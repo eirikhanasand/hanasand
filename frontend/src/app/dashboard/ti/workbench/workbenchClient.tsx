@@ -794,7 +794,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         }
         const rationale = note.trim()
         if (!rationale) {
-            setMessage({ ok: false, text: 'Customer notification receipt requires decision rationale.' })
+            setMessage({ ok: false, text: 'Customer notification needs decision rationale.' })
             return
         }
         await runPersistentAction(`case:${item.id}:customer_notification`, async () => {
@@ -1352,7 +1352,7 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
                                     onClick={onCustomerNotification}
                                     className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
                                 >
-                                    {busyAction === `case:${selected?.id}:customer_notification` ? 'Recording...' : 'Record receipt'}
+                                    {busyAction === `case:${selected?.id}:customer_notification` ? 'Recording...' : 'Record notification'}
                                 </button>
                             ) : null}
                             {!row.href && !row.action && row.copyPayload === undefined && !row.customerNotification && (
@@ -1427,16 +1427,16 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({ id: 'open_case', label: 'Open selected case', detail: backedCaseHref, tone: 'ready', href: backedCaseHref })
         rows.push({
             id: 'export_case_evidence',
-            label: 'Replay export',
-            detail: `GET ${caseExportHref(backedCaseHref)} returns case evidence, timeline, delivery rows, and next-action payloads for audit replay.`,
+            label: 'Case package',
+            detail: `Open ${caseExportHref(backedCaseHref)} for evidence, timeline, delivery rows, and next actions.`,
             tone: 'ready',
             href: caseExportHref(backedCaseHref),
         })
         const notificationState = customerNotificationActionState(caseDetail)
-        const notificationDisabledReason = notificationState.disabledReason || (!note.trim() ? 'Customer notification receipt requires decision rationale.' : undefined)
+        const notificationDisabledReason = notificationState.disabledReason || (!note.trim() ? 'Customer notification needs decision rationale.' : undefined)
         rows.push({
             id: 'record_customer_notification',
-            label: 'Record receipt',
+            label: 'Record notification',
             detail: `POST ${caseCustomerNotificationHref(backedCaseHref)} after delivered webhook evidence is present.`,
             tone: notificationDisabledReason ? 'blocked' : 'ready',
             customerNotification: true,
@@ -2381,7 +2381,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
                                 <ExternalLink className='h-3.5 w-3.5' />
                             </Link>
                             <Link href={caseExportHref(item.caseDetailHref)} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
-                                Replay export
+                                Case package
                                 <ExternalLink className='h-3.5 w-3.5' />
                             </Link>
                         </>
@@ -2772,7 +2772,7 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
             <div>
                 <p className='text-xs font-semibold uppercase text-[#147a3b]'>Live case actions</p>
                 <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Updates the selected case and refreshes the detail pane.</p>
-                {item.caseDetailHref && <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Case export includes evidence, timeline, delivery, and next actions.</p>}
+                {item.caseDetailHref && <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Case package includes evidence, timeline, delivery, and next actions.</p>}
             </div>
             <div className='flex flex-wrap gap-2'>
                 <CaseMutationButton
@@ -2848,7 +2848,7 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
                 <DecisionButton
                     busy={busy || busyAction === `case:${item.id}:customer_notification`}
                     onClick={onCustomerNotification}
-                    disabledReason={notificationState.disabledReason || (!noteText ? 'Customer notification receipt requires decision rationale.' : undefined)}
+                    disabledReason={notificationState.disabledReason || (!noteText ? 'Customer notification needs decision rationale.' : undefined)}
                 >
                     Record notification
                 </DecisionButton>
@@ -3091,6 +3091,10 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
     const activeWatchlistCount = (detail?.watchlists || orgContext?.watchlists || []).filter(watchlist => watchlist.status === 'active').length
     const delivered = delivery?.status === 'delivered' || detail?.deliveryContext?.delivered
     const activeDestination = orgContext?.webhookDestinations.find(destination => destination.status === 'active')
+    const auditRows = detail?.timeline || []
+    const workflowEventCount = detail ? (detail.case?.workflowEvents || []).length + (detail.alertContext?.workflowEvents || []).length : 0
+    const auditCount = auditRows.length + workflowEventCount
+    const auditHref = caseHref ? caseExportHref(caseHref) : undefined
     const caseStatus: WorkbenchWorkflowStep['status'] = caseDetail?.status === 'loading'
         ? 'needs_action'
         : detail?.case
@@ -3102,8 +3106,29 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
     const evidenceStatus: WorkbenchWorkflowStep['status'] = evidenceCount ? 'ready' : sourceHref || item.kind === 'dwm_alert' ? 'needs_action' : 'blocked'
     const watchlistStatus: WorkbenchWorkflowStep['status'] = activeWatchlistCount ? 'ready' : watchlistCount || item.kind === 'dwm_alert' ? 'needs_action' : 'blocked'
     const deliveryStatus: WorkbenchWorkflowStep['status'] = delivered ? 'ready' : delivery || activeDestination || item.kind === 'dwm_alert' ? 'needs_action' : 'blocked'
+    const auditStatus: WorkbenchWorkflowStep['status'] = auditCount ? 'ready' : caseDetail?.status === 'loading' || caseHref ? 'needs_action' : 'blocked'
 
     return [
+        {
+            id: 'watchlist',
+            label: 'Watchlist',
+            status: watchlistStatus,
+            detail: activeWatchlistCount ? `${activeWatchlistCount} active watchlist${activeWatchlistCount === 1 ? '' : 's'} routed.` : watchlistCount ? `${watchlistCount} watchlist${watchlistCount === 1 ? '' : 's'} staged but paused.` : 'Watchlist routing is syncing.',
+            source: detail?.watchlists?.length ? 'Case watchlist' : 'Customer watchlist',
+            href: watchlistLedgerHref(orgContext),
+            actionLabel: 'Open watchlists',
+            blockedReason: 'Watchlist routing needed',
+        },
+        {
+            id: 'evidence',
+            label: 'Evidence',
+            status: evidenceStatus,
+            detail: `${evidenceCount} evidence item${evidenceCount === 1 ? '' : 's'} active${sourceHref ? '; source drill-in available.' : '.'}`,
+            source: detail?.evidence?.length ? 'Case evidence' : alertRecord?.evidence?.length ? 'Saved alert evidence' : 'Selected evidence',
+            href: sourceHref || alertHref || caseHref,
+            actionLabel: sourceHref ? 'Inspect source' : 'Open evidence',
+            blockedReason: 'Evidence source needed',
+        },
         {
             id: 'alert',
             label: 'Alert',
@@ -3125,26 +3150,6 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
             blockedReason: 'Case file needed',
         },
         {
-            id: 'evidence',
-            label: 'Evidence',
-            status: evidenceStatus,
-            detail: `${evidenceCount} evidence item${evidenceCount === 1 ? '' : 's'} active${sourceHref ? '; source drill-in available.' : '.'}`,
-            source: detail?.evidence?.length ? 'Case evidence' : alertRecord?.evidence?.length ? 'Saved alert evidence' : 'Selected evidence',
-            href: sourceHref || alertHref || caseHref,
-            actionLabel: sourceHref ? 'Inspect source' : 'Open evidence',
-            blockedReason: 'Evidence source needed',
-        },
-        {
-            id: 'watchlist',
-            label: 'Watchlist',
-            status: watchlistStatus,
-            detail: activeWatchlistCount ? `${activeWatchlistCount} active watchlist${activeWatchlistCount === 1 ? '' : 's'} routed.` : watchlistCount ? `${watchlistCount} watchlist${watchlistCount === 1 ? '' : 's'} staged but paused.` : 'Watchlist routing is syncing.',
-            source: detail?.watchlists?.length ? 'Case watchlist' : 'Customer watchlist',
-            href: watchlistLedgerHref(orgContext),
-            actionLabel: 'Open watchlists',
-            blockedReason: 'Watchlist routing needed',
-        },
-        {
             id: 'delivery',
             label: 'Delivery',
             status: deliveryStatus,
@@ -3153,6 +3158,16 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
             href: deliveryHref,
             actionLabel: 'Open delivery',
             blockedReason: 'Delivery destination needed',
+        },
+        {
+            id: 'audit',
+            label: 'Audit',
+            status: auditStatus,
+            detail: auditCount ? `${auditRows.length} timeline row${auditRows.length === 1 ? '' : 's'} and ${workflowEventCount} workflow event${workflowEventCount === 1 ? '' : 's'}.` : caseHref ? 'Case activity is loading.' : 'Case activity is not attached yet.',
+            source: 'Case timeline',
+            href: auditHref || caseHref,
+            actionLabel: auditHref ? 'Open case package' : 'Open case',
+            blockedReason: 'Case timeline needed',
         },
     ]
 }
@@ -3180,8 +3195,8 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
         deliveryKind: notificationContext.latest.deliveryMode,
         attemptedAt: notificationContext.latest.at,
         webhookDestinationId: notificationContext.latest.webhookDestinationId,
-        endpointHash: 'receipt_endpoint_hash_not_returned',
-        payloadHash: 'receipt_payload_hash_not_returned',
+        endpointHash: 'notification_endpoint_hash_not_returned',
+        payloadHash: 'notification_payload_hash_not_returned',
     } : undefined
     const notificationLedgerHref = notificationDelivery ? deliveryLedgerHref(orgContext, item, notificationDelivery) : undefined
     const latestTimeline = (detail?.timeline || [])
@@ -3240,7 +3255,7 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                         </p>
                         <p className='mt-2 text-xs text-[#8fa0ba]'>Refresh: {refreshText}</p>
                     </ContinuityBlock>
-                    <ContinuityBlock title='Replay export'>
+                    <ContinuityBlock title='Case package'>
                         <div data-case-replay-export-state={replayExport.status} className='grid gap-2'>
                             <div className='flex flex-wrap items-center gap-2'>
                                 <span className={workflowStatusClass(replayExport.status)}>{label(replayExport.status)}</span>
@@ -3254,7 +3269,7 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                             </div>
                             {replayExport.href ? (
                                 <Link href={replayExport.href} className='inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
-                                    <span className='truncate'>Open replay export</span>
+                                    <span className='truncate'>Open case package</span>
                                     <ExternalLink className='h-3.5 w-3.5 shrink-0' />
                                 </Link>
                             ) : null}
@@ -3557,8 +3572,8 @@ function mergeDeliveryEvidence(nextDeliveries: WorkbenchDeliveryEvidence[], exis
 
 function customerNotificationActionState(caseDetail: CaseDetailState | undefined) {
     if (caseDetail?.status !== 'ready') return { disabledReason: 'Open the case details before recording customer notification.' }
-    if (caseDetail.detail.customerNotificationContext?.notified) return { disabledReason: 'Customer notification receipt is already recorded.' }
-    if (!deliveredCaseDelivery(caseDetail.detail)) return { disabledReason: 'Customer notification receipt requires a delivered webhook row.' }
+    if (caseDetail.detail.customerNotificationContext?.notified) return { disabledReason: 'Customer notification is already recorded.' }
+    if (!deliveredCaseDelivery(caseDetail.detail)) return { disabledReason: 'Customer notification requires a delivered webhook row.' }
     if (caseDetail.detail.access?.readOnly) return { disabledReason: 'Read-only case members cannot record customer notifications.' }
     return {}
 }
@@ -3611,7 +3626,7 @@ function caseReplayExportState(item: WorkbenchCase, caseDetail: CaseDetailState 
         : blockers.length
             ? 'needs_action'
             : 'ready'
-    const routeText = href ? `Open ${href}` : 'Replay export is syncing the case detail route.'
+    const routeText = href ? `Open ${href}` : 'Case package is syncing the case detail route.'
     const detailText = detail
         ? `${routeText}; ${workflowEventCount} workflow event${workflowEventCount === 1 ? '' : 's'}, ${timelineCount} timeline row${timelineCount === 1 ? '' : 's'}, ${deliveryCount} delivery row${deliveryCount === 1 ? '' : 's'}.`
         : routeText
