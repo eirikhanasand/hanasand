@@ -193,7 +193,7 @@ function Results({ result }: { result: TiSearchResponse }) {
         confidence: queueConfidenceFilter,
         sort: queueSort,
     }), [queueConfidenceFilter, queueKindFilter, queueSort, queueSourceFilter, workItems])
-    const visibleQueueItems = showFullQueue ? filteredWorkItems : filteredWorkItems.slice(0, 8)
+    const visibleQueueItems = showFullQueue ? filteredWorkItems : filteredWorkItems.slice(0, 6)
     const queueSourceOptions = useMemo(() => unique(workItems.map(item => item.source).filter(Boolean)).sort((a, b) => a.localeCompare(b)).slice(0, 8), [workItems])
     const queueSourceCounts = useMemo(() => sourceCountsFor(filteredWorkItems), [filteredWorkItems])
     const selected = filteredWorkItems.find(item => item.id === selectedId) ?? filteredWorkItems[0] ?? workItems.find(item => item.id === selectedId) ?? workItems[0]
@@ -403,7 +403,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                             <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${severityClass(item.severity)}`}>{item.severity}</span>
                                             <span className='text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{decision ? decisionLabel(decision.status) : item.status}</span>
                                         </div>
-                                        <span className='text-sm font-semibold leading-5 text-[#171a21] dark:text-[#eef4ff]'>{item.title}</span>
+                                        <span className='text-sm font-semibold leading-5 text-[#171a21] dark:text-[#eef4ff]'>{displayRequirementText(item.title)}</span>
                                         <span className='line-clamp-2 text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>{item.subtitle}</span>
                                         <span className='flex flex-wrap gap-2 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>
                                             <span>{item.timestamp}</span>
@@ -423,7 +423,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     Show {filteredWorkItems.length - visibleQueueItems.length} more findings
                                 </button>
                             ) : null}
-                            {showFullQueue && filteredWorkItems.length > 8 ? (
+                            {showFullQueue && filteredWorkItems.length > 6 ? (
                                 <button
                                     type='button'
                                     onClick={() => setShowFullQueue(false)}
@@ -447,7 +447,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                                 <span className='rounded-md border border-[#d8dee9] bg-[#f2f4f7] px-2 py-1 text-xs font-semibold text-[#475467] dark:border-[#314057] dark:bg-[#1d2939] dark:text-[#c6d3e4]'>{kindLabel(selected.kind)}</span>
                                                 <span className='rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'>{selectedDecision ? decisionLabel(selectedDecision.status) : selected.status}</span>
                                             </div>
-                                            <h2 className='mt-3 wrap-break-word text-2xl font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selected.title}</h2>
+                                            <h2 className='mt-3 wrap-break-word text-2xl font-semibold text-[#171a21] dark:text-[#eef4ff]'>{displayRequirementText(selected.title)}</h2>
                                             <p className='mt-2 text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selected.detail)}</p>
                                         </div>
                                         {selected.href ? (
@@ -465,22 +465,25 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <EvidenceMetric label='Source reference' value={displayRequirementText(selected.provenance)} />
                                     </div>
 
-                                    {selectedTriageBrief ? <SelectedTriageBriefPanel brief={selectedTriageBrief} /> : null}
-
                                     {selectedSourceDrilldown ? <SelectedEvidenceContextTable drilldown={selectedSourceDrilldown} /> : null}
-                                    {selected.priority ? <EvidencePriorityPanel priority={selected.priority} /> : null}
-                                    {selectedSourceDrilldown ? <SelectedSourceDrilldownPanel drilldown={selectedSourceDrilldown} /> : null}
+                                    {showMoreAnalysis ? (
+                                        <>
+                                            {selectedTriageBrief ? <SelectedTriageBriefPanel brief={selectedTriageBrief} /> : null}
+                                            {selected.priority ? <EvidencePriorityPanel priority={selected.priority} /> : null}
+                                            {selectedSourceDrilldown ? <SelectedSourceDrilldownPanel drilldown={selectedSourceDrilldown} /> : null}
 
-                                    <CustomerAlertFit selected={selected} watchlist={watchlist} alertPacket={alertPacket} />
+                                            <CustomerAlertFit selected={selected} watchlist={watchlist} alertPacket={alertPacket} />
 
-                                    <div className='mt-4 grid gap-3 md:grid-cols-2'>
-                                        <EvidencePanel title='Evidence'>
-                                            {selected.evidence.map(line => <li key={line}>{line}</li>)}
-                                        </EvidencePanel>
-                                        <EvidencePanel title='Recommended next step'>
-                                            {selected.nextActions.map(line => <li key={line}>{displayRequirementText(line)}</li>)}
-                                        </EvidencePanel>
-                                    </div>
+                                            <div className='mt-4 grid gap-3 md:grid-cols-2'>
+                                                <EvidencePanel title='Evidence'>
+                                                    {selected.evidence.map(line => <li key={line}>{line}</li>)}
+                                                </EvidencePanel>
+                                                <EvidencePanel title='Recommended next step'>
+                                                    {selected.nextActions.map(line => <li key={line}>{displayRequirementText(line)}</li>)}
+                                                </EvidencePanel>
+                                            </div>
+                                        </>
+                                    ) : null}
                                 </section>
                                 <SecondaryAnalysisToggle
                                     expanded={showMoreAnalysis}
@@ -6309,6 +6312,15 @@ function MobileEvidenceWorkbar({
                 </div>
                 <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
             </div>
+            <div data-ti-mobile-selected-context='true' className='grid gap-1 rounded-md border border-[#eef1f5] bg-[#fbfcfe] px-2 py-1.5 dark:border-[#273244] dark:bg-[#131c29]'>
+                <p className='line-clamp-2 text-[11px] leading-4 text-[#475467] dark:text-[#c4d0e2]'>{displayRequirementText(selected.detail)}</p>
+                <div className='flex min-w-0 flex-wrap gap-1.5 text-[10px] font-semibold text-[#586274] dark:text-[#9aa8bd]'>
+                    <span>{selected.timestamp}</span>
+                    <span>{selected.source}</span>
+                    <span>{sourceBasisLabel(selected.confidence)}</span>
+                    <a href='#ti-selected-evidence' className='text-[#3056d3] dark:text-[#9ab3ff]'>Open detail</a>
+                </div>
+            </div>
 
             <div className='flex min-w-0 gap-1.5 overflow-x-auto pb-1'>
                 {kindOptions.map(item => (
@@ -9525,115 +9537,94 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                 </div>
                 <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#131c29] dark:text-[#9eb3ff]'>{hasPoints ? `${geo.points.length} countries` : hasRegionalAreas ? `${regionalAreas.length} regions` : 'Country data pending'}</span>
             </div>
-            <div className={`${compact ? 'min-h-72' : 'min-h-80'} relative overflow-hidden bg-[#f7f9fc] dark:bg-[#0b111a]`}>
-                <div className='absolute left-3 top-3 z-20 rounded-lg border border-[#dfe5ee] bg-white/90 px-3 py-1.5 text-xs text-[#596170] shadow-sm backdrop-blur dark:border-[#273244] dark:bg-[#101826]/90 dark:text-[#b7c2d4]'>
-                    <span className='inline-flex items-center gap-2'>
-                        <Move className='h-3.5 w-3.5' />
-                        Drag to pan · wheel to zoom
-                    </span>
-                </div>
-                <div className='absolute bottom-3 left-3 z-20 flex items-center gap-1 rounded-lg border border-[#dfe5ee] bg-white/90 p-1 shadow-sm backdrop-blur dark:border-[#273244] dark:bg-[#101826]/90'>
-                    <MapZoomButton label='−' onClick={() => setViewBox((current) => zoomViewBox(current, 1.18, MAP_WIDTH / 2, MAP_HEIGHT / 2))} />
-                    <MapZoomButton label='Reset' wide onClick={() => setViewBox(INITIAL_VIEWBOX)} />
-                    <MapZoomButton label='+' onClick={() => setViewBox((current) => zoomViewBox(current, 0.84, MAP_WIDTH / 2, MAP_HEIGHT / 2))} />
-                </div>
-                <svg
-                    viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
-                    role='img'
-                    aria-label={`Country-level actor map for ${humanizeSlug(result.query)}`}
-                    className={`${compact ? 'h-72' : 'h-80'} relative z-10 w-full cursor-grab bg-white active:cursor-grabbing dark:bg-[#0b111a]`}
-                    onMouseDown={(event) => {
-                        dragRef.current = { x: event.clientX, y: event.clientY, viewBox }
-                    }}
-                    onMouseMove={(event) => {
-                        if (!dragRef.current) return
-                        const scaleX = dragRef.current.viewBox.width / MAP_WIDTH
-                        const scaleY = dragRef.current.viewBox.height / MAP_HEIGHT
-                        setViewBox(clampViewBox({
-                            ...dragRef.current.viewBox,
-                            x: dragRef.current.viewBox.x - ((event.clientX - dragRef.current.x) * scaleX),
-                            y: dragRef.current.viewBox.y - ((event.clientY - dragRef.current.y) * scaleY),
-                        }))
-                    }}
-                    onMouseUp={() => { dragRef.current = null }}
-                    onMouseLeave={() => { dragRef.current = null }}
-                    onWheel={(event) => {
-                        event.preventDefault()
-                        const rect = event.currentTarget.getBoundingClientRect()
-                        const px = ((event.clientX - rect.left) / rect.width) * viewBox.width + viewBox.x
-                        const py = ((event.clientY - rect.top) / rect.height) * viewBox.height + viewBox.y
-                        setViewBox((current) => zoomViewBox(current, event.deltaY > 0 ? 1.12 : 0.88, px, py))
-                    }}
-                >
-                    <rect x='0' y='0' width={MAP_WIDTH} height={MAP_HEIGHT} className='fill-white dark:fill-[#0b111a]' />
-                    <g className='opacity-95'>{mapPaths}</g>
-                    {geo.flows.map(flow => {
-                        const from = countryCentroids[flow.from.code]
-                        const to = countryCentroids[flow.to.code]
-                        if (!from || !to) return null
-                        const [x1, y1] = project(from)
-                        const [x2, y2] = project(to)
-                        const dx = x2 - x1
-                        const dy = y2 - y1
-                        const distance = Math.sqrt((dx * dx) + (dy * dy))
-                        const cx = (x1 + x2) / 2
-                        const cy = (y1 + y2) / 2 - (distance * 0.22)
-                        return (
-                            <path
-                                key={`${flow.from.code}-${flow.to.code}`}
-                                d={`M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`}
-                                fill='none'
-                                stroke='#d92d20'
-                                strokeDasharray='5 5'
-                                strokeWidth='1.8'
-                                opacity='0.45'
-                            />
-                        )
-                    })}
-                    {geo.points.map(point => {
-                        const coords = countryCentroids[point.code]
-                        if (!coords) return null
-                        const [x, y] = project(coords)
-                        const active = selectedPoint?.code === point.code
-                        const color = point.role === 'operator' ? '#7c3aed' : '#d92d20'
-                        const radius = point.role === 'operator' ? 5 : 4 + Math.min(5, point.count * 1.5)
-                        return (
-                            <g key={`${point.role}-${point.code}`} onClick={() => focusCountry(point.code)} className='cursor-pointer'>
-                                <circle cx={x} cy={y} r={radius + 9} fill={color} opacity={active ? '0.16' : '0.08'} />
-                                <circle cx={x} cy={y} r={radius} fill={color} opacity='0.92' stroke='#ffffff' strokeWidth='1.5' />
-                                <circle cx={x} cy={y} r='2' fill='#ffffff' />
-                                <text
-                                    x={x}
-                                    y={y - radius - 7}
-                                    textAnchor='middle'
-                                    className='fill-[#171a21] text-[10px] font-bold dark:fill-[#eef4ff]'
-                                    stroke='#ffffff'
-                                    strokeWidth='3'
-                                    paintOrder='stroke'
-                                >
-                                    {point.code}
-                                </text>
-                            </g>
-                        )
-                    })}
-                </svg>
-                {hasRegionalAreas ? (
-                    <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/85 px-4 text-center dark:bg-[#101826]/90'>
-                        <div className='max-w-md'>
-                            <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Regional operating area</p>
-                            <div className='mt-3 flex flex-wrap justify-center gap-2'>
-                                {regionalAreas.map(region => (
-                                    <span key={region} className='rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'>{region}</span>
-                                ))}
-                            </div>
-                            <p className='mt-3 text-sm font-medium leading-6 text-[#586274] dark:text-[#b7c2d4]'>Country-level map points appear when linked reporting names exact origin, victim, or target countries.</p>
+            <div className={`${hasPoints ? compact ? 'min-h-72' : 'min-h-80' : ''} relative overflow-hidden bg-[#f7f9fc] dark:bg-[#0b111a]`}>
+                {hasPoints ? (
+                    <>
+                        <div className='absolute left-3 top-3 z-20 rounded-lg border border-[#dfe5ee] bg-white/90 px-3 py-1.5 text-xs text-[#596170] shadow-sm backdrop-blur dark:border-[#273244] dark:bg-[#101826]/90 dark:text-[#b7c2d4]'>
+                            <span className='inline-flex items-center gap-2'>
+                                <Move className='h-3.5 w-3.5' />
+                                Drag to pan · wheel to zoom
+                            </span>
                         </div>
-                    </div>
-                ) : !hasPoints ? (
-                    <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/80 px-4 text-center text-sm font-medium text-[#586274] dark:bg-[#101826]/85 dark:text-[#b7c2d4]'>
-                        Country mapping will appear when this profile has country-level target or origin observations.
-                    </div>
-                ) : null}
+                        <div className='absolute bottom-3 left-3 z-20 flex items-center gap-1 rounded-lg border border-[#dfe5ee] bg-white/90 p-1 shadow-sm backdrop-blur dark:border-[#273244] dark:bg-[#101826]/90'>
+                            <MapZoomButton label='−' onClick={() => setViewBox((current) => zoomViewBox(current, 1.18, MAP_WIDTH / 2, MAP_HEIGHT / 2))} />
+                            <MapZoomButton label='Reset' wide onClick={() => setViewBox(INITIAL_VIEWBOX)} />
+                            <MapZoomButton label='+' onClick={() => setViewBox((current) => zoomViewBox(current, 0.84, MAP_WIDTH / 2, MAP_HEIGHT / 2))} />
+                        </div>
+                        <svg
+                            viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
+                            role='img'
+                            aria-label={`Country-level actor map for ${humanizeSlug(result.query)}`}
+                            className={`${compact ? 'h-72' : 'h-80'} relative z-10 w-full cursor-grab bg-white active:cursor-grabbing dark:bg-[#0b111a]`}
+                            onMouseDown={(event) => {
+                                dragRef.current = { x: event.clientX, y: event.clientY, viewBox }
+                            }}
+                            onMouseMove={(event) => {
+                                if (!dragRef.current) return
+                                const scaleX = dragRef.current.viewBox.width / MAP_WIDTH
+                                const scaleY = dragRef.current.viewBox.height / MAP_HEIGHT
+                                setViewBox(clampViewBox({
+                                    ...dragRef.current.viewBox,
+                                    x: dragRef.current.viewBox.x - ((event.clientX - dragRef.current.x) * scaleX),
+                                    y: dragRef.current.viewBox.y - ((event.clientY - dragRef.current.y) * scaleY),
+                                }))
+                            }}
+                            onMouseUp={() => { dragRef.current = null }}
+                            onMouseLeave={() => { dragRef.current = null }}
+                            onWheel={(event) => {
+                                event.preventDefault()
+                                const rect = event.currentTarget.getBoundingClientRect()
+                                const px = ((event.clientX - rect.left) / rect.width) * viewBox.width + viewBox.x
+                                const py = ((event.clientY - rect.top) / rect.height) * viewBox.height + viewBox.y
+                                setViewBox((current) => zoomViewBox(current, event.deltaY > 0 ? 1.12 : 0.88, px, py))
+                            }}
+                        >
+                            <rect x='0' y='0' width={MAP_WIDTH} height={MAP_HEIGHT} className='fill-white dark:fill-[#0b111a]' />
+                            <g className='opacity-95'>{mapPaths}</g>
+                            {geo.flows.map(flow => {
+                                const from = countryCentroids[flow.from.code]
+                                const to = countryCentroids[flow.to.code]
+                                if (!from || !to) return null
+                                const [x1, y1] = project(from)
+                                const [x2, y2] = project(to)
+                                const dx = x2 - x1
+                                const dy = y2 - y1
+                                const distance = Math.sqrt((dx * dx) + (dy * dy))
+                                const cx = (x1 + x2) / 2
+                                const cy = (y1 + y2) / 2 - (distance * 0.22)
+                                return (
+                                    <path
+                                        key={`${flow.from.code}-${flow.to.code}`}
+                                        d={`M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`}
+                                        fill='none'
+                                        stroke='#d92d20'
+                                        strokeDasharray='5 5'
+                                        strokeWidth='1.8'
+                                        opacity='0.45'
+                                    />
+                                )
+                            })}
+                            {geo.points.map(point => {
+                                const coords = countryCentroids[point.code]
+                                if (!coords) return null
+                                const [x, y] = project(coords)
+                                const active = selectedPoint?.code === point.code
+                                const color = point.role === 'operator' ? '#7c3aed' : '#d92d20'
+                                const radius = point.role === 'operator' ? 5 : 4 + Math.min(5, point.count * 1.5)
+                                return (
+                                    <g key={`${point.role}-${point.code}`} onClick={() => focusCountry(point.code)} className='cursor-pointer'>
+                                        <circle cx={x} cy={y} r={radius + 9} fill={color} opacity={active ? '0.16' : '0.08'} />
+                                        <circle cx={x} cy={y} r={radius} fill={color} opacity='0.92' stroke='#ffffff' strokeWidth='1.5' />
+                                        <circle cx={x} cy={y} r='2' fill='#ffffff' />
+                                        <text x={x} y={y - radius - 7} textAnchor='middle' className='fill-[#171a21] text-[10px] font-bold dark:fill-[#eef4ff]' stroke='#ffffff' strokeWidth='3' paintOrder='stroke'>{point.code}</text>
+                                    </g>
+                                )
+                            })}
+                        </svg>
+                    </>
+                ) : (
+                    <MapCoverageFallback regions={regionalAreas} actor={actor} actionability={actionability} />
+                )}
             </div>
             {hasPoints ? (
                 <div className='grid gap-3 border-t border-[#e8edf5] bg-white px-4 py-3 dark:border-[#273244] dark:bg-[#0f1621]'>
@@ -9655,6 +9646,69 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                     </div>
                 </div>
             ) : null}
+        </div>
+    )
+}
+
+function MapCoverageFallback({ regions, actor, actionability }: { regions: string[]; actor: TiActorIntelligenceProfile; actionability: TiActionabilityModel }) {
+    const families = actor.sourceCoverage.sourceFamilies.slice(0, 4)
+    const gaps = actor.sourceCoverage.missing.slice(0, 3)
+    const sourceRows = actor.provenanceRows.slice(0, 3)
+    return (
+        <div data-ti-geo-coverage-fallback='true' className='grid gap-3 bg-white p-4 dark:bg-[#0b111a]'>
+            <div className='grid gap-3 md:grid-cols-3'>
+                <CoverageFallbackMetric label='Regions' value={regions.length ? regions.join(', ') : 'No country-level rows'} />
+                <CoverageFallbackMetric label='Source rows' value={`${actor.sourceCoverage.totalRows}`} />
+                <CoverageFallbackMetric label='Newest' value={actor.sourceCoverage.latestReportDate ? formatDate(actor.sourceCoverage.latestReportDate) : formatDate(actor.lastSeen)} />
+            </div>
+            {regions.length ? (
+                <div className='flex flex-wrap gap-2'>
+                    {regions.map(region => (
+                        <span key={region} className='rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'>{region}</span>
+                    ))}
+                </div>
+            ) : null}
+            <div className='overflow-hidden rounded-lg border border-[#eef1f5] bg-[#fbfcfe] dark:border-[#273244] dark:bg-[#131c29]'>
+                <div className='grid grid-cols-[minmax(0,1fr)_5rem_minmax(0,0.8fr)] gap-2 border-b border-[#eef1f5] px-3 py-2 text-[11px] font-semibold uppercase text-[#586274] dark:border-[#273244] dark:text-[#9aa8bd]'>
+                    <span>Coverage</span>
+                    <span>Count</span>
+                    <span>Next action</span>
+                </div>
+                {(families.length ? families : [{ family: 'source coverage', count: actor.sourceCoverage.totalRows }]).map(item => (
+                    <div key={item.family} className='grid grid-cols-[minmax(0,1fr)_5rem_minmax(0,0.8fr)] gap-2 border-b border-[#eef1f5] px-3 py-2 text-xs last:border-b-0 dark:border-[#273244]'>
+                        <span className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{formatLabel(item.family)}</span>
+                        <span className='text-[#475467] dark:text-[#b7c2d4]'>{item.count}</span>
+                        <span className='wrap-break-word text-[#586274] dark:text-[#9aa8bd]'>{gaps[0] ? sourceHealthFieldLabel(gaps[0]) : 'Review source context'}</span>
+                    </div>
+                ))}
+            </div>
+            <div className='grid gap-2 sm:grid-cols-2'>
+                {sourceRows.map(row => (
+                    <div key={`${row.sourceName}-${row.provenance}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 text-xs dark:border-[#273244] dark:bg-[#131c29]'>
+                        <p className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</p>
+                        <p className='mt-1 wrap-break-word text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.shownBecause)}</p>
+                        <p className='mt-2 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{[row.reportDate ? formatDate(row.reportDate) : '', typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : '', row.captureId ? `capture ${row.captureId}` : 'capture needed'].filter(Boolean).join(' · ')}</p>
+                    </div>
+                ))}
+                {!sourceRows.length ? (
+                    <div className='rounded-lg border border-dashed border-[#d8dee9] bg-[#fbfcfe] p-3 text-xs text-[#586274] dark:border-[#314057] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
+                        Add source name, report date, and provenance before using geography for customer routing.
+                    </div>
+                ) : null}
+            </div>
+            <div className='flex min-w-0 flex-wrap gap-2'>
+                <span className={sourceHealthChipClass(gaps.length ? 'review' : 'ready')}>{gaps.length ? `${gaps.length} source gap${gaps.length === 1 ? '' : 's'}` : 'source context ready'}</span>
+                <span className={sourceHealthChipClass(actionability.watchlistRelevance.terms.length ? 'ready' : 'review')}>{actionability.watchlistRelevance.terms.length ? `${actionability.watchlistRelevance.terms.length} watch terms` : 'watch term needed'}</span>
+            </div>
+        </div>
+    )
+}
+
+function CoverageFallbackMetric({ label, value }: { label: string; value: string }) {
+    return (
+        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 dark:border-[#273244] dark:bg-[#131c29]'>
+            <p className='text-[11px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{label}</p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{value}</p>
         </div>
     )
 }
