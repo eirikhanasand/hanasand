@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
 
 type ProxyOptions = {
     method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
@@ -7,7 +8,7 @@ type ProxyOptions = {
 }
 
 export async function proxyTiRequest(request: NextRequest, path: string, options: ProxyOptions = {}) {
-    const base = process.env.TI_SCRAPER_API_BASE
+    const base = tiScraperApiBase()
     if (!base) {
         return NextResponse.json({ error: { code: 'ti_backend_unavailable', message: 'TI backend is not configured.' } }, { status: 503 })
     }

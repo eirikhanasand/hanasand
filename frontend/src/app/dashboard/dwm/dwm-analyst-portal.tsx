@@ -1707,7 +1707,7 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
     const orgId = alert ? alertOrganizationId(alert) : undefined
     const caseId = alert?.caseId || alert?.caseIdCandidate || alert?.workflowContext?.caseIdCandidate || alert?.webhookContext?.caseIdCandidate
     const caseHref = alert && caseId ? caseDetailHref(caseId, alert.id, orgId, 'delivery_history') : undefined
-    const orgHref = orgId ? `/organizations?organizationId=${encodeURIComponent(orgId)}${caseId ? `&caseId=${encodeURIComponent(caseId)}` : ''}${alert?.id ? `&alertId=${encodeURIComponent(alert.id)}` : ''}&focus=webhooks` : '/organizations?focus=webhooks'
+    const orgHref = orgId ? `/organizations?organizationId=${encodeURIComponent(orgId)}${caseId ? `&caseId=${encodeURIComponent(caseId)}` : ''}${alert?.id ? `&alertId=${encodeURIComponent(alert.id)}` : ''}&focus=destinations` : '/organizations?focus=destinations'
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel'>
             <div className='flex items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>

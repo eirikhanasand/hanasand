@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { demoDwmProductSnapshot } from '@/utils/dwm/product'
+import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
 import { dwmProductPayloadFromLedger, loadProductDwmProductProofLedger } from '@/utils/productProgress/dwmProductProofSource'
 
 export const dynamic = 'force-dynamic'
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
 }
 
 async function fetchTiDwmProduct(request: NextRequest) {
-    const base = process.env.TI_SCRAPER_API_BASE
+    const base = tiScraperApiBase()
     if (!base) return { ok: false, error: 'TI_SCRAPER_API_BASE is not configured.' } as const
 
     try {

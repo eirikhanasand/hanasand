@@ -725,6 +725,7 @@ export default function OrganizationWorkspaceClient() {
     const updateSavedDestination = (destination: WebhookDestination, draft: DestinationEditDraft) => selectedOrganization && runAction('update-destination', async () => {
         const url = draft.url.trim()
         if (url && !validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
+        if (!destinationEditChanged(destination, draft)) return 'No destination changes.'
         const body: Record<string, unknown> = {
             name: draft.name.trim() || destination.name || destination.id,
             kind: draft.kind,
@@ -1371,6 +1372,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                     const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
                     const draftUrl = draft?.url.trim() || ''
                     const draftUrlInvalid = Boolean(draftUrl) && !validDestinationUrl(draftUrl)
+                    const draftChanged = draft ? destinationEditChanged(destination, draft) : false
                     return (
                         <div
                             role='button'
@@ -1405,8 +1407,9 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                                         <input value={draft.url} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, url: event.target.value } }))} className={inputClass} placeholder='Leave blank to keep the stored redacted endpoint' />
                                         {draftUrlInvalid && <span className='text-xs font-semibold text-[#b42318] dark:text-[#fecaca]'>Use a valid HTTPS URL.</span>}
                                     </label>
+                                    {!draftUrlInvalid && !draftChanged && <p className='rounded-md bg-[#f8fafc] px-3 py-2 text-xs font-semibold text-[#667085] dark:bg-[#0d1522] dark:text-[#a8b3c5] md:col-span-3'>No changes to save.</p>}
                                     <div className='flex flex-wrap gap-2 md:col-span-3' onClick={event => event.stopPropagation()}>
-                                        <button type='button' className={primaryButtonClass} disabled={draftUrlInvalid || Boolean(busy)} onClick={() => onUpdate(destination, draft)}>
+                                        <button type='button' className={primaryButtonClass} disabled={draftUrlInvalid || !draftChanged || Boolean(busy)} onClick={() => onUpdate(destination, draft)}>
                                             <CheckCircle2 className='h-4 w-4' />
                                             Save
                                         </button>
@@ -2192,7 +2195,7 @@ function requestedSubjectFromSearch(input: {
     if (input.watchlistId && bundle.watchlists.some(item => item.id === input.watchlistId)) return { type: 'watchlist', id: input.watchlistId }
     if (input.focus === 'cases' && bundle.cases[0]?.id) return { type: 'case', id: bundle.cases[0].id }
     if (input.focus === 'alerts' && bundle.alerts[0]?.id) return { type: 'alert', id: bundle.alerts[0].id }
-    if (input.focus === 'destinations' && bundle.webhooks[0]?.id) return { type: 'destination', id: bundle.webhooks[0].id }
+    if ((input.focus === 'destinations' || input.focus === 'webhooks') && bundle.webhooks[0]?.id) return { type: 'destination', id: bundle.webhooks[0].id }
     if (input.focus === 'watchlists' && bundle.watchlists[0]?.id) return { type: 'watchlist', id: bundle.watchlists[0].id }
     return { type: 'organization', id: input.organizationId }
 }
@@ -2371,6 +2374,15 @@ function validDestinationUrl(value: string) {
     } catch {
         return false
     }
+}
+
+function destinationEditChanged(destination: WebhookDestination, draft: DestinationEditDraft) {
+    const currentKind = (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook'
+    const currentStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
+    return (draft.name.trim() || destination.name || destination.id) !== (destination.name || destination.id)
+        || draft.kind !== currentKind
+        || draft.status !== currentStatus
+        || Boolean(draft.url.trim())
 }
 
 function destinationConfigured(item: WatchlistItem) {

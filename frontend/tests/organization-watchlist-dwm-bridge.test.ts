@@ -9,6 +9,7 @@ import {
 } from '@/app/api/organizations/_organizationWatchlistDwmBridge'
 
 const organizationWorkspaceSource = readFileSync(new URL('../src/app/organizations/organizationWorkspaceClient.tsx', import.meta.url), 'utf8')
+const dwmAnalystPortalSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-analyst-portal.tsx', import.meta.url), 'utf8')
 
 test('organization workspace exposes destination lifecycle controls safely', () => {
     assert.match(organizationWorkspaceSource, /validDestinationUrl\(url\)/, 'destination save should validate URL shape before dry-run.')
@@ -21,6 +22,9 @@ test('organization workspace exposes destination lifecycle controls safely', () 
     assert.match(organizationWorkspaceSource, /deliveryMatchesSubject\(delivery, selectedSubject\)/, 'delivery history should filter by the selected org row.')
     assert.match(organizationWorkspaceSource, /nextRetryAt/, 'delivery history should show retry scheduling when present.')
     assert.match(organizationWorkspaceSource, /\/dashboard\/dwm\/cases\/\$\{encodeURIComponent\(delivery\.caseId\)\}/, 'delivery history should link case context.')
+    assert.match(organizationWorkspaceSource, /input\.focus === 'destinations' \|\| input\.focus === 'webhooks'/, 'DWM destination links should focus saved destinations, including legacy webhook links.')
+    assert.match(dwmAnalystPortalSource, /&focus=destinations/, 'DWM delivery panel should route operators to destination management.')
+    assert.doesNotMatch(dwmAnalystPortalSource, /&focus=webhooks/, 'DWM delivery panel should not use the old webhook focus value.')
     assert.doesNotMatch(organizationWorkspaceSource, /token=[^'"]+|discord-secret|webhook secret/i, 'workspace source should not hard-code webhook secrets.')
 })
 
@@ -137,7 +141,7 @@ test('summarizes mirrored DWM alert detail for organization watchlist feedback',
 })
 
 test('mirrors org watchlist save into DWM alert rebuild and returns alert delta', async () => {
-    const calls: Array<{ url: string, method: string, body?: any, headers: Record<string, string> }> = []
+    const calls: Array<{ url: string, method: string, body?: unknown, headers: Record<string, string> }> = []
     const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
         const url = input instanceof Request ? input.url : String(input)
         const method = init?.method || (input instanceof Request ? input.method : 'GET')

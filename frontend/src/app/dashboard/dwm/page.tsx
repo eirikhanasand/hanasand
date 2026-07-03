@@ -1,5 +1,6 @@
 import { DashboardPage } from '@/components/dashboard/ui'
 import type { DwmProductSnapshot } from '@/utils/dwm/product'
+import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
 import { DwmAnalystPortal } from './dwm-analyst-portal'
 
 export const dynamic = 'force-dynamic'
@@ -56,7 +57,7 @@ function firstParam(value: string | string[] | undefined) {
 }
 
 async function loadDwmSnapshot(scope: DwmPageScope): Promise<LoadResult<DwmProductSnapshot>> {
-    const base = process.env.TI_SCRAPER_API_BASE
+    const base = tiScraperApiBase()
     if (!base) return {
         data: emptyDwmProductSnapshot('missing scraper base', undefined, scope.tenantId),
         state: 'missing',
@@ -112,7 +113,7 @@ function emptyDwmProductSnapshot(reason: string, generatedAt = new Date().toISOS
 }
 
 async function loadDwmOperations(scope: DwmPageScope): Promise<LoadResult<DwmOperationsSnapshot | null>> {
-    const base = process.env.TI_SCRAPER_API_BASE
+    const base = tiScraperApiBase()
     if (!base) return { data: null, state: 'missing', label: 'Collection syncing', detail: 'Collection state is loading.' }
 
     try {
@@ -127,7 +128,7 @@ async function loadDwmOperations(scope: DwmPageScope): Promise<LoadResult<DwmOpe
 }
 
 async function loadDwmAlerts(scope: DwmPageScope): Promise<LoadResult<DwmAlertInboxItem[]>> {
-    const base = process.env.TI_SCRAPER_API_BASE
+    const base = tiScraperApiBase()
     if (!base) return { data: [], state: 'missing', label: 'Alerts syncing', detail: 'Saved alert state is loading.' }
 
     try {
@@ -143,7 +144,7 @@ async function loadDwmAlerts(scope: DwmPageScope): Promise<LoadResult<DwmAlertIn
 }
 
 async function loadDwmDeliveries(scope: DwmPageScope): Promise<LoadResult<DwmDeliveryItem[]>> {
-    const base = process.env.TI_SCRAPER_API_BASE
+    const base = tiScraperApiBase()
     if (!base) return { data: [], state: 'missing', label: 'Deliveries syncing', detail: 'Delivery state is loading.' }
 
     try {

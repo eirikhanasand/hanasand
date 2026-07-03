@@ -12,6 +12,9 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(page).toContain('SelectedActionBar')
     expect(page).toContain('Customer delivery')
     expect(page).toContain('caseDetailHref')
+    expect(page).toContain('&focus=destinations')
+    expect(page).toContain('Manage destination')
+    expect(page).not.toContain('&focus=webhooks')
 
     expect(page).toContain('data-dwm-workflow-snapshot')
     expect(page).toContain('Workflow route')
