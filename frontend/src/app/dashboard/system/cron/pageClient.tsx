@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Activity, AlertTriangle, CalendarClock, CheckCircle2, Clock3, Cpu, FileText, PauseCircle, PlayCircle, RefreshCcw, Save, ServerCog, TerminalSquare, Zap } from 'lucide-react'
+import { Activity, AlertTriangle, CalendarClock, ChevronDown, Clock3, Cpu, FileText, PauseCircle, PlayCircle, RefreshCcw, Save, ServerCog, TerminalSquare, Zap } from 'lucide-react'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import { fetchManagedCronJobs, updateManagedCronJob, type ManagedCronJob } from '@/utils/systemCron/client'
 
@@ -21,6 +21,8 @@ export default function CronJobsClient() {
         const daily = sumMoney(jobs.map(job => job.costEstimate.dailyUsd))
         return { total: jobs.length, enabled, running, failed, hourly, daily }
     }, [jobs])
+    const attentionJobs = useMemo(() => jobs.filter(needsAttention), [jobs])
+    const runnableJobs = useMemo(() => jobs.filter(job => job.controls.includes('run_now') && !needsAttention(job)).slice(0, 3), [jobs])
 
     useEffect(() => {
         void load()
@@ -59,21 +61,59 @@ export default function CronJobsClient() {
 
     return (
         <div className='grid gap-3'>
-            <DashboardPanel className='grid gap-3 p-4'>
-                <div className='flex flex-wrap items-center justify-between gap-3'>
-                    <div className='grid gap-2 sm:grid-cols-3 xl:grid-cols-6'>
-                        <Stat label='Total jobs' value={String(summary.total)} icon={<ServerCog className='h-4 w-4' />} />
-                        <Stat label='Enabled' value={String(summary.enabled)} icon={<CheckCircle2 className='h-4 w-4' />} />
-                        <Stat label='Running' value={String(summary.running)} icon={<Activity className='h-4 w-4' />} />
-                        <Stat label='Issues' value={String(summary.failed)} icon={<AlertTriangle className='h-4 w-4' />} tone={summary.failed ? 'bad' : 'ok'} />
-                        <Stat label='Hourly cost' value={money(summary.hourly)} icon={<Zap className='h-4 w-4' />} />
-                        <Stat label='Daily cost' value={money(summary.daily)} icon={<Zap className='h-4 w-4' />} />
+            <DashboardPanel className='grid gap-4 p-4'>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                    <div className='min-w-0'>
+                        <p className='text-xs font-semibold uppercase tracking-normal text-ui-muted'>Scheduled operations</p>
+                        <h2 className='mt-1 text-lg font-semibold text-ui-text'>{primaryHeadline(summary)}</h2>
+                        <p className='mt-1 text-sm text-ui-muted'>{summary.total ? `${summary.enabled}/${summary.total} enabled · ${summary.running} running · ${money(summary.daily)}/day estimate` : 'Waiting for the cron inventory.'}</p>
                     </div>
                     <button onClick={() => void load()} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:border-ui-primary hover:bg-ui-panel'>
                         <RefreshCcw className='h-4 w-4' />
                         {busy === 'load' ? 'Refreshing' : 'Refresh'}
                     </button>
                 </div>
+
+                <div className='grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]'>
+                    <section className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3' aria-labelledby='cron-attention-heading'>
+                        <div className='flex items-center gap-2'>
+                            <AlertTriangle className={`h-4 w-4 ${attentionJobs.length ? 'text-ui-danger' : 'text-ui-success'}`} />
+                            <h3 id='cron-attention-heading' className='text-sm font-semibold text-ui-text'>Needs attention</h3>
+                            <span className='ml-auto text-xs font-semibold text-ui-muted'>{attentionJobs.length}</span>
+                        </div>
+                        {attentionJobs.length ? (
+                            <div className='grid gap-2'>
+                                {attentionJobs.slice(0, 3).map(job => (
+                                    <a key={job.id} href={`#job-${job.id}`} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text transition hover:border-ui-primary'>
+                                        <span className='font-semibold'>{job.name}</span>
+                                        <span className='mt-1 block text-xs text-ui-muted'>{job.lastError || `${operationalStateLabel(job.status)} · ${job.category}`}</span>
+                                    </a>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className='text-sm text-ui-muted'>No blocked or failing jobs in the current inventory.</p>
+                        )}
+                    </section>
+
+                    <section className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3' aria-labelledby='cron-next-action-heading'>
+                        <div className='flex items-center gap-2'>
+                            <PlayCircle className='h-4 w-4 text-ui-primary' />
+                            <h3 id='cron-next-action-heading' className='text-sm font-semibold text-ui-text'>Next safe action</h3>
+                        </div>
+                        {runnableJobs[0] ? (
+                            <div className='grid gap-2'>
+                                <p className='text-sm text-ui-muted'>{runnableJobs[0].name} can be run manually without changing the schedule.</p>
+                                <button onClick={() => void save(runnableJobs[0], { action: 'run_now' })} disabled={busy === runnableJobs[0].id} className='inline-flex h-9 w-fit items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-white hover:bg-ui-primary/90 disabled:cursor-not-allowed disabled:opacity-50'>
+                                    <PlayCircle className='h-4 w-4' />
+                                    {busy === runnableJobs[0].id ? 'Starting' : 'Run selected job'}
+                                </button>
+                            </div>
+                        ) : (
+                            <p className='text-sm text-ui-muted'>No manual run action is available from this snapshot.</p>
+                        )}
+                    </section>
+                </div>
+
                 {message ? <p className='text-sm text-ui-muted'>{message}</p> : null}
             </DashboardPanel>
 
@@ -86,10 +126,10 @@ export default function CronJobsClient() {
                             <h2 className='text-sm font-semibold uppercase tracking-normal text-ui-muted'>{category}</h2>
                             <span className='text-xs text-ui-muted'>{rows.length} job{rows.length === 1 ? '' : 's'}</span>
                         </div>
-                        <div className='grid gap-3 xl:grid-cols-2'>
+                        <div className='grid gap-2'>
                             {rows.map(job => (
-                                <DashboardPanel key={job.id} className='grid gap-3 p-4'>
-                                    <div className='flex items-start justify-between gap-3'>
+                                <DashboardPanel key={job.id} id={`job-${job.id}`} className='grid gap-3 p-4'>
+                                    <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start'>
                                         <div className='min-w-0'>
                                             <div className='flex flex-wrap items-center gap-2'>
                                                 <ServerCog className='h-4 w-4 text-ui-muted' />
@@ -97,6 +137,30 @@ export default function CronJobsClient() {
                                                 <StatusPill job={job} />
                                             </div>
                                             <p className='mt-1 text-sm leading-5 text-ui-muted'>{job.description}</p>
+                                            <div className='mt-3 grid gap-2 sm:grid-cols-3'>
+                                                <Info icon={<CalendarClock className='h-4 w-4' />} label='Schedule' value={job.schedule} />
+                                                <Info icon={<Clock3 className='h-4 w-4' />} label='Next run' value={timeLabel(job.nextRunAt)} />
+                                                <Info icon={<AlertTriangle className='h-4 w-4' />} label='Health' value={job.failureCount ? `${job.failureCount}: ${job.lastError || 'See logs'}` : 'Clear'} />
+                                            </div>
+                                        </div>
+                                        <div className='flex flex-wrap gap-2 lg:justify-end'>
+                                            {(job.controls.includes('pause') || job.controls.includes('resume')) && (
+                                                <button onClick={() => void save(job, { enabled: !job.enabled })} disabled={busy === job.id} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-50'>
+                                                    {job.enabled ? <PauseCircle className='h-4 w-4' /> : <PlayCircle className='h-4 w-4' />}
+                                                    {busy === job.id ? 'Saving' : job.enabled ? 'Pause' : 'Resume'}
+                                                </button>
+                                            )}
+                                            {job.controls.includes('run_now') && (
+                                                <button onClick={() => void save(job, { action: 'run_now' })} disabled={busy === job.id} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-50'>
+                                                    <PlayCircle className='h-4 w-4' />
+                                                    {busy === job.id ? 'Starting' : 'Run now'}
+                                                </button>
+                                            )}
+                                            {!job.controls.length && (
+                                                <span className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted'>
+                                                    Observable only
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
 
@@ -114,40 +178,22 @@ export default function CronJobsClient() {
                                                 </button>
                                             </div>
                                         </label>
-                                    ) : (
-                                        <Info icon={<CalendarClock className='h-4 w-4' />} label='Schedule' value={job.schedule} />
-                                    )}
+                                    ) : null}
 
-                                    <div className='grid gap-2 md:grid-cols-2'>
-                                        <Info icon={<Clock3 className='h-4 w-4' />} label='Last / next' value={`${timeLabel(job.lastRunAt)} / ${timeLabel(job.nextRunAt)}`} />
-                                        <Info icon={<Activity className='h-4 w-4' />} label='Runtime' value={`${duration(job.currentRunDurationMs) || 'not running'} current; ${duration(job.averageRuntimeMs) || 'measuring'} avg`} />
-                                        <Info icon={<AlertTriangle className='h-4 w-4' />} label='Failures' value={job.failureCount ? `${job.failureCount}: ${job.lastError || 'See logs'}` : 'Failure monitor clear'} />
-                                        <Info icon={<Cpu className='h-4 w-4' />} label='Resources' value={resourceLabel(job)} />
-                                        <Info icon={<Zap className='h-4 w-4' />} label='Cost' value={`${money(job.costEstimate.hourlyUsd)}/hr · ${money(job.costEstimate.dailyUsd)}/day`} />
-                                        <Info icon={<FileText className='h-4 w-4' />} label='Control' value={controlLabel(job)} />
-                                    </div>
-
-                                    <Info icon={<TerminalSquare className='h-4 w-4' />} label='Log' value={job.logExcerpt || 'Log stream live; no recent line.'} mono />
-
-                                    <div className='flex flex-wrap gap-2'>
-                                        {(job.controls.includes('pause') || job.controls.includes('resume')) && (
-                                            <button onClick={() => void save(job, { enabled: !job.enabled })} disabled={busy === job.id} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-50'>
-                                                {job.enabled ? <PauseCircle className='h-4 w-4' /> : <PlayCircle className='h-4 w-4' />}
-                                                {busy === job.id ? 'Saving' : job.enabled ? 'Pause' : 'Resume'}
-                                            </button>
-                                        )}
-                                        {job.controls.includes('run_now') && (
-                                            <button onClick={() => void save(job, { action: 'run_now' })} disabled={busy === job.id} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-50'>
-                                                <PlayCircle className='h-4 w-4' />
-                                                {busy === job.id ? 'Starting' : 'Run now'}
-                                            </button>
-                                        )}
-                                        {!job.controls.length && (
-                                            <span className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted'>
-                                                Observable only
-                                            </span>
-                                        )}
-                                    </div>
+                                    <details className='group rounded-lg border border-ui-border bg-ui-raised'>
+                                        <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary'>
+                                            <span>Runtime, cost, and log details</span>
+                                            <ChevronDown className='h-4 w-4 text-ui-muted transition group-open:rotate-180' />
+                                        </summary>
+                                        <div className='grid gap-2 border-t border-ui-border p-3 md:grid-cols-2'>
+                                            <Info icon={<Clock3 className='h-4 w-4' />} label='Last run' value={timeLabel(job.lastRunAt)} />
+                                            <Info icon={<Activity className='h-4 w-4' />} label='Runtime' value={`${duration(job.currentRunDurationMs) || 'not running'} current; ${duration(job.averageRuntimeMs) || 'measuring'} avg`} />
+                                            <Info icon={<Cpu className='h-4 w-4' />} label='Resources' value={resourceLabel(job)} />
+                                            <Info icon={<Zap className='h-4 w-4' />} label='Cost' value={`${money(job.costEstimate.hourlyUsd)}/hr · ${money(job.costEstimate.dailyUsd)}/day`} />
+                                            <Info icon={<FileText className='h-4 w-4' />} label='Control' value={controlLabel(job)} />
+                                            <Info icon={<TerminalSquare className='h-4 w-4' />} label='Log' value={job.logExcerpt || 'Log stream live; no recent line.'} mono />
+                                        </div>
+                                    </details>
                                 </DashboardPanel>
                             ))}
                         </div>
@@ -156,6 +202,18 @@ export default function CronJobsClient() {
             })}
         </div>
     )
+}
+
+function primaryHeadline(summary: { failed: number, running: number, total: number }) {
+    if (!summary.total) return 'Loading scheduled work'
+    if (summary.failed === 1) return '1 job needs review'
+    if (summary.failed) return `${summary.failed} jobs need review`
+    if (summary.running) return `${summary.running} job${summary.running === 1 ? '' : 's'} running now`
+    return 'All scheduled jobs are quiet'
+}
+
+function needsAttention(job: ManagedCronJob) {
+    return job.status === 'failed' || job.status === 'blocked' || job.failureCount > 0
 }
 
 function StatusPill({ job }: { job: ManagedCronJob }) {
@@ -167,19 +225,6 @@ function StatusPill({ job }: { job: ManagedCronJob }) {
                 ? 'border-ui-success bg-ui-success/15 text-ui-success'
                 : 'border-ui-border bg-ui-raised text-ui-muted'
     return <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${tone}`}>{operationalStateLabel(job.status)}</span>
-}
-
-function Stat({ label, value, icon, tone }: { label: string, value: string, icon: ReactNode, tone?: 'ok' | 'bad' }) {
-    const color = tone === 'bad' ? 'text-ui-danger' : tone === 'ok' ? 'text-ui-success' : 'text-ui-text'
-    return (
-        <div className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
-            <div className='flex items-center gap-2 text-ui-muted'>
-                {icon}
-                <p className='text-[11px] font-semibold uppercase'>{label}</p>
-            </div>
-            <p className={`mt-1 text-sm font-semibold ${color}`}>{value}</p>
-        </div>
-    )
 }
 
 function Info({ icon, label, value, mono = false }: { icon: ReactNode, label: string, value: string, mono?: boolean }) {
