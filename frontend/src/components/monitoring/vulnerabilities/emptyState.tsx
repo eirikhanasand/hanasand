@@ -17,7 +17,7 @@ export default function EmptyState({ scanStatus }: { scanStatus: GetVulnerabilit
 function emptyStateCopy(scanStatus: GetVulnerabilities['scanStatus']) {
     if (scanStatus.blocker || scanStatus.lastError) {
         return {
-            title: 'Scanner is blocked',
+            title: 'Scanner needs setup',
             message: scanStatus.blockerAction || scanStatus.blocker || scanStatus.lastError || 'The scanner reported a service issue before package findings could be stored.',
         }
     }
