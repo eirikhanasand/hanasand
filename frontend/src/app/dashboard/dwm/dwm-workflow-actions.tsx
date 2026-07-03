@@ -14,6 +14,10 @@ export function DwmWorkflowActions({ initialTerms }: { initialTerms: string[] })
     const [terms, setTerms] = useState(initialTerms.join('\n'))
     const [webhookUrl, setWebhookUrl] = useState('')
     const [sourceTarget, setSourceTarget] = useState('')
+    const [claimActor, setClaimActor] = useState('')
+    const [claimCompany, setClaimCompany] = useState('')
+    const [claimData, setClaimData] = useState('')
+    const [claimUrl, setClaimUrl] = useState('')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [result, setResult] = useState<WorkflowResult | null>(null)
 
@@ -37,6 +41,58 @@ export function DwmWorkflowActions({ initialTerms }: { initialTerms: string[] })
                 ok: rebuild.ok,
                 message: rebuild.ok ? `Watchlist saved. Rebuilt ${savedAlertCount} alerts.` : rebuild.message,
             })
+            router.refresh()
+        } catch (error) {
+            setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
+        } finally {
+            setBusyAction(null)
+        }
+    }
+
+    async function ingestMetadataClaim(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        setBusyAction('claim')
+        setResult(null)
+
+        const actor = claimActor.trim()
+        const company = claimCompany.trim()
+        const claimedData = claimData.trim() || 'new victim claim'
+        const url = claimUrl.trim()
+        const nextTerms = ensureTerm(terms, company)
+
+        try {
+            const ingest = await postJson('/api/dwm/exposure-claims/ingest', {
+                items: [{
+                    tenantId: 'default',
+                    actor,
+                    company,
+                    claimedData,
+                    sourceName: `${actor} metadata intake`,
+                    sourceFamily: 'darkweb_metadata',
+                    title: `${actor} has just published a new victim: ${company}`,
+                    text: `${actor} victim: ${company}. ${claimedData}.`,
+                    publishedAt: new Date().toISOString(),
+                    url: url || undefined,
+                }],
+            })
+            if (!ingest.ok) throw new Error(ingest.message)
+            const accepted = typeof ingest.accepted === 'number' ? ingest.accepted : 0
+            if (!accepted) throw new Error('No claim was accepted. Check the actor and victim fields.')
+
+            const watchlist = await postJson('/api/dwm/watchlists', {
+                tenantId: 'default',
+                name: 'Default company exposure watchlist',
+                terms: nextTerms,
+                webhookUrl: webhookUrl.trim() || undefined,
+            })
+            if (!watchlist.ok) throw new Error(watchlist.message)
+
+            const rebuild = await postJson('/api/dwm/alerts/rebuild', { tenantId: 'default' })
+            const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
+            setTerms(nextTerms)
+            setClaimData('')
+            setClaimUrl('')
+            setResult({ ok: rebuild.ok, message: rebuild.ok ? `Ingested ${accepted} claim(s). Rebuilt ${savedAlertCount} alert(s).` : rebuild.message })
             router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -201,9 +257,11 @@ export function DwmWorkflowActions({ initialTerms }: { initialTerms: string[] })
     const termCount = countTerms(terms)
     const webhookConfigured = /^https?:\/\//i.test(webhookUrl.trim())
     const sourceReady = sourceTarget.trim().length > 0
+    const claimReady = claimActor.trim().length > 0 && claimCompany.trim().length > 0
     const busy = busyAction !== null
     const saveDisabledReason = termCount ? '' : 'Add at least one company, domain, supplier, or product term first.'
     const sourceDisabledReason = sourceReady ? '' : 'Add a public Telegram handle or t.me URL first.'
+    const claimDisabledReason = claimReady ? '' : 'Add the actor name and affected company before ingesting evidence.'
     const webhookTestDisabledReason = webhookConfigured ? '' : 'Enter an HTTPS webhook URL before testing delivery.'
 
     return (
@@ -219,7 +277,7 @@ export function DwmWorkflowActions({ initialTerms }: { initialTerms: string[] })
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div>
                         <h2 className='text-base font-semibold text-ui-text'>First-run path</h2>
-                        <p className='mt-1 text-sm leading-6 text-ui-muted'>Use this sequence when there are no alerts yet: define matching terms, collect approved sources, rebuild cases, then test delivery.</p>
+                        <p className='mt-1 text-sm leading-6 text-ui-muted'>Define matching terms, ingest source evidence, rebuild alerts, open a case, then test delivery.</p>
                     </div>
                     {result ? (
                         <p data-dwm-workflow-result className={`rounded-lg border px-3 py-2 text-sm ${result.ok ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'}`}>
@@ -235,7 +293,7 @@ export function DwmWorkflowActions({ initialTerms }: { initialTerms: string[] })
                 </div>
             </section>
 
-            <div className='grid gap-4 xl:grid-cols-[1.05fr_0.95fr]'>
+            <div className='grid gap-4 xl:grid-cols-2 2xl:grid-cols-[1.05fr_0.95fr_0.95fr]'>
                 <form onSubmit={saveWatchlist} className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
@@ -269,6 +327,47 @@ export function DwmWorkflowActions({ initialTerms }: { initialTerms: string[] })
                     </div>
                     {saveDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-warning'>{saveDisabledReason}</p> : null}
                     {webhookTestDisabledReason ? <p className='mt-1 text-xs leading-5 text-ui-muted'>{webhookTestDisabledReason}</p> : null}
+                </form>
+
+                <form onSubmit={ingestMetadataClaim} className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
+                    <div className='flex items-start justify-between gap-3'>
+                        <div>
+                            <h2 className='text-base font-semibold text-ui-text'>Metadata claim intake</h2>
+                            <p className='mt-1 text-sm leading-6 text-ui-muted'>Create a metadata-only source capture, add the victim to the watchlist, and rebuild alerts.</p>
+                        </div>
+                        <ShieldCheck className='h-5 w-5 text-ui-primary' />
+                    </div>
+                    <div className='mt-4 grid gap-3 sm:grid-cols-2'>
+                        <input
+                            value={claimActor}
+                            onChange={event => setClaimActor(event.target.value)}
+                            placeholder='Actor'
+                            className='h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                        />
+                        <input
+                            value={claimCompany}
+                            onChange={event => setClaimCompany(event.target.value)}
+                            placeholder='Affected company or domain'
+                            className='h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                        />
+                    </div>
+                    <input
+                        value={claimData}
+                        onChange={event => setClaimData(event.target.value)}
+                        placeholder='Claimed data, sector, or access type'
+                        className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                    />
+                    <input
+                        value={claimUrl}
+                        onChange={event => setClaimUrl(event.target.value)}
+                        placeholder='Source URL, optional'
+                        className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                    />
+                    <button disabled={busy || Boolean(claimDisabledReason)} title={claimDisabledReason || undefined} className='mt-3 inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
+                        {busyAction === 'claim' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus className='h-4 w-4' />}
+                        Ingest and rebuild
+                    </button>
+                    {claimDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-muted'>{claimDisabledReason}</p> : null}
                 </form>
 
                 <form onSubmit={submitSource} className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
@@ -345,6 +444,14 @@ function WorkflowButton({ busy, disabled, disabledReason, icon, onClick, childre
 
 function countTerms(value: string) {
     return value.split(/[\n,]/).map(term => term.trim()).filter(Boolean).length
+}
+
+function ensureTerm(value: string, term: string) {
+    const cleanTerm = term.trim()
+    if (!cleanTerm) return value
+    const terms = value.split(/[\n,]/).map(item => item.trim()).filter(Boolean)
+    const exists = terms.some(item => item.toLowerCase() === cleanTerm.toLowerCase())
+    return (exists ? terms : [...terms, cleanTerm]).join('\n')
 }
 
 async function postJson(path: string, body: Record<string, unknown>): Promise<Record<string, unknown> & { ok: boolean, message: string }> {
