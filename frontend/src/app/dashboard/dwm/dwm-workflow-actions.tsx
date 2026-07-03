@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useState } from 'react'
 import { Activity, BellRing, Loader2, Plus, RefreshCw, Send, ShieldCheck } from 'lucide-react'
@@ -55,8 +56,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         })
     }
 
-    async function saveWatchlist(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault()
+    async function saveAndRebuildWatchlist() {
         setBusyAction('watchlist')
         setResult(null)
         const nextTerms = workflowTerms(terms)
@@ -78,6 +78,11 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         } finally {
             setBusyAction(null)
         }
+    }
+
+    async function saveWatchlist(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        await saveAndRebuildWatchlist()
     }
 
     async function ingestMetadataClaim(event: FormEvent<HTMLFormElement>) {
@@ -466,6 +471,53 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const sourceDisabledReason = sourceReady ? '' : 'Add a public Telegram handle or t.me URL first.'
     const claimDisabledReason = claimReady ? '' : 'Add the actor name and affected company before ingesting evidence.'
     const webhookTestDisabledReason = webhookConfigured ? '' : 'Enter an HTTPS webhook URL before testing delivery.'
+    const routeQueue = [
+        {
+            id: 'full_route',
+            label: 'Run full route',
+            state: alertCount ? `${alertCount} alerts ready` : captureCount ? `${captureCount} captures ready` : 'source pack ready',
+            detail: 'Enable source packs, collect captures, rebuild alerts, open a case, and dry-run delivery when a webhook is staged.',
+            tone: alertCount ? 'ok' : captureCount ? 'warn' : 'neutral',
+            command: 'Run to case',
+            busy: busyAction === 'source-case',
+            disabled: busy,
+            onClick: runSourcePackToCase,
+        },
+        {
+            id: 'watchlist',
+            label: 'Watchlist match',
+            state: effectiveTermCount ? `${effectiveTermCount} terms` : 'starter terms staged',
+            detail: 'Save the customer terms and rebuild matching alerts from collected evidence.',
+            tone: effectiveTermCount ? 'ok' : 'warn',
+            command: 'Save and rebuild',
+            busy: busyAction === 'watchlist',
+            disabled: busy,
+            onClick: saveAndRebuildWatchlist,
+        },
+        {
+            id: 'capture',
+            label: 'Live capture',
+            state: captureCount ? `${captureCount} captures` : latestRunStatus || 'not collected',
+            detail: 'Run bounded public collection and push safe excerpts into the exposure queue.',
+            tone: captureCount ? 'ok' : activeSourceCount ? 'warn' : 'neutral',
+            command: 'Run collection',
+            busy: busyAction === 'collection',
+            disabled: busy,
+            onClick: runCollection,
+        },
+        {
+            id: 'delivery',
+            label: 'Discord/webhook',
+            state: deliveryCount ? `${deliveryCount} attempts` : webhookConfigured ? 'URL staged' : 'destination needed',
+            detail: deliveryCount ? 'Review the delivery result before recording customer notification.' : 'Test the endpoint before sending customer findings.',
+            tone: deliveryCount ? 'ok' : webhookConfigured ? 'warn' : 'bad',
+            command: webhookConfigured ? 'Test webhook' : 'Add webhook URL',
+            busy: busyAction === 'webhook-test',
+            disabled: busy || Boolean(webhookTestDisabledReason),
+            disabledReason: webhookTestDisabledReason || undefined,
+            onClick: testWebhook,
+        },
+    ] satisfies RouteQueueAction[]
 
     return (
         <div data-dwm-workflow-runbook className='grid gap-4 rounded-lg border border-[#26344d] bg-[#0b121e] p-4 text-[#edf4ff]'>
@@ -488,6 +540,21 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 <RouteStateCard label='Captures' value={String(captureCount)} detail={latestRunStatus ? `${latestRunStatus}${latestRunCaptureCount ? ` · ${latestRunCaptureCount} latest` : ''}` : 'No run loaded'} tone={captureCount ? 'ok' : 'neutral'} />
                 <RouteStateCard label='Alerts' value={String(alertCount)} detail={`${telemetry?.watchlistMatchCount ?? 0} source match${(telemetry?.watchlistMatchCount ?? 0) === 1 ? '' : 'es'}`} tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
                 <RouteStateCard label='Webhook' value={deliveryCount ? `${deliveryCount} attempt${deliveryCount === 1 ? '' : 's'}` : webhookConfigured ? 'URL ready' : 'Not tested'} detail={webhookConfigured ? 'Test before customer send' : 'Paste HTTPS endpoint to dry-run'} tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
+            </section>
+
+            <section data-dwm-route-queue className='rounded-lg border border-[#26344d] bg-[#101827] p-3'>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                    <div className='min-w-0'>
+                        <h3 className='text-sm font-semibold text-[#edf4ff]'>Route queue</h3>
+                        <p className='mt-0.5 text-xs leading-5 text-[#8fa0ba]'>Run the next backed step from watchlist to case and delivery.</p>
+                    </div>
+                    <Link href='/dashboard/ti/workbench' className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#5f86ff] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#5f86ff]'>
+                        Recent attacks
+                    </Link>
+                </div>
+                <div className='mt-3 grid gap-2 lg:grid-cols-4'>
+                    {routeQueue.map(action => <RouteQueueCard key={action.id} action={action} />)}
+                </div>
             </section>
 
             <section className='overflow-hidden rounded-lg border border-[#26344d] bg-[#101827]'>
@@ -673,6 +740,50 @@ function readString(value: unknown) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+type RouteQueueAction = {
+    id: string
+    label: string
+    state: string
+    detail: string
+    tone: 'ok' | 'warn' | 'bad' | 'neutral'
+    command: string
+    busy: boolean
+    disabled: boolean
+    disabledReason?: string
+    onClick: () => void | Promise<void>
+}
+
+function RouteQueueCard({ action }: { action: RouteQueueAction }) {
+    const toneClass = action.tone === 'ok'
+        ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'
+        : action.tone === 'warn'
+            ? 'border-[#6f5417] bg-[#2a220f] text-[#ffd879]'
+            : action.tone === 'bad'
+                ? 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
+                : 'border-[#27364f] bg-[#0b121e] text-[#aab7cc]'
+    return (
+        <article className='grid min-h-44 gap-3 rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
+            <div className='min-w-0'>
+                <div className='flex items-start justify-between gap-2'>
+                    <h4 className='wrap-break-word text-sm font-semibold text-[#edf4ff]'>{action.label}</h4>
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClass}`}>{action.state}</span>
+                </div>
+                <p className='mt-2 line-clamp-3 text-xs leading-5 text-[#8fa0ba]'>{action.detail}</p>
+            </div>
+            <button
+                type='button'
+                onClick={action.onClick}
+                disabled={action.disabled}
+                title={action.disabledReason}
+                className='mt-auto inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[#27364f] bg-[#101827] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#5f86ff] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#5f86ff] disabled:cursor-not-allowed disabled:opacity-60'
+            >
+                {action.busy ? <Loader2 className='h-4 w-4 animate-spin' /> : <Activity className='h-4 w-4' />}
+                {action.busy ? 'Running...' : action.command}
+            </button>
+        </article>
+    )
 }
 
 function RouteStepRow({ stage, state, next, command, tone }: { stage: string, state: string, next: string, command: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
