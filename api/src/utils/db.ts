@@ -32,12 +32,7 @@ const pool = new Pool({
 export default async function run(query: string, params?: SQLParamType) {
     while (true) {
         try {
-            const client = await pool.connect()
-            try {
-                return await client.query(query, params ?? [])
-            } finally {
-                client.release()
-            }
+            return await queryOnce(query, params)
         } catch (error) {
             if (!isTransientDatabaseError(error)) {
                 throw error
@@ -47,6 +42,15 @@ export default async function run(query: string, params?: SQLParamType) {
             console.log(error)
             await sleep(config.CACHE_TTL_HOT)
         }
+    }
+}
+
+export async function queryOnce(query: string, params?: SQLParamType) {
+    const client = await pool.connect()
+    try {
+        return await client.query(query, params ?? [])
+    } finally {
+        client.release()
     }
 }
 

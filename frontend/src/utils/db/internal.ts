@@ -3,18 +3,21 @@
 import { requestService } from '@/utils/monitoring/serviceApi'
 
 export type DatabaseOverview = {
+    status: 'healthy' | 'unavailable'
     generatedAt: string
-    clusterCount: number
-    databaseCount: number
-    totalSizeBytes: number
-    activeQueries: number
-    averageQuerySeconds?: number | null
-    longestQuery?: {
-        query?: string
-        durationSeconds?: number | null
-        database?: string
-        state?: string
-    } | null
+    clusterCount: number | null
+    databaseCount: number | null
+    totalSizeBytes: number | null
+    activeQueries: number | null
+    averageQuerySeconds: number | null
+    longRunningThresholdSeconds: number
+    longestQuery?: DatabaseQueryActivity | null
+    queries: DatabaseQueryActivity[]
+    health: {
+        message: string
+        detail?: string
+        category?: 'auth' | 'network' | 'permission' | 'unknown'
+    }
     clusters: Array<{
         id: string
         name: string
@@ -28,10 +31,21 @@ export type DatabaseOverview = {
         databases: Array<{
             name: string
             sizeBytes: number
-            tableCount: number
+            tableCount: number | null
             activeConnections?: number
         }>
     }>
+}
+
+export type DatabaseQueryActivity = {
+    database: string | null
+    user: string | null
+    state: string | null
+    durationSeconds: number | null
+    waitEventType: string | null
+    waitEvent: string | null
+    query: string | null
+    isLongRunning: boolean
 }
 
 export type BackupService = {
@@ -43,6 +57,12 @@ export type BackupService = {
     totalStorage?: string
     lastBackup?: string | null
     nextBackup?: string | null
+    retention?: string | null
+    storageTarget?: string | null
+    latestFile?: string | null
+    latestSize?: string | null
+    latestDuration?: string | null
+    healthCheck?: string | null
 }
 
 export type BackupFile = {
