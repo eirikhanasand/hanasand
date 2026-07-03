@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
@@ -156,6 +156,24 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
     const webhookState = deliveries.some(delivery => delivery.alertId === 'webhook_test' && (delivery.status === 'dry_run' || delivery.status === 'delivered')) ? 'Tested' : 'Not tested'
     const apiProblemCount = [dataHealth.snapshot, dataHealth.operations, dataHealth.alerts, dataHealth.deliveries]
         .filter(item => item.state !== 'live').length + (dataHealth.usingFallbackAlerts ? 1 : 0)
+    const workflowTelemetry = {
+        activeSourceCount,
+        sourceCount,
+        captureCount,
+        watchlistMatchCount,
+        latestRunStatus: operations?.latestRun?.status,
+        latestRunCaptureCount: operations?.latestRun?.captureCount,
+        alertCount: alerts.length,
+        deliveryCount: deliveries.length,
+    }
+    const workflowActions = (
+        <DwmWorkflowActions
+            tenantId={tenantId}
+            organizationId={selectedOrganizationId}
+            initialTerms={snapshot.watchlist.map(term => term.value)}
+            telemetry={workflowTelemetry}
+        />
+    )
 
     useEffect(() => {
         if (queue.length && !queue.some(alert => alert.id === selectedId)) {
@@ -377,7 +395,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                                 onSend={sendAlert}
                             />
                         ) : (
-                            <NoCaseWorkspace latestCaptures={latestCaptures} />
+                            <NoCaseWorkspace latestCaptures={latestCaptures} workflowActions={workflowActions} />
                         )}
                     </main>
 
@@ -391,23 +409,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                 </div>
             </section>
 
-            <section id='dwm-workflow-actions' className='scroll-mt-24'>
-                <DwmWorkflowActions
-                    tenantId={tenantId}
-                    organizationId={selectedOrganizationId}
-                    initialTerms={snapshot.watchlist.map(term => term.value)}
-                    telemetry={{
-                        activeSourceCount: operations?.counts.activeSourceCount ?? 0,
-                        sourceCount: operations?.counts.sourceCount ?? 0,
-                        captureCount,
-                        watchlistMatchCount: operations?.counts.watchlistMatchCount ?? 0,
-                        latestRunStatus: operations?.latestRun?.status,
-                        latestRunCaptureCount: operations?.latestRun?.captureCount,
-                        alertCount: alerts.length,
-                        deliveryCount: deliveries.length,
-                    }}
-                />
-            </section>
+            {selectedAlert ? <section id='dwm-workflow-actions' className='scroll-mt-24'>{workflowActions}</section> : null}
         </div>
     )
 }
@@ -1502,52 +1504,74 @@ function CaseBrief({ label, value }: { label: string, value: string }) {
     )
 }
 
-function NoCaseWorkspace({ latestCaptures }: { latestCaptures: OperationsSnapshot['latestCaptures'] }) {
+function NoCaseWorkspace({ latestCaptures, workflowActions }: { latestCaptures: OperationsSnapshot['latestCaptures'], workflowActions: ReactNode }) {
     const newestCapture = [...latestCaptures].sort((first, second) => second.collectedAt.localeCompare(first.collectedAt))[0]
-    const monitoringBrief = {
-        headline: latestCaptures.length ? 'Monitoring is collecting safe source records' : 'No customer alerts match the watchlist right now',
-        whatHappened: latestCaptures.length
-            ? `${latestCaptures.length} recent capture${latestCaptures.length === 1 ? '' : 's'} passed duplicate and safety checks, but none currently require a customer alert.`
-            : 'Monitoring is active, but no accepted source record currently matches the saved watchlist strongly enough to open a case.',
-        whyItMatters: 'A quiet case list is only useful when source collection, watch terms, and delivery routes are still visible.',
-        nextAction: latestCaptures.length
-            ? 'Review recent captures, tune watched terms, and run a webhook test before the first customer alert.'
-            : 'Check watch terms, confirm source health, and add a delivery route before relying on customer notifications.',
-        readyForCustomer: false,
-        evidenceBoundary: 'Show only safe excerpts and metadata; keep raw leaked files and secrets out of customer updates.',
-        sourceRecords: newestCapture ? `Newest capture from ${newestCapture.sourceName} ${relativeTimeLabel(newestCapture.collectedAt)}.` : 'No accepted captures are available in this view yet.',
-        workflowReadiness: 'No customer alert is waiting; keep source collection and webhook testing ready for the next match.',
-    }
+    const operatorRows = [
+        {
+            stage: 'Scope',
+            state: 'Watchlist controls are ready',
+            action: 'Edit watchlist',
+            detail: 'Companies, domains, suppliers, brands, and products define match scope.',
+        },
+        {
+            stage: 'Collection',
+            state: latestCaptures.length ? `${latestCaptures.length} accepted capture${latestCaptures.length === 1 ? '' : 's'}` : 'No accepted captures',
+            action: 'Run collection',
+            detail: newestCapture ? `${newestCapture.sourceName} ${relativeTimeLabel(newestCapture.collectedAt)}` : 'Approved source records appear after duplicate and safety checks.',
+        },
+        {
+            stage: 'Case path',
+            state: 'No alert selected',
+            action: 'Rebuild alerts',
+            detail: 'Matches become reviewable alerts with evidence, provenance, and delivery state.',
+        },
+        {
+            stage: 'Delivery',
+            state: 'Customer send blocked',
+            action: 'Test webhook',
+            detail: 'Dry-run delivery before sending customer notifications.',
+        },
+    ]
     return (
-        <div className='grid gap-5 p-5'>
-            <AnalystBriefPanel brief={monitoringBrief} />
-            <section data-dwm-zero-case-recovery className='grid gap-3 rounded-lg border border-[#334762] bg-[#111b2b] p-4'>
-                <div>
-                    <p className='text-xs font-semibold uppercase text-[#9db8ff]'>Next operational steps</p>
-                    <h3 className='mt-1 text-lg font-semibold text-[#edf4ff]'>Turn source activity into customer alerts.</h3>
-                    <p className='mt-1 text-sm leading-6 text-[#aab7cc]'>Use the controls below this console to tune matching, collect public Telegram sources, and test delivery before the next alert fires.</p>
+        <div className='grid gap-4 p-4'>
+            <section data-dwm-zero-case-recovery className='overflow-hidden rounded-lg border border-[#334762] bg-[#111b2b]'>
+                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#26344d] bg-[#0b121e] px-4 py-3'>
+                    <div>
+                        <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Exposure operations</p>
+                        <h3 className='mt-1 text-base font-semibold text-[#edf4ff]'>No alert is waiting for review</h3>
+                    </div>
+                    <span className='rounded-full border border-[#1f6f48] bg-[#0c261c] px-2.5 py-1 text-xs font-semibold text-[#9cf0bc]'>Monitoring live</span>
                 </div>
-                <div className='grid gap-2 sm:grid-cols-3'>
-                    <NoCaseActionLink href='#dwm-workflow-actions' label='Edit watchlist' detail='Add company, supplier, domain, and product terms.' />
-                    <NoCaseActionLink href='#dwm-workflow-actions' label='Run collection' detail='Pull approved public sources and rebuild alerts.' />
-                    <NoCaseActionLink href='#dwm-workflow-actions' label='Test delivery' detail='Verify the webhook path before customer send.' />
+                <div className='overflow-x-auto'>
+                    <table className='w-full min-w-[760px] text-left text-xs'>
+                        <thead className='bg-[#101827] text-[10px] uppercase text-[#8fa0ba]'>
+                            <tr>
+                                <th className='px-4 py-2 font-semibold'>Stage</th>
+                                <th className='px-4 py-2 font-semibold'>State</th>
+                                <th className='px-4 py-2 font-semibold'>Action</th>
+                                <th className='px-4 py-2 font-semibold'>Evidence</th>
+                            </tr>
+                        </thead>
+                        <tbody className='divide-y divide-[#1f2c42]'>
+                            {operatorRows.map(row => (
+                                <tr key={row.stage} className='align-top transition hover:bg-[#162033]'>
+                                    <td className='px-4 py-3 text-sm font-semibold text-[#edf4ff]'>{row.stage}</td>
+                                    <td className='px-4 py-3 text-sm text-[#dbe7ff]'>{row.state}</td>
+                                    <td className='px-4 py-3'>
+                                        <a href='#dwm-workflow-actions' className='inline-flex rounded-lg border border-[#27364f] bg-[#101827] px-3 py-1.5 text-xs font-semibold text-[#bfd0ff] transition hover:border-[#5f86ff] hover:bg-[#122449] focus:outline-none focus:ring-2 focus:ring-[#5f86ff]'>
+                                            {row.action}
+                                        </a>
+                                    </td>
+                                    <td className='px-4 py-3 text-sm leading-5 text-[#aab7cc]'>{row.detail}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </section>
-            <div className='grid gap-3 rounded-lg border border-[#26344d] bg-[#0b121e] p-4 md:grid-cols-3'>
-                <WorkTile title='1. Watch terms' body='Keep company, domain, supplier, brand, and product terms current.' state='active' />
-                <WorkTile title='2. Collect sources' body='Run Telegram and no-stolen-file dark web checks after watchlist changes.' state='active' />
-                <WorkTile title='3. Send alerts' body='Test the webhook before the first real customer alert.' state='pending' />
-            </div>
-            <div className='rounded-lg border border-dashed border-[#334762] bg-[#101827] p-5'>
-                <div className='flex items-center justify-between gap-3'>
-                    <div className='flex items-center gap-2 text-sm font-semibold text-[#edf4ff]'>
-                        <ShieldCheck className='h-4 w-4 text-[#9cf0bc]' />
-                        No recent attacks
-                    </div>
-                    <span className='rounded-full bg-[#0c261c] px-2 py-1 text-xs font-semibold text-[#9cf0bc]'>Monitoring live</span>
-                </div>
-                <p className='mt-2 text-sm leading-6 text-[#aab7cc]'>Fresh captures are still useful here: they show what the system is collecting and whether the watchlist needs better terms.</p>
-            </div>
+            <section id='dwm-workflow-actions' className='scroll-mt-24'>
+                {workflowActions}
+            </section>
             <div className='rounded-lg border border-[#26344d] bg-[#101827]'>
                 <div className='border-b border-[#1f2c42] px-4 py-3'>
                     <h3 className='text-sm font-semibold text-[#edf4ff]'>Recent capture review</h3>
@@ -1568,15 +1592,6 @@ function NoCaseWorkspace({ latestCaptures }: { latestCaptures: OperationsSnapsho
                 </div>
             </div>
         </div>
-    )
-}
-
-function NoCaseActionLink({ href, label, detail }: { href: string, label: string, detail: string }) {
-    return (
-        <a href={href} className='rounded-lg border border-[#27364f] bg-[#101827] p-3 transition hover:border-[#5f86ff] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a]'>
-            <span className='text-sm font-semibold text-[#edf4ff]'>{label}</span>
-            <span className='mt-1 block text-xs leading-5 text-[#8fa0ba]'>{detail}</span>
-        </a>
     )
 }
 
@@ -1908,20 +1923,6 @@ function shortTime(value: string) {
     }).formatToParts(date)
     const byType = new Map(parts.map(part => [part.type, part.value]))
     return `${byType.get('month')} ${byType.get('day')}, ${byType.get('hour')}:${byType.get('minute')}`
-}
-
-function WorkTile({ title, body, state }: { title: string, body: string, state: 'active' | 'pending' }) {
-    return (
-        <div className='rounded-lg border border-[#26344d] bg-[#101827] p-3'>
-            <div className='flex items-center justify-between gap-2'>
-                <h3 className='text-sm font-semibold text-[#edf4ff]'>{title}</h3>
-                <span className={state === 'active' ? 'rounded-full bg-[#0c261c] px-2 py-0.5 text-[11px] font-semibold text-[#9cf0bc]' : 'rounded-full bg-[#2a1c0e] px-2 py-0.5 text-[11px] font-semibold text-[#ffd58a]'}>
-                    {state}
-                </span>
-            </div>
-            <p className='mt-2 text-xs leading-5 text-[#aab7cc]'>{body}</p>
-        </div>
-    )
 }
 
 function CaseButton({ busy, disabled = false, icon, onClick, children }: { busy: boolean, disabled?: boolean, icon: 'review' | 'ready' | 'replay' | 'send' | 'false' | 'case', onClick: () => void, children: string }) {
