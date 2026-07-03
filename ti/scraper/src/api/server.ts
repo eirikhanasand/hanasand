@@ -165,7 +165,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
           packCount: catalog.packs.length,
           candidateCount: catalog.candidates.length,
           telegramPublic: catalog.candidates.filter((candidate) => candidate.family === "telegram_public").length,
-          darkwebMetadata: catalog.candidates.filter((candidate) => candidate.family === "darkweb_metadata").length
+          darkwebMetadata: catalog.candidates.filter((candidate) => candidate.family === "darkweb_metadata").length,
+          publicAdvisory: catalog.candidates.filter((candidate) => candidate.family === "public_advisory").length
         },
         workerReadiness: sourcePackWorker.workerReadiness,
         sourceHealth: sourcePackWorker.sourceHealth,

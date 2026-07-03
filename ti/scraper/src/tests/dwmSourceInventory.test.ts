@@ -12,14 +12,26 @@ import type { SourceRecord } from "../types.ts";
 const generatedAt = "2026-06-27T12:00:00.000Z";
 
 describe("dwm source inventory", () => {
-  test("generates public Telegram and metadata-only dark-web seed catalogs", () => {
+  test("generates public Telegram dark-web metadata and public advisory seed catalogs", () => {
     const catalog = buildDwmSeedCatalog({ watchlist: ["acme.com", "Acme Payments"], generatedAt });
 
-    expect(catalog.packs.length).toBeGreaterThanOrEqual(5);
+    expect(catalog.packs.length).toBeGreaterThanOrEqual(6);
     expect(catalog.candidates.filter((candidate) => candidate.family === "telegram_public").length).toBeGreaterThanOrEqual(3000);
     expect(catalog.candidates.filter((candidate) => candidate.family === "darkweb_metadata").length).toBeGreaterThanOrEqual(4000);
+    expect(catalog.candidates.filter((candidate) => candidate.family === "public_advisory").length).toBeGreaterThanOrEqual(900);
     expect(catalog.candidates.every((candidate) => candidate.source.metadata.mediaPolicy === "metadata_only_no_download")).toBe(true);
     expect(catalog.candidates.find((candidate) => candidate.family === "darkweb_metadata")?.source.legalNotes).toContain("No credential bypass");
+    expect(catalog.candidates.find((candidate) => candidate.family === "public_advisory")?.source).toMatchObject({
+      type: "public_advisory",
+      accessMethod: "public_http_metadata",
+      metadata: {
+        collectionBoundary: expect.objectContaining({
+          publicOnly: true,
+          metadataOnly: true,
+          noPayloadDownloads: true
+        })
+      }
+    });
   });
 
   test("dedupes registered sources into review workflow instead of creating duplicate candidates", () => {
@@ -101,6 +113,36 @@ describe("dwm source inventory", () => {
     expect(store.listSources().every((source) => source.metadata?.metadataOnlyApproved === true)).toBe(true);
   });
 
+  test("activates public advisory seed packs as public metadata sources", () => {
+    const store = new InMemoryScraperStore();
+    const first = applyDwmSeedCatalog({
+      store,
+      seedPackIds: ["public-advisory-exposure-watch"],
+      activate: true,
+      approvedBy: "analyst-1",
+      limit: 5,
+      generatedAt
+    });
+    const second = applyDwmSeedCatalog({
+      store,
+      seedPackIds: ["public-advisory-exposure-watch"],
+      activate: true,
+      approvedBy: "analyst-1",
+      limit: 5,
+      generatedAt
+    });
+
+    expect(first.summary.createdCount).toBe(5);
+    expect(first.summary.publicAdvisoryCreated).toBe(5);
+    expect(first.createdSources.every((source) => source.type === "public_advisory")).toBe(true);
+    expect(first.createdSources.every((source) => source.status === "active")).toBe(true);
+    expect(first.createdSources.every((source) => source.governance?.metadataOnly === true)).toBe(true);
+    expect(first.createdSources.every((source) => source.metadata.collectionBoundary.publicOnly === true)).toBe(true);
+    expect(first.createdSources.every((source) => source.metadata.collectionBoundary.noPayloadDownloads === true)).toBe(true);
+    expect(second.summary.createdCount).toBe(0);
+    expect(second.summary.duplicateCount).toBe(5);
+  });
+
   test("mounts source pack and source inventory API routes", async () => {
     const store = new InMemoryScraperStore();
     const options = { store, frontier: new FocusedFrontier() };
@@ -110,6 +152,11 @@ describe("dwm source inventory", () => {
       body: JSON.stringify({ seedPackIds: ["telegram-stealer-broker-watch"], activate: true, limit: 10, scope: "acme.com" })
     }), options);
     const applyBody = await applyResponse.json() as any;
+    const advisoryResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ seedPackIds: ["public-advisory-exposure-watch"], activate: true, approvedBy: "analyst-1", limit: 4, scope: "acme.com" })
+    }), options);
+    const advisoryBody = await advisoryResponse.json() as any;
     const inventoryResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?watchlist=acme.com"), options);
     const inventoryBody = await inventoryResponse.json() as any;
     const packsResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-packs"), options);
@@ -117,9 +164,15 @@ describe("dwm source inventory", () => {
 
     expect(applyResponse.status).toBe(201);
     expect(applyBody.summary.createdCount).toBe(10);
+    expect(advisoryResponse.status).toBe(201);
+    expect(advisoryBody.summary.publicAdvisoryCreated).toBe(4);
+    expect(advisoryBody.createdCandidates.every((candidate: any) => candidate.family === "public_advisory")).toBe(true);
+    expect(advisoryBody.createdCandidates.every((candidate: any) => candidate.policyBoundary.metadataOnly === true)).toBe(true);
+    expect(advisoryBody.createdCandidates.every((candidate: any) => candidate.policyBoundary.noPayloadDownloads === true)).toBe(true);
     expect(inventoryBody.schemaVersion).toBe("dwm.source_inventory.v1");
     expect(inventoryBody.counts.registeredTelegramPublic).toBe(10);
     expect(packsBody.counts.telegramPublic).toBeGreaterThanOrEqual(3000);
+    expect(packsBody.counts.publicAdvisory).toBeGreaterThanOrEqual(900);
   });
 
   test("exposes missing worker readiness as a proxy-verifiable blocked state", async () => {

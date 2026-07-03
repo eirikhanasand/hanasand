@@ -54,6 +54,7 @@ export interface DwmSourceInventorySnapshot {
     catalogTotalCandidates: number;
     catalogTelegramPublic: number;
     catalogDarkwebMetadata: number;
+    catalogPublicAdvisory: number;
     netNewCandidates: number;
     duplicateCandidates: number;
     reviewQueue: number;
@@ -106,6 +107,7 @@ export interface DwmSeedCatalogApplyResult {
     duplicateCount: number;
     telegramPublicCreated: number;
     darkwebMetadataCreated: number;
+    publicAdvisoryCreated: number;
   };
 }
 
@@ -207,10 +209,29 @@ const DARKWEB_METADATA_PACKS: SeedPackTemplate[] = [
   }
 ];
 
+const PUBLIC_ADVISORY_PACKS: SeedPackTemplate[] = [
+  {
+    id: "public-advisory-exposure-watch",
+    label: "Public advisory exposure watch",
+    family: "public_advisory",
+    priority: "high",
+    description: "Public advisory and vendor bulletin candidates for exposure context, affected products, CVEs, and mitigation timelines.",
+    safetyBoundary: "Public HTTP metadata only; no account access, no authenticated portals, no exploit retrieval, and no payload downloads.",
+    topics: ["public_advisory", "cve", "affected_products"],
+    seeds: [
+      "cisa-kev", "cert-eu", "us-cert", "msrc", "google-cloud-security", "aws-security-bulletins",
+      "okta-security-advisories", "atlassian-security", "fortinet-psirt", "palo-alto-unit42",
+      "microsoft-threat-intelligence", "mandiant-advantage", "crowdstrike-research", "sentinelone-labs",
+      "rapid7-advisories", "talos-threat-source", "unit42-threat-briefs", "watchtowr-labs",
+      "wiz-research", "cloudflare-security", "github-security-advisories", "nvd-feed"
+    ]
+  }
+];
+
 export function buildDwmSeedCatalog(input: BuildDwmSourceInventoryInput = {}): { packs: DwmSourcePackDefinition[]; candidates: DwmSeedSourceCandidate[] } {
   const generatedAt = input.generatedAt ?? nowIso();
   const watchTerms = uniqueStrings((input.watchlist ?? []).map((term) => term.trim())).slice(0, 20);
-  const templates = expandSeedPackTemplates([...TELEGRAM_PACKS, ...DARKWEB_METADATA_PACKS]);
+  const templates = expandSeedPackTemplates([...TELEGRAM_PACKS, ...DARKWEB_METADATA_PACKS, ...PUBLIC_ADVISORY_PACKS]);
   const candidates = templates.flatMap((pack) => pack.seeds.map((seed, index) => candidateFromSeed(pack, seed, index, watchTerms, generatedAt)));
   return {
     packs: templates.map((pack) => ({
@@ -228,10 +249,12 @@ export function buildDwmSeedCatalog(input: BuildDwmSourceInventoryInput = {}): {
 
 function expandSeedPackTemplates(packs: SeedPackTemplate[]): SeedPackTemplate[] {
   return packs.map((pack) => {
-    const target = pack.family === "telegram_public" ? 1200 : 2200;
+    const target = pack.family === "telegram_public" ? 1200 : pack.family === "public_advisory" ? 900 : 2200;
     const generated = pack.family === "telegram_public"
       ? generatedTelegramSeeds(pack.id, pack.topics, target)
-      : generatedDarkwebMetadataSeeds(pack.id, pack.topics, target);
+      : pack.family === "public_advisory"
+        ? generatedPublicAdvisorySeeds(pack.id, pack.topics, target)
+        : generatedDarkwebMetadataSeeds(pack.id, pack.topics, target);
     return { ...pack, seeds: uniqueStrings([...pack.seeds, ...generated]).slice(0, target) };
   });
 }
@@ -304,6 +327,30 @@ function namespaceSeeds(packId: string, topicSlug: string, seeds: string[]): str
   return seeds.map((seed) => `${packId.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}_${topicSlug}_${seed}`);
 }
 
+function generatedPublicAdvisorySeeds(packId: string, topics: string[], target: number): string[] {
+  const vendors = [
+    "microsoft", "google-cloud", "aws", "okta", "atlassian", "fortinet", "palo-alto", "cisco", "vmware", "github",
+    "cloudflare", "rapid7", "mandiant", "crowdstrike", "sentinelone", "wiz", "watchtowr", "talos", "unit42", "cert"
+  ];
+  const subjects = ["cve", "identity", "cloud", "vpn", "ransomware", "stealer", "session", "api-key", "supply-chain", "zero-day"];
+  const sectors = ["finance", "healthcare", "energy", "software", "retail", "manufacturing", "telecom", "government", "education", "transport"];
+  const suffixes = ["advisory", "bulletin", "mitigation", "ioc", "exposure", "campaign", "affected-products", "patch", "risk-note", "timeline"];
+  const topicSlug = topics.join("-").replace(/[^a-z0-9-]/gi, "-").toLowerCase();
+  const seeds: string[] = [];
+  for (const vendor of vendors) {
+    for (const subject of subjects) {
+      for (const sector of sectors) {
+        for (const suffix of suffixes) {
+          const ordinal = String(seeds.length + 1).padStart(4, "0");
+          seeds.push(`${vendor}-${subject}-${sector}-${suffix}-${ordinal}`);
+          if (seeds.length >= target) return namespaceSeeds(packId, topicSlug, seeds);
+        }
+      }
+    }
+  }
+  return namespaceSeeds(packId, topicSlug, seeds);
+}
+
 export function buildDwmSourceInventory(input: BuildDwmSourceInventoryInput = {}): DwmSourceInventorySnapshot {
   const generatedAt = input.generatedAt ?? nowIso();
   const sources = input.sources ?? [];
@@ -323,6 +370,7 @@ export function buildDwmSourceInventory(input: BuildDwmSourceInventoryInput = {}
       catalogTotalCandidates: catalog.candidates.length,
       catalogTelegramPublic: catalog.candidates.filter((candidate) => candidate.family === "telegram_public").length,
       catalogDarkwebMetadata: catalog.candidates.filter((candidate) => candidate.family === "darkweb_metadata").length,
+      catalogPublicAdvisory: catalog.candidates.filter((candidate) => candidate.family === "public_advisory").length,
       netNewCandidates: netNew.length,
       duplicateCandidates: duplicateItems.length,
       reviewQueue: reviewQueue.length
@@ -339,6 +387,7 @@ export function buildDwmSourceInventory(input: BuildDwmSourceInventoryInput = {}
         "registeredTelegramPublic",
         "registeredDarkwebMetadata",
         "catalogTelegramPublic",
+        "catalogPublicAdvisory",
         "netNewCandidates",
         "duplicateCandidates",
         "reviewQueue"
@@ -402,7 +451,8 @@ export function applyDwmSeedCatalog(input: ApplyDwmSeedCatalogInput): DwmSeedCat
       createdCount: createdSources.length,
       duplicateCount: skippedDuplicates.length,
       telegramPublicCreated: createdSources.filter((source) => familyForSource(source) === "telegram_public").length,
-      darkwebMetadataCreated: createdSources.filter((source) => familyForSource(source) === "darkweb_metadata").length
+      darkwebMetadataCreated: createdSources.filter((source) => familyForSource(source) === "darkweb_metadata").length,
+      publicAdvisoryCreated: createdSources.filter((source) => familyForSource(source) === "public_advisory").length
     }
   };
 }
@@ -428,24 +478,31 @@ export function sourceDedupeKey(source: SourceRecord): string {
 
 function candidateFromSeed(pack: SeedPackTemplate, seed: string, index: number, watchTerms: string[], generatedAt: string): DwmSeedSourceCandidate {
   const telegram = pack.family === "telegram_public";
-  const sourceUrl = telegram ? `https://t.me/${seed}` : `metadata://darkweb/${pack.id}/${seed}`;
-  const name = telegram ? `Public Telegram ${seed}` : `Dark-web metadata ${seed}`;
-  const type = telegram ? "telegram_public" : "darkweb_metadata";
+  const darkweb = pack.family === "darkweb_metadata";
+  const sourceUrl = telegram
+    ? `https://t.me/${seed}`
+    : darkweb
+      ? `metadata://darkweb/${pack.id}/${seed}`
+      : `https://advisories.example.com/${pack.id}/${seed}`;
+  const name = telegram ? `Public Telegram ${seed}` : darkweb ? `Dark-web metadata ${seed}` : `Public advisory ${seed}`;
+  const type = telegram ? "telegram_public" : darkweb ? "darkweb_metadata" : "public_advisory";
   const score = scoreSeedCandidate(pack, index, watchTerms.length);
   const reviewState: DwmInventoryReviewState = telegram ? "ready_for_canary" : "metadata_only_approved";
   const source: SourceRecord = {
-    id: stableId(telegram ? "src_dwm_tg_seed" : "src_dwm_dw_seed", sourceUrl),
+    id: stableId(telegram ? "src_dwm_tg_seed" : darkweb ? "src_dwm_dw_seed" : "src_dwm_advisory_seed", sourceUrl),
     name,
     type,
     url: sourceUrl,
-    accessMethod: telegram ? "public_http" : "restricted_metadata",
+    accessMethod: telegram ? "public_http" : darkweb ? "restricted_metadata" : "public_http_metadata",
     status: "candidate",
     risk: pack.priority === "critical" ? "high" : "medium",
     trustScore: Math.round(score * 100) / 100,
     crawlFrequencySeconds: telegram ? (pack.priority === "critical" ? 600 : 900) : 1800,
     legalNotes: telegram
       ? "Public Telegram preview collection only. No private invite access, auto-join, credentials, replies, reactions, or media downloads."
-      : "Restricted source metadata only. No credential bypass, actor interaction, transaction, payload path, or stolen-data download.",
+      : darkweb
+        ? "Restricted source metadata only. No credential bypass, actor interaction, transaction, payload path, or stolen-data download."
+        : "Public advisory metadata only. No authenticated portals, exploit retrieval, payload downloads, or account automation.",
     language: "multi",
     createdAt: generatedAt,
     updatedAt: generatedAt,
@@ -461,21 +518,7 @@ function candidateFromSeed(pack: SeedPackTemplate, seed: string, index: number, 
       mediaPolicy: "metadata_only_no_download",
       reviewState,
       score,
-      collectionBoundary: telegram ? {
-        publicOnly: true,
-        noPrivateAccess: true,
-        noAutoJoin: true,
-        noCredentialCollection: true,
-        noMediaDownload: true,
-        noActorInteraction: true
-      } : {
-        metadataOnly: true,
-        noCredentialBypass: true,
-        noDownloads: true,
-        noActorInteraction: true,
-        noTransactions: true,
-        payloadPathsBlocked: true
-      }
+      collectionBoundary: collectionBoundaryForFamily(pack.family)
     }
   } as SourceRecord;
   return {
@@ -495,8 +538,8 @@ function candidateFromSeed(pack: SeedPackTemplate, seed: string, index: number, 
 }
 
 function prepareCandidateSource(candidate: DwmSeedSourceCandidate, input: { activate: boolean; approveMetadataOnly: boolean; approvedBy?: string; tenantId?: string; generatedAt: string }): SourceRecord {
-  const activeStatus = candidate.family === "telegram_public" ? "canary" : candidate.family === "darkweb_metadata" && input.approveMetadataOnly ? "active" : "candidate";
-  const metadataOnlyApproved = candidate.family === "darkweb_metadata" && input.approveMetadataOnly;
+  const activeStatus = candidate.family === "telegram_public" ? "canary" : candidate.family === "public_advisory" || (candidate.family === "darkweb_metadata" && input.approveMetadataOnly) ? "active" : "candidate";
+  const metadataOnlyApproved = candidate.family === "darkweb_metadata" && input.approveMetadataOnly || candidate.family === "public_advisory";
   return {
     ...candidate.source,
     status: input.activate ? activeStatus : "candidate",
@@ -511,7 +554,9 @@ function prepareCandidateSource(candidate: DwmSeedSourceCandidate, input: { acti
       approvedAt: input.generatedAt,
       approvedBy: input.approvedBy ?? "metadata-only-approval",
       policyVersion: "dwm-metadata-only:v1",
-      riskJustification: "Approved for metadata-only monitoring. Payload downloads, authentication bypass, transactions, private access, and actor interaction remain blocked."
+      riskJustification: candidate.family === "public_advisory"
+        ? "Approved for public advisory metadata monitoring. Authenticated portals, exploit retrieval, account automation, and payload downloads remain blocked."
+        : "Approved for metadata-only monitoring. Payload downloads, authentication bypass, transactions, private access, and actor interaction remain blocked."
     } : candidate.source.governance,
     metadata: {
       ...(candidate.source.metadata ?? {}),
@@ -522,6 +567,37 @@ function prepareCandidateSource(candidate: DwmSeedSourceCandidate, input: { acti
       catalogAppliedAt: input.generatedAt
     }
   } as SourceRecord;
+}
+
+function collectionBoundaryForFamily(family: DwmInventoryFamily) {
+  if (family === "telegram_public") {
+    return {
+      publicOnly: true,
+      noPrivateAccess: true,
+      noAutoJoin: true,
+      noCredentialCollection: true,
+      noMediaDownload: true,
+      noActorInteraction: true
+    };
+  }
+  if (family === "public_advisory") {
+    return {
+      publicOnly: true,
+      metadataOnly: true,
+      noAuthenticatedPortals: true,
+      noExploitRetrieval: true,
+      noPayloadDownloads: true,
+      noAccountAutomation: true
+    };
+  }
+  return {
+    metadataOnly: true,
+    noCredentialBypass: true,
+    noDownloads: true,
+    noActorInteraction: true,
+    noTransactions: true,
+    payloadPathsBlocked: true
+  };
 }
 
 function approveDarkwebMetadataSource(source: SourceRecord, input: ApplyDwmSeedCatalogInput): SourceRecord {

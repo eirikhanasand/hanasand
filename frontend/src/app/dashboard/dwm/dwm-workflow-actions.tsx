@@ -44,6 +44,17 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         })
     }
 
+    function enablePublicAdvisorySources(nextTerms: string, limit = 24) {
+        return postJson('/api/dwm/source-requests', {
+            ...scope,
+            seedPackIds: ['public-advisory-exposure-watch'],
+            activate: true,
+            approvedBy: 'dashboard',
+            limit,
+            scope: nextTerms,
+        })
+    }
+
     async function saveWatchlist(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         setBusyAction('watchlist')
@@ -197,6 +208,9 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             })
             if (!darkweb.ok) throw new Error(darkweb.message)
 
+            const advisory = await enablePublicAdvisorySources(nextTerms, 24)
+            if (!advisory.ok) throw new Error(advisory.message)
+
             const run = await postJson('/api/dwm/canary/run', {
                 ...scope,
                 operatorApproval: true,
@@ -244,8 +258,10 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             }
 
             const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
+            const advisorySummary = advisory.summary && typeof advisory.summary === 'object' ? advisory.summary as Record<string, unknown> : {}
+            const advisoryCount = typeof advisorySummary.publicAdvisoryCreated === 'number' ? advisorySummary.publicAdvisoryCreated : 0
             setTerms(nextTerms)
-            setResult({ ok: true, message: `Collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s), opened ${caseId || 'a case'}.${deliveryText}` })
+            setResult({ ok: true, message: `Added ${advisoryCount} public advisory source(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s), opened ${caseId || 'a case'}.${deliveryText}` })
             if (caseId) {
                 router.push(caseDetailPath(caseId, alert.id, organizationId))
             } else {
@@ -372,10 +388,14 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 scope: nextTerms,
             })
             if (!approved.ok) throw new Error(approved.message)
+            const advisory = await enablePublicAdvisorySources(nextTerms, 24)
+            if (!advisory.ok) throw new Error(advisory.message)
             const summary = approved.summary && typeof approved.summary === 'object' ? approved.summary as Record<string, unknown> : {}
             const count = typeof summary.darkwebMetadataCreated === 'number' ? summary.darkwebMetadataCreated : 0
+            const advisorySummary = advisory.summary && typeof advisory.summary === 'object' ? advisory.summary as Record<string, unknown> : {}
+            const advisoryCount = typeof advisorySummary.publicAdvisoryCreated === 'number' ? advisorySummary.publicAdvisoryCreated : 0
             setTerms(nextTerms)
-            setResult({ ok: true, message: `Approved ${count} dark-web metadata source(s). No payload downloads enabled.` })
+            setResult({ ok: true, message: `Approved ${count} dark-web metadata source(s) and ${advisoryCount} public advisory source(s). No payload downloads enabled.` })
             router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -483,7 +503,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         </thead>
                         <tbody className='divide-y divide-[#1f2c42]'>
                             <RouteStepRow stage='1. Watchlist' state={termCount ? `${termCount} terms saved or staged` : 'Starter terms staged on action'} next='Company, domain, supplier, brand, and product terms define alert scope.' command='Save and rebuild alerts' tone={termCount ? 'ok' : 'warn'} />
-                            <RouteStepRow stage='2. Sources' state={sourceCount ? `${activeSourceCount}/${sourceCount} active` : 'No source inventory loaded'} next='Enable public Telegram and metadata-only source packs before relying on matches.' command='Expand Telegram / Approve metadata' tone={activeSourceCount ? 'ok' : 'warn'} />
+                            <RouteStepRow stage='2. Sources' state={sourceCount ? `${activeSourceCount}/${sourceCount} active` : 'No source inventory loaded'} next='Enable public Telegram, public advisory, and metadata-only source packs before relying on matches.' command='Expand Telegram / Approve metadata' tone={activeSourceCount ? 'ok' : 'warn'} />
                             <RouteStepRow stage='3. Captures' state={captureCount ? `${captureCount} safe captures` : 'No accepted captures'} next='Run collection to pull safe excerpts and metadata into the exposure queue.' command='Run Telegram collection' tone={captureCount ? 'ok' : 'neutral'} />
                             <RouteStepRow stage='4. Alert and case' state={alertCount ? `${alertCount} alerts in queue` : 'No active alert'} next='Rebuild after source changes, then open the alert as a case with provenance.' command='Run to case / Open case' tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
                             <RouteStepRow stage='5. Delivery' state={deliveryCount ? `${deliveryCount} delivery attempts` : webhookConfigured ? 'Webhook URL staged' : 'No delivery tested'} next='Use dry-run before sending customer notifications.' command='Test webhook / Send webhooks' tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
