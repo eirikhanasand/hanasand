@@ -2,17 +2,27 @@
 @import 'tailwindcss';
 
 @theme {
-  --background: #0b0c0b;
+  --background: #08111f;
   --foreground: #f1f3ee;
   --font-sans: 'Manrope', 'Aptos', sans-serif;
-  --color-background: #0b0c0b;
+  --color-ui-canvas: var(--ui-canvas);
+  --color-ui-panel: var(--ui-panel);
+  --color-ui-raised: var(--ui-raised);
+  --color-ui-border: var(--ui-border);
+  --color-ui-text: var(--ui-text);
+  --color-ui-muted: var(--ui-muted);
+  --color-ui-primary: var(--ui-primary);
+  --color-ui-success: var(--ui-success);
+  --color-ui-warning: var(--ui-warning);
+  --color-ui-danger: var(--ui-danger);
+  --color-background: #08111f;
   --color-dark: #171916;
-  --color-dark-reverse: #10120f;
-  --color-normal: #151713;
-  --color-light: #232820;
-  --color-extralight: #343a30;
-  --color-superlight: #4b5547;
-  --color-almostbright: #74806e;
+  --color-dark-reverse: #0b1422;
+  --color-normal: #111927;
+  --color-light: #162238;
+  --color-extralight: #243044;
+  --color-superlight: #34445f;
+  --color-almostbright: #a8b3c5;
   --color-bright: #f7f8f2;
 }
 
@@ -26,23 +36,33 @@
 }
 
 .dark {
-  --background: #0b0c0b;
+  --ui-canvas: #08111f;
+  --ui-panel: #101927;
+  --ui-raised: #162238;
+  --ui-border: #34445f;
+  --ui-text: #f5f7fb;
+  --ui-muted: #b9c4d6;
+  --ui-primary: #8fb2ff;
+  --ui-success: #7de0a2;
+  --ui-warning: #ffd879;
+  --ui-danger: #ffb8b0;
+  --background: #08111f;
   --foreground: #f1f3ee;
-  --color-background: #0b0c0b;
-  --color-dark: #171916;
-  --color-dark-reverse: #10120f;
-  --color-normal: #151713;
-  --color-light: #232820;
-  --color-extralight: #343a30;
-  --color-superlight: #4b5547;
-  --color-almostbright: #74806e;
+  --color-background: #08111f;
+  --color-dark: #101927;
+  --color-dark-reverse: #0b1422;
+  --color-normal: #111927;
+  --color-light: #162238;
+  --color-extralight: #243044;
+  --color-superlight: #34445f;
+  --color-almostbright: #a8b3c5;
   --color-bright: #f7f8f2;
-  --page-wash-top: #10130f;
-  --page-wash-bottom: #050605;
-  --grid-line: rgba(207, 222, 255, 0.075);
-  --ambient-primary: rgba(79, 132, 105, 0.026);
-  --ambient-secondary: rgba(226, 88, 34, 0.020);
-  --ambient-neutral: rgba(241, 243, 238, 0.016);
+  --page-wash-top: #0e1520;
+  --page-wash-bottom: #050914;
+  --dot-grid: rgba(157, 182, 255, 0.18);
+  --ambient-primary: rgba(48, 86, 211, 0.105);
+  --ambient-secondary: rgba(20, 163, 90, 0.045);
+  --ambient-neutral: rgba(157, 182, 255, 0.055);
   --panel-border: rgba(247, 248, 242, 0.10);
   --panel-surface: rgba(13, 15, 12, 0.78);
   --card-border: rgba(247, 248, 242, 0.09);
@@ -53,6 +73,16 @@
 }
 
 .light {
+  --ui-canvas: #f7f8fb;
+  --ui-panel: #ffffff;
+  --ui-raised: #f2f5f9;
+  --ui-border: #d9e2ef;
+  --ui-text: #171a21;
+  --ui-muted: #4b5565;
+  --ui-primary: #3056d3;
+  --ui-success: #147a3b;
+  --ui-warning: #8a5a00;
+  --ui-danger: #b42318;
   --background: #f7f8fb;
   --foreground: #171a21;
   --color-background: #f7f8fb;
@@ -66,7 +96,7 @@
   --color-bright: #171a21;
   --page-wash-top: #ffffff;
   --page-wash-bottom: #eef2f7;
-  --grid-line: rgba(48, 86, 211, 0.040);
+  --dot-grid: rgba(48, 86, 211, 0.085);
   --ambient-primary: rgba(48, 86, 211, 0.044);
   --ambient-secondary: rgba(20, 163, 90, 0.030);
   --ambient-neutral: rgba(22, 26, 33, 0.026);
@@ -406,6 +436,14 @@ html.dark:not(.light) .enterprise-theme button:disabled[class*="disabled:bg-[#f5
   border-color: var(--landing-surface-border) !important;
 }
 
+.landing-surface-divider {
+  border-color: var(--landing-surface-border) !important;
+}
+
+.landing-surface-divider > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--landing-surface-border) !important;
+}
+
 .landing-surface-border-hover:hover {
   border-color: var(--landing-surface-border-hover) !important;
 }
@@ -488,23 +526,16 @@ button:not(:disabled),
   content: '';
   position: absolute;
   inset: 0;
-  opacity: 0.42;
+  opacity: 0.58;
   background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-position:
-    0 0,
-    0 0;
-  background-size:
-    72px 72px,
-    72px 72px;
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.72), transparent 74%);
-  filter: blur(0.6px);
-  transform: scale(1.003);
+    radial-gradient(circle at 1px 1px, var(--dot-grid) 1px, transparent 0);
+  background-position: 0 0;
+  background-size: 22px 22px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.82), transparent 78%);
 }
 
 .light .site-atmosphere::before {
-  opacity: 0.28;
+  opacity: 0.46;
 }
 
 .site-atmosphere::after {
@@ -516,50 +547,45 @@ button:not(:disabled),
     radial-gradient(ellipse 56rem 38rem at 82% 10%, var(--ambient-primary) 0%, transparent 76%),
     radial-gradient(ellipse 50rem 42rem at 11% 72%, var(--ambient-secondary) 0%, transparent 78%),
     radial-gradient(ellipse 70rem 46rem at 55% 34%, var(--ambient-neutral) 0%, transparent 82%);
-  filter: blur(46px);
+  filter: blur(48px);
   transform: scale(1.04);
 }
 
-.background-sketch {
-  pointer-events: none;
-  position: absolute;
-  z-index: 0;
-  width: clamp(10rem, 20vw, 20rem);
-  height: auto;
-  color: var(--foreground);
-  opacity: 0.10;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter: blur(0.32px);
-  transform: rotate(-1.4deg);
+.site-loading-screen {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  padding: 2rem;
+  background:
+    radial-gradient(ellipse 34rem 24rem at 50% 20%, rgba(48, 86, 211, 0.15) 0%, transparent 72%),
+    linear-gradient(180deg, #0e1520, #08111f 54%, #050914);
 }
 
-.lumbermill-sketch {
-  top: 12vh;
-  left: clamp(0.75rem, 3.2vw, 4rem);
+.site-loading-panel {
+  display: grid;
+  justify-items: center;
+  gap: 0.9rem;
+  color: #d9e2f2;
 }
 
-.future-cabin-sketch {
-  top: 54vh;
-  right: clamp(0.75rem, 3.2vw, 4rem);
-  transform: rotate(1.2deg);
+.site-loading-icon {
+  width: 2rem;
+  height: 2rem;
+  color: #9db4ff;
+  animation: site-loading-spin 0.9s linear infinite;
 }
 
-.background-sketch .sketch-distant {
-  opacity: 0.48;
-  stroke-width: 1.1;
+.site-loading-label {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #d9e2f2;
 }
 
-.background-sketch .sketch-shade {
-  opacity: 0.55;
-  stroke-width: 0.9;
-}
-
-.light .background-sketch {
-  opacity: 0.15;
+@keyframes site-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .glass-panel {

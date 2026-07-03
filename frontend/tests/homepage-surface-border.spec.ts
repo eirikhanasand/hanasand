@@ -2,9 +2,18 @@ import { expect, test } from '@playwright/test'
 
 const sampledSurfaces = [
     ['exposure panel', '[data-home-exposure-panel="true"]'],
+    ['exposure panel header', '[data-home-exposure-panel-header="true"]'],
+    ['exposure panel toolbar', '[data-home-exposure-panel-toolbar="true"]'],
+    ['exposure table header', '[data-home-exposure-panel-table-header="true"]'],
     ['product readiness panel', '[data-home-product-readiness="true"]'],
     ['workflow coverage panel', '[data-home-workflow-coverage="true"]'],
+    ['workflow coverage header', '[data-home-workflow-coverage-header="true"]'],
+    ['workflow coverage table header', '[data-home-workflow-coverage-table-header="true"]'],
+    ['workflow demo panel', '[data-home-workflow-panel="true"]'],
+    ['workflow demo panel header', '[data-home-workflow-panel-header="true"]'],
+    ['workflow demo step', '[data-home-workflow-step="true"]'],
     ['example card', '[data-home-example-card="true"]'],
+    ['example card footer', '[data-home-example-card-footer="true"]'],
     ['solution card', '[data-home-solution-card="true"]'],
     ['readiness fact card', '[data-home-readiness-fact="true"]'],
 ] as const
@@ -15,7 +24,7 @@ test.describe('homepage surface border theme tokens', () => {
             const baseURL = testInfo.project.use.baseURL || 'http://127.0.0.1:3000'
             await page.context().addCookies([{ name: 'theme', value: theme, url: baseURL }])
 
-            await page.goto('/')
+            await page.goto('/', { waitUntil: 'domcontentloaded' })
             await expect(page.locator('[data-home-exposure-panel="true"]')).toBeVisible()
 
             const report = await page.evaluate((surfaces) => {
