@@ -67,6 +67,7 @@ services:
       MAIL_MANAGESIEVE_PORT: ${MAIL_MANAGESIEVE_PORT:-4190}
       MANAGED_CRON_GID: ${MANAGED_CRON_GID:-990}
       VM_HOST_ID: ${VM_HOST_ID:-ovhcloud}
+      ONION_SESSION_PROXY: ${ONION_SESSION_PROXY:-socks5://onion-tor:9050}
       VULNERABILITY_SCAN_STATE_PATH: ${VULNERABILITY_SCAN_STATE_PATH:-/var/lib/hanasand/vulnerability-scan.json}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api"]
@@ -82,6 +83,20 @@ services:
         condition: service_started
       ti-scraper:
         condition: service_healthy
+      onion-tor:
+        condition: service_started
+
+  onion-tor:
+    container_name: hanasand_onion_tor
+    image: hanasand_onion_tor
+    restart: always
+    build:
+      context: ./ops/onion-tor
+      dockerfile: ./Dockerfile
+    expose:
+      - "9050"
+    networks:
+      - hanasandnet
 
   ai-parser-bridge:
     container_name: hanasand_ai_parser_bridge

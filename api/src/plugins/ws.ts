@@ -11,6 +11,7 @@ import config from '#constants'
 import followTest from '../handlers/test/follow.ts'
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
+import { handleOnionSessionSocket } from '../handlers/onionSession/ws.ts'
 
 type PendingUpdates = {
     content: string
@@ -166,6 +167,11 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         connection.on('error', (error) => {
             void recordWebsocketFailure('gpt-client', id, error)
         })
+    })
+
+    // remote onion browser session
+    fastify.get<{ Params: { id: string } }>('/api/ws/onion-session/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
+        handleOnionSessionSocket(connection, req.params.id)
     })
 })
 

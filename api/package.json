@@ -41,6 +41,9 @@
     "smoke:dwm-webhooks": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-dwm-webhooks.ts",
     "check:scheduled-job-registry": "bun scripts/check-scheduled-job-registry.ts",
     "smoke:scheduled-job-registry": "bun scripts/smoke-scheduled-job-registry.ts",
+    "smoke:onion-session": "bun scripts/smoke-onion-session-broker.ts",
+    "smoke:onion-session-proxy": "bun scripts/smoke-onion-session-proxy.ts",
+    "smoke:onion-session-ui": "bun scripts/smoke-onion-session-ui.ts",
     "test:lxd-lifecycle": "bun scripts/test-lxd-lifecycle.ts"
   },
   "author": "",
