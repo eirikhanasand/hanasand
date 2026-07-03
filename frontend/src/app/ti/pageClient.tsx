@@ -2142,7 +2142,7 @@ function StructuredProvenancePanel({ rows, actor, actionability, query }: { rows
                             <div className='flex flex-wrap items-center justify-between gap-2'>
                                 <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</p>
                                 <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
-                                    <span className='shrink-0 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{row.reportDate ? formatDate(row.reportDate) : row.captureId ? `capture ${row.captureId}` : `${Math.round((row.confidence ?? 0) * 100)}%`}</span>
+                                    <span className='shrink-0 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{row.reportDate ? formatDate(row.reportDate) : row.captureId ? `capture ${row.captureId}` : sourceBasisLabel(row.confidence)}</span>
                                     <CopyPayloadButton label='Provenance artifact' payload={provenanceArtifactPayloadFor(row, actor, actionability, query)} />
                                     {href ? (
                                         <a href={href} target='_blank' rel='noopener noreferrer' className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
@@ -2892,7 +2892,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                             <div className='min-w-0'>
                                 <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</p>
                                 <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                    {[row.sourceId ? `source ${row.sourceId}` : '', row.reportDate ? formatDate(row.reportDate) : '', typeof row.confidence === 'number' ? `${Math.round(row.confidence * 100)}%` : ''].filter(Boolean).join(' · ') || 'Source metadata incomplete'}
+                                    {[row.sourceId ? `source ${row.sourceId}` : '', row.reportDate ? formatDate(row.reportDate) : '', typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : ''].filter(Boolean).join(' · ') || 'Source metadata incomplete'}
                                 </p>
                             </div>
                             <span className={row.state === 'ready' ? decisionStepStatusClass('ready') : row.state === 'needs_capture' ? decisionStepStatusClass('review') : decisionStepStatusClass('blocked')}>
@@ -8378,7 +8378,7 @@ function selectedTriageBriefFor(
                 ? 'Source reference is present, but the public result does not yet include a capture ID. Verify before customer-facing escalation.'
                 : 'No source reference is attached to the selected result. Treat this as context until source evidence is added.',
         proofTone,
-        safetyBoundary: 'Public TI results are metadata-only. Hanasand does not expose raw leak files, credential values, or webhook secrets in this view.',
+        safetyBoundary: 'Public TI results are metadata-only. This view does not expose raw leak files, credential values, or webhook secrets.',
         labels: [
             { label: 'Severity', value: formatLabel(selected.severity) },
             { label: 'Source basis', value: sourceBasis },
@@ -9481,7 +9481,7 @@ function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnT
                         <div data-ti-geo-sources='true' data-ti-geo-provenance='true' className='mt-2 grid gap-1 border-t border-[#eef1f5] pt-2'>
                             {handoff.evidenceRows.slice(0, 2).map(row => (
                                 <p key={`${point.code}-${row.victim}-${row.reportDate}`} className='wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
-                                    {row.victim} · {formatDate(row.reportDate)} · {Math.round(row.confidence * 100)}% · {row.sourceIds.length ? row.sourceIds.map(sourceId => `source ${sourceId}`).join(', ') : row.source}
+                                    {row.victim} · {formatDate(row.reportDate)} · {sourceBasisLabel(row.confidence)} · {row.sourceIds.length ? row.sourceIds.map(sourceId => `source ${sourceId}`).join(', ') : row.source}
                                 </p>
                             ))}
                         </div>
