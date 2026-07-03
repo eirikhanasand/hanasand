@@ -314,6 +314,11 @@ function Results({ result }: { result: TiSearchResponse }) {
         <div className='grid gap-6'>
             <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#263244] dark:bg-[#101722]'>
                 {mobileEvidenceWorkbar ? <div className='border-b border-[#e8edf5] bg-[#f8fafc] p-3 dark:border-[#263244] dark:bg-[#101722] lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
+                {selected ? (
+                    <div className='border-b border-[#e8edf5] bg-white p-3 dark:border-[#263244] dark:bg-[#101722] lg:hidden'>
+                        <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
+                    </div>
+                ) : null}
                 <div className='grid gap-4 border-b border-[#e8edf5] bg-white p-4 dark:border-[#263244] dark:bg-[#101722]'>
                     <div className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] xl:items-stretch'>
                         <div className='grid min-w-0 content-start gap-4'>
@@ -341,9 +346,16 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 ))}
                             </div>
                             <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
-                            {selected ? <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} /> : null}
                         </div>
-                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
+                        {selected ? (
+                            <div className='hidden min-w-0 lg:block'>
+                                <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
+                            </div>
+                        ) : (
+                            <div className='hidden min-w-0 rounded-lg border border-dashed border-[#d8dee9] bg-[#fbfcfe] p-4 text-sm text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd] lg:block'>
+                                Select a finding to inspect evidence, source context, and case handoff.
+                            </div>
+                        )}
                     </div>
                 </div>
                 <ActorActionStrip
@@ -497,6 +509,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                             <TiCommandBar links={commandLinks} />
                                             <SectionOverviewRail items={sectionOverview} />
                                         </div>
+                                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                                         <ActorIntelligenceDossier
                                             actor={actorIntel}
                                             actionability={actionability}
@@ -5073,7 +5086,7 @@ function SelectedWorkflowSummaryPanel({
         <Panel title='Selected workflow' description='Compact action state for the selected finding.' icon={<ShieldAlert className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
-                    <p className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selected?.title ?? 'Select a finding'}</p>
+                    <p className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selected ? displayRequirementText(selected.title) : 'Select a finding'}</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         {selected ? `${selected.source} · ${sourceBasisLabel(selected.confidence)} · ${selected.timestamp}` : 'Choose a row to inspect source and case context.'}
                     </p>
