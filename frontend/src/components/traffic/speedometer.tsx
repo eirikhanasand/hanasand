@@ -3,9 +3,9 @@ import { Cell, Pie, PieChart } from 'recharts'
 export default function Speedometer({ name, tps }: { name: string, tps: number }) {
 
     function getColor(value: number) {
-        if (value < 40) return '#147a3b'
-        if (value < 70) return '#8a5a00'
-        return '#b42318'
+        if (value < 40) return 'var(--ui-success)'
+        if (value < 70) return 'var(--ui-warning)'
+        return 'var(--ui-danger)'
     }
 
     const activeColor = getColor(tps)
@@ -16,8 +16,8 @@ export default function Speedometer({ name, tps }: { name: string, tps: number }
     ]
 
     return (
-        <div className='relative flex h-60 w-full flex-col items-center justify-center rounded-lg border border-[#dfe5ee] bg-white p-6 shadow-sm'>
-            <div className='mb-4 text-lg font-semibold text-[#171a21]'>
+        <div className='relative flex h-60 w-full flex-col items-center justify-center rounded-lg border border-ui-border bg-ui-panel p-6 shadow-sm'>
+            <div className='mb-4 text-lg font-semibold text-ui-text'>
                 {name}
             </div>
 
@@ -33,8 +33,8 @@ export default function Speedometer({ name, tps }: { name: string, tps: number }
                                 style={{
                                     transform: `rotate(${deg}deg) translateY(-90px)`,
                                     backgroundColor: long
-                                        ? '#667085'
-                                        : '#d8dee9',
+                                        ? 'var(--ui-muted)'
+                                        : 'var(--ui-border)',
                                 }}
                             />
                         )
@@ -60,7 +60,7 @@ export default function Speedometer({ name, tps }: { name: string, tps: number }
                             {data.map((_, index) => (
                                 <Cell
                                     key={`cell-${index}`}
-                                    fill={index === 0 ? activeColor : '#eef1f5'}
+                                    fill={index === 0 ? activeColor : 'var(--ui-border)'}
                                 />
                             ))}
                         </Pie>
@@ -74,7 +74,7 @@ export default function Speedometer({ name, tps }: { name: string, tps: number }
                     >
                         {tps.toFixed(1)}
                     </div>
-                    <div className='text-sm text-[#667085]'>req/s</div>
+                    <div className='text-sm text-ui-muted'>req/s</div>
                 </div>
             </div>
         </div>

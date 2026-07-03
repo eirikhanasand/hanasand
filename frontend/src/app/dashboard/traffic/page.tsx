@@ -100,8 +100,8 @@ export default async function Page({
                 />
                 <DashboardPanel className='p-4'>
                     <div className='mb-4'>
-                        <h2 className='text-lg font-semibold text-[#edf4ff]'>Request operations</h2>
-                        <p className='mt-1 text-sm text-[#aab7cc]'>
+                        <h2 className='text-lg font-semibold text-ui-text'>Request operations</h2>
+                        <p className='mt-1 text-sm text-ui-muted'>
                             Route demand, user agents, IP activity, and access controls for production operations.
                         </p>
                     </div>
@@ -146,35 +146,35 @@ function TrafficLane({ title, icon, value, detail, footer, tone }: {
     tone: 'neutral' | 'ok' | 'watch' | 'bad'
 }) {
     return (
-        <DashboardPanel className='overflow-hidden p-0 dark:border-[#22334d] dark:bg-[#0f172a]'>
-            <div className='flex items-center justify-between gap-3 border-b border-[#22334d] bg-[#101722] px-4 py-3'>
-                <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-[#d8deea]'>
+        <DashboardPanel className='overflow-hidden p-0'>
+            <div className='flex items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-4 py-3'>
+                <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text'>
                     <span className={toneText(tone)}>{icon}</span>
                     <span className='truncate'>{title}</span>
                 </div>
                 <span className={`h-2 w-2 rounded-full ${toneDot(tone)}`} />
             </div>
             <div className='p-4'>
-                <p className='line-clamp-1 text-lg font-semibold text-[#d8deea]'>{value}</p>
-                <p className='mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-[#aab6ca]'>{detail}</p>
-                <p className='mt-3 truncate text-xs text-[#8795ad]'>{footer}</p>
+                <p className='line-clamp-1 text-lg font-semibold text-ui-text'>{value}</p>
+                <p className='mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-ui-muted'>{detail}</p>
+                <p className='mt-3 truncate text-xs text-ui-muted'>{footer}</p>
             </div>
         </DashboardPanel>
     )
 }
 
 function toneText(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
-    if (tone === 'ok') return 'text-[#7bd39a]'
-    if (tone === 'watch') return 'text-[#f6b45f]'
-    if (tone === 'bad') return 'text-[#ff9b6b]'
-    return 'text-[#9db4ff]'
+    if (tone === 'ok') return 'text-ui-success'
+    if (tone === 'watch') return 'text-ui-warning'
+    if (tone === 'bad') return 'text-ui-danger'
+    return 'text-ui-primary'
 }
 
 function toneDot(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
-    if (tone === 'ok') return 'bg-[#31c48d] shadow-[0_0_14px_rgba(49,196,141,0.65)]'
-    if (tone === 'watch') return 'bg-[#f6b45f] shadow-[0_0_14px_rgba(246,180,95,0.45)]'
-    if (tone === 'bad') return 'bg-[#ff7a59] shadow-[0_0_14px_rgba(255,122,89,0.45)]'
-    return 'bg-[#9db4ff] shadow-[0_0_14px_rgba(157,180,255,0.45)]'
+    if (tone === 'ok') return 'bg-ui-success shadow-sm'
+    if (tone === 'watch') return 'bg-ui-warning shadow-sm'
+    if (tone === 'bad') return 'bg-ui-danger shadow-sm'
+    return 'bg-ui-primary shadow-sm'
 }
 
 function shortTime(value: string) {
