@@ -223,7 +223,12 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
             })
             const payload = await readPayload(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            return payload.case?.id ? `Case ${payload.case.id} is ready.` : 'Case is ready.'
+            const caseId = payload.case?.id || payload.alertCaseHandoff?.caseId
+            if (caseId) {
+                router.push(caseDetailHref(caseId, alert.id, alertOrganizationId(alert, organizationId), 'alert_queue'))
+                return `Opening case ${caseId}.`
+            }
+            return 'Case is ready.'
         })
     }
 
@@ -513,6 +518,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
     const [copiedHash, setCopiedHash] = useState('')
     const evidenceDispositions = localState?.evidenceDispositions ?? {}
     const analystBrief = buildAnalystBrief(alert, evidenceSummary, routingContext, workflowContext)
+    const caseHref = workflowContext.caseId ? caseDetailHref(workflowContext.caseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined
     const timeline = buildTimeline(alert, deliveries, {
         localState,
         selectedEvidence,
@@ -585,7 +591,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
             <section className='grid gap-2 rounded-lg border border-[#26344d] bg-[#0b121e] p-3 sm:grid-cols-2 xl:grid-cols-5'>
                 <ContextChip label='Organization' value={workflowContext.organizationId || 'tenant default'} href={workflowContext.organizationId ? `/organizations?organizationId=${encodeURIComponent(workflowContext.organizationId)}` : '/organizations'} />
                 <ContextChip label='Watched terms' value={workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} scoped` : stateLabel(alert.matchedTerm.kind)} href='/organizations' />
-                <ContextChip label='Case' value={workflowContext.caseId || 'case is being prepared'} href={workflowContext.caseId ? `/api/cases/${encodeURIComponent(workflowContext.caseId)}${workflowContext.organizationId ? `?organizationId=${encodeURIComponent(workflowContext.organizationId)}` : ''}` : undefined} />
+                <ContextChip label='Case' value={workflowContext.caseId || 'case is being prepared'} href={caseHref} />
                 <ContextChip label='Delivery' value={workflowContext.lastDelivery ? `${stateLabel(workflowContext.lastDelivery.status)} · ${relativeTimeLabel(workflowContext.lastDelivery.attemptedAt)}` : workflowContext.hasWebhookRoute ? 'delivery configured' : 'checking delivery'} />
                 <ContextChip label='Source type' value={`${stateLabel(alert.sourceFamily)} · ${alert.sourceCount}`} />
             </section>
@@ -839,7 +845,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
     const latestDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
     const actualCaseId = alert.caseId
     const caseCandidate = alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
-    const casePath = actualCaseId ? `/dashboard/dwm/cases/${encodeURIComponent(actualCaseId)}${workflowContext.organizationId ? `?organizationId=${encodeURIComponent(workflowContext.organizationId)}${alert.id ? `&alertId=${encodeURIComponent(alert.id)}` : ''}` : alert.id ? `?alertId=${encodeURIComponent(alert.id)}` : ''}` : alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness?.actions?.find(action => action.action === 'case_link' && action.casePath)?.casePath
+    const casePath = actualCaseId ? caseDetailHref(actualCaseId, alert.id, workflowContext.organizationId, 'alert_queue') : alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness?.actions?.find(action => action.action === 'case_link' && action.casePath)?.casePath
     const canOpenCase = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
     const steps: WorkflowStepModel[] = [
         {
@@ -1440,7 +1446,8 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const suppressReady = actionReady(alert, 'suppress')
     const closeReady = actionReady(alert, 'close')
     const reopenReady = actionReady(alert, 'reopen')
-    const hasCase = Boolean(alert.caseId)
+    const caseId = alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
+    const caseHref = caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert), 'alert_queue') : undefined
     const caseReady = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
     return (
         <section className='grid min-w-0 gap-3 rounded-lg border border-[#334762] bg-[#111b2b] p-3'>
@@ -1460,7 +1467,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                 <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap'>
                     <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
                     <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
-                    <CaseButton busy={busyAction === `case:${alert.id}`} disabled={hasCase || !caseReady} icon='case' onClick={onOpenCase}>{hasCase ? 'Case open' : 'Open case'}</CaseButton>
+                    {caseHref ? <CaseLink href={caseHref}>Open case</CaseLink> : <CaseButton busy={busyAction === `case:${alert.id}`} disabled={!caseReady} icon='case' onClick={onOpenCase}>Open case</CaseButton>}
                     <CaseButton busy={busyAction === `replay:${alert.id}`} disabled={!replayReady} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
                     <CaseButton busy={busyAction === `test:${alert.id}`} disabled={!deliverReady} icon='send' onClick={() => onTest(alert.id)}>Test</CaseButton>
                     <CaseButton busy={busyAction === `send:${alert.id}`} disabled={!deliverReady} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
@@ -1935,6 +1942,15 @@ function CaseButton({ busy, disabled = false, icon, onClick, children }: { busy:
     )
 }
 
+function CaseLink({ href, children }: { href: string, children: string }) {
+    return (
+        <a href={href} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-[#5f86ff] bg-[#122449] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#183064] focus:outline-none focus:ring-2 focus:ring-[#5f86ff] sm:px-3'>
+            <FolderOpen className='h-4 w-4' />
+            {children}
+        </a>
+    )
+}
+
 type LocalCaseState = {
     assignee?: string
     note?: string
@@ -2133,8 +2149,17 @@ function actionReady(alert: PortalAlert, action: DwmAlertAnalystAction) {
     return true
 }
 
-async function readPayload(response: Response): Promise<{ error?: { message?: string }, attemptedCount?: number, case?: { id?: string } }> {
+async function readPayload(response: Response): Promise<{ error?: { message?: string }, attemptedCount?: number, case?: { id?: string }, alertCaseHandoff?: { caseId?: string } }> {
     return await response.json().catch(() => ({}))
+}
+
+function caseDetailHref(caseId: string, alertId?: string, organizationId?: string, route?: string) {
+    const params = new URLSearchParams()
+    if (organizationId) params.set('organizationId', organizationId)
+    if (alertId) params.set('alertId', alertId)
+    if (route) params.set('route', route)
+    const query = params.toString()
+    return `/dashboard/dwm/cases/${encodeURIComponent(caseId)}${query ? `?${query}` : ''}`
 }
 
 function severityClass(severity: string) {
