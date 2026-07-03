@@ -18,6 +18,7 @@
     "check:contract-index": "bun run scripts/check-contract-index.ts",
     "check:product-readiness-contracts": "PATH=\"$HOME/.bun/bin:$PATH\" bun run scripts/check-product-readiness-contracts.ts",
     "check:api-regression": "bun run scripts/check-api-regression.ts",
+    "smoke:realtime-alert-discord": "bun run scripts/smoke-realtime-alert-discord.ts",
     "check:api-gateway": "bun run scripts/check-api-gateway.ts",
     "check:frontier-apply-plan": "bun run scripts/check-frontier-apply-plan.ts",
     "check:graph-review-mounted": "bun run scripts/check-graph-review-mounted.ts",
