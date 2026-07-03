@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AlertTriangle, ArrowLeft, BellRing, CheckCircle2, Clock3, Copy, Loader2, RotateCcw, Send, ShieldCheck, UserRound, XCircle } from 'lucide-react'
+import { ArrowLeft, BellRing, CheckCircle2, Copy, Loader2, RotateCcw, Send, ShieldCheck, UserRound, XCircle } from 'lucide-react'
 
 type CaseDetail = {
     schemaVersion?: string
@@ -188,7 +188,7 @@ type LoadState = {
 
 const primaryActions = ['review', 'assign', 'escalate', 'suppress', 'false_positive', 'close', 'reopen', 'note']
 
-export function DwmCaseDetailClient({ caseId, organizationId, alertId }: { caseId: string, organizationId?: string, alertId?: string }) {
+export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId }: { caseId: string, tenantId?: string, organizationId?: string, alertId?: string }) {
     const [state, setState] = useState<LoadState>({ loading: true })
     const [busy, setBusy] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
@@ -206,10 +206,10 @@ export function DwmCaseDetailClient({ caseId, organizationId, alertId }: { caseI
     async function load() {
         setState(previous => ({ ...previous, loading: true, error: undefined }))
         try {
-            const query = queryString({ organizationId, alertId })
+            const query = queryString({ tenantId, organizationId, alertId })
             const [detailResponse, exportResponse] = await Promise.all([
                 fetch(`/api/cases/${encodeURIComponent(caseId)}${query}`, { cache: 'no-store' }),
-                fetch(`/api/cases/${encodeURIComponent(caseId)}/export${queryString({ organizationId, alertId, shape: 'full' })}`, { cache: 'no-store' }),
+                fetch(`/api/cases/${encodeURIComponent(caseId)}/export${queryString({ tenantId, organizationId, alertId, shape: 'full' })}`, { cache: 'no-store' }),
             ])
             const detailPayload = await detailResponse.json().catch(() => ({}))
             const exportPayload = await exportResponse.json().catch(() => ({}))
@@ -224,7 +224,7 @@ export function DwmCaseDetailClient({ caseId, organizationId, alertId }: { caseI
 
     useEffect(() => {
         void load()
-    }, [caseId, organizationId, alertId])
+    }, [caseId, tenantId, organizationId, alertId])
 
     async function runAction(action: CaseAction) {
         if (!action.enabled || busy) return
@@ -245,8 +245,9 @@ export function DwmCaseDetailClient({ caseId, organizationId, alertId }: { caseI
                 method: 'PATCH',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({
-                    organizationId: caseRecord?.organizationId || organizationId,
-                    alertId: caseRecord?.alertId || alertId,
+                    tenantId: resolvedTenantId(caseRecord, tenantId),
+                    organizationId: resolvedOrganizationId(caseRecord, organizationId),
+                    alertId: resolvedAlertId(caseRecord, alertContext, alertId),
                     action: actionId,
                     note: rationale,
                     assignedOwner: owner.trim() || undefined,
@@ -273,7 +274,8 @@ export function DwmCaseDetailClient({ caseId, organizationId, alertId }: { caseI
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({
-                    organizationId: caseRecord?.organizationId || organizationId,
+                    tenantId: resolvedTenantId(caseRecord, tenantId),
+                    organizationId: resolvedOrganizationId(caseRecord, organizationId),
                     deliveryMode: 'dry_run',
                     note: note.trim() || 'Customer notification dry run.',
                     idempotencyKey: `dashboard-case-notify:${caseId}:${Date.now()}`,
@@ -291,7 +293,7 @@ export function DwmCaseDetailClient({ caseId, organizationId, alertId }: { caseI
     }
 
     async function sendWebhook(dryRun: boolean) {
-        const targetAlertId = caseRecord?.alertId || alertId
+        const targetAlertId = resolvedAlertId(caseRecord, alertContext, alertId)
         if (!targetAlertId) {
             setMessage({ ok: false, text: 'This case is missing an alert id.' })
             return
@@ -303,7 +305,8 @@ export function DwmCaseDetailClient({ caseId, organizationId, alertId }: { caseI
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({
-                    organizationId: caseRecord?.organizationId || organizationId,
+                    tenantId: resolvedTenantId(caseRecord, tenantId),
+                    organizationId: resolvedOrganizationId(caseRecord, organizationId),
                     alertId: targetAlertId,
                     limit: 1,
                     dryRun,
@@ -343,6 +346,9 @@ export function DwmCaseDetailClient({ caseId, organizationId, alertId }: { caseI
     const deliveries = state.detail.deliveries || state.exportPayload?.deliveryEvidence || []
     const latestDelivery = state.detail.deliveryContext?.latestDelivery || deliveries[0]
     const readOnly = Boolean(state.detail.access?.readOnly || state.detail.workflowActionPolicy?.summary?.readOnly)
+    const scopedTenantId = resolvedTenantId(caseRecord, tenantId)
+    const scopedOrganizationId = resolvedOrganizationId(caseRecord, organizationId)
+    const scopedAlertId = resolvedAlertId(caseRecord, alertContext, alertId)
 
     return (
         <main className='grid gap-3 text-[#dbe7ff]'>
@@ -362,6 +368,16 @@ export function DwmCaseDetailClient({ caseId, organizationId, alertId }: { caseI
 
                 <div className='grid gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_360px]'>
                     <section className='grid gap-3'>
+                        <CaseCommandBar
+                            caseId={caseRecord.id}
+                            tenantId={scopedTenantId}
+                            organizationId={scopedOrganizationId}
+                            alertId={scopedAlertId}
+                            exportReady={Boolean(state.exportPayload?.exportChecksum)}
+                            latestDelivery={latestDelivery}
+                            readOnly={readOnly}
+                        />
+
                         <div className='grid gap-2 md:grid-cols-4'>
                             <Metric label='Watch terms' value={`${matchedTerms(state.detail).length}`} detail={matchedTerms(state.detail).slice(0, 2).join(', ') || 'none'} />
                             <Metric label='Evidence' value={`${evidence.length}`} detail={hashList(evidence.map(item => item.contentHash || item.provenance?.contentHash)).slice(0, 1).join(', ') || 'no hash'} />
@@ -490,6 +506,67 @@ function WorkflowStrip({ detail, exportPayload }: { detail: CaseDetail, exportPa
     )
 }
 
+function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady, latestDelivery, readOnly }: {
+    caseId: string
+    tenantId: string
+    organizationId?: string
+    alertId?: string
+    exportReady: boolean
+    latestDelivery?: DeliveryRow
+    readOnly: boolean
+}) {
+    const caseScope = queryString({ tenantId, organizationId, alertId })
+    const dashboardScope = queryString({ tenantId, organizationId, alert: alertId })
+    const organizationHref = organizationId ? `/organizations?organizationId=${encodeURIComponent(organizationId)}` : '/organizations'
+    const exportHref = `/api/cases/${encodeURIComponent(caseId)}/export${queryString({ tenantId, organizationId, alertId, shape: 'full' })}`
+    const alertHref = alertId ? `/api/dwm/alerts/${encodeURIComponent(alertId)}${queryString({ tenantId, organizationId })}` : undefined
+    const lastDelivery = latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTime(latestDelivery.attemptedAt)}` : 'not sent'
+
+    return (
+        <section className='rounded-lg border border-[#334762] bg-[#111b2b] p-3'>
+            <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
+                <div className='min-w-0'>
+                    <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Case command</p>
+                    <div className='mt-2 grid gap-2 text-xs sm:grid-cols-4'>
+                        <CommandFact label='Scope' value={organizationId || tenantId} />
+                        <CommandFact label='Alert' value={alertId || 'pending'} mono />
+                        <CommandFact label='Export' value={exportReady ? 'ready' : 'pending'} tone={exportReady ? 'ready' : 'warn'} />
+                        <CommandFact label='Delivery' value={lastDelivery} tone={latestDelivery?.status === 'failed' ? 'warn' : 'neutral'} />
+                    </div>
+                </div>
+                <div className='flex flex-wrap gap-2 lg:justify-end'>
+                    <CommandLink href={`/dashboard/dwm${dashboardScope}`}>Queue</CommandLink>
+                    <CommandLink href={organizationHref}>Organization</CommandLink>
+                    {alertHref ? <CommandLink href={alertHref}>Alert JSON</CommandLink> : null}
+                    <CommandLink href={exportHref}>{exportReady ? 'Export JSON' : 'Check export'}</CommandLink>
+                    {readOnly ? <span className='inline-flex h-9 items-center rounded-lg border border-[#6f5417] bg-[#2a220f] px-3 text-xs font-semibold text-[#ffd879]'>Read only</span> : null}
+                    <a href={`/api/cases/${encodeURIComponent(caseId)}${caseScope}`} className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
+                        Case JSON
+                    </a>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+function CommandFact({ label, value, mono = false, tone = 'neutral' }: { label: string, value: string, mono?: boolean, tone?: 'ready' | 'warn' | 'neutral' }) {
+    const toneClass = tone === 'ready' ? 'text-[#9cf0bc]' : tone === 'warn' ? 'text-[#ffd879]' : 'text-[#dbe7ff]'
+    return (
+        <div className='min-w-0 rounded-lg border border-[#26344d] bg-[#0b121e] px-3 py-2'>
+            <p className='text-[10px] font-semibold uppercase text-[#8fa0ba]'>{label}</p>
+            <p className={`${mono ? 'font-mono text-[11px]' : 'text-xs'} mt-1 truncate font-semibold ${toneClass}`} title={value}>{value}</p>
+        </div>
+    )
+}
+
+function CommandLink({ href, children }: { href: string, children: ReactNode }) {
+    return (
+        <a href={href} className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a]'>
+            {children}
+        </a>
+    )
+}
+
 function Panel({ title, action, children }: { title: string, action?: string, children: ReactNode }) {
     return (
         <section className='rounded-lg border border-[#334762] bg-[#111b2b] p-3'>
@@ -564,6 +641,18 @@ function matchedTerms(detail: CaseDetail) {
     const terms = detail.watchlists?.flatMap(watchlist => watchlist.matchedTerms?.map(term => term.value).filter(Boolean) || []) || []
     const matched = detail.alert?.matchedTerm?.value
     return uniqueStrings([matched, ...terms])
+}
+
+function resolvedTenantId(caseRecord: CaseDetail['case'] | undefined, fallback?: string) {
+    return caseRecord?.tenantId || fallback || 'default'
+}
+
+function resolvedOrganizationId(caseRecord: CaseDetail['case'] | undefined, fallback?: string) {
+    return caseRecord?.organizationId || fallback
+}
+
+function resolvedAlertId(caseRecord: CaseDetail['case'] | undefined, alertContext: CaseDetail['alertContext'] | undefined, fallback?: string) {
+    return caseRecord?.alertId || alertContext?.id || fallback
 }
 
 function hashList(values: Array<string | undefined>) {
