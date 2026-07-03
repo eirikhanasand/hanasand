@@ -57,6 +57,9 @@ extension DesktopAgentModel {
 
     struct DesktopImpersonationStartPayload: Encodable {
         let target_id: String
+        let reason: String
+        let durationMinutes: Int
+        let scope: [String]
     }
 
     struct DesktopImpersonationTarget: Decodable {
@@ -73,11 +76,21 @@ extension DesktopAgentModel {
         let session: DesktopImpersonationSession
     }
 
-    func impersonateDashboardUser(_ user: DashboardUser) {
+    func impersonateDashboardUser(_ user: DashboardUser, reason: String) {
         guard user.id != userIDForRequests else { return }
+        let auditReason = reason.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        guard auditReason.count >= 10 else {
+            nativeDashboardStatus = "Impersonation reason must be at least 10 characters."
+            return
+        }
         Task {
             do {
-                let body = try JSONEncoder().encode(DesktopImpersonationStartPayload(target_id: user.id))
+                let body = try JSONEncoder().encode(DesktopImpersonationStartPayload(
+                    target_id: user.id,
+                    reason: auditReason,
+                    durationMinutes: 30,
+                    scope: ["read_profile", "read_org"]
+                ))
                 let response: DesktopImpersonationStartResponse = try await requestJSON(
                     settings.apiBaseURL.normalizedBaseURL.appendingAPIPath("impersonation/start"),
                     method: "POST",

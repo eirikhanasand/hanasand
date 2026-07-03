@@ -6,14 +6,18 @@ export function impersonationHeaders(): Record<string, string> {
     return {}
 }
 
-export async function startImpersonating(id: string) {
+export async function startImpersonating(id: string, reason: string) {
     const actorId = getCookie('id')
     const token = getCookie('access_token')
+    const auditReason = reason.trim().replace(/\s+/g, ' ')
     if (!actorId || !token) {
         throw new Error('Log in again before impersonating a user.')
     }
     if (actorId === id) {
         throw new Error('You are already viewing your own account.')
+    }
+    if (auditReason.length < 10) {
+        throw new Error('Impersonation reason must be at least 10 characters.')
     }
 
     const response = await fetch('/api/impersonation/start', {
@@ -21,7 +25,12 @@ export async function startImpersonating(id: string) {
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ target_id: id }),
+        body: JSON.stringify({
+            target_id: id,
+            reason: auditReason,
+            durationMinutes: 30,
+            scope: ['read_profile', 'read_org'],
+        }),
     })
     if (!response.ok) {
         const body = await response.json().catch(() => null) as { error?: string } | null
