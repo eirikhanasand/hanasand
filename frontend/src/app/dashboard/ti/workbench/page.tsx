@@ -10,12 +10,14 @@ export const dynamic = 'force-dynamic'
 
 export default async function TiAnalystWorkbenchPage() {
     const overview = getTiAdminOverview()
-    const [liveAlerts, deliveries] = await Promise.all([
+    const [liveAlerts, liveCases, deliveries] = await Promise.all([
         loadDwmAlerts(),
+        loadDwmCases(),
         loadDwmDeliveries(),
     ])
-    const alertsWithDelivery = attachDeliveriesToAlerts(liveAlerts, deliveries)
-    const cases = buildWorkbenchCases(overview, alertsWithDelivery)
+    const alertsWithCaseState = attachCasesToAlerts(liveAlerts, liveCases)
+    const alertsWithDelivery = attachDeliveriesToAlerts(alertsWithCaseState, deliveries)
+    const cases = buildWorkbenchCases(overview, alertsWithDelivery, liveCases)
 
     return (
         <DashboardPage>
@@ -76,6 +78,49 @@ type WorkbenchDwmDelivery = {
     deliveryKind?: string
 }
 
+type WorkbenchDwmCaseListItem = {
+    id?: string
+    caseId?: string
+    title?: string
+    summary?: string
+    status?: string
+    priority?: string
+    severity?: WorkbenchCase['severity'] | string
+    assignedOwner?: string
+    organizationId?: string
+    tenantId?: string
+    alertId?: string
+    dedupeKey?: string
+    recommendedRoute?: string
+    watchlistIds?: string[]
+    watchlistItemIds?: string[]
+    webhookDeliveryIds?: string[]
+    webhookStatuses?: string[]
+    createdAt?: string
+    updatedAt?: string
+    closedAt?: string
+    latestEvent?: { id?: string, at?: string, title?: string, eventType?: string, summary?: string, body?: string }
+    latestCaseAction?: { id?: string, at?: string, title?: string, eventType?: string, summary?: string, body?: string }
+    timeline?: Array<{ id?: string, at?: string, title?: string, eventType?: string, summary?: string, body?: string }>
+    nextAllowedActions?: Array<{ id?: string, label?: string, enabled?: boolean, disabledReason?: string }>
+}
+
+async function loadDwmCases(): Promise<WorkbenchDwmCaseListItem[]> {
+    const base = process.env.TI_SCRAPER_API_BASE
+    if (!base) return []
+
+    try {
+        const target = new URL('/v1/cases', base)
+        target.searchParams.set('tenantId', 'default')
+        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        if (!response.ok) return []
+        const payload = await response.json() as { cases?: WorkbenchDwmCaseListItem[] }
+        return (payload.cases || []).sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
+    } catch {
+        return []
+    }
+}
+
 async function loadDwmDeliveries(): Promise<WorkbenchDwmDelivery[]> {
     const base = process.env.TI_SCRAPER_API_BASE
     if (!base) return []
@@ -92,6 +137,30 @@ async function loadDwmDeliveries(): Promise<WorkbenchDwmDelivery[]> {
     }
 }
 
+function attachCasesToAlerts(alerts: DwmAlert[], cases: WorkbenchDwmCaseListItem[]): DwmAlert[] {
+    if (!cases.length) return alerts
+    const caseByAlertId = new Map<string, WorkbenchDwmCaseListItem>()
+    for (const item of cases) {
+        const alertId = String(item.alertId || '')
+        if (alertId) caseByAlertId.set(alertId, item)
+    }
+    return alerts.map(alert => {
+        const caseRow = caseByAlertId.get(alert.id)
+        if (!caseRow) return alert
+        const caseId = String(caseRow.caseId || caseRow.id || '')
+        const organizationId = caseRow.organizationId
+        return {
+            ...alert,
+            organizationId: organizationId || (alert as DwmAlert & { organizationId?: string }).organizationId,
+            caseId: caseId || (alert as DwmAlert & { caseId?: string }).caseId,
+            casePath: caseId ? caseApiHref(caseRow) : (alert as DwmAlert & { casePath?: string }).casePath,
+            assignedOwner: caseRow.assignedOwner || (alert as DwmAlert & { assignedOwner?: string }).assignedOwner,
+            workflowStatus: caseRow.status || (alert as DwmAlert & { workflowStatus?: string }).workflowStatus,
+            updatedAt: caseRow.updatedAt || (alert as DwmAlert & { updatedAt?: string }).updatedAt,
+        } as DwmAlert
+    })
+}
+
 function attachDeliveriesToAlerts(alerts: DwmAlert[], deliveries: WorkbenchDwmDelivery[]): DwmAlert[] {
     if (!deliveries.length) return alerts
     return alerts.map(alert => ({
@@ -100,13 +169,117 @@ function attachDeliveriesToAlerts(alerts: DwmAlert[], deliveries: WorkbenchDwmDe
     }))
 }
 
-function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[]): WorkbenchCase[] {
+function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[], liveCases: WorkbenchDwmCaseListItem[] = []): WorkbenchCase[] {
     const alertCases = alerts.map(dwmAlertToWorkbenchCase)
+    const alertIds = new Set(alerts.map(alert => alert.id))
+    const linkedCaseRows = liveCases
+        .filter(item => String(item.alertId || '') && !alertIds.has(String(item.alertId)))
+        .map(dwmCaseToWorkbenchCase)
     const domainCases = overview.domains.map(domain => domainToCase(domain, overview.captures))
     const captureCases = overview.captures.map(captureToCase)
 
-    return [...alertCases, ...domainCases, ...captureCases]
+    return [...linkedCaseRows, ...alertCases, ...domainCases, ...captureCases]
         .sort((a, b) => b.priority - a.priority || b.updatedAt.localeCompare(a.updatedAt))
+}
+
+function dwmCaseToWorkbenchCase(row: WorkbenchDwmCaseListItem): WorkbenchCase {
+    const caseId = String(row.caseId || row.id || 'case')
+    const alertId = String(row.alertId || '')
+    const rowId = alertId || caseId
+    const hasAlertRef = Boolean(alertId)
+    const severity = normalizeWorkbenchSeverity(row.severity || row.priority)
+    const route = String(row.recommendedRoute || 'case_review').replaceAll('_', ' ')
+    const webhookStatuses = row.webhookStatuses || []
+    const webhookDeliveryIds = row.webhookDeliveryIds || []
+    const updatedAt = row.updatedAt || row.latestEvent?.at || row.createdAt || new Date().toISOString()
+    const watchlistItemIds = row.watchlistItemIds || []
+    const timeline = (row.timeline || [])
+        .slice(0, 8)
+        .map((event, index) => ({
+            id: String(event.id || `${caseId}_timeline_${index}`),
+            at: String(event.at || updatedAt),
+            title: String(event.title || event.eventType || 'Case event').replaceAll('_', ' '),
+            body: String(event.summary || event.body || event.eventType || 'Case event recorded.'),
+        }))
+
+    return {
+        id: rowId,
+        kind: 'dwm_alert',
+        queue: 'Case queue',
+        title: row.title || caseId,
+        subtitle: row.summary || `${caseId} is ${row.status || 'open'} with ${webhookDeliveryIds.length} webhook delivery ${pluralize('row', webhookDeliveryIds.length)}.`,
+        severity,
+        status: row.status || 'open',
+        priority: severityPriority(severity) + 30 + webhookDeliveryIds.length,
+        confidence: webhookDeliveryIds.length ? 86 : 78,
+        owner: row.assignedOwner || 'unassigned',
+        createdAt: row.createdAt || updatedAt,
+        updatedAt,
+        company: row.title || row.organizationId || 'DWM case',
+        matchedTerm: watchlistItemIds[0] || row.dedupeKey || rowId,
+        actor: 'DWM case',
+        sourceLabel: webhookStatuses.length ? `${webhookStatuses.join(', ')} delivery` : 'case timeline',
+        recommendedAction: row.nextAllowedActions?.find(action => action.enabled)?.label || 'Open the case detail, review the timeline, then record the next analyst action.',
+        routeLabel: route,
+        persistent: true,
+        evidence: [],
+        timeline,
+        nextTasks: [
+            'Open the case detail and inspect evidence/provenance.',
+            webhookDeliveryIds.length ? 'Review webhook delivery state before closing.' : 'Send or test webhook delivery when evidence is customer-safe.',
+            'Record rationale before suppressing, escalating, or closing.',
+        ],
+        relatedLinks: [
+            { href: caseApiHref(row), label: 'Open case' },
+            ...(hasAlertRef ? [{ href: `/api/dwm/alerts/${encodeURIComponent(alertId)}`, label: 'Open alert detail' }] : []),
+        ],
+        workflowPath: [
+            {
+                id: 'alert_ref',
+                label: 'Alert',
+                status: hasAlertRef ? 'ready' : 'needs_action',
+                owner: 'alert',
+                source: 'case alert reference',
+                detail: hasAlertRef ? `Alert ${alertId}` : 'Alert reference is syncing.',
+                entityId: alertId || undefined,
+                href: hasAlertRef ? `/api/dwm/alerts/${encodeURIComponent(alertId)}` : undefined,
+            },
+            {
+                id: 'case_ref',
+                label: 'Case',
+                status: 'ready',
+                owner: 'case',
+                source: 'case file',
+                detail: `${caseId} · ${row.status || 'open'} · owner ${row.assignedOwner || 'unassigned'}.`,
+                entityId: caseId,
+                href: caseApiHref(row),
+            },
+            {
+                id: 'delivery_ref',
+                label: 'Delivery',
+                status: webhookDeliveryIds.length ? webhookStatuses.includes('failed') ? 'blocked' : 'ready' : 'needs_action',
+                owner: 'webhook',
+                source: 'delivery ledger',
+                detail: webhookDeliveryIds.length ? `${webhookDeliveryIds.length} delivery ${pluralize('row', webhookDeliveryIds.length)}: ${webhookStatuses.join(', ') || 'recorded'}.` : 'No webhook delivery is attached yet.',
+                entityId: webhookDeliveryIds[0],
+            },
+        ],
+        actions: [
+            { id: 'replay_alert', label: 'Replay', method: 'POST', href: `/api/dwm/alerts/${encodeURIComponent(rowId)}/replay`, body: { organizationId: row.organizationId, action: 'replay' }, disabledReason: hasAlertRef ? undefined : 'Alert reference is syncing before replay can run.' },
+            { id: 'send_alert', label: 'Send', method: 'POST', href: '/api/dwm/webhooks/deliver', body: { organizationId: row.organizationId, alertId: rowId, limit: 1 }, disabledReason: hasAlertRef ? undefined : 'Alert reference is syncing before delivery can run.' },
+        ],
+        caseDetailHref: caseApiHref(row),
+        deliveryEvidence: [],
+    }
+}
+
+function caseApiHref(row: WorkbenchDwmCaseListItem) {
+    const caseId = String(row.caseId || row.id || '')
+    const params = new URLSearchParams()
+    if (row.organizationId) params.set('organizationId', row.organizationId)
+    if (row.alertId) params.set('alertId', row.alertId)
+    const query = params.toString()
+    return `/api/cases/${encodeURIComponent(caseId || 'case')}${query ? `?${query}` : ''}`
 }
 
 function domainToCase(domain: TiAdminDomain, captures: TiAdminCapture[]): WorkbenchCase {
@@ -233,6 +406,13 @@ function severityPriority(severity: WorkbenchCase['severity']) {
     if (severity === 'high') return 300
     if (severity === 'medium') return 200
     return 100
+}
+
+function normalizeWorkbenchSeverity(value: string | undefined): WorkbenchCase['severity'] {
+    if (value === 'critical' || value === 'high' || value === 'medium' || value === 'low') return value
+    if (value === 'urgent' || value === 'p1') return 'critical'
+    if (value === 'review' || value === 'p2') return 'high'
+    return 'medium'
 }
 
 function pluralize(word: string, count: number) {
