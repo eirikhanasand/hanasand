@@ -333,13 +333,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 </div>
                                 <p className='mt-3 max-w-3xl text-base leading-7 text-[#475467] dark:text-[#c4d0e2]'>{displayRequirementText(result.summary)}</p>
                             </div>
-                            <div className='flex flex-wrap gap-2'>
-                                {result.aliases.slice(0, 8).map(alias => (
-                                    <span key={alias} className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>{alias}</span>
-                                ))}
-                                {result.aliases.length > 8 ? <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>+{result.aliases.length - 8} aliases</span> : null}
-                                {!result.aliases.length ? <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>No aliases in this actor profile</span> : null}
-                            </div>
                             <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-3'>
                                 {profileStats.map(item => (
                                     <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
@@ -6018,6 +6011,7 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
         ...actor.targetSectors.slice(0, 2),
         ...actor.geographies.slice(0, 2),
     ].filter(Boolean).slice(0, 4)
+    const aliases = result.aliases.slice(0, 5)
     const techniques = actor.techniqueCoverage.slice(0, 3)
     const latestDate = actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt
     const openGap = actionability.enrichmentGapQueue[0]
@@ -6073,6 +6067,9 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Actor at a glance</p>
                     <h2 className='mt-1 wrap-break-word text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>Identity, geography, methods, and review path</h2>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>
+                        Aliases: {aliases.length ? aliases.join(' · ') : 'No aliases in this actor profile'}{result.aliases.length > aliases.length ? ` · +${result.aliases.length - aliases.length} more` : ''}
+                    </p>
                 </div>
                 <span className={sourceHealthChipClass(actor.sourceCoverage.stale ? 'review' : 'ready')}>
                     {actor.sourceCoverage.stale ? 'refresh recommended' : 'current source set'}
@@ -6091,14 +6088,11 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
                     </div>
                 ))}
             </div>
-            <div className='mt-3 flex min-w-0 flex-col gap-2 border-t border-[#eef1f5] pt-3 dark:border-[#273244] sm:flex-row sm:items-center sm:justify-between'>
+            <div className='mt-3 flex min-w-0 flex-col gap-2 border-t border-[#eef1f5] pt-3 dark:border-[#273244]'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Workflow state</p>
                     <p className='mt-1 wrap-break-word text-sm leading-6 text-[#344054] dark:text-[#d8e2f2]'>{workflowSummary}</p>
                 </div>
-                <a href='#ti-selected-evidence' className='inline-flex min-h-8 w-fit items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
-                    Open evidence
-                </a>
             </div>
             {techniques.length ? (
                 <div className='mt-3 flex min-w-0 flex-wrap items-center gap-2'>
@@ -6238,7 +6232,7 @@ function EvidenceQueueFilters({
                 </label>
             </div>
             {sourceCounts.length ? (
-                <div className='flex min-w-0 gap-1.5 overflow-x-auto pb-1'>
+                <div className='flex min-w-0 flex-wrap gap-1.5 pb-1'>
                     {sourceCounts.slice(0, 5).map(item => (
                         <button
                             key={item.source}
@@ -6316,7 +6310,7 @@ function MobileEvidenceWorkbar({
                 </div>
             </div>
 
-            <div className='flex min-w-0 gap-1.5 overflow-x-auto pb-1'>
+            <div className='flex min-w-0 flex-wrap gap-1.5 pb-1'>
                 {kindOptions.map(item => (
                     <button
                         key={item.value}
@@ -6333,7 +6327,7 @@ function MobileEvidenceWorkbar({
             </div>
 
             {sourceCounts.length ? (
-                <div className='flex min-w-0 gap-1.5 overflow-x-auto pb-1'>
+                <div className='flex min-w-0 flex-wrap gap-1.5 pb-1'>
                     {sourceCounts.slice(0, 6).map(item => (
                         <button
                             key={item.source}
