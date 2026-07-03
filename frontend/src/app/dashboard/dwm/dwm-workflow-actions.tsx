@@ -22,18 +22,22 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
     const [result, setResult] = useState<WorkflowResult | null>(null)
     const scope = organizationId ? { tenantId, organizationId } : { tenantId }
 
+    function saveWatchlistTerms(nextTerms: string) {
+        return postJson('/api/dwm/watchlists', {
+            ...scope,
+            name: 'Default company exposure watchlist',
+            terms: nextTerms,
+            webhookUrl: webhookUrl.trim() || undefined,
+        })
+    }
+
     async function saveWatchlist(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         setBusyAction('watchlist')
         setResult(null)
 
         try {
-            const create = await postJson('/api/dwm/watchlists', {
-                ...scope,
-                name: 'Default company exposure watchlist',
-                terms,
-                webhookUrl: webhookUrl.trim() || undefined,
-            })
+            const create = await saveWatchlistTerms(terms)
             if (!create.ok) throw new Error(create.message)
 
             const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
@@ -62,30 +66,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
         const nextTerms = ensureTerm(terms, company)
 
         try {
-            const ingest = await postJson('/api/dwm/exposure-claims/ingest', {
-                items: [{
-                    ...scope,
-                    actor,
-                    company,
-                    claimedData,
-                    sourceName: `${actor} metadata intake`,
-                    sourceFamily: 'darkweb_metadata',
-                    title: `${actor} has just published a new victim: ${company}`,
-                    text: `${actor} victim: ${company}. ${claimedData}.`,
-                    publishedAt: new Date().toISOString(),
-                    url: url || undefined,
-                }],
-            })
+            const ingest = await ingestClaim({ actor, company, claimedData, url }, scope)
             if (!ingest.ok) throw new Error(ingest.message)
             const accepted = typeof ingest.accepted === 'number' ? ingest.accepted : 0
             if (!accepted) throw new Error('No claim was accepted. Check the actor and victim fields.')
 
-            const watchlist = await postJson('/api/dwm/watchlists', {
-                ...scope,
-                name: 'Default company exposure watchlist',
-                terms: nextTerms,
-                webhookUrl: webhookUrl.trim() || undefined,
-            })
+            const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
 
             const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
@@ -95,6 +81,71 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
             setClaimUrl('')
             setResult({ ok: rebuild.ok, message: rebuild.ok ? `Ingested ${accepted} claim(s). Rebuilt ${savedAlertCount} alert(s).` : rebuild.message })
             router.refresh()
+        } catch (error) {
+            setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
+        } finally {
+            setBusyAction(null)
+        }
+    }
+
+    async function openCaseFromMetadataClaim() {
+        setBusyAction('claim-case')
+        setResult(null)
+
+        const actor = claimActor.trim()
+        const company = claimCompany.trim()
+        const claimedData = claimData.trim() || 'new victim claim'
+        const url = claimUrl.trim()
+        const nextTerms = ensureTerm(terms, company)
+
+        try {
+            const ingest = await ingestClaim({ actor, company, claimedData, url }, scope)
+            const accepted = typeof ingest.accepted === 'number' ? ingest.accepted : 0
+            if (!accepted) throw new Error('No claim was accepted. Check the actor and victim fields.')
+
+            const watchlist = await saveWatchlistTerms(nextTerms)
+            if (!watchlist.ok) throw new Error(watchlist.message)
+
+            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
+            if (!rebuild.ok) throw new Error(rebuild.message)
+
+            const alert = selectRebuiltAlert(rebuild, company, nextTerms)
+            if (!alert?.id) throw new Error('No matching alert was generated for this claim.')
+
+            const casePayload = await postJson(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
+                ...scope,
+                actor: 'dashboard',
+                note: `Case opened from metadata claim for ${company}.`,
+                idempotencyKey: `dashboard-metadata-claim-case:${alert.id}`,
+            })
+            if (!casePayload.ok) throw new Error(casePayload.message)
+
+            const caseId = readNestedString(casePayload, ['case', 'id']) || readNestedString(casePayload, ['alertCaseHandoff', 'caseId'])
+            let deliveryText = ''
+            if (webhookConfigured) {
+                const delivery = await postJson('/api/dwm/webhooks/deliver', {
+                    ...scope,
+                    alertId: alert.id,
+                    caseId: caseId || undefined,
+                    limit: 1,
+                    dryRun: true,
+                    webhookUrl: webhookUrl.trim(),
+                    attachToWatchlist: true,
+                })
+                if (!delivery.ok) throw new Error(delivery.message)
+                const attemptedCount = typeof delivery.attemptedCount === 'number' ? delivery.attemptedCount : 0
+                deliveryText = attemptedCount ? ' Dry-run delivery recorded.' : ' No delivery was ready.'
+            }
+
+            setTerms(nextTerms)
+            setClaimData('')
+            setClaimUrl('')
+            setResult({ ok: true, message: `Ingested ${accepted} claim(s), opened ${caseId || 'a case'}.${deliveryText}` })
+            if (caseId) {
+                router.push(caseDetailPath(caseId, alert.id, organizationId))
+            } else {
+                router.refresh()
+            }
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
         } finally {
@@ -366,10 +417,15 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
                         placeholder='Source URL, optional'
                         className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
-                    <button disabled={busy || Boolean(claimDisabledReason)} title={claimDisabledReason || undefined} className='mt-3 inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
-                        {busyAction === 'claim' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus className='h-4 w-4' />}
-                        Ingest and rebuild
-                    </button>
+                    <div className='mt-3 flex flex-wrap gap-2'>
+                        <button disabled={busy || Boolean(claimDisabledReason)} title={claimDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
+                            {busyAction === 'claim' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus className='h-4 w-4' />}
+                            Ingest and rebuild
+                        </button>
+                        <WorkflowButton busy={busyAction === 'claim-case'} disabled={busy || Boolean(claimDisabledReason)} disabledReason={claimDisabledReason || undefined} icon={<ShieldCheck className='h-4 w-4' />} onClick={openCaseFromMetadataClaim}>
+                            Open case
+                        </WorkflowButton>
+                    </div>
                     {claimDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-muted'>{claimDisabledReason}</p> : null}
                 </form>
 
@@ -396,6 +452,60 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
             </div>
         </div>
     )
+}
+
+async function ingestClaim(input: { actor: string, company: string, claimedData: string, url: string }, scope: { tenantId: string, organizationId?: string }) {
+    return postJson('/api/dwm/exposure-claims/ingest', {
+        items: [{
+            ...scope,
+            actor: input.actor,
+            company: input.company,
+            claimedData: input.claimedData,
+            sourceName: `${input.actor} metadata intake`,
+            sourceFamily: 'darkweb_metadata',
+            title: `${input.actor} has just published a new victim: ${input.company}`,
+            text: `${input.actor} victim: ${input.company}. ${input.claimedData}.`,
+            publishedAt: new Date().toISOString(),
+            url: input.url || undefined,
+        }],
+    })
+}
+
+function selectRebuiltAlert(payload: Record<string, unknown>, company: string, terms: string) {
+    const alerts = Array.isArray(payload.alerts) ? payload.alerts.filter(isRecord) : []
+    const needles = [company, ...terms.split(/[\n,]/)].map(item => item.trim().toLowerCase()).filter(Boolean)
+    const match = alerts.find(alert => {
+        const companyValue = readString(alert.company).toLowerCase()
+        const matchedValue = readNestedString(alert, ['matchedTerm', 'value']).toLowerCase()
+        const summary = readString(alert.claimSummary).toLowerCase()
+        return needles.some(needle => companyValue.includes(needle) || matchedValue.includes(needle) || summary.includes(needle))
+    }) ?? alerts[0]
+    const id = readString(match?.id)
+    return id ? { id } : undefined
+}
+
+function caseDetailPath(caseId: string, alertId: string, organizationId?: string) {
+    const params = new URLSearchParams()
+    if (organizationId) params.set('organizationId', organizationId)
+    params.set('alertId', alertId)
+    return `/dashboard/dwm/cases/${encodeURIComponent(caseId)}?${params.toString()}`
+}
+
+function readNestedString(value: unknown, path: string[]) {
+    let cursor = value
+    for (const part of path) {
+        if (!isRecord(cursor)) return ''
+        cursor = cursor[part]
+    }
+    return readString(cursor)
+}
+
+function readString(value: unknown) {
+    return typeof value === 'string' ? value : ''
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function RunbookStep({ step, title, detail, state }: { step: string, title: string, detail: string, state: 'ready' | 'needed' | 'waiting' }) {
