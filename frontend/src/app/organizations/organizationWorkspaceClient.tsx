@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Archive, BellRing, Building2, CheckCircle2, CircleAlert, Copy, ExternalLink, Loader2, Pause, Pencil, Play, RefreshCw, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
 
 type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer' | 'support'
@@ -244,6 +245,8 @@ function organizationDisplayId(organization: Pick<OrganizationSummary, 'slug' | 
 }
 
 export default function OrganizationWorkspaceClient() {
+    const searchParams = useSearchParams()
+    const requestedOrganizationId = searchParams.get('organizationId')?.trim() || ''
     const [organizations, setOrganizations] = useState<OrganizationSummary[]>([])
     const [selectedId, setSelectedId] = useState('')
     const [bundle, setBundle] = useState<OrgBundle>(initialBundle)
@@ -282,7 +285,7 @@ export default function OrganizationWorkspaceClient() {
             const payload = await requestJson<{ organizations?: OrganizationSummary[] }>('/api/organizations')
             const nextOrganizations = payload.organizations || []
             setOrganizations(nextOrganizations)
-            const preferred = nextSelectedId || selectedId
+            const preferred = nextSelectedId || requestedOrganizationId || selectedId
             const nextSelected = nextOrganizations.find(item => item.id === preferred)?.id || nextOrganizations[0]?.id || ''
             setSelectedId(nextSelected)
             if (!nextSelected) {
@@ -296,7 +299,7 @@ export default function OrganizationWorkspaceClient() {
         } finally {
             setLoading(false)
         }
-    }, [selectedId])
+    }, [requestedOrganizationId, selectedId])
 
     const loadOrganizationBundle = useCallback(async (organizationId: string) => {
         setBusy('load-org')
