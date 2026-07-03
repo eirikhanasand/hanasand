@@ -1064,7 +1064,7 @@ export function buildDwmEntitlementDownstreamAdoptionExamples(input: { generated
         route: "analyst_handoff_consumer",
         status: "blocked",
         separation: "analyst_handoff",
-        customerSafeText: "Analyst handoff is blocked until the bundle satisfies webhook audit and case/source readiness contracts.",
+        customerSafeText: "Analyst handoff is waiting for webhook audit plus case and source checks.",
         supportText: "Use analystHandoff.stage, field, and recoverable to route the fix.",
         sample: {
           blocker: {
