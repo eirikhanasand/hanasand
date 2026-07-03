@@ -423,7 +423,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId 
                         </Panel>
                     </section>
 
-                    <aside className='grid content-start gap-3'>
+                    <aside data-dwm-case-action-dock className='order-first grid content-start gap-3 xl:order-none'>
                         <section className='rounded-lg border border-[#334762] bg-[#111b2b] p-3'>
                             <div className='flex items-center justify-between gap-2'>
                                 <h2 className='text-sm font-semibold text-[#edf4ff]'>Analyst actions</h2>
@@ -539,11 +539,11 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
                 <div className='flex flex-wrap gap-2 lg:justify-end'>
                     <CommandLink href={`/dashboard/dwm${dashboardScope}`}>Queue</CommandLink>
                     <CommandLink href={organizationHref}>Organization</CommandLink>
-                    {alertHref ? <CommandLink href={alertHref}>Alert JSON</CommandLink> : null}
-                    <CommandLink href={exportHref}>{exportReady ? 'Export JSON' : 'Check export'}</CommandLink>
+                    {alertHref ? <CommandLink href={alertHref}>Alert record</CommandLink> : null}
+                    <CommandLink href={exportHref}>{exportReady ? 'Export packet' : 'Check export'}</CommandLink>
                     {readOnly ? <span className='inline-flex h-9 items-center rounded-lg border border-[#6f5417] bg-[#2a220f] px-3 text-xs font-semibold text-[#ffd879]'>Read only</span> : null}
                     <a href={`/api/cases/${encodeURIComponent(caseId)}${caseScope}`} className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
-                        Case JSON
+                        Case record
                     </a>
                 </div>
             </div>
