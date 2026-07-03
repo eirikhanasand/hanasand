@@ -1,0 +1,24 @@
+import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+
+const root = process.cwd()
+
+test('ai chat product shell uses shared dashboard theme tokens', async () => {
+    const source = await readFile(path.join(root, 'src/components/ai/chatPane.tsx'), 'utf8')
+    const artifactSectionStart = source.indexOf('function ArtifactList')
+
+    expect(artifactSectionStart).toBeGreaterThan(0)
+
+    const shellSource = source.slice(0, artifactSectionStart)
+
+    expect(shellSource).toContain('border-ui-border bg-ui-panel')
+    expect(shellSource).toContain('hover:bg-ui-raised hover:text-ui-text')
+    expect(shellSource).toContain('focus-within:border-ui-primary')
+    expect(shellSource).toContain('bg-ui-primary/10 text-ui-primary')
+    expect(shellSource).toContain('text-ui-danger')
+
+    expect(shellSource).not.toContain('bg-white')
+    expect(shellSource).not.toContain('text-white')
+    expect(shellSource).not.toMatch(/#[0-9a-fA-F]{3,8}/)
+})

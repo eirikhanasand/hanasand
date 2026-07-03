@@ -86,23 +86,23 @@ export default function ChatPane({
     return (
         <Fragment>
             <section className='relative flex min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-hidden'>
-                <div className='relative z-10 w-full max-w-full border-b border-[#e0e5ed] bg-white px-4 py-4 sm:px-7 sm:py-5'>
+                <div className='relative z-10 w-full max-w-full border-b border-ui-border bg-ui-panel px-4 py-4 sm:px-7 sm:py-5'>
                     <div className='flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4'>
                         <div className='min-w-0'>
-                            <h1 className='truncate text-base font-semibold tracking-normal text-[#171a21]'>{conversationTitle(activeConversation?.title)}</h1>
+                            <h1 className='truncate text-base font-semibold tracking-normal text-ui-text'>{conversationTitle(activeConversation?.title)}</h1>
                             <div className='relative mt-1 inline-block'>
                                 <button
                                     type='button'
                                     onClick={() => setModelMenuOpen((prev) => !prev)}
                                     disabled={!clients.length}
-                                    className='inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md text-left text-sm font-semibold text-[#3056d3] transition-colors hover:text-[#2546a8] disabled:cursor-not-allowed disabled:text-[#98a2b3] sm:px-1'
+                                    className='inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md text-left text-sm font-semibold text-ui-primary transition-colors hover:text-ui-primary/80 disabled:cursor-not-allowed disabled:text-ui-muted sm:px-1'
                                     title={selectedModelLabel}
                                 >
                                     <span className='truncate'>{isConnected ? selectedModelLabel : 'Review paused'}</span>
                                     {clients.length ? <ChevronDown className='h-3.5 w-3.5 shrink-0' /> : null}
                                 </button>
                                 {modelMenuOpen && clients.length ? (
-                                    <div className='absolute left-0 top-full z-30 mt-2 w-[min(26rem,calc(100vw-3rem))] overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-[0_18px_60px_rgba(26,35,55,0.14)]'>
+                                    <div className='absolute left-0 top-full z-30 mt-2 w-[min(26rem,calc(100vw-3rem))] overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-lg'>
                                         {clients.map((client) => {
                                             const active = client.name === selectedClient?.name
                                             return (
@@ -114,10 +114,10 @@ export default function ChatPane({
                                                         onPreferredModelChange(client.name)
                                                         setModelMenuOpen(false)
                                                     }}
-                                                    className={`block w-full px-3 py-2.5 text-left transition-colors ${active ? 'bg-[#eef3ff] text-[#2546a8]' : 'text-[#344054] hover:bg-[#f8fafc] hover:text-[#171a21]'}`}
+                                                    className={`block w-full px-3 py-2.5 text-left transition-colors ${active ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}
                                                 >
                                                     <span className='block truncate text-sm font-medium'>{modelLabel(client)}</span>
-                                                    <span className='mt-0.5 block truncate text-xs text-[#667085]'>{client.name}</span>
+                                                    <span className='mt-0.5 block truncate text-xs text-ui-muted'>{client.name}</span>
                                                 </button>
                                             )
                                         })}
@@ -128,7 +128,7 @@ export default function ChatPane({
                         <div className='flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end'>
                             <Link
                                 href='/s'
-                                className='grid h-9 w-9 place-items-center rounded-lg text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'
+                                className='grid h-9 w-9 place-items-center rounded-lg text-ui-muted transition-colors hover:bg-ui-raised hover:text-ui-text'
                                 aria-label='Import context'
                             >
                                 <FolderKanban className='h-4 w-4 shrink-0' />
@@ -139,7 +139,7 @@ export default function ChatPane({
                                 accent={isThinking}
                             />
                             {latestArtifacts.length ? (
-                                <button type='button' onClick={() => setShowArtifacts((prev) => !prev)} className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition-colors ${showArtifacts ? 'bg-[#eef3ff] text-[#2546a8]' : 'text-[#667085] hover:bg-[#f8fafc] hover:text-[#171a21]'}`}>
+                                <button type='button' onClick={() => setShowArtifacts((prev) => !prev)} className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition-colors ${showArtifacts ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}>
                                     <PanelRightOpen className='h-3.5 w-3.5' />
                                     Artifacts
                                 </button>
@@ -153,9 +153,9 @@ export default function ChatPane({
                         {!activeConversation?.messages.length ? (
                             <EmptyComposerState tooltip={emptyTooltip} hasReadyModel={hasReadyModel} isAuthenticated={isAuthenticated} />
                         ) : activeConversation.messages.map((message) => (
-                            <article key={message.id} className={`max-w-3xl rounded-lg border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-[#dfe5ee] bg-white text-[#171a21] shadow-sm' : message.error ? 'border-[#fecdca] bg-[#fff1f0] text-[#912018]' : message.role === 'tool' ? 'border-[#dfe5ee] bg-[#f8fafc] text-[#344054]' : 'border-transparent bg-transparent text-[#171a21]'}`}>
+                            <article key={message.id} className={`max-w-3xl rounded-lg border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-ui-border bg-ui-panel text-ui-text shadow-sm' : message.error ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger' : message.role === 'tool' ? 'border-ui-border bg-ui-raised text-ui-muted' : 'border-transparent bg-transparent text-ui-text'}`}>
                                 {message.role === 'tool' || message.role === 'assistant' ? (
-                                    <div className='mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase text-[#667085]'>
+                                    <div className='mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase text-ui-muted'>
                                         <span>{message.role === 'tool' ? toolLabel(message) : message.role}</span>
                                         <span>{message.role === 'assistant' ? (message.modelName || activeConversation.activeModel || 'assistant') : null}</span>
                                     </div>
@@ -179,8 +179,8 @@ export default function ChatPane({
                     </div>
 
                     {showArtifacts ? (
-                        <aside className='min-h-0 border-t border-[#e0e5ed] bg-white xl:border-t-0 xl:border-l'>
-                            <div className='border-b border-[#e0e5ed] px-4 py-3 text-[11px] font-semibold uppercase text-[#667085]'>
+                        <aside className='min-h-0 border-t border-ui-border bg-ui-panel xl:border-t-0 xl:border-l'>
+                            <div className='border-b border-ui-border px-4 py-3 text-[11px] font-semibold uppercase text-ui-muted'>
                                 Workspace output
                             </div>
                             <div className='min-h-0 space-y-3 overflow-y-auto p-4'>
@@ -188,10 +188,10 @@ export default function ChatPane({
                                     <section key={group.kind} className='space-y-3'>
                                         <div className='flex items-center justify-between gap-3'>
                                             <div>
-                                                <div className='text-[10px] font-semibold uppercase text-[#667085]'>{group.label}</div>
-                                                <div className='mt-1 text-xs text-[#596170]'>{group.artifacts.length} item{group.artifacts.length === 1 ? '' : 's'}</div>
+                                                <div className='text-[10px] font-semibold uppercase text-ui-muted'>{group.label}</div>
+                                                <div className='mt-1 text-xs text-ui-muted'>{group.artifacts.length} item{group.artifacts.length === 1 ? '' : 's'}</div>
                                             </div>
-                                            <div className='rounded-full border border-[#d8dee9] px-2.5 py-1 text-[10px] font-semibold uppercase text-[#667085]'>
+                                            <div className='rounded-full border border-ui-border px-2.5 py-1 text-[10px] font-semibold uppercase text-ui-muted'>
                                                 {group.kind}
                                             </div>
                                         </div>
@@ -203,8 +203,8 @@ export default function ChatPane({
                     ) : null}
                 </div>
 
-                <div className='relative z-10 border-t border-[#e0e5ed] bg-white px-4 py-4 md:px-12 xl:px-24'>
-                    <div className='mx-auto flex min-h-14 max-w-5xl items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 shadow-sm focus-within:border-[#3056d3] focus-within:ring-4 focus-within:ring-[#dce6ff]'>
+                <div className='relative z-10 border-t border-ui-border bg-ui-panel px-4 py-4 md:px-12 xl:px-24'>
+                    <div className='mx-auto flex min-h-14 max-w-5xl items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 shadow-sm focus-within:border-ui-primary focus-within:ring-4 focus-within:ring-ui-primary/15'>
                         <textarea
                             value={composer}
                             onChange={(event) => onComposerChange(event.target.value)}
@@ -217,7 +217,7 @@ export default function ChatPane({
                             placeholder='Ask Hanasand to inspect context, draft a change, review files, or prepare customer notes...'
                             readOnly={readOnly}
                             rows={1}
-                            className='h-10 min-h-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-sm leading-6 text-[#171a21] outline-none placeholder:text-[#8c95a5]'
+                            className='h-10 min-h-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-sm leading-6 text-ui-text outline-none placeholder:text-ui-muted'
                         />
                         <button
                             type='button'
@@ -226,13 +226,13 @@ export default function ChatPane({
                             title={composerBlockedReason || undefined}
                             disabled={Boolean(composerBlockedReason) || !composer.trim()}
                             onClick={onSend}
-                            className='grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#171a21] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45'
+                            className='grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-ui-text text-ui-canvas transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45'
                         >
                             {awaitingResponse ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <ArrowUp className='h-3.5 w-3.5 stroke-[2.8]' />}
                         </button>
                     </div>
                     {composerBlockedReason ? (
-                        <div id='ai-composer-blocked-reason' className='mx-auto mt-2 max-w-5xl px-4 text-xs text-[#667085]'>
+                        <div id='ai-composer-blocked-reason' className='mx-auto mt-2 max-w-5xl px-4 text-xs text-ui-muted'>
                             {composerBlockedReason}
                         </div>
                     ) : null}
@@ -247,24 +247,24 @@ function EmptyComposerState({ tooltip, hasReadyModel, isAuthenticated }: { toolt
     return (
         <div className='flex h-full min-h-[28rem] items-center justify-center'>
             <div className='max-w-xl text-center'>
-                <div className='mx-auto grid h-14 w-14 place-items-center rounded-lg border border-[#dfe5ee] bg-white text-[#3056d3]'>
+                <div className='mx-auto grid h-14 w-14 place-items-center rounded-lg border border-ui-border bg-ui-panel text-ui-primary'>
                     <Bot className='h-6 w-6' />
                 </div>
-                <h2 className='mt-7 text-2xl font-semibold tracking-normal text-[#171a21]'>
+                <h2 className='mt-7 text-2xl font-semibold tracking-normal text-ui-text'>
                     Review context, then ship when it is ready.
                 </h2>
-                <p className='mt-3 text-sm leading-6 text-[#596170]'>
+                <p className='mt-3 text-sm leading-6 text-ui-muted'>
                     {hasReadyModel
                         ? tooltip
                         : 'Attach context or open a shared workspace. Files, launch state, and notes stay visible while review is paused.'}
                 </p>
                 {!hasReadyModel ? (
-                    <div className='mt-5 flex flex-wrap justify-center gap-2 text-xs text-[#596170]'>
-                        <Link href='/s' className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
+                    <div className='mt-5 flex flex-wrap justify-center gap-2 text-xs text-ui-muted'>
+                        <Link href='/s' className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 font-semibold transition-colors hover:bg-ui-raised hover:text-ui-text'>
                             Open context
                         </Link>
                         {!isAuthenticated ? (
-                            <Link href='/login' className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
+                            <Link href='/login' className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 font-semibold transition-colors hover:bg-ui-raised hover:text-ui-text'>
                                 Sign in
                             </Link>
                         ) : null}
@@ -313,7 +313,7 @@ function conversationTitle(title?: string | null) {
 
 function MarkdownBlock({ content }: { content: string }) {
     return (
-        <div className='prose max-w-none wrap-break-word text-sm leading-6 text-[#344054] prose-p:my-3 prose-pre:overflow-auto prose-pre:rounded-lg prose-pre:bg-[#f4f6fa] prose-pre:p-3 prose-code:text-[0.9em] prose-a:text-[#3056d3]'>
+        <div className='prose max-w-none wrap-break-word text-sm leading-6 text-ui-muted prose-p:my-3 prose-pre:overflow-auto prose-pre:rounded-lg prose-pre:bg-ui-raised prose-pre:p-3 prose-code:text-[0.9em] prose-a:text-ui-primary'>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {content}
             </ReactMarkdown>
@@ -333,12 +333,12 @@ function ToolMessage({
 
     return (
         <div className='space-y-2'>
-            <div className='inline-flex items-center gap-2 rounded-full bg-[#eef3ff] px-3 py-1 text-xs font-medium text-[#3056d3]'>
-                {state === 'running' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin text-[#3056d3]' /> : <Sparkles className='h-3.5 w-3.5 text-[#3056d3]' />}
+            <div className='inline-flex items-center gap-2 rounded-full bg-ui-primary/10 px-3 py-1 text-xs font-medium text-ui-primary'>
+                {state === 'running' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin text-ui-primary' /> : <Sparkles className='h-3.5 w-3.5 text-ui-primary' />}
                 {state === 'running' ? 'Working...' : state === 'error' ? 'Tool error' : 'Tool complete'}
             </div>
             {browserSummary ? <BrowserVerificationCard summary={browserSummary} /> : null}
-            <div className='whitespace-pre-wrap wrap-break-word text-sm leading-6 text-[#344054]'>{message.content}</div>
+            <div className='whitespace-pre-wrap wrap-break-word text-sm leading-6 text-ui-muted'>{message.content}</div>
         </div>
     )
 }
@@ -353,7 +353,7 @@ function StatusChip({
     accent?: boolean
 }) {
     return (
-        <div className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs ${accent ? 'bg-[#eef3ff] text-[#3056d3]' : 'text-[#667085]'}`}>
+        <div className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs ${accent ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted'}`}>
             {icon}
             {label}
         </div>
@@ -374,7 +374,7 @@ function ArtifactList({
     }
 
     return (
-        <div className='mt-3 grid gap-3 border-t border-dark/70 pt-3'>
+        <div className='mt-3 grid gap-3 border-t border-ui-border pt-3'>
             {artifacts.map((artifact, index) => (
                 <details
                     key={`${artifact.kind}-${artifact.title}-${index}`}
@@ -458,18 +458,18 @@ function ArtifactPreviewOverlay({
     }
 
     return (
-        <div className='fixed inset-0 z-200 flex items-center justify-center bg-black/82 p-4 backdrop-blur-sm' onClick={onClose}>
+        <div className='fixed inset-0 z-200 flex items-center justify-center bg-ui-canvas/82 p-4 backdrop-blur-sm' onClick={onClose}>
             <div className='w-full max-w-6xl rounded-3xl bg-[#070909] p-4 outline outline-white/10' onClick={(event) => event.stopPropagation()}>
                 <div className='mb-3 flex items-center justify-between gap-3'>
                     <div>
                         <div className='text-[10px] uppercase tracking-[0.16em] text-[#858581]'>{artifactKindLabel(artifact.kind)}</div>
                         <div className='mt-1 text-sm font-medium text-[#eeeeea]'>{artifact.title}</div>
                     </div>
-                    <button type='button' onClick={onClose} className='rounded-full bg-white/5 p-2 text-[#d3d3ce] outline outline-white/10 transition hover:bg-white/8'>
+                    <button type='button' onClick={onClose} className='rounded-full bg-ui-panel/5 p-2 text-[#d3d3ce] outline outline-white/10 transition hover:bg-ui-panel/8'>
                         <X className='h-4 w-4' />
                     </button>
                 </div>
-                <div className='overflow-auto rounded-2xl bg-black/30 p-3'>
+                <div className='overflow-auto rounded-2xl bg-ui-canvas/30 p-3'>
                     <Image src={artifact.dataUrl} alt={artifact.title} width={1600} height={1200} className='max-h-[78vh] w-full object-contain' />
                 </div>
             </div>
@@ -480,7 +480,7 @@ function ArtifactPreviewOverlay({
 function DiffArtifact({ content }: { content: string }) {
     const lines = content.split('\n')
     return (
-        <div className='mt-3 max-h-80 overflow-auto rounded-lg bg-black/25 p-3 text-xs leading-5'>
+        <div className='mt-3 max-h-80 overflow-auto rounded-lg bg-ui-canvas/25 p-3 text-xs leading-5'>
             {lines.map((line, index) => (
                 <div
                     key={`${line}-${index}`}
@@ -524,16 +524,16 @@ function BrowserVerificationCard({
                         {summary.status === 'passed' ? 'Verification passed' : 'Verification found issues'}
                     </div>
                     <div className='mt-2 flex flex-wrap gap-2 text-[11px] text-current/80'>
-                        {summary.title ? <span className='rounded-full bg-black/20 px-2.5 py-1'>{summary.title}</span> : null}
-                        {summary.url ? <span className='rounded-full bg-black/20 px-2.5 py-1'>{summary.url}</span> : null}
-                        <span className='rounded-full bg-black/20 px-2.5 py-1'>{summary.hasScreenshot ? 'Screenshot captured' : 'No screenshot'}</span>
-                        <span className='rounded-full bg-black/20 px-2.5 py-1'>{summary.pageErrors.length} page error{summary.pageErrors.length === 1 ? '' : 's'}</span>
-                        <span className='rounded-full bg-black/20 px-2.5 py-1'>{summary.consoleMessages.length} console message{summary.consoleMessages.length === 1 ? '' : 's'}</span>
+                        {summary.title ? <span className='rounded-full bg-ui-canvas/20 px-2.5 py-1'>{summary.title}</span> : null}
+                        {summary.url ? <span className='rounded-full bg-ui-canvas/20 px-2.5 py-1'>{summary.url}</span> : null}
+                        <span className='rounded-full bg-ui-canvas/20 px-2.5 py-1'>{summary.hasScreenshot ? 'Screenshot captured' : 'No screenshot'}</span>
+                        <span className='rounded-full bg-ui-canvas/20 px-2.5 py-1'>{summary.pageErrors.length} page error{summary.pageErrors.length === 1 ? '' : 's'}</span>
+                        <span className='rounded-full bg-ui-canvas/20 px-2.5 py-1'>{summary.consoleMessages.length} console message{summary.consoleMessages.length === 1 ? '' : 's'}</span>
                     </div>
                     {issueLines.length ? (
                         <div className='mt-3 space-y-1 text-xs text-current/90'>
                             {issueLines.map((line, index) => (
-                                <div key={`${line}-${index}`} className='rounded-lg bg-black/20 px-2.5 py-2'>
+                                <div key={`${line}-${index}`} className='rounded-lg bg-ui-canvas/20 px-2.5 py-2'>
                                     {line}
                                 </div>
                             ))}
