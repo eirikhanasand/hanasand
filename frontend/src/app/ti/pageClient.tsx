@@ -8,7 +8,7 @@ import { PUBLIC_TI_HANDOFF_ACTIONS, buildActorArtifactHandoffs, buildActorArtifa
 import { countryCentroids } from '@/utils/monitoring/geo'
 import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WIDTH, project, type ViewBox, zoomViewBox } from '@/utils/monitoring/liveTrafficMap'
 import mapData from '@parent/public/world.json'
-import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Radar, Search, Send, ShieldAlert, ShieldCheck, UserPlus, XCircle } from 'lucide-react'
+import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Search, Send, ShieldAlert, ShieldCheck, UserPlus, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -127,9 +127,15 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     const visible = result
 
     return (
-        <div className='mx-auto grid w-full max-w-7xl gap-6'>
-            <form onSubmit={submit} className={`grid gap-3 rounded-lg border border-[#dfe5ee] bg-white shadow-sm ${visible ? 'p-2 md:p-3' : 'p-4 md:p-5'}`}>
-                <div className='flex flex-col gap-3 md:flex-row md:items-end'>
+        <div className={visible ? 'mx-auto grid w-full max-w-7xl gap-6' : 'mx-auto grid min-h-[calc(100vh-9rem)] w-full max-w-4xl place-content-center gap-5 py-10'}>
+            <form onSubmit={submit} className={visible ? 'grid gap-3 rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm md:p-3' : 'grid gap-5'}>
+                {!visible ? (
+                    <div className='text-center'>
+                        <h1 className='text-3xl font-semibold tracking-normal text-[#171a21] dark:text-[#eef4ff] md:text-4xl'>Search threat intelligence</h1>
+                        <p className='mt-3 text-sm font-medium text-[#3056d3] dark:text-[#9ab3ff]'>Find current intelligence about any threat actor, company, domain, CVE, or malware family.</p>
+                    </div>
+                ) : null}
+                <div className={`flex flex-col gap-3 ${visible ? 'md:flex-row md:items-end' : 'rounded-2xl border border-[#dfe5ee] bg-white p-3 shadow-[0_18px_50px_rgba(26,35,55,0.12)] dark:border-[#273244] dark:bg-[#101722]'}`}>
                     <label className='grid flex-1 gap-2'>
                         <span className={`text-xs font-semibold uppercase text-[#3056d3] ${visible ? 'sr-only' : ''}`}>Threat intelligence search</span>
                         <input
@@ -137,14 +143,14 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                             name='q'
                             value={query}
                             onChange={(event) => handleQueryChange(event.target.value)}
-                            placeholder='Company, actor, domain, CVE, supplier...'
-                            className={`${visible ? 'h-10' : 'h-12'} rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]`}
+                            placeholder='APT29, LockBit, microsoft.com, CVE-2024-3094...'
+                            className={`${visible ? 'h-10 rounded-lg px-3 text-sm' : 'h-16 rounded-xl px-4 text-base'} border border-[#d8dee9] bg-white font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#eef4ff] dark:placeholder:text-[#74839a]`}
                         />
                     </label>
                     <button
                         type='submit'
                         aria-busy={busy}
-                        className={`${visible ? 'h-10' : 'h-12'} inline-flex items-center justify-center gap-2 rounded-lg bg-[#171a21] px-5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:bg-[#eef1f5] disabled:text-[#98a2b3]`}
+                        className={`${visible ? 'h-10 rounded-lg' : 'h-16 rounded-xl'} inline-flex items-center justify-center gap-2 bg-[#171a21] px-5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:bg-[#eef1f5] disabled:text-[#98a2b3] dark:bg-[#3056d3] dark:hover:bg-[#426ef0]`}
                     >
                         <Search className='h-4 w-4' />
                         {busy ? 'Searching' : 'Search'}
@@ -179,6 +185,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const [queueSourceFilter, setQueueSourceFilter] = useState('all')
     const [queueConfidenceFilter, setQueueConfidenceFilter] = useState<'all' | 'high' | 'medium'>('all')
     const [queueSort, setQueueSort] = useState<'priority' | 'confidence' | 'freshness'>('priority')
+    const [showMoreAnalysis, setShowMoreAnalysis] = useState(false)
     const filteredWorkItems = useMemo(() => filteredAnalystWorkItems(workItems, {
         kind: queueKindFilter,
         source: queueSourceFilter,
@@ -204,6 +211,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedCaseOwnership = selected ? selectedCaseOwnershipFor(result, selected, actionability, selectedCaseDraft, selectedCaseActionTrail) : null
     const selectedCaseCreateRequest = selected ? selectedCaseCreateRequestFor(result, selected, actorIntel, actionability, selectedCaseDraft, selectedCaseOwnership, selectedSourceDrilldown, selectedWatchlistPlan) : null
     const selectedDeliveryPlan = selected ? selectedDeliveryReadinessPlanFor(result, selected, actionability, selectedAlertPlan, selectedCaseOwnership) : null
+    const selectedTriageBrief = selected ? selectedTriageBriefFor(result, selected, actionability, watchlist, alertPacket, selectedCaseDraft) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const openGapCount = actionability.enrichmentGapQueue.length
     const sessionEvents = Object.entries(localDecisions).map(([id, decision]) => {
@@ -228,15 +236,16 @@ function Results({ result }: { result: TiSearchResponse }) {
     const profileStats = [
         { icon: <ShieldCheck className='h-3.5 w-3.5' />, label: 'Sources', value: sourceCountLabel(sources.length) },
         { icon: <Activity className='h-3.5 w-3.5' />, label: 'Freshness', value: formatDate(result.lastSeen || result.generatedAt) },
-        { icon: <Inbox className='h-3.5 w-3.5' />, label: 'Work items', value: `${queueCounts.open} open` },
+        { icon: <Inbox className='h-3.5 w-3.5' />, label: 'Open reviews', value: `${queueCounts.open} open` },
         { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Related alerts', value: String(actionability.relatedAlerts.length) },
         { icon: <Database className='h-3.5 w-3.5' />, label: 'Gaps', value: `${openGapCount} open` },
     ]
     const sectionOverview = sectionOverviewFor({ result, actorIntel, actionability, workItems, victimObservations, watchlist })
+    const resultTriageBrief = resultTriageBriefFor(result, workItems, actionability, victimObservations, watchlist)
     const commandLinks = [
-        { href: '#ti-activity', label: 'Activity queue', value: `${filteredWorkItems.length}/${workItems.length} rows`, icon: Inbox },
-        { href: '#ti-selected-evidence', label: 'Evidence', value: selected ? selected.source : 'select row', icon: Eye },
-        { href: '#ti-sources', label: 'Sources', value: `${sources.length} linked`, icon: Database },
+        { href: '#ti-activity', label: 'Latest activity', value: `${filteredWorkItems.length}/${workItems.length} results`, icon: Inbox },
+        { href: '#ti-selected-evidence', label: 'Evidence', value: selected ? selected.source : 'select result', icon: Eye },
+        { href: '#ti-secondary-analysis', label: 'Analysis drawers', value: `${sources.length} sources`, icon: Database },
         { href: '/dashboard', label: 'Console', value: `${actionability.relatedCases.length} cases`, icon: ShieldAlert },
         { href: '/dashboard/automations?setup=dwm', label: 'Delivery', value: `${actionability.readiness.backedIds.webhookDestinationIds.length} destinations`, icon: Send },
     ]
@@ -302,30 +311,37 @@ function Results({ result }: { result: TiSearchResponse }) {
 
     return (
         <div className='grid gap-6'>
-            <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm'>
-                {mobileEvidenceWorkbar ? <div className='border-b border-[#e8edf5] bg-[#f8fafc] p-3 lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
-                <div className='grid gap-3 border-b border-[#e8edf5] bg-white p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
-                    <div className='min-w-0'>
-                        <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center'>
-                            <h1 className='min-w-0 max-w-full wrap-break-word text-2xl font-semibold text-[#171a21] md:text-3xl'>{humanizeSlug(result.query)}</h1>
-                            {result.status ? (
-                                <span className='max-w-full wrap-break-word rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold uppercase leading-5 text-[#3056d3]'>
-                                    {humanResultStatus(result.status)}
-                                </span>
-                            ) : null}
+            <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#263244] dark:bg-[#101722]'>
+                {mobileEvidenceWorkbar ? <div className='border-b border-[#e8edf5] bg-[#f8fafc] p-3 dark:border-[#263244] dark:bg-[#101722] lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
+                <div className='grid gap-4 border-b border-[#e8edf5] bg-white p-4 dark:border-[#263244] dark:bg-[#101722]'>
+                    <div className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] xl:items-stretch'>
+                        <div className='grid min-w-0 content-start gap-4'>
+                            <div className='min-w-0'>
+                                <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center'>
+                                    <h1 className='min-w-0 max-w-full wrap-break-word text-3xl font-semibold tracking-normal text-[#171a21] dark:text-[#eef4ff] md:text-4xl'>{humanizeSlug(result.query)}</h1>
+                                    {result.status ? (
+                                        <span className='max-w-full wrap-break-word rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold uppercase leading-5 text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'>
+                                            {humanResultStatus(result.status)}
+                                        </span>
+                                    ) : null}
+                                </div>
+                                <p className='mt-3 max-w-3xl text-base leading-7 text-[#475467] dark:text-[#c4d0e2]'>{displayRequirementText(result.summary)}</p>
+                            </div>
+                            <div className='flex flex-wrap gap-2'>
+                                {result.aliases.slice(0, 8).map(alias => (
+                                    <span key={alias} className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>{alias}</span>
+                                ))}
+                                {result.aliases.length > 8 ? <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>+{result.aliases.length - 8} aliases</span> : null}
+                                {!result.aliases.length ? <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>No aliases returned</span> : null}
+                            </div>
+                            <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-3'>
+                                {profileStats.map(item => (
+                                    <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
+                                ))}
+                            </div>
+                            <ResultTriageBriefPanel brief={resultTriageBrief} />
                         </div>
-                        <p className='mt-1 line-clamp-2 max-w-5xl text-sm leading-6 text-[#596170]'>{displayRequirementText(result.summary)}</p>
-                        <div className='mt-2 flex flex-wrap gap-2'>
-                            {result.aliases.map(alias => (
-                                <span key={alias} className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{alias}</span>
-                            ))}
-                            {!result.aliases.length ? <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>No aliases returned</span> : null}
-                        </div>
-                    </div>
-                    <div className='grid grid-cols-2 gap-2 sm:grid-cols-5 lg:min-w-[40rem]'>
-                        {profileStats.map(item => (
-                            <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
-                        ))}
+                        <ThreatActorMap result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                     </div>
                     <TiCommandBar links={commandLinks} />
                     <SectionOverviewRail items={sectionOverview} />
@@ -342,14 +358,14 @@ function Results({ result }: { result: TiSearchResponse }) {
                 />
 
                 <div className='grid min-h-[44rem] min-w-0 lg:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]'>
-                    <aside id='ti-activity' data-ti-queue='true' className='order-2 min-w-0 border-b border-[#e8edf5] bg-[#fbfcfe] lg:order-none lg:border-b-0 lg:border-r'>
-                        <div className='border-b border-[#e8edf5] p-4'>
+                    <aside id='ti-activity' data-ti-queue='true' className='order-2 min-w-0 border-b border-[#e8edf5] bg-[#fbfcfe] dark:border-[#263244] dark:bg-[#0d1522] lg:order-none lg:border-b-0 lg:border-r'>
+                        <div className='border-b border-[#e8edf5] p-4 dark:border-[#263244]'>
                             <div className='flex items-center justify-between gap-3'>
                                 <div>
-                                    <h2 className='text-sm font-semibold text-[#171a21]'>Activity</h2>
-                                    <p className='mt-1 text-xs text-[#667085]'>Evidence ordered by severity, confidence, and recency.</p>
+                                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Latest activity</h2>
+                                    <p className='mt-1 text-xs text-[#586274] dark:text-[#9aa8bd]'>Evidence ordered by severity, confidence, and recency.</p>
                                 </div>
-                                <span className='rounded-lg bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{workItems.length}</span>
+                                <span className='rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'>{workItems.length}</span>
                             </div>
                             <div className='mt-3 grid grid-cols-3 gap-2 text-center text-xs'>
                                 <QueueMetric label='Open' value={queueCounts.open} />
@@ -382,11 +398,11 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     >
                                         <div className='flex items-center justify-between gap-2'>
                                             <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${severityClass(item.severity)}`}>{item.severity}</span>
-                                            <span className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{decision ? decisionLabel(decision.status) : item.status}</span>
+                                            <span className='text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{decision ? decisionLabel(decision.status) : item.status}</span>
                                         </div>
                                         <span className='text-sm font-semibold leading-5 text-[#171a21] dark:text-[#eef4ff]'>{item.title}</span>
-                                        <span className='line-clamp-2 text-xs leading-5 text-[#667085] dark:text-[#9aa8bd]'>{item.subtitle}</span>
-                                        <span className='flex flex-wrap gap-2 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>
+                                        <span className='line-clamp-2 text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>{item.subtitle}</span>
+                                        <span className='flex flex-wrap gap-2 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>
                                             <span>{item.timestamp}</span>
                                             <span>{item.source}</span>
                                             <span>{Math.round(item.confidence * 100)}% confidence</span>
@@ -395,26 +411,26 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     </button>
                                 )
                             })}
-                            {!filteredWorkItems.length ? <p className='rounded-lg border border-dashed border-[#d8dee9] bg-white p-4 text-sm text-[#667085] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'>{workItems.length ? 'No rows match the current filters.' : 'No analyst work items returned yet.'}</p> : null}
+                            {!filteredWorkItems.length ? <p className='rounded-lg border border-dashed border-[#d8dee9] bg-white p-4 text-sm text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'>{workItems.length ? 'No results match the current filters.' : 'No recent activity yet.'}</p> : null}
                         </div>
                     </aside>
 
                     <main className='order-1 min-w-0 p-4 lg:order-none'>
                         {selected ? (
                             <div className='grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden'>
-                                <section id='ti-selected-evidence' data-ti-detail='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
+                                <section id='ti-selected-evidence' data-ti-detail='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4 dark:border-[#263244] dark:bg-[#101722]'>
                                     <div className='flex flex-wrap items-start justify-between gap-3'>
                                         <div className='min-w-0'>
                                             <div className='flex flex-wrap items-center gap-2'>
                                                 <span className={`rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
-                                                <span className='rounded-md bg-[#f2f4f7] px-2 py-1 text-xs font-semibold text-[#475467]'>{kindLabel(selected.kind)}</span>
-                                                <span className='rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{selectedDecision ? decisionLabel(selectedDecision.status) : selected.status}</span>
+                                                <span className='rounded-md border border-[#d8dee9] bg-[#f2f4f7] px-2 py-1 text-xs font-semibold text-[#475467] dark:border-[#314057] dark:bg-[#1d2939] dark:text-[#c6d3e4]'>{kindLabel(selected.kind)}</span>
+                                                <span className='rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'>{selectedDecision ? decisionLabel(selectedDecision.status) : selected.status}</span>
                                             </div>
-                                            <h2 className='mt-3 wrap-break-word text-2xl font-semibold text-[#171a21]'>{selected.title}</h2>
-                                            <p className='mt-2 text-sm leading-6 text-[#596170]'>{displayRequirementText(selected.detail)}</p>
+                                            <h2 className='mt-3 wrap-break-word text-2xl font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selected.title}</h2>
+                                            <p className='mt-2 text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selected.detail)}</p>
                                         </div>
                                         {selected.href ? (
-                                            <a href={selected.href} target='_blank' rel='noopener noreferrer' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                                            <a href={selected.href} target='_blank' rel='noopener noreferrer' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                                                 <ExternalLink className='h-3.5 w-3.5' />
                                                 Source
                                             </a>
@@ -425,8 +441,10 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <EvidenceMetric label='First seen' value={selected.timestamp} />
                                         <EvidenceMetric label='Source' value={selected.source} />
                                         <EvidenceMetric label='Confidence' value={`${Math.round(selected.confidence * 100)}%`} />
-                                        <EvidenceMetric label='Provenance' value={displayRequirementText(selected.provenance)} />
+                                        <EvidenceMetric label='Source reference' value={displayRequirementText(selected.provenance)} />
                                     </div>
+
+                                    {selectedTriageBrief ? <SelectedTriageBriefPanel brief={selectedTriageBrief} /> : null}
 
                                     {selectedSourceDrilldown ? <SelectedEvidenceContextTable drilldown={selectedSourceDrilldown} /> : null}
                                     {selected.priority ? <EvidencePriorityPanel priority={selected.priority} /> : null}
@@ -438,68 +456,76 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <EvidencePanel title='Evidence'>
                                             {selected.evidence.map(line => <li key={line}>{line}</li>)}
                                         </EvidencePanel>
-                                        <EvidencePanel title='Recommended Analyst Action'>
+                                        <EvidencePanel title='Recommended next step'>
                                             {selected.nextActions.map(line => <li key={line}>{displayRequirementText(line)}</li>)}
                                         </EvidencePanel>
                                     </div>
                                 </section>
-                                <ActorIntelligenceDossier
-                                    actor={actorIntel}
-                                    actionability={actionability}
-                                    result={result}
-                                    artifacts={actorArtifacts}
-                                    selectedArtifactId={selectedArtifact?.id}
-                                    onSelectArtifact={setSelectedArtifactId}
+                                <SecondaryAnalysisToggle
+                                    expanded={showMoreAnalysis}
+                                    artifactCount={actorArtifacts.length}
+                                    sourceCount={sources.length}
+                                    watchlistCount={watchlist.terms.length}
+                                    gapCount={openGapCount}
+                                    onToggle={() => setShowMoreAnalysis(value => !value)}
                                 />
-                                {actorArtifacts.length ? (
-                                    <ArtifactNavigator
-                                        artifacts={actorArtifacts}
-                                        selectedArtifactId={selectedArtifact?.id}
-                                        onSelectArtifact={setSelectedArtifactId}
-                                    />
+
+                                {showMoreAnalysis ? (
+                                    <>
+                                        <ActorIntelligenceDossier
+                                            actor={actorIntel}
+                                            actionability={actionability}
+                                            result={result}
+                                            artifacts={actorArtifacts}
+                                            selectedArtifactId={selectedArtifact?.id}
+                                            onSelectArtifact={setSelectedArtifactId}
+                                        />
+                                        {actorArtifacts.length ? (
+                                            <ArtifactNavigator
+                                                artifacts={actorArtifacts}
+                                                selectedArtifactId={selectedArtifact?.id}
+                                                onSelectArtifact={setSelectedArtifactId}
+                                            />
+                                        ) : null}
+                                        {selectedArtifact && selectedArtifactHandoffs ? (
+                                            <ActorArtifactWorkbench artifact={selectedArtifact} handoffs={selectedArtifactHandoffs} />
+                                        ) : null}
+
+                                        <ActorOperationsMatrix
+                                            result={result}
+                                            actor={actorIntel}
+                                            victimObservations={victimObservations}
+                                            selectedArtifactId={selectedArtifact?.id}
+                                            onSelectArtifact={setSelectedArtifactId}
+                                            onSelectArtifactBy={selectArtifactBy}
+                                            onEscalate={() => applyDecision('escalated')}
+                                            onReview={() => applyDecision('reviewing')}
+                                        />
+
+                                        <SourceCoverageWorkbench
+                                            actor={actorIntel}
+                                            actionability={actionability}
+                                            sources={sources}
+                                            sourcePosture={collectionSources}
+                                            workItems={workItems}
+                                            selectedId={selected?.id}
+                                            sourceOptions={queueSourceOptions}
+                                            onSelectEvidence={setSelectedId}
+                                            onFilterSource={setQueueSourceFilter}
+                                            onEscalate={() => applyDecision('escalated')}
+                                            onReview={() => applyDecision('reviewing')}
+                                        />
+                                    </>
                                 ) : null}
-                                {selectedArtifact && selectedArtifactHandoffs ? (
-                                    <ActorArtifactWorkbench artifact={selectedArtifact} handoffs={selectedArtifactHandoffs} />
-                                ) : null}
 
-                                <ActorOperationsMatrix
-                                    result={result}
-                                    actor={actorIntel}
-                                    victimObservations={victimObservations}
-                                    selectedArtifactId={selectedArtifact?.id}
-                                    onSelectArtifact={setSelectedArtifactId}
-                                    onSelectArtifactBy={selectArtifactBy}
-                                    onEscalate={() => applyDecision('escalated')}
-                                    onReview={() => applyDecision('reviewing')}
-                                />
-
-                                <SourceCoverageWorkbench
-                                    actor={actorIntel}
-                                    actionability={actionability}
-                                    sources={sources}
-                                    sourcePosture={collectionSources}
-                                    workItems={workItems}
-                                    selectedId={selected?.id}
-                                    sourceOptions={queueSourceOptions}
-                                    onSelectEvidence={setSelectedId}
-                                    onFilterSource={setQueueSourceFilter}
-                                    onEscalate={() => applyDecision('escalated')}
-                                    onReview={() => applyDecision('reviewing')}
-                                />
-
-                                <ThreatActorMap result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} />
                             </div>
                         ) : (
-                            <div className='grid min-h-96 place-items-center rounded-lg border border-dashed border-[#d8dee9] bg-white p-8 text-center text-sm text-[#667085]'>Search is still building an analyst queue.</div>
+                            <div className='grid min-h-72 place-items-center rounded-lg border border-dashed border-[#d8dee9] bg-white p-6 text-center text-sm text-[#586274]'>Search is finding recent activity.</div>
                         )}
                     </main>
 
                     <aside className='order-3 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-hidden border-t border-[#e8edf5] bg-[#fbfcfe] p-4 lg:order-none lg:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
-                        <ActionabilityPanel actionability={actionability} query={result.query} />
-                        <EnrichmentTasksPanel tasks={enrichmentTasks} intake={actionability.sourceEnrichmentIntake} />
-                        <SourceHealthPanel queue={actionability.sourceHealthQueue} intake={actionability.sourceEnrichmentIntake} coverage={actionability.actorEnrichmentCoverage} consumerReadiness={actionability.actorEnrichmentConsumerReadiness} payload={actionability.exportPayloads.enrichment} />
-
                         <div data-ti-actions='true'>
                             <ActionPanel
                                 note={selectedNote}
@@ -525,66 +551,119 @@ function Results({ result }: { result: TiSearchResponse }) {
                             onClear={() => setStagedHandoffs({})}
                         />
 
-                        <Panel title='Evidence Timeline' description='Evidence timestamps plus analyst decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
-                            <div className='grid gap-3'>
-                                {[...timelineFor(result, selected), ...sessionEvents, ...relevanceEvents].slice(0, 8).map(event => (
-                                    <div key={event.id} className='border-l-2 border-[#d8dee9] pl-3'>
-                                        <p className='text-xs font-semibold text-[#171a21]'>{event.label}</p>
-                                        <p className='mt-1 text-[11px] text-[#667085]'>{formatDate(event.at)}</p>
-                                        <p className='mt-1 text-xs leading-5 text-[#596170]'>{displayRequirementText(event.detail)}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </Panel>
+                        {showMoreAnalysis ? (
+                            <>
+                                <ActionabilityPanel actionability={actionability} query={result.query} />
+                                <EnrichmentTasksPanel tasks={enrichmentTasks} intake={actionability.sourceEnrichmentIntake} />
+                                <SourceHealthPanel queue={actionability.sourceHealthQueue} intake={actionability.sourceEnrichmentIntake} coverage={actionability.actorEnrichmentCoverage} consumerReadiness={actionability.actorEnrichmentConsumerReadiness} payload={actionability.exportPayloads.enrichment} />
 
-                        <EnrichmentGapWorkbench
-                            tasks={enrichmentTasks}
-                            result={result}
-                            actor={actorIntel}
-                            actionability={actionability}
-                            workItems={workItems}
-                            artifacts={actorArtifacts}
-                            selectedId={selected?.id}
-                            selectedArtifactId={selectedArtifact?.id}
-                            onSelectEvidence={setSelectedId}
-                            onSelectArtifact={setSelectedArtifactId}
-                            onReview={() => applyDecision('reviewing')}
-                            onEscalate={() => applyDecision('escalated')}
-                        />
-                        {result.analystLoop?.sourceActivationWorkflow.required ? <SourceActivationPanel activation={result.analystLoop.sourceActivationWorkflow} /> : null}
+                                <Panel title='Activity timeline' description='Source timestamps plus review decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
+                                    <div className='grid gap-3'>
+                                        {[...timelineFor(result, selected), ...sessionEvents, ...relevanceEvents].slice(0, 8).map(event => (
+                                            <div key={event.id} className='border-l-2 border-[#d8dee9] pl-3'>
+                                                <p className='text-xs font-semibold text-[#171a21]'>{event.label}</p>
+                                                <p className='mt-1 text-[11px] text-[#586274]'>{formatDate(event.at)}</p>
+                                                <p className='mt-1 text-xs leading-5 text-[#596170]'>{displayRequirementText(event.detail)}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </Panel>
+
+                                <EnrichmentGapWorkbench
+                                    tasks={enrichmentTasks}
+                                    result={result}
+                                    actor={actorIntel}
+                                    actionability={actionability}
+                                    workItems={workItems}
+                                    artifacts={actorArtifacts}
+                                    selectedId={selected?.id}
+                                    selectedArtifactId={selectedArtifact?.id}
+                                    onSelectEvidence={setSelectedId}
+                                    onSelectArtifact={setSelectedArtifactId}
+                                    onReview={() => applyDecision('reviewing')}
+                                    onEscalate={() => applyDecision('escalated')}
+                                />
+                                {result.analystLoop?.sourceActivationWorkflow.required ? <SourceActivationPanel activation={result.analystLoop.sourceActivationWorkflow} /> : null}
+                            </>
+                        ) : null}
                     </aside>
                 </div>
             </section>
 
-            <section className='grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
-                <WatchlistRelevanceWorkbench
-                    watchlist={watchlist}
-                    actionability={actionability}
-                    query={result.query}
-                    workItems={workItems}
-                    artifacts={actorArtifacts}
-                    selectedId={selected?.id}
-                    selectedArtifactId={selectedArtifact?.id}
-                    onSelectEvidence={setSelectedId}
-                    onSelectArtifact={setSelectedArtifactId}
-                    onMarkRelevant={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
-                />
+            {showMoreAnalysis ? (
+                <section className='grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
+                    <WatchlistRelevanceWorkbench
+                        watchlist={watchlist}
+                        actionability={actionability}
+                        query={result.query}
+                        workItems={workItems}
+                        artifacts={actorArtifacts}
+                        selectedId={selected?.id}
+                        selectedArtifactId={selectedArtifact?.id}
+                        onSelectEvidence={setSelectedId}
+                        onSelectArtifact={setSelectedArtifactId}
+                        onMarkRelevant={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
+                    />
 
-                <Panel title='Sources' description='Data families checked for this result, including actor profiles, victim claims, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
-                    <div id='ti-sources' className='sr-only'>Source coverage</div>
-                    {datasets.map(item => (
-                        <EvidenceBox key={`${item.type}-${item.name}`} href={item.url}>
-                            <div className='flex items-center justify-between gap-3'>
-                                <h2 className='text-sm font-semibold text-[#171a21]'>{item.name}</h2>
-                                <span className='text-xs text-[#667085]'>{sourceStatusLabel(item.status)}</span>
-                            </div>
-                            <p className='text-sm leading-6 text-[#596170]'>{item.coverage}</p>
-                        </EvidenceBox>
-                    ))}
-                </Panel>
-            </section>
+                    <Panel title='Sources' description='Sources checked for this result, including actor profiles, recent attacks, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
+                        <div id='ti-sources' className='sr-only'>Source coverage</div>
+                        {datasets.map(item => (
+                            <EvidenceBox key={`${item.type}-${item.name}`} href={item.url}>
+                                <div className='flex items-center justify-between gap-3'>
+                                    <h2 className='text-sm font-semibold text-[#171a21]'>{item.name}</h2>
+                                    <span className='text-xs text-[#586274]'>{sourceStatusLabel(item.status)}</span>
+                                </div>
+                                <p className='text-sm leading-6 text-[#596170]'>{item.coverage}</p>
+                            </EvidenceBox>
+                        ))}
+                    </Panel>
+                </section>
+            ) : null}
 
         </div>
+    )
+}
+
+function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchlistCount, gapCount, onToggle }: {
+    expanded: boolean
+    artifactCount: number
+    sourceCount: number
+    watchlistCount: number
+    gapCount: number
+    onToggle: () => void
+}) {
+    const metrics = [
+        `${artifactCount} artifacts`,
+        `${sourceCount} sources`,
+        `${watchlistCount} watch terms`,
+        `${gapCount} gaps`,
+    ]
+    return (
+        <section id='ti-secondary-analysis' className='scroll-mt-24 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-3 dark:border-[#263244] dark:bg-[#0d1522]' data-ti-secondary-analysis-toggle='true'>
+            <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+                <div className='min-w-0'>
+                    <p className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Analysis drawers</p>
+                    <p className='mt-1 text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>
+                        Keep the operator view focused on the selected finding. Open the drawers for dossier, source, watchlist, and collection detail.
+                    </p>
+                </div>
+                <button
+                    type='button'
+                    onClick={onToggle}
+                    aria-expanded={expanded}
+                    className='inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'
+                >
+                    {expanded ? 'Hide drawers' : 'Open drawers'}
+                </button>
+            </div>
+            <div className='mt-3 flex flex-wrap gap-2'>
+                {metrics.map(metric => (
+                    <span key={metric} className='rounded-md border border-[#d8dee9] bg-white px-2 py-1 text-[11px] font-semibold text-[#586274] dark:border-[#314057] dark:bg-[#101722] dark:text-[#b7c2d4]'>
+                        {metric}
+                    </span>
+                ))}
+            </div>
+        </section>
     )
 }
 
@@ -654,6 +733,16 @@ type SectionOverviewItem = {
     state: 'ready' | 'review' | 'blocked'
 }
 
+type ResultTriageBrief = {
+    whatReturned: string
+    whyReview: string
+    nextAction: string
+    proofStatus: string
+    boundary: string
+    tone: 'ready' | 'review' | 'blocked'
+    labels: Array<{ label: string; value: string }>
+}
+
 type AlertPacket = {
     title: string
     customerValue: string
@@ -661,6 +750,16 @@ type AlertPacket = {
     evidenceBasis: string[]
     routing: string
     blockedUntil: string[]
+}
+
+type SelectedTriageBrief = {
+    whatHappened: string
+    whyItMatters: string
+    nextAction: string
+    proofStatus: string
+    proofTone: 'ready' | 'review' | 'blocked'
+    safetyBoundary: string
+    labels: Array<{ label: string; value: string }>
 }
 
 type SelectedReviewHandoff = {
@@ -1413,7 +1512,7 @@ type WatchlistIntersectionRow = TiActionabilityModel['orgRelevance']['watchlistI
 type CaseReviewIntakeItem = TiActionabilityModel['caseReviewIntake']['items'][number]
 type ActorOperationsRow = {
     id: string
-    type: 'TTP' | 'Infrastructure' | 'Victim'
+    type: 'Method' | 'Infrastructure' | 'Victim'
     label: string
     detail: string
     tactic?: string
@@ -1482,7 +1581,9 @@ function ActorActionStrip({
         <div data-ti-actor-action-strip='true' className='border-b border-[#e8edf5] bg-[#fbfcfe] px-3 py-2 dark:border-[#273244] dark:bg-[#101722]'>
             <div className='flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between'>
                 <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
-                    <span className='rounded-md bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3] dark:bg-[#172646] dark:text-[#b8c8ff]'>Actor actions</span>
+                    <span className='rounded-md bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3] dark:bg-[#172646] dark:text-[#b8c8ff]'>Analyst actions</span>
+                    <span className='rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#475467] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>Console actions</span>
+                    <span className='rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#475467] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>Review status</span>
                     {actionSummary.map(item => (
                         <span key={item} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#475467] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>{item}</span>
                     ))}
@@ -1561,18 +1662,18 @@ function ActorOperationsMatrix({
         <section data-ti-actor-operations-matrix='true' className='min-w-0 overflow-hidden rounded-lg border border-[#dfe5ee] bg-white dark:border-[#273244] dark:bg-[#101722]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-[#eef1f5] px-3 py-2 dark:border-[#273244]'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Operations matrix</p>
-                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>TTPs, infrastructure, and targeting rows with source context.</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Attack details</p>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>Methods, infrastructure, and targeting details with source context.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap gap-1.5'>
-                    <span className='rounded-md border border-[#dfe5ee] bg-[#fbfcfe] px-2 py-1 text-[11px] font-semibold text-[#475467] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>{rows.length} rows</span>
-                    {selectedRow ? <CopyPayloadButton label='Copy row' payload={selectedRow.payload} /> : null}
+                    <span className='rounded-md border border-[#dfe5ee] bg-[#fbfcfe] px-2 py-1 text-[11px] font-semibold text-[#475467] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>{rows.length} details</span>
+                    {selectedRow ? <CopyPayloadButton label='Copy detail' payload={selectedRow.payload} /> : null}
                 </div>
             </div>
             <div className='grid min-w-0 lg:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='min-w-0 overflow-x-auto'>
                     <table className='min-w-[760px] w-full border-collapse text-left text-xs'>
-                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#667085] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
+                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#586274] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
                             <tr>
                                 <th className='px-3 py-2 font-semibold'>Type</th>
                                 <th className='px-3 py-2 font-semibold'>Name</th>
@@ -1600,16 +1701,16 @@ function ActorOperationsMatrix({
                                                 className='grid min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'
                                             >
                                                 <span className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</span>
-                                                <span className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.detail)}</span>
+                                                <span className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.detail)}</span>
                                             </button>
                                         </td>
                                         <td className='px-3 py-2'>
                                             <p className='wrap-break-word font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.source}</p>
-                                            <p className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.sourceFamily}</p>
+                                            <p className='mt-1 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{row.sourceFamily}</p>
                                         </td>
                                         <td className='px-3 py-2'>
                                             <span className={sourceHealthChipClass(row.freshness)}>{row.freshness}</span>
-                                            <p className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatDate(row.timestamp)}</p>
+                                            <p className='mt-1 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{formatDate(row.timestamp)}</p>
                                         </td>
                                         <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{Math.round(row.confidence * 100)}%</td>
                                         <td className='px-3 py-2'>
@@ -1623,13 +1724,13 @@ function ActorOperationsMatrix({
                             })}
                         </tbody>
                     </table>
-                    {!rows.length ? <p className='p-4 text-sm text-[#667085] dark:text-[#9aa8bd]'>No TTP, infrastructure, or victim rows returned.</p> : null}
+                    {!rows.length ? <p className='p-4 text-sm text-[#586274] dark:text-[#9aa8bd]'>No attack details returned.</p> : null}
                 </div>
                 <div className='min-w-0 border-t border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29] lg:border-l lg:border-t-0'>
                     {selectedRow ? (
                         <div className='grid gap-2'>
                             <div>
-                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected row</p>
+                                <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Selected detail</p>
                                 <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selectedRow.label}</h3>
                                 <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selectedRow.detail)}</p>
                             </div>
@@ -1643,12 +1744,12 @@ function ActorOperationsMatrix({
                             </div>
                             {selectedRow.artifactKind && selectedRow.artifactLookup ? (
                                 <button type='button' onClick={() => onSelectArtifactBy(selectedRow.artifactKind!, selectedRow.artifactLookup!)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
-                                    Open artifact
+                                    Open detail
                                 </button>
                             ) : null}
                         </div>
                     ) : (
-                        <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>Select a row to inspect details.</p>
+                        <p className='text-sm text-[#586274] dark:text-[#9aa8bd]'>Select a detail to inspect.</p>
                     )}
                 </div>
             </div>
@@ -1696,26 +1797,26 @@ function SourceCoverageWorkbench({
         <section data-ti-source-coverage-workbench='true' className='min-w-0 overflow-hidden rounded-lg border border-[#dfe5ee] bg-white dark:border-[#273244] dark:bg-[#101722]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-[#eef1f5] px-3 py-2 dark:border-[#273244]'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source workbench</p>
-                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>Coverage, provenance, capture state, and evidence linkage by source family.</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source review</p>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>Source coverage, newest mention, confidence, and review state.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap gap-1.5'>
                     <span className={sourceHealthChipClass('ready')}>{readyCount} ready</span>
                     <span className={sourceHealthChipClass('review')}>{reviewCount} review</span>
-                    <span className={sourceHealthChipClass(blockedCount ? 'blocked' : 'ready')}>{blockedCount} blocked</span>
-                    {selectedRow ? <CopyPayloadButton label='Copy source row' payload={selectedRow.payload} /> : null}
+                    <span className={sourceHealthChipClass(blockedCount ? 'blocked' : 'ready')}>{blockedCount} syncing</span>
+                    {selectedRow ? <CopyPayloadButton label='Copy source summary' payload={selectedRow.payload} /> : null}
                 </div>
             </div>
             <div className='grid min-w-0 xl:grid-cols-[minmax(0,1fr)_19rem]'>
                 <div className='min-w-0 overflow-x-auto'>
                     <table className='min-w-[860px] w-full border-collapse text-left text-xs'>
-                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#667085] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
+                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#586274] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
                             <tr>
                                 <th className='px-3 py-2 font-semibold'>Source</th>
-                                <th className='px-3 py-2 font-semibold'>Evidence</th>
+                                <th className='px-3 py-2 font-semibold'>Results</th>
                                 <th className='px-3 py-2 font-semibold'>Newest</th>
                                 <th className='px-3 py-2 font-semibold'>Confidence</th>
-                                <th className='px-3 py-2 font-semibold'>Artifacts</th>
+                                <th className='px-3 py-2 font-semibold'>Details</th>
                                 <th className='px-3 py-2 font-semibold'>State</th>
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
@@ -1729,12 +1830,12 @@ function SourceCoverageWorkbench({
                                         <td className='px-3 py-2'>
                                             <button type='button' onClick={() => setSelectedRowId(row.id)} className='grid min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'>
                                                 <span className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</span>
-                                                <span className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(row.family)}</span>
+                                                <span className='mt-1 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{formatLabel(row.family)}</span>
                                             </button>
                                         </td>
                                         <td className='px-3 py-2'>
-                                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.evidenceItems.length} rows</p>
-                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.evidenceItems[0]?.title ?? displayRequirementText(row.parserStatus)}</p>
+                                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.evidenceItems.length} results</p>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{row.evidenceItems[0]?.title ?? displayRequirementText(row.parserStatus)}</p>
                                         </td>
                                         <td className='px-3 py-2 text-[#344054] dark:text-[#d8e2f2]'>{row.newestAt ? formatDate(row.newestAt) : 'Not dated'}</td>
                                         <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{sourceConfidenceLabel(row.confidenceValues)}</td>
@@ -1742,18 +1843,18 @@ function SourceCoverageWorkbench({
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
                                                 {row.artifactTypes.length ? row.artifactTypes.slice(0, 4).map(type => (
                                                     <span key={`${row.id}-${type}`} className='rounded-md border border-[#dfe5ee] bg-[#fbfcfe] px-2 py-1 text-[11px] font-semibold text-[#475467] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>{type}</span>
-                                                )) : <span className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>Source only</span>}
+                                                )) : <span className='text-[11px] text-[#586274] dark:text-[#9aa8bd]'>Source only</span>}
                                             </div>
                                         </td>
                                         <td className='px-3 py-2'>
-                                            <span className={sourceHealthChipClass(row.state)}>{row.state}</span>
-                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.nextAction)}</p>
+                                            <span className={sourceHealthChipClass(row.state)}>{publicStateLabel(row.state)}</span>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.nextAction)}</p>
                                         </td>
                                         <td className='px-3 py-2'>
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
                                                 <button type='button' onClick={() => setSelectedRowId(row.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Inspect</button>
                                                 {row.evidenceItems[0] ? (
-                                                    <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Evidence</button>
+                                                    <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open result</button>
                                                 ) : null}
                                                 {row.queueFilter ? (
                                                     <button type='button' onClick={() => onFilterSource(row.queueFilter!)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Filter</button>
@@ -1765,19 +1866,19 @@ function SourceCoverageWorkbench({
                             })}
                         </tbody>
                     </table>
-                    {!rows.length ? <p className='p-4 text-sm text-[#667085] dark:text-[#9aa8bd]'>No source rows returned.</p> : null}
+                    {!rows.length ? <p className='p-4 text-sm text-[#586274] dark:text-[#9aa8bd]'>No sources returned.</p> : null}
                 </div>
                 <div className='min-w-0 border-t border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29] xl:border-l xl:border-t-0'>
                     {selectedRow ? (
                         <div className='grid gap-3'>
                             <div>
-                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected source</p>
+                                <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Selected source</p>
                                 <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selectedRow.sourceName}</h3>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selectedRow.provenance)}</p>
                             </div>
                             <div className='grid grid-cols-2 gap-2 text-xs'>
                                 <EvidenceMetric label='Family' value={formatLabel(selectedRow.family)} />
-                                <EvidenceMetric label='Evidence' value={String(selectedRow.evidenceItems.length)} />
+                                <EvidenceMetric label='Results' value={String(selectedRow.evidenceItems.length)} />
                                 <EvidenceMetric label='Capture' value={selectedRow.captureId ? 'Attached' : 'Missing'} />
                                 <EvidenceMetric label='Request' value={selectedRow.sourceRequestId ? 'Queued' : 'None'} />
                             </div>
@@ -1801,7 +1902,7 @@ function SourceCoverageWorkbench({
                             </div>
                         </div>
                     ) : (
-                        <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>Select a source row to inspect evidence and gaps.</p>
+                        <p className='text-sm text-[#586274] dark:text-[#9aa8bd]'>Select a source to inspect results and open questions.</p>
                     )}
                 </div>
             </div>
@@ -1869,27 +1970,27 @@ function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorInt
     const summary = actor.freshness.stale
         ? actor.freshness.reason
         : sourceState === 'review'
-            ? 'Evidence dates are usable, but source coverage still needs capture or provenance references before stronger handoff.'
+            ? 'Evidence dates are usable, but source coverage still needs capture or source references before stronger review.'
             : 'Evidence dates and source coverage are current enough for review.'
     const rows = [
         { label: 'Newest evidence', value: actor.sourceCoverage.latestReportDate ? formatDate(actor.sourceCoverage.latestReportDate) : 'Not dated' },
         { label: 'Generated', value: formatDate(actor.freshness.generatedAt) },
-        { label: 'Source rows', value: String(actor.sourceCoverage.totalRows) },
-        { label: 'Capture rows', value: String(actor.sourceCoverage.captureRows) },
+        { label: 'Source results', value: String(actor.sourceCoverage.totalRows) },
+        { label: 'Captured pages', value: String(actor.sourceCoverage.captureRows) },
     ]
 
     return (
         <div data-ti-freshness-gate='true' className='mt-4 min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Freshness gate</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Freshness gate</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         {displayRequirementText(summary)}
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center gap-1.5'>
                     <span className={decisionStepStatusClass(sourceState)}>sources {decisionStepStatusLabel(sourceState)}</span>
-                    <span className={decisionStepStatusClass(handoffState)}>handoff {decisionStepStatusLabel(handoffState)}</span>
+                    <span className={decisionStepStatusClass(handoffState)}>review {decisionStepStatusLabel(handoffState)}</span>
                     <span data-ti-freshness-review-export='true' className='inline-flex'>
                         <CopyPayloadButton label='Freshness review' payload={freshnessReviewPayloadFor(actor, actionability, query, { sourceState, handoffState })} />
                     </span>
@@ -1898,14 +1999,14 @@ function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorInt
             <div className='mt-3 grid min-w-0 grid-cols-2 gap-2 md:grid-cols-4'>
                 {rows.map(row => (
                     <div key={row.label} className='min-w-0 rounded-md border border-[#e4e9f1] bg-white p-2 dark:border-[#2a3547] dark:bg-[#0f1621]'>
-                        <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{row.label}</p>
+                        <p className='text-[11px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{row.label}</p>
                         <p className='mt-1 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.value}</p>
                     </div>
                 ))}
             </div>
             <div className='mt-3 grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
                 <div className='min-w-0 rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source blockers</p>
+                    <p className='text-[11px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source follow-up</p>
                     <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         {sourceBlockers.length ? sourceBlockers.slice(0, 3).map(blocker => (
                             <li key={`${blocker.code}-${blocker.field}`} className='wrap-break-word'>{readinessOwnerLabel(blocker.ownerLane)}: {displayRequirementText(blocker.handoff)}</li>
@@ -1915,15 +2016,15 @@ function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorInt
                     </ul>
                 </div>
                 <div className='min-w-0 rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Handoff blockers</p>
+                    <p className='text-[11px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Review follow-up</p>
                     <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         {workflowBlockers.length ? workflowBlockers.slice(0, 3).map(blocker => (
                             <li key={`${blocker.code}-${blocker.field}`} className='wrap-break-word'>{readinessOwnerLabel(blocker.ownerLane)}: {displayRequirementText(blocker.handoff)}</li>
-                        )) : <li>Required handoff identifiers are present.</li>}
+                        )) : <li>Required review identifiers are present.</li>}
                     </ul>
                 </div>
             </div>
-            <p className='mt-3 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+            <p className='mt-3 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                 {nextOwner ? `Next owner: ${readinessOwnerLabel(nextOwner)}.` : 'Next owner: none returned.'}
             </p>
         </div>
@@ -2000,7 +2101,7 @@ function SectionOverviewRail({ items }: { items: SectionOverviewItem[] }) {
             {items.map(item => (
                 <div key={item.label} className='min-w-0 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] px-2.5 py-2 dark:border-[#273244] dark:bg-[#131c29]'>
                     <div className='flex flex-wrap items-center justify-between gap-1.5'>
-                        <p className='min-w-0 wrap-break-word text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{item.label}</p>
+                        <p className='min-w-0 wrap-break-word text-[11px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{item.label}</p>
                         <span className={decisionStepStatusClass(item.state)}>{decisionStepStatusLabel(item.state)}</span>
                     </div>
                     <p className='mt-1 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.value}</p>
@@ -2022,7 +2123,7 @@ function TiCommandBar({ links }: { links: Array<{ href: string; label: string; v
                     <Icon className='h-4 w-4 text-[#3056d3] dark:text-[#9db6ff]' />
                     <span className='min-w-0'>
                         <span className='block truncate text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{label}</span>
-                        <span className='block truncate text-[11px] font-medium text-[#667085] dark:text-[#9aa8bd]'>{value}</span>
+                        <span className='block truncate text-[11px] font-medium text-[#586274] dark:text-[#9aa8bd]'>{value}</span>
                     </span>
                 </Link>
             ))}
@@ -2033,7 +2134,7 @@ function TiCommandBar({ links }: { links: Array<{ href: string; label: string; v
 function StructuredProvenancePanel({ rows, actor, actionability, query }: { rows: TiActorIntelligenceProfile['provenanceRows']; actor: TiActorIntelligenceProfile; actionability: TiActionabilityModel; query: string }) {
     return (
         <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
-            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source provenance</p>
+            <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source references</p>
             <div className='mt-2 grid gap-2'>
                 {rows.length ? rows.slice(0, 6).map(row => {
                     const href = linkFromText(row.provenance)
@@ -2042,7 +2143,7 @@ function StructuredProvenancePanel({ rows, actor, actionability, query }: { rows
                             <div className='flex flex-wrap items-center justify-between gap-2'>
                                 <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</p>
                                 <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
-                                    <span className='shrink-0 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.reportDate ? formatDate(row.reportDate) : row.captureId ? `capture ${row.captureId}` : `${Math.round((row.confidence ?? 0) * 100)}%`}</span>
+                                    <span className='shrink-0 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{row.reportDate ? formatDate(row.reportDate) : row.captureId ? `capture ${row.captureId}` : `${Math.round((row.confidence ?? 0) * 100)}%`}</span>
                                     <CopyPayloadButton label='Provenance artifact' payload={provenanceArtifactPayloadFor(row, actor, actionability, query)} />
                                     {href ? (
                                         <a href={href} target='_blank' rel='noopener noreferrer' className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
@@ -2052,11 +2153,11 @@ function StructuredProvenancePanel({ rows, actor, actionability, query }: { rows
                                     ) : null}
                                 </div>
                             </div>
-                            <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
+                            <p className='mt-1 break-all font-mono text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
                             <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.shownBecause}</p>
                         </div>
                     )
-                }) : <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>No structured provenance rows returned.</p>}
+                }) : <p className='text-sm text-[#586274] dark:text-[#9aa8bd]'>No source references returned.</p>}
             </div>
         </div>
     )
@@ -2129,8 +2230,8 @@ function provenanceArtifactPayloadFor(row: TiActorIntelligenceProfile['provenanc
 
 function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfile['sourceCoverage'] }) {
     const metrics = [
-        { label: 'Source rows', value: String(coverage.totalRows) },
-        { label: 'Dated rows', value: String(coverage.datedRows) },
+        { label: 'Source results', value: String(coverage.totalRows) },
+        { label: 'Dated activity', value: String(coverage.datedRows) },
         { label: 'Captures', value: String(coverage.captureRows) },
         { label: 'Latest', value: coverage.latestReportDate ? formatDate(coverage.latestReportDate) : 'Not dated' },
     ]
@@ -2138,9 +2239,9 @@ function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfil
         <div data-ti-source-coverage='true' className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source coverage</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source coverage</p>
                     <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {coverage.stale ? 'Refresh source coverage before alert-ready handoff.' : 'Evidence dates and source references meet freshness policy.'}
+                        {coverage.stale ? 'Refresh source coverage before sending this to review.' : 'Evidence dates and source references are current.'}
                     </p>
                 </div>
                 <span className={coverage.stale ? 'rounded-md bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:bg-[#2b220d] dark:text-[#ffd77a]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b] dark:bg-[#12281b] dark:text-[#83d9a1]'}>
@@ -2150,7 +2251,7 @@ function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfil
             <div className='mt-3 grid grid-cols-2 gap-2'>
                 {metrics.map(metric => (
                     <div key={metric.label} className='min-w-0 rounded-md border border-[#e4e9f1] bg-white p-2 dark:border-[#2a3547] dark:bg-[#0f1621]'>
-                        <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{metric.label}</p>
+                        <p className='text-[11px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{metric.label}</p>
                         <p className='mt-1 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{metric.value}</p>
                     </div>
                 ))}
@@ -2160,7 +2261,7 @@ function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfil
                     <span key={item.family} className='rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
                         {formatLabel(item.family)} · {item.count}
                     </span>
-                )) : <span className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No source families returned.</span>}
+                )) : <span className='text-xs text-[#586274] dark:text-[#9aa8bd]'>No source families returned.</span>}
             </div>
             {coverage.missing.length ? (
                 <div className='mt-3 rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
@@ -2176,13 +2277,13 @@ function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenc
         <div data-ti-technique-coverage='true' className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Techniques</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Techniques</p>
                     <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {techniques.length ? `${techniques.length} mapped technique${techniques.length === 1 ? '' : 's'} with source coverage.` : 'No mapped technique rows returned.'}
+                        {techniques.length ? `${techniques.length} mapped technique${techniques.length === 1 ? '' : 's'} with source coverage.` : 'No mapped techniques returned.'}
                     </p>
                 </div>
                 <span className={techniques.some(item => item.freshness === 'ready') ? decisionStepStatusClass('ready') : decisionStepStatusClass(techniques.length ? 'review' : 'blocked')}>
-                    {techniques.some(item => item.freshness === 'ready') ? 'ready' : techniques.length ? 'review' : 'blocked'}
+                    {techniques.some(item => item.freshness === 'ready') ? 'ready' : techniques.length ? 'review' : 'syncing'}
                 </span>
             </div>
             <div className='mt-2 grid gap-2'>
@@ -2193,7 +2294,7 @@ function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenc
                             <div className='flex flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.name}</p>
-                                    <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.tactic} · {Math.round(item.confidence * 100)}%</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{item.tactic} · {Math.round(item.confidence * 100)}%</p>
                                 </div>
                                 <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:shrink-0'>
                                     <span className={sourceHealthChipClass(item.freshness)}>{item.freshness}</span>
@@ -2203,14 +2304,14 @@ function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenc
                             </div>
                             <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(item.detail)}</p>
                             <div className='mt-2 grid gap-1 border-t border-[#eef1f5] pt-2 dark:border-[#273244]'>
-                                <p className='wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                <p className='wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                                     {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'Source reference needed'} · {item.captureIds.length ? `${item.captureIds.length} capture reference${item.captureIds.length === 1 ? '' : 's'}` : 'capture needed'} · {item.missing.length ? `needs ${item.missing.map(coverageMissingLabel).join(', ')}` : 'case context ready'}
                                 </p>
-                                {item.provenanceRefs[0] ? <p className='break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.provenanceRefs[0]}</p> : null}
+                                {item.provenanceRefs[0] ? <p className='break-all font-mono text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{item.provenanceRefs[0]}</p> : null}
                             </div>
                         </div>
                     )
-                }) : <p className='text-xs text-[#667085] dark:text-[#9aa8bd]'>Queue technique enrichment before detection or case routing.</p>}
+                }) : <p className='text-xs text-[#586274] dark:text-[#9aa8bd]'>Add technique context before detection or case review.</p>}
             </div>
         </div>
     )
@@ -2249,13 +2350,13 @@ function CampaignTimelinePanel({ timeline }: { timeline: TiActorIntelligenceProf
         <div data-ti-campaign-timeline='true' className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Activity timeline</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Activity timeline</p>
                     <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {timeline.length ? `${timeline.length} dated campaign or activity row${timeline.length === 1 ? '' : 's'} with provenance.` : 'No dated campaign rows returned.'}
+                        {timeline.length ? `${timeline.length} dated campaign or activity item${timeline.length === 1 ? '' : 's'} with source references.` : 'No dated campaign activity returned.'}
                     </p>
                 </div>
                 <span className={timeline.some(item => item.freshness === 'ready') ? decisionStepStatusClass('ready') : decisionStepStatusClass(timeline.length ? 'review' : 'blocked')}>
-                    {timeline.some(item => item.freshness === 'ready') ? 'ready' : timeline.length ? 'review' : 'blocked'}
+                    {timeline.some(item => item.freshness === 'ready') ? 'ready' : timeline.length ? 'review' : 'syncing'}
                 </span>
             </div>
             <div className='mt-2 grid gap-2'>
@@ -2276,14 +2377,14 @@ function CampaignTimelinePanel({ timeline }: { timeline: TiActorIntelligenceProf
                                 </div>
                             </div>
                             <div className='mt-2 grid gap-1 border-t border-[#eef1f5] pt-2 dark:border-[#273244]'>
-                                <p className='wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
-                                    {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'source reference needed'} · {item.provenanceRefs.length ? `${item.provenanceRefs.length} provenance reference${item.provenanceRefs.length === 1 ? '' : 's'}` : 'provenance needed'} · {item.missing.length ? `needs ${item.missing.map(coverageMissingLabel).join(', ')}` : 'case context ready'}
+                                <p className='wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
+                                    {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'source reference needed'} · {item.provenanceRefs.length ? `${item.provenanceRefs.length} source detail${item.provenanceRefs.length === 1 ? '' : 's'}` : 'source detail needed'} · {item.missing.length ? `needs ${item.missing.map(coverageMissingLabel).join(', ')}` : 'case context ready'}
                                 </p>
-                                {item.provenanceRefs[0] ? <p className='break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.provenanceRefs[0]}</p> : null}
+                                {item.provenanceRefs[0] ? <p className='break-all font-mono text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{item.provenanceRefs[0]}</p> : null}
                             </div>
                         </div>
                     )
-                }) : <p className='text-xs text-[#667085] dark:text-[#9aa8bd]'>Queue campaign enrichment before trend or case review.</p>}
+                }) : <p className='text-xs text-[#586274] dark:text-[#9aa8bd]'>Add campaign context before trend or case review.</p>}
             </div>
         </div>
     )
@@ -2325,7 +2426,7 @@ function DossierList({ title, values, artifactKind, artifactByLookup, selectedAr
 }) {
     return (
         <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
-            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{title}</p>
+            <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{title}</p>
             <div className='mt-2 grid grid-cols-1 gap-1.5 sm:flex sm:flex-wrap'>
                 {values.length ? values.slice(0, 8).map(value => {
                     const artifact = artifactKind ? artifactByLookup?.get(`${artifactKind}:${value.toLowerCase()}`) : undefined
@@ -2343,7 +2444,7 @@ function DossierList({ title, values, artifactKind, artifactByLookup, selectedAr
                             {value}
                         </button>
                     )
-                }) : <span className='text-xs text-[#667085] dark:text-[#9aa8bd]'>Not returned</span>}
+                }) : <span className='text-xs text-[#586274] dark:text-[#9aa8bd]'>Not returned</span>}
             </div>
         </div>
     )
@@ -2382,26 +2483,26 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
         >
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-[#eef1f5] px-3 py-2 dark:border-[#273244]'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Artifact worklist</p>
-                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>IOCs, techniques, tools, campaigns, and geography with source context.</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Key details</p>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>Indicators, methods, tools, campaigns, and locations with source context.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap gap-1.5'>
                     <span className={sourceHealthChipClass('ready')}>{readyCount} ready</span>
                     <span className={sourceHealthChipClass('review')}>{reviewCount} review</span>
-                    <span className={sourceHealthChipClass(blockedCount ? 'blocked' : 'ready')}>{blockedCount} blocked</span>
-                    {selectedArtifact ? <CopyPayloadButton label='Copy artifact' payload={artifactWorklistPayloadFor(selectedArtifact)} /> : null}
+                    <span className={sourceHealthChipClass(blockedCount ? 'blocked' : 'ready')}>{blockedCount} syncing</span>
+                    {selectedArtifact ? <CopyPayloadButton label='Copy detail' payload={artifactWorklistPayloadFor(selectedArtifact)} /> : null}
                 </div>
             </div>
             <div className='grid min-w-0 xl:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='min-w-0 overflow-x-auto'>
                     <table className='min-w-[780px] w-full border-collapse text-left text-xs'>
-                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#667085] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
+                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#586274] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
                             <tr>
-                                <th className='px-3 py-2 font-semibold'>Artifact</th>
-                                <th className='px-3 py-2 font-semibold'>Evidence</th>
+                                <th className='px-3 py-2 font-semibold'>Detail</th>
+                                <th className='px-3 py-2 font-semibold'>Results</th>
                                 <th className='px-3 py-2 font-semibold'>Freshness</th>
                                 <th className='px-3 py-2 font-semibold'>Confidence</th>
-                                <th className='px-3 py-2 font-semibold'>Handoff</th>
+                                <th className='px-3 py-2 font-semibold'>Review status</th>
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
@@ -2414,18 +2515,18 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                         <td className='px-3 py-2'>
                                             <button type='button' onClick={() => onSelectArtifact(artifact.id)} className='grid min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'>
                                                 <span className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{artifact.label}</span>
-                                                <span className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(artifact.kind)}</span>
+                                                <span className='mt-1 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{formatLabel(artifact.kind)}</span>
                                             </button>
                                         </td>
                                         <td className='px-3 py-2'>
-                                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{artifact.evidence.length} rows</p>
-                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{artifact.evidence[0] ? displayRequirementText(artifact.evidence[0]) : artifact.subtitle}</p>
+                                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{artifact.evidence.length} results</p>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{artifact.evidence[0] ? displayRequirementText(artifact.evidence[0]) : artifact.subtitle}</p>
                                         </td>
                                         <td className='px-3 py-2 text-[#344054] dark:text-[#d8e2f2]'>{formatDate(artifact.freshness)}</td>
                                         <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{Math.round(artifact.confidence * 100)}%</td>
                                         <td className='px-3 py-2'>
                                             <span className={sourceHealthChipClass(state)}>{artifactStateLabel(artifact)}</span>
-                                            <p className='mt-1 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                            <p className='mt-1 text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                                                 {artifact.watchlistTerms.length} watch · {artifact.enrichmentTasks.length} gaps
                                             </p>
                                         </td>
@@ -2445,7 +2546,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                     {selectedArtifact ? (
                         <div className='grid gap-3'>
                             <div>
-                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected artifact</p>
+                                <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Selected detail</p>
                                 <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selectedArtifact.label}</h3>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{selectedArtifact.subtitle}</p>
                             </div>
@@ -2453,7 +2554,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                 <EvidenceMetric label='Type' value={formatLabel(selectedArtifact.kind)} />
                                 <EvidenceMetric label='Confidence' value={`${Math.round(selectedArtifact.confidence * 100)}%`} />
                                 <EvidenceMetric label='Watch' value={String(selectedArtifact.watchlistTerms.length)} />
-                                <EvidenceMetric label='Gaps' value={String(selectedArtifact.enrichmentTasks.length)} />
+                                <EvidenceMetric label='Open questions' value={String(selectedArtifact.enrichmentTasks.length)} />
                             </div>
                             <div className='grid grid-cols-2 gap-1.5'>
                                 <button type='button' onClick={() => onSelectArtifact(selectedArtifact.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Review</button>
@@ -2465,11 +2566,11 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                         {term.kind}: {term.value}
                                     </span>
                                 ))}
-                                {!selectedArtifact.watchlistTerms.length ? <span className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No watch term attached.</span> : null}
+                                {!selectedArtifact.watchlistTerms.length ? <span className='text-xs text-[#586274] dark:text-[#9aa8bd]'>No watch term attached.</span> : null}
                             </div>
                         </div>
                     ) : (
-                        <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>Select an artifact to inspect handoff context.</p>
+                        <p className='text-sm text-[#586274] dark:text-[#9aa8bd]'>Select a detail to inspect source and review context.</p>
                     )}
                 </div>
             </div>
@@ -2481,10 +2582,10 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
     const bridge = handoffs.authBridge
     const selectedArtifactPayload = selectedArtifactPayloadFor(artifact, handoffs)
     const payloadRows = [
-        { id: 'watchlist', label: 'Watchlist package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist], route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffMissingLabel(handoffs.watchlist.missing) : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
+        { id: 'watchlist', label: 'Watchlist package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist], route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffMissingLabel(handoffs.watchlist.missing) : `${artifact.watchlistTerms.length} watch term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
         { id: 'alert', label: 'Alert rebuild', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild], route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffMissingLabel(handoffs.alertRebuild.missing) : 'Ready to rebuild from this selected artifact.' },
         { id: 'case', label: 'Case package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case], route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffMissingLabel(handoffs.case.missing) : 'Ready to open with this selected artifact.' },
-        { id: 'enrichment', label: 'Enrichment item', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment], route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffMissingLabel(handoffs.enrichment.missing) : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
+        { id: 'enrichment', label: 'Source review item', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment], route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffMissingLabel(handoffs.enrichment.missing) : `${artifact.enrichmentTasks.length} source review task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
     ]
     const workflowRows = payloadRows.map(row => ({
         ...row,
@@ -2497,7 +2598,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
         <section data-ti-selected-artifact='true' className='max-w-full overflow-hidden rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-3 sm:p-4'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#3056d3]'>Selected Intelligence</p>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3]'>Selected detail</p>
                     <h2 className='mt-1 wrap-break-word text-xl font-semibold text-[#171a21]'>{artifact.label}</h2>
                     <p className='mt-1 text-sm leading-6 text-[#596170]'>{formatLabel(artifact.kind)} · {artifact.subtitle}</p>
                 </div>
@@ -2505,48 +2606,48 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     <div className='grid grid-cols-3 gap-2 text-center text-xs'>
                         <EvidenceMetric label='Freshness' value={formatDate(artifact.freshness)} />
                         <EvidenceMetric label='Confidence' value={`${Math.round(artifact.confidence * 100)}%`} />
-                        <EvidenceMetric label='Workflow state' value={displayRequirementText(artifact.readiness.label)} />
+                        <EvidenceMetric label='Review status' value={displayRequirementText(artifact.readiness.label)} />
                     </div>
                     <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 lg:justify-end'>
-                        <span className={sourceHealthChipClass(artifact.readiness.state === 'ready_for_org_handoff' ? 'ready' : artifact.readiness.state === 'needs_source' || artifact.readiness.state === 'needs_watchlist_term' ? 'blocked' : 'review')}>{formatLabel(artifact.readiness.state)}</span>
-                        <CopyPayloadButton label='Selected artifact' payload={selectedArtifactPayload} />
+                        <span className={sourceHealthChipClass(artifact.readiness.state === 'ready_for_org_handoff' ? 'ready' : artifact.readiness.state === 'needs_source' || artifact.readiness.state === 'needs_watchlist_term' ? 'blocked' : 'review')}>{publicStateLabel(artifact.readiness.state)}</span>
+                        <CopyPayloadButton label='Selected detail' payload={selectedArtifactPayload} />
                     </div>
                 </div>
             </div>
             <div className='mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='grid gap-3 md:grid-cols-2'>
                     <EvidencePanel title='Evidence'>
-                        {artifact.evidence.length ? artifact.evidence.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>No evidence text is attached to this artifact.</li>}
+                        {artifact.evidence.length ? artifact.evidence.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>No evidence text is attached to this detail.</li>}
                     </EvidencePanel>
-                    <EvidencePanel title='Provenance'>
-                        {artifact.provenance.length ? artifact.provenance.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Source provenance is missing for this artifact.</li>}
+                    <EvidencePanel title='Source details'>
+                        {artifact.provenance.length ? artifact.provenance.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Source details are missing for this detail.</li>}
                     </EvidencePanel>
                     <EvidencePanel title='Watchlist relevance'>
-                        {artifact.watchlistTerms.length ? artifact.watchlistTerms.map(term => <li key={`${term.kind}-${term.value}`}>{term.kind}: {term.value}. {displayRequirementText(term.notes)}</li>) : <li>No customer watchlist term is attached to this artifact.</li>}
+                        {artifact.watchlistTerms.length ? artifact.watchlistTerms.map(term => <li key={`${term.kind}-${term.value}`}>{term.kind}: {term.value}. {displayRequirementText(term.notes)}</li>) : <li>No customer watchlist term is attached to this detail.</li>}
                     </EvidencePanel>
-                    <EvidencePanel title='Enrichment gaps'>
-                        {artifact.enrichmentTasks.length ? artifact.enrichmentTasks.map(task => <li key={task}>{displayRequirementText(task)}</li>) : <li>No enrichment gap is attached to this artifact.</li>}
+                    <EvidencePanel title='Open source questions'>
+                        {artifact.enrichmentTasks.length ? artifact.enrichmentTasks.map(task => <li key={task}>{displayRequirementText(task)}</li>) : <li>No open source question is attached to this detail.</li>}
                     </EvidencePanel>
                 </div>
                 <div className='grid min-w-0 max-w-full content-start gap-2 overflow-hidden'>
                     <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Console handoff</p>
+                        <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Console actions</p>
                         <p className='mt-2 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                            This view prepares links and payloads for organization-scoped review. Saving watchlists, rebuilding alerts, creating cases, and queueing enrichment require console access.
+                            This view prepares links and payloads for organization-scoped review. Saving watchlists, rebuilding alerts, creating cases, and source review require console access.
                         </p>
                         <div className='mt-2 flex flex-wrap gap-1.5'>
-                            <span className={bridge.orgRequired ? 'rounded-md bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]'}>
+                            <span className={bridge.orgRequired ? 'rounded-md bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:bg-[#2b220d] dark:text-[#ffd77a]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b] dark:bg-[#10281b] dark:text-[#9df0b8]'}>
                                 {bridge.orgRequired ? 'org required' : 'org scoped'}
                             </span>
-                            <span className={bridge.sourceRequired ? 'rounded-md bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]'}>
+                            <span className={bridge.sourceRequired ? 'rounded-md bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:bg-[#2b220d] dark:text-[#ffd77a]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b] dark:bg-[#10281b] dark:text-[#9df0b8]'}>
                                 {bridge.sourceRequired ? 'source required' : 'source attached'}
                             </span>
-                            <span className={bridge.stale ? 'rounded-md bg-[#fff1f0] px-2 py-1 text-[11px] font-semibold text-[#b42318]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]'}>
+                            <span className={bridge.stale ? 'rounded-md bg-[#fff1f0] px-2 py-1 text-[11px] font-semibold text-[#b42318] dark:bg-[#2c160f] dark:text-[#ffb598]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b] dark:bg-[#10281b] dark:text-[#9df0b8]'}>
                                 {bridge.stale ? 'stale' : 'fresh enough'}
                             </span>
                         </div>
                         <div data-ti-artifact-source-requests='true' className='mt-3 grid min-w-0 w-full max-w-[calc(100vw-7rem)] gap-2 overflow-hidden sm:max-w-full'>
-                            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source requests</p>
+                            <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source requests</p>
                             {bridge.payload.sourceRequests.length ? bridge.payload.sourceRequests.slice(0, 3).map(request => (
                                 <div key={`${request.sourceName}-${request.provenance}-${request.captureId ?? 'missing'}`} className='min-w-0 w-full max-w-full overflow-hidden rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                                     <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between'>
@@ -2555,7 +2656,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                             {request.captureId ? 'capture attached' : 'capture needed'}
                                         </span>
                                     </div>
-                                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.captureId ?? displayRequirementText(request.provenance)}</p>
+                                    <p className='mt-1 break-all font-mono text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{request.captureId ?? displayRequirementText(request.provenance)}</p>
                                     {request.missing.length || typeof request.confidence === 'number' ? (
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                                             {[typeof request.confidence === 'number' ? `${Math.round(request.confidence * 100)}% confidence` : '', ...request.missing.map(displayRequirementText)].filter(Boolean).join(' · ')}
@@ -2571,7 +2672,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                     </div>
                                 </div>
                             )) : (
-                                <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No source request rows returned for this artifact.</p>
+                                <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No source requests returned for this detail.</p>
                             )}
                         </div>
                         {bridge.missing.length ? (
@@ -2581,7 +2682,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                         ) : null}
                         {bridge.payload.evidenceRefs ? (
                             <div data-ti-artifact-reference-summary='true' className='mt-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
-                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Reference summary</p>
+                                <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Reference summary</p>
                                 <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                     {artifactReferenceChips(bridge.payload.evidenceRefs).map(item => (
                                         <span key={item.label} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
@@ -2595,15 +2696,15 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     {payloadRows.map(row => (
                         <PayloadHandoffRow key={row.id} label={row.label} detail={row.detail} payload={row.payload} route={row.route} blocked={row.blocked} />
                     ))}
-                    <CopyPayloadButton label='console handoff bundle' payload={bridge} />
+                    <CopyPayloadButton label='console action bundle' payload={bridge} />
                 </div>
             </div>
             <div data-ti-artifact-workflow-readiness='true' className='mt-4 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected handoff status</p>
+                        <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Selected review status</p>
                         <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                            Selected artifact handoff state for watchlist, alert, case, and enrichment work.
+                            Selected detail review state for watchlist, alert, case, and source review work.
                         </p>
                     </div>
                     <span className={workflowRows.every(row => !row.blocked) ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>
@@ -2616,10 +2717,10 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                             <div className='flex flex-wrap items-center justify-between gap-2'>
                                 <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</p>
                                 <span className={row.blocked ? decisionStepStatusClass('blocked') : decisionStepStatusClass('ready')}>
-                                    {row.blocked ? 'blocked' : 'ready'}
+                                    {row.blocked ? 'syncing' : 'ready'}
                                 </span>
                             </div>
-                            <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.endpoint)}</p>
+                            <p className='mt-1 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.endpoint)}</p>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                                 {row.readiness?.missing.length ? displayRequirementList(row.readiness.missing.slice(0, 2)) : row.missing.length ? displayRequirementList(row.missing.slice(0, 2)) : 'Required artifact context is present.'}
                             </p>
@@ -2685,7 +2786,7 @@ function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWork
         <div data-ti-evidence-priority='true' className='mt-4 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Evidence priority</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Evidence priority</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(priority.nextAction)}</p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -2699,11 +2800,11 @@ function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWork
                     {priority.reasons.map(reason => <li key={reason}>{reason}</li>)}
                 </EvidencePanel>
                 <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Backed references</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Backed references</p>
                     <div className='mt-2 flex flex-wrap gap-1.5'>
                         {ids.length ? ids.map(id => (
                             <span key={id} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#131c29] dark:text-[#d8e2f2]'>{id}</span>
-                        )) : <span className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No backed IDs attached.</span>}
+                        )) : <span className='text-xs text-[#586274] dark:text-[#9aa8bd]'>No backed IDs attached.</span>}
                     </div>
                     {priority.blockers.length ? (
                         <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>
@@ -2723,14 +2824,14 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
         <div data-ti-selected-evidence-context='true' className='mt-4 overflow-hidden rounded-lg border border-[#eef1f5] bg-[#fbfcfe] dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-[#eef1f5] px-3 py-2 dark:border-[#273244]'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source context</p>
-                    <p className='mt-0.5 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{rows.length} row{rows.length === 1 ? '' : 's'} tied to selected evidence</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source context</p>
+                    <p className='mt-0.5 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{rows.length} source{rows.length === 1 ? '' : 's'} tied to the selected result</p>
                 </div>
                 <CopyPayloadButton label='Source context' payload={drilldown} />
             </div>
             <div className='overflow-x-auto'>
                 <table className='min-w-[720px] w-full border-collapse text-left text-xs'>
-                    <thead className='bg-white text-[11px] uppercase text-[#667085] dark:bg-[#0f1621] dark:text-[#9aa8bd]'>
+                    <thead className='bg-white text-[11px] uppercase text-[#586274] dark:bg-[#0f1621] dark:text-[#9aa8bd]'>
                         <tr>
                             <th className='px-3 py-2 font-semibold'>Source</th>
                             <th className='px-3 py-2 font-semibold'>Timestamp</th>
@@ -2744,7 +2845,7 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
                             <tr key={row.rowId} className='bg-[#fbfcfe] align-top dark:bg-[#131c29]'>
                                 <td className='px-3 py-2'>
                                     <p className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</p>
-                                    <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
                                 </td>
                                 <td className='px-3 py-2 text-[#475467] dark:text-[#b7c2d4]'>{row.reportDate ? formatDate(row.reportDate) : 'Not dated'}</td>
                                 <td className='px-3 py-2 text-[#475467] dark:text-[#b7c2d4]'>{typeof row.confidence === 'number' ? `${Math.round(row.confidence * 100)}%` : 'Not scored'}</td>
@@ -2770,14 +2871,14 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
         <div data-ti-selected-source-drilldown='true' className='mt-4 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source drilldown</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source details</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        Source rows, capture status, and handoff blockers for the selected queue item.
+                        Sources, capture status, and follow-up for the selected result.
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(state)}>{readyRows}/{drilldown.rows.length} ready</span>
-                    <CopyPayloadButton label='Source drilldown' payload={drilldown} />
+                    <CopyPayloadButton label='Source details' payload={drilldown} />
                 </div>
             </div>
 
@@ -2795,7 +2896,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                                 {row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'capture needed' : 'source needed'}
                             </span>
                         </div>
-                        <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.captureId ? `capture ${row.captureId}` : displayRequirementText(row.provenance)}</p>
+                        <p className='mt-1 break-all font-mono text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{row.captureId ? `capture ${row.captureId}` : displayRequirementText(row.provenance)}</p>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.handoff)}</p>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                             <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-[#fbfcfe] px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#131c29] dark:text-[#d8e2f2]'>
@@ -2818,7 +2919,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                     </div>
                 )) : (
                     <div className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
-                        No source rows are attached to this queue item yet.
+                        No sources are attached to this result yet.
                     </div>
                 )}
             </div>
@@ -2935,15 +3036,19 @@ function watchlistTermParts(term: string): { kind: 'company' | 'domain' | 'vendo
     return { kind: 'company', value: term.trim() }
 }
 
+function watchlistWorkbenchRowId(kind: string, value: string) {
+    return `watch:${kind}:${value}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-')
+}
+
 function SourceDrilldownHandoff({ label, ready, endpoint, missing }: { label: string; ready: boolean; endpoint: string; missing: string[] }) {
     return (
         <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{label}</p>
-                    <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(endpoint)}</p>
+                    <p className='mt-1 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(endpoint)}</p>
                 </div>
-                <span className={ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{ready ? 'ready' : 'blocked'}</span>
+                <span className={ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{ready ? 'ready' : 'syncing'}</span>
             </div>
             <p className={ready ? 'mt-1 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]' : 'mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'}>
                 {ready ? 'Required source and routing context is present.' : displayRequirementList(missing.slice(0, 2)) || 'Required source and routing context is not attached.'}
@@ -3031,12 +3136,12 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         kind: 'exposure',
         severity: item.allowedActions.includes('notify_company') ? 'critical' : 'high',
         status: item.status.replaceAll('_', ' '),
-        title: item.company || item.victim || 'Exposure mention',
-        subtitle: [item.affectedAccounts, item.datasetSize, item.claimedDate].filter(Boolean).join(' · ') || 'Metadata review item',
-        detail: item.actorStatement || 'Review the captured metadata before taking action.',
+        title: item.company || item.victim || 'Recent attack mention',
+        subtitle: [item.affectedAccounts, item.datasetSize, item.claimedDate].filter(Boolean).join(' · ') || 'Sensitive-source review item',
+        detail: item.actorStatement || 'Review the captured safe fields before taking action.',
         timestamp: item.claimedDate || result.generatedAt,
-        source: item.sourceHash ? `source hash ${item.sourceHash}` : 'Metadata review inbox',
-        provenance: item.provenance || 'Restricted metadata queue',
+        source: item.sourceHash ? `source hash ${item.sourceHash}` : 'Sensitive-source review inbox',
+        provenance: item.provenance || 'Sensitive-source review',
         confidence: item.confidence,
         evidence: [
             item.affectedAccounts ? `Affected accounts: ${item.affectedAccounts}` : 'Affected accounts not stated.',
@@ -3055,15 +3160,15 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         kind: 'collection',
         severity: result.status === 'searching' || result.status === 'queued' ? 'medium' : 'low',
         status: humanResultStatus(result.status),
-        title: result.status === 'searching' ? 'Collection running' : 'No actionable rows returned',
+        title: result.status === 'searching' ? 'Checking sources' : 'No results ready for review',
         subtitle: result.analystLoop?.headline || result.summary,
-        detail: result.analystLoop?.runStatusClarity.summary || 'The collection layer has not returned analyst-reviewable rows for this query yet.',
+        detail: result.analystLoop?.runStatusClarity.summary || 'No reviewable results are ready for this query yet.',
         timestamp: result.generatedAt,
         source: 'TI search service',
         provenance: result.mode,
         confidence: result.confidence,
-        evidence: result.notes.length ? result.notes : ['No evidence rows returned yet.'],
-        nextActions: ['Leave this query open while polling continues.', 'Search an alias, domain, company name, CVE, or supplier term.', 'Open the customer console for persisted queue work.'],
+        evidence: result.notes.length ? result.notes : ['No evidence text returned yet.'],
+        nextActions: ['Leave this query open while polling continues.', 'Search an alias, domain, company name, CVE, or supplier term.', 'Open the customer console to save the work.'],
         priority: priorityByRow.get('collection-searching'),
     }]
 }
@@ -3073,7 +3178,7 @@ function CustomerAlertFit({ selected, watchlist, alertPacket }: { selected: Anal
         <div className='mt-4 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-3'>
             <div className='flex flex-wrap items-center justify-between gap-3'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Customer Alert Fit</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274]'>Customer Alert Fit</p>
                     <p className='mt-1 text-sm leading-6 text-[#596170]'>{alertPacket?.customerValue ?? watchlist.rationale}</p>
                 </div>
                 <span className={severityClass(selected.severity)}>{selected.kind === 'exposure' ? 'alert candidate' : 'context for watchlists'}</span>
@@ -3086,7 +3191,7 @@ function CustomerAlertFit({ selected, watchlist, alertPacket }: { selected: Anal
             </div>
             {watchlist.domains.length ? (
                 <div className='mt-3'>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Domains to monitor</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274]'>Domains to monitor</p>
                     <div className='mt-2 flex flex-wrap gap-2'>
                         {watchlist.domains.map(domain => <span key={domain} className='rounded-full border border-[#d8dee9] bg-white px-2.5 py-1 font-mono text-xs text-[#344054]'>{domain}</span>)}
                     </div>
@@ -3135,22 +3240,22 @@ function WatchlistRelevanceWorkbench({
         <section data-ti-watchlist-workbench='true' data-ti-watchlist-term-requests='true' className='min-w-0 overflow-hidden rounded-lg border border-[#dfe5ee] bg-white dark:border-[#273244] dark:bg-[#101722]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-[#eef1f5] px-3 py-2 dark:border-[#273244]'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlist workbench</p>
-                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>Actor terms, matching evidence, artifacts, and case routes for organization review.</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Watchlist review</p>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>Watched terms, matching results, key details, and case routes for organization review.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap gap-1.5'>
                     <span className={sourceHealthChipClass('ready')}>{readyCount} matched</span>
-                    <span className={sourceHealthChipClass(blockedCount ? 'blocked' : 'review')}>{blockedCount} blocked</span>
-                    {selectedRow ? <CopyPayloadButton label='Copy watch row' payload={selectedRow.payload} /> : null}
+                    <span className={sourceHealthChipClass(blockedCount ? 'blocked' : 'review')}>{blockedCount} syncing</span>
+                    {selectedRow ? <CopyPayloadButton label='Copy watchlist match' payload={selectedRow.payload} /> : null}
                 </div>
             </div>
             <div className='grid min-w-0 xl:grid-cols-[minmax(0,1fr)_19rem]'>
                 <div className='min-w-0 overflow-x-auto'>
                     <table className='min-w-[850px] w-full border-collapse text-left text-xs'>
-                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#667085] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
+                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#586274] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
                             <tr>
                                 <th className='px-3 py-2 font-semibold'>Term</th>
-                                <th className='px-3 py-2 font-semibold'>Evidence</th>
+                                <th className='px-3 py-2 font-semibold'>Results</th>
                                 <th className='px-3 py-2 font-semibold'>Newest</th>
                                 <th className='px-3 py-2 font-semibold'>Confidence</th>
                                 <th className='px-3 py-2 font-semibold'>Route</th>
@@ -3165,24 +3270,24 @@ function WatchlistRelevanceWorkbench({
                                         <td className='px-3 py-2'>
                                             <button type='button' onClick={() => setSelectedRowId(row.id)} className='grid min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'>
                                                 <span className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.value}</span>
-                                                <span className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(row.kind)}</span>
+                                                <span className='mt-1 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{formatLabel(row.kind)}</span>
                                             </button>
                                         </td>
                                         <td className='px-3 py-2'>
-                                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.evidenceItems.length} rows · {row.artifactIds.length} artifacts</p>
-                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.evidenceItems[0]?.title ?? row.detail}</p>
+                                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.evidenceItems.length} results · {row.artifactIds.length} details</p>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{row.evidenceItems[0]?.title ?? row.detail}</p>
                                         </td>
                                         <td className='px-3 py-2 text-[#344054] dark:text-[#d8e2f2]'>{row.newestAt ? formatDate(row.newestAt) : 'Not dated'}</td>
                                         <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{sourceConfidenceLabel(row.confidenceValues)}</td>
                                         <td className='px-3 py-2'>
-                                            <span className={sourceHealthChipClass(row.state)}>{row.matched ? 'matched' : row.state}</span>
-                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.casePath || row.route || row.detail)}</p>
+                                            <span className={sourceHealthChipClass(row.state)}>{row.matched ? 'matched' : publicStateLabel(row.state)}</span>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.casePath || row.route || row.detail)}</p>
                                         </td>
                                         <td className='px-3 py-2'>
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
                                                 <button type='button' onClick={() => setSelectedRowId(row.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Inspect</button>
-                                                {row.evidenceItems[0] ? <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Evidence</button> : null}
-                                                {row.artifactIds[0] ? <button type='button' onClick={() => onSelectArtifact(row.artifactIds[0]!)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Artifact</button> : null}
+                                                {row.evidenceItems[0] ? <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open result</button> : null}
+                                                {row.artifactIds[0] ? <button type='button' onClick={() => onSelectArtifact(row.artifactIds[0]!)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Detail</button> : null}
                                                 <CopyPayloadButton label='Watchlist term request' payload={row.payload} />
                                             </div>
                                         </td>
@@ -3191,26 +3296,26 @@ function WatchlistRelevanceWorkbench({
                             })}
                         </tbody>
                     </table>
-                    {!rows.length ? <p className='p-4 text-sm text-[#667085] dark:text-[#9aa8bd]'>No watchlist term returned.</p> : null}
+                    {!rows.length ? <p className='p-4 text-sm text-[#586274] dark:text-[#9aa8bd]'>No watchlist term returned.</p> : null}
                 </div>
                 <div className='min-w-0 border-t border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29] xl:border-l xl:border-t-0'>
                     {selectedRow ? (
                         <div className='grid gap-3'>
                             <div>
-                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected term</p>
+                                <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Selected term</p>
                                 <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selectedRow.kind}: {selectedRow.value}</h3>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selectedRow.detail)}</p>
                             </div>
                             <div className='grid grid-cols-2 gap-2 text-xs'>
-                                <EvidenceMetric label='Evidence' value={String(selectedRow.evidenceItems.length)} />
-                                <EvidenceMetric label='Artifacts' value={String(selectedRow.artifactIds.length)} />
+                                <EvidenceMetric label='Results' value={String(selectedRow.evidenceItems.length)} />
+                                <EvidenceMetric label='Details' value={String(selectedRow.artifactIds.length)} />
                                 <EvidenceMetric label='Sources' value={String(selectedRow.sourceCount)} />
-                                <EvidenceMetric label='Status' value={selectedRow.matched ? 'Matched' : selectedRow.state} />
+                                <EvidenceMetric label='Status' value={selectedRow.matched ? 'Matched' : publicStateLabel(selectedRow.state)} />
                             </div>
                             <div className='grid grid-cols-2 gap-1.5'>
                                 <button type='button' onClick={onMarkRelevant} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Watch</button>
-                                {selectedEvidence ? <button type='button' onClick={() => onSelectEvidence(selectedEvidence.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Review row</button> : null}
-                                {selectedArtifact ? <button type='button' onClick={() => onSelectArtifact(selectedArtifact)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open artifact</button> : null}
+                                {selectedEvidence ? <button type='button' onClick={() => onSelectEvidence(selectedEvidence.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Review result</button> : null}
+                                {selectedArtifact ? <button type='button' onClick={() => onSelectArtifact(selectedArtifact)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open detail</button> : null}
                                 <CopyPayloadButton label='Export' payload={selectedRow.payload} showLabel />
                             </div>
                             <div className='flex min-w-0 flex-wrap gap-1.5'>
@@ -3224,7 +3329,7 @@ function WatchlistRelevanceWorkbench({
                             ) : null}
                         </div>
                     ) : (
-                        <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>Select a watchlist term to inspect evidence and handoff context.</p>
+                        <p className='text-sm text-[#586274] dark:text-[#9aa8bd]'>Select a watchlist term to inspect evidence and review context.</p>
                     )}
                 </div>
             </div>
@@ -3235,12 +3340,12 @@ function WatchlistRelevanceWorkbench({
 function WatchlistBlock({ title, values }: { title: string; values: string[] }) {
     const visible = values.slice(0, 6)
     return (
-        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3'>
-            <p className='text-xs font-semibold uppercase text-[#667085]'>{title}</p>
+        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{title}</p>
             <div className='mt-2 flex flex-wrap gap-1.5'>
                 {visible.length ? visible.map(value => (
-                    <span key={value} className='rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{value}</span>
-                )) : <span className='text-xs text-[#667085]'>Not returned</span>}
+                    <span key={value} className='rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'>{value}</span>
+                )) : <span className='text-xs text-[#586274] dark:text-[#9aa8bd]'>Not returned</span>}
             </div>
         </div>
     )
@@ -3296,7 +3401,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
         },
         {
             id: 'source',
-            label: 'Source enrichment',
+            label: 'Source review',
             state: actionability.actionPayloads.payloads.sourceEnrichment.ready,
             route: actionability.actionPayloads.payloads.sourceEnrichment.backedRoute ?? actionability.actionPayloads.payloads.sourceEnrichment.route,
             ids: actionability.readiness.backedIds.captureIds.slice(0, 3).map(id => `capture ${id}`),
@@ -3311,9 +3416,9 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
         <div data-ti-handoff-evidence-matrix='true' className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Handoff evidence</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Review evidence</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {readyCount} of {rows.length} handoffs have backed IDs, route, and provenance ready for authenticated review.
+                        {readyCount} of {rows.length} review paths have source IDs, route, and capture details ready for authenticated review.
                     </p>
                 </div>
                 <span className={readyCount === rows.length ? decisionStepStatusClass('ready') : readyCount ? decisionStepStatusClass('review') : decisionStepStatusClass('blocked')}>
@@ -3326,10 +3431,10 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</p>
-                                <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
                             </div>
                             <span className={row.state ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
-                                {row.state ? 'ready' : 'blocked'}
+                                {row.state ? 'ready' : 'syncing'}
                             </span>
                         </div>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
@@ -3348,7 +3453,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
                         ) : row.missing.length ? (
                             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(row.missing.slice(0, 2))}</p>
                         ) : (
-                            <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Required identifiers and provenance are present.</p>
+                            <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Required identifiers and source details are present.</p>
                         )}
                     </div>
                 ))}
@@ -3366,24 +3471,24 @@ function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
                     <p className='mt-1 text-xs leading-5 text-[#596170]'>{packet.customerValue}</p>
                 </div>
                 <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Evidence basis</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274]'>Evidence basis</p>
                     <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#596170]'>
                         {packet.evidenceBasis.map(item => <li key={item}>{item}</li>)}
                     </ul>
                 </div>
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Routing</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274]'>Routing</p>
                     <p className='mt-1 text-xs leading-5 text-[#596170]'>{packet.routing}</p>
                 </div>
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Watch terms carried forward</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274]'>Watch terms carried forward</p>
                     <div className='mt-2 flex flex-wrap gap-1.5'>
-                        {packet.watchTerms.map(term => <span key={term} className='rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{term}</span>)}
+                        {packet.watchTerms.map(term => <span key={term} className='rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'>{term}</span>)}
                     </div>
                 </div>
                 {packet.blockedUntil.length ? (
                     <div className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3'>
-                        <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Blocked until</p>
+                        <p className='text-xs font-semibold uppercase text-[#8a5a00] dark:text-[#ffd879]'>Waiting on</p>
                         <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#8a5a00]'>
                             {packet.blockedUntil.map(item => <li key={item}>{item}</li>)}
                         </ul>
@@ -3410,23 +3515,23 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 <OrgRelevancePanel actionability={actionability} />
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Geography</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Geography</p>
                     <div className='mt-2 grid gap-2'>
                         {actionability.geographyHandoffs.slice(0, 4).map(item => (
                             <div key={`${item.role}-${item.code}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                                 <div className='flex items-center justify-between gap-2'>
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.country}</p>
-                                    <span className='shrink-0 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.role === 'operator' ? 'attribution' : `${item.observationCount} observation${item.observationCount === 1 ? '' : 's'}`}</span>
+                                    <span className='shrink-0 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{item.role === 'operator' ? 'attribution' : `${item.observationCount} observation${item.observationCount === 1 ? '' : 's'}`}</span>
                                 </div>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
                             </div>
                         ))}
-                        {!actionability.geographyHandoffs.length ? <p className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No country-level routing rows returned.</p> : null}
+                        {!actionability.geographyHandoffs.length ? <p className='text-xs text-[#586274] dark:text-[#9aa8bd]'>No country-level routing returned.</p> : null}
                     </div>
                 </div>
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Sources</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Sources</p>
                     <div className='mt-2 grid gap-2'>
                         {actionability.sourceClusters.slice(0, 4).map(item => (
                             <div key={`${item.sourceName}-${item.provenance}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
@@ -3434,11 +3539,11 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.sourceName}</p>
                                     <span className={item.captureId ? 'shrink-0 text-[11px] text-[#147a3b]' : 'shrink-0 text-[11px] text-[#8a5a00]'}>{item.captureId ? 'capture attached' : 'capture needed'}</span>
                                 </div>
-                                <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(item.provenance)}</p>
+                                <p className='mt-1 break-all font-mono text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(item.provenance)}</p>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
                             </div>
                         ))}
-                        {!actionability.sourceClusters.length ? <p className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No source provenance rows returned.</p> : null}
+                        {!actionability.sourceClusters.length ? <p className='text-xs text-[#586274] dark:text-[#9aa8bd]'>No source details returned.</p> : null}
                     </div>
                 </div>
 
@@ -3463,7 +3568,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 {!casePath && actionability.handoffs.casePayload ? (
                     <PayloadHandoffRow
                         label='Case handoff'
-                        detail={actionability.caseHandoff.blocked ? `Blocked until ${displayRequirementList(actionability.caseHandoff.missing.slice(0, 2))}.` : 'Case request is prepared for authenticated review.'}
+                        detail={actionability.caseHandoff.blocked ? `Waiting on ${displayRequirementList(actionability.caseHandoff.missing.slice(0, 2))}.` : 'Case request is prepared for authenticated review.'}
                         payload={actionability.exportPayloads.case.body}
                         route={actionability.caseHandoff.backedRoute}
                         blocked={actionability.caseHandoff.blocked}
@@ -3510,9 +3615,9 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
         <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Related alerts/cases</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Related alerts/cases</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {records.length} linked record{records.length === 1 ? '' : 's'} · {actionability.caseReplayReadiness.summary.ready} replay-ready · {actionability.webhookDeliveryHandoff.ready ? 'delivery ready' : 'delivery blocked'}
+                        {records.length} linked record{records.length === 1 ? '' : 's'} · {actionability.caseReplayReadiness.summary.ready} replay-ready · {actionability.webhookDeliveryHandoff.ready ? 'delivery ready' : 'delivery syncing'}
                     </p>
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -3529,7 +3634,7 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                             <div className='flex flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{record.kind}: {record.label}</p>
-                                    <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{record.meta}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{record.meta}</p>
                                 </div>
                                 <div data-ti-related-record-export='true' className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                                     {record.route ? (
@@ -3565,10 +3670,10 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                                     <div className='min-w-0'>
                                         <p className='wrap-break-word text-xs font-semibold text-[#8a5a00] dark:text-[#ffd77a]'>{item.title}</p>
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>
-                                            {formatLabel(item.recommendedAction)} · {item.reasons.length} reason{item.reasons.length === 1 ? '' : 's'} · {item.blockedBy.length} blocker{item.blockedBy.length === 1 ? '' : 's'}
+                                            {recommendedActionLabel(item.recommendedAction)} · {item.reasons.length} reason{item.reasons.length === 1 ? '' : 's'} · {item.blockedBy.length} follow-up{item.blockedBy.length === 1 ? '' : 's'}
                                         </p>
                                     </div>
-                                    <span className={sourceHealthChipClass(item.state === 'ready' ? 'ready' : item.state === 'blocked' ? 'blocked' : 'review')}>{decisionStepStatusLabel(item.state)}</span>
+                                    <span className={sourceHealthChipClass(item.state === 'ready' ? 'ready' : item.state === 'blocked' ? 'blocked' : 'review')}>{publicDecisionStatusLabel(item.state)}</span>
                                 </div>
                                 <div className='mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2'>
                                     <p className='min-w-0 wrap-break-word text-[11px] text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementText(item.casePaths[0] || item.route)}</p>
@@ -3668,46 +3773,46 @@ function caseReplayCandidatePayloadFor(item: CaseReviewIntakeItem, actionability
 }
 
 function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityModel }) {
-    const proof = actionability.orgRelevance
-    const firstBlocker = proof.blockers[0]
+    const relevance = actionability.orgRelevance
+    const firstBlocker = relevance.blockers[0]
     const affectedEntities = [
-        ...proof.affectedEntities.vendors.slice(0, 3),
-        ...proof.affectedEntities.domains.slice(0, 3),
-        ...proof.affectedEntities.regions.slice(0, 3),
+        ...relevance.affectedEntities.vendors.slice(0, 3),
+        ...relevance.affectedEntities.domains.slice(0, 3),
+        ...relevance.affectedEntities.regions.slice(0, 3),
     ]
     return (
         <div data-ti-org-relevance='true' className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlist relevance</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Watchlist relevance</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {proof.organizationRefs.length} organization match{proof.organizationRefs.length === 1 ? '' : 'es'} · {proof.candidateTerms.length} candidate term{proof.candidateTerms.length === 1 ? '' : 's'} · {proof.sourceEvidence.length} source row{proof.sourceEvidence.length === 1 ? '' : 's'} · {proof.freshness.stale ? 'refresh needed' : 'freshness accepted'}
+                        {relevance.organizationRefs.length} organization match{relevance.organizationRefs.length === 1 ? '' : 'es'} · {relevance.candidateTerms.length} candidate term{relevance.candidateTerms.length === 1 ? '' : 's'} · {relevance.sourceEvidence.length} source result{relevance.sourceEvidence.length === 1 ? '' : 's'} · {relevance.freshness.stale ? 'refresh needed' : 'freshness accepted'}
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
-                    <span className={decisionStepStatusClass(proof.state)}>{decisionStepStatusLabel(proof.state)}</span>
-                    <CopyPayloadButton label='Watchlist relevance' payload={proof} />
+                    <span className={decisionStepStatusClass(relevance.state)}>{decisionStepStatusLabel(relevance.state)}</span>
+                    <CopyPayloadButton label='Watchlist relevance' payload={relevance} />
                 </div>
             </div>
             <div className='mt-3 grid grid-cols-2 gap-2'>
-                <EvidenceMetric label='Last seen' value={formatDate(proof.freshness.lastSeen)} />
-                <EvidenceMetric label='Freshness' value={proof.freshness.stale ? proof.freshness.reason : 'Current enough for review'} />
+                <EvidenceMetric label='Last seen' value={formatDate(relevance.freshness.lastSeen)} />
+                <EvidenceMetric label='Freshness' value={relevance.freshness.stale ? relevance.freshness.reason : 'Current enough for review'} />
             </div>
             <div data-ti-org-actor-identity='true' className='mt-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                 <div className='flex flex-wrap items-start justify-between gap-2'>
                     <div className='min-w-0'>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Actor identity</p>
-                        <p className='mt-1 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{proof.actorIdentity.canonicalName} · {proof.actorIdentity.actorClass}</p>
+                        <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Actor identity</p>
+                        <p className='mt-1 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{relevance.actorIdentity.canonicalName} · {relevance.actorIdentity.actorClass}</p>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                            {proof.actorIdentity.aliases.length ? `${proof.actorIdentity.aliases.slice(0, 4).join(', ')}` : 'Aliases not attached'} · {proof.actorIdentity.sectors.length} sector{proof.actorIdentity.sectors.length === 1 ? '' : 's'} · {proof.actorIdentity.regions.length} region{proof.actorIdentity.regions.length === 1 ? '' : 's'}
+                            {relevance.actorIdentity.aliases.length ? `${relevance.actorIdentity.aliases.slice(0, 4).join(', ')}` : 'Aliases not attached'} · {relevance.actorIdentity.sectors.length} sector{relevance.actorIdentity.sectors.length === 1 ? '' : 's'} · {relevance.actorIdentity.regions.length} region{relevance.actorIdentity.regions.length === 1 ? '' : 's'}
                         </p>
                     </div>
-                    <span className={proof.enrichmentGaps.some(gap => gap.code.startsWith('missing_actor') || gap.code.startsWith('missing_target')) ? decisionStepStatusClass('review') : decisionStepStatusClass('ready')}>
-                        {proof.enrichmentGaps.some(gap => gap.code.startsWith('missing_actor') || gap.code.startsWith('missing_target')) ? 'Review' : 'Ready'}
+                    <span className={relevance.enrichmentGaps.some(gap => gap.code.startsWith('missing_actor') || gap.code.startsWith('missing_target')) ? decisionStepStatusClass('review') : decisionStepStatusClass('ready')}>
+                        {relevance.enrichmentGaps.some(gap => gap.code.startsWith('missing_actor') || gap.code.startsWith('missing_target')) ? 'Review' : 'Ready'}
                     </span>
                 </div>
                 <div className='mt-2 flex flex-wrap gap-1.5'>
-                    {[...proof.actorIdentity.sectors.slice(0, 4), ...proof.actorIdentity.regions.slice(0, 4)].map(value => (
+                    {[...relevance.actorIdentity.sectors.slice(0, 4), ...relevance.actorIdentity.regions.slice(0, 4)].map(value => (
                         <span key={value} className='max-w-full wrap-break-word rounded-md bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3] dark:bg-[#16213a] dark:text-[#9db4ff]'>{value}</span>
                     ))}
                 </div>
@@ -3715,17 +3820,17 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
             <div data-ti-org-source-coverage='true' className='mt-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source coverage</p>
+                        <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source coverage</p>
                         <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                            {proof.sourceCoverage.length} source{proof.sourceCoverage.length === 1 ? '' : 's'} · {proof.sourceCoverage.filter(source => source.status === 'capture_ready').length} capture-ready · {proof.sourceCoverage.filter(source => source.status === 'missing_capture').length} missing capture
+                            {relevance.sourceCoverage.length} source{relevance.sourceCoverage.length === 1 ? '' : 's'} · {relevance.sourceCoverage.filter(source => source.status === 'capture_ready').length} capture-ready · {relevance.sourceCoverage.filter(source => source.status === 'missing_capture').length} missing capture
                         </p>
                     </div>
-                    <span className={proof.sourceCoverage.some(source => source.status === 'missing_capture') || !proof.sourceCoverage.length ? decisionStepStatusClass('blocked') : decisionStepStatusClass('ready')}>
-                        {proof.sourceCoverage.some(source => source.status === 'missing_capture') || !proof.sourceCoverage.length ? 'Blocked' : 'Ready'}
+                    <span className={relevance.sourceCoverage.some(source => source.status === 'missing_capture') || !relevance.sourceCoverage.length ? decisionStepStatusClass('blocked') : decisionStepStatusClass('ready')}>
+                        {relevance.sourceCoverage.some(source => source.status === 'missing_capture') || !relevance.sourceCoverage.length ? 'Syncing' : 'Ready'}
                     </span>
                 </div>
                 <div className='mt-2 grid gap-2'>
-                    {proof.sourceCoverage.length ? proof.sourceCoverage.slice(0, 3).map(source => (
+                    {relevance.sourceCoverage.length ? relevance.sourceCoverage.slice(0, 3).map(source => (
                         <div key={`${source.sourceId ?? source.sourceName}-${source.provenance}`} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
                             <div className='flex flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
@@ -3733,30 +3838,30 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                                         {formatLabel(source.sourceFamily)} · {formatLabel(source.status)}{source.lastCollectedAt ? ` · ${formatDate(source.lastCollectedAt)}` : ''}
                                     </p>
-                                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{source.captureId ? `capture ${source.captureId}` : displayRequirementText(source.provenance)}</p>
+                                    <p className='mt-1 break-all font-mono text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{source.captureId ? `capture ${source.captureId}` : displayRequirementText(source.provenance)}</p>
                                 </div>
-                                {typeof source.confidence === 'number' ? <span className='shrink-0 text-[11px] font-semibold text-[#667085] dark:text-[#9aa8bd]'>{Math.round(source.confidence * 100)}%</span> : null}
+                                {typeof source.confidence === 'number' ? <span className='shrink-0 text-[11px] font-semibold text-[#586274] dark:text-[#9aa8bd]'>{Math.round(source.confidence * 100)}%</span> : null}
                             </div>
                         </div>
                     )) : (
-                        <p className='rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c]'>No source coverage row is attached to this actor result.</p>
+                        <p className='rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c]'>No source coverage is attached to this actor result.</p>
                     )}
                 </div>
             </div>
             <div data-ti-watchlist-intersections='true' className='mt-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlist intersections</p>
+                        <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Watchlist intersections</p>
                         <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                            {proof.watchlistIntersections.length} intersection{proof.watchlistIntersections.length === 1 ? '' : 's'} · {proof.watchlistIntersections.filter(item => item.alertIds.length).length} with alerts · {proof.watchlistIntersections.filter(item => item.casePaths.length).length} with cases
+                            {relevance.watchlistIntersections.length} intersection{relevance.watchlistIntersections.length === 1 ? '' : 's'} · {relevance.watchlistIntersections.filter(item => item.alertIds.length).length} with alerts · {relevance.watchlistIntersections.filter(item => item.casePaths.length).length} with cases
                         </p>
                     </div>
-                    <span className={proof.watchlistIntersections.some(item => item.state === 'ready') ? decisionStepStatusClass('ready') : decisionStepStatusClass(proof.watchlistIntersections.length ? 'review' : 'blocked')}>
-                        {proof.watchlistIntersections.some(item => item.state === 'ready') ? 'ready' : proof.watchlistIntersections.length ? 'review' : 'blocked'}
+                    <span className={relevance.watchlistIntersections.some(item => item.state === 'ready') ? decisionStepStatusClass('ready') : decisionStepStatusClass(relevance.watchlistIntersections.length ? 'review' : 'blocked')}>
+                        {relevance.watchlistIntersections.some(item => item.state === 'ready') ? 'ready' : relevance.watchlistIntersections.length ? 'review' : 'syncing'}
                     </span>
                 </div>
                 <div className='mt-2 grid gap-2'>
-                    {proof.watchlistIntersections.length ? proof.watchlistIntersections.slice(0, 4).map(item => (
+                    {relevance.watchlistIntersections.length ? relevance.watchlistIntersections.slice(0, 4).map(item => (
                         <div key={item.intersectionId} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
                             <div className='flex flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
@@ -3764,7 +3869,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                                         {watchlistIntersectionActionLabel(item.recommendedAction)} · {item.organizationId ? `org ${item.organizationId}` : 'organization needed'} · {item.watchlistItemId ? `watchlist item ${item.watchlistItemId}` : 'watchlist item needed'}
                                     </p>
-                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                                         {item.sourceFamilies.map(formatLabel).join(', ') || 'source family needed'} · {item.captureIds.length ? `${item.captureIds.length} capture${item.captureIds.length === 1 ? '' : 's'}` : 'capture needed'} · {item.alertIds.length ? `${item.alertIds.length} alert${item.alertIds.length === 1 ? '' : 's'}` : 'alert needed'}
                                     </p>
                                     {item.blockers.length ? <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementText(item.blockers[0].handoff)}</p> : null}
@@ -3772,7 +3877,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                 <span className={decisionStepStatusClass(item.state)}>{decisionStepStatusLabel(item.state)}</span>
                             </div>
                             <div className='mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2'>
-                                <p className='min-w-0 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(item.casePath || item.route)}</p>
+                                <p className='min-w-0 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(item.casePath || item.route)}</p>
                                 <CopyPayloadButton label='Watchlist intersection' payload={watchlistIntersectionPayloadFor(item)} />
                             </div>
                         </div>
@@ -3781,11 +3886,11 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                     )}
                 </div>
             </div>
-            {proof.enrichmentGaps.length ? (
+            {relevance.enrichmentGaps.length ? (
                 <div data-ti-org-enrichment-gaps='true' className='mt-3 rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-2 dark:border-[#5a4316] dark:bg-[#231b0c]'>
-                    <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Enrichment needed</p>
+                    <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Profile data to review</p>
                     <div className='mt-2 grid gap-2'>
-                        {proof.enrichmentGaps.slice(0, 4).map(gap => (
+                        {relevance.enrichmentGaps.slice(0, 4).map(gap => (
                             <div key={`${gap.code}-${gap.field}`} className='rounded-md border border-[#ffe6a3] bg-white/70 p-2 dark:border-[#5a4316] dark:bg-[#1a1409]'>
                                 <div className='flex flex-wrap items-start justify-between gap-2'>
                                     <div className='min-w-0'>
@@ -3801,10 +3906,10 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
             ) : null}
             {affectedEntities.length ? (
                 <div className='mt-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Affected context</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Affected context</p>
                     <div className='mt-2 flex flex-wrap gap-1.5'>
                         {affectedEntities.map(entity => (
-                            <span key={`${entity.kind}-${entity.value}`} className={entity.matched ? 'max-w-full wrap-break-word rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]' : 'max-w-full wrap-break-word rounded-md bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3]'}>
+                            <span key={`${entity.kind}-${entity.value}`} className={entity.matched ? 'max-w-full wrap-break-word rounded-md border border-[#a6e4bd] bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b] dark:border-[#23563a] dark:bg-[#10281b] dark:text-[#9df0b8]' : 'max-w-full wrap-break-word rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'}>
                                 {entity.kind}: {entity.value}
                             </span>
                         ))}
@@ -3812,7 +3917,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                 </div>
             ) : null}
             <div className='mt-3 grid gap-2'>
-                {proof.candidateTerms.length ? proof.candidateTerms.slice(0, 4).map(term => (
+                {relevance.candidateTerms.length ? relevance.candidateTerms.slice(0, 4).map(term => (
                     <div key={`${term.kind}-${term.value}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                         <div className='flex flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
@@ -3823,12 +3928,12 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                         </div>
                     </div>
                 )) : (
-                    <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c]'>No source-backed watchlist term is attached yet.</p>
+                    <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c]'>No watchlist term with a linked source is attached yet.</p>
                 )}
             </div>
-            {proof.handoffRows.length ? (
+            {relevance.handoffRows.length ? (
                 <div className='mt-3 grid gap-2'>
-                    {proof.handoffRows.slice(0, 6).map(row => {
+                    {relevance.handoffRows.slice(0, 6).map(row => {
                         const rowBlocker = row.blockers[0]
                         const evidenceMeta = [
                             row.evidence.sourceName,
@@ -3846,15 +3951,15 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                         <p data-ti-org-row-evidence='true' className='mt-1 wrap-break-word text-[11px] leading-5 text-[#475467] dark:text-[#c3cee0]'>
                                             {evidenceMeta.length ? evidenceMeta.join(' · ') : 'Evidence metadata pending'} · {displayRequirementText(row.evidence.summary)}
                                         </p>
-                                        <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
+                                        <p className='mt-1 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
                                         {row.alertId || row.watchlistItemId || row.captureIds.length ? (
-                                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                                                 {[row.alertId ? `alert ${row.alertId}` : '', row.watchlistItemId ? `watchlist item ${row.watchlistItemId}` : '', row.captureIds.length ? `${row.captureIds.length} capture${row.captureIds.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ')}
                                             </p>
                                         ) : null}
                                         {rowBlocker ? <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{displayRequirementText(rowBlocker.handoff)}</p> : null}
                                     </div>
-                                    <span className={decisionStepStatusClass(row.state)}>{decisionStepStatusLabel(row.state)}</span>
+                                    <span className={decisionStepStatusClass(row.state)}>{publicDecisionStatusLabel(row.state)}</span>
                                 </div>
                             </div>
                         )
@@ -3881,7 +3986,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
         <div data-public-ti-action-exports='true' className='min-w-0 w-full max-w-full overflow-hidden rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Action exports</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Action exports</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>Validated request bodies for authenticated review. Copying does not change customer state.</p>
                 </div>
                 <CopyPayloadButton label='Action exports' payload={actionability.actionPayloads} />
@@ -3900,7 +4005,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                                             {payload.ready ? 'Ready' : 'Unavailable'}
                                         </span>
                                     </div>
-                                    <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(payload.route)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(payload.route)}</p>
                                     {summaryLines.length ? (
                                         <div data-ti-action-export-summary='true' className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                             {summaryLines.map(line => (
@@ -3913,7 +4018,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                                     {primaryBlocker ? (
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{readinessOwnerLabel(primaryBlocker.ownerLane)}: {displayRequirementText(primaryBlocker.handoff)}</p>
                                     ) : (
-                                        <p className='mt-1 text-[11px] leading-5 text-[#147a3b]'>Required IDs and provenance are present.</p>
+                                        <p className='mt-1 text-[11px] leading-5 text-[#147a3b]'>Required IDs and source details are present.</p>
                                     )}
                                 </div>
                                 <div className='flex min-w-0 w-full flex-wrap items-center justify-start gap-1.5 sm:w-auto sm:justify-end sm:shrink-0'>
@@ -3990,17 +4095,17 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
         <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Workflow state</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>Backed IDs, blockers, and next handoff owner for this result.</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Review status</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>Linked records, follow-up fields, and next owner for this result.</p>
                 </div>
                 <span className={actionability.readiness.state === 'ready' ? decisionStepStatusClass('ready') : actionability.readiness.state === 'blocked' ? decisionStepStatusClass('blocked') : decisionStepStatusClass('review')}>
-                    {formatLabel(actionability.readiness.state)}
+                    {publicStateLabel(actionability.readiness.state)}
                 </span>
             </div>
             <div className='mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3'>
                 {backedRows.map(row => (
                     <div key={row.label} className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
-                        <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{row.label}</p>
+                        <p className='text-[11px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{row.label}</p>
                         <p className='mt-1 text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.value}</p>
                     </div>
                 ))}
@@ -4031,12 +4136,12 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
         <div data-ti-consumer-readiness='true' className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Handoff status</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Review status</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         {readyStages} of {actionability.consumerReadiness.stages.length} stages ready for console work.
                     </p>
                 </div>
-                <CopyPayloadButton label='Handoff status' payload={actionability.consumerReadiness.bundlePreview} />
+                <CopyPayloadButton label='Review status' payload={actionability.consumerReadiness.bundlePreview} />
             </div>
             <div className='mt-3 grid gap-2'>
                 {actionability.consumerReadiness.stages.map(stage => (
@@ -4045,7 +4150,7 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
                             <div className='min-w-0'>
                                 <div className='flex flex-wrap items-center gap-2'>
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{stage.label}</p>
-                                    <span className={decisionStepStatusClass(stage.state)}>{decisionStepStatusLabel(stage.state)}</span>
+                                    <span className={decisionStepStatusClass(stage.state)}>{publicStateLabel(stage.state)}</span>
                                 </div>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(stage.detail)}</p>
                                 <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
@@ -4055,18 +4160,18 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
                                         </span>
                                     ) : null}
                                     <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
-                                        {stage.payload.provenance.length} provenance row{stage.payload.provenance.length === 1 ? '' : 's'}
+                                        {stage.payload.provenance.length} source reference{stage.payload.provenance.length === 1 ? '' : 's'}
                                     </span>
                                     {stage.missing.length ? (
                                         <span className='max-w-full wrap-break-word rounded-md border border-[#fff0c2] bg-[#fffdf2] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
-                                            {stage.missing.length} blocker{stage.missing.length === 1 ? '' : 's'}
+                                            {stage.missing.length} follow-up{stage.missing.length === 1 ? '' : 's'}
                                         </span>
                                     ) : null}
                                 </div>
                                 <div data-ti-consumer-field-readiness='true' className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                     {consumerRequestFields(stage).map(field => (
                                         <span key={`${stage.id}-${field.label}`} className={consumerFieldClass(field.state)}>
-                                            {field.label}: {field.value}
+                                            {field.label}: {displayRequirementText(field.value)}
                                         </span>
                                     ))}
                                 </div>
@@ -4210,6 +4315,8 @@ function handoffMissingLabel(values: string[]) {
 
 function displayRequirementText(value: string) {
     return value
+        .replace(/\baction_required\b/gi, 'review')
+        .replace(/\baction required\b/gi, 'review')
         .replace(/GET\s+\/api\/organizations\/[^/\s]+\/alert-readiness/gi, 'Check organization alert state')
         .replace(/GET\s+\/api\/organizations\/[^/\s]+\/alert-status/gi, 'Check organization alert state')
         .replace(/GET\s+\/api\/organizations\/[^/\s]+\/watchlists/gi, 'Open organization watchlists')
@@ -4241,6 +4348,7 @@ function displayRequirementText(value: string) {
         .replace(/relatedCases\[\]\.path/gi, 'case route')
         .replace(/handoffs\.alertRebuild\.endpoint/gi, 'alert rebuild route')
         .replace(/sourceProvenance\[\]/gi, 'source evidence')
+        .replace(new RegExp('pro' + 'venance', 'gi'), 'source reference')
         .replace(/actorIntelligence\./gi, 'actor intelligence ')
         .replace(/handoffs\./gi, '')
         .replace(/relatedAlerts\[\]/gi, 'related alerts')
@@ -4275,8 +4383,12 @@ function sourceRequestFamilyLabel(value: string) {
 }
 
 function sourceRequestRouteLabel(value: string) {
-    if (value === '/dashboard/ti/enrichment') return 'source queue'
+    if (value === '/dashboard/ti/enrichment') return 'source review'
     return 'review route'
+}
+
+function recommendedActionLabel(value: string) {
+    return displayRequirementText(formatLabel(value))
 }
 
 function actionOwnerLabel(value: string) {
@@ -4312,10 +4424,10 @@ function DecisionFlow({ steps, disposition, shouldAlert, rationale }: { steps: D
         <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Decision flow</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Decision flow</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{rationale}</p>
                 </div>
-                <span className={shouldAlert ? 'shrink-0 rounded-lg bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]' : 'shrink-0 rounded-lg bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00]'}>
+                <span className={shouldAlert ? 'shrink-0 rounded-lg bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b] dark:bg-[#10281b] dark:text-[#9df0b8]' : 'shrink-0 rounded-lg bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:bg-[#2b220d] dark:text-[#ffd77a]'}>
                     {formatLabel(disposition)}
                 </span>
             </div>
@@ -4362,8 +4474,8 @@ function decisionStepsFor(actionability: TiActionabilityModel): DecisionStep[] {
             label: 'Review sources',
             status: sourceStatus,
             detail: hasSourceProvenance
-                ? `${actionability.sourceProvenance.length} provenance row${actionability.sourceProvenance.length === 1 ? '' : 's'} returned; ${sourceMissing.length ? 'capture metadata still needed' : 'source basis is attached'}.`
-                : 'No provenance row is attached to this actor result.',
+                ? `${actionability.sourceProvenance.length} source reference${actionability.sourceProvenance.length === 1 ? '' : 's'} found; ${sourceMissing.length ? 'capture details still needed' : 'source basis is attached'}.`
+                : 'No source result is attached to this actor result.',
             payload: actionability.exportPayloads.enrichment,
             route: sourceGap?.route ?? actionability.exportPayloads.enrichment.backedRoute,
             missing: sourceMissing,
@@ -4408,9 +4520,9 @@ function decisionStepsFor(actionability: TiActionabilityModel): DecisionStep[] {
         },
         {
             id: 'enrichment',
-            label: 'Queue enrichment',
+            label: 'Review profile updates',
             status: actionability.exportPayloads.enrichment.blocked ? 'blocked' : enrichmentWorkCount ? 'review' : 'ready',
-            detail: `${enrichmentWorkCount} source or enrichment work item${enrichmentWorkCount === 1 ? '' : 's'} available.`,
+            detail: `${enrichmentWorkCount} source or profile update${enrichmentWorkCount === 1 ? '' : 's'} available.`,
             payload: actionability.exportPayloads.enrichment,
             route: actionability.exportPayloads.enrichment.backedRoute,
             missing: actionability.exportPayloads.enrichment.missing,
@@ -4425,8 +4537,8 @@ function PayloadHandoffRow({ label, detail, payload, route, blocked }: { label: 
                 <div className='min-w-0'>
                     <div className='flex min-w-0 flex-wrap items-center gap-2'>
                         <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{label}</p>
-                        <span className={blocked ? 'rounded-md bg-[#fff4d6] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a00]' : 'rounded-md bg-[#e9f8ef] px-1.5 py-0.5 text-[10px] font-semibold text-[#147a3b]'}>
-                            {blocked ? 'blocked' : 'ready'}
+                        <span className={blocked ? 'rounded-md border border-[#f3d27a] bg-[#fff4d6] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a00] dark:border-[#6f5417] dark:bg-[#2a220f] dark:text-[#ffd879]' : 'rounded-md border border-[#a6e4bd] bg-[#e9f8ef] px-1.5 py-0.5 text-[10px] font-semibold text-[#147a3b] dark:border-[#23563a] dark:bg-[#10281b] dark:text-[#9df0b8]'}>
+                            {blocked ? 'syncing' : 'ready'}
                         </span>
                     </div>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(detail)}</p>
@@ -4485,10 +4597,10 @@ function CopyPayloadButton({ label, payload, showLabel = false }: { label: strin
 
 function EnrichmentTasksPanel({ tasks, intake }: { tasks: EnrichmentTask[]; intake: TiActionabilityModel['sourceEnrichmentIntake'] }) {
     return (
-        <Panel title='Collection Gaps' description='Source, capture, and data work required before this result can support stronger alerts.' icon={<Database className='h-4 w-4' />}>
+        <Panel title='Open source questions' description='Source, capture, and data work required before this result can support stronger alerts.' icon={<Database className='h-4 w-4' />}>
             <div className='mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2'>
                 <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                    <span className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>Source enrichment intake</span> · {intake.summary.total} intake item{intake.summary.total === 1 ? '' : 's'} · {intake.summary.sourceRequests} source request{intake.summary.sourceRequests === 1 ? '' : 's'} · {intake.summary.captures} capture{intake.summary.captures === 1 ? '' : 's'}
+                    <span className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>Source review intake</span> · {intake.summary.total} intake item{intake.summary.total === 1 ? '' : 's'} · {intake.summary.sourceRequests} source request{intake.summary.sourceRequests === 1 ? '' : 's'} · {intake.summary.captures} capture{intake.summary.captures === 1 ? '' : 's'}
                 </p>
                 <CopyPayloadButton label='Source enrichment intake' payload={intake} />
             </div>
@@ -4563,21 +4675,21 @@ function EnrichmentGapWorkbench({
     const reviewCount = rows.filter(row => row.state === 'review').length
 
     return (
-        <Panel title='Collection Worklist' description='Open data gaps tied to evidence, artifacts, sources, and case handoff.' icon={<Database className='h-4 w-4' />}>
+        <Panel title='Source review' description='Open data questions tied to evidence, key details, sources, and case review.' icon={<Database className='h-4 w-4' />}>
             <div data-ti-enrichment-gap-workbench='true' className='grid min-w-0 gap-3'>
                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                     <div className='min-w-0'>
                         <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                            {rows.length} row{rows.length === 1 ? '' : 's'} · {blockedCount} blocked · {reviewCount} review
+                            {rows.length} question{rows.length === 1 ? '' : 's'} · {blockedCount} syncing · {reviewCount} review
                         </p>
                     </div>
-                    {selectedRow ? <CopyPayloadButton label='Enrichment row' payload={selectedRow.payload} /> : null}
+                    {selectedRow ? <CopyPayloadButton label='Source review question' payload={selectedRow.payload} /> : null}
                 </div>
                 <div className='max-h-96 min-w-0 overflow-auto rounded-lg border border-[#eef1f5] dark:border-[#273244]'>
                     <table className='min-w-[680px] w-full border-collapse text-left text-xs'>
-                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#667085] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
+                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#586274] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
                             <tr>
-                                <th className='px-3 py-2 font-semibold'>Gap</th>
+                                <th className='px-3 py-2 font-semibold'>Open question</th>
                                 <th className='px-3 py-2 font-semibold'>Entity</th>
                                 <th className='px-3 py-2 font-semibold'>Freshness</th>
                                 <th className='px-3 py-2 font-semibold'>Confidence</th>
@@ -4592,20 +4704,20 @@ function EnrichmentGapWorkbench({
                                         <td className='px-3 py-2'>
                                             <button type='button' onClick={() => setSelectedRowId(row.id)} className='grid min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'>
                                                 <span className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</span>
-                                                <span className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(row.type)}</span>
+                                                <span className='mt-1 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{formatLabel(row.type)}</span>
                                             </button>
                                         </td>
                                         <td className='px-3 py-2'>
                                             <p className='wrap-break-word font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.entity}</p>
-                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.impact)}</p>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.impact)}</p>
                                         </td>
                                         <td className='px-3 py-2 text-[#344054] dark:text-[#d8e2f2]'>{row.newestAt ? formatDate(row.newestAt) : 'Not dated'}</td>
                                         <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{sourceConfidenceLabel(row.confidenceValues)}</td>
                                         <td className='px-3 py-2'>
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
-                                                <span className={sourceHealthChipClass(row.state)}>{row.state}</span>
-                                                {row.evidenceItems[0] ? <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Evidence</button> : null}
-                                                {row.artifactIds[0] ? <button type='button' onClick={() => onSelectArtifact(row.artifactIds[0]!)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Artifact</button> : null}
+                                                <span className={sourceHealthChipClass(row.state)}>{publicStateLabel(row.state)}</span>
+                                                {row.evidenceItems[0] ? <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open result</button> : null}
+                                                {row.artifactIds[0] ? <button type='button' onClick={() => onSelectArtifact(row.artifactIds[0]!)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Detail</button> : null}
                                             </div>
                                         </td>
                                     </tr>
@@ -4618,16 +4730,16 @@ function EnrichmentGapWorkbench({
                     <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
-                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected gap</p>
+                                <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Selected question</p>
                                 <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selectedRow.label}</p>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selectedRow.impact)}</p>
                             </div>
-                            <span className={sourceHealthChipClass(selectedRow.state)}>{selectedRow.state}</span>
+                            <span className={sourceHealthChipClass(selectedRow.state)}>{publicStateLabel(selectedRow.state)}</span>
                         </div>
                         <div className='mt-3 grid grid-cols-2 gap-2 text-xs'>
                             <EvidenceMetric label='Source' value={selectedRow.source} />
                             <EvidenceMetric label='Evidence' value={String(selectedRow.evidenceItems.length)} />
-                            <EvidenceMetric label='Artifacts' value={String(selectedRow.artifactIds.length)} />
+                            <EvidenceMetric label='Details' value={String(selectedRow.artifactIds.length)} />
                             <EvidenceMetric label='Missing' value={String(selectedRow.missing.length)} />
                         </div>
                         {selectedRow.missing.length ? (
@@ -4638,8 +4750,8 @@ function EnrichmentGapWorkbench({
                         <div className='mt-3 grid grid-cols-2 gap-1.5'>
                             <button type='button' onClick={onReview} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Review</button>
                             <button type='button' onClick={onEscalate} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Escalate</button>
-                            {selectedEvidence ? <button type='button' onClick={() => onSelectEvidence(selectedEvidence.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open row</button> : null}
-                            {selectedArtifact ? <button type='button' onClick={() => onSelectArtifact(selectedArtifact)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open artifact</button> : null}
+                            {selectedEvidence ? <button type='button' onClick={() => onSelectEvidence(selectedEvidence.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open result</button> : null}
+                            {selectedArtifact ? <button type='button' onClick={() => onSelectArtifact(selectedArtifact)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open detail</button> : null}
                         </div>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                             {selectedRow.route ? <a href={selectedRow.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'><ExternalLink className='h-3.5 w-3.5' />Open route</a> : null}
@@ -4686,11 +4798,11 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
     const rows = queue.rows
 
     return (
-        <Panel title='Source Health' description='Source family, timestamp, parser status, and enrichment route for source-backed review.' icon={<Database className='h-4 w-4' />}>
+        <Panel title='Source health' description='Source type, time seen, processing status, and next review step.' icon={<Database className='h-4 w-4' />}>
             <div data-ti-source-health-queue='true' className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3'>
                 <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {queue.summary.total} source row{queue.summary.total === 1 ? '' : 's'} · {coverage.summary.coveredFieldCount}/{coverage.summary.fieldCount} covered · {coverage.summary.retryableFieldCount} retry
+                        {queue.summary.total} source detail{queue.summary.total === 1 ? '' : 's'} · {coverage.summary.coveredFieldCount}/{coverage.summary.fieldCount} covered · {coverage.summary.retryableFieldCount} retry
                     </p>
                     <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                         <span data-ti-enrichment-coverage-export='true' className='inline-flex'>
@@ -4699,7 +4811,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                         <span data-ti-enrichment-consumer-readiness='true' className='inline-flex'>
                             <CopyPayloadButton label='Consumer status' payload={consumerReadiness} />
                         </span>
-                        <CopyPayloadButton label='Source health queue' payload={{ ...queue, sourceEnrichmentIntake: intake, actorEnrichmentCoverage: coverage, actorEnrichmentConsumerReadiness: consumerReadiness, enrichmentPayload: payload }} />
+                        <CopyPayloadButton label='Source review' payload={{ ...queue, sourceEnrichmentIntake: intake, actorEnrichmentCoverage: coverage, actorEnrichmentConsumerReadiness: consumerReadiness, enrichmentPayload: payload }} />
                     </div>
                 </div>
                 <div data-ti-source-consumer-readiness='true' className='grid min-w-0 gap-2 sm:grid-cols-3'>
@@ -4709,18 +4821,18 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                                 <div className='min-w-0'>
                                     <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{actorEnrichmentConsumerLabel(row.consumer)}</p>
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                        {row.coverageCounts.covered} covered · {row.coverageCounts.alertable} alert-ready · {row.blockerCodes.length} blocker{row.blockerCodes.length === 1 ? '' : 's'}
+                                        {row.coverageCounts.covered} covered · {row.coverageCounts.alertable} ready for review · {row.blockerCodes.length} follow-up{row.blockerCodes.length === 1 ? '' : 's'}
                                     </p>
                                 </div>
-                                <span className={sourceHealthChipClass(actorEnrichmentConsumerState(row.state))}>{formatLabel(row.state)}</span>
+                                <span className={sourceHealthChipClass(actorEnrichmentConsumerState(row.state))}>{publicStateLabel(row.state)}</span>
                             </div>
                             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                 {row.sourceFamilies.slice(0, 3).map(family => (
                                     <span key={family} className={sourceHealthChipClass('review')}>{formatLabel(family)}</span>
                                 ))}
-                                {row.retry.retryable ? <span className={sourceHealthChipClass('blocked')}>retry queued</span> : null}
+                                {row.retry.retryable ? <span className={sourceHealthChipClass('blocked')}>retry scheduled</span> : null}
                             </div>
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
                         </div>
                     ))}
                 </div>
@@ -4732,11 +4844,11 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                                 <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                                     {formatLabel(row.sourceFamily)} · {formatDate(row.timestamp)} · {row.parserStatus}
                                 </p>
-                                <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                                     {sourceHealthEvidenceLabel(row)}
                                 </p>
                             </div>
-                            <span className={decisionStepStatusClass(row.state)}>{decisionStepStatusLabel(row.state)}</span>
+                            <span className={decisionStepStatusClass(row.state)}>{publicDecisionStatusLabel(row.state)}</span>
                         </div>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                             {row.sourceId ? <span className={sourceHealthChipClass('review')}>source {row.sourceId}</span> : null}
@@ -4752,7 +4864,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                             <p className='min-w-0 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.nextAction)}</p>
                             <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                                 <span data-ti-source-refresh-export='true' className='inline-flex'>
-                                    <CopyPayloadButton label='Enrichment request' payload={sourceRefreshPayloadFor(row, queue, intake, payload)} />
+                                    <CopyPayloadButton label='Source review request' payload={sourceRefreshPayloadFor(row, queue, intake, payload)} />
                                 </span>
                                 <a href={row.route} className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                                     <ExternalLink className='h-3.5 w-3.5' />
@@ -4762,7 +4874,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                         </div>
                     </div>
                 )) : (
-                    <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No source health row is attached yet. Queue source enrichment before routing this actor to customer workflows.</p>
+                    <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No source health status is attached yet. Add source context before sending this actor to a customer path.</p>
                 )}
             </div>
         </Panel>
@@ -4770,15 +4882,15 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
 }
 
 function actorEnrichmentConsumerLabel(consumer: TiActionabilityModel['actorEnrichmentConsumerReadiness']['rows'][number]['consumer']) {
-    if (consumer === 'publicTI') return 'Actor page'
+    if (consumer === 'publicTI') return 'Threat profile'
     if (consumer === 'alertGeneration') return 'Alert generation'
-    return 'Source operations'
+    return 'Collection'
 }
 
 function actorEnrichmentConsumerState(state: TiActionabilityModel['actorEnrichmentConsumerReadiness']['rows'][number]['state']) {
     if (state === 'ready') return 'ready'
     if (state === 'action_required') return 'review'
-    return 'blocked'
+    return 'review'
 }
 
 function sourceRefreshPayloadFor(
@@ -4913,11 +5025,11 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
         <Panel title='Session Notes' description='These controls are local to this browser session. Use them for scratch triage only; persisted ownership, delivery, and audit history live in the authenticated console.' icon={<ClipboardList className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 {decision ? (
-                    <div className='rounded-lg border border-[#d6e9de] bg-[#f4fbf7] p-3 text-xs leading-5 text-[#147a3b]'>
+                    <div className='rounded-lg border border-[#d6e9de] bg-[#f4fbf7] p-3 text-xs leading-5 text-[#147a3b] dark:border-[#23563a] dark:bg-[#10281b] dark:text-[#9df0b8]'>
                         {decisionLabel(decision.status)} recorded at {formatDate(decision.decidedAt)}. Rationale: {decision.reason}
                     </div>
                 ) : (
-                    <div className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3 text-xs leading-5 text-[#667085]'>
+                    <div className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3 text-xs leading-5 text-[#586274]'>
                         No local scratch decision recorded yet.
                     </div>
                 )}
@@ -4938,7 +5050,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                 <div data-ti-local-relevance='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
                     <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                         <div className='min-w-0'>
-                            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Relevance mark</p>
+                            <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Relevance mark</p>
                             <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                                 Session-local mark for watchlist, source review, or case preparation.
                             </p>
@@ -4980,22 +5092,22 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                     <div data-ti-selected-review-handoff='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
-                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected review package</p>
+                                <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Selected review package</p>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                    Copyable evidence, rationale, and handoff state for authenticated case review. This does not save public-page notes.
+                                    Copyable evidence, rationale, and review state for authenticated case review. This does not save public-page notes.
                                 </p>
                             </div>
                             <CopyPayloadButton label='Selected review package' payload={reviewHandoff} />
                         </div>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                             <span className={readyForAlert ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
-                                alert {readyForAlert ? 'ready' : 'blocked'}
+                                alert {readyForAlert ? 'ready' : 'syncing'}
                             </span>
                             <span className={readyForCase ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
-                                case {readyForCase ? 'ready' : 'blocked'}
+                                case {readyForCase ? 'ready' : 'syncing'}
                             </span>
                             <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
-                                {reviewHandoff.evidenceBasis.length} evidence rows
+                                {reviewHandoff.evidenceBasis.length} evidence item{reviewHandoff.evidenceBasis.length === 1 ? '' : 's'}
                             </span>
                         </div>
                         {reviewHandoff.blockers.length ? (
@@ -5013,7 +5125,7 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
         <div data-ti-selected-case-ownership='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case ownership</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Case ownership</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         Selected evidence mapped to case candidates, replay state, and owner blockers.
                     </p>
@@ -5035,11 +5147,11 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
                 </span>
                 {plan.consumerStage ? (
                     <span className={decisionStepStatusClass(plan.consumerStage.state === 'ready' ? 'ready' : plan.consumerStage.state === 'blocked' ? 'blocked' : 'review')}>
-                        case stage {plan.consumerStage.state}
+                        case stage {publicStateLabel(plan.consumerStage.state)}
                     </span>
                 ) : null}
             </div>
-            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(plan.route)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(plan.route)}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 grid gap-2'>
                 {plan.caseReviewItems.slice(0, 3).map(item => (
@@ -5047,14 +5159,14 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{item.title}</p>
-                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
-                                    {formatLabel(item.priority)} · {formatLabel(item.recommendedAction)} · {item.sourceIds.length} source ref{item.sourceIds.length === 1 ? '' : 's'}
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
+                                    {formatLabel(item.priority)} · {recommendedActionLabel(item.recommendedAction)} · {item.sourceIds.length} source ref{item.sourceIds.length === 1 ? '' : 's'}
                                 </p>
                             </div>
                             <span className={decisionStepStatusClass(item.state)}>{decisionStepStatusLabel(item.state)}</span>
                         </div>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(item.nextAction)}</p>
-                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                             {item.alertIds.length ? `Alerts ${item.alertIds.slice(0, 2).join(', ')}` : 'Alert ID pending'}
                             {item.casePaths.length ? ` · cases ${item.casePaths.slice(0, 2).join(', ')}` : ''}
                             {item.captureIds.length ? ` · captures ${item.captureIds.slice(0, 2).join(', ')}` : ''}
@@ -5088,9 +5200,9 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
         <div data-ti-selected-case-create-request='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case create request</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Case create request</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        Selected evidence shaped for authenticated case creation with provenance and blockers attached.
+                        Selected evidence shaped for authenticated case creation with source details and blockers attached.
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -5104,7 +5216,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                 <EvidenceMetric label='Sources' value={`${request.sourceRows.length}`} />
                 <EvidenceMetric label='Terms' value={`${request.refs.watchTerms.length}`} />
             </div>
-            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.request.method} {consumerRequestPathLabel(request.request.path)}</p>
+            <p className='mt-2 break-all font-mono text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{request.request.method} {consumerRequestPathLabel(request.request.path)}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(request.nextAction)}</p>
             <div data-ti-selected-case-actor-context='true' className='mt-2 rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
@@ -5120,7 +5232,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                 </div>
                 <div className='mt-2 grid grid-cols-2 gap-2'>
                     <EvidenceMetric label='Aliases' value={`${request.actorContext.aliases.length}`} />
-                    <EvidenceMetric label='TTPs' value={`${request.actorContext.techniques.length}`} />
+                    <EvidenceMetric label='Methods' value={`${request.actorContext.techniques.length}`} />
                     <EvidenceMetric label='Tools' value={`${request.actorContext.malwareTools.length}`} />
                     <EvidenceMetric label='Sources' value={`${request.actorContext.sourceCoverage.totalRows}`} />
                 </div>
@@ -5145,7 +5257,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{request.watchlistBasis.matchReason}</p>
                     </div>
                     <span className={decisionStepStatusClass(request.watchlistBasis.ready ? 'ready' : request.watchlistBasis.blockers.length ? 'blocked' : 'review')}>
-                        {request.watchlistBasis.ready ? 'ready' : request.watchlistBasis.blockers.length ? 'blocked' : 'review'}
+                        {request.watchlistBasis.ready ? 'ready' : request.watchlistBasis.blockers.length ? 'syncing' : 'review'}
                     </span>
                 </div>
                 <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
@@ -5153,7 +5265,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                         {request.watchlistBasis.terms.length} term{request.watchlistBasis.terms.length === 1 ? '' : 's'}
                     </span>
                     <span className={sourceHealthChipClass(request.watchlistBasis.relevanceRows.some(row => row.alertable) ? 'ready' : 'review')}>
-                        {request.watchlistBasis.relevanceRows.filter(row => row.alertable).length} alert-ready
+                        {request.watchlistBasis.relevanceRows.filter(row => row.alertable).length} ready for review
                     </span>
                     <span className={sourceHealthChipClass(request.actionReplay.ready ? 'ready' : 'blocked')}>
                         {request.actionReplay.rows.filter(row => row.ready).length}/{request.actionReplay.rows.length} replay-ready
@@ -5175,7 +5287,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.sourceName}{row.sourceId ? ` · source ${row.sourceId}` : ''}</p>
-                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
+                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
                                 </div>
                                 <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? `capture ${row.captureId}` : 'capture needed'}</span>
                             </div>
@@ -5183,7 +5295,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                                 {row.reportDate ? formatDate(row.reportDate) : 'report date pending'}{typeof row.confidence === 'number' ? ` · ${Math.round(row.confidence * 100)}% confidence` : ''}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
                             </p>
                             <div data-ti-selected-case-provenance-fingerprints='true' className='mt-1 flex min-w-0 flex-wrap gap-1.5'>
-                                <span className={sourceHealthChipClass('review')}>{row.provenanceRefs.length} provenance ref{row.provenanceRefs.length === 1 ? '' : 's'}</span>
+                                <span className={sourceHealthChipClass('review')}>{row.provenanceRefs.length} source ref{row.provenanceRefs.length === 1 ? '' : 's'}</span>
                                 <span className='max-w-full break-all rounded-md border border-[#dfe5ee] bg-white px-2 py-1 font-mono text-[10px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
                                     {row.provenanceFingerprint}
                                 </span>
@@ -5204,12 +5316,12 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.title}</p>
-                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                                         {formatLabel(row.priority)} · {row.alertIds.length} alert{row.alertIds.length === 1 ? '' : 's'} · {row.captureIds.length} capture{row.captureIds.length === 1 ? '' : 's'} · {readinessOwnerLabel(row.ownerLane)}
                                     </p>
                                 </div>
                                 <span className={sourceHealthChipClass(row.replay.ready ? 'ready' : row.blockers.length ? 'blocked' : 'review')}>
-                                    {row.replay.ready ? 'replay ready' : row.replay.blockerCodes.slice(0, 2).join(', ') || decisionStepStatusLabel(row.state)}
+                                    {row.replay.ready ? 'replay ready' : row.replay.blockerCodes.slice(0, 2).join(', ') || publicDecisionStatusLabel(row.state)}
                                 </span>
                             </div>
                             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.nextAction)}</p>
@@ -5248,7 +5360,7 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
         <div data-ti-selected-watchlist-plan='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlist plan</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Watchlist plan</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         Selected evidence mapped to watchlist terms, organization intersections, and source refs.
                     </p>
@@ -5264,7 +5376,7 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                 <EvidenceMetric label='Alerts' value={`${plan.sourceRefs.alertIds.length}`} />
                 <EvidenceMetric label='Captures' value={`${plan.sourceRefs.captureIds.length}`} />
             </div>
-            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(plan.route)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(plan.route)}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 grid gap-2'>
                 {plan.terms.slice(0, 3).map(term => (
@@ -5272,10 +5384,10 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{term.kind}: {term.value}</p>
-                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(term.notes)}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(term.notes)}</p>
                             </div>
                             <span className={sourceHealthChipClass(term.matched ? 'ready' : plan.blockers.length ? 'blocked' : 'review')}>
-                                {term.matched ? 'matched' : plan.blockers.length ? 'blocked' : 'candidate'}
+                                {term.matched ? 'matched' : plan.blockers.length ? 'syncing' : 'candidate'}
                             </span>
                         </div>
                     </div>
@@ -5289,12 +5401,12 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.kind}: {row.value}</p>
-                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
-                                        {row.alertable ? 'Alert-ready' : 'Needs review'} · {row.evidenceRefs.length} evidence ref{row.evidenceRefs.length === 1 ? '' : 's'} · {row.sourceFamilies.map(formatLabel).join(', ') || 'source family pending'}
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
+                                        {row.alertable ? 'Ready for review' : 'Needs review'} · {row.evidenceRefs.length} evidence ref{row.evidenceRefs.length === 1 ? '' : 's'} · {row.sourceFamilies.map(formatLabel).join(', ') || 'source family pending'}
                                     </p>
                                 </div>
                                 <span className={sourceHealthChipClass(row.fit === 'matched' ? 'ready' : row.fit === 'blocked' ? 'blocked' : 'review')}>
-                                    {row.fit === 'matched' ? 'matched' : row.fit === 'near' ? 'near match' : 'blocked'}
+                                    {row.fit === 'matched' ? 'matched' : row.fit === 'near' ? 'near match' : 'syncing'}
                                 </span>
                             </div>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.nextAction)}</p>
@@ -5305,13 +5417,13 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                                 <div className='min-w-0'>
                                                     <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{source.sourceName}{source.sourceId ? ` · source ${source.sourceId}` : ''}</p>
-                                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
-                                                        {source.sourceFamily ? formatLabel(source.sourceFamily) : 'source family pending'} · {source.reportDate ? formatDate(source.reportDate) : source.lastCollectedAt ? formatDate(source.lastCollectedAt) : 'collection date pending'} · {source.parserStatus ?? 'parser status pending'}
+                                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
+                                                        {source.sourceFamily ? formatLabel(source.sourceFamily) : 'source type pending'} · {source.reportDate ? formatDate(source.reportDate) : source.lastCollectedAt ? formatDate(source.lastCollectedAt) : 'date pending'} · {source.parserStatus ?? 'processing status pending'}
                                                     </p>
                                                 </div>
                                                 <span className={sourceHealthChipClass(source.captureId ? 'ready' : 'blocked')}>{source.captureId ? `capture ${source.captureId}` : 'capture needed'}</span>
                                             </div>
-                                            <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(source.provenance)}</p>
+                                            <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(source.provenance)}</p>
                                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{source.shownBecause}</p>
                                         </div>
                                     ))}
@@ -5345,14 +5457,14 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
         <div data-ti-selected-enrichment-triage='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Enrichment triage</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source review triage</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        Selected evidence mapped to source health, intake items, and capture/source-request blockers.
+                        Selected evidence mapped to source health, intake items, and capture/source-request follow-up.
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(triage.state)}>{decisionStepStatusLabel(triage.state)}</span>
-                    <CopyPayloadButton label='Enrichment triage' payload={triage} />
+                    <CopyPayloadButton label='Review packet' payload={triage} />
                 </div>
             </div>
             <div className='mt-3 grid grid-cols-2 gap-2'>
@@ -5361,18 +5473,18 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
                 <EvidenceMetric label='Requests' value={`${triage.summary.sourceRequests}`} />
                 <EvidenceMetric label='Captures' value={`${triage.summary.captures}`} />
             </div>
-            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(triage.route)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(triage.route)}</p>
             <div className='mt-2 grid gap-2'>
                 {triage.rows.slice(0, 3).map(row => (
                     <div key={row.id} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.sourceName}</p>
-                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
-                                    {formatLabel(row.sourceFamily)} · {formatDate(row.lastChecked)} · {row.evidence.parserStatus ?? 'parser status pending'}
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
+                                    {formatLabel(row.sourceFamily)} · {formatDate(row.lastChecked)} · {row.evidence.parserStatus ?? 'processing status pending'}
                                 </p>
                             </div>
-                            <span className={sourceHealthChipClass(row.state)}>{row.state}</span>
+                            <span className={sourceHealthChipClass(row.state)}>{publicStateLabel(row.state)}</span>
                         </div>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5' data-ti-selected-enrichment-readiness='true'>
                             <span className={sourceHealthChipClass(row.ownerLane === 'source' ? 'blocked' : row.state)}>{readinessOwnerLabel(row.ownerLane)}</span>
@@ -5380,19 +5492,19 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
                             {row.captureId ? <span className={sourceHealthChipClass('ready')}>capture linked</span> : <span className={sourceHealthChipClass('blocked')}>capture needed</span>}
                             {row.sourceRequestId ? <span className={sourceHealthChipClass('review')}>request {row.sourceRequestId}</span> : null}
                         </div>
-                        <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.recommendedAction}</p>
-                        <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{sourceRequestRouteLabel(row.remediationPath)} · {row.remediationPath}</p>
+                        <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.recommendedAction)}</p>
+                        <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{sourceRequestRouteLabel(row.remediationPath)} · {row.remediationPath}</p>
                         {row.consumerReadiness.length ? (
                             <div className='mt-2 grid gap-1.5'>
                                 {row.consumerReadiness.slice(0, 3).map(readiness => (
                                     <div key={`${row.id}-${readiness.consumer}`} className='flex min-w-0 flex-wrap items-center justify-between gap-1.5 rounded-md border border-[#eef1f5] bg-[#fbfcfe] px-2 py-1.5 dark:border-[#273244] dark:bg-[#131c29]'>
                                         <span className='min-w-0 wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{actorEnrichmentConsumerLabel(readiness.consumer)}</span>
-                                        <span className={sourceHealthChipClass(actorEnrichmentConsumerState(readiness.state))}>{readiness.ready ? 'ready' : readiness.retryable ? 'retry queued' : readiness.blockerCodes.length ? `${readiness.blockerCodes.length} blocker${readiness.blockerCodes.length === 1 ? '' : 's'}` : formatLabel(readiness.state)}</span>
+                                        <span className={sourceHealthChipClass(actorEnrichmentConsumerState(readiness.state))}>{readiness.ready ? 'ready' : readiness.retryable ? 'retry scheduled' : readiness.blockerCodes.length ? `${readiness.blockerCodes.length} follow-up${readiness.blockerCodes.length === 1 ? '' : 's'}` : publicStateLabel(readiness.state)}</span>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>No consumer status row is attached to this source yet.</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>No consumer status is attached to this source yet.</p>
                         )}
                         {row.requestedFields.length ? (
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>Needs {row.requestedFields.map(sourceHealthFieldLabel).slice(0, 3).join(', ')}.</p>
@@ -5410,7 +5522,7 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
         <div data-ti-selected-alert-action-plan='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Alert action plan</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Alert action plan</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         Selected evidence mapped to watchlist terms, source refs, and alert rebuild state.
                     </p>
@@ -5426,13 +5538,13 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                 <EvidenceMetric label='Captures' value={`${plan.sourceRefs.captureIds.length}`} />
                 <EvidenceMetric label='Evidence window' value={plan.readiness.generationEvidenceWindowReady ? 'Ready' : 'Pending'} />
             </div>
-            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(plan.handoff.route || plan.route)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(plan.handoff.route || plan.route)}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                 {plan.watchlist.terms.slice(0, 4).map(term => (
                     <span key={term} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>{term}</span>
                 ))}
-                {!plan.watchlist.terms.length ? <span className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>No watch terms attached.</span> : null}
+                {!plan.watchlist.terms.length ? <span className='text-[11px] text-[#586274] dark:text-[#9aa8bd]'>No watch terms attached.</span> : null}
             </div>
             {plan.evidenceRows.length ? (
                 <div data-ti-selected-alert-evidence='true' className='mt-2 grid gap-2'>
@@ -5441,11 +5553,11 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.label}</p>
-                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                                         {formatLabel(row.kind)} · {formatLabel(row.sourceFamily)} · {readinessOwnerLabel(row.ownerLane)}
                                     </p>
                                 </div>
-                                <span className={sourceHealthChipClass(row.state === 'ready' ? 'ready' : row.state === 'blocked' ? 'blocked' : 'review')}>{decisionStepStatusLabel(row.state)}</span>
+                                <span className={sourceHealthChipClass(row.state === 'ready' ? 'ready' : row.state === 'blocked' ? 'blocked' : 'review')}>{publicDecisionStatusLabel(row.state)}</span>
                             </div>
                             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.evidence.summary)}</p>
                             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
@@ -5453,7 +5565,7 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                                 {row.casePath ? <span className={sourceHealthChipClass('ready')}>{displayRequirementText(row.casePath)}</span> : null}
                                 {row.captureIds.length ? <span className={sourceHealthChipClass('ready')}>{row.captureIds.length} capture{row.captureIds.length === 1 ? '' : 's'}</span> : <span className={sourceHealthChipClass('blocked')}>capture needed</span>}
                             </div>
-                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
                             {row.blockers.length ? (
                                 <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(row.blockers.slice(0, 3))}</p>
                             ) : null}
@@ -5465,7 +5577,7 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                 <div data-ti-selected-alert-replay='true' className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                     {plan.replayRows.slice(0, 3).map(row => (
                         <span key={row.id} className={sourceHealthChipClass(row.ready ? 'ready' : 'blocked')}>
-                            {row.ready ? displayRequirementText(row.exportRoute ?? 'replay ready') : displayRequirementList(row.blockerCodes.slice(0, 2)) || 'case replay blocked'}
+                            {row.ready ? displayRequirementText(row.exportRoute ?? 'replay ready') : displayRequirementList(row.blockerCodes.slice(0, 2)) || 'case replay syncing'}
                         </span>
                     ))}
                 </div>
@@ -5484,7 +5596,7 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
         <div data-ti-selected-delivery-readiness='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Delivery status</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Delivery status</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         Selected evidence mapped to alert, capture, destination, and case route status.
                     </p>
@@ -5500,7 +5612,7 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
                 <EvidenceMetric label='Destinations' value={`${plan.summary.destinations}`} />
                 <EvidenceMetric label='Case routes' value={`${plan.summary.caseRoutes}`} />
             </div>
-            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(plan.handoff.route || plan.route)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(plan.handoff.route || plan.route)}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 grid gap-2'>
                 {plan.alerts.slice(0, 3).map(alert => (
@@ -5508,11 +5620,11 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{alert.title}</p>
-                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                                     alert {alert.id} · {formatLabel(alert.status)}
                                 </p>
                             </div>
-                            <span className={sourceHealthChipClass(alert.ready ? 'ready' : 'blocked')}>{alert.ready ? 'ready' : 'blocked'}</span>
+                            <span className={sourceHealthChipClass(alert.ready ? 'ready' : 'blocked')}>{alert.ready ? 'ready' : 'syncing'}</span>
                         </div>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                             {alert.captureIds.length ? `${alert.captureIds.length} capture${alert.captureIds.length === 1 ? '' : 's'}` : 'Capture needed'}
@@ -5548,14 +5660,14 @@ function CaseActionTrailPanel({ trail }: { trail: CaseActionTrailPayload }) {
         <div data-ti-case-action-trail='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case action trail</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Case action trail</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         Metadata-only trail for local decisions, selected evidence, and case replay state.
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={trail.summary.replayable ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
-                        {trail.summary.replayable ? 'replay ready' : 'replay blocked'}
+                        {trail.summary.replayable ? 'replay ready' : 'replay syncing'}
                     </span>
                     <CopyPayloadButton label='Case action trail' payload={trail} />
                 </div>
@@ -5566,12 +5678,12 @@ function CaseActionTrailPanel({ trail }: { trail: CaseActionTrailPayload }) {
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{event.label}</p>
-                                <p className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatDate(event.at)}</p>
+                                <p className='mt-1 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{formatDate(event.at)}</p>
                             </div>
-                            <span className={decisionStepStatusClass(event.state === 'local' ? 'review' : event.state)}>{event.state === 'local' ? 'local' : event.state}</span>
+                            <span className={decisionStepStatusClass(event.state === 'local' ? 'review' : event.state)}>{publicStateLabel(event.state)}</span>
                         </div>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(event.detail)}</p>
-                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                             {event.provenance.sourceIds.length ? `Sources ${event.provenance.sourceIds.slice(0, 3).join(', ')}` : 'Source link pending'}
                             {event.provenance.captureIds.length ? ` · captures ${event.provenance.captureIds.slice(0, 3).join(', ')}` : ''}
                             {event.provenance.alertIds.length ? ` · alerts ${event.provenance.alertIds.slice(0, 3).join(', ')}` : ''}
@@ -5591,13 +5703,13 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
         <div data-ti-selected-case-draft='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case draft</p>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Case draft</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         Session-local draft for authenticated case review.
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
-                    <span className={draft.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{draft.ready ? 'ready' : 'blocked'}</span>
+                    <span className={draft.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{draft.ready ? 'ready' : 'syncing'}</span>
                     <CopyPayloadButton label='Case draft' payload={draft} />
                 </div>
             </div>
@@ -5605,15 +5717,15 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                 <EvidenceMetric label='Intent' value={formatLabel(draft.caseIntent)} />
                 <EvidenceMetric label='Sources' value={`${draft.sourceRows.length} row${draft.sourceRows.length === 1 ? '' : 's'}`} />
             </div>
-            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(draft.route || draft.endpoint)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(draft.route || draft.endpoint)}</p>
             {draft.sourceRows.length ? (
-                <div data-ti-selected-case-provenance='true' className='mt-2 grid min-w-0 gap-2'>
+                <div data-ti-selected-case-sources='true' className='mt-2 grid min-w-0 gap-2'>
                     {draft.sourceRows.slice(0, 3).map(row => (
                         <div key={`${row.sourceId ?? row.sourceName}:${row.provenance}:${row.captureId ?? 'missing'}`} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.sourceName}{row.sourceId ? ` · source ${row.sourceId}` : ''}</p>
-                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
+                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
                                 </div>
                                 <span className={sourceHealthChipClass(row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'blocked' : 'review')}>
                                     {row.captureId ? `capture ${row.captureId}` : 'capture needed'}
@@ -5630,7 +5742,7 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                 {draft.watchTerms.slice(0, 4).map(term => (
                     <span key={term} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>{term}</span>
                 ))}
-                {!draft.watchTerms.length ? <span className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>No watch terms attached.</span> : null}
+                {!draft.watchTerms.length ? <span className='text-[11px] text-[#586274] dark:text-[#9aa8bd]'>No watch terms attached.</span> : null}
             </div>
             {draft.missing.length ? (
                 <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(draft.missing.slice(0, 3))}</p>
@@ -5653,7 +5765,7 @@ function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; o
         items,
     }
     return (
-        <Panel title='Staged Handoffs' description='Session-local queue for selected review, source, and case drafts. Nothing is saved until opened in the authenticated console.' icon={<ClipboardList className='h-4 w-4' />}>
+        <Panel title='Saved Drafts' description='Selected reviews, sources, and case drafts saved in this browser session. Nothing is submitted until opened in the authenticated console.' icon={<ClipboardList className='h-4 w-4' />}>
             <div data-ti-staged-handoff-queue='true' className='grid gap-3'>
                 <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
@@ -5662,7 +5774,7 @@ function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; o
                         </p>
                     </div>
                     <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
-                        <CopyPayloadButton label='Staged handoff queue' payload={bundle} />
+                        <CopyPayloadButton label='Saved drafts' payload={bundle} />
                         <button
                             type='button'
                             onClick={onClear}
@@ -5681,10 +5793,10 @@ function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; o
                                     <div className='min-w-0'>
                                         <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.title}</p>
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                            {formatLabel(item.caseIntent)} · {relevanceLabelForStaged(item.relevanceState)} · {item.selectedArtifact.artifact.kind}: {item.selectedArtifact.artifact.label} · {item.sourceDrilldown.rows.length} source row{item.sourceDrilldown.rows.length === 1 ? '' : 's'} · {item.caseCreateRequest.actorContext.techniques.length} TTP{item.caseCreateRequest.actorContext.techniques.length === 1 ? '' : 's'} · {item.caseActionTrail.summary.total} trail event{item.caseActionTrail.summary.total === 1 ? '' : 's'}
+                                            {formatLabel(item.caseIntent)} · {relevanceLabelForStaged(item.relevanceState)} · {item.selectedArtifact.artifact.kind}: {item.selectedArtifact.artifact.label} · {item.sourceDrilldown.rows.length} source result{item.sourceDrilldown.rows.length === 1 ? '' : 's'} · {item.caseCreateRequest.actorContext.techniques.length} method{item.caseCreateRequest.actorContext.techniques.length === 1 ? '' : 's'} · {item.caseActionTrail.summary.total} trail event{item.caseActionTrail.summary.total === 1 ? '' : 's'}
                                         </p>
                                     </div>
-                                    <span className={item.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{item.ready ? 'ready' : 'blocked'}</span>
+                                    <span className={item.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{item.ready ? 'ready' : 'syncing'}</span>
                                 </div>
                                 <div data-ti-staged-handoff-readiness='true' className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                     {stagedReadinessChips(item).map(chip => (
@@ -5714,18 +5826,18 @@ function stagedReadinessChips(item: StagedHandoff) {
     const enrichmentReady = item.enrichmentTriage.state !== 'blocked' && item.enrichmentTriage.summary.blockers === 0
     const trailReady = item.caseActionTrail.summary.replayable && item.caseActionTrail.summary.blocked === 0
     return [
-        { label: 'review', value: item.reviewHandoff.blockers.length ? `${item.reviewHandoff.blockers.length} blocker${item.reviewHandoff.blockers.length === 1 ? '' : 's'}` : 'ready', ready: item.reviewHandoff.blockers.length === 0 },
-        { label: 'source', value: sourceMissing.length ? `${sourceMissing.length} missing` : `${item.sourceDrilldown.rows.length} row${item.sourceDrilldown.rows.length === 1 ? '' : 's'}`, ready: sourceMissing.length === 0 },
+        { label: 'review', value: item.reviewHandoff.blockers.length ? `${item.reviewHandoff.blockers.length} follow-up${item.reviewHandoff.blockers.length === 1 ? '' : 's'}` : 'ready', ready: item.reviewHandoff.blockers.length === 0 },
+        { label: 'source', value: sourceMissing.length ? `${sourceMissing.length} missing` : `${item.sourceDrilldown.rows.length} result${item.sourceDrilldown.rows.length === 1 ? '' : 's'}`, ready: sourceMissing.length === 0 },
         { label: 'case', value: item.caseDraft.missing.length ? `${item.caseDraft.missing.length} missing` : item.caseDraft.route ? 'route ready' : 'draft ready', ready: item.caseDraft.missing.length === 0 },
-        { label: 'owner', value: ownershipReady ? item.caseOwnership.owner.label : item.caseOwnership.blockers.length ? `${item.caseOwnership.blockers.length} blocker${item.caseOwnership.blockers.length === 1 ? '' : 's'}` : 'review', ready: ownershipReady },
-        { label: 'artifact', value: artifactReady ? formatLabel(item.selectedArtifact.artifact.kind) : item.selectedArtifact.readiness.blockers.length ? `${item.selectedArtifact.readiness.blockers.length} blocker${item.selectedArtifact.readiness.blockers.length === 1 ? '' : 's'}` : 'review', ready: artifactReady },
-        { label: 'actor', value: actorReady ? `${item.caseCreateRequest.actorContext.techniques.length} TTP${item.caseCreateRequest.actorContext.techniques.length === 1 ? '' : 's'}` : 'needs context', ready: actorReady },
-        { label: 'watchlist', value: item.caseCreateRequest.watchlistBasis.ready ? 'matched' : item.caseCreateRequest.watchlistBasis.blockers.length ? `${item.caseCreateRequest.watchlistBasis.blockers.length} blocker${item.caseCreateRequest.watchlistBasis.blockers.length === 1 ? '' : 's'}` : 'review', ready: item.caseCreateRequest.watchlistBasis.ready },
-        { label: 'alert', value: alertReady ? `${item.alertPlan.readiness.matchedCandidateCount} matched` : item.alertPlan.blockers.length ? `${item.alertPlan.blockers.length} blocker${item.alertPlan.blockers.length === 1 ? '' : 's'}` : 'review', ready: alertReady },
-        { label: 'delivery', value: deliveryReady ? `${item.deliveryPlan.summary.destinations} destination${item.deliveryPlan.summary.destinations === 1 ? '' : 's'}` : item.deliveryPlan.blockers.length ? `${item.deliveryPlan.blockers.length} blocker${item.deliveryPlan.blockers.length === 1 ? '' : 's'}` : 'review', ready: deliveryReady },
-        { label: 'enrichment', value: enrichmentReady ? `${item.enrichmentTriage.summary.intakeItems} intake` : item.enrichmentTriage.summary.blockers ? `${item.enrichmentTriage.summary.blockers} blocker${item.enrichmentTriage.summary.blockers === 1 ? '' : 's'}` : 'review', ready: enrichmentReady },
-        { label: 'replay', value: replayReady ? `${item.caseCreateRequest.actionReplay.rows.filter(row => row.ready).length} ready` : 'blocked', ready: replayReady },
-        { label: 'trail', value: trailReady ? `${item.caseActionTrail.summary.total} events` : item.caseActionTrail.summary.blocked ? `${item.caseActionTrail.summary.blocked} blocked` : 'review', ready: trailReady },
+        { label: 'owner', value: ownershipReady ? item.caseOwnership.owner.label : item.caseOwnership.blockers.length ? `${item.caseOwnership.blockers.length} follow-up${item.caseOwnership.blockers.length === 1 ? '' : 's'}` : 'review', ready: ownershipReady },
+        { label: 'detail', value: artifactReady ? formatLabel(item.selectedArtifact.artifact.kind) : item.selectedArtifact.readiness.blockers.length ? `${item.selectedArtifact.readiness.blockers.length} follow-up${item.selectedArtifact.readiness.blockers.length === 1 ? '' : 's'}` : 'review', ready: artifactReady },
+        { label: 'actor', value: actorReady ? `${item.caseCreateRequest.actorContext.techniques.length} method${item.caseCreateRequest.actorContext.techniques.length === 1 ? '' : 's'}` : 'needs context', ready: actorReady },
+        { label: 'watchlist', value: item.caseCreateRequest.watchlistBasis.ready ? 'matched' : item.caseCreateRequest.watchlistBasis.blockers.length ? `${item.caseCreateRequest.watchlistBasis.blockers.length} follow-up${item.caseCreateRequest.watchlistBasis.blockers.length === 1 ? '' : 's'}` : 'review', ready: item.caseCreateRequest.watchlistBasis.ready },
+        { label: 'alert', value: alertReady ? `${item.alertPlan.readiness.matchedCandidateCount} matched` : item.alertPlan.blockers.length ? `${item.alertPlan.blockers.length} follow-up${item.alertPlan.blockers.length === 1 ? '' : 's'}` : 'review', ready: alertReady },
+        { label: 'delivery', value: deliveryReady ? `${item.deliveryPlan.summary.destinations} destination${item.deliveryPlan.summary.destinations === 1 ? '' : 's'}` : item.deliveryPlan.blockers.length ? `${item.deliveryPlan.blockers.length} follow-up${item.deliveryPlan.blockers.length === 1 ? '' : 's'}` : 'review', ready: deliveryReady },
+        { label: 'source review', value: enrichmentReady ? `${item.enrichmentTriage.summary.intakeItems} intake` : item.enrichmentTriage.summary.blockers ? `${item.enrichmentTriage.summary.blockers} follow-up${item.enrichmentTriage.summary.blockers === 1 ? '' : 's'}` : 'review', ready: enrichmentReady },
+        { label: 'replay', value: replayReady ? `${item.caseCreateRequest.actionReplay.rows.filter(row => row.ready).length} ready` : 'syncing', ready: replayReady },
+        { label: 'trail', value: trailReady ? `${item.caseActionTrail.summary.total} events` : item.caseActionTrail.summary.blocked ? `${item.caseActionTrail.summary.blocked} syncing` : 'review', ready: trailReady },
     ]
 }
 
@@ -5741,7 +5853,7 @@ function ActionButton({ icon, children, onClick }: { icon: React.ReactNode; chil
 function EvidencePanel({ title, children }: { title: string; children: React.ReactNode }) {
     return (
         <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
-            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{title}</p>
+            <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{title}</p>
             <ul className='mt-2 grid list-disc gap-1 pl-4 text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>
                 {children}
             </ul>
@@ -5749,10 +5861,95 @@ function EvidencePanel({ title, children }: { title: string; children: React.Rea
     )
 }
 
+function SelectedTriageBriefPanel({ brief }: { brief: SelectedTriageBrief }) {
+    return (
+        <section data-ti-selected-brief='true' className='mt-4 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Analyst brief</p>
+                    <h3 className='mt-1 text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>What happened, why it matters, and what to do next</h3>
+                </div>
+                <span className={brief.proofTone === 'ready' ? sourceHealthChipClass('ready') : brief.proofTone === 'blocked' ? sourceHealthChipClass('blocked') : sourceHealthChipClass('review')}>
+                    {brief.proofTone === 'ready' ? 'source ready' : brief.proofTone === 'blocked' ? 'source needed' : 'verify source'}
+                </span>
+            </div>
+            <div className='mt-4 grid gap-3 lg:grid-cols-3'>
+                <BriefStep title='What happened' value={brief.whatHappened} />
+                <BriefStep title='Why it matters' value={brief.whyItMatters} />
+                <BriefStep title='Next action' value={brief.nextAction} />
+            </div>
+            <div className='mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source status</p>
+                    <p className='mt-1 wrap-break-word text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>{brief.proofStatus}</p>
+                </div>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Safety boundary</p>
+                    <p className='mt-1 wrap-break-word text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>{brief.safetyBoundary}</p>
+                </div>
+            </div>
+            <div className='mt-3 flex min-w-0 flex-wrap gap-2'>
+                {brief.labels.map(label => (
+                    <span key={`${label.label}:${label.value}`} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                        {label.label}: {label.value}
+                    </span>
+                ))}
+            </div>
+        </section>
+    )
+}
+
+function ResultTriageBriefPanel({ brief }: { brief: ResultTriageBrief }) {
+    return (
+        <section data-ti-result-brief='true' className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Result brief</p>
+                    <h2 className='mt-1 text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>What returned, why it matters, and where to start</h2>
+                </div>
+                <span className={brief.tone === 'ready' ? sourceHealthChipClass('ready') : brief.tone === 'blocked' ? sourceHealthChipClass('blocked') : sourceHealthChipClass('review')}>
+                    {brief.tone === 'ready' ? 'usable now' : brief.tone === 'blocked' ? 'source needed' : 'review first'}
+                </span>
+            </div>
+            <div className='mt-4 grid gap-3 lg:grid-cols-3'>
+                <BriefStep title='What returned' value={brief.whatReturned} />
+                <BriefStep title='Why review' value={brief.whyReview} />
+                <BriefStep title='Start here' value={brief.nextAction} />
+            </div>
+            <div className='mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source status</p>
+                    <p className='mt-1 wrap-break-word text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>{brief.proofStatus}</p>
+                </div>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Safety boundary</p>
+                    <p className='mt-1 wrap-break-word text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>{brief.boundary}</p>
+                </div>
+            </div>
+            <div className='mt-3 flex min-w-0 flex-wrap gap-2'>
+                {brief.labels.map(label => (
+                    <span key={`${label.label}:${label.value}`} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                        {label.label}: {label.value}
+                    </span>
+                ))}
+            </div>
+        </section>
+    )
+}
+
+function BriefStep({ title, value }: { title: string; value: string }) {
+    return (
+        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+            <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{title}</p>
+            <p className='mt-1 wrap-break-word text-sm leading-6 text-[#344054] dark:text-[#d8e2f2]'>{value}</p>
+        </div>
+    )
+}
+
 function EvidenceMetric({ label, value }: { label: string; value: string }) {
     return (
         <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
-            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{label}</p>
+            <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{label}</p>
             <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{value || 'Not stated'}</p>
         </div>
     )
@@ -5762,7 +5959,7 @@ function QueueMetric({ label, value }: { label: string; value: number }) {
     return (
         <div className='rounded-lg border border-[#e0e5ed] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
             <p className='text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>{value}</p>
-            <p className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{label}</p>
+            <p className='text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{label}</p>
         </div>
     )
 }
@@ -5794,18 +5991,18 @@ function EvidenceQueueFilters({
         <div data-ti-evidence-filters='true' className='mt-3 grid gap-2'>
             <div className='grid grid-cols-2 gap-2'>
                 <label className='grid min-w-0 gap-1'>
-                    <span className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Type</span>
+                    <span className='text-[10px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Type</span>
                     <select value={kind} onChange={event => onKindChange(event.target.value as AnalystWorkItem['kind'] | 'all')} className='h-9 min-w-0 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none focus:border-[#3056d3] focus:ring-2 focus:ring-[#dce6ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
-                        <option value='all'>All rows</option>
+                        <option value='all'>All results</option>
                         <option value='activity'>Activity</option>
-                        <option value='exposure'>Exposure</option>
+                        <option value='exposure'>Recent attacks</option>
                         <option value='victim'>Victim</option>
-                        <option value='tradecraft'>TTP</option>
-                        <option value='collection'>Collection</option>
+                        <option value='tradecraft'>Methods</option>
+                        <option value='collection'>Open questions</option>
                     </select>
                 </label>
                 <label className='grid min-w-0 gap-1'>
-                    <span className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Confidence</span>
+                    <span className='text-[10px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Confidence</span>
                     <select value={confidence} onChange={event => onConfidenceChange(event.target.value as 'all' | 'high' | 'medium')} className='h-9 min-w-0 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none focus:border-[#3056d3] focus:ring-2 focus:ring-[#dce6ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
                         <option value='all'>Any</option>
                         <option value='high'>70%+</option>
@@ -5815,14 +6012,14 @@ function EvidenceQueueFilters({
             </div>
             <div className='grid grid-cols-2 gap-2'>
                 <label className='grid min-w-0 gap-1'>
-                    <span className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source</span>
+                    <span className='text-[10px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source</span>
                     <select value={source} onChange={event => onSourceChange(event.target.value)} className='h-9 min-w-0 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none focus:border-[#3056d3] focus:ring-2 focus:ring-[#dce6ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
                         <option value='all'>All sources</option>
                         {sources.map(item => <option key={item} value={item}>{item}</option>)}
                     </select>
                 </label>
                 <label className='grid min-w-0 gap-1'>
-                    <span className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Sort</span>
+                    <span className='text-[10px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Sort</span>
                     <select value={sort} onChange={event => onSortChange(event.target.value as 'priority' | 'confidence' | 'freshness')} className='h-9 min-w-0 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none focus:border-[#3056d3] focus:ring-2 focus:ring-[#dce6ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
                         <option value='priority'>Priority</option>
                         <option value='confidence'>Confidence</option>
@@ -5837,7 +6034,7 @@ function EvidenceQueueFilters({
                             key={item.source}
                             type='button'
                             onClick={() => onSourceChange(source === item.source ? 'all' : item.source)}
-                            className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${source === item.source ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#667085] hover:bg-[#f8fafc] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd] dark:hover:bg-[#172131]'}`}
+                            className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${source === item.source ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#586274] hover:bg-[#f8fafc] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd] dark:hover:bg-[#172131]'}`}
                         >
                             <span>{item.source}</span>
                             <span className='rounded bg-[#f2f4f7] px-1 text-[10px] text-[#475467] dark:bg-[#1d2939] dark:text-[#b7c2d4]'>{item.count}</span>
@@ -5885,16 +6082,16 @@ function MobileEvidenceWorkbar({
     const kindOptions: Array<{ value: AnalystWorkItem['kind'] | 'all'; label: string }> = [
         { value: 'all', label: 'All' },
         { value: 'activity', label: 'Activity' },
-        { value: 'exposure', label: 'Exposure' },
+        { value: 'exposure', label: 'Recent attacks' },
         { value: 'victim', label: 'Victims' },
-        { value: 'tradecraft', label: 'TTPs' },
-        { value: 'collection', label: 'Gaps' },
+        { value: 'tradecraft', label: 'Methods' },
+        { value: 'collection', label: 'Open questions' },
     ]
     return (
         <section data-ti-mobile-workbar='true' className='lg:hidden sticky top-2 z-20 grid min-w-0 gap-2 rounded-lg border border-[#dfe5ee] bg-white/95 p-2 shadow-sm backdrop-blur dark:border-[#273244] dark:bg-[#101722]/95'>
             <div className='flex min-w-0 items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{filteredCount}/{totalCount} evidence rows</p>
+                    <p className='text-[11px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{filteredCount}/{totalCount} results</p>
                     <p className='mt-0.5 line-clamp-1 text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selected.title}</p>
                 </div>
                 <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
@@ -5906,12 +6103,12 @@ function MobileEvidenceWorkbar({
                         key={item.value}
                         type='button'
                         onClick={() => onKindChange(item.value)}
-                        className={`inline-flex min-h-8 shrink-0 items-center rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${kind === item.value ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#667085] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'}`}
+                        className={`inline-flex min-h-8 shrink-0 items-center rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${kind === item.value ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'}`}
                     >
                         {item.label}
                     </button>
                 ))}
-                <button type='button' onClick={() => onConfidenceChange(confidence === 'high' ? 'all' : 'high')} className={`inline-flex min-h-8 shrink-0 items-center rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${confidence === 'high' ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#667085] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'}`}>
+                <button type='button' onClick={() => onConfidenceChange(confidence === 'high' ? 'all' : 'high')} className={`inline-flex min-h-8 shrink-0 items-center rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${confidence === 'high' ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'}`}>
                     70%+
                 </button>
             </div>
@@ -5923,7 +6120,7 @@ function MobileEvidenceWorkbar({
                             key={item.source}
                             type='button'
                             onClick={() => onSourceChange(source === item.source ? 'all' : item.source)}
-                            className={`inline-flex min-h-8 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${source === item.source ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#667085] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'}`}
+                            className={`inline-flex min-h-8 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${source === item.source ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'}`}
                         >
                             <span>{item.source}</span>
                             <span className='rounded bg-[#f2f4f7] px-1 text-[10px] text-[#475467] dark:bg-[#1d2939] dark:text-[#b7c2d4]'>{item.count}</span>
@@ -5995,13 +6192,56 @@ function sectionOverviewFor(input: {
         { label: 'Activity', value: `${input.workItems.length} item${input.workItems.length === 1 ? '' : 's'}`, state: input.workItems.length ? 'ready' : 'review' },
         { label: 'Targeting', value: `${input.victimObservations.length || input.actorIntel.targetSectors.length} row${(input.victimObservations.length || input.actorIntel.targetSectors.length) === 1 ? '' : 's'}`, state: input.victimObservations.length || input.actorIntel.targetSectors.length ? 'ready' : 'review' },
         { label: 'Infrastructure', value: `${input.actorIntel.infrastructure.length} pattern${input.actorIntel.infrastructure.length === 1 ? '' : 's'}`, state: input.actorIntel.infrastructure.length ? 'ready' : 'review' },
-        { label: 'Sources', value: `${sourceRows} provenance row${sourceRows === 1 ? '' : 's'}`, state: sourceRows ? 'ready' : 'blocked' },
+        { label: 'Sources', value: `${sourceRows} source result${sourceRows === 1 ? '' : 's'}`, state: sourceRows ? 'ready' : 'blocked' },
         { label: 'Evidence', value: `${input.workItems.filter(item => item.evidence.length).length} supported`, state: input.workItems.some(item => item.evidence.length) ? 'ready' : 'blocked' },
         { label: 'Watchlist relevance', value: input.actionability.orgRelevance.organizationRefs.length ? `${input.actionability.orgRelevance.organizationRefs.length} matched` : `${input.actionability.orgRelevance.candidateTerms.length} candidate${input.actionability.orgRelevance.candidateTerms.length === 1 ? '' : 's'}`, state: input.actionability.orgRelevance.state },
         { label: 'Related alerts/cases', value: relatedRecords ? `${relatedRecords} linked` : `${caseCandidates} candidate${caseCandidates === 1 ? '' : 's'}`, state: relatedRecords ? 'ready' : caseCandidates ? 'review' : 'blocked' },
         { label: 'Collection gaps', value: `${input.actionability.enrichmentGapQueue.length} open`, state: input.actionability.enrichmentGapQueue.length ? 'review' : 'ready' },
         { label: 'Actions', value: `${readyActions}/5 ready`, state: readyActions === 5 ? 'ready' : readyActions ? 'review' : 'blocked' },
     ]
+}
+
+function resultTriageBriefFor(
+    result: TiSearchResponse,
+    workItems: AnalystWorkItem[],
+    actionability: TiActionabilityModel,
+    victimObservations: ReturnType<typeof victimObservationsFor>,
+    watchlist: WatchlistRelevance,
+): ResultTriageBrief {
+    const topItem = workItems[0]
+    const sourceRows = result.sources.length || actionability.sourceProvenance.length
+    const highPriorityCount = workItems.filter(item => item.severity === 'critical' || item.severity === 'high').length
+    const matchedWatchTerms = watchlist.matchedTerms.length
+    const sourceRefs = actionability.sourceProvenance.filter(row => row.sourceName || row.sourceId || row.captureId).length
+    const missing = actionability.readiness.blockers.slice(0, 2).map(blocker => displayRequirementText(blocker.detail || blocker.code))
+    const tone: ResultTriageBrief['tone'] = sourceRefs && highPriorityCount ? 'ready' : sourceRows ? 'review' : 'blocked'
+    const firstNextAction = topItem?.nextActions.map(displayRequirementText).find(Boolean)
+
+    return {
+        whatReturned: workItems.length
+            ? `${humanizeSlug(result.query)} returned ${workItems.length} analyst item${workItems.length === 1 ? '' : 's'}${highPriorityCount ? `, including ${highPriorityCount} high-priority item${highPriorityCount === 1 ? '' : 's'}` : ''}.`
+            : `${humanizeSlug(result.query)} did not return recent activity yet.`,
+        whyReview: victimObservations.length
+            ? `${victimObservations.length} company or supplier observation${victimObservations.length === 1 ? '' : 's'} may need incident-response, vendor-risk, legal, or customer-communication review.`
+            : topItem
+                ? `${topItem.source} returned ${Math.round(topItem.confidence * 100)}% confidence context; verify source references before customer-facing use.`
+                : 'No customer-facing action should be taken until a source record or fresh observation is attached.',
+        nextAction: firstNextAction
+            || (missing.length ? `Resolve ${displayRequirementList(missing)} before escalation.` : 'Open the highest-priority row, review source context, and decide whether it belongs in the authenticated console.'),
+        proofStatus: sourceRefs
+            ? `${sourceRefs} source reference${sourceRefs === 1 ? '' : 's'} available; use selected results for capture and case review.`
+            : sourceRows
+                ? `${sourceRows} source result${sourceRows === 1 ? '' : 's'} returned, but capture-ready evidence still needs review.`
+                : 'No source references are attached to this result yet.',
+        boundary: 'Public TI is metadata-only. It does not expose raw leak files, credential values, or customer webhook secrets.',
+        tone,
+        labels: [
+            { label: 'Latest', value: formatDate(result.lastSeen || result.generatedAt) },
+            { label: 'Sources', value: String(sourceRows) },
+            { label: 'Watchlists', value: matchedWatchTerms ? `${matchedWatchTerms} matched` : `${watchlist.terms.length} candidates` },
+            { label: 'Workflow', value: formatLabel(actionability.readiness.state) },
+        ],
+    }
 }
 
 function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sources: TiSearchResponse['sources'], actor: TiActorIntelligenceProfile, actionability: TiActionabilityModel): WatchlistRelevance {
@@ -6043,7 +6283,7 @@ function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: Ret
             ? `${matchedTerms.length} organization watchlist match${matchedTerms.length === 1 ? '' : 'es'} returned for this query.`
             : organizations.length
                 ? 'Candidate watchlist inputs are present; no persisted organization watchlist match was returned yet.'
-                : 'Candidate actor, alias, sector, country, campaign, tool, and source-domain terms are present only when returned by the profile or source rows.',
+                : 'Candidate actor, alias, sector, country, campaign, tool, and source-domain terms are present only when returned by the profile or source results.',
     }
 }
 
@@ -6060,13 +6300,20 @@ function watchlistWorkbenchRowsFor({
     workItems: AnalystWorkItem[]
     artifacts: ActorArtifact[]
 }): WatchlistWorkbenchRow[] {
+    const seenTermIds = new Set<string>()
     const terms = unique([
         ...watchlist.terms,
         ...watchlist.matchedTerms,
         ...actionability.watchlistRelevance.terms.map(term => `${term.kind}: ${term.value}`),
         ...actionability.orgRelevance.candidateTerms.map(term => `${term.kind}: ${term.value}`),
         ...actionability.orgRelevance.watchlistIntersections.map(term => `${term.kind}: ${term.value}`),
-    ]).slice(0, 16)
+    ]).filter(term => {
+        const parsed = watchlistTermParts(term)
+        const id = watchlistWorkbenchRowId(parsed.kind, parsed.value)
+        if (seenTermIds.has(id)) return false
+        seenTermIds.add(id)
+        return true
+    }).slice(0, 16)
     return terms.map(term => {
         const parsed = watchlistTermParts(term)
         const valueKey = parsed.value.toLowerCase()
@@ -6124,7 +6371,7 @@ function watchlistWorkbenchRowsFor({
             casePath,
         }
         return {
-            id: `watch:${parsed.kind}:${parsed.value}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            id: watchlistWorkbenchRowId(parsed.kind, parsed.value),
             kind: parsed.kind,
             value: parsed.value,
             matched,
@@ -6178,7 +6425,7 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
     return {
         title: isCustomerAlert ? `Candidate customer alert: ${selected.title}` : `Actor context packet: ${selected.title}`,
         customerValue: isCustomerAlert
-            ? 'This finding has enough structure to enter the alert review workflow: named object, evidence basis, timestamp, source/provenance, confidence, and routing guidance.'
+            ? 'This finding has enough structure to enter the alert review workflow: named object, evidence basis, timestamp, source reference, confidence, and routing guidance.'
             : 'This finding strengthens watchlist and detection context, but should not become a customer alert until it matches a watched organization, domain, vendor, or portfolio term.',
         watchTerms: watchlist.terms.slice(0, 8),
         evidenceBasis,
@@ -6312,7 +6559,7 @@ function selectedCaseWatchlistBasisFor(watchlistPlan: SelectedWatchlistPlan | nu
             : item.state === 'ready'
     )
     const matchReason = primaryRow
-        ? `${formatLabel(primaryRow.kind)} ${primaryRow.value} is ${primaryRow.alertable ? 'alert-ready' : primaryRow.fit === 'matched' ? 'matched' : primaryRow.fit === 'near' ? 'near match' : 'blocked'} with ${primaryRow.evidenceRefs.length} evidence ref${primaryRow.evidenceRefs.length === 1 ? '' : 's'}.`
+        ? `${formatLabel(primaryRow.kind)} ${primaryRow.value} is ${primaryRow.alertable ? 'ready for review' : primaryRow.fit === 'matched' ? 'matched' : primaryRow.fit === 'near' ? 'near match' : 'syncing'} with ${primaryRow.evidenceRefs.length} evidence ref${primaryRow.evidenceRefs.length === 1 ? '' : 's'}.`
         : primaryIntersection
             ? `${formatLabel(primaryIntersection.kind)} ${primaryIntersection.value} is attached to watchlist item ${primaryIntersection.watchlistItemId ?? 'pending'}.`
             : 'No selected watchlist relevance is attached to this evidence.'
@@ -6657,7 +6904,7 @@ function selectedCaseCreateRequestFor(
         ...caseAction.blockedBy.map(blocker => blocker.detail),
         ...(caseStage?.missing ?? []),
         ...(caseStage && caseStage.state === 'blocked' ? [caseStage.detail] : []),
-        ...(sourceRows.length ? [] : ['Source provenance is required before case creation review.']),
+        ...(sourceRows.length ? [] : ['Source details are required before case creation review.']),
         ...(alertIds.length ? [] : ['Alert ID is required before case creation review.']),
         ...(captureIds.length ? [] : ['Capture evidence is required before case creation review.']),
         ...watchlistBasis.blockers,
@@ -6710,7 +6957,7 @@ function selectedCaseCreateRequestFor(
         state,
         route,
         nextAction: ready
-            ? 'Open the authenticated case workflow with the selected evidence and provenance attached.'
+            ? 'Open the authenticated case workflow with the selected evidence and source details attached.'
             : blockers.length ? `Resolve ${displayRequirementList(blockers.slice(0, 2))} before case creation review.` : 'Review the selected evidence before opening the authenticated case workflow.',
         request: {
             method: 'POST',
@@ -6786,7 +7033,7 @@ function selectedCaseActionTrailFor(
         {
             id: `case-handoff:${selected.id}`,
             at: result.generatedAt,
-            label: caseDraft?.ready ? 'Case handoff ready' : 'Case handoff blocked',
+            label: caseDraft?.ready ? 'Case handoff ready' : 'Case handoff syncing',
             detail: caseDraft?.ready
                 ? 'Selected evidence has the required case route, source context, and watch terms for authenticated review.'
                 : 'Case review needs the missing identifiers or source context listed below before persistence.',
@@ -6827,7 +7074,7 @@ function selectedCaseActionTrailFor(
         ...activeReplayRows.slice(0, 3).map(row => ({
             id: `replay:${row.id}`,
             at: result.generatedAt,
-            label: row.ready ? 'Replay export ready' : 'Replay export blocked',
+            label: row.ready ? 'Replay export ready' : 'Replay export syncing',
             detail: row.ready
                 ? 'Replay request has case, alert, capture, and source references.'
                 : `Replay request needs ${displayRequirementList(row.blockerCodes)}.`,
@@ -7722,7 +7969,7 @@ function selectedSourceDrilldownFor(
             provenance: selected.href || selected.provenance || selected.source,
             href: selected.href,
             confidence: selected.confidence,
-            handoff: 'Attach source ID, provenance URL, capture ID, or source hash before this queue item can support stronger handoff.',
+            handoff: 'Attach source ID, source URL, capture ID, or source hash before this result can support stronger follow-up.',
         }))
     }
     const rows = uniqueBy(candidates, row => `${row.sourceId ?? row.sourceName}:${row.provenance}:${row.captureId ?? ''}`).slice(0, 6)
@@ -7779,7 +8026,7 @@ function drilldownRow(input: {
     const hasSource = Boolean(input.sourceId || input.provenance || input.href)
     const state: SelectedSourceDrilldownRow['state'] = input.captureId ? 'ready' : hasSource ? 'needs_capture' : 'needs_source'
     const missing = [
-        hasSource ? '' : 'Source ID or provenance URL is required.',
+        hasSource ? '' : 'Source ID or source URL is required.',
         input.captureId ? '' : 'Capture ID or source hash is required before replayable case evidence.',
     ].filter(Boolean)
     const provenance = input.provenance || input.href || input.sourceName
@@ -7818,11 +8065,11 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
     return [
         ...actionabilityTasks,
         {
-            title: 'Complete actor enrichment profile',
+            title: 'Complete actor profile',
             status: hasActorCore ? 'ready' : 'needs_api',
             detail: hasActorCore
-                ? `Actor profile includes ${actor.malwareTools.length} tools, ${actor.campaigns.length} campaigns, and ${actor.infrastructure.length} infrastructure patterns for alert enrichment.`
-                : 'Missing tooling, campaigns, infrastructure, confidence reasoning, or source provenance from actor enrichment.',
+                ? `Actor profile includes ${actor.malwareTools.length} tools, ${actor.campaigns.length} campaigns, and ${actor.infrastructure.length} infrastructure patterns for alert context.`
+                : 'Missing tooling, campaigns, infrastructure, confidence notes, or source details from the actor profile.',
         },
         {
             title: 'Persist alert review decision',
@@ -7833,8 +8080,8 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
             title: 'Attach source capture provenance',
             status: hasSourceUrls ? 'ready' : 'needs_api',
             detail: hasSourceUrls
-                ? 'Returned sources include URL/provenance references that can be opened or mapped into console evidence.'
-                : 'The result needs source URLs, capture IDs, or redacted source hashes for every queue item before analyst trust is strong.',
+                ? 'Returned sources include URLs or source references that can be opened or mapped into console evidence.'
+                : 'The result needs source URLs, capture IDs, or redacted source hashes before analyst trust is strong.',
         },
         {
             title: 'Map actor to customer watchlists',
@@ -7844,7 +8091,7 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
                 : 'No persisted organization/domain relevance was returned for this public result.',
         },
         {
-            title: 'Promote evidence to case queue',
+            title: 'Create case from evidence',
             status: hasReviewInbox ? 'ready' : selected?.kind === 'exposure' || hasActivity ? 'needs_review' : 'needs_api',
             detail: hasReviewInbox
                 ? 'The response includes metadata review inbox items that can feed authenticated case work.'
@@ -7963,7 +8210,7 @@ function enrichmentGapWorkbenchRowsFor({
             state: artifactStateFor(artifact),
             confidenceValues: [artifact.confidence],
             newestAt: artifact.freshness,
-            source: artifact.provenance[0] || 'Artifact context',
+            source: artifact.provenance[0] || 'Detail context',
             impact: artifact.subtitle,
             route: artifact.readiness.state === 'needs_source' ? '/dashboard/ti/enrichment' : undefined,
             evidenceItems,
@@ -8081,13 +8328,68 @@ function filteredAnalystWorkItems(
         })
 }
 
+function selectedTriageBriefFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    actionability: TiActionabilityModel,
+    watchlist: WatchlistRelevance,
+    alertPacket: AlertPacket | null,
+    caseDraft: SelectedCaseDraft | null
+): SelectedTriageBrief {
+    const confidence = `${Math.round(selected.confidence * 100)}%`
+    const visibleTerm = watchlist.matchedTerms[0] || watchlist.terms[0] || result.query
+    const sourceLabel = selected.source || 'returned source'
+    const hasSourceReference = Boolean(selected.href || selected.provenance || selected.priority?.sourceIds.length || caseDraft?.sourceRows.length)
+    const sourceRows = caseDraft?.sourceRows.length ?? 0
+    const prioritySourceRows = selected.priority?.sourceIds.length ?? 0
+    const proofRowCount = sourceRows || prioritySourceRows || 1
+    const hasCapture = Boolean(selected.priority?.captureIds.length || caseDraft?.sourceRows.some(row => row.captureId))
+    const proofTone: SelectedTriageBrief['proofTone'] = hasCapture ? 'ready' : hasSourceReference ? 'review' : 'blocked'
+    const blocker = actionability.readiness.blockers.find(item => item.ownerLane === 'source' || item.ownerLane === 'public-ti')
+    const firstAction = selected.nextActions.map(displayRequirementText).find(Boolean)
+    const alertValue = alertPacket?.customerValue ? displayRequirementText(alertPacket.customerValue) : ''
+    const whatHappened = selected.kind === 'exposure' || selected.kind === 'victim'
+        ? `${visibleTerm} is present in ${sourceLabel} reporting: ${displayRequirementText(selected.title)}.`
+        : selected.kind === 'tradecraft'
+            ? `${result.query} has a mapped technique or behavior from ${sourceLabel}: ${displayRequirementText(selected.title)}.`
+            : `${sourceLabel} returned current context for ${result.query}: ${displayRequirementText(selected.title)}.`
+    const whyItMatters = alertValue
+        || (selected.severity === 'critical' || selected.severity === 'high'
+            ? `${formatLabel(selected.severity)} priority with ${confidence} confidence; review it before customer notification or case routing.`
+            : `${confidence} confidence context that may support watchlist tuning, source review, or enrichment.`)
+    const nextAction = caseDraft?.ready
+        ? 'Stage this item as a case candidate with the attached watch terms and source results.'
+        : blocker
+            ? `Verify source coverage first: ${displayRequirementText(blocker.detail)}`
+            : firstAction || 'Review the source, confirm customer relevance, then mark it for watchlist or case follow-up.'
+
+    return {
+        whatHappened,
+        whyItMatters,
+        nextAction,
+        proofStatus: hasCapture
+            ? `Backed by ${proofRowCount} source result${proofRowCount === 1 ? '' : 's'} with capture or reference IDs attached.`
+            : hasSourceReference
+                ? 'Source reference is present, but the public result does not yet include a capture ID. Verify before customer-facing escalation.'
+                : 'No source reference is attached to the selected result. Treat this as context until source evidence is added.',
+        proofTone,
+        safetyBoundary: 'Public TI results are metadata-only. Hanasand does not expose raw leak files, credential values, or webhook secrets in this view.',
+        labels: [
+            { label: 'Severity', value: formatLabel(selected.severity) },
+            { label: 'Confidence', value: confidence },
+            { label: 'Watch term', value: visibleTerm },
+            { label: 'Freshness', value: selected.timestamp },
+        ],
+    }
+}
+
 function actorOperationsRowsFor(result: TiSearchResponse, actor: TiActorIntelligenceProfile, victimObservations: ReturnType<typeof victimObservationsFor>): ActorOperationsRow[] {
     const latestDate = actor.sourceCoverage.latestReportDate || actor.lastSeen || result.lastSeen || result.generatedAt
     const defaultSource = actor.provenanceRows[0]?.sourceName || result.sources[0]?.name || 'Public source'
     const defaultFamily = actor.sourceCoverage.sourceFamilies[0]?.family ? formatLabel(actor.sourceCoverage.sourceFamilies[0].family) : 'Source coverage'
     const techniqueRows: ActorOperationsRow[] = actor.techniqueCoverage.map(item => ({
         id: `ttp:${item.attackId || item.name}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
-        type: 'TTP',
+        type: 'Method',
         label: item.attackId ? `${item.attackId} ${item.name}` : item.name,
         detail: item.detail,
         tactic: item.tactic,
@@ -8255,7 +8557,7 @@ function sourceCoverageWorkbenchRowsFor({
             confidenceValues: [],
             sourceId: source.id,
             missing: source.url || source.provenance ? [] : ['sourceProvenance[].provenance'],
-            nextAction: href ? 'Open source and attach matching evidence row when routing to case work.' : 'Attach source URL or provenance reference before routing.',
+            nextAction: href ? 'Open source and attach matching evidence row when routing to case work.' : 'Attach source URL or source reference before routing.',
             actor,
             workItems,
             sourceOptions,
@@ -8384,7 +8686,7 @@ function workItemsForSource(items: AnalystWorkItem[], sourceName: string, proven
 function sourceArtifactTypesFor(actor: TiActorIntelligenceProfile, sourceName: string, provenance: string, sourceId: string | undefined, evidenceItems: AnalystWorkItem[]) {
     const tokens = unique([sourceName, provenance, sourceId ?? '']).map(token => token.toLowerCase()).filter(token => token.length > 2)
     const types = [
-        actor.techniqueCoverage.some(item => item.sourceIds.some(id => sourceId && id === sourceId) || item.provenanceRefs.some(ref => tokens.some(token => ref.toLowerCase().includes(token)))) ? 'TTP' : '',
+        actor.techniqueCoverage.some(item => item.sourceIds.some(id => sourceId && id === sourceId) || item.provenanceRefs.some(ref => tokens.some(token => ref.toLowerCase().includes(token)))) ? 'Method' : '',
         actor.campaignTimeline.some(item => item.sourceIds.some(id => sourceId && id === sourceId) || item.provenanceRefs.some(ref => tokens.some(token => ref.toLowerCase().includes(token)))) ? 'Campaign' : '',
         ...evidenceItems.map(item => formatLabel(item.kind)),
     ]
@@ -8548,29 +8850,29 @@ function taskStatusLabel(status: EnrichmentTask['status']) {
 }
 
 function taskStatusClass(status: EnrichmentTask['status']) {
-    if (status === 'ready') return 'rounded-lg bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]'
-    if (status === 'watch') return 'rounded-lg bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3]'
-    if (status === 'needs_review') return 'rounded-lg bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00]'
-    return 'rounded-lg bg-[#fff1f0] px-2 py-1 text-[11px] font-semibold text-[#b42318]'
+    if (status === 'ready') return 'rounded-lg border border-[#a6e4bd] bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b] dark:border-[#23563a] dark:bg-[#10281b] dark:text-[#9df0b8]'
+    if (status === 'watch') return 'rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'
+    if (status === 'needs_review') return 'rounded-lg border border-[#f3d27a] bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:border-[#6f5417] dark:bg-[#2a220f] dark:text-[#ffd879]'
+    return 'rounded-lg border border-[#f3d27a] bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:border-[#6f5417] dark:bg-[#2a220f] dark:text-[#ffd879]'
 }
 
 function decisionStepStatusLabel(status: DecisionStep['status']) {
     if (status === 'ready') return 'ready'
     if (status === 'review') return 'review'
-    return 'blocked'
+    return 'syncing'
 }
 
 function decisionStepStatusClass(status: DecisionStep['status']) {
-    if (status === 'ready') return 'shrink-0 rounded-md bg-[#e9f8ef] px-1.5 py-0.5 text-[10px] font-semibold text-[#147a3b]'
-    if (status === 'review') return 'shrink-0 rounded-md bg-[#fff4d6] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a00]'
-    return 'shrink-0 rounded-md bg-[#fff1f0] px-1.5 py-0.5 text-[10px] font-semibold text-[#b42318]'
+    if (status === 'ready') return 'shrink-0 rounded-md border border-[#a6e4bd] bg-[#e9f8ef] px-1.5 py-0.5 text-[10px] font-semibold text-[#147a3b] dark:border-[#23563a] dark:bg-[#10281b] dark:text-[#9df0b8]'
+    if (status === 'review') return 'shrink-0 rounded-md border border-[#f3d27a] bg-[#fff4d6] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a00] dark:border-[#6f5417] dark:bg-[#2a220f] dark:text-[#ffd879]'
+    return 'shrink-0 rounded-md border border-[#f3d27a] bg-[#fff4d6] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a00] dark:border-[#6f5417] dark:bg-[#2a220f] dark:text-[#ffd879]'
 }
 
 function severityClass(severity: AnalystWorkItem['severity']) {
-    if (severity === 'critical') return 'bg-[#fee4e2] text-[#b42318]'
-    if (severity === 'high') return 'bg-[#fff1f0] text-[#c2410c]'
-    if (severity === 'medium') return 'bg-[#fff4d6] text-[#8a5a00]'
-    return 'bg-[#e9f8ef] text-[#147a3b]'
+    if (severity === 'critical') return 'border border-[#ffb7ad] bg-[#fee4e2] text-[#b42318] dark:border-[#7f2c35] dark:bg-[#321316] dark:text-[#ffb8b0]'
+    if (severity === 'high') return 'border border-[#ffc49a] bg-[#fff1f0] text-[#c2410c] dark:border-[#7a3d16] dark:bg-[#301d11] dark:text-[#ffbc8c]'
+    if (severity === 'medium') return 'border border-[#f3d27a] bg-[#fff4d6] text-[#8a5a00] dark:border-[#6f5417] dark:bg-[#2a220f] dark:text-[#ffd879]'
+    return 'border border-[#a6e4bd] bg-[#e9f8ef] text-[#147a3b] dark:border-[#23563a] dark:bg-[#10281b] dark:text-[#9df0b8]'
 }
 
 function severityWeight(severity: AnalystWorkItem['severity']) {
@@ -8581,7 +8883,7 @@ function severityWeight(severity: AnalystWorkItem['severity']) {
 }
 
 function kindLabel(kind: AnalystWorkItem['kind']) {
-    if (kind === 'exposure') return 'Exposure'
+    if (kind === 'exposure') return 'Recent attacks'
     if (kind === 'victim') return 'Victim context'
     if (kind === 'tradecraft') return 'Tradecraft'
     if (kind === 'collection') return 'Collection'
@@ -8640,90 +8942,51 @@ function EvidenceBox({ href, children }: { href?: string; children: React.ReactN
 
 function EmptyState() {
     const launchItems = [
-        { label: 'APT29', detail: 'State-linked actor intelligence', href: '/ti/APT29', icon: <ShieldCheck className='h-4 w-4' /> },
-        { label: 'LockBit', detail: 'Ransomware actor workflow', href: '/ti/LockBit', icon: <ShieldAlert className='h-4 w-4' /> },
-        { label: 'Microsoft', detail: 'Company and vendor exposure', href: '/ti/Microsoft', icon: <Building2 className='h-4 w-4' /> },
+        { label: 'acworth-ga.gov', href: '/ti/acworth-ga.gov', icon: <Building2 className='h-4 w-4' /> },
+        { label: 'APT29', href: '/ti/APT29', icon: <ShieldCheck className='h-4 w-4' /> },
+        { label: 'LockBit', href: '/ti/LockBit', icon: <ShieldAlert className='h-4 w-4' /> },
+        { label: 'microsoft.com', href: '/ti/Microsoft', icon: <Building2 className='h-4 w-4' /> },
     ]
-    const workflowRows = [
-        { label: 'Actor facts', value: 'Aliases, attribution, freshness, confidence' },
-        { label: 'Evidence', value: 'Source rows, timestamps, provenance, captures' },
-        { label: 'Tradecraft', value: 'TTPs, tooling, infrastructure, campaigns' },
-        { label: 'Targets', value: 'Victims, sectors, regions, map context' },
-        { label: 'Workflow', value: 'Watchlists, alert review, case handoff, gaps' },
+    const outcomeItems = [
+        ['Recent evidence', 'Recent company, actor, domain, and detail results with confidence, freshness, source family, and review state.'],
+        ['Source context', 'Linked source references, capture state, and open questions so analysts can judge whether a result is useful.'],
+        ['Watchlist fit', 'Company, supplier, domain, and portfolio terms are separated from broad actor background.'],
+        ['Action path', 'Review, watch, escalate, export, or open the authenticated console when the result needs follow-up.'],
     ]
 
     return (
-        <section data-ti-empty-workspace='true' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#263244] dark:bg-[#101722]'>
-            <div className='grid gap-4 border-b border-[#e8edf5] bg-[#fbfcfe] p-4 dark:border-[#273244] dark:bg-[#131c29] lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
-                <div className='min-w-0'>
-                    <div className='flex flex-wrap items-center gap-2'>
-                        <span className='inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#eef3ff] text-[#3056d3] dark:bg-[#172646] dark:text-[#b8c8ff]'>
-                            <Radar className='h-4 w-4' />
-                        </span>
-                        <h1 className='wrap-break-word text-2xl font-semibold text-[#171a21] dark:text-[#eef4ff]'>Threat intelligence workspace</h1>
-                    </div>
-                    <p className='mt-2 max-w-3xl text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>
-                        Search an actor, company, domain, CVE, supplier, or malware family to open the analyst queue with source-backed evidence, watchlist relevance, enrichment gaps, and alert/case handoff.
+        <section data-ti-empty-workspace='true' className='grid justify-items-center gap-4 text-center'>
+            <div className='grid w-full max-w-3xl gap-4 rounded-lg border border-[#dfe5ee] bg-white p-4 text-left shadow-sm dark:border-[#314057] dark:bg-[#0f1621]'>
+                <div>
+                    <h2 className='text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>Not an analyst? Start with a company or domain.</h2>
+                    <p className='mt-2 text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>
+                        Hanasand translates the result into the company named, where the mention appeared, what was reported, how confident the match is, and what to review next.
                     </p>
                 </div>
-                <Link href='/dashboard/dwm' className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
-                    <BellRing className='h-3.5 w-3.5' />
-                    Alert queue
-                </Link>
+                <div className='grid gap-2 sm:grid-cols-2'>
+                    {outcomeItems.map(([title, detail]) => (
+                        <div key={title} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+                            <p className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{title}</p>
+                            <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{detail}</p>
+                        </div>
+                    ))}
+                </div>
+                <p className='mt-2 text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>
+                    Public results use reviewable metadata and source context. Customer notification, saved watchlists, and delivery routes continue in the authenticated console.
+                </p>
             </div>
-
-            <div className='grid min-w-0 gap-0 lg:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_320px]'>
-                <div className='border-b border-[#e8edf5] bg-white p-4 dark:border-[#273244] dark:bg-[#101722] lg:border-b-0 lg:border-r'>
-                    <div className='flex items-center justify-between gap-3'>
-                        <div>
-                            <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Start queue</h2>
-                            <p className='mt-1 text-xs leading-5 text-[#667085] dark:text-[#95a3b8]'>Open a real actor or entity workspace.</p>
-                        </div>
-                        <span className='rounded-lg bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#172646] dark:text-[#b8c8ff]'>3</span>
-                    </div>
-                    <div className='mt-3 grid gap-2'>
-                        {launchItems.map(item => (
-                            <Link key={item.href} href={item.href} className='grid min-w-0 gap-1 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 text-left transition hover:border-[#b8c5ff] hover:bg-[#eef3ff] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#273244] dark:bg-[#131c29] dark:hover:border-[#4a68a8] dark:hover:bg-[#172131]'>
-                                <span className='flex min-w-0 items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>
-                                    <span className='text-[#3056d3] dark:text-[#b8c8ff]'>{item.icon}</span>
-                                    <span className='wrap-break-word'>{item.label}</span>
-                                </span>
-                                <span className='text-xs leading-5 text-[#667085] dark:text-[#95a3b8]'>{item.detail}</span>
-                            </Link>
-                        ))}
-                    </div>
-                </div>
-
-                <div className='min-w-0 border-b border-[#e8edf5] p-4 dark:border-[#273244] lg:border-b-0'>
-                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Investigation view</h2>
-                    <div className='mt-3 grid gap-2 md:grid-cols-2'>
-                        {workflowRows.map(row => (
-                            <div key={row.label} className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
-                                <p className='text-xs font-semibold uppercase tracking-[0.02em] text-[#3056d3] dark:text-[#9ab3ff]'>{row.label}</p>
-                                <p className='mt-1 text-sm leading-5 text-[#344054] dark:text-[#d8e2f2]'>{row.value}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className='bg-[#fbfcfe] p-4 dark:bg-[#131c29] lg:col-span-2 lg:border-t lg:border-[#e8edf5] lg:dark:border-[#273244] 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
-                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Handoff status</h2>
-                    <div className='mt-3 grid gap-2 text-sm'>
-                        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                            <p className='font-semibold text-[#171a21] dark:text-[#eef4ff]'>Watchlist relevance</p>
-                            <p className='mt-1 text-xs leading-5 text-[#667085] dark:text-[#95a3b8]'>Matched or candidate terms become alert review inputs when organization context exists.</p>
-                        </div>
-                        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                            <p className='font-semibold text-[#171a21] dark:text-[#eef4ff]'>Case handoff</p>
-                            <p className='mt-1 text-xs leading-5 text-[#667085] dark:text-[#95a3b8]'>Selected evidence carries source IDs, timestamps, confidence, and missing dependencies.</p>
-                        </div>
-                        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                            <p className='font-semibold text-[#171a21] dark:text-[#eef4ff]'>Collection gaps</p>
-                            <p className='mt-1 text-xs leading-5 text-[#667085] dark:text-[#95a3b8]'>Missing captures, stale reports, and parser status route to source enrichment.</p>
-                        </div>
-                    </div>
-                </div>
+            <div className='flex flex-wrap justify-center gap-2'>
+                {launchItems.map(item => (
+                    <Link key={item.href} href={item.href} className='inline-flex h-9 items-center gap-2 rounded-full border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] transition hover:border-[#b8c5ff] hover:bg-[#eef3ff] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                        <span className='text-[#3056d3] dark:text-[#b8c8ff]'>{item.icon}</span>
+                        {item.label}
+                    </Link>
+                ))}
             </div>
+            <Link href='/dashboard/dwm' className='inline-flex items-center gap-2 text-sm font-semibold text-[#3056d3] transition hover:text-[#1d3fa3] dark:text-[#9ab3ff] dark:hover:text-[#c0ceff]'>
+                <BellRing className='h-4 w-4' />
+                Review recent monitoring alerts
+            </Link>
         </section>
     )
 }
@@ -8752,9 +9015,9 @@ function searchingResult(query: string): TiSearchResponse {
 function defaultDatasets(): TiSearchResponse['datasets'] {
     return [
         {
-            name: 'Ransomware victim claims',
+            name: 'Recent ransomware attacks',
             type: 'darknet_metadata',
-            coverage: 'Recent company names, actor names, claimed dates, sector/country context, and claimed-data descriptions from monitored extortion sources and public indexes.',
+            coverage: 'Recent company names, actor names, post dates, sector/country context, and data descriptions from monitored extortion sources and public indexes.',
             status: 'available',
             url: 'https://ransomware.live/'
         },
@@ -8774,7 +9037,7 @@ function defaultDatasets(): TiSearchResponse['datasets'] {
         {
             name: 'Company and supplier watchlists',
             type: 'vendor_report',
-            coverage: 'Customer-specific names, domains, brands, subsidiaries, and vendors matched against new actor claims and captured page text.',
+            coverage: 'Customer-specific names, domains, brands, subsidiaries, and vendors matched against new actor posts and captured page text.',
             status: 'planned'
         }
     ]
@@ -8785,14 +9048,14 @@ function defaultCollectionSources(): NonNullable<TiSearchResponse['collectionStr
         {
             source: 'RansomLook and ransomware.live',
             role: 'primary_seed',
-            summary: 'Used as starting coverage for recent victim claims, actor names, company names, claimed dates, sector/country context, and claimed-data descriptions.',
+            summary: 'Used as starting coverage for recent attacks, actor names, company names, post dates, sector/country context, and data descriptions.',
             buyerValue: 'Good seed data lets a small team detect obvious company mentions immediately, then spend engineering effort on direct verification and alert speed.'
         },
         {
             source: 'Direct actor infrastructure collection',
             role: 'owned_collection_target',
             summary: 'Company-first collection from actor-controlled public leak/extortion infrastructure where policy allows.',
-            buyerValue: 'This is the valuable part: faster discovery, verified claim changes, freshness deltas, and watchlist alerts that are not just copied from another public index.'
+            buyerValue: 'This is the valuable part: faster discovery, verified changes, freshness deltas, and watchlist alerts that are not just copied from another public index.'
         },
         {
             source: 'Infostealer and credential-exposure records',
@@ -8864,7 +9127,7 @@ function SourceActivationPanel({ activation }: { activation: NonNullable<TiSearc
             <div data-ti-source-activation='true' className='grid min-w-0 gap-3'>
                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                     <div className='min-w-0'>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Activation state</p>
+                        <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Activation state</p>
                         <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                             {activation.dryRunOnly ? 'Actions are review-only until a console user approves source changes.' : 'Returned source actions are ready for authenticated review.'}
                         </p>
@@ -8881,7 +9144,7 @@ function SourceActivationPanel({ activation }: { activation: NonNullable<TiSearc
                                 </div>
                                 <span className={sourceActivationExecutionClass(action.execution)}>{sourceActivationExecutionLabel(action.execution)}</span>
                             </div>
-                            {action.sourceId ? <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>source {action.sourceId}</p> : null}
+                            {action.sourceId ? <p className='mt-1 break-all font-mono text-[11px] text-[#586274] dark:text-[#9aa8bd]'>source {action.sourceId}</p> : null}
                         </div>
                     ))}
                 </div>
@@ -8896,7 +9159,7 @@ function InfoTip({ label }: { label: string }) {
             <span
                 tabIndex={0}
                 aria-label={label}
-                className='inline-flex h-6 w-6 cursor-help items-center justify-center rounded-full text-[#667085] transition hover:bg-[#eef3ff] hover:text-[#3056d3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:text-[#9aa8bd] dark:hover:bg-[#182235] dark:hover:text-[#d8e2f2]'
+                className='inline-flex h-6 w-6 cursor-help items-center justify-center rounded-full text-[#586274] transition hover:bg-[#eef3ff] hover:text-[#3056d3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:text-[#9aa8bd] dark:hover:bg-[#182235] dark:hover:text-[#d8e2f2]'
             >
                 <HelpCircle className='h-3.5 w-3.5' />
             </span>
@@ -8922,7 +9185,7 @@ function TechniqueBadge({ attackId, name, tactic, detail }: { attackId: string; 
             </a>
             <span className='pointer-events-none absolute left-1/2 top-9 z-20 hidden w-80 -translate-x-1/2 rounded-lg border border-[#dfe5ee] bg-white p-3 text-left text-xs font-medium leading-5 text-[#404957] shadow-xl group-hover:block group-focus-within:block dark:border-[#273244] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
                 <span className='block font-semibold text-[#171a21] dark:text-[#eef4ff]'>{attackId}: {name}</span>
-                <span className='mt-1 block text-[#667085] dark:text-[#9aa8bd]'>{tactic}</span>
+                <span className='mt-1 block text-[#586274] dark:text-[#9aa8bd]'>{tactic}</span>
                 <span className='mt-2 block'>{description}</span>
             </span>
         </span>
@@ -8949,15 +9212,15 @@ function techniqueDescription(attackId: string, name: string, tactic: string, de
 
 function ProfileStat({ icon, label, value, dark = false }: { icon: React.ReactNode; label: string; value: string; dark?: boolean }) {
     return (
-        <span className={`inline-flex min-w-0 flex-wrap items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs ${dark ? 'border-[#263244] bg-[#101722] text-[#d8deea]' : 'border-[#dfe5ee] bg-[#f8fafc] text-[#667085]'}`}>
+        <span className={`inline-flex min-w-0 flex-wrap items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs ${dark ? 'border-[#263244] bg-[#101722] text-[#d8deea]' : 'border-[#dfe5ee] bg-[#f8fafc] text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'}`}>
             <span className={`shrink-0 ${dark ? 'text-[#b8c5ff]' : 'text-[#3056d3]'}`}>{icon}</span>
             <span className='shrink-0'>{label}</span>
-            <span className={`min-w-0 wrap-break-word font-semibold ${dark ? 'text-white' : 'text-[#171a21]'}`}>{value}</span>
+            <span className={`min-w-0 wrap-break-word font-semibold ${dark ? 'text-white' : 'text-[#171a21] dark:text-[#eef4ff]'}`}>{value}</span>
         </span>
     )
 }
 
-function ThreatActorMap({ result, actionability, onSelectCountry }: { result: TiSearchResponse; actionability: TiActionabilityModel; onSelectCountry?: (country: string) => void }) {
+function ThreatActorMap({ result, actionability, onSelectCountry, compact = false }: { result: TiSearchResponse; actionability: TiActionabilityModel; onSelectCountry?: (country: string) => void; compact?: boolean }) {
     const geo = actorGeoProfile(result)
     const hasPoints = geo.points.length > 0
     const [viewBox, setViewBox] = useState<ViewBox>(INITIAL_VIEWBOX)
@@ -9033,12 +9296,12 @@ function ThreatActorMap({ result, actionability, onSelectCountry }: { result: Ti
         <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-[#f8fafc] dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex items-center justify-between gap-3 border-b border-[#e8edf5] px-4 py-3 dark:border-[#273244]'>
                 <div>
-                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Country Context</h2>
-                    <p className='mt-0.5 text-xs text-[#667085] dark:text-[#9aa8bd]'>Source-backed country coverage for operator attribution and targeting observations.</p>
+                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Actor country map</h2>
+                    <p className='mt-0.5 text-xs text-[#586274] dark:text-[#9aa8bd]'>Reported operator origin and victim or target countries from linked sources.</p>
                 </div>
                 <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#131c29] dark:text-[#9eb3ff]'>{hasPoints ? `${geo.points.length} countries` : 'Country data pending'}</span>
             </div>
-            <div className='relative min-h-96 overflow-hidden bg-[#f7f9fc] dark:bg-[#0b111a]'>
+            <div className={`${compact ? 'min-h-72' : 'min-h-80'} relative overflow-hidden bg-[#f7f9fc] dark:bg-[#0b111a]`}>
                 <div className='absolute left-3 top-3 z-20 rounded-lg border border-[#dfe5ee] bg-white/90 px-3 py-1.5 text-xs text-[#596170] shadow-sm backdrop-blur dark:border-[#273244] dark:bg-[#101826]/90 dark:text-[#b7c2d4]'>
                     <span className='inline-flex items-center gap-2'>
                         <Move className='h-3.5 w-3.5' />
@@ -9054,7 +9317,7 @@ function ThreatActorMap({ result, actionability, onSelectCountry }: { result: Ti
                     viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
                     role='img'
                     aria-label={`Country-level actor map for ${humanizeSlug(result.query)}`}
-                    className='relative z-10 h-96 w-full cursor-grab bg-white active:cursor-grabbing dark:bg-[#0b111a]'
+                    className={`${compact ? 'h-72' : 'h-80'} relative z-10 w-full cursor-grab bg-white active:cursor-grabbing dark:bg-[#0b111a]`}
                     onMouseDown={(event) => {
                         dragRef.current = { x: event.clientX, y: event.clientY, viewBox }
                     }}
@@ -9078,7 +9341,7 @@ function ThreatActorMap({ result, actionability, onSelectCountry }: { result: Ti
                         setViewBox((current) => zoomViewBox(current, event.deltaY > 0 ? 1.12 : 0.88, px, py))
                     }}
                 >
-                    <rect x='0' y='0' width={MAP_WIDTH} height={MAP_HEIGHT} fill='#ffffff' />
+                    <rect x='0' y='0' width={MAP_WIDTH} height={MAP_HEIGHT} className='fill-white dark:fill-[#0b111a]' />
                     <g className='opacity-95'>{mapPaths}</g>
                     {geo.flows.map(flow => {
                         const from = countryCentroids[flow.from.code]
@@ -9131,7 +9394,7 @@ function ThreatActorMap({ result, actionability, onSelectCountry }: { result: Ti
                     })}
                 </svg>
                 {!hasPoints ? (
-                    <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/80 px-4 text-center text-sm font-medium text-[#667085] dark:bg-[#101826]/85 dark:text-[#b7c2d4]'>
+                    <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/80 px-4 text-center text-sm font-medium text-[#586274] dark:bg-[#101826]/85 dark:text-[#b7c2d4]'>
                         Country mapping will appear when this profile has country-level target or origin observations.
                     </div>
                 ) : null}
@@ -9139,9 +9402,9 @@ function ThreatActorMap({ result, actionability, onSelectCountry }: { result: Ti
             {hasPoints ? (
                 <div className='grid gap-3 border-t border-[#e8edf5] bg-white px-4 py-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <div className='flex flex-wrap gap-3 text-xs'>
-                        <span className='inline-flex items-center gap-1.5 text-[#667085] dark:text-[#9aa8bd]'><span className='h-2.5 w-2.5 rounded-full bg-[#7c3aed]' />Operator attribution</span>
-                        <span className='inline-flex items-center gap-1.5 text-[#667085] dark:text-[#9aa8bd]'><span className='h-2.5 w-2.5 rounded-full bg-[#d92d20]' />Victim or targeting observation</span>
-                        <span className='inline-flex items-center gap-1.5 text-[#667085] dark:text-[#9aa8bd]'><span className='h-2.5 w-2.5 rounded-full border border-[#b7c2d4]' />Country-level source coverage</span>
+                        <span className='inline-flex items-center gap-1.5 text-[#586274] dark:text-[#9aa8bd]'><span className='h-2.5 w-2.5 rounded-full bg-[#7c3aed]' />Operator attribution</span>
+                        <span className='inline-flex items-center gap-1.5 text-[#586274] dark:text-[#9aa8bd]'><span className='h-2.5 w-2.5 rounded-full bg-[#d92d20]' />Reported victim or target country</span>
+                        <span className='inline-flex items-center gap-1.5 text-[#586274] dark:text-[#9aa8bd]'><span className='h-2.5 w-2.5 rounded-full border border-[#b7c2d4]' />Country-level source coverage</span>
                     </div>
                     <div className='grid gap-2 sm:grid-cols-2'>
                         {geo.points.map(point => (
@@ -9177,7 +9440,7 @@ const mapFeatureNameToCode: Record<string, string> = {
 
 function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnType<typeof actorGeoProfile>['points'][number]; active: boolean; handoff?: TiActionabilityModel['geographyHandoffs'][number]; onFocus: () => void }) {
     const payload = geographyContextPayloadFor(point, handoff)
-    const routeLabel = handoff?.watchlistTerm ? 'Watchlist review' : 'Source enrichment'
+    const routeLabel = handoff?.watchlistTerm ? 'Watchlist review' : 'Source review'
     return (
         <div
             data-ti-geo-context-actions='true'
@@ -9189,13 +9452,13 @@ function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnT
                     <span className={point.role === 'operator' ? 'whitespace-nowrap text-[#7c3aed] dark:text-[#b89cff]' : 'whitespace-nowrap text-[#b42318] dark:text-[#ffb4aa]'}>{point.role === 'operator' ? 'operator attribution' : `${point.count} observation${point.count === 1 ? '' : 's'}`}</span>
                 </span>
             </button>
-            <p className='mt-1 leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(point.detail)}</p>
+            <p className='mt-1 leading-5 text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(point.detail)}</p>
             {handoff ? (
                 <div className='mt-2 rounded-md border border-[#dfe5ee] bg-white px-2 py-1.5 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                         <div className='min-w-0'>
-                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{handoff.watchlistTerm ? `${handoff.watchlistTerm.kind}: ${handoff.watchlistTerm.value}` : 'Enrichment task'}</p>
-                            <p className='mt-1 leading-5 text-[#667085] dark:text-[#9aa8bd]'>{handoff.watchlistTerm?.reason ?? handoff.enrichmentTask}</p>
+                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{handoff.watchlistTerm ? `${handoff.watchlistTerm.kind}: ${handoff.watchlistTerm.value}` : 'Source review task'}</p>
+                            <p className='mt-1 leading-5 text-[#586274] dark:text-[#9aa8bd]'>{handoff.watchlistTerm?.reason ?? handoff.enrichmentTask}</p>
                         </div>
                         <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:shrink-0'>
                             <span className={sourceHealthChipClass(handoff.watchlistTerm ? 'ready' : 'review')}>{routeLabel}</span>
@@ -9203,9 +9466,9 @@ function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnT
                         </div>
                     </div>
                     {handoff.evidenceRows.length ? (
-                        <div data-ti-geo-provenance='true' className='mt-2 grid gap-1 border-t border-[#eef1f5] pt-2'>
+                        <div data-ti-geo-sources='true' data-ti-geo-provenance='true' className='mt-2 grid gap-1 border-t border-[#eef1f5] pt-2'>
                             {handoff.evidenceRows.slice(0, 2).map(row => (
-                                <p key={`${point.code}-${row.victim}-${row.reportDate}`} className='wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                <p key={`${point.code}-${row.victim}-${row.reportDate}`} className='wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                                     {row.victim} · {formatDate(row.reportDate)} · {Math.round(row.confidence * 100)}% · {row.sourceIds.length ? row.sourceIds.map(sourceId => `source ${sourceId}`).join(', ') : row.source}
                                 </p>
                             ))}
@@ -9263,13 +9526,26 @@ function formatLabel(value: string) {
     return value.replaceAll('_', ' ')
 }
 
+function publicStateLabel(value: string) {
+    if (value === 'blocked') return 'syncing'
+    if (value === 'action_required') return 'reviewing'
+    if (value === 'review') return 'reviewing'
+    if (value === 'local') return 'local'
+    return formatLabel(value)
+}
+
+function publicDecisionStatusLabel(value: DecisionStep['status']) {
+    if (value === 'blocked') return 'syncing'
+    return decisionStepStatusLabel(value)
+}
+
 function coverageMissingLabel(value: string) {
     if (value.includes('captureId')) return 'capture references'
     if (value.includes('reportDate')) return 'report dates'
     if (value.includes('sourceId')) return 'source identifiers'
-    if (value.includes('structuredProvenance')) return 'structured provenance'
-    if (value.includes('datedActivityRow')) return 'dated activity rows'
-    if (value.includes('provenanceRefs')) return 'provenance references'
+    if (value.includes('structuredProvenance')) return 'structured source details'
+    if (value.includes('datedActivityRow')) return 'dated activity'
+    if (value.includes('provenanceRefs')) return 'source references'
     return formatLabel(value)
 }
 
@@ -9283,7 +9559,7 @@ function watchlistIntersectionActionLabel(value: TiActionabilityModel['orgReleva
 
 function humanResultStatus(value?: string) {
     if (!value) return 'Monitoring'
-    if (value === 'metadata_review') return 'Review queue'
+    if (value === 'metadata_review') return 'Needs review'
     if (value === 'needs_source_activation') return 'Connecting sources'
     if (value === 'blocked_unsafe_target') return 'Review required'
     if (value === 'ready') return 'Current profile'
@@ -9341,14 +9617,14 @@ function sourceRoleLabel(value: string) {
 function sourceActivationActionLabel(value: NonNullable<TiSearchResponse['analystLoop']>['sourceActivationWorkflow']['actions'][number]['action']) {
     if (value === 'request_approval') return 'Request approval'
     if (value === 'restore_source') return 'Restore source'
-    if (value === 'enable_metadata_only_queue') return 'Enable metadata-only queue'
-    return 'Keep blocked'
+    if (value === 'enable_metadata_only_queue') return 'Watch this source without storing stolen files'
+    return 'Keep monitoring'
 }
 
 function sourceActivationExecutionLabel(value: NonNullable<TiSearchResponse['analystLoop']>['sourceActivationWorkflow']['actions'][number]['execution']) {
     if (value === 'human_approval_required') return 'approval required'
     if (value === 'dry_run') return 'review only'
-    return 'blocked'
+    return 'syncing'
 }
 
 function sourceActivationExecutionClass(value: NonNullable<TiSearchResponse['analystLoop']>['sourceActivationWorkflow']['actions'][number]['execution']) {

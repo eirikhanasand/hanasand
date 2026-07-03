@@ -1099,7 +1099,7 @@ function priorityRow(input: Omit<PublicTiEvidencePriority, 'schemaVersion' | 'ne
             ? 'Open the related console record or prepare customer review.'
             : input.state === 'review'
                 ? 'Review missing source, watchlist, alert, or freshness context before routing.'
-                : 'Collect source provenance and organization context before routing.',
+                : 'Collect source details and organization context before routing.',
     }
 }
 
@@ -1587,7 +1587,7 @@ function orgRelevanceEnrichmentGaps(input: {
     if (!input.actorIdentity.sectors.length) gaps.push(orgGap('missing_target_sectors', 'public-ti', 'actorIdentity.sectors', 'Attach target-sector evidence before routing this actor to a customer watchlist.', '/dashboard/ti/enrichment', 'actor_profile'))
     if (!input.actorIdentity.regions.length) gaps.push(orgGap('missing_target_regions', 'public-ti', 'actorIdentity.regions', 'Attach target-region evidence before regional exposure review.', '/dashboard/ti/enrichment', 'geography'))
     if (!input.sourceCoverage.length) gaps.push(orgGap('missing_source_coverage', 'source', 'sourceCoverage', 'Attach at least one source coverage row for this actor result.', '/dashboard/ti/sources', 'source_capture'))
-    if (!input.sourceEvidence.length) gaps.push(orgGap('missing_provenance', 'source', 'sourceEvidence', 'Source provenance is required before org relevance can be reviewed.', '/dashboard/ti/enrichment', 'source_capture'))
+    if (!input.sourceEvidence.length) gaps.push(orgGap('missing_provenance', 'source', 'sourceEvidence', 'Source details are required before org relevance can be reviewed.', '/dashboard/ti/enrichment', 'source_capture'))
     if (input.freshness.stale) gaps.push(orgGap('stale_evidence', 'source', 'freshness.lastSeen', input.freshness.reason, '/dashboard/ti/enrichment', 'source_capture'))
     return uniqueBy(gaps, gap => `${gap.code}:${gap.field}`)
 }
@@ -1958,10 +1958,10 @@ function buildPublicTiReadiness(input: {
 
     if (!hasOrgContext) blockers.push(readinessBlocker('missing_org', 'watchlist', 'org', 'watchlistMatches[].organizationId', 'Organization context is required before watchlist, alert, case, or delivery handoff can mutate customer state.', '/dashboard/dwm', 'Open the authenticated console and choose the customer organization before saving watchlist terms.', 'consumer_readiness'))
     if (!watchlistIds.length || !watchlistItemIds.length) blockers.push(readinessBlocker('missing_org_watchlist', 'watchlist', 'org', 'watchlistMatches[].watchlistId', hasWatchlistTerms ? 'Candidate watchlist terms exist, but no persisted organization watchlist item is attached.' : 'No candidate or persisted organization watchlist term is attached to this result.', '/dashboard/dwm', hasWatchlistTerms ? 'Create or select the customer watchlist, then rebuild alerts from the saved items.' : 'Collect a customer-relevant company, domain, vendor, or sector term before rebuilding alerts.', 'consumer_readiness'))
-    if (!input.sourceProvenance.length) blockers.push(readinessBlocker('missing_source_provenance', 'source', 'source', 'sourceProvenance[]', 'No source provenance row is attached to this result.', '/dashboard/ti/enrichment', 'Attach source name, source ID, provenance, report date, and confidence before using this result for alerting.', 'public_result'))
-    if (input.actor.freshness.stale) blockers.push(readinessBlocker('stale_provenance', 'public_ti', 'public-ti', 'actorIntelligence.freshness', input.actor.freshness.reason, '/dashboard/ti/enrichment', 'Refresh the actor profile or attach newer corroborating evidence before claiming alert-ready status.', 'public_result'))
+    if (!input.sourceProvenance.length) blockers.push(readinessBlocker('missing_source_provenance', 'source', 'source', 'sourceProvenance[]', 'No source detail row is attached to this result.', '/dashboard/ti/enrichment', 'Attach source name, source ID, source URL, report date, and confidence before using this result for alerting.', 'public_result'))
+    if (input.actor.freshness.stale) blockers.push(readinessBlocker('stale_provenance', 'public_ti', 'public-ti', 'actorIntelligence.freshness', input.actor.freshness.reason, '/dashboard/ti/enrichment', 'Refresh the actor profile or attach newer corroborating evidence before sending this to review.', 'public_result'))
     if (!alertIds.length) blockers.push(readinessBlocker('missing_alert', 'alert', 'alert', 'relatedAlerts[].id', 'No generated alert ID is attached to this actor result.', '/dashboard/dwm', 'Rebuild alerts from persisted watchlist items and return the alert ID.', 'consumer_readiness'))
-    if (!captureIds.length) blockers.push(readinessBlocker('missing_capture', 'source', 'source', 'sourceProvenance[].captureId', 'No replayable capture ID is attached for case evidence or delivery dry-run.', '/dashboard/ti/enrichment', 'Attach capture IDs or source request IDs to the provenance rows.', 'consumer_readiness'))
+    if (!captureIds.length) blockers.push(readinessBlocker('missing_capture', 'source', 'source', 'sourceProvenance[].captureId', 'No replayable capture ID is attached for case evidence or delivery dry-run.', '/dashboard/ti/enrichment', 'Attach capture IDs or source request IDs to the source rows.', 'consumer_readiness'))
     if (!casePaths.length) blockers.push(readinessBlocker('missing_case_route', 'case', 'case', 'relatedCases[].path', 'No case route or case path is attached to this result.', '/dashboard/ti/workbench', 'Return relatedCases[].path or relatedAlerts[].casePath after case creation is available.', 'consumer_readiness'))
     if (!webhookDestinationIds.length) blockers.push(readinessBlocker('missing_webhook_destination', 'webhook', 'webhook', 'relatedWebhookDestinations[].id', 'No active webhook destination ID is attached for dry-run delivery.', '/dashboard/dwm', 'Attach an active webhook destination before preparing customer delivery.', 'consumer_readiness'))
 
@@ -2817,7 +2817,7 @@ function buildExportPayloads(input: {
     const webhookMissing = input.webhookBlockers ?? [
         ...(firstAlert?.id ? [] : ['DWM alert ID from /v1/dwm/alerts or /v1/dwm/alerts/rebuild']),
         ...(webhookDestinationIds.length ? [] : ['Active webhook destination ID from /v1/dwm/webhooks']),
-        ...(captureIds.length ? [] : ['Replayable capture ID from source provenance or DWM alert evidence']),
+        ...(captureIds.length ? [] : ['Replayable capture ID from source details or DWM alert evidence']),
     ]
     const relatedCaseContext = input.relatedCases.map(item => ({
         id: item.id,
@@ -2846,7 +2846,7 @@ function buildExportPayloads(input: {
             title: `${item.country} ${item.role === 'operator' ? 'attribution' : 'targeting'} review`,
             severity: item.role === 'operator' ? 'low' as const : 'medium' as const,
             detail: item.enrichmentTask,
-            dependency: item.role === 'operator' ? 'actor attribution source provenance' : 'country-specific victim/source evidence',
+            dependency: item.role === 'operator' ? 'actor attribution source details' : 'country-specific victim/source evidence',
         })),
     ], task => task.id).slice(0, 12)
     const caseBody = input.casePayload ?? {
@@ -3115,7 +3115,7 @@ function buildConsumerReadiness(input: {
 function blockersForStage(stage: ConsumerReadinessStage['id'], request: ConsumerReadinessRequest, missing: string[], provenance: TiHandoffExportPayload['provenance']): ConsumerReadinessBlocker[] {
     const blockers = missing.map(item => consumerBlocker(blockerCodeFor(item, stage), stage, `${stage}.missing`, item, true))
     if (!request.body.organizationId && stage !== 'enrichment') blockers.push(consumerBlocker('missing_org', stage, `${stage}.request.body.organizationId`, 'Organization context is required in the authenticated console.', true))
-    if (!provenance.length && stage !== 'publicTi') blockers.push(consumerBlocker('missing_provenance', stage, `${stage}.provenance`, 'Source provenance is required before this handoff can be consumed.', true))
+    if (!provenance.length && stage !== 'publicTi') blockers.push(consumerBlocker('missing_provenance', stage, `${stage}.provenance`, 'Source details are required before this handoff can be consumed.', true))
     if ((stage === 'caseHandoff' || stage === 'webhookTrigger') && !readStringArray(request.body.captureIds).length) blockers.push(consumerBlocker('missing_provenance', stage, `${stage}.request.body.captureIds`, 'Capture IDs are required for case and delivery evidence.', true))
     if ((stage === 'caseHandoff' || stage === 'webhookTrigger') && !request.body.alertId) blockers.push(consumerBlocker('absent_alert_id', stage, `${stage}.request.body.alertId`, 'Alert ID is required before case or delivery handoff.', true))
     if (stage === 'publicTi' && !readTermArray(request.body.terms).length) blockers.push(consumerBlocker('missing_watchlist_term', stage, `${stage}.request.body.terms`, 'At least one watchlist term is required.', true))
@@ -3247,7 +3247,7 @@ function normalizeEnrichmentGaps(contractGaps: TiActionabilityContract['enrichme
     if (!actor.malwareTools.length || !actor.campaigns.length) {
         gaps.push({
             id: 'actor-enrichment',
-            title: 'Complete actor enrichment fields',
+            title: 'Complete actor profile fields',
             severity: 'medium',
             detail: 'Actor tools and campaigns are needed to enrich watchlists and explain defensive relevance.',
             dependency: 'TiSearchResponse.actorIntelligence.malwareTools/campaigns',
@@ -3393,7 +3393,7 @@ function rationaleFor(disposition: TiActionabilityModel['alertDisposition'], can
     if (alerts.length) return 'A backed alert ID is attached, so this result can move into case review.'
     if (matches.length) return 'A backed organization watchlist match is attached; rebuild or open alert review before customer delivery.'
     if (candidates.length) return 'The result has watchlist candidates, but no backed organization watchlist match or alert ID was returned.'
-    if (sources.length) return 'Source provenance exists, but the result has no customer-relevant watchlist terms or backed alert linkage.'
+    if (sources.length) return 'Source details exist, but the result has no customer-relevant watchlist terms or alert linkage.'
     return 'The result does not have enough source, watchlist, alert, or case data to act on yet.'
 }
 

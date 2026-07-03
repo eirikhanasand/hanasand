@@ -242,7 +242,7 @@ export function buildActorArtifacts(
             ...matchingActivity(result, campaign),
         ],
         watchlistKind: 'vendor',
-        enrichmentTask: `Attach campaign source provenance for ${campaign}, including named victims, timeframe, and capture or advisory reference.`,
+        enrichmentTask: `Attach campaign source details for ${campaign}, including named victims, timeframe, and capture or advisory reference.`,
     }))
 
     const infrastructureArtifacts = actor.infrastructure.map(item => artifactFromActorList({
@@ -257,7 +257,7 @@ export function buildActorArtifacts(
             ...matchingActivity(result, item),
         ],
         watchlistKind: 'domain',
-        enrichmentTask: `Collect concrete observable or source provenance for ${item} before promoting it into customer alert matching.`,
+        enrichmentTask: `Collect concrete observable or source details for ${item} before promoting it into customer alert matching.`,
     }))
 
     const techniqueArtifacts = result.ttps.map(ttp => withReadiness({
@@ -615,8 +615,8 @@ function selectedPayloadForAction(action: PublicTiHandoffAction, payloads: Publi
 function blockersForBridge(artifact: PublicTiHandoffArtifact, bridgeState: Pick<AuthenticatedArtifactBridge, 'orgRequired' | 'sourceRequired' | 'stale' | 'missing'>): PublicTiHandoffPayload['blockers'] {
     return [
         ...(bridgeState.orgRequired ? [{ code: 'org_required' as const, detail: 'Open this payload in an authenticated organization context before creating watchlists, rebuilding alerts, or creating cases.' }] : []),
-        ...(bridgeState.sourceRequired ? [{ code: 'source_required' as const, detail: 'Attach source provenance, capture ID, source URL, or request ID before using this artifact as alert or case evidence.' }] : []),
-        ...(bridgeState.stale ? [{ code: 'stale_evidence' as const, detail: `Fresh source is required after ${formatDate(artifact.freshness)} before claiming alert-ready status.` }] : []),
+        ...(bridgeState.sourceRequired ? [{ code: 'source_required' as const, detail: 'Attach source details, capture ID, source URL, or request ID before using this artifact as alert or case evidence.' }] : []),
+        ...(bridgeState.stale ? [{ code: 'stale_evidence' as const, detail: `Fresh source is required after ${formatDate(artifact.freshness)} before sending this to review.` }] : []),
         ...(!artifact.watchlistTerms.length && artifact.kind !== 'technique' ? [{ code: 'missing_watchlist_term' as const, detail: 'Add or select an organization watchlist term before alert rebuild.' }] : []),
     ]
 }
@@ -736,7 +736,7 @@ function labelForHandoffAction(action: PublicTiHandoffAction) {
     if (action === PUBLIC_TI_HANDOFF_ACTIONS.watchlist) return 'Create Watchlist'
     if (action === PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild) return 'Rebuild Alerts'
     if (action === PUBLIC_TI_HANDOFF_ACTIONS.case) return 'Open Case'
-    return 'Queue Enrichment'
+    return 'Add Context'
 }
 
 function normalizeHandoffAction(value: string | null | undefined): PublicTiHandoffAction | null {

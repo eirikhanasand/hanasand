@@ -210,7 +210,7 @@ function buildProvenanceRows(result: TiSearchResponse, fallback: TiActorIntellig
         reportDate: undefined,
         captureId: undefined,
         confidence: fallback.confidence,
-        shownBecause: 'Used to support actor enrichment when newer source rows are not returned.',
+        shownBecause: 'Used to support actor profiles when newer source rows are not returned.',
     }))
 
     return uniqueBy([

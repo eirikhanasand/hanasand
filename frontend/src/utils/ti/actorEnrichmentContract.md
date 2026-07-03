@@ -1,6 +1,6 @@
 # Public TI Actor Enrichment Contract
 
-The public `/ti/<query>` actor page can render and export serious analyst work only when the TI search response carries these fields.
+The public `/ti/<query>` threat profile can render and export serious analyst work only when the TI search response carries these fields.
 
 ## Actor Intelligence
 
