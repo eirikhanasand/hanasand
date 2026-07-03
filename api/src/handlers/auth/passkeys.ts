@@ -74,6 +74,54 @@ export async function getPasskeyRegisterOptions(req: FastifyRequest, res: Fastif
     })
 }
 
+export async function getPasskeys(req: FastifyRequest, res: FastifyReply) {
+    const actor = await tokenWrapper(req, res)
+    if (!actor.valid || !actor.id) {
+        return res.status(401).send({ error: actor.error || 'Unauthorized.' })
+    }
+
+    const result = await run(`
+        SELECT credential_id, label, alg, aaguid, sign_count, created_at, last_used_at
+        FROM user_passkeys
+        WHERE user_id = $1
+        ORDER BY last_used_at DESC NULLS LAST, created_at DESC
+    `, [actor.id])
+
+    return res.send({
+        passkeys: result.rows.map(row => ({
+            credentialId: row.credential_id,
+            label: row.label,
+            algorithm: Number(row.alg) === -7 ? 'ES256' : Number(row.alg) === -257 ? 'RS256' : String(row.alg),
+            aaguid: row.aaguid,
+            signCount: Number(row.sign_count || 0),
+            createdAt: row.created_at,
+            lastUsedAt: row.last_used_at,
+        })),
+    })
+}
+
+export async function deletePasskey(req: FastifyRequest, res: FastifyReply) {
+    const actor = await tokenWrapper(req, res)
+    if (!actor.valid || !actor.id) {
+        return res.status(401).send({ error: actor.error || 'Unauthorized.' })
+    }
+
+    const { credentialId } = req.params as { credentialId?: string } ?? {}
+    if (!credentialId) {
+        return res.status(400).send({ error: 'Missing passkey credential id.' })
+    }
+
+    const result = await run(
+        'DELETE FROM user_passkeys WHERE credential_id = $1 AND user_id = $2 RETURNING credential_id',
+        [credentialId, actor.id],
+    )
+    if (!result.rows.length) {
+        return res.status(404).send({ error: 'Passkey not found.' })
+    }
+
+    return res.send({ ok: true, credentialId })
+}
+
 export async function postPasskeyRegisterVerify(req: FastifyRequest, res: FastifyReply) {
     const actor = await tokenWrapper(req, res)
     if (!actor.valid || !actor.id) {

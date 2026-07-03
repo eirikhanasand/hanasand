@@ -5,20 +5,38 @@ import { DashboardPanel } from '@/components/dashboard/ui'
 import { getCookie, removeCookies } from '@/utils/cookies/cookies'
 import { Fingerprint, LogOut, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { decodePasskeyCreationOptions, passkeyCredentialToJSON } from '@/utils/auth/passkeys'
+
+type PasskeyRow = {
+    credentialId: string
+    label: string
+    algorithm: string
+    createdAt: string
+    lastUsedAt: string | null
+}
 
 export default function AccountActions({ isSelf }: { isSelf: boolean }) {
     const router = useRouter()
     const [confirmDelete, setConfirmDelete] = useState(false)
     const [busy, setBusy] = useState(false)
     const [message, setMessage] = useState('')
+    const [passkeys, setPasskeys] = useState<PasskeyRow[]>([])
 
     if (!isSelf) return null
 
     function clearAndGoLogin() {
         removeCookies('access_token', 'id', 'name', 'avatar', 'roles')
         router.push('/login')
+    }
+
+    async function refreshPasskeys() {
+        const response = await fetch('/api/auth/passkeys', { cache: 'no-store' }).catch(() => null)
+        if (!response) return
+        const data = await response.json().catch(() => null)
+        if (response.ok && Array.isArray(data?.passkeys)) {
+            setPasskeys(data.passkeys)
+        }
     }
 
     async function deleteAccount() {
@@ -87,12 +105,38 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
             }
 
             setMessage('Passkey added. You can use it on the login page.')
+            await refreshPasskeys()
         } catch (error) {
             setMessage(error instanceof Error ? error.message : 'Unable to add passkey.')
         } finally {
             setBusy(false)
         }
     }
+
+    async function removePasskey(credentialId: string) {
+        if (busy) return
+        setBusy(true)
+        setMessage('')
+        try {
+            const response = await fetch(`/api/auth/passkeys/${encodeURIComponent(credentialId)}`, { method: 'DELETE' })
+            const data = await response.json().catch(() => null)
+            if (!response.ok) {
+                setMessage(data?.error || 'Unable to remove passkey.')
+                return
+            }
+            setPasskeys(current => current.filter(passkey => passkey.credentialId !== credentialId))
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : 'Unable to remove passkey.')
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    useEffect(() => {
+        if (isSelf) {
+            void refreshPasskeys()
+        }
+    }, [isSelf])
 
     return (
         <DashboardPanel className='p-4'>
@@ -117,6 +161,22 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
                 </div>
             </div>
             {message && <p className='mt-3 text-sm text-red-700'>{message}</p>}
+            <div className='mt-4 grid gap-2'>
+                {passkeys.map(passkey => (
+                    <div key={passkey.credentialId} className='flex flex-col gap-2 rounded-lg border border-[#d8dee9] bg-white p-3 sm:flex-row sm:items-center sm:justify-between'>
+                        <div>
+                            <p className='text-sm font-semibold text-[#171a21]'>{passkey.label || 'Passkey'}</p>
+                            <p className='mt-1 text-xs text-[#596170]'>
+                                {passkey.algorithm} · {passkey.lastUsedAt ? `Last used ${formatDate(passkey.lastUsedAt)}` : `Added ${formatDate(passkey.createdAt)}`}
+                            </p>
+                        </div>
+                        <button disabled={busy} onClick={() => void removePasskey(passkey.credentialId)} className='h-8 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60'>
+                            Remove
+                        </button>
+                    </div>
+                ))}
+                {!passkeys.length && <div className='rounded-lg border border-dashed border-[#d8dee9] bg-white p-3 text-sm text-[#596170]'>No passkeys enrolled.</div>}
+            </div>
 
             {confirmDelete && (
                 <div className='fixed inset-0 z-50 grid place-items-center bg-black/45 px-4 backdrop-blur-sm'>
@@ -138,4 +198,8 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
             )}
         </DashboardPanel>
     )
+}
+
+function formatDate(value: string) {
+    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
