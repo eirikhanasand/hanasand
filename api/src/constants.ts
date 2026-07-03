@@ -41,6 +41,7 @@ const config = {
     lxd_image_server: process.env.LXD_IMAGE_SERVER || 'https://cloud-images.ubuntu.com/releases',
     pwned: process.env.PWNED_API_URL || 'http://pwned:8080/api/pwned',
     pwned_ws: process.env.PWNED_WS_URL || 'ws://pwned:8080/api/pwned/ws',
+    hibp_pwned_range_api: process.env.HIBP_PWNED_RANGE_API || 'https://api.pwnedpasswords.com/range',
     github_articles_ssh: process.env.ARTICLES_REPO_URL || 'git@github.com:eirikhanasand/hanasand.git',
     self_url: 'https://api.hanasand.com/api/auth/token',
     internal_api: process.env.INTERNAL_API || 'https://internal.hanasand.com/api',

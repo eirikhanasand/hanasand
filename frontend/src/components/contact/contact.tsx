@@ -1,12 +1,13 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Building2, Mail, MessageSquareText, Send, ShieldCheck, UserRound } from 'lucide-react'
+import { Building2, CheckCircle2, LoaderCircle, Mail, MessageSquareText, Send, ShieldCheck, UserRound } from 'lucide-react'
 import { useFormik } from 'formik'
 import * as Yup from 'yup'
 import ErrorNotice from '@/components/error/errorNotice'
+import { useState } from 'react'
 
-const fieldClassName = 'w-full rounded-lg border border-[#d8dee9] bg-white px-3 py-3 text-sm text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
+const fieldClassName = 'w-full rounded-lg border border-ui-border bg-ui-panel px-3 py-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/15'
 
 type ContactIntent = {
     subject: string
@@ -16,11 +17,32 @@ type ContactIntent = {
     detail: string
 }
 
+type ContactResult = {
+    ticketId: string
+    nextStep: string
+}
+
+const intakeSteps = [
+    ['Coverage fit', 'Confirm whether the names, domains, suppliers, or actors are sensible to monitor now.'],
+    ['Delivery path', 'Pick email, webhook, API, or shared review links for the first alerts.'],
+    ['Security review', 'Package DPA, subprocessors, SLA notes, identity requirements, and current control gaps.'],
+]
+
+const reviewPacketRows = [
+    ['Pilot scope', 'Watched names, domains, suppliers, alert owner, and first-month success criteria.'],
+    ['Delivery setup', 'Email, webhook, API, or shared review link path with the fields your team needs.'],
+    ['Security packet', 'DPA notes, subprocessors, SLA expectations, identity requirements, and current certification limits.'],
+]
+
 export default function Contact({ plan = '', intent = '' }: { plan?: string; intent?: string }) {
     const contactIntent = getContactIntent(plan, intent)
+    const [submitting, setSubmitting] = useState(false)
+    const [submitError, setSubmitError] = useState('')
+    const [result, setResult] = useState<ContactResult | null>(null)
     const validationSchema = Yup.object().shape({
         name: Yup.string().required('Name is required'),
         email: Yup.string().email('Invalid email').required('Email is required'),
+        company: Yup.string(),
         type: Yup.string().min(5, 'Subject must be at least 5 characters').required('Subject is required'),
         message: Yup.string().min(20, 'Message must be at least 20 characters').required('Message is required'),
     })
@@ -29,29 +51,57 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
         initialValues: {
             name: '',
             email: '',
+            company: '',
             type: contactIntent.subject,
             message: contactIntent.message,
         },
         enableReinitialize: true,
         validationSchema,
-        onSubmit: (values) => {
-            const subject = values.type
-            const body = `${values.message}\n\n${values.name}\n${values.email}`
-            const mailtoLink = `mailto:eirik@hanasand.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-            window.location.href = mailtoLink
+        onSubmit: async (values) => {
+            setSubmitting(true)
+            setSubmitError('')
+            setResult(null)
+            try {
+                const response = await fetch('/api/contact', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: values.name,
+                        email: values.email,
+                        company: values.company,
+                        subject: values.type,
+                        message: values.message,
+                        intent,
+                        plan,
+                    }),
+                })
+                const payload = await response.json().catch(() => ({})) as { error?: string, ticketId?: string, nextStep?: string }
+                if (!response.ok || payload.error) {
+                    throw new Error(payload.error || 'Unable to send the request right now.')
+                }
+                setResult({
+                    ticketId: payload.ticketId || 'received',
+                    nextStep: payload.nextStep || 'We received the request and will reply by email.',
+                })
+                formik.resetForm({ values })
+            } catch (error) {
+                setSubmitError(error instanceof Error ? error.message : 'Unable to send the request right now.')
+            } finally {
+                setSubmitting(false)
+            }
         }
     })
 
-    const canSubmit = formik.isValid && formik.dirty
+    const canSubmit = formik.isValid && formik.dirty && !submitting
 
     return (
-        <section className='min-h-[calc(100vh-4.5rem)] bg-[#f7f8fb] px-4 py-12 text-[#171a21] md:px-8 md:py-18'>
+        <section className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-12 text-ui-text md:px-8 md:py-18'>
             <div className='mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-start'>
                 <div className='grid gap-6'>
                     <div className='grid gap-4'>
-                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>{contactIntent.eyebrow}</p>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>{contactIntent.eyebrow}</p>
                         <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>{contactIntent.heading}</h1>
-                        <p className='max-w-xl text-base leading-7 text-[#596170]'>
+                        <p className='max-w-xl text-base leading-7 text-ui-muted'>
                             {contactIntent.detail}
                         </p>
                     </div>
@@ -59,18 +109,58 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                     <div className='grid gap-3'>
                         <ContactPoint icon={<ShieldCheck className='h-4.5 w-4.5' />} title='Threat monitoring' detail='Company and supplier exposure alerts from recent actor activity.' />
                         <ContactPoint icon={<Building2 className='h-4.5 w-4.5' />} title='Buyer fit' detail='Best for teams that need fast notification, clean fields, and reviewable context.' />
+                        <ContactPoint icon={<MessageSquareText className='h-4.5 w-4.5' />} title='Procurement review' detail='Request DPA, subprocessor details, SLA notes, security questionnaire, and identity requirements.' />
                         <ContactPoint icon={<Mail className='h-4.5 w-4.5' />} title='Direct email' detail='eirik@hanasand.com' />
+                    </div>
+
+                    <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>What happens next</p>
+                        <div className='grid gap-3'>
+                            {intakeSteps.map(([title, detail]) => (
+                                <div key={title} className='grid gap-1 rounded-lg border border-ui-border bg-ui-raised p-3'>
+                                    <span className='text-sm font-semibold text-ui-text'>{title}</span>
+                                    <span className='text-sm leading-6 text-ui-muted'>{detail}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
+                        <div className='border-b border-ui-border bg-ui-raised px-4 py-3'>
+                            <p className='text-sm font-semibold uppercase text-ui-primary'>Review packet</p>
+                            <p className='mt-1 text-sm leading-6 text-ui-muted'>A good request should leave with a concrete pilot shape, not a generic sales thread.</p>
+                        </div>
+                        <div className='divide-y divide-ui-border'>
+                            {reviewPacketRows.map(([label, detail]) => (
+                                <div key={label} className='grid gap-1 px-4 py-3 text-sm sm:grid-cols-[8rem_1fr] sm:gap-4'>
+                                    <span className='font-semibold text-ui-text'>{label}</span>
+                                    <span className='leading-6 text-ui-muted'>{detail}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
-                <form className='grid gap-5 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-[0_20px_70px_rgba(26,35,55,0.10)] md:p-7' onSubmit={formik.handleSubmit} title={contactIntent.eyebrow}>
+                <form className='grid gap-5 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-lg md:p-7' onSubmit={formik.handleSubmit} title={contactIntent.eyebrow}>
                     <div className='grid gap-1'>
                         <h2 className='text-xl font-semibold'>Start a conversation</h2>
-                        <p className='text-sm text-[#667085]'>This opens a drafted email with your details filled in.</p>
+                        <p className='text-sm text-ui-muted'>Send the request here so it can be tracked. Direct email stays available as a fallback.</p>
                     </div>
 
+                    {result ? (
+                        <div className='rounded-lg border border-ui-success/35 bg-ui-success/10 p-4 text-sm leading-6 text-ui-success'>
+                            <div className='flex items-center gap-2 font-semibold'>
+                                <CheckCircle2 className='h-4 w-4' />
+                                Request received
+                            </div>
+                            <p className='mt-2'>Ticket <span className='font-mono font-semibold'>{result.ticketId}</span>. {result.nextStep}</p>
+                        </div>
+                    ) : null}
+
+                    <ErrorNotice compact message={submitError} />
+
                     <Field
-                        icon={<UserRound className='h-4 w-4 text-[#697386]' />}
+                        icon={<UserRound className='h-4 w-4 text-ui-muted' />}
                         label='Name'
                         error={formik.touched.name ? formik.errors.name : undefined}
                     >
@@ -83,8 +173,8 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                     </Field>
 
                     <Field
-                        icon={<Mail className='h-4 w-4 text-[#697386]' />}
-                        label='Email Address'
+                        icon={<Mail className='h-4 w-4 text-ui-muted' />}
+                        label='Work email'
                         error={formik.touched.email ? formik.errors.email : undefined}
                     >
                         <input
@@ -96,7 +186,21 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                     </Field>
 
                     <Field
-                        icon={<MessageSquareText className='h-4 w-4 text-[#697386]' />}
+                        icon={<Building2 className='h-4 w-4 text-ui-muted' />}
+                        label='Company or team'
+                        error={formik.touched.company ? formik.errors.company : undefined}
+                    >
+                        <input
+                            type='text'
+                            className={fieldClassName}
+                            {...formik.getFieldProps('company')}
+                            placeholder='Acme Security'
+                            autoComplete='organization'
+                        />
+                    </Field>
+
+                    <Field
+                        icon={<MessageSquareText className='h-4 w-4 text-ui-muted' />}
                         label='Subject'
                         error={formik.touched.type ? formik.errors.type : undefined}
                     >
@@ -109,7 +213,7 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                     </Field>
 
                     <Field
-                        icon={<MessageSquareText className='h-4 w-4 text-[#697386]' />}
+                        icon={<MessageSquareText className='h-4 w-4 text-ui-muted' />}
                         label='Message'
                         error={formik.touched.message ? formik.errors.message : undefined}
                     >
@@ -122,12 +226,15 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
 
                     <button
                         type='submit'
-                        className={`flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition ${canSubmit ? 'bg-[#171a21] text-white hover:bg-[#2b2f39]' : 'cursor-not-allowed border border-[#d8dee9] bg-[#f5f7fb] text-[#98a2b3]'}`}
+                        className={`flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition ${canSubmit ? 'bg-ui-primary text-ui-canvas hover:bg-ui-primary/90' : 'cursor-not-allowed border border-ui-border bg-ui-raised text-ui-muted'}`}
                         disabled={!canSubmit}
                     >
-                        <Send className='h-4 w-4' />
-                        Send
+                        {submitting ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
+                        {submitting ? 'Sending' : 'Send request'}
                     </button>
+                    <a href='mailto:eirik@hanasand.com' className='text-center text-sm font-semibold text-ui-primary hover:text-ui-primary/80'>
+                        Email eirik@hanasand.com instead
+                    </a>
                 </form>
             </div>
         </section>
@@ -136,13 +243,13 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
 
 function ContactPoint({ icon, title, detail }: { icon: ReactNode, title: string, detail: string }) {
     return (
-        <div className='grid grid-cols-[2.75rem_1fr] gap-3 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
-            <span className='grid h-11 w-11 place-items-center rounded-lg border border-[#e1e7f0] bg-[#f8fafc] text-[#3056d3]'>
+        <div className='grid grid-cols-[2.75rem_1fr] gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
+            <span className='grid h-11 w-11 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
                 {icon}
             </span>
             <span className='grid gap-1'>
-                <span className='font-semibold text-[#171a21]'>{title}</span>
-                <span className='text-sm leading-6 text-[#596170]'>{detail}</span>
+                <span className='font-semibold text-ui-text'>{title}</span>
+                <span className='text-sm leading-6 text-ui-muted'>{detail}</span>
             </span>
         </div>
     )
@@ -161,7 +268,7 @@ function Field({
 }) {
     return (
         <label className='grid gap-2'>
-            <span className='flex items-center gap-2 text-sm font-semibold text-[#344054]'>
+            <span className='flex items-center gap-2 text-sm font-semibold text-ui-text'>
                 {icon}
                 {label}
             </span>
@@ -222,6 +329,16 @@ function getContactIntent(plan: string, intent: string): ContactIntent {
             eyebrow: 'Support',
             heading: 'Get help with an account, webhook, API, or terms question.',
             detail: 'Send the route, account email, webhook, or API workflow you need help with. Support can help with access, billing questions, endpoint changes, and terms-of-service questions.',
+        }
+    }
+
+    if (normalizedIntent === 'procurement' || normalizedIntent === 'enterprise' || normalizedIntent === 'security') {
+        return {
+            subject: 'Enterprise security and procurement review',
+            message: 'I need the Hanasand enterprise review packet.\n\nOrganization:\nVendor portal or questionnaire link:\nJurisdiction / DPA requirements:\nSecurity controls required:\nSSO / SCIM requirements:\nSLA or support requirements:\nProcurement deadline:',
+            eyebrow: 'Enterprise review',
+            heading: 'Request security, DPA, SLA, and procurement material.',
+            detail: 'Send the vendor portal, required controls, deadline, identity requirements, and contract needs. The reply can cover DPA, subprocessors, SLA/support terms, security questionnaire responses, and onboarding scope.',
         }
     }
 

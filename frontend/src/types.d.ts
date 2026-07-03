@@ -144,6 +144,8 @@ type Breach = {
     ok: boolean
     count: number
     message: string
+    source?: string
+    checkedPrefix?: string
 }
 
 type BreachFile = {

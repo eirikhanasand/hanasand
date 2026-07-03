@@ -1,169 +1,43 @@
-import { useEffect, useRef, useState } from 'react'
-import randomId from '../../utils/random/randomId'
-import config from '@/config'
-import Marquee from '../marquee/marquee'
-import { CheckCircle2, FileText, LoaderCircle, ShieldAlert } from 'lucide-react'
+import { CheckCircle2, ShieldAlert } from 'lucide-react'
 
 type PwnedSearchProps = {
     breached: boolean
     breachCount: number | null
-    password: string
+    checkedPrefix?: string
 }
 
-type BreachMessage = {
-    type: 'update'
-    timestamp: string
-    ok?: boolean
-    file?: string
-    line?: number
-    offset?: number
-    source?: string
-    done?: boolean
-}
-
-type BreachFile = {
-    file: string
-    line?: number
-    offset?: number
-    source?: string
-}
-
-export default function PwnedSearch({ breached, breachCount, password }: PwnedSearchProps) {
-    const [id, setId] = useState<string | null>(null)
-    const [loading, setLoading] = useState(true)
-    const ref = useRef<HTMLDivElement | null>(null)
-    const [breachFiles, setBreachFiles] = useState<BreachFile[]>([])
-    const uniqueBreachFiles = Array.from(
-        new Map(breachFiles.map(b => [`${b.file}:${b.line ?? ''}:${b.offset ?? ''}`, b])).values()
-    )
-
-    useEffect(() => {
-        setId(randomId())
-    }, [])
-
-    useEffect(() => {
-        if (!id) return
-
-        const ws = new WebSocket(`${config.url.api_wss}/pwned/${randomId()}`)
-
-        ws.onopen = () => {
-            setLoading(true)
-            ws.send(JSON.stringify({ password }))
-        }
-
-        ws.onclose = () => {
-            setLoading(false)
-        }
-
-        ws.onerror = (error) => {
-            console.log('WebSocket error:', error)
-        }
-
-        ws.onmessage = async (event) => {
-            try {
-                let data: string
-
-                if (event.data instanceof Blob) {
-                    data = await event.data.text()
-                } else {
-                    data = event.data as string
-                }
-
-                const msg = JSON.parse(data) as BreachMessage
-                if (msg) {
-                    if (msg.done) {
-                        setLoading(false)
-                    }
-
-                    if (msg.file) {
-                        setBreachFiles(prev => [...prev, {
-                            file: msg.file!,
-                            line: msg.line,
-                            offset: msg.offset,
-                            source: msg.source
-                        }])
-                    }
-                }
-            } catch (error) {
-                console.error(`Invalid message from server: ${error}`)
-            }
-        }
-
-        return () => {
-            ws.close()
-        }
-    }, [id, password])
-
-    const suffix = uniqueBreachFiles.length > 0
-        ? `and exists in the following ${uniqueBreachFiles.length} files.`
-        : `but the ${breachCount === 1 ? 'dataset is' : 'datasets are'} currently not publicly available.`
-
-    const text = uniqueBreachFiles.length === 0 && loading
-        ? 'Searching indexed files...'
-        : uniqueBreachFiles.length === 1
-            ? `Found in ${formatBreachLocation(uniqueBreachFiles[0])}.`
-            : `Found ${breachCount} ${breachCount === 1 ? 'time' : 'times'}, ${suffix}`
+export default function PwnedSearch({ breached, breachCount, checkedPrefix }: PwnedSearchProps) {
+    const count = breachCount || 0
 
     return (
-        <div className='grid gap-3 rounded-lg border border-[#e0e5ed] bg-[#f8fafc] p-3'>
+        <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3'>
             {breached ? (
-                <div className='relative grid gap-3'>
-                    <div className='flex items-start gap-3 rounded-lg border border-[#fecdca] bg-[#fff1f0] p-3 text-sm text-[#912018]'>
-                        <ShieldAlert className='mt-0.5 h-4 w-4 shrink-0 text-[#b42318]' />
-                        <p className='min-w-0 leading-6'>{text}</p>
-                    </div>
-                    {uniqueBreachFiles.length > 0 && (
-                        <div className='grid max-h-60 gap-1 overflow-auto rounded-lg border border-[#e0e5ed] bg-white p-2'>
-                            <div className='grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2 px-2 py-1 text-xs font-semibold uppercase text-[#667085]'>
-                                <span>File</span>
-                                <span className='text-right'>Line</span>
-                            </div>
-                            <div className='grid gap-1'>
-                                {uniqueBreachFiles.map((breach) => (<div key={`${breach.file}:${breach.line ?? ''}:${breach.offset ?? ''}`} className='grid grid-cols-[minmax(0,1fr)_5.5rem] items-center gap-2 rounded-md bg-[#f8fafc] px-2 py-2 text-sm'>
-                                    <div className='flex min-w-0 items-center gap-2 text-[#344054]'>
-                                        <FileText className='h-4 w-4 shrink-0 text-[#667085]' />
-                                        <Marquee className='min-w-0 truncate' innerClassName='text-[#344054] text-sm break-all' text={breach.file} />
-                                    </div>
-                                    <span className='text-right font-mono text-xs text-[#667085]'>
-                                        {formatBreachLine(breach)}
-                                    </span>
-                                </div>))}
-                            </div>
+                <div className='grid gap-3 rounded-lg border border-ui-danger bg-ui-danger/10 p-3 text-sm text-ui-danger'>
+                    <div className='flex items-start gap-3'>
+                        <ShieldAlert className='mt-0.5 h-4 w-4 shrink-0' />
+                        <div className='grid gap-1'>
+                            <p className='font-semibold'>Exact match found</p>
+                            <p className='leading-6'>
+                                This password appears {count.toLocaleString()} {count === 1 ? 'time' : 'times'} in known breach data. Do not reuse it.
+                            </p>
                         </div>
-                    )}
-                    <div ref={ref} className='min-w-full grid place-items-center'>
-                        {loading && (
-                            <div key={ref.current?.offsetWidth} className='flex items-center gap-2 text-xs text-[#667085]'>
-                                <LoaderCircle className='h-3.5 w-3.5 animate-spin' />
-                                Checking detailed file matches
-                            </div>
-                        )}
+                    </div>
+                    <div className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs leading-5 text-ui-text'>
+                        Next action: choose a unique password from a password manager and rotate it anywhere this password was used.
                     </div>
                 </div>
             ) : (
-                <div className='flex items-start gap-3 rounded-lg border border-[#bde8ca] bg-[#e9f8ef] p-3 text-sm text-[#11612f]'>
-                    <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-[#147a3b]' />
-                    <p className='leading-6'>No exact matches found in the indexed breach data.</p>
+                <div className='flex items-start gap-3 rounded-lg border border-ui-success bg-ui-success/10 p-3 text-sm text-ui-success'>
+                    <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0' />
+                    <div className='grid gap-1'>
+                        <p className='font-semibold'>No exact match found</p>
+                        <p className='leading-6'>This only means the exact password was not present in the checked breach range. Use a unique password anyway.</p>
+                    </div>
                 </div>
             )}
+            <p className='text-xs leading-5 text-ui-muted'>
+                Privacy check: checkedPrefix {checkedPrefix || '-----'} was sent to the range API without sending the password or full hash to Hanasand.
+            </p>
         </div>
     )
-}
-
-function formatBreachLocation(breach: BreachFile) {
-    const line = breach.line ? `:${breach.line}` : ''
-    const offset = !breach.line && typeof breach.offset === 'number' ? ` byte ${breach.offset}` : ''
-    return `${breach.file}${line}${offset}`
-}
-
-function formatBreachLine(breach: BreachFile) {
-    if (breach.line) {
-        return breach.line
-    }
-
-    if (typeof breach.offset === 'number') {
-        return `byte ${breach.offset}`
-    }
-
-    return breach.source ?? 'found'
 }
