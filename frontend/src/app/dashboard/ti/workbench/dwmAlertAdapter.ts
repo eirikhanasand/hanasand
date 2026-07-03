@@ -287,6 +287,7 @@ function buildAlertTimeline(alert: RuntimeDwmAlert, selectedCaptureIds: string[]
 function buildAlertActions(alert: RuntimeDwmAlert, organizationId: string | undefined): WorkbenchAction[] {
     const scope = organizationId ? { organizationId } : {}
     const expectedWorkflowEventCount = alert.workflowEvents?.length ?? alert.customerReadiness?.workflowReadiness?.eventCount ?? alert.workflowSummary?.eventCount
+    const caseId = alert.caseId ?? alert.customerReadiness?.caseHandoff?.caseId ?? alert.customerReadiness?.caseHandoff?.caseIdCandidate ?? alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate
     const bodyBase = {
         ...scope,
         ...(expectedWorkflowEventCount !== undefined ? { expectedWorkflowEventCount } : {}),
@@ -295,6 +296,17 @@ function buildAlertActions(alert: RuntimeDwmAlert, organizationId: string | unde
     const replayBlocked = alert.customerReadiness?.webhookReplayReadiness?.ready === false ? blockerLabel(alert.customerReadiness.webhookReplayReadiness.blockerCodes) : undefined
     const sendBlocked = alert.customerReadiness?.deliveryReadiness?.ready === false ? blockerLabel(alert.customerReadiness.deliveryReadiness.blockerCodes) : undefined
     return [
+        ...(!caseId ? [{
+            id: 'open_case',
+            label: 'Open case',
+            method: 'POST' as const,
+            href: `${alertHref}/case-handoff`,
+            body: {
+                ...scope,
+                note: 'Open a case from this alert.',
+                idempotencyKey: `ti-workbench-open-case:${alert.id}`,
+            },
+        }] : []),
         { id: 'review_alert', label: 'Review', method: 'PATCH', href: alertHref, body: { ...bodyBase, status: 'triaged' } },
         { id: 'escalate_alert', label: 'Escalate', method: 'PATCH', href: alertHref, body: { ...bodyBase, status: 'investigating' } },
         { id: 'suppress_alert', label: 'Suppress', method: 'PATCH', href: alertHref, body: { ...bodyBase, status: 'suppressed' } },

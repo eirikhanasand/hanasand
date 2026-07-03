@@ -1443,7 +1443,15 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             disabledReason: notificationDisabledReason,
         })
     } else if (selected.kind === 'dwm_alert') {
-        rows.push({ id: 'case_blocked', label: 'Open selected case', detail: selected.missingDependency || 'Case link is syncing to this alert.', tone: 'blocked' })
+        const openCaseAction = selected.actions?.find(action => action.id === 'open_case')
+        rows.push({
+            id: 'open_case',
+            label: 'Open selected case',
+            detail: openCaseAction ? 'Create or reuse a case from this alert while preserving evidence, watchlist scope, and delivery context.' : selected.missingDependency || 'Case link is syncing to this alert.',
+            tone: openCaseAction ? 'ready' : 'blocked',
+            action: openCaseAction,
+            disabledReason: openCaseAction ? undefined : 'Case handoff action is not attached to this alert yet.',
+        })
     }
     if (selected.kind === 'dwm_alert') {
         const replayAction = selected.actions?.find(action => action.id === 'replay_alert')
@@ -3031,7 +3039,7 @@ function SelectedWorkflowHandoff({ item, caseDetail, alertDetail, actionDeliveri
             <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#26344d] bg-[#101827] px-4 py-3 sm:items-center'>
                 <div className='min-w-0'>
                     <h3 className='text-sm font-semibold text-[#edf4ff]'>Investigation lanes</h3>
-                    <p className='mt-0.5 wrap-break-word text-xs text-[#8fa0ba]'>What is ready, what is being prepared, and what can be sent next.</p>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#8fa0ba]'>Stage, state, source, and next action.</p>
                 </div>
                 <div className='flex flex-wrap items-center gap-2 text-xs'>
                     <span className={workflowStatusClass(blockedCount ? 'blocked' : readyCount === steps.length ? 'ready' : 'needs_action')}>{readyCount}/{steps.length} ready</span>
@@ -3046,7 +3054,7 @@ function SelectedWorkflowHandoff({ item, caseDetail, alertDetail, actionDeliveri
                             <span className={`${workflowStatusClass(step.status)} shrink-0`}>{label(step.status)}</span>
                         </div>
                         <p className='wrap-break-word text-xs leading-5 text-[#aab7cc]'>{step.detail}</p>
-                        <p className='wrap-break-word text-[11px] text-[#8fa0ba]'><span className='font-semibold text-[#9fb0c8]'>Signal:</span> {operatorSourceLabel(step.source)}</p>
+                        <p className='wrap-break-word text-[11px] text-[#8fa0ba]'><span className='font-semibold text-[#9fb0c8]'>Source:</span> {operatorSourceLabel(step.source)}</p>
                         {step.href ? (
                             <Link href={step.href} className='inline-flex min-h-8 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
                                 <span className='truncate'>{step.actionLabel}</span>

@@ -10,8 +10,12 @@ export const dynamic = 'force-dynamic'
 
 export default async function TiAnalystWorkbenchPage() {
     const overview = getTiAdminOverview()
-    const liveAlerts = await loadDwmAlerts()
-    const cases = buildWorkbenchCases(overview, liveAlerts)
+    const [liveAlerts, deliveries] = await Promise.all([
+        loadDwmAlerts(),
+        loadDwmDeliveries(),
+    ])
+    const alertsWithDelivery = attachDeliveriesToAlerts(liveAlerts, deliveries)
+    const cases = buildWorkbenchCases(overview, alertsWithDelivery)
 
     return (
         <DashboardPage>
@@ -53,6 +57,47 @@ async function loadDwmAlerts(): Promise<DwmAlert[]> {
     } catch {
         return []
     }
+}
+
+type WorkbenchDwmDelivery = {
+    id: string
+    tenantId?: string
+    alertId: string
+    watchlistId?: string
+    webhookDestinationId?: string
+    endpointHash: string
+    dedupeKey?: string
+    attemptedAt: string
+    dryRun?: boolean
+    payloadHash: string
+    status: string
+    httpStatus?: number
+    error?: string
+    deliveryKind?: string
+}
+
+async function loadDwmDeliveries(): Promise<WorkbenchDwmDelivery[]> {
+    const base = process.env.TI_SCRAPER_API_BASE
+    if (!base) return []
+
+    try {
+        const target = new URL('/v1/dwm/webhooks/deliveries', base)
+        target.searchParams.set('tenantId', 'default')
+        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        if (!response.ok) return []
+        const payload = await response.json() as { deliveries?: WorkbenchDwmDelivery[] }
+        return (payload.deliveries || []).sort((a, b) => String(b.attemptedAt ?? '').localeCompare(String(a.attemptedAt ?? '')))
+    } catch {
+        return []
+    }
+}
+
+function attachDeliveriesToAlerts(alerts: DwmAlert[], deliveries: WorkbenchDwmDelivery[]): DwmAlert[] {
+    if (!deliveries.length) return alerts
+    return alerts.map(alert => ({
+        ...alert,
+        deliveries: deliveries.filter(delivery => delivery.alertId === alert.id),
+    }))
 }
 
 function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[]): WorkbenchCase[] {
