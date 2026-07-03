@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { FormEvent, useState } from 'react'
+import { FormEvent, useRef, useState } from 'react'
 import { Activity, BellRing, Loader2, Plus, RefreshCw, Send, ShieldCheck } from 'lucide-react'
 
 type WorkflowResult = {
@@ -25,6 +25,7 @@ const STARTER_WATCH_TERMS = ['hanasand.com', 'Hanasand'] as const
 
 export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry }: { tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry }) {
     const router = useRouter()
+    const webhookInputRef = useRef<HTMLInputElement>(null)
     const [terms, setTerms] = useState(initialTerms.join('\n'))
     const [webhookUrl, setWebhookUrl] = useState('')
     const [sourceTarget, setSourceTarget] = useState('')
@@ -448,6 +449,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
     }
 
+    function focusWebhookInput() {
+        webhookInputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        webhookInputRef.current?.focus()
+        setResult({ ok: true, message: 'Paste an HTTPS endpoint, then test the delivery route.' })
+    }
+
     function seedStarterWatchlist() {
         if (countTerms(terms)) return
         setTerms(starterWatchTerms())
@@ -511,11 +518,10 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             state: deliveryCount ? `${deliveryCount} attempts` : webhookConfigured ? 'URL staged' : 'destination needed',
             detail: deliveryCount ? 'Review the delivery result before recording customer notification.' : 'Test the endpoint before sending customer findings.',
             tone: deliveryCount ? 'ok' : webhookConfigured ? 'warn' : 'bad',
-            command: webhookConfigured ? 'Test webhook' : 'Add webhook URL',
+            command: webhookConfigured ? 'Test webhook' : 'Add endpoint',
             busy: busyAction === 'webhook-test',
-            disabled: busy || Boolean(webhookTestDisabledReason),
-            disabledReason: webhookTestDisabledReason || undefined,
-            onClick: testWebhook,
+            disabled: busy,
+            onClick: webhookConfigured ? testWebhook : focusWebhookInput,
         },
     ] satisfies RouteQueueAction[]
 
@@ -534,14 +540,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 ) : null}
             </section>
 
-            <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
-                <RouteStateCard label='Watch terms' value={String(effectiveTermCount)} detail={termCount ? 'Ready for matching' : 'Starter terms ready'} tone={termCount ? 'ok' : 'warn'} />
-                <RouteStateCard label='Sources' value={`${activeSourceCount}/${sourceCount}`} detail={sourceCount ? 'Active monitored sources' : 'Run source pack or add a channel'} tone={activeSourceCount ? 'ok' : 'warn'} />
-                <RouteStateCard label='Captures' value={String(captureCount)} detail={latestRunStatus ? `${latestRunStatus}${latestRunCaptureCount ? ` · ${latestRunCaptureCount} latest` : ''}` : 'No run loaded'} tone={captureCount ? 'ok' : 'neutral'} />
-                <RouteStateCard label='Alerts' value={String(alertCount)} detail={`${telemetry?.watchlistMatchCount ?? 0} source match${(telemetry?.watchlistMatchCount ?? 0) === 1 ? '' : 'es'}`} tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
-                <RouteStateCard label='Webhook' value={deliveryCount ? `${deliveryCount} attempt${deliveryCount === 1 ? '' : 's'}` : webhookConfigured ? 'URL ready' : 'Not tested'} detail={webhookConfigured ? 'Test before customer send' : 'Paste HTTPS endpoint to dry-run'} tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
-            </section>
-
             <section data-dwm-route-queue className='rounded-lg border border-[#26344d] bg-[#101827] p-3'>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div className='min-w-0'>
@@ -555,6 +553,31 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 <div className='mt-3 grid gap-2 lg:grid-cols-4'>
                     {routeQueue.map(action => <RouteQueueCard key={action.id} action={action} />)}
                 </div>
+                <div data-dwm-inline-webhook className='mt-3 grid gap-2 rounded-lg border border-[#26344d] bg-[#0b121e] p-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end'>
+                    <label className='min-w-0'>
+                        <span className='text-[10px] font-semibold uppercase text-[#8fa0ba]'>Delivery endpoint</span>
+                        <input
+                            ref={webhookInputRef}
+                            value={webhookUrl}
+                            onChange={event => setWebhookUrl(event.target.value)}
+                            placeholder='https://discord.com/api/webhooks/...'
+                            className='mt-1 h-10 w-full rounded-lg border border-[#27364f] bg-[#101827] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                        />
+                    </label>
+                    <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test route</WorkflowButton>
+                    <WorkflowButton busy={busyAction === 'delivery'} disabled={busy} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send queued</WorkflowButton>
+                    <p className='text-xs leading-5 text-[#8fa0ba] lg:col-span-3'>
+                        {webhookConfigured ? 'Delivery actions use the staged endpoint for dry-runs and queued alert sends.' : 'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.'}
+                    </p>
+                </div>
+            </section>
+
+            <section className='grid grid-cols-2 gap-3 xl:grid-cols-5'>
+                <RouteStateCard label='Watch terms' value={String(effectiveTermCount)} detail={termCount ? 'Ready for matching' : 'Starter terms ready'} tone={termCount ? 'ok' : 'warn'} />
+                <RouteStateCard label='Sources' value={`${activeSourceCount}/${sourceCount}`} detail={sourceCount ? 'Active monitored sources' : 'Run source pack or add a channel'} tone={activeSourceCount ? 'ok' : 'warn'} />
+                <RouteStateCard label='Captures' value={String(captureCount)} detail={latestRunStatus ? `${latestRunStatus}${latestRunCaptureCount ? ` · ${latestRunCaptureCount} latest` : ''}` : 'No run loaded'} tone={captureCount ? 'ok' : 'neutral'} />
+                <RouteStateCard label='Alerts' value={String(alertCount)} detail={`${telemetry?.watchlistMatchCount ?? 0} source match${(telemetry?.watchlistMatchCount ?? 0) === 1 ? '' : 'es'}`} tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
+                <RouteStateCard label='Webhook' value={deliveryCount ? `${deliveryCount} attempt${deliveryCount === 1 ? '' : 's'}` : webhookConfigured ? 'URL ready' : 'Not tested'} detail={webhookConfigured ? 'Test before customer send' : 'Paste HTTPS endpoint to dry-run'} tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
             </section>
 
             <section className='overflow-hidden rounded-lg border border-[#26344d] bg-[#101827]'>
