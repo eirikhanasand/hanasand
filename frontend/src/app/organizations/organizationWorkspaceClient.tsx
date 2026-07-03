@@ -567,6 +567,11 @@ export default function OrganizationWorkspaceClient() {
 
     const saveWatchlistEdit = (item: WatchlistItem) => selectedOrganization && runAction('save-watchlist', async () => {
         const draft = editingWatchlist[item.id]
+        if (!draft) throw new Error('Open the watchlist term before saving.')
+        if (isDuplicateWatchlistTerm(bundle.watchlists, draft.kind, draft.value, item.id)) {
+            throw new Error('This watchlist term already exists in this organization.')
+        }
+        if (!watchlistDraftChanged(item, draft)) return 'No watchlist changes.'
         const payload = await requestJson<{ dwmAlertBridge?: DwmAlertBridgeResult }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/${encodeURIComponent(item.id)}`, {
             method: 'PUT',
             body: JSON.stringify({
@@ -853,56 +858,38 @@ export default function OrganizationWorkspaceClient() {
 
 function EmptyWorkspacePreview() {
     const nextSteps = [
-        'Invite teammates and assign roles.',
-        'Use scope starters for company, domain, supplier, actor, or keyword watch terms.',
-        'Connect alert destinations when the first watchlist is ready.',
+        'Invite teammates and assign roles',
+        'Add company, domain, supplier, actor, or keyword watch terms',
+        'Connect a Discord or webhook destination',
+        'Review routed alerts, cases, and activity',
     ]
 
     return (
         <div className='grid gap-4'>
-            <section className='rounded-lg border border-[#dfe5ee] bg-white p-6 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
-                <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-                    <div>
-                        <h2 className='text-xl font-semibold text-[#171a21] dark:text-white'>Create the first organization</h2>
-                        <p className='mt-1 text-sm leading-6 text-[#667085] dark:text-[#a8b3c5]'>The workspace unlocks teammate invites, shared watchlists, alert scope, cases, and destinations.</p>
+            <section className='rounded-lg border border-[#dfe5ee] bg-white p-6 shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-empty-focused-create='true'>
+                <div className='grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start'>
+                    <div className='min-w-0'>
+                        <div className='flex min-w-0 items-start gap-3'>
+                            <div className='grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#eef4ff] text-[#3056d3] dark:bg-[#172a4b] dark:text-[#a9c3ff]'>
+                                <Building2 className='h-5 w-5' />
+                            </div>
+                            <div className='min-w-0'>
+                                <h2 className='text-xl font-semibold text-[#171a21] dark:text-white'>Create the first organization</h2>
+                                <p className='mt-1 max-w-2xl text-sm leading-6 text-[#667085] dark:text-[#a8b3c5]'>
+                                    Start with the workspace. Team access, shared watchlists, destinations, cases, and activity appear after the organization exists.
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <Building2 className='h-9 w-9 text-[#3056d3]' />
+                    <ol className='grid gap-2 text-sm leading-6 text-[#475467] dark:text-[#c4cedd]'>
+                        {nextSteps.map((step, index) => (
+                            <li key={step} className='flex gap-3 rounded-md border border-[#edf1f7] bg-[#f8fafc] px-3 py-2 dark:border-[#253246] dark:bg-[#0c1420]'>
+                                <span className='flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#e8efff] text-xs font-bold text-[#3056d3] dark:bg-[#172a4b] dark:text-[#a9c3ff]'>{index + 1}</span>
+                                <span>{step}</span>
+                            </li>
+                        ))}
+                    </ol>
                 </div>
-            </section>
-            <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
-                <SectionTitle icon={<CheckCircle2 className='h-4 w-4' />} title='After the org is created' detail='Keep setup focused: create the workspace first, then add people, watchlists, and delivery routes.' />
-                <ol className='mt-4 grid gap-2 text-sm leading-6 text-[#475467] dark:text-[#c4cedd]'>
-                    {nextSteps.map((step, index) => (
-                        <li key={step} className='flex gap-3 rounded-lg border border-[#edf1f7] bg-[#f8fafc] px-3 py-2 dark:border-[#253246] dark:bg-[#0c1420]'>
-                            <span className='flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#e8efff] text-xs font-bold text-[#3056d3] dark:bg-[#172a4b] dark:text-[#a9c3ff]'>{index + 1}</span>
-                            <span>{step}</span>
-                        </li>
-                    ))}
-                </ol>
-            </section>
-            <section id='watchlists' className='rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-4 shadow-sm dark:border-[#2a3b58] dark:bg-[#101b2d]' data-org-empty-scope-starters='true'>
-                <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Watchlist scope starters' detail='Pick the type first, then enter a real organization-owned term after the workspace exists.' />
-                <div className='mt-3 grid gap-2 sm:grid-cols-2'>
-                    {watchlistTemplates.map(template => (
-                        <div key={template.label} className='rounded-lg border border-[#cfd7e6] bg-white p-3 dark:border-[#344258] dark:bg-[#121d2b]'>
-                            <p className='text-sm font-semibold text-[#202838] dark:text-[#eef3fb]'>{template.label}</p>
-                            <p className='mt-1 text-xs leading-5 text-[#667085] dark:text-[#a8b3c5]'>{template.notes}</p>
-                        </div>
-                    ))}
-                </div>
-            </section>
-            <section id='destinations' className='rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-4 shadow-sm dark:border-[#2a3b58] dark:bg-[#101b2d]' data-org-empty-destination-flow='true'>
-                <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Destination workflow' detail='After the first watchlist is saved, add a Discord or webhook route, run a dry-run test, and inspect the delivery result.' />
-                <div className='mt-3 grid gap-2 sm:grid-cols-3'>
-                    {['Add endpoint', 'Run dry-run', 'Inspect history'].map(step => (
-                        <div key={step} className='rounded-lg border border-[#cfd7e6] bg-white px-3 py-2 text-sm font-semibold text-[#202838] dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb]'>
-                            {step}
-                        </div>
-                    ))}
-                </div>
-            </section>
-            <section id='audit' className='rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-4 shadow-sm dark:border-[#2a3b58] dark:bg-[#101b2d]' data-org-empty-audit-flow='true'>
-                <SectionTitle icon={<CheckCircle2 className='h-4 w-4' />} title='Activity trail' detail='Invite, watchlist, destination test, replay, and case routing actions appear here with the selected row context.' />
             </section>
         </div>
     )
@@ -1356,6 +1343,8 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                 )}
                 {watchlists.map(item => {
                     const edit = editing[item.id]
+                    const editDuplicate = edit ? isDuplicateWatchlistTerm(watchlists, edit.kind, edit.value, item.id) : false
+                    const editChanged = edit ? watchlistDraftChanged(item, edit) : false
                     return (
                         <div key={item.id} className={`rounded-lg border p-3 transition ${selectedSubject.type === 'watchlist' && selectedSubject.id === item.id ? 'border-[#8fb2ff] bg-[#f5f8ff] dark:border-[#4267a7] dark:bg-[#101b2d]' : 'border-[#e6ebf2] dark:border-[#26344a]'}`} onClick={() => onSelectSubject({ type: 'watchlist', id: item.id })}>
                             {edit ? (
@@ -1366,8 +1355,10 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                         Notes
                                         <textarea value={edit.notes} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [item.id]: { ...edit, notes: event.target.value } }))} className={`${inputClass} min-h-20 resize-y`} />
                                     </label>
+                                    {editDuplicate && <p className='rounded-md bg-[#fff7ed] px-3 py-2 text-xs font-semibold text-[#9a3412] dark:bg-[#2b1606] dark:text-[#fed7aa] md:col-span-2'>This term already exists in this organization.</p>}
+                                    {!editDuplicate && !editChanged && <p className='rounded-md bg-[#f8fafc] px-3 py-2 text-xs font-semibold text-[#667085] dark:bg-[#0d1522] dark:text-[#a8b3c5] md:col-span-2'>No changes to save.</p>}
                                     <div className='flex flex-wrap gap-2 md:col-span-2'>
-                                        <button type='button' className={primaryButtonClass} disabled={!edit.value.trim() || Boolean(busy)} onClick={() => onSave(item)}>
+                                        <button type='button' className={primaryButtonClass} disabled={!edit.value.trim() || editDuplicate || !editChanged || Boolean(busy)} onClick={() => onSave(item)}>
                                             <CheckCircle2 className='h-4 w-4' />
                                             Save
                                         </button>
@@ -2095,10 +2086,16 @@ function destinationConfigured(item: WatchlistItem) {
     return Boolean(item.webhookUrlConfigured || item.webhookDestinationId || item.webhookEndpointHash || item.webhookEndpointHint)
 }
 
-function isDuplicateWatchlistTerm(watchlists: WatchlistItem[], kind: WatchlistKind, value: string) {
+function isDuplicateWatchlistTerm(watchlists: WatchlistItem[], kind: WatchlistKind, value: string, excludeId = '') {
     const normalizedValue = normalizeWatchlistValue(value)
     if (!normalizedValue) return false
-    return watchlists.some(item => item.status !== 'archived' && item.kind === kind && normalizeWatchlistValue(item.value) === normalizedValue)
+    return watchlists.some(item => item.id !== excludeId && item.status !== 'archived' && item.kind === kind && normalizeWatchlistValue(item.value) === normalizedValue)
+}
+
+function watchlistDraftChanged(item: WatchlistItem, draft: { kind: WatchlistKind, value: string, notes: string }) {
+    return item.kind !== draft.kind
+        || normalizeWatchlistValue(item.value) !== normalizeWatchlistValue(draft.value)
+        || (item.notes || '').trim() !== draft.notes.trim()
 }
 
 function normalizeWatchlistValue(value: string) {
