@@ -742,7 +742,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
     const latestDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
     const actualCaseId = alert.caseId
     const caseCandidate = alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
-    const casePath = alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness?.actions?.find(action => action.action === 'case_link' && action.casePath)?.casePath
+    const casePath = actualCaseId ? `/dashboard/dwm/cases/${encodeURIComponent(actualCaseId)}${workflowContext.organizationId ? `?organizationId=${encodeURIComponent(workflowContext.organizationId)}${alert.id ? `&alertId=${encodeURIComponent(alert.id)}` : ''}` : alert.id ? `?alertId=${encodeURIComponent(alert.id)}` : ''}` : alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness?.actions?.find(action => action.action === 'case_link' && action.casePath)?.casePath
     const canOpenCase = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
     const steps: WorkflowStepModel[] = [
         {
