@@ -32,13 +32,23 @@ export type DashboardWebhookDelivery = {
     watchlistId?: string
     organizationId?: string
     webhookDestinationId?: string
+    destinationId?: string
+    requestId?: string
+    auditEventId?: string
     endpointHash?: string
+    endpointHint?: string
     attemptedAt: string
     payloadHash?: string
     status: string
     deliveryKind?: string
     httpStatus?: number
     error?: string
+    errorClass?: string
+    attemptCount?: number | null
+    nextRetryAt?: string | null
+    idempotencyKey?: string
+    casePath?: string
+    dryRun?: boolean
 }
 
 function sanitizeDeliveryCopy(value: string | undefined) {
@@ -323,16 +333,27 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                                 </thead>
                                 <tbody className='divide-y divide-[#1f2c42]'>
                                     {!scopedDeliveries.length ? (
-                                        <tr><td colSpan={4} className='px-3 py-4 text-sm text-[#8fa0ba]'>Dry-run and customer sends stream here.</td></tr>
+                                        <tr><td colSpan={4} className='px-3 py-4 text-sm text-[#8fa0ba]'>Dry-run tests, retries, and customer sends stream here with redacted destination metadata.</td></tr>
                                     ) : scopedDeliveries.map(delivery => (
                                         <tr key={delivery.id}>
                                             <td className='px-3 py-2'>
                                                 <p className='font-mono text-[11px] text-[#dbe7ff]'>{delivery.id}</p>
                                                 <p className='mt-1 text-[#8fa0ba]'>{formatTimestamp(delivery.attemptedAt)}</p>
+                                                <p className='mt-1 truncate font-mono text-[11px] text-[#8fa0ba]'>{delivery.requestId || delivery.auditEventId || 'no audit id'}</p>
                                             </td>
-                                            <td className='px-3 py-2 text-[#dbe7ff]'>{delivery.alertId}</td>
-                                            <td className='px-3 py-2'><span className={statusPill(delivery.status)}>{delivery.status}</span></td>
-                                            <td className='px-3 py-2 text-[#8fa0ba]'>{delivery.error || (delivery.httpStatus ? `HTTP ${delivery.httpStatus}` : delivery.payloadHash || 'clear')}</td>
+                                            <td className='px-3 py-2'>
+                                                <p className='truncate text-[#dbe7ff]'>{delivery.alertId}</p>
+                                                <p className='mt-1 truncate text-[#8fa0ba]'>{delivery.casePath || delivery.watchlistId || delivery.idempotencyKey || 'alert route pending'}</p>
+                                            </td>
+                                            <td className='px-3 py-2'>
+                                                <span className={statusPill(delivery.status)}>{delivery.status}</span>
+                                                <p className='mt-1 text-[#8fa0ba]'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'delivery'}</p>
+                                                <p className='mt-1 truncate font-mono text-[11px] text-[#8fa0ba]'>{delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || delivery.destinationId || 'redacted target'}</p>
+                                            </td>
+                                            <td className='px-3 py-2 text-[#8fa0ba]'>
+                                                <p>{deliveryStatusDetail(delivery)}</p>
+                                                <p className='mt-1'>{retryDetail(delivery)}</p>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -436,6 +457,20 @@ function upsertDelivery(current: DashboardWebhookDelivery[], delivery: Dashboard
 
 function errorMessage(error: unknown) {
     return error instanceof Error ? error.message : String(error)
+}
+
+function deliveryStatusDetail(delivery: DashboardWebhookDelivery) {
+    if (delivery.error) return delivery.error
+    if (delivery.errorClass) return delivery.errorClass
+    if (delivery.httpStatus) return `HTTP ${delivery.httpStatus}`
+    if (delivery.payloadHash) return delivery.payloadHash
+    return 'clear'
+}
+
+function retryDetail(delivery: DashboardWebhookDelivery) {
+    const attempt = delivery.attemptCount === null || delivery.attemptCount === undefined ? null : `attempt ${delivery.attemptCount}`
+    const nextRetry = delivery.nextRetryAt ? `retry ${formatTimestamp(delivery.nextRetryAt)}` : null
+    return [attempt, nextRetry].filter(Boolean).join(' · ') || 'no retry scheduled'
 }
 
 function formatTimestamp(value?: string) {

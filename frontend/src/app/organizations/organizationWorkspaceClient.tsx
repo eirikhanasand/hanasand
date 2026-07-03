@@ -236,6 +236,12 @@ const initialBundle: OrgBundle = {
 
 const roleOptions: OrganizationRole[] = ['admin', 'member', 'viewer']
 const watchlistKinds: WatchlistKind[] = ['company', 'domain', 'vendor', 'actor', 'keyword']
+const watchlistTemplates: Array<{ label: string, kind: WatchlistKind, notes: string }> = [
+    { label: 'Corporate domain', kind: 'domain', notes: 'Primary company domain monitored for exposure mentions.' },
+    { label: 'Supplier', kind: 'vendor', notes: 'Critical supplier, processor, or integration partner.' },
+    { label: 'Company name', kind: 'company', notes: 'Legal entity or operating brand used in source matching.' },
+    { label: 'Actor keyword', kind: 'actor', notes: 'Threat actor, leak site, or campaign label relevant to this organization.' },
+]
 const destinationKinds: DestinationDraft['kind'][] = ['discord', 'webhook']
 const webhookPolicies = ['active_destinations', 'manual_selection', 'disabled']
 const alertPolicies = ['members', 'admins', 'owners']
@@ -299,6 +305,7 @@ export default function OrganizationWorkspaceClient() {
     const pausedWatchlists = bundle.watchlists.filter(item => item.status === 'paused')
     const archivedWatchlists = bundle.watchlists.filter(item => item.status === 'archived')
     const hasConfiguredDestination = bundle.watchlists.some(destinationConfigured)
+    const watchlistDraftDuplicate = isDuplicateWatchlistTerm(bundle.watchlists, watchlistDraft.kind, watchlistDraft.value)
     const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
     const activityRows = useMemo(() => organizationActivityRows(activity, bundle), [activity, bundle])
     const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedFocus)
@@ -537,6 +544,9 @@ export default function OrganizationWorkspaceClient() {
     }, `member-${member.userId}`)
 
     const createWatchlist = () => selectedOrganization && runAction('create-watchlist', async () => {
+        if (watchlistDraftDuplicate) {
+            throw new Error('This watchlist term already exists in this organization.')
+        }
         const payload = await requestJson<{ dwmAlertBridge?: DwmAlertBridgeResult }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists`, {
             method: 'POST',
             body: JSON.stringify({
@@ -806,6 +816,7 @@ export default function OrganizationWorkspaceClient() {
                                             onTestDestination={(item, mode) => void testWatchlistDestination(item, mode)}
                                             onCleanup={() => void cleanupWatchlists()}
                                             rowMessages={rowMessages}
+                                            draftDuplicate={watchlistDraftDuplicate}
                                             selectedSubject={selectedActivitySubject}
                                             onSelectSubject={setSelectedActivitySubject}
                                         />
@@ -837,7 +848,7 @@ export default function OrganizationWorkspaceClient() {
 function EmptyWorkspacePreview() {
     const nextSteps = [
         'Invite teammates and assign roles.',
-        'Add company, domain, vendor, actor, or keyword watch terms.',
+        'Use scope starters for company, domain, supplier, actor, or keyword watch terms.',
         'Connect alert destinations when the first watchlist is ready.',
     ]
 
@@ -862,6 +873,17 @@ function EmptyWorkspacePreview() {
                         </li>
                     ))}
                 </ol>
+            </section>
+            <section className='rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-4 shadow-sm dark:border-[#2a3b58] dark:bg-[#101b2d]' data-org-empty-scope-starters='true'>
+                <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Watchlist scope starters' detail='Pick the type first, then enter a real organization-owned term after the workspace exists.' />
+                <div className='mt-3 grid gap-2 sm:grid-cols-2'>
+                    {watchlistTemplates.map(template => (
+                        <div key={template.label} className='rounded-lg border border-[#cfd7e6] bg-white p-3 dark:border-[#344258] dark:bg-[#121d2b]'>
+                            <p className='text-sm font-semibold text-[#202838] dark:text-[#eef3fb]'>{template.label}</p>
+                            <p className='mt-1 text-xs leading-5 text-[#667085] dark:text-[#a8b3c5]'>{template.notes}</p>
+                        </div>
+                    ))}
+                </div>
             </section>
         </div>
     )
@@ -1075,7 +1097,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
             <div className='mt-4 grid gap-3'>
                 <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1]'>
                     Emails
-                    <textarea value={emails} disabled={!canManage} onChange={event => setEmails(event.target.value)} className={`${inputClass} min-h-24 resize-y`} placeholder='teammate@example.com, analyst@example.com' />
+                    <textarea value={emails} disabled={!canManage} onChange={event => setEmails(event.target.value)} className={`${inputClass} min-h-24 resize-y`} placeholder='analyst@company.com, admin@company.com' />
                 </label>
                 <SelectField label='Role' value={role} options={roleOptions} disabled={!canManage} onChange={value => setRole(value as OrganizationRole)} />
                 <button type='button' className={primaryButtonClass} disabled={!canManage || !emails.trim() || Boolean(busy)} onClick={onInvite}>
@@ -1219,27 +1241,52 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
     )
 }
 
-function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
+function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const archivedCount = watchlists.filter(item => item.status === 'archived').length
     return (
         <section id='watchlists' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Terms, owners, destinations.' />
+                <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Customer-owned terms that drive DWM alert scope, cases, and delivery routes.' />
                 <button type='button' className={secondaryButtonClass} disabled={!canManage || archivedCount === 0 || Boolean(busy)} onClick={onCleanup}>
                     <Archive className='h-4 w-4' />
                     Cleanup archived
                 </button>
             </div>
             <div className='mt-2'><RowStatus message={rowMessages['watchlists-cleanup']} /></div>
+            <div className='mt-4 rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-3 dark:border-[#2a3b58] dark:bg-[#101b2d]' data-org-watchlist-starter='true'>
+                <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                    <div className='min-w-0'>
+                        <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9cc2ff]'>Scope starter</p>
+                        <p className='mt-1 text-sm leading-5 text-[#475467] dark:text-[#c6d1e2]'>Choose a term type, then enter the real company, domain, supplier, actor, or keyword value.</p>
+                    </div>
+                    <span className='shrink-0 rounded-lg border border-[#c7d7fe] bg-white px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4267a7] dark:bg-[#0d1522] dark:text-[#9cc2ff]'>
+                        {watchlists.length} saved
+                    </span>
+                </div>
+                <div className='mt-3 flex flex-wrap gap-2'>
+                    {watchlistTemplates.map(template => (
+                        <button
+                            key={template.label}
+                            type='button'
+                            disabled={!canManage || Boolean(busy)}
+                            onClick={() => setDraft({ kind: template.kind, value: '', notes: template.notes })}
+                            className='inline-flex min-h-9 items-center rounded-lg border border-[#cfd7e6] bg-white px-3 text-xs font-semibold text-[#202838] transition hover:border-[#9db8ff] hover:bg-[#eef4ff] disabled:cursor-not-allowed disabled:opacity-55 dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb] dark:hover:bg-[#18263a]'
+                        >
+                            {template.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
             <div className='mt-4 grid gap-3 rounded-lg border border-[#e6ebf2] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522] md:grid-cols-[9rem_1fr]'>
                 <SelectField label='Type' value={draft.kind} options={watchlistKinds} disabled={!canManage} onChange={value => setDraft({ ...draft, kind: value as WatchlistKind })} />
-                <Field label='Term' value={draft.value} disabled={!canManage} onChange={value => setDraft({ ...draft, value })} placeholder='example.com, vendor name, company, actor' />
+                <Field label='Term' value={draft.value} disabled={!canManage} onChange={value => setDraft({ ...draft, value })} placeholder='company.com, supplier name, brand, actor' />
                 <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1] md:col-span-2'>
                     Notes
                     <textarea value={draft.notes} disabled={!canManage} onChange={event => setDraft({ ...draft, notes: event.target.value })} className={`${inputClass} min-h-20 resize-y`} placeholder='Why this term matters to the organization' />
                 </label>
                 <div className='md:col-span-2'>
-                    <button type='button' className={primaryButtonClass} disabled={!canManage || !draft.value.trim() || Boolean(busy)} onClick={onCreate}>
+                    {draftDuplicate && <p className='mb-2 rounded-md bg-[#fff7ed] px-3 py-2 text-xs font-semibold text-[#9a3412] dark:bg-[#2b1606] dark:text-[#fed7aa]'>This term already exists in this organization.</p>}
+                    <button type='button' className={primaryButtonClass} disabled={!canManage || !draft.value.trim() || draftDuplicate || Boolean(busy)} onClick={onCreate}>
                         <BellRing className='h-4 w-4' />
                         Add shared term
                     </button>
@@ -1247,7 +1294,12 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
             </div>
 
             <div className='mt-5 grid gap-3'>
-                {watchlists.length === 0 && <EmptyLine text='Add the first shared term above. Alert matching, delivery routes, and case context attach to watchlist rows.' />}
+                {watchlists.length === 0 && (
+                    <div className='rounded-lg border border-dashed border-[#b8c5ff] bg-[#f8fbff] p-4 text-sm leading-6 text-[#475467] dark:border-[#344258] dark:bg-[#101b2d] dark:text-[#c6d1e2]'>
+                        <p className='font-semibold text-[#171a21] dark:text-white'>No watchlist terms yet.</p>
+                        <p className='mt-1'>Start with a scope template, enter a real customer-owned term, then save it to generate org-scoped alert terms and delivery context.</p>
+                    </div>
+                )}
                 {watchlists.map(item => {
                     const edit = editing[item.id]
                     return (
@@ -1932,6 +1984,16 @@ function inviteLink(invite: OrganizationInvite) {
 
 function destinationConfigured(item: WatchlistItem) {
     return Boolean(item.webhookUrlConfigured || item.webhookDestinationId || item.webhookEndpointHash || item.webhookEndpointHint)
+}
+
+function isDuplicateWatchlistTerm(watchlists: WatchlistItem[], kind: WatchlistKind, value: string) {
+    const normalizedValue = normalizeWatchlistValue(value)
+    if (!normalizedValue) return false
+    return watchlists.some(item => item.status !== 'archived' && item.kind === kind && normalizeWatchlistValue(item.value) === normalizedValue)
+}
+
+function normalizeWatchlistValue(value: string) {
+    return value.trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/g, '').toLowerCase()
 }
 
 function alertsForWatchlist(item: WatchlistItem, alerts: ScopedAlert[]) {

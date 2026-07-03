@@ -7,6 +7,8 @@ import { GET as organizationWebhooksGet } from '../src/app/api/organizations/[id
 
 const here = new URL('.', import.meta.url)
 const routeSource = readFileSync(new URL('../src/app/api/organizations/[id]/webhooks/route.ts', here), 'utf8')
+const routeTestSource = readFileSync(new URL('../src/app/api/organizations/[id]/webhooks/test/route.ts', here), 'utf8')
+const dashboardWebhookSource = readFileSync(new URL('../src/app/dashboard/WebhookDeliveryConsole.tsx', here), 'utf8')
 const proofSource = readFileSync(new URL('../src/utils/productProgress/webhookProofSource.ts', here), 'utf8')
 
 for (const token of [
@@ -25,6 +27,23 @@ for (const token of [
 ]) {
     assert.ok(proofSource.includes(token), `Webhook proof source missing token: ${token}`)
 }
+
+for (const token of [
+    'body.webhookDestinationId',
+    'webhookDestinationId: destinationId',
+    '/dwm/webhook-destinations/${encodeURIComponent(destinationId)}/test',
+]) {
+    assert.ok(routeTestSource.includes(token), `Organization webhook test route missing destination test token: ${token}`)
+}
+
+assert.ok(
+    dashboardWebhookSource.includes('webhookDestinationId: destinationId'),
+    'Dashboard destination test must send the saved destination id expected by the organization proxy.',
+)
+assert.ok(
+    dashboardWebhookSource.includes('nextRetryAt') && dashboardWebhookSource.includes('auditEventId'),
+    'Dashboard delivery history must expose retry/audit context when the backend returns it.',
+)
 
 const originalBase = process.env.TI_SCRAPER_API_BASE
 const originalInline = process.env.PRODUCT_PROGRESS_WEBHOOK_PROOF_JSON
