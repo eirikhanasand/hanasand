@@ -5,9 +5,10 @@ import { getCookie } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import config from '@/config'
-import { ArrowRight, KeyRound } from 'lucide-react'
+import { ArrowRight, Fingerprint, KeyRound } from 'lucide-react'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 import ErrorNotice from '@/components/error/errorNotice'
+import { decodePasskeyRequestOptions, passkeyCredentialToJSON } from '@/utils/auth/passkeys'
 
 type LoginPageProps = {
     path: string | null
@@ -116,6 +117,48 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         }
     }
 
+    async function handlePasskeyLogin() {
+        if (!window.PublicKeyCredential || !navigator.credentials) {
+            return setError('This browser does not support passkeys.')
+        }
+
+        setBusy(true)
+        setError(null)
+        try {
+            const optionsResponse = await fetch('/api/auth/passkeys/authenticate/options', { cache: 'no-store' })
+            const options = await optionsResponse.json().catch(() => null)
+            if (!optionsResponse.ok || !options?.challengeId || !options?.publicKey) {
+                return setError(options?.error || 'No passkey challenge is available.')
+            }
+
+            const credential = await navigator.credentials.get({
+                publicKey: decodePasskeyRequestOptions(options.publicKey),
+            }) as PublicKeyCredential | null
+            if (!credential) {
+                return setError('No passkey was selected.')
+            }
+
+            const verifyResponse = await fetch('/api/auth/passkeys/authenticate/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    challengeId: options.challengeId,
+                    credential: passkeyCredentialToJSON(credential),
+                }),
+            })
+            const data = await verifyResponse.json().catch(() => null)
+            if (!verifyResponse.ok) {
+                return setError(data?.error || 'Passkey login failed.')
+            }
+
+            router.push(redirectPath)
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'Passkey login failed.')
+        } finally {
+            setBusy(false)
+        }
+    }
+
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const { condition: expired } = useClearStateAfter({ initialState: serverExpired, timeout: 8000 })
@@ -213,6 +256,15 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 </div>
                             </form>
                             <div className='grid gap-2 border-t border-ui-border pt-3'>
+                                <button
+                                    type='button'
+                                    onClick={handlePasskeyLogin}
+                                    disabled={!hydrated || busy}
+                                    className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel focus:outline-none focus:ring-4 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:text-ui-muted'
+                                >
+                                    <Fingerprint className='h-4 w-4 text-ui-primary' />
+                                    Sign in with passkey
+                                </button>
                                 <a
                                     href={ssoHref}
                                     className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel focus:outline-none focus:ring-4 focus:ring-ui-primary/20'

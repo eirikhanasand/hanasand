@@ -1,6 +1,12 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
 import indexHandler from './handlers/index.ts'
 import loginHandler from './handlers/auth/login.ts'
+import {
+    getPasskeyAuthenticateOptions,
+    getPasskeyRegisterOptions,
+    postPasskeyAuthenticateVerify,
+    postPasskeyRegisterVerify,
+} from './handlers/auth/passkeys.ts'
 import { getSsoStart, postSsoCallback } from './handlers/auth/sso.ts'
 import getUser from './handlers/user/get.ts'
 import postUser from './handlers/user/post.ts'
@@ -213,6 +219,10 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/auth/token/:id', tokenHandler)
     fastify.get('/auth/sessions', getSessions)
     fastify.post('/auth/login/:id', loginHandler)
+    fastify.get('/auth/passkeys/register/options', getPasskeyRegisterOptions)
+    fastify.post('/auth/passkeys/register/verify', postPasskeyRegisterVerify)
+    fastify.get('/auth/passkeys/authenticate/options', getPasskeyAuthenticateOptions)
+    fastify.post('/auth/passkeys/authenticate/verify', postPasskeyAuthenticateVerify)
     fastify.get('/auth/sso/start', getSsoStart)
     fastify.post('/auth/sso/callback', postSsoCallback)
     fastify.post('/auth/password-reset/request', requestPasswordReset)
