@@ -309,6 +309,7 @@ export default function OrganizationWorkspaceClient() {
     const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
     const activityRows = useMemo(() => organizationActivityRows(activity, bundle), [activity, bundle])
     const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedFocus)
+    const settingsDirty = useMemo(() => !settingsEqual(settingsDraft, bundle.settings || {}), [settingsDraft, bundle.settings])
 
     const loadOrganizations = useCallback(async (nextSelectedId?: string) => {
         setLoading(true)
@@ -481,6 +482,7 @@ export default function OrganizationWorkspaceClient() {
     })
 
     const saveSettings = () => selectedOrganization && runAction('save-settings', async () => {
+        if (!settingsDirty) return 'No settings changes.'
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/settings`, {
             method: 'PUT',
             body: JSON.stringify(settingsDraft),
@@ -797,7 +799,7 @@ export default function OrganizationWorkspaceClient() {
 
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
                                     <div className='grid gap-5'>
-                                        <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} canManage={canManage} busy={busy} onSave={() => void saveSettings()} />
+                                        <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
                                         <WatchlistPanel
                                             watchlists={bundle.watchlists}
                                             activeTerms={bundle.alertTerms}
@@ -1085,7 +1087,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
     )
 }
 
-function SettingsPanel({ settingsDraft, setSettingsDraft, canManage, busy, onSave }: { settingsDraft: OrganizationSettings, setSettingsDraft: (next: OrganizationSettings) => void, canManage: boolean, busy: string, onSave: () => void }) {
+function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canManage, busy, onSave, onReset }: { settingsDraft: OrganizationSettings, setSettingsDraft: (next: OrganizationSettings) => void, settingsDirty: boolean, canManage: boolean, busy: string, onSave: () => void, onReset: () => void }) {
     return (
         <section id='settings' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
             <SectionTitle icon={<Settings className='h-4 w-4' />} title='Settings' detail={canManage ? 'Owner and admin policy controls.' : 'Read-only policy view.'} />
@@ -1097,8 +1099,12 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, canManage, busy, onSav
                 <SelectField label='Lifecycle' value={settingsDraft.lifecycleStatus || 'active'} options={lifecycleStatuses} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, lifecycleStatus: value })} />
                 <Field label='Retention days' type='number' value={String(settingsDraft.retentionDays || 365)} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, retentionDays: Number(value) || 365 })} />
             </div>
-            <div className='mt-4 flex justify-end'>
-                <button type='button' className={primaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={onSave}>
+            <div className='mt-4 flex flex-wrap items-center justify-end gap-2'>
+                {settingsDirty && <span className='mr-auto rounded-md bg-[#fff7d6] px-2 py-1 text-xs font-semibold text-[#8a4b00] dark:bg-[#332604] dark:text-[#fde68a]'>Unsaved changes</span>}
+                <button type='button' className={secondaryButtonClass} disabled={!canManage || !settingsDirty || Boolean(busy)} onClick={onReset}>
+                    Reset
+                </button>
+                <button type='button' className={primaryButtonClass} disabled={!canManage || !settingsDirty || Boolean(busy)} onClick={onSave}>
                     <Settings className='h-4 w-4' />
                     Save settings
                 </button>
@@ -2053,6 +2059,21 @@ function compactMetadata(rows: Array<[string, string | undefined]>) {
 
 function inviteLink(invite: OrganizationInvite) {
     return invite.acceptanceUrl || invite.acceptancePath || invite.token || ''
+}
+
+function normalizeSettings(settings: OrganizationSettings = {}) {
+    return {
+        name: (settings.name || '').trim(),
+        slug: (settings.slug || '').trim(),
+        defaultWebhookPolicy: settings.defaultWebhookPolicy || 'active_destinations',
+        alertVisibilityPolicy: settings.alertVisibilityPolicy || 'members',
+        lifecycleStatus: settings.lifecycleStatus || 'active',
+        retentionDays: Number(settings.retentionDays || 365),
+    }
+}
+
+function settingsEqual(left: OrganizationSettings = {}, right: OrganizationSettings = {}) {
+    return JSON.stringify(normalizeSettings(left)) === JSON.stringify(normalizeSettings(right))
 }
 
 function parseInviteEmails(value: string) {
