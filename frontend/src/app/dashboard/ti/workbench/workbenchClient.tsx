@@ -1023,40 +1023,49 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
 
                     <aside className='min-w-0 border-t border-[#26344d] bg-[#0d1522] xl:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         <div className='grid gap-4 p-4'>
-                            <OrgOperatingPanel
-                                orgContext={orgContext}
-                                selected={selected}
-                                caseDetail={selectedCaseDetail}
-                                actionDeliveries={selectedActionDeliveries}
-                                busyAction={busyAction}
-                                inviteEmail={inviteEmail}
-                                inviteRole={inviteRole}
-                                onInviteEmailChange={setInviteEmail}
-                                onInviteRoleChange={setInviteRole}
-                                onInvite={inviteOrganizationMember}
-                                onCreateSharedWatchlistTerm={() => selected && createSharedWatchlistTerm(selected)}
-                                onUpdateWatchlist={upsertWatchlist}
-                            />
-
                             <OperatorActionRail
                                 selected={selected}
                                 orgContext={orgContext}
                                 caseDetail={selectedCaseDetail}
                                 alertDetail={selectedAlertDetail}
                                 actionDeliveries={selectedActionDeliveries}
-                                note={notes[selected.id] ?? ''}
+                                note={selected ? notes[selected.id] ?? '' : ''}
                                 busyAction={busyAction}
                                 onRunAction={(action) => selected && runWorkbenchAction(selected, action, notes[selected.id] ?? '')}
-                                onCustomerNotification={() => recordCustomerNotification(selected, notes[selected.id] ?? '', selectedCaseDetail)}
+                                onCustomerNotification={() => selected && recordCustomerNotification(selected, notes[selected.id] ?? '', selectedCaseDetail)}
                                 onCopyPayload={(payload) => selected && copyHandoffPayload(selected, payload)}
                             />
 
-                            <section className='rounded-lg border border-[#26344d] bg-[#101827]'>
-                                <div className='border-b border-[#26344d] px-4 py-3'>
-                                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Case groups and links</h3>
-                                    <p className='mt-0.5 text-xs text-[#8fa0ba]'>Current case group and related routes for the selected item.</p>
+                            <details className='rounded-lg border border-[#26344d] bg-[#101827]' data-workbench-org-disclosure>
+                                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#142033] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                                    <span>Org and shared watchlist</span>
+                                    <span className='text-xs font-medium text-[#8fa0ba]'>Members, terms, visibility</span>
+                                </summary>
+                                <div className='border-t border-[#26344d]'>
+                                    <OrgOperatingPanel
+                                        orgContext={orgContext}
+                                        selected={selected}
+                                        caseDetail={selectedCaseDetail}
+                                        actionDeliveries={selectedActionDeliveries}
+                                        busyAction={busyAction}
+                                        inviteEmail={inviteEmail}
+                                        inviteRole={inviteRole}
+                                        embedded
+                                        onInviteEmailChange={setInviteEmail}
+                                        onInviteRoleChange={setInviteRole}
+                                        onInvite={inviteOrganizationMember}
+                                        onCreateSharedWatchlistTerm={() => selected && createSharedWatchlistTerm(selected)}
+                                        onUpdateWatchlist={upsertWatchlist}
+                                    />
                                 </div>
-                                <div className='grid gap-2 border-b border-[#26344d] p-3'>
+                            </details>
+
+                            <details className='rounded-lg border border-[#26344d] bg-[#101827]' data-workbench-case-groups-disclosure>
+                                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#142033] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                                    <span>Case groups and links</span>
+                                    <span className='text-xs font-medium text-[#8fa0ba]'>{queues.length} groups, {selected?.relatedLinks.length || 0} links</span>
+                                </summary>
+                                <div className='grid gap-2 border-t border-[#26344d] p-3'>
                                     {queues.map(queue => (
                                         <div key={queue.name} className='flex items-center justify-between gap-3 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 text-xs'>
                                             <span className='font-semibold text-[#edf4ff]'>{queue.name}</span>
@@ -1064,7 +1073,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                         </div>
                                     ))}
                                 </div>
-                                <div className='grid gap-2 p-3'>
+                                <div className='grid gap-2 border-t border-[#26344d] p-3'>
                                     {selected?.relatedLinks.map(link => (
                                         <Link key={link.href} href={link.href} className='inline-flex h-9 items-center justify-between gap-2 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#101a2a]'>
                                             {link.label}
@@ -1072,7 +1081,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                         </Link>
                                     ))}
                                 </div>
-                            </section>
+                            </details>
                         </div>
                     </aside>
                 </div>
@@ -1081,7 +1090,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     )
 }
 
-function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries, busyAction, inviteEmail, inviteRole, onInviteEmailChange, onInviteRoleChange, onInvite, onCreateSharedWatchlistTerm, onUpdateWatchlist }: {
+function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries, busyAction, inviteEmail, inviteRole, embedded = false, onInviteEmailChange, onInviteRoleChange, onInvite, onCreateSharedWatchlistTerm, onUpdateWatchlist }: {
     orgContext?: WorkbenchOrgContext
     selected?: WorkbenchCase
     caseDetail?: CaseDetailState
@@ -1089,6 +1098,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
     busyAction: string | null
     inviteEmail: string
     inviteRole: string
+    embedded?: boolean
     onInviteEmailChange: (value: string) => void
     onInviteRoleChange: (value: string) => void
     onInvite: () => void | Promise<void>
@@ -1108,11 +1118,13 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
     const activeWatchlists = (orgContext?.watchlists || []).filter(item => item.status === 'active')
 
     return (
-        <section className='rounded-lg border border-[#26344d] bg-[#101827]'>
-            <div className='border-b border-[#26344d] px-4 py-3'>
-                <h3 className='text-sm font-semibold text-[#edf4ff]'>Org and shared watchlist</h3>
-                <p className='mt-0.5 text-xs text-[#8fa0ba]'>Member access, watch terms, and customer visibility for the selected case.</p>
-            </div>
+        <section className={embedded ? 'bg-[#101827]' : 'rounded-lg border border-[#26344d] bg-[#101827]'}>
+            {!embedded && (
+                <div className='border-b border-[#26344d] px-4 py-3'>
+                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Org and shared watchlist</h3>
+                    <p className='mt-0.5 text-xs text-[#8fa0ba]'>Member access, watch terms, and customer visibility for the selected case.</p>
+                </div>
+            )}
             <div className='grid gap-3 p-3'>
                 <div className='grid gap-2 text-xs'>
                     <OperatorRow label='Org' value={orgContext?.organization ? `${orgContext.organization.name} · ${orgContext.organization.id}` : 'syncing'} tone={orgContext?.organization ? 'ready' : 'blocked'} />
