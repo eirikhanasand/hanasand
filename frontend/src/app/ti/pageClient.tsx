@@ -317,6 +317,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     return (
         <div className='grid gap-6'>
             <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel'>
+                {renderMobileWorkbar && mobileEvidenceWorkbar ? <div className='border-b border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
                 <div className='grid gap-4 border-b border-ui-border bg-ui-panel p-4 dark:border-ui-border dark:bg-ui-panel'>
                     <div className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] xl:items-stretch'>
                         <div className='grid min-w-0 content-start gap-4'>
@@ -340,7 +341,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                         </div>
                     </div>
                 </div>
-                {renderMobileWorkbar && mobileEvidenceWorkbar ? <div className='border-b border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
                 {renderDesktopActions ? (
                     <ActorActionStrip
                         actor={actorIntel}
