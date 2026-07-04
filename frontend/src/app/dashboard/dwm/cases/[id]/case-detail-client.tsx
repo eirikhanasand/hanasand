@@ -418,7 +418,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
                         <div className='grid gap-2 md:grid-cols-4'>
                             <Metric label='Watch terms' value={`${matchedTerms(state.detail).length}`} detail={matchedTerms(state.detail).slice(0, 2).join(', ') || 'none'} />
-                            <Metric label='Evidence' value={`${evidence.length}`} detail={hashList(evidence.map(item => item.contentHash || item.provenance?.contentHash)).slice(0, 1).join(', ') || 'no hash'} />
+                            <Metric label='Evidence' value={`${evidence.length}`} detail={evidence.some(item => item.contentHash || item.provenance?.contentHash) ? 'hashes linked' : 'hashes pending'} />
                             <Metric label='Deliveries' value={`${deliveries.length}`} detail={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTime(latestDelivery.attemptedAt)}` : 'no attempts'} />
                             <Metric label='Timeline' value={`${timeline.length}`} detail={caseRecord.updatedAt ? `updated ${relativeTime(caseRecord.updatedAt)}` : 'no update'} />
                         </div>
@@ -455,10 +455,10 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                                     <tbody className='divide-y divide-ui-border bg-ui-panel'>
                                                         {evidence.map((row, index) => (
                                                             <tr key={row.id || index} className='hover:bg-ui-raised'>
-                                                                <td className='px-3 py-2 align-top font-semibold text-ui-text'>{row.sourceName || row.provenance?.sourceId || 'source pending'}<p className='text-[11px] font-normal text-ui-muted'>{stateLabel(row.sourceFamily)}</p></td>
+                                                                <td className='px-3 py-2 align-top font-semibold text-ui-text'>{row.sourceName || sourceReferenceState(row)}<p className='text-[11px] font-normal text-ui-muted'>{stateLabel(row.sourceFamily)}</p></td>
                                                                 <td className='px-3 py-2 align-top text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</td>
                                                                 <td className='max-w-xl px-3 py-2 align-top text-ui-text'>{safeCaseEvidenceExcerpt(row)}</td>
-                                                                <td className='px-3 py-2 align-top font-mono text-[11px] text-ui-muted'>{row.provenance?.captureId || row.id || 'capture pending'}<p>{row.contentHash || row.provenance?.contentHash || 'hash pending'}</p></td>
+                                                                <td className='px-3 py-2 align-top text-[11px] font-semibold text-ui-muted'>{evidenceReferenceState(row)}<p>{evidenceHashState(row)}</p></td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
@@ -507,15 +507,15 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                 <div className='grid gap-2 text-xs text-ui-muted'>
                                     <KeyValue label='Status' value={stateLabel(latestDelivery.status)} />
                                     <KeyValue label='Attempted' value={relativeTime(latestDelivery.attemptedAt)} />
-                                    <KeyValue label='Endpoint' value={latestDelivery.endpointHint || latestDelivery.endpointHash || latestDelivery.webhookDestinationId || latestDelivery.destinationId || 'destination pending'} mono />
-                                    <KeyValue label='Dedupe' value={latestDelivery.dedupeKey || 'pending'} mono />
+                                    <KeyValue label='Endpoint' value={deliveryDestinationState(latestDelivery)} />
+                                    <KeyValue label='Dedupe' value={latestDelivery.dedupeKey ? 'dedupe linked' : 'pending'} />
                                     <div className='grid gap-2 sm:grid-cols-2'>
-                                        <KeyValue label='Request' value={latestDelivery.requestId || latestDelivery.auditEventId || 'pending'} mono />
+                                        <KeyValue label='Request' value={latestDelivery.requestId || latestDelivery.auditEventId ? 'request linked' : 'pending'} />
                                         <KeyValue label='Retry' value={latestDelivery.nextRetryAt ? relativeTime(latestDelivery.nextRetryAt) : latestDelivery.errorClass ? stateLabel(latestDelivery.errorClass) : `${latestDelivery.attemptCount ?? latestDelivery.retryCount ?? 0} attempts`} />
                                     </div>
                                     <div className='grid gap-2 sm:grid-cols-2'>
                                         <KeyValue label='Mode' value={latestDelivery.dryRun ? 'Dry run' : latestDelivery.httpStatus ? `HTTP ${latestDelivery.httpStatus}` : 'queued'} />
-                                        <KeyValue label='Case link' value={caseRecord.id} mono />
+                                        <KeyValue label='Case link' value='case linked' />
                                     </div>
                                     {latestDelivery.error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-ui-danger'>{latestDelivery.error}</p> : null}
                                 </div>
@@ -536,8 +536,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
                         <Panel title='Case export' action={state.exportPayload?.exportChecksum ? 'ready' : 'pending'}>
                             <div className='grid gap-2 text-xs text-ui-muted'>
-                                <KeyValue label='Checksum' value={state.exportPayload?.exportChecksum || 'not available'} mono />
-                                <KeyValue label='Dedupe' value={state.exportPayload?.summary?.dedupeKey || alert?.webhookDelivery?.dedupeKey || 'pending'} mono />
+                                <KeyValue label='Checksum' value={state.exportPayload?.exportChecksum ? 'export checksum linked' : 'not available'} />
+                                <KeyValue label='Dedupe' value={state.exportPayload?.summary?.dedupeKey || alert?.webhookDelivery?.dedupeKey ? 'dedupe linked' : 'pending'} />
                                 <button type='button' onClick={() => copyText(state.exportPayload?.copyText || '')} disabled={!state.exportPayload?.copyText} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
                                     <Copy className='h-4 w-4' />Copy summary
                                 </button>
@@ -731,7 +731,7 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
                     <p className='text-[10px] font-semibold uppercase text-ui-primary'>Case command</p>
                     <div className='mt-2 grid gap-2 text-xs sm:grid-cols-4'>
                         <CommandFact label='Scope' value={organizationId || tenantId} />
-                        <CommandFact label='Alert' value={alertId || 'pending'} mono />
+                        <CommandFact label='Alert' value={alertId ? 'alert linked' : 'pending'} />
                         <CommandFact label='Export' value={exportReady ? 'ready' : 'pending'} tone={exportReady ? 'ready' : 'warn'} />
                         <CommandFact label='Delivery' value={lastDelivery} tone={latestDelivery?.status === 'failed' ? 'warn' : 'neutral'} />
                     </div>
@@ -749,12 +749,12 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
     )
 }
 
-function CommandFact({ label, value, mono = false, tone = 'neutral' }: { label: string, value: string, mono?: boolean, tone?: 'ready' | 'warn' | 'neutral' }) {
+function CommandFact({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'ready' | 'warn' | 'neutral' }) {
     const toneClass = tone === 'ready' ? 'text-ui-success' : tone === 'warn' ? 'text-ui-warning' : 'text-ui-text'
     return (
         <div className='min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2'>
             <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
-            <p className={`${mono ? 'font-mono text-[11px]' : 'text-xs'} mt-1 truncate font-semibold ${toneClass}`} title={value}>{value}</p>
+            <p className={`mt-1 truncate text-xs font-semibold ${toneClass}`} title={value}>{value}</p>
         </div>
     )
 }
@@ -827,21 +827,19 @@ function orderCaseDeliveries(rows: DeliveryRow[]) {
 }
 
 function EvidenceMobileRow({ row }: { row: EvidenceRow }) {
-    const captureId = row.provenance?.captureId || row.id || 'capture pending'
-    const contentHash = row.contentHash || row.provenance?.contentHash || 'hash pending'
     return (
         <article className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 text-xs' data-dwm-case-evidence-mobile-row='true'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='truncate text-sm font-semibold text-ui-text'>{row.sourceName || row.provenance?.sourceId || 'source pending'}</p>
+                    <p className='truncate text-sm font-semibold text-ui-text'>{row.sourceName || sourceReferenceState(row)}</p>
                     <p className='mt-1 truncate text-ui-muted'>{stateLabel(row.sourceFamily)}</p>
                 </div>
                 <span className='shrink-0 rounded-md border border-ui-border bg-ui-canvas px-2 py-1 font-semibold text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</span>
             </div>
             <p className='wrap-break-word rounded-md bg-ui-canvas px-3 py-2 leading-5 text-ui-text'>{safeCaseEvidenceExcerpt(row)}</p>
-            <div className='grid gap-1 font-mono text-[11px] text-ui-muted'>
-                <span className='truncate'>Capture: {captureId}</span>
-                <span className='truncate'>Hash: {contentHash}</span>
+            <div className='grid gap-1 text-[11px] font-semibold text-ui-muted'>
+                <span className='truncate'>Capture: {evidenceReferenceState(row)}</span>
+                <span className='truncate'>Hash: {evidenceHashState(row)}</span>
             </div>
         </article>
     )
@@ -857,7 +855,7 @@ function TimelineItem({ row, compact = false }: { row: TimelineRow, compact?: bo
                     <p className='shrink-0 text-ui-muted'>{relativeTime(when)}</p>
                 </div>
                 <p className='mt-1 wrap-break-word leading-5 text-ui-muted'>{row.rationale || row.note || row.source || 'Case event recorded.'}</p>
-                <p className='mt-2 font-mono text-[11px] text-ui-muted'>{row.actor || 'system'}{row.workflow?.toStatus ? ` · ${stateLabel(row.workflow.toStatus)}` : ''}</p>
+                <p className='mt-2 text-[11px] font-semibold text-ui-muted'>{timelineActorLabel(row.actor)}{row.workflow?.toStatus ? ` · ${stateLabel(row.workflow.toStatus)}` : ''}</p>
             </div>
         )
     }
@@ -869,7 +867,7 @@ function TimelineItem({ row, compact = false }: { row: TimelineRow, compact?: bo
                 <p className='font-semibold text-ui-text'>{stateLabel(row.action || row.eventType)}</p>
                 <p className='mt-1 wrap-break-word leading-5 text-ui-muted'>{row.rationale || row.note || row.source || 'Case event recorded.'}</p>
             </div>
-            <div className='font-mono text-[11px] text-ui-muted'>{row.actor || 'system'}{row.workflow?.toStatus ? <p>{stateLabel(row.workflow.toStatus)}</p> : null}</div>
+            <div className='text-[11px] font-semibold text-ui-muted'>{timelineActorLabel(row.actor)}{row.workflow?.toStatus ? <p>{stateLabel(row.workflow.toStatus)}</p> : null}</div>
         </div>
     )
 }
@@ -893,8 +891,8 @@ function StatusDot({ state }: { state: 'ready' | 'action' | 'blocked' }) {
     return <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${toneClass}`}>{state}</span>
 }
 
-function KeyValue({ label, value, mono = false }: { label: string, value: string, mono?: boolean }) {
-    return <div className='grid gap-1 rounded-lg border border-ui-border bg-ui-canvas p-2'><p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p><p className={`${mono ? 'font-mono text-[11px]' : 'text-xs'} wrap-break-word text-ui-text`}>{value}</p></div>
+function KeyValue({ label, value }: { label: string, value: string }) {
+    return <div className='grid gap-1 rounded-lg border border-ui-border bg-ui-canvas p-2'><p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p><p className='wrap-break-word text-xs text-ui-text'>{value}</p></div>
 }
 
 function EmptyLine({ text }: { text: string }) {
@@ -926,10 +924,6 @@ function resolvedAlertId(caseRecord: CaseDetail['case'] | undefined, alertContex
     return caseRecord?.alertId || alertContext?.id || fallback
 }
 
-function hashList(values: Array<string | undefined>) {
-    return uniqueStrings(values).map(value => value.length > 14 ? `${value.slice(0, 14)}...` : value)
-}
-
 function uniqueStrings(values: Array<string | undefined>) {
     return [...new Set(values.map(value => value?.trim()).filter(Boolean) as string[])]
 }
@@ -949,6 +943,34 @@ function relativeTime(value?: string) {
 
 function stateLabel(value?: string) {
     return (value || 'pending').replace(/[_-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+}
+
+function evidenceReferenceState(row: EvidenceRow) {
+    if (row.provenance?.captureId || row.id) return 'capture linked'
+    return 'capture pending'
+}
+
+function sourceReferenceState(row: EvidenceRow) {
+    if (row.provenance?.sourceId) return 'source linked'
+    return 'source pending'
+}
+
+function evidenceHashState(row: EvidenceRow) {
+    if (row.contentHash || row.provenance?.contentHash) return 'hash linked'
+    return 'hash pending'
+}
+
+function deliveryDestinationState(row: DeliveryRow) {
+    if (row.endpointHint || row.endpointHash) return 'configured destination'
+    if (row.webhookDestinationId || row.destinationId) return 'saved destination'
+    return 'destination pending'
+}
+
+function timelineActorLabel(value?: string) {
+    if (!value) return 'system'
+    if (/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(value)) return value
+    if (/^[a-z0-9_-]{16,}$/i.test(value)) return 'system actor'
+    return stateLabel(value)
 }
 
 function actionLabel(value: string) {
