@@ -2200,11 +2200,19 @@ function ActorOperationsMatrix({
 }) {
     const rows = useMemo(() => actorOperationsRowsFor(result, actor, victimObservations), [actor, result, victimObservations])
     const [selectedRowId, setSelectedRowId] = useState(rows[0]?.id ?? '')
+    const [showAllOperations, setShowAllOperations] = useState(false)
     useEffect(() => {
         if (!rows.length) return
         if (!rows.some(row => row.id === selectedRowId)) setSelectedRowId(rows[0]?.id ?? '')
     }, [rows, selectedRowId])
     const selectedRow = rows.find(row => row.id === selectedRowId) ?? rows[0]
+    const compactRows = rows.slice(0, 8)
+    const visibleRows = showAllOperations
+        ? rows
+        : selectedRow && !compactRows.some(row => row.id === selectedRow.id)
+            ? [...compactRows.slice(0, 7), selectedRow]
+            : compactRows
+    const hiddenOperationCount = Math.max(0, rows.length - visibleRows.length)
 
     return (
         <section data-ti-actor-operations-matrix='true' className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-panel'>
@@ -2232,7 +2240,7 @@ function ActorOperationsMatrix({
                             </tr>
                         </thead>
                         <tbody className='divide-y divide-ui-border'>
-                            {rows.map(row => {
+                            {visibleRows.map(row => {
                                 const active = selectedRow?.id === row.id || (row.artifactLookup && selectedArtifactId?.includes(row.artifactLookup.toLowerCase().replace(/[^a-z0-9]+/g, '-')))
                                 return (
                                     <tr key={row.id} className={`${active ? 'bg-ui-primary/10 dark:bg-ui-primary/10' : 'bg-ui-panel dark:bg-ui-panel'} align-top`}>
@@ -2272,6 +2280,23 @@ function ActorOperationsMatrix({
                             })}
                         </tbody>
                     </table>
+                    {hiddenOperationCount ? (
+                        <button
+                            type='button'
+                            onClick={() => setShowAllOperations(true)}
+                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                        >
+                            Show {hiddenOperationCount} more details
+                        </button>
+                    ) : showAllOperations && rows.length > compactRows.length ? (
+                        <button
+                            type='button'
+                            onClick={() => setShowAllOperations(false)}
+                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                        >
+                            Show key details only
+                        </button>
+                    ) : null}
                     {!rows.length ? <p className='p-4 text-sm text-ui-muted dark:text-ui-muted'>Add technique, infrastructure, or victim context before case review.</p> : null}
                 </div>
                 <div className='min-w-0 border-t border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised lg:border-l lg:border-t-0'>
