@@ -1170,6 +1170,7 @@ export default function OrganizationWorkspaceClient() {
                                         focus={requestedFocus}
                                     />
                                 )}
+                                <WorkspaceSectionNav organization={selectedOrganization} bundle={bundle} selectedSubject={selectedActivitySubject} />
                                 <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} canManage={canManage} />
                                 <OrgActionStrip
                                     alertId={selectedAlertId}
@@ -1251,6 +1252,90 @@ export default function OrganizationWorkspaceClient() {
                 </div>
             </div>
         </section>
+    )
+}
+
+function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organization: OrganizationSummary, bundle: OrgBundle, selectedSubject: ActivitySubject }) {
+    const activeMembers = bundle.members.filter(member => member.status === 'active')
+    const pendingInvites = bundle.invites.filter(invite => invite.status === 'pending')
+    const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active') === 'active')
+    const activeDestinations = bundle.webhooks.filter(destination => destination.deliveryReady || destination.status === 'active' || destination.status === 'configured')
+    const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status === 'failed' || Boolean(delivery.error))
+    const rows = [
+        {
+            id: 'team',
+            href: '#members',
+            label: 'Team',
+            value: `${activeMembers.length} active`,
+            detail: `${pendingInvites.length} pending`,
+            icon: <Users className='h-4 w-4' />,
+            active: selectedSubject.type === 'member' || selectedSubject.type === 'invite',
+            tone: pendingInvites.length ? 'review' : 'ready',
+        },
+        {
+            id: 'watchlists',
+            href: '#watchlists',
+            label: 'Watchlists',
+            value: `${activeTerms.length} active`,
+            detail: `${bundle.watchlists.length} saved`,
+            icon: <BellRing className='h-4 w-4' />,
+            active: selectedSubject.type === 'watchlist',
+            tone: activeTerms.length ? 'ready' : 'review',
+        },
+        {
+            id: 'destinations',
+            href: '#destinations',
+            label: 'Destinations',
+            value: `${activeDestinations.length} ready`,
+            detail: `${bundle.webhooks.length} saved`,
+            icon: <Webhook className='h-4 w-4' />,
+            active: selectedSubject.type === 'destination',
+            tone: activeDestinations.length ? 'ready' : 'review',
+        },
+        {
+            id: 'delivery',
+            href: '#delivery-history',
+            label: 'Delivery',
+            value: `${bundle.deliveries.length} events`,
+            detail: failedDeliveries.length ? `${failedDeliveries.length} failed` : 'clean',
+            icon: <RefreshCw className='h-4 w-4' />,
+            active: selectedSubject.type === 'alert' || selectedSubject.type === 'case',
+            tone: failedDeliveries.length ? 'warning' : bundle.deliveries.length ? 'ready' : 'neutral',
+        },
+        {
+            id: 'activity',
+            href: '#audit',
+            label: 'Activity',
+            value: selectedSubjectLabel(selectedSubject, organization, bundle),
+            detail: selectedSubject.type,
+            icon: <CheckCircle2 className='h-4 w-4' />,
+            active: selectedSubject.type === 'organization',
+            tone: 'neutral',
+        },
+    ] as const
+    return (
+        <nav className='sticky top-2 z-10 rounded-lg border border-ui-border bg-ui-panel/95 p-2 shadow-sm backdrop-blur dark:border-ui-border dark:bg-ui-panel/95' aria-label='Organization workspace sections' data-org-section-nav='true'>
+            <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-5'>
+                {rows.map(row => (
+                    <a
+                        key={row.id}
+                        href={row.href}
+                        className={`grid min-h-16 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md border px-3 py-2 text-left transition hover:border-ui-primary/35 hover:bg-ui-raised dark:hover:bg-ui-raised ${row.active ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-primary/10' : row.tone === 'warning' ? 'border-ui-warning/35 bg-ui-warning/10 dark:border-ui-warning/35 dark:bg-ui-warning/10' : row.tone === 'ready' ? 'border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-canvas' : 'border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-canvas'}`}
+                        data-org-section-nav-item={row.id}
+                    >
+                        <span className='grid h-8 w-8 place-items-center rounded-md border border-ui-border bg-ui-panel text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{row.icon}</span>
+                        <span className='min-w-0'>
+                            <span className='flex min-w-0 items-center justify-between gap-2'>
+                                <span className='truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
+                                <span className='h-1.5 w-1.5 shrink-0 rounded-full bg-ui-primary opacity-70' aria-hidden='true' />
+                            </span>
+                            <span className='mt-1 block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
+                            <span className='block truncate text-xs text-ui-muted dark:text-ui-muted'>{row.detail}</span>
+                        </span>
+                    </a>
+                ))}
+            </div>
+        </nav>
     )
 }
 
