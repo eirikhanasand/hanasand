@@ -1751,7 +1751,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                                 </button>
                             </div>
                         </div>
-                        {visibleInvites.length === 0 && <EmptyLine text='No invites match this view.' />}
+                        {visibleInvites.length === 0 && <EmptyLine text='Adjust filters to see pending access requests.' />}
                         {visibleInvites.map(invite => {
                             const canCopy = Boolean(inviteLink(invite)) && inviteActionAllowed(invite, 'copy') && !busy
                             const canResend = canManage && inviteActionAllowed(invite, 'resend') && !busy
@@ -1820,7 +1820,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
             </summary>
             <div className='overflow-x-auto border-t border-ui-border p-4 dark:border-ui-border'>
                 {busyLabel && <InlineBusy label={busyLabel} marker='data-org-member-busy' />}
-                {members.length === 0 && <EmptyLine text='Active members appear here after invites are accepted or the backend returns the current team.' />}
+                {members.length === 0 && <EmptyLine text='Invite teammates to populate this access table.' />}
                 {members.length > 0 && (
                     <>
                         <div className='mb-3 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[minmax(0,1fr)_9rem_auto]' data-org-member-filter-strip='true'>
@@ -1860,7 +1860,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                         </div>
                         {visibleMembers.length === 0 && (
                             <div className='mb-3'>
-                                <EmptyLine text='No members match this view.' />
+                                <EmptyLine text='Adjust filters to see matching team members.' />
                             </div>
                         )}
                         <div className='grid gap-2 md:hidden' data-org-member-mobile-list='true'>
@@ -2060,7 +2060,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                         <RowStatus message={rowMessages['destination-create']} />
                     </div>
                 )}
-                {destinations.length === 0 && <EmptyLine text={canManage ? 'No saved destinations yet.' : 'No saved destinations available.'} />}
+                {destinations.length === 0 && <EmptyLine text={canManage ? 'Add a Discord or webhook destination to enable delivery tests.' : 'Destination access appears after an owner adds one.'} />}
                 {destinations.length > 0 && (
                     <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[minmax(0,1fr)_8rem_8rem_auto]' data-org-destination-filter-strip='true'>
                         <label className='grid min-w-0 gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
@@ -2106,7 +2106,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                         </div>
                     </div>
                 )}
-                {destinations.length > 0 && visibleDestinations.length === 0 && <EmptyLine text='No destinations match this view.' />}
+                {destinations.length > 0 && visibleDestinations.length === 0 && <EmptyLine text='Adjust filters to see matching destinations.' />}
                 {visibleDestinations.map(destination => {
                     const draft = editing[destination.id]
                     const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
@@ -2331,7 +2331,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                 )}
                 {watchlists.length > 0 && visibleWatchlists.length === 0 && (
                     <div className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm text-ui-muted dark:border-ui-border dark:bg-ui-panel' data-org-watchlist-filter-empty='true'>
-                        No watchlist terms match this view.
+                        Adjust filters to see matching watchlist terms.
                     </div>
                 )}
                 {visibleWatchlists.map(item => {
@@ -2599,7 +2599,7 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
             </div>
             <div className='mt-4 overflow-x-auto rounded-lg border border-ui-border dark:border-ui-border'>
                 {scopedDeliveries.length === 0 ? (
-                    <EmptyLine text={selectedSubject.type === 'organization' ? 'No delivery attempts for this organization yet.' : 'No delivery attempts for the selected row.'} />
+                    <EmptyLine text={selectedSubject.type === 'organization' ? 'Test or replay a destination to populate delivery history.' : 'Select a row with delivery activity or run a test destination.'} />
                 ) : (
                     <>
                         <div className='grid gap-2 p-2 md:hidden' data-org-delivery-mobile-list='true'>
@@ -2828,7 +2828,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
             </div>
             <div className='mt-4 grid gap-2'>
                 {activity.length === 0 && <EmptyLine text='Activity appears after team, watchlist, or destination actions.' />}
-                {activity.length > 0 && selectedRows.length === 0 && selectedSubject.type !== 'organization' && <EmptyLine text='No activity for the selected row.' />}
+                {activity.length > 0 && selectedRows.length === 0 && selectedSubject.type !== 'organization' && <EmptyLine text='Select a row with recent team, watchlist, or delivery activity.' />}
                 {visibleRows.map(item => {
                     const itemSubject = activitySubjectFromItem(item, organization.id)
                     const selected = itemSubject?.type === selectedSubject.type && itemSubject.id === selectedSubject.id
