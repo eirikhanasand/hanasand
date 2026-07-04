@@ -3875,7 +3875,7 @@ function WatchlistRelevanceWorkbench({
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Watchlist review</p>
-                    <p className='mt-0.5 wrap-break-word text-xs text-ui-muted dark:text-ui-muted'>Watched terms, matching results, key details, and case routes for organization review.</p>
+                    <p className='mt-0.5 wrap-break-word text-xs text-ui-muted dark:text-ui-muted'>Watched terms, matching results, key details, and case links for organization review.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap gap-1.5'>
                     <span className={sourceHealthChipClass('ready')}>{readyCount} matched</span>
@@ -4541,7 +4541,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                             </div>
                         </div>
                     )) : (
-                        <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>Connect an organization watchlist to activate routing.</p>
+                        <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>Connect an organization watchlist to activate review.</p>
                     )}
                 </div>
             </div>
@@ -4587,7 +4587,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                         </div>
                     </div>
                 )) : (
-                    <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>Link a sourced watchlist term to route this actor.</p>
+                    <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>Link a sourced watchlist term to review this actor.</p>
                 )}
             </div>
             {relevance.handoffRows.length ? (
@@ -4901,7 +4901,7 @@ function consumerRequestFields(stage: TiActionabilityModel['consumerReadiness'][
             { key: 'organizationId', label: 'Org', required: true },
             { key: 'alertId', label: 'Alert', required: true },
             { key: 'captureIds', label: 'Captures', required: true },
-            { key: 'casePath', label: 'Case path', required: false },
+            { key: 'casePath', label: 'Case link', required: false },
         ],
         webhookTrigger: [
             { key: 'organizationId', label: 'Org', required: true },
@@ -4930,11 +4930,11 @@ function consumerRequestFields(stage: TiActionabilityModel['consumerReadiness'][
 
 function consumerRequestPathLabel(value: string) {
     if (value.includes('alert-readiness')) return 'org alert state'
-    if (value.includes('/api/organizations') && value.includes('watchlists')) return 'org watchlist API'
-    if (value.includes('/v1/dwm/watchlists')) return 'watchlist API'
-    if (value.includes('/v1/dwm/alerts')) return 'alert API'
-    if (value.includes('/v1/cases')) return 'case API'
-    if (value.includes('/v1/dwm/webhooks')) return 'delivery API'
+    if (value.includes('/api/organizations') && value.includes('watchlists')) return 'org watchlist action'
+    if (value.includes('/v1/dwm/watchlists')) return 'watchlist action'
+    if (value.includes('/v1/dwm/alerts')) return 'alert action'
+    if (value.includes('/v1/cases')) return 'case action'
+    if (value.includes('/v1/dwm/webhooks')) return 'delivery action'
     return sourceRequestRouteLabel(value)
 }
 
@@ -4975,7 +4975,7 @@ function sourceHealthFieldLabel(value: string) {
     if (/sourceId/i.test(value)) return 'source ID'
     if (/provenance|sourceUrl|url/i.test(value)) return 'source reference'
     if (/relatedAlerts.*id|alertId/i.test(value)) return 'alert ID'
-    if (/casePath|caseId/i.test(value)) return 'case route'
+    if (/casePath|caseId/i.test(value)) return 'case link'
     if (/webhookDestination/i.test(value)) return 'webhook destination'
     if (/organizationId|tenantId/i.test(value)) return 'organization scope'
     if (/watchlistItem|watchlistId/i.test(value)) return 'watchlist item'
@@ -4989,7 +4989,7 @@ function handoffMissingLabel(values: string[]) {
         if (/organization|org|tenant/i.test(value)) return 'organization scope'
         if (/watchlist/i.test(value)) return 'watchlist item'
         if (/alert/i.test(value)) return 'alert ID'
-        if (/case/i.test(value)) return 'case route'
+        if (/case/i.test(value)) return 'case link'
         if (/webhook|destination/i.test(value)) return 'webhook destination'
         if (/fresh|stale|after/i.test(value)) return 'fresh source evidence'
         return value
@@ -5018,7 +5018,7 @@ function displayRequirementText(value: string) {
         .replace(/GET\s+\/api\/organizations\/[^/\s]+\/watchlists/gi, 'Open organization watchlists')
         .replace(/\/api\/organizations\/[^/\s]+\/alert-readiness/gi, 'organization alert state')
         .replace(/\/api\/organizations\/[^/\s]+\/alert-status/gi, 'organization alert state')
-        .replace(/\/api\/organizations\/[^/\s]+\/watchlists/gi, 'organization watchlist API')
+        .replace(/\/api\/organizations\/[^/\s]+\/watchlists/gi, 'organization watchlist action')
         .replace(/GET\s+\/api\/organizations\/:id\/alert-readiness/gi, 'Check org alert state')
         .replace(/GET\s+\/api\/organizations\/:id\/alert-status/gi, 'Check org alert state')
         .replace(/\/api\/organizations\/:id\/alert-readiness/gi, 'org alert state')
@@ -5039,10 +5039,10 @@ function displayRequirementText(value: string) {
         .replace(/sourceProvenance\[\]\.captureId/gi, 'capture ID')
         .replace(/sourceProvenance\[\]\.sourceId/gi, 'source ID')
         .replace(/sourceProvenance\[\]\.provenance/gi, 'source reference')
-        .replace(/relatedAlerts\[\]\.casePath/gi, 'alert case route')
+        .replace(/relatedAlerts\[\]\.casePath/gi, 'alert case link')
         .replace(/relatedAlerts\[\]\.id/gi, 'alert ID')
-        .replace(/relatedCases\[\]\.path/gi, 'case route')
-        .replace(/handoffs\.alertRebuild\.endpoint/gi, 'alert rebuild route')
+        .replace(/relatedCases\[\]\.path/gi, 'case link')
+        .replace(/handoffs\.alertRebuild\.endpoint/gi, 'alert rebuild action')
         .replace(/sourceProvenance\[\]/gi, 'source evidence')
         .replace(new RegExp('pro' + 'venance', 'gi'), 'source reference')
         .replace(/actorIntelligence\./gi, 'actor intelligence ')
@@ -5080,7 +5080,7 @@ function sourceRequestFamilyLabel(value: string) {
 
 function sourceRequestRouteLabel(value: string) {
     if (value === '/dashboard/ti/enrichment') return 'source review'
-    return 'review route'
+    return 'review action'
 }
 
 function recommendedActionLabel(value: string) {
@@ -7786,7 +7786,7 @@ function selectedCaseActionTrailFor(
             at: result.generatedAt,
             label: caseDraft?.ready ? 'Case handoff ready' : 'Case handoff syncing',
             detail: caseDraft?.ready
-                ? 'Selected evidence has the required case route, source context, and watch terms for authenticated review.'
+                ? 'Selected evidence has the required case link, source context, and watch terms for authenticated review.'
                 : 'Case review needs the missing identifiers or source context listed below before persistence.',
             state: caseDraft?.ready ? 'ready' : 'blocked',
             route: caseRoute,
