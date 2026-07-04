@@ -1475,12 +1475,32 @@ function EmptyWorkspacePreview() {
 }
 
 function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, archivedWatchlists, memberCount, inviteCount, webhookCount }: { organization: OrganizationSummary, activeWatchlists: number, pausedWatchlists: number, archivedWatchlists: number, memberCount: number, inviteCount: number, webhookCount: number }) {
+    const rows = [
+        { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organization.role || 'member', detail: organization.status || 'active' },
+        { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount || organization.memberCount || organization.activeMemberCount || 0), detail: `${inviteCount || organization.pendingInviteCount || 0} pending` },
+        { id: 'watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Watchlists', value: String(activeWatchlists || organization.sharedWatchlistCount || 0), detail: `${pausedWatchlists} paused · ${archivedWatchlists} archived` },
+        { id: 'destinations', icon: <Webhook className='h-4 w-4' />, label: 'Destinations', value: String(webhookCount), detail: 'Org-scoped' },
+    ]
     return (
-        <section className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel sm:grid-cols-2 lg:grid-cols-4'>
-            <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Role' value={organization.role || 'member'} detail={organization.status || 'active'} />
-            <Metric icon={<Users className='h-4 w-4' />} label='Members' value={String(memberCount || organization.memberCount || organization.activeMemberCount || 0)} detail={`${inviteCount || organization.pendingInviteCount || 0} pending`} />
-            <Metric icon={<BellRing className='h-4 w-4' />} label='Watchlists' value={String(activeWatchlists || organization.sharedWatchlistCount || 0)} detail={`${pausedWatchlists} paused · ${archivedWatchlists} archived`} />
-            <Metric icon={<Webhook className='h-4 w-4' />} label='Destinations' value={String(webhookCount)} detail='Org-scoped' />
+        <section className='flex min-w-0 flex-col gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel xl:flex-row xl:items-center xl:justify-between' data-org-workspace-summary='true'>
+            <div className='min-w-0'>
+                <p className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
+                    <ShieldCheck className='h-4 w-4 shrink-0 text-ui-primary' />
+                    <span className='truncate'>{organizationDisplayName(organization)}</span>
+                </p>
+                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayId(organization)} · {organization.tenantId || 'default tenant'}</p>
+            </div>
+            <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:flex xl:flex-wrap xl:justify-end' data-org-summary-chip-list='true'>
+                {rows.map(row => (
+                    <span key={row.id} className='grid min-h-12 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas' data-org-summary-chip={row.id}>
+                        <span className='grid h-7 w-7 place-items-center rounded-md bg-ui-panel text-ui-muted dark:bg-ui-panel dark:text-ui-muted'>{row.icon}</span>
+                        <span className='min-w-0'>
+                            <span className='block truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
+                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value} <span className='font-medium text-ui-muted dark:text-ui-muted'>{row.detail}</span></span>
+                        </span>
+                    </span>
+                ))}
+            </div>
         </section>
     )
 }
@@ -2934,16 +2954,6 @@ function SectionTitle({ icon, title, detail }: { icon: ReactNode, title: string,
                 <h2 className='flex items-center gap-2 text-base font-semibold text-ui-text dark:text-ui-text'>{icon}{title}</h2>
                 <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>{detail}</p>
             </div>
-        </div>
-    )
-}
-
-function Metric({ icon, label, value, detail }: { icon: ReactNode, label: string, value: string, detail: string }) {
-    return (
-        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas'>
-            <p className='flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{icon}{label}</p>
-            <p className='mt-2 truncate text-2xl font-semibold text-ui-text dark:text-ui-text'>{value}</p>
-            <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{detail}</p>
         </div>
     )
 }
