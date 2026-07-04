@@ -784,6 +784,38 @@ function SelectedEvidenceRail({
             : caseDraft
                 ? 'draft ready'
                 : 'source needed'
+    const continuityRows = [
+        {
+            label: 'Watchlist',
+            value: watchlistPlan?.intersections.some(item => item.watchlistItemId)
+                ? `${watchlistPlan.intersections.filter(item => item.watchlistItemId).length} linked`
+                : watchlistPlan?.terms.length ? `${watchlistPlan.terms.length} terms` : 'term needed',
+            state: watchReady ? 'ready' : 'review',
+            href: watchlistHref,
+            fallback: watchlistPlan?.nextAction ?? 'Review customer relevance before saving a watch term.',
+        },
+        {
+            label: 'Alert',
+            value: alertValue,
+            state: alertReady ? 'ready' : 'review',
+            href: alertHref,
+            fallback: alertPlan?.nextAction ?? 'Attach watchlist and source context before alert review.',
+        },
+        {
+            label: 'Case',
+            value: caseValue,
+            state: caseReady ? 'ready' : 'review',
+            href: caseHref,
+            fallback: caseOwnership?.nextAction ?? 'Attach source evidence before authenticated case handoff.',
+        },
+        {
+            label: 'Delivery',
+            value: deliveryReady ? 'ready' : deliveryPlan ? 'review' : 'pending',
+            state: deliveryReady ? 'ready' : deliveryPlan ? 'review' : 'blocked',
+            href: deliveryPlan?.route,
+            fallback: deliveryPlan?.nextAction ?? 'Choose an authenticated destination before delivery review.',
+        },
+    ] as const
 
     return (
         <section id='ti-selected-evidence' data-ti-actor-evidence-spotlight='true' className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel'>
@@ -806,15 +838,21 @@ function SelectedEvidenceRail({
                     </div>
                 </div>
                 <div data-ti-selected-action-rail='true' className='grid min-w-0 content-start gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised'>
-                    <div className='grid grid-cols-2 gap-2 text-xs'>
-                        <EvidenceMetric label='Owner' value={owner} />
-                        <EvidenceMetric label='Alert' value={alertValue} />
-                        <EvidenceMetric label='Case' value={caseValue} />
-                        <EvidenceMetric label='Delivery' value={deliveryReady ? 'ready' : deliveryPlan ? 'review' : 'pending'} />
+                    <div className='flex min-w-0 items-center justify-between gap-2 border-b border-ui-border pb-2 dark:border-ui-border'>
+                        <div className='min-w-0'>
+                            <p className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Action rail</p>
+                            <p className='mt-0.5 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>Owner: {owner}</p>
+                        </div>
+                        <span className={decisionStepStatusClass(caseReady && alertReady ? 'ready' : 'review')}>{caseReady && alertReady ? 'routed' : 'review'}</span>
+                    </div>
+                    <div className='grid min-w-0 gap-1.5'>
+                        {continuityRows.map(row => (
+                            <ContinuityRow key={row.label} label={row.label} value={row.value} state={row.state} href={row.href} fallback={row.fallback} />
+                        ))}
                     </div>
                     <div className='grid grid-cols-2 gap-1.5'>
                         <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
-                        <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onStage} href={caseHref} disabled={!caseHref && !caseReady}>Case</StripActionButton>
+                        <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onStage} href={caseHref} disabled={!caseHref && !caseReady}>Open case</StripActionButton>
                         <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate} href={alertHref}>Escalate</StripActionButton>
                         <StripActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
                     </div>
@@ -829,6 +867,39 @@ function SelectedEvidenceRail({
                 </div>
             </div>
         </section>
+    )
+}
+
+function ContinuityRow({ label, value, state, href, fallback }: { label: string; value: string; state: DecisionStep['status']; href?: string; fallback: string }) {
+    const content = (
+        <>
+            <span className='min-w-0'>
+                <span className='block truncate text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>{label}</span>
+                <span className='block truncate text-xs font-semibold text-ui-text dark:text-ui-text'>{value}</span>
+            </span>
+            <span className={decisionStepStatusClass(state)}>{href ? 'console' : decisionStepStatusLabel(state)}</span>
+        </>
+    )
+
+    if (href) {
+        return (
+            <a
+                href={href}
+                title={fallback}
+                className='grid min-h-10 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-2 py-1.5 transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:hover:bg-ui-raised'
+            >
+                {content}
+            </a>
+        )
+    }
+
+    return (
+        <div
+            title={fallback}
+            className='grid min-h-10 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-2 py-1.5 dark:border-ui-border dark:bg-ui-panel'
+        >
+            {content}
+        </div>
     )
 }
 
