@@ -432,35 +432,43 @@ export default function TiScraperControlClient() {
                 </div>
             </section>
 
-            <section className='grid gap-2 sm:grid-cols-2 xl:grid-cols-5'>
-                <Metric title='Scraper' value={snapshot?.health ? 'Reachable' : loading ? 'Loading' : 'Connecting'} detail={`${healthyEndpoints}/${Math.max(endpointRows.length, 1)} checks healthy`} icon={<Gauge className='h-4 w-4' />} tone={snapshot?.health ? 'ok' : 'bad'} />
-                <Metric title='Queue' value={String(queueCount)} detail='frontier tasks visible to workers' icon={<Workflow className='h-4 w-4' />} tone={queueCount > 200 ? 'warn' : 'ok'} />
-                <Metric title='Active Telegram' value={String(sourceGrowth.activeTelegram)} detail='public source coverage' icon={<UserRound className='h-4 w-4' />} tone={sourceGrowth.activeTelegram ? 'ok' : 'warn'} />
-                <Metric title='Darkweb/onion' value={String(sourceGrowth.activeDarkweb)} detail={`${sourceGrowth.candidates} candidates total`} icon={<DatabaseZap className='h-4 w-4' />} tone={sourceGrowth.activeDarkweb ? 'ok' : 'warn'} />
-                <Metric title='Alerts' value={String(sourceGrowth.alertsGenerated)} detail={`${sourceGrowth.watchlistMatches} matches, ${sourceGrowth.webhookDeliveries} deliveries`} icon={<Clock3 className='h-4 w-4' />} tone={sourceGrowth.alertsGenerated ? 'ok' : 'hold'} />
-            </section>
+            <details className='overflow-hidden rounded-md border border-ui-border bg-ui-panel' data-ti-control-telemetry-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-3 py-2 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span>Operations telemetry</span>
+                    <span className='text-xs font-medium text-ui-muted'>{healthyEndpoints}/{Math.max(endpointRows.length, 1)} checks healthy · {queueCount} queued · {sourceGrowth.alertsGenerated} alerts</span>
+                </summary>
+                <div className='grid gap-2 border-t border-ui-border p-2' data-ti-control-telemetry-panels>
+                    <section className='grid gap-2 sm:grid-cols-2 xl:grid-cols-5'>
+                        <Metric title='Scraper' value={snapshot?.health ? 'Reachable' : loading ? 'Loading' : 'Connecting'} detail={`${healthyEndpoints}/${Math.max(endpointRows.length, 1)} checks healthy`} icon={<Gauge className='h-4 w-4' />} tone={snapshot?.health ? 'ok' : 'bad'} />
+                        <Metric title='Queue' value={String(queueCount)} detail='frontier tasks visible to workers' icon={<Workflow className='h-4 w-4' />} tone={queueCount > 200 ? 'warn' : 'ok'} />
+                        <Metric title='Active Telegram' value={String(sourceGrowth.activeTelegram)} detail='public source coverage' icon={<UserRound className='h-4 w-4' />} tone={sourceGrowth.activeTelegram ? 'ok' : 'warn'} />
+                        <Metric title='Darkweb/onion' value={String(sourceGrowth.activeDarkweb)} detail={`${sourceGrowth.candidates} candidates total`} icon={<DatabaseZap className='h-4 w-4' />} tone={sourceGrowth.activeDarkweb ? 'ok' : 'warn'} />
+                        <Metric title='Alerts' value={String(sourceGrowth.alertsGenerated)} detail={`${sourceGrowth.watchlistMatches} matches, ${sourceGrowth.webhookDeliveries} deliveries`} icon={<Clock3 className='h-4 w-4' />} tone={sourceGrowth.alertsGenerated ? 'ok' : 'hold'} />
+                    </section>
 
-            <section className='grid gap-2 xl:grid-cols-[1fr_0.9fr]'>
-                <Panel title='Endpoints' icon={<GitBranch className='h-4 w-4' />}>
-                    <div className='grid gap-2 md:grid-cols-2'>
-                        {endpointRows.map(([name, state]) => (
-                            <div key={name} className='flex items-center justify-between gap-3 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs'>
-                                <span className='font-semibold text-ui-text'>{name}</span>
-                                <span className={state.ok ? 'text-ui-success' : 'text-ui-danger'}>{state.ok ? `HTTP ${state.status}` : state.error || `HTTP ${state.status}`}</span>
+                    <section className='grid gap-2 xl:grid-cols-[1fr_0.9fr]'>
+                        <Panel title='Endpoints' icon={<GitBranch className='h-4 w-4' />}>
+                            <div className='grid gap-2 md:grid-cols-2'>
+                                {endpointRows.map(([name, state]) => (
+                                    <div key={name} className='flex items-center justify-between gap-3 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs'>
+                                        <span className='font-semibold text-ui-text'>{name}</span>
+                                        <span className={state.ok ? 'text-ui-success' : 'text-ui-danger'}>{state.ok ? `HTTP ${state.status}` : state.error || `HTTP ${state.status}`}</span>
+                                    </div>
+                                ))}
+                                {!endpointRows.length ? <p className='text-sm text-ui-muted'>Live checks appear here when the scraper connects.</p> : null}
                             </div>
-                        ))}
-                        {!endpointRows.length ? <p className='text-sm text-ui-muted'>Live checks appear here when the scraper connects.</p> : null}
-                    </div>
-                </Panel>
-                <Panel title='Output feed' icon={<FileSearch className='h-4 w-4' />}>
-                    <div className='grid gap-2 md:grid-cols-2'>
-                        <Info label='Runs' value='collection feed' />
-                        <Info label='Queue' value={`${queueCount} frontier tasks`} />
-                        <Info label='Quality' value={qualitySummary(snapshot)} />
-                        <Info label='TI page' value={`${query} coverage`} />
-                    </div>
-                </Panel>
-            </section>
+                        </Panel>
+                        <Panel title='Output feed' icon={<FileSearch className='h-4 w-4' />}>
+                            <div className='grid gap-2 md:grid-cols-2'>
+                                <Info label='Runs' value='collection feed' />
+                                <Info label='Queue' value={`${queueCount} frontier tasks`} />
+                                <Info label='Quality' value={qualitySummary(snapshot)} />
+                                <Info label='TI page' value={`${query} coverage`} />
+                            </div>
+                        </Panel>
+                    </section>
+                </div>
+            </details>
         </div>
     )
 
