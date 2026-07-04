@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import { ArrowRight, Building2, ChevronRight, ExternalLink, Search, ShieldCheck, Waypoints } from 'lucide-react'
 import LogoutClient from '@/components/logout/logoutClient'
-import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard, type ProductNorthStarScoreboard } from '@/utils/productProgress/northStar'
 import { buildRouteMetadata } from './seo'
 import HomeExposureQueueClient from './homeExposureQueueClient'
 
@@ -80,6 +79,33 @@ const workflowShortcuts = [
     { label: 'Start pilot', href: '/contact?plan=pilot', detail: 'Watchlist, delivery, and security review' },
 ]
 
+const operatorPaths = [
+    {
+        label: 'Monitor companies',
+        state: 'Watchlists',
+        value: 'Create terms for companies, vendors, domains, executives, and brands.',
+        href: '/organizations',
+    },
+    {
+        label: 'Triage exposure',
+        state: 'DWM queue',
+        value: 'Review matched source claims with evidence, freshness, confidence, and case context.',
+        href: '/dashboard/dwm',
+    },
+    {
+        label: 'Search actor intel',
+        state: 'Threat intel',
+        value: 'Inspect actor activity, sources, artifacts, watchlist fit, and handoff actions.',
+        href: '/ti/apt29',
+    },
+    {
+        label: 'Route notifications',
+        state: 'Delivery',
+        value: 'Send reviewed alerts to configured webhooks, APIs, and analyst workflows.',
+        href: '/dashboard/automations?setup=dwm',
+    },
+]
+
 const customerSteps = [
     {
         title: 'Tell us what to watch',
@@ -149,10 +175,8 @@ export default async function Page({
 }) {
     const params = await searchParams
     const logout = Boolean(firstParam(params.logout)) || false
-    const query = firstParam(params.q) || 'acworth-ga.gov'
     const Headers = await headers()
     const generatedAt = new Date().toISOString()
-    const scoreboard = await loadProductReadiness(Headers, query) || buildProductNorthStarScoreboard(null, { generatedAt, query })
     const exposureQueue = await loadExposureQueue(Headers) || emptyExposureQueue(generatedAt)
 
     return (
@@ -209,7 +233,7 @@ export default async function Page({
                             ))}
                         </div>
 
-                        <HomeReadinessStrip scoreboard={scoreboard} />
+                        <HomeOperatorStrip />
                     </div>
 
                     <div className='landing-surface-border grid overflow-hidden rounded-xl border border-ui-border bg-ui-panel shadow-sm' id='sample-alert' data-home-workflow-panel='true'>
@@ -260,7 +284,7 @@ export default async function Page({
                         })}
                     </div>
 
-                    <HomeWorkflowCoverage scoreboard={scoreboard} />
+                    <HomeOperatorPaths />
                 </div>
             </section>
 
@@ -316,47 +340,19 @@ export default async function Page({
     )
 }
 
-function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreboard }) {
-    const stateLabel = scoreboard.fullChainReady ? 'ready' : 'syncing'
-    const firstMissingRow = scoreboard.rows.find(row => row.state !== 'ready')
-    const ledger = scoreboard.productReadinessAggregate
-    const ledgerValue = scoreboard.fullChainReady
-        ? 'Monitoring, triage, and delivery active'
-        : ledger.state === 'unavailable'
-            ? 'Delivery paths refreshing'
-            : ledger.state === 'ready'
-                ? 'Delivery paths active'
-                : 'Delivery paths connecting'
-    const nextStep = scoreboard.fullChainReady
-        ? 'Monitoring, triage, and customer delivery are live.'
-        : formatCustomerAction(scoreboard.firstBlocker || 'Connect the next data source.')
-
+function HomeOperatorStrip() {
     return (
         <div
             className='landing-surface-border grid w-full max-w-6xl gap-3 rounded-xl border border-ui-border bg-ui-panel/90 p-3 text-left shadow-sm backdrop-blur sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.95fr_1.5fr_auto]'
             data-home-product-status='true'
-            data-home-workflow-state={stateLabel}
-            data-home-workflow-ready-rows={scoreboard.readyRows}
-            data-home-workflow-total-rows={scoreboard.totalRows}
-            data-home-workflow-query={scoreboard.query}
-            data-home-deploy-state={scoreboard.deployGate.state}
-            data-home-path-state={ledger.state}
-            data-home-path-source={ledger.source}
-            data-home-path-blocked-count={ledger.customerVisibleBlockedCount}
-            data-home-path-row-count={ledger.rowCount}
-            data-home-path-deploy-risk={ledger.deployRisk}
-            data-home-first-blocker-row={firstMissingRow?.id || ''}
-            data-home-first-blocker-owner={firstMissingRow?.ownerLane || ''}
-            data-home-first-blocker-source={firstMissingRow ? formatCustomerAction(firstMissingRow.backendProofContractVersion) : ''}
-            data-home-first-blocker-raw={formatCustomerAction(scoreboard.firstBlocker || '')}
         >
-            <HomeReadinessFact label='Product' value='Company exposure monitoring for security teams' />
-            <HomeReadinessFact label='Coverage' value='Companies, vendors, domains, actors, and sources' />
-            <HomeReadinessFact label='Updated' value={formatChecked(scoreboard.generatedAt)} />
-            <HomeReadinessFact label='Delivery' value={ledgerValue} />
-            <HomeReadinessFact label={scoreboard.fullChainReady ? 'Live path' : 'Next action'} value={nextStep} />
+            <HomeOperatorFact label='Product' value='Company exposure monitoring for security teams' />
+            <HomeOperatorFact label='Coverage' value='Companies, vendors, domains, actors, and sources' />
+            <HomeOperatorFact label='Alert packet' value='Source, evidence, confidence, freshness, and next action' />
+            <HomeOperatorFact label='Delivery' value='Webhook, API, and analyst console routing' />
+            <HomeOperatorFact label='Setup path' value='Create an organization, add watchlists, route reviewed alerts' />
             <Link
-                href={`/dashboard?q=${encodeURIComponent(scoreboard.query)}`}
+                href='/dashboard'
                 className='inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
             >
                 Open console
@@ -366,7 +362,7 @@ function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreb
     )
 }
 
-function HomeReadinessFact({ label, value }: { label: string, value: string }) {
+function HomeOperatorFact({ label, value }: { label: string, value: string }) {
     return (
         <div className='landing-surface-border min-w-0 rounded-lg border border-ui-border bg-ui-raised px-3 py-2' data-home-status-fact='true'>
             <p className='text-[11px] font-semibold uppercase text-ui-muted'>{label}</p>
@@ -375,21 +371,19 @@ function HomeReadinessFact({ label, value }: { label: string, value: string }) {
     )
 }
 
-function HomeWorkflowCoverage({ scoreboard }: { scoreboard: ProductNorthStarScoreboard }) {
+function HomeOperatorPaths() {
     return (
         <section
             className='landing-surface-border overflow-hidden rounded-xl border border-ui-border bg-ui-panel/95 shadow-sm backdrop-blur'
-            data-home-workflow-coverage='true'
-            data-home-workflow-coverage-ready-rows={scoreboard.readyRows}
-            data-home-workflow-coverage-total-rows={scoreboard.totalRows}
+            data-home-operator-paths='true'
         >
-            <div className='landing-surface-divider grid gap-2 border-b px-4 py-4 md:grid-cols-[1fr_auto] md:items-end' data-home-workflow-coverage-header='true'>
+            <div className='landing-surface-divider grid gap-2 border-b px-4 py-4 md:grid-cols-[1fr_auto] md:items-end' data-home-operator-paths-header='true'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-ui-primary'>Workflow map</p>
-                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>What your security team can use today</h2>
+                    <p className='text-xs font-semibold uppercase text-ui-primary'>Operator paths</p>
+                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Core DWM workflows in the console</h2>
                 </div>
                 <Link
-                    href={`/dashboard?q=${encodeURIComponent(scoreboard.query)}`}
+                    href='/dashboard'
                     className='inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
                 >
                     Inspect console
@@ -404,26 +398,20 @@ function HomeWorkflowCoverage({ scoreboard }: { scoreboard: ProductNorthStarScor
                     <span className='text-right'>Action</span>
                 </div>
                 <div className='divide-y landing-surface-divider'>
-                    {scoreboard.direction.map(item => (
+                    {operatorPaths.map(item => (
                         <div
-                            key={item.id}
+                            key={item.href}
                             className='grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_8rem_1.5fr_8rem] md:items-center md:py-3'
-                            data-home-direction-id={item.id}
-                            data-home-direction-state={item.state}
-                            data-home-direction-backed-rows={item.backedRowIds.join(',')}
-                            data-home-direction-owner-lanes={item.ownerLanes.join(',')}
-                            data-home-direction-href={item.href}
+                            data-home-operator-path={item.href}
                         >
                             <div className='min-w-0'>
                                 <p className='wrap-break-word font-semibold text-ui-text'>{item.label}</p>
-                                <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{formatLaneList(item.ownerLanes)}</p>
+                                <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{item.state}</p>
                             </div>
-                            <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${homeStateTone(item.state)}`}>
-                                {homeStateLabel(item.state)}
+                            <span className='w-fit rounded-full border border-ui-primary/30 bg-ui-primary/10 px-2.5 py-1 text-xs font-semibold text-ui-primary'>
+                                Open
                             </span>
-                            <p className='min-w-0 wrap-break-word text-ui-muted' title={item.blocker ? formatCustomerAction(item.blocker) : customerWorkflowValue(item)}>
-                                {customerWorkflowValue(item)}
-                            </p>
+                            <p className='min-w-0 wrap-break-word text-ui-muted'>{item.value}</p>
                             <Link href={item.href} className='inline-flex min-h-9 min-w-20 w-fit items-center justify-center px-3 py-2 text-sm font-semibold text-ui-primary hover:text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/20 md:justify-self-end'>
                                 Open
                             </Link>
@@ -433,107 +421,6 @@ function HomeWorkflowCoverage({ scoreboard }: { scoreboard: ProductNorthStarScor
             </div>
         </section>
     )
-}
-
-function homeStateTone(state: ProductNorthStarScoreboard['rows'][number]['state']) {
-    if (state === 'ready') return 'border-ui-success/30 bg-ui-success/10 text-ui-success'
-    if (state === 'blocked') return 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
-    if (state === 'needs_action') return 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
-    return 'border-ui-primary/30 bg-ui-primary/10 text-ui-primary'
-}
-
-function homeStateLabel(state: ProductNorthStarScoreboard['rows'][number]['state']) {
-    if (state === 'ready') return 'live'
-    if (state === 'blocked') return 'checking'
-    if (state === 'needs_action') return 'checking'
-    return 'checking'
-}
-
-function customerWorkflowValue(item: ProductNorthStarScoreboard['direction'][number]) {
-    const readyCopy: Record<string, string> = {
-        multi_org_threat_monitoring: 'Monitor multiple customer organizations with shared watchlists and scoped access.',
-        source_backed_intelligence: 'Search recent actor posts, company mentions, sources, timing, and what changed.',
-        shared_alert_workflow: 'Move fresh company mentions into analyst triage with cases, owners, and review actions.',
-        delivery_destinations: 'Send customer notifications through configured webhooks and API delivery routes.',
-        enterprise_support: 'Keep support, audit visibility, and live service status available for customer operations.',
-    }
-    const checkingCopy: Record<string, string> = {
-        multi_org_threat_monitoring: 'Organization monitoring is connected to customer watchlists and access scope.',
-        source_backed_intelligence: 'Collection is refreshing actor posts, source lists, timing, and changed details.',
-        shared_alert_workflow: 'The console turns matched company mentions into analyst triage with cases and owners.',
-        delivery_destinations: 'Delivery routes connect alert decisions to webhooks and customer APIs.',
-        enterprise_support: 'Support and service visibility keep customer operations traceable.',
-    }
-    const source = item.state === 'ready' ? readyCopy : checkingCopy
-    const summary = (item as unknown as Record<string, string>)['pro' + 'ofSummary'] || item.detail
-    return source[item.id] || formatCustomerValue(summary)
-}
-
-function formatCustomerAction(value: string) {
-    const normalized = value
-        .replace(/\bmissing_dashboard_alert_evidence\b/gi, 'Generate a dashboard-visible alert for the selected customer.')
-        .replace(/\bmissing_alert_generation_readiness\b/gi, 'Connect alert generation status.')
-        .replace(/\bmissing_analyst_case_detail_readiness\b/gi, 'Open a linked case with timeline and actions.')
-        .replace(/\bmissing_webhook_lifecycle_health_api\b/gi, 'Connect webhook destination health and delivery history.')
-        .replace(/\bmissing_source_proxy_worker_readiness\b/gi, 'Refresh source coverage.')
-        .replace(/\bmissing_helpdesk_audit_readiness_api\b/gi, 'Connect support audit history.')
-        .replace(/\bmissing_dwm_entitlement_readiness_api\b/g, 'Connect organization access policy for alert routing.')
-        .replace(/\bmissing_org_alert_export_readiness_api\b/g, 'Connect active organization watchlist terms for alert routing.')
-        .replace(/\bmissing_source_proxy_worker_readiness\b/g, 'Run the TI source worker and refresh source coverage.')
-        .replace(/\bmissing_dashboard_alert\b/gi, 'Generate a dashboard-visible alert for the selected customer.')
-        .replace(/\bmissing_alert_generation_readiness\b/gi, 'Connect alert generation status.')
-        .replace(/\bMissing dashboard alert evidence\b/gi, 'Generate a dashboard-visible alert for the selected customer.')
-        .replace(new RegExp('\\bDashboard-visible alert ' + 'pro' + 'of is not loaded\\b', 'g'), 'Generate a dashboard-visible alert for the selected customer.')
-        .replace(/\bmissing_webhook_lifecycle_health_api\b/g, 'Connect webhook destination health and delivery history.')
-        .replace(/\bmissing_helpdesk_audit_readiness_api\b/g, 'Connect support audit history.')
-        .replace(/\bmissing_live_deploy_probe\b/g, 'Run the latest live deploy check.')
-        .replace(new RegExp('\\bmissing_public_ti_' + 'pro' + 'venance_readiness_api\\b', 'g'), 'Connect current source coverage for public threat intelligence.')
-        .replace(new RegExp('\\bDWM entitlement ' + 'readiness endpoint is not wired into product progress yet\\b', 'gi'), 'Organization access policy is not connected to this console view yet')
-        .replace(/\bEntitlement owner must expose policy, role, and allowed-action readiness before this can become ready\b/gi, 'Connect policy, role, and allowed alert actions before customer routing')
-        .replace(new RegExp('\\breadiness pr' + 'oof\\b', 'gi'), 'connection status')
-        .replace(new RegExp('\\b' + 'pro' + 'of is not loaded\\b', 'gi'), 'data is not connected')
-        .replace(/\bis not loaded\b/gi, 'is not connected')
-        .replace(/\bnot loaded\b/gi, 'not connected')
-        .replace(/\bunavailable\b/gi, 'refreshing')
-        .replace(/\breadiness\b/gi, 'status')
-        .replace(new RegExp('\\b' + 'pro' + 'of\\b', 'gi'), 'status')
-        .replace(/\bevidence\b/gi, 'source context')
-        .replace(/\bbackend\b/gi, 'live')
-        .replace(/\bcontract\b/gi, 'integration')
-        .replace(/_/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-    return normalized ? normalized[0].toUpperCase() + normalized.slice(1) : 'Connect the next data source.'
-}
-
-function formatCustomerValue(value: string) {
-    return formatCustomerAction(value)
-        .replace(/\bconnected\b/gi, 'live')
-        .replace(/\bboth have current source data\b/gi, 'are current and searchable')
-}
-
-function formatLaneList(lanes: string[]) {
-    return lanes.length ? lanes.join(', ') : 'operator review'
-}
-
-async function loadProductReadiness(requestHeaders: Headers, query: string): Promise<ProductNorthStarScoreboard | null> {
-    const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host')
-    if (!host) return null
-    const proto = requestHeaders.get('x-forwarded-proto') || 'http'
-    const target = new URL('/api/product-readiness', `${proto}://${host}`)
-    target.searchParams.set('q', query)
-
-    try {
-        const response = await fetch(target, {
-            cache: 'no-store',
-            headers: forwardedHeaders(requestHeaders),
-            signal: AbortSignal.timeout(3500),
-        })
-        if (!response.ok) return null
-        return parseProductNorthStarScoreboard(await response.json())
-    } catch {
-        return null
-    }
 }
 
 async function loadExposureQueue(requestHeaders: Headers): Promise<ExposureQueue | null> {
@@ -634,16 +521,4 @@ function forwardedHeaders(requestHeaders: Headers) {
 function firstParam(value: string | string[] | undefined) {
     if (Array.isArray(value)) return value[0] || undefined
     return value
-}
-
-function formatChecked(value: string) {
-    const time = new Date(value).getTime()
-    if (!value || Number.isNaN(time)) return 'checking'
-    const seconds = Math.max(0, Math.round((Date.now() - time) / 1000))
-    if (seconds < 60) return `${seconds}s ago`
-    const minutes = Math.round(seconds / 60)
-    if (minutes < 60) return `${minutes}m ago`
-    const hours = Math.round(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 }
