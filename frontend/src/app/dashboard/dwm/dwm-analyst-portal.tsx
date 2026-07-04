@@ -1599,7 +1599,7 @@ function RouteWatchlistImpactRail({ alert, selectedEvidence, selectedEntity, wor
 
 function ImpactChip({ label, value }: { label: string, value: string }) {
     return (
-        <span className='inline-flex min-h-7 max-w-full items-center gap-1 rounded-lg border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-muted'>
+        <span className='inline-flex min-h-7 max-w-full items-center gap-1 border-l border-ui-border pl-2 text-[11px] font-semibold text-ui-muted'>
             <span className='text-ui-muted'>{label}:</span>
             <span className='truncate text-ui-text' title={value}>{value}</span>
         </span>
