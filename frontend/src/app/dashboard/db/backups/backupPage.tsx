@@ -279,9 +279,9 @@ function RestoreProof({ proof }: { proof: BackupPresentation['restoreProof'] }) 
     return (
         <div className='mt-4 rounded-lg border border-ui-border bg-ui-panel p-3' data-backup-restore-proof={proof.state}>
             <div className='flex flex-wrap items-center justify-between gap-2'>
-                <p className='text-sm font-semibold text-ui-text'>Restore readiness proof</p>
+                <p className='text-sm font-semibold text-ui-text'>Restore checks</p>
                 <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${proof.state === 'ready' ? 'border-ui-success bg-ui-success/15 text-ui-success' : 'border-ui-warning bg-ui-warning/15 text-ui-warning'}`}>
-                    {proof.state === 'ready' ? 'Ready' : 'Blocked'}
+                    {proof.state === 'ready' ? 'Ready' : 'Review'}
                 </span>
             </div>
             <div className='mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4'>
