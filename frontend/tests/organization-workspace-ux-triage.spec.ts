@@ -67,6 +67,14 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('data-org-member-mobile-list=\'true\'')
     expect(page).toContain('data-org-member-mobile-row=\'true\'')
     expect(page).toContain('data-org-member-desktop-table=\'true\'')
+    expect(page).toContain('data-org-member-filter-strip')
+    expect(page).toContain('data-org-member-filter-count')
+    expect(page).toContain('const [memberQuery, setMemberQuery] = useState(\'\')')
+    expect(page).toContain('const [memberRoleFilter, setMemberRoleFilter] = useState(\'all\')')
+    expect(page).toContain('const visibleMembers = members.filter')
+    expect(page).toContain('memberSearchText(member).includes(normalizedMemberQuery)')
+    expect(page).toContain('function memberSearchText')
+    expect(page).toContain('No members match this view.')
     expect(page).toContain('data-org-destinations-disclosure')
     expect(page).toContain('Saved destinations')
 
@@ -204,6 +212,20 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.getByLabel('Find workspace').fill('')
     await expect(page.locator('[data-org-workspace-count="true"]')).toContainText('2/2')
     await expect(page.getByRole('button', { name: /Acme Security owner/ })).toBeVisible()
+    await page.locator('[data-org-members-disclosure] summary').click()
+    await expect(page.locator('[data-org-member-filter-strip="true"]')).toBeVisible()
+    await expect(page.locator('[data-org-member-filter-count="true"]')).toContainText('3/3 shown')
+    await page.getByLabel('Find member').fill('analyst')
+    await expect(page.locator('[data-org-member-filter-count="true"]')).toContainText('1/3 shown')
+    await expect(page.locator('[data-org-members-disclosure]')).toContainText('analyst@acme.test')
+    await expect(page.locator('[data-org-members-disclosure]')).not.toContainText('viewer@acme.test')
+    await page.locator('[data-org-member-filter-strip="true"]').getByLabel('Role').selectOption('viewer')
+    await expect(page.locator('[data-org-member-filter-count="true"]')).toContainText('0/3 shown')
+    await expect(page.locator('[data-org-members-disclosure]')).toContainText('No members match this view.')
+    await page.locator('[data-org-member-filter-strip="true"]').getByRole('button', { name: 'Clear' }).click()
+    await page.locator('[data-org-member-filter-strip="true"]').getByLabel('Role').selectOption('viewer')
+    await expect(page.locator('[data-org-member-filter-count="true"]')).toContainText('1/3 shown')
+    await expect(page.locator('[data-org-members-disclosure]')).toContainText('viewer@acme.test')
     await expect(page.locator('[data-org-watchlist-filter-strip="true"]')).toBeVisible()
     await expect(page.locator('[data-org-watchlist-filter-count="true"]')).toContainText('3/3 shown')
     const acmeRow = page.locator('#watchlists').getByRole('button', { name: /domain active acme\.com/ })
@@ -217,7 +239,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(oktaRow).toBeVisible()
     await expect(acmeRow).toBeHidden()
 
-    await page.getByRole('button', { name: 'Clear' }).click()
+    await page.locator('[data-org-watchlist-filter-strip="true"]').getByRole('button', { name: 'Clear' }).click()
     await page.locator('[data-org-watchlist-filter-strip="true"]').getByLabel('Status').selectOption('archived')
     await expect(page.locator('[data-org-watchlist-filter-count="true"]')).toContainText('1/3 shown')
     await expect(retiredVendorRow).toBeVisible()
@@ -264,6 +286,7 @@ const fixtureViewerOrganization = {
 const fixtureMembers = [
     { userId: 'owner_acme', email: 'owner@acme.test', name: 'Acme Owner', role: 'owner', status: 'active', joinedAt: '2026-07-01T10:00:00.000Z' },
     { userId: 'analyst_acme', email: 'analyst@acme.test', name: 'Acme Analyst', role: 'member', status: 'active', joinedAt: '2026-07-02T10:00:00.000Z' },
+    { userId: 'viewer_acme', email: 'viewer@acme.test', name: 'Acme Viewer', role: 'viewer', status: 'active', joinedAt: '2026-07-03T10:00:00.000Z' },
 ]
 
 const fixtureInvites = [

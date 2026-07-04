@@ -365,6 +365,17 @@ function organizationSearchText(organization: OrganizationSummary) {
     ].filter(value => value !== undefined && value !== null).join(' ').toLowerCase()
 }
 
+function memberSearchText(member: OrganizationMember) {
+    return [
+        member.userId,
+        member.email,
+        member.name,
+        member.role,
+        member.status,
+        member.invitedBy,
+    ].filter(value => value !== undefined && value !== null).join(' ').toLowerCase()
+}
+
 function normalizeOrganizationName(value: string) {
     return value.trim().replace(/\s+/g, ' ')
 }
@@ -1630,13 +1641,23 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
 
 function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onRoleChange, onRemove }: { members: OrganizationMember[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onRoleChange: (member: OrganizationMember, role: OrganizationRole) => void, onRemove: (member: OrganizationMember) => void }) {
     const [pendingRoles, setPendingRoles] = useState<Record<string, OrganizationRole>>({})
+    const [memberQuery, setMemberQuery] = useState('')
+    const [memberRoleFilter, setMemberRoleFilter] = useState('all')
     const busyLabel = memberBusyLabel(busy)
+    const normalizedMemberQuery = memberQuery.trim().toLowerCase()
+    const visibleMembers = members.filter(member => {
+        const roleMatches = memberRoleFilter === 'all' || member.role === memberRoleFilter
+        if (!roleMatches) return false
+        if (!normalizedMemberQuery) return true
+        return memberSearchText(member).includes(normalizedMemberQuery)
+    })
+    const memberFiltersActive = Boolean(memberQuery.trim()) || memberRoleFilter !== 'all'
     return (
         <details id='members' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-members-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                 <SectionTitle icon={<Users className='h-4 w-4' />} title='Members' detail='Roles, status, and removal are available when access needs review.' />
                 <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
-                    {members.length} member{members.length === 1 ? '' : 's'}
+                    {visibleMembers.length}/{members.length} member{members.length === 1 ? '' : 's'}
                 </span>
             </summary>
             <div className='overflow-x-auto border-t border-ui-border p-4 dark:border-ui-border'>
@@ -1644,8 +1665,48 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                 {members.length === 0 && <EmptyLine text='Active members appear here after invites are accepted or the backend returns the current team.' />}
                 {members.length > 0 && (
                     <>
+                        <div className='mb-3 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[minmax(0,1fr)_9rem_auto]' data-org-member-filter-strip='true'>
+                            <label className='grid min-w-0 gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                                Find member
+                                <input
+                                    value={memberQuery}
+                                    disabled={Boolean(busy)}
+                                    onChange={event => setMemberQuery(event.target.value)}
+                                    className={inputClass}
+                                    placeholder='Name, email, status'
+                                />
+                            </label>
+                            <SelectField
+                                label='Role'
+                                value={memberRoleFilter}
+                                options={['all', 'owner', ...roleOptions]}
+                                disabled={Boolean(busy)}
+                                onChange={setMemberRoleFilter}
+                            />
+                            <div className='grid content-end gap-1'>
+                                <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-2 text-center text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted' data-org-member-filter-count='true'>
+                                    {visibleMembers.length}/{members.length} shown
+                                </span>
+                                <button
+                                    type='button'
+                                    className={secondaryButtonClass}
+                                    disabled={!memberFiltersActive || Boolean(busy)}
+                                    onClick={() => {
+                                        setMemberQuery('')
+                                        setMemberRoleFilter('all')
+                                    }}
+                                >
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                        {visibleMembers.length === 0 && (
+                            <div className='mb-3'>
+                                <EmptyLine text='No members match this view.' />
+                            </div>
+                        )}
                         <div className='grid gap-2 md:hidden' data-org-member-mobile-list='true'>
-                            {members.map(member => {
+                            {visibleMembers.map(member => {
                                 const selectedRole = pendingRoles[member.userId] || member.role
                                 const roleChanged = selectedRole !== member.role
                                 const canMutateMember = canManage && memberCanMutate(member)
@@ -1714,7 +1775,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                 </tr>
                             </thead>
                             <tbody>
-                                {members.map(member => {
+                                {visibleMembers.map(member => {
                                     const selectedRole = pendingRoles[member.userId] || member.role
                                     const roleChanged = selectedRole !== member.role
                                     const canMutateMember = canManage && memberCanMutate(member)
