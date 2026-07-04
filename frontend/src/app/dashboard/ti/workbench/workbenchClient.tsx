@@ -920,7 +920,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     }
 
     const workbenchStatsGrid = (
-        <div className='grid grid-cols-2 gap-2 border-b border-[#26344d] bg-[#0b111c] p-2 sm:p-3 xl:grid-cols-5' data-workbench-stats>
+        <div className='grid grid-cols-2 gap-2 border-b border-ui-border bg-ui-canvas p-2 sm:p-3 xl:grid-cols-5' data-workbench-stats>
             <WorkbenchStat icon={<Inbox className='h-4 w-4' />} label='Open cases' value={String(workbenchStats.total)} detail={`${workbenchStats.review} awaiting analyst`} tone='neutral' />
             <WorkbenchStat icon={<AlertTriangle className='h-4 w-4' />} label='High priority' value={String(workbenchStats.highPriority)} detail='critical or high severity' tone={workbenchStats.highPriority ? 'warn' : 'good'} />
             <WorkbenchStat icon={<ShieldCheck className='h-4 w-4' />} label='Customer-ready' value={String(workbenchStats.persistent)} detail='saved alert workflows' tone={workbenchStats.persistent ? 'good' : 'neutral'} />
@@ -932,32 +932,32 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     return (
         <div className='grid gap-3'>
             {message && (
-                <p className={`rounded-lg border px-3 py-2 text-sm ${message.ok ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]' : 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'}`}>
+                <p className={`rounded-lg border px-3 py-2 text-sm ${message.ok ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'}`}>
                     {message.text}
                 </p>
             )}
 
-            <div className='min-w-0 overflow-hidden rounded-lg border border-[#26344d] bg-[#101827]'>
+            <div className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
                 {compact ? (
-                    <details className='border-b border-[#26344d] bg-[#0b111c]' data-workbench-stats-disclosure>
-                        <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] outline-none transition hover:bg-[#101827] focus-visible:ring-2 focus-visible:ring-[#1f3f7a] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <details className='border-b border-ui-border bg-ui-canvas' data-workbench-stats-disclosure>
+                        <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20 sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                             <span>Workbench counters</span>
-                            <span className='text-xs font-medium text-[#8fa0ba]'>{workbenchStats.total} cases · {workbenchStats.highPriority} high · {workbenchStats.latest}</span>
+                            <span className='text-xs font-medium text-ui-muted'>{workbenchStats.total} cases · {workbenchStats.highPriority} high · {workbenchStats.latest}</span>
                         </summary>
                         {workbenchStatsGrid}
                     </details>
                 ) : workbenchStatsGrid}
 
                 <div className={`grid min-w-0 ${compact ? 'min-h-[480px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_300px]' : 'min-h-[480px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)_330px]'}`}>
-                    <aside className='min-w-0 border-b border-[#26344d] bg-[#0d1522] xl:border-b-0 xl:border-r'>
-                        <div className='grid gap-3 border-b border-[#26344d] p-4'>
+                    <aside className='min-w-0 border-b border-ui-border bg-ui-canvas xl:border-b-0 xl:border-r'>
+                        <div className='grid gap-3 border-b border-ui-border p-4'>
                             <label className='relative block'>
-                                <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71819a]' />
+                                <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-muted' />
                                 <input
                                     value={query}
                                     onChange={event => setQuery(event.target.value)}
                                     placeholder='Search cases, actors, domains'
-                                    className='h-10 w-full rounded-lg border border-[#27364f] bg-[#080e18] pl-9 pr-3 text-sm text-[#e8eefc] outline-none transition placeholder:text-[#6e7d92] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                                    className='h-10 w-full rounded-lg border border-ui-border bg-ui-canvas pl-9 pr-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                                 />
                             </label>
                             <div className='flex flex-wrap gap-2'>
@@ -966,7 +966,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                         key={item}
                                         type='button'
                                         onClick={() => setFilter(item)}
-                                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${filter === item ? 'border-[#7aa5ff] bg-[#15284b] text-[#dbe7ff]' : 'border-[#27364f] bg-[#0b121e] text-[#aab7cc] hover:border-[#3c5072] hover:bg-[#101a2a]'}`}
+                                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${filter === item ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-text' : 'border-ui-border bg-ui-raised text-ui-muted hover:border-ui-border hover:bg-ui-primary/10'}`}
                                     >
                                         {item === 'all' ? <Filter className='h-3.5 w-3.5' /> : null}
                                         {label(item)}
@@ -986,23 +986,23 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                         data-queue-index={index}
                                         onClick={() => setSelectedId(item.id)}
                                         onKeyDown={event => handleQueueKeyDown(event, index)}
-                                        className={`w-full min-w-0 rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-[#4d7cff] bg-[#101d33] shadow-sm shadow-black/20' : 'border-transparent bg-[#0b121e] hover:border-[#27364f] hover:bg-[#101827]'}`}
+                                        className={`w-full min-w-0 rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-ui-primary/35 bg-ui-panel shadow-sm shadow-ui-canvas/20' : 'border-transparent bg-ui-raised hover:border-ui-border hover:bg-ui-panel'}`}
                                     >
                                         <div className='flex items-center justify-between gap-2'>
-                                            <span className='truncate text-sm font-semibold text-[#edf4ff]'>{item.title}</span>
+                                            <span className='truncate text-sm font-semibold text-ui-text'>{item.title}</span>
                                             <span className={severityClass(item.severity)}>{item.severity}</span>
                                         </div>
-                                        <p className='mt-1 truncate text-xs text-[#8fa0ba]'>{item.queue} · {ownerLabel(item.owner)}</p>
-                                        <p className='mt-2 line-clamp-2 wrap-break-word text-xs leading-5 text-[#aab7cc]'>{item.subtitle}</p>
-                                        <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-[#8fa0ba]'>
-                                            <span className='rounded-full border border-[#27364f] bg-[#080e18] px-2 py-0.5 text-[#cbd8ec]'>{label(item.status)}</span>
+                                        <p className='mt-1 truncate text-xs text-ui-muted'>{item.queue} · {ownerLabel(item.owner)}</p>
+                                        <p className='mt-2 line-clamp-2 wrap-break-word text-xs leading-5 text-ui-muted'>{item.subtitle}</p>
+                                        <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-ui-muted'>
+                                            <span className='rounded-full border border-ui-border bg-ui-canvas px-2 py-0.5 text-ui-muted'>{label(item.status)}</span>
                                             <span>{item.confidence}%</span>
                                             <span>{relativeTime(item.updatedAt)}</span>
                                         </div>
                                     </button>
                                 ))}
                             </div>
-                            {!cases.length && <p className='rounded-lg border border-dashed border-[#31415c] bg-[#0b121e] p-4 text-sm text-[#aab7cc]'>Case state is updating for this filter.</p>}
+                            {!cases.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-4 text-sm text-ui-muted'>Case state is updating for this filter.</p>}
                         </div>
                     </aside>
 
@@ -1033,7 +1033,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                         )}
                     </main>
 
-                    <aside className='min-w-0 border-t border-[#26344d] bg-[#0d1522] xl:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
+                    <aside className='min-w-0 border-t border-ui-border bg-ui-canvas xl:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         <div className='grid gap-4 p-4'>
                             <OperatorActionRail
                                 selected={selected}
@@ -1048,12 +1048,12 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 onCopyPayload={(payload) => selected && copyHandoffPayload(selected, payload)}
                             />
 
-                            <details className='rounded-lg border border-[#26344d] bg-[#101827]' data-workbench-org-disclosure>
-                                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#142033] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                            <details className='rounded-lg border border-ui-border bg-ui-panel' data-workbench-org-disclosure>
+                                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                                     <span>Org and shared watchlist</span>
-                                    <span className='text-xs font-medium text-[#8fa0ba]'>Members, terms, visibility</span>
+                                    <span className='text-xs font-medium text-ui-muted'>Members, terms, visibility</span>
                                 </summary>
-                                <div className='border-t border-[#26344d]'>
+                                <div className='border-t border-ui-border'>
                                     <OrgOperatingPanel
                                         orgContext={orgContext}
                                         selected={selected}
@@ -1072,22 +1072,22 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 </div>
                             </details>
 
-                            <details className='rounded-lg border border-[#26344d] bg-[#101827]' data-workbench-case-groups-disclosure>
-                                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#142033] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                            <details className='rounded-lg border border-ui-border bg-ui-panel' data-workbench-case-groups-disclosure>
+                                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                                     <span>Case groups and links</span>
-                                    <span className='text-xs font-medium text-[#8fa0ba]'>{queues.length} groups, {selected?.relatedLinks.length || 0} links</span>
+                                    <span className='text-xs font-medium text-ui-muted'>{queues.length} groups, {selected?.relatedLinks.length || 0} links</span>
                                 </summary>
-                                <div className='grid gap-2 border-t border-[#26344d] p-3'>
+                                <div className='grid gap-2 border-t border-ui-border p-3'>
                                     {queues.map(queue => (
-                                        <div key={queue.name} className='flex items-center justify-between gap-3 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 text-xs'>
-                                            <span className='font-semibold text-[#edf4ff]'>{queue.name}</span>
-                                            <span className='text-[#8fa0ba]'>{queue.count}</span>
+                                        <div key={queue.name} className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs'>
+                                            <span className='font-semibold text-ui-text'>{queue.name}</span>
+                                            <span className='text-ui-muted'>{queue.count}</span>
                                         </div>
                                     ))}
                                 </div>
-                                <div className='grid gap-2 border-t border-[#26344d] p-3'>
+                                <div className='grid gap-2 border-t border-ui-border p-3'>
                                     {selected?.relatedLinks.map(link => (
-                                        <Link key={link.href} href={link.href} className='inline-flex h-9 items-center justify-between gap-2 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#101a2a]'>
+                                        <Link key={link.href} href={link.href} className='inline-flex h-9 items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-border hover:bg-ui-primary/10'>
                                             {link.label}
                                             <ExternalLink className='h-3.5 w-3.5' />
                                         </Link>
@@ -1130,11 +1130,11 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
     const activeWatchlists = (orgContext?.watchlists || []).filter(item => item.status === 'active')
 
     return (
-        <section className={embedded ? 'bg-[#101827]' : 'rounded-lg border border-[#26344d] bg-[#101827]'}>
+        <section className={embedded ? 'bg-ui-panel' : 'rounded-lg border border-ui-border bg-ui-panel'}>
             {!embedded && (
-                <div className='border-b border-[#26344d] px-4 py-3'>
-                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Org and shared watchlist</h3>
-                    <p className='mt-0.5 text-xs text-[#8fa0ba]'>Member access, watch terms, and customer visibility for the selected case.</p>
+                <div className='border-b border-ui-border px-4 py-3'>
+                    <h3 className='text-sm font-semibold text-ui-text'>Org and shared watchlist</h3>
+                    <p className='mt-0.5 text-xs text-ui-muted'>Member access, watch terms, and customer visibility for the selected case.</p>
                 </div>
             )}
             <div className='grid gap-3 p-3'>
@@ -1153,11 +1153,11 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                     <InspectionNotice tone='blocked' title='Syncing' body={blockedReason} />
                 )}
 
-                <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+                <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                     <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
-                            <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Team invite</p>
-                            <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Add analysts to the active customer case.</p>
+                            <p className='text-xs font-semibold uppercase text-ui-muted'>Team invite</p>
+                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Add analysts to the active customer case.</p>
                         </div>
                         <span className={workflowStatusClass(inviteBlockedReason ? 'blocked' : 'ready')}>{inviteBlockedReason ? 'syncing' : 'ready'}</span>
                     </div>
@@ -1167,14 +1167,14 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                             onChange={event => onInviteEmailChange(event.target.value)}
                             disabled={Boolean(inviteBlockedReason) || Boolean(busyAction)}
                             placeholder='analyst@example.com'
-                            className='h-9 rounded-lg border border-[#27364f] bg-[#080e18] px-3 text-xs text-[#e8eefc] outline-none transition placeholder:text-[#6e7d92] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
+                            className='h-9 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
                         />
                         <div className='flex gap-2'>
                             <select
                                 value={inviteRole}
                                 onChange={event => onInviteRoleChange(event.target.value)}
                                 disabled={Boolean(inviteBlockedReason) || Boolean(busyAction)}
-                                className='h-9 min-w-0 flex-1 rounded-lg border border-[#27364f] bg-[#080e18] px-2 text-xs font-semibold text-[#dbe7ff] outline-none transition focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
+                                className='h-9 min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-canvas px-2 text-xs font-semibold text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
                             >
                                 <option value='analyst'>Analyst</option>
                                 <option value='admin'>Admin</option>
@@ -1185,49 +1185,49 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                                 disabled={Boolean(inviteBlockedReason) || Boolean(busyAction)}
                                 title={inviteBlockedReason || undefined}
                                 onClick={onInvite}
-                                className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
+                                className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-border hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
                             >
                                 {busyAction === 'org:invite' ? 'Inviting...' : 'Invite'}
                             </button>
                         </div>
                     </div>
-                    {inviteBlockedReason && <p className='mt-2 text-xs leading-5 text-[#ffb598]'>{inviteBlockedReason}</p>}
+                    {inviteBlockedReason && <p className='mt-2 text-xs leading-5 text-ui-danger'>{inviteBlockedReason}</p>}
                     {orgContext?.pendingInvites.length ? (
                         <div className='mt-3 grid gap-1'>
                             {orgContext.pendingInvites.slice(0, 4).map(invite => (
-                                <p key={invite.id} className='truncate text-xs text-[#8fa0ba]'>{invite.email} · {invite.role} · expires {formatDateTime(invite.expiresAt)}</p>
+                                <p key={invite.id} className='truncate text-xs text-ui-muted'>{invite.email} · {invite.role} · expires {formatDateTime(invite.expiresAt)}</p>
                             ))}
                         </div>
-                    ) : <p className='mt-3 text-xs text-[#8fa0ba]'>Invite state is updating.</p>}
+                    ) : <p className='mt-3 text-xs text-ui-muted'>Invite state is updating.</p>}
                 </div>
 
-                <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+                <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                     <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
-                            <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Active members</p>
-                            <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Assignable people for this case.</p>
+                            <p className='text-xs font-semibold uppercase text-ui-muted'>Active members</p>
+                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Assignable people for this case.</p>
                         </div>
                         <span className={workflowStatusClass(orgContext?.members.length ? 'ready' : 'blocked')}>{orgContext?.members.length ? 'active' : 'syncing'}</span>
                     </div>
                     <div className='mt-3 grid gap-1'>
                         {(orgContext?.members || []).filter(member => member.status === 'active').slice(0, 5).map(member => (
-                            <p key={member.id} className='truncate text-xs text-[#8fa0ba]'>{member.email} · {member.role}</p>
+                            <p key={member.id} className='truncate text-xs text-ui-muted'>{member.email} · {member.role}</p>
                         ))}
-                        {!orgContext?.members.length && <p className='text-xs text-[#8fa0ba]'>Teammate state is loading; manual owner text stays available.</p>}
+                        {!orgContext?.members.length && <p className='text-xs text-ui-muted'>Teammate state is loading; manual owner text stays available.</p>}
                     </div>
                 </div>
 
-                <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+                <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                     <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
-                            <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Selected term</p>
-                            <p className='mt-1 break-all text-sm font-semibold text-[#edf4ff]'>{term || 'Term syncing'}</p>
+                            <p className='text-xs font-semibold uppercase text-ui-muted'>Selected term</p>
+                            <p className='mt-1 break-all text-sm font-semibold text-ui-text'>{term || 'Term syncing'}</p>
                         </div>
                         <span className={workflowStatusClass(termCoverage?.covered ? 'ready' : canCreateTerm ? 'needs_action' : 'blocked')}>
                             {termCoverage?.covered ? 'covered' : canCreateTerm ? 'ready' : 'syncing'}
                         </span>
                     </div>
-                    <p className='mt-2 text-xs leading-5 text-[#aab7cc]'>
+                    <p className='mt-2 text-xs leading-5 text-ui-muted'>
                         {termCoverage?.covered
                             ? `${term} is already in ${termCoverage.watchlistName}.`
                             : canCreateTerm
@@ -1239,26 +1239,26 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                         disabled={!canCreateTerm || Boolean(busyAction)}
                         title={!canCreateTerm ? watchlistBlockedReason || blockedReason || 'Term is already covered or organization context is syncing.' : undefined}
                         onClick={onCreateSharedWatchlistTerm}
-                        className='mt-3 inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
+                        className='mt-3 inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-border hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
                     >
                         {busyAction === `watchlist:${selected?.id}` ? 'Saving...' : 'Create shared term'}
                     </button>
                 </div>
 
-                <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+                <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                     <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
-                            <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Shared terms</p>
-                            <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Terms currently routing exposure matches into this customer scope.</p>
+                            <p className='text-xs font-semibold uppercase text-ui-muted'>Shared terms</p>
+                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Terms currently routing exposure matches into this customer scope.</p>
                         </div>
                         <span className={workflowStatusClass(activeWatchlists.length ? 'ready' : 'blocked')}>{activeWatchlists.length ? 'active' : 'syncing'}</span>
                     </div>
                     <div className='mt-3 grid gap-2'>
                         {activeWatchlists.slice(0, 3).map(watchlist => (
-                            <div key={watchlist.id} className='rounded-lg border border-[#27364f] bg-[#080e18] p-2'>
+                            <div key={watchlist.id} className='rounded-lg border border-ui-border bg-ui-canvas p-2'>
                                 <div className='flex items-center justify-between gap-2'>
-                                    <p className='truncate text-xs font-semibold text-[#edf4ff]'>{watchlist.name}</p>
-                                    <span className='text-[11px] text-[#8fa0ba]'>{relativeTime(watchlist.updatedAt)}</span>
+                                    <p className='truncate text-xs font-semibold text-ui-text'>{watchlist.name}</p>
+                                    <span className='text-[11px] text-ui-muted'>{relativeTime(watchlist.updatedAt)}</span>
                                 </div>
                                 <div className='mt-2 flex flex-wrap gap-1'>
                                     {watchlist.terms.slice(0, 6).map(termItem => (
@@ -1268,7 +1268,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                                             disabled={Boolean(watchlistBlockedReason) || Boolean(busyAction) || watchlist.terms.length <= 1}
                                             title={watchlist.terms.length <= 1 ? 'Pause the watchlist before removing its last term.' : watchlistBlockedReason || 'Remove this term from the shared watchlist.'}
                                             onClick={() => onUpdateWatchlist({ watchlist, terms: watchlist.terms.filter(candidate => candidate.value !== termItem.value) })}
-                                            className='rounded-full border border-[#27364f] bg-[#0f1726] px-2 py-0.5 text-[11px] font-semibold text-[#aab7cc] transition hover:border-[#3c5072] hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-60'
+                                            className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[11px] font-semibold text-ui-muted transition hover:border-ui-border hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'
                                         >
                                             {termItem.kind || inferTermKind(termItem.value)}:{termItem.value}
                                         </button>
@@ -1279,13 +1279,13 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                                     disabled={Boolean(watchlistBlockedReason) || Boolean(busyAction)}
                                     title={watchlistBlockedReason || 'Pause this shared watchlist.'}
                                     onClick={() => onUpdateWatchlist({ watchlist, status: 'paused' })}
-                                    className='mt-2 inline-flex h-8 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-60'
+                                    className='mt-2 inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:border-ui-border hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'
                                 >
                                     {busyAction === `watchlist:update:${watchlist.id}` ? 'Saving...' : 'Pause watchlist'}
                                 </button>
                             </div>
                         ))}
-                        {!activeWatchlists.length && <p className='text-xs leading-5 text-[#8fa0ba]'>Shared watchlist state is updating for the first active term.</p>}
+                        {!activeWatchlists.length && <p className='text-xs leading-5 text-ui-muted'>Shared watchlist state is updating for the first active term.</p>}
                     </div>
                 </div>
 
@@ -1299,7 +1299,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
 
                 <div className='grid gap-2'>
                     {orgContext?.links.map(link => (
-                        <Link key={link.href} href={link.href} className='inline-flex h-8 items-center justify-between gap-2 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033]'>
+                        <Link key={link.href} href={link.href} className='inline-flex h-8 items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:border-ui-border hover:bg-ui-raised'>
                             {link.label}
                             <ExternalLink className='h-3.5 w-3.5' />
                         </Link>
@@ -1325,24 +1325,24 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
     const rows = actionRailRows(selected, orgContext, caseDetail, alertDetail, actionDeliveries, note)
 
     return (
-        <section className='rounded-lg border border-[#26344d] bg-[#101827]'>
-            <div className='border-b border-[#26344d] px-4 py-3'>
-                <h3 className='text-sm font-semibold text-[#edf4ff]'>Operator actions</h3>
-                <p className='mt-0.5 text-xs text-[#8fa0ba]'>Run the backed action, open the record, or copy the selected review package.</p>
+        <section className='rounded-lg border border-ui-border bg-ui-panel'>
+            <div className='border-b border-ui-border px-4 py-3'>
+                <h3 className='text-sm font-semibold text-ui-text'>Operator actions</h3>
+                <p className='mt-0.5 text-xs text-ui-muted'>Run the backed action, open the record, or copy the selected review package.</p>
             </div>
             <div className='grid gap-2 p-3'>
                 {rows.map(row => (
-                    <div key={row.id} className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+                    <div key={row.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                         <div className='flex flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
-                                <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>{sanitizeWorkbenchCopy(row.label) || row.label}</p>
-                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#aab7cc]'>{sanitizeWorkbenchCopy(row.detail) || row.detail}</p>
+                                <p className='text-xs font-semibold uppercase text-ui-muted'>{sanitizeWorkbenchCopy(row.label) || row.label}</p>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted'>{sanitizeWorkbenchCopy(row.detail) || row.detail}</p>
                             </div>
                             <span className={workflowStatusClass(row.disabledReason ? 'blocked' : row.tone)}>{row.disabledReason ? 'syncing' : label(row.tone)}</span>
                         </div>
                         <div className='mt-3 flex flex-wrap gap-2'>
                             {row.href ? (
-                                <Link href={row.href} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033]'>
+                                <Link href={row.href} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:border-ui-border hover:bg-ui-raised'>
                                     Open
                                     <ExternalLink className='h-3.5 w-3.5' />
                                 </Link>
@@ -1353,7 +1353,7 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
                                     disabled={Boolean(busyAction) || Boolean(row.disabledReason || row.action.disabledReason)}
                                     title={row.disabledReason || row.action.disabledReason}
                                     onClick={() => onRunAction(row.action as WorkbenchAction)}
-                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
+                                    className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:border-ui-border hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
                                 >
                                     {busyAction === `action:${selected?.id}:${row.action.id}` ? 'Running...' : row.action.label}
                                 </button>
@@ -1363,7 +1363,7 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
                                     type='button'
                                     disabled={Boolean(busyAction)}
                                     onClick={() => onCopyPayload(row.copyPayload)}
-                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
+                                    className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:border-ui-border hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
                                 >
                                     Copy handoff
                                 </button>
@@ -1374,13 +1374,13 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
                                     disabled={Boolean(busyAction) || Boolean(row.disabledReason)}
                                     title={row.disabledReason}
                                     onClick={onCustomerNotification}
-                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
+                                    className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:border-ui-border hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
                                 >
                                     {busyAction === `case:${selected?.id}:customer_notification` ? 'Recording...' : 'Record notification'}
                                 </button>
                             ) : null}
                             {!row.href && !row.action && row.copyPayload === undefined && !row.customerNotification && (
-                                <button type='button' disabled title={row.disabledReason} className='inline-flex min-h-8 cursor-not-allowed items-center rounded-lg border border-[#27364f] bg-[#101827] px-2.5 text-xs font-semibold text-[#71819a]'>
+                                <button type='button' disabled title={row.disabledReason} className='inline-flex min-h-8 cursor-not-allowed items-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-muted'>
                                     Needs setup
                                 </button>
                             )}
@@ -2028,11 +2028,11 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
     }, [])
     if (!items.length) {
         return (
-            <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3 '>
+            <div className='rounded-lg border border-ui-border bg-ui-raised p-3 '>
                 <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                     <div>
-                        <p className='text-xs font-semibold uppercase text-[#8fa0ba] '>Operations</p>
-                        <p className='mt-1 text-xs leading-5 text-[#aab7cc] '>Live lanes are connecting for this workspace.</p>
+                        <p className='text-xs font-semibold uppercase text-ui-muted '>Operations</p>
+                        <p className='mt-1 text-xs leading-5 text-ui-muted '>Live lanes are connecting for this workspace.</p>
                     </div>
                     <span className={workflowStatusClass('needs_action')}>checking</span>
                 </div>
@@ -2041,18 +2041,18 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
     }
 
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3 '>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3 '>
             <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-[#8fa0ba] '>Live operations</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#aab7cc] '>
+                    <p className='text-xs font-semibold uppercase text-ui-muted '>Live operations</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted '>
                         {orgContext?.readiness.fullChainReady
                             ? 'Org, watchlist, sources, dashboard alert, and delivery lanes are running.'
                             : `Collecting: ${(orgContext?.readiness.fullChainBlockedBy || ['dashboard alert evidence pending']).join('; ')}.`}
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-2'>
-                    <Link href='/readiness' className='inline-flex min-h-8 min-w-36 items-center justify-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#7aa5ff] transition hover:bg-[#162033] ' data-readiness-scorecard-link='/readiness'>
+                    <Link href='/readiness' className='inline-flex min-h-8 min-w-36 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised ' data-readiness-scorecard-link='/readiness'>
                         Open operations gates
                     </Link>
                     <span className={workflowStatusClass(orgContext?.readiness.fullChainReady ? 'ready' : 'needs_action')}>
@@ -2075,7 +2075,7 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                             key={item.id}
                             type='button'
                             onClick={() => setSelectedReadinessId(item.id)}
-                            className={`flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#9db8ff]/50 ${active ? 'border-[#7aa5ff] bg-[#15284b] dark:border-[#2d3a52] ' : 'border-[#27364f] bg-[#0f1726] hover:border-[#b9c7da] dark:border-[#2d3a52] dark:hover:border-[#3b4b68] '}`}
+                            className={`flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-ui-primary/50 ${active ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-border ' : 'border-ui-border bg-ui-panel hover:border-ui-border dark:border-ui-border dark:hover:border-ui-border '}`}
                             data-readiness-row-id={item.id}
                             data-readiness-state={operationalState}
                             data-readiness-blocker-count={item.blockerCount ?? (item.status === 'ready' ? 0 : 1)}
@@ -2095,9 +2095,9 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                             data-readiness-priority={index + 1}
                         >
                             <div className='min-w-0'>
-                                <p className='wrap-break-word text-xs font-semibold text-[#edf4ff] '>{item.label}</p>
-                                <p className='mt-0.5 wrap-break-word text-[11px] leading-4 text-[#8fa0ba] '>{item.detail}</p>
-                                <p className='mt-1 wrap-break-word text-[10px] font-semibold uppercase text-[#7a879c] '>{[item.workflowBlocker, item.ownerLane, item.operatorAction].filter(Boolean).join(' · ')}</p>
+                                <p className='wrap-break-word text-xs font-semibold text-ui-text '>{item.label}</p>
+                                <p className='mt-0.5 wrap-break-word text-[11px] leading-4 text-ui-muted '>{item.detail}</p>
+                                <p className='mt-1 wrap-break-word text-[10px] font-semibold uppercase text-ui-muted '>{[item.workflowBlocker, item.ownerLane, item.operatorAction].filter(Boolean).join(' · ')}</p>
                             </div>
                             <span className={`${workflowStatusClass(tone)} shrink-0`}>{productReadinessOperationalLabel(item.status)}</span>
                         </button>
@@ -2117,7 +2117,7 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
     const metrics = readinessDetailMetrics(item)
     return (
         <div
-            className='mt-3 rounded-lg border border-[#27364f] bg-[#0f1726] p-3 '
+            className='mt-3 rounded-lg border border-ui-border bg-ui-panel p-3 '
             data-readiness-detail={item.id}
             data-readiness-detail-state={item.status}
             data-readiness-detail-owner={item.ownerLane || ''}
@@ -2132,8 +2132,8 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
         >
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-[#7a879c] '>Operation detail</p>
-                    <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#edf4ff] '>{item.label}</h3>
+                    <p className='text-[10px] font-semibold uppercase text-ui-muted '>Operation detail</p>
+                    <h3 className='mt-1 wrap-break-word text-sm font-semibold text-ui-text '>{item.label}</h3>
                 </div>
                 <span className={workflowStatusClass(tone)}>{label(item.status)}</span>
             </div>
@@ -2150,15 +2150,15 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
                     <ReadinessDetailField key={metric.label} label={metric.label} value={metric.value} />
                 ))}
             </div>
-            <div className='mt-3 rounded-lg border border-[#27364f] bg-[#0b121e] p-3 '>
-                <p className='text-[10px] font-semibold uppercase text-[#8fa0ba] '>{item.status === 'ready' ? 'Evidence' : 'Needs attention'}</p>
-                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#dbe7ff] '>{item.status === 'ready' ? item.detail : blocker}</p>
-                {item.customerImpact ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-[#8fa0ba] '>Impact: {item.customerImpact}</p> : null}
-                {item.integrationProbeHint ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-[#8fa0ba] '>{item.integrationProbeHint}</p> : null}
+            <div className='mt-3 rounded-lg border border-ui-border bg-ui-raised p-3 '>
+                <p className='text-[10px] font-semibold uppercase text-ui-muted '>{item.status === 'ready' ? 'Evidence' : 'Needs attention'}</p>
+                <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-text '>{item.status === 'ready' ? item.detail : blocker}</p>
+                {item.customerImpact ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-ui-muted '>Impact: {item.customerImpact}</p> : null}
+                {item.integrationProbeHint ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-ui-muted '>{item.integrationProbeHint}</p> : null}
             </div>
             {actions.length ? (
-                <div className='mt-3 rounded-lg border border-[#27364f] bg-[#0b121e] p-3 ' data-readiness-detail-actions={item.id}>
-                    <p className='text-[10px] font-semibold uppercase text-[#8fa0ba] '>Actions</p>
+                <div className='mt-3 rounded-lg border border-ui-border bg-ui-raised p-3 ' data-readiness-detail-actions={item.id}>
+                    <p className='text-[10px] font-semibold uppercase text-ui-muted '>Actions</p>
                     <div className='mt-2 flex flex-wrap gap-2'>
                         {actions.map(action => {
                             const actionKey = `${item.id}:${action.id}`
@@ -2169,7 +2169,7 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
                                     href={action.href}
                                     data-readiness-action-id={action.id}
                                     data-readiness-action-method={action.method}
-                                    className='inline-flex min-h-9 min-w-36 items-center justify-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#7aa5ff] transition hover:bg-[#162033] '
+                                    className='inline-flex min-h-9 min-w-36 items-center justify-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised '
                                 >
                                     {action.label}
                                     <ExternalLink className='h-3.5 w-3.5' />
@@ -2183,7 +2183,7 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
                                     data-readiness-action-id={action.id}
                                     data-readiness-action-method={action.method}
                                     onClick={() => onRunAction(item, action)}
-                                    className='inline-flex min-h-9 min-w-36 items-center justify-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#7aa5ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#9db8ff]/50 disabled:cursor-not-allowed disabled:opacity-60 '
+                                    className='inline-flex min-h-9 min-w-36 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/50 disabled:cursor-not-allowed disabled:opacity-60 '
                                 >
                                     {busy ? 'Running...' : action.label}
                                 </button>
@@ -2191,21 +2191,21 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
                         })}
                     </div>
                     {actionState && actionState.id.startsWith(`${item.id}:`) ? (
-                        <p className={`mt-2 wrap-break-word text-[11px] leading-4 ${actionState.status === 'blocked' ? 'text-[#f6b45f] ' : 'text-[#8fa0ba] '}`}>{customerOperationalText(actionState.text)}</p>
+                        <p className={`mt-2 wrap-break-word text-[11px] leading-4 ${actionState.status === 'blocked' ? 'text-ui-warning ' : 'text-ui-muted '}`}>{customerOperationalText(actionState.text)}</p>
                     ) : null}
                 </div>
             ) : null}
             {item.href ? (
                 <div className='mt-3 flex flex-wrap gap-2'>
-                    <Link href={item.href} className='inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#7aa5ff] transition hover:bg-[#162033] '>
+                    <Link href={item.href} className='inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised '>
                         Open workflow
                     </Link>
-                    <Link href='/readiness' className='inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#7aa5ff] transition hover:bg-[#162033] '>
+                    <Link href='/readiness' className='inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised '>
                         Open scorecard
                     </Link>
                 </div>
             ) : (
-                <p className='mt-3 text-xs leading-5 text-[#8fa0ba] '>Workflow link appears when a direct drill-in is available.</p>
+                <p className='mt-3 text-xs leading-5 text-ui-muted '>Workflow link appears when a direct drill-in is available.</p>
             )}
         </div>
     )
@@ -2267,9 +2267,9 @@ function readinessDetailMetrics(item: WorkbenchProductReadinessItem) {
 
 function ReadinessDetailField({ label: fieldLabel, value }: { label: string, value: string }) {
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 '>
-            <p className='text-[10px] font-semibold uppercase text-[#8fa0ba] '>{fieldLabel}</p>
-            <p className='mt-1 wrap-break-word text-xs font-semibold text-[#edf4ff] '>{value}</p>
+        <div className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 '>
+            <p className='text-[10px] font-semibold uppercase text-ui-muted '>{fieldLabel}</p>
+            <p className='mt-1 wrap-break-word text-xs font-semibold text-ui-text '>{value}</p>
         </div>
     )
 }
@@ -2343,9 +2343,9 @@ function OperatorRow({ label: rowLabel, value, tone }: { label: string, value: s
     const cleanLabel = sanitizeWorkbenchCopy(rowLabel) || rowLabel
     const cleanValue = sanitizeWorkbenchCopy(value) || value
     return (
-        <div className='flex flex-wrap items-start justify-between gap-3 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 sm:items-center'>
-            <span className='font-semibold text-[#edf4ff] '>{cleanLabel}</span>
-            <span className='flex min-w-0 flex-wrap items-center justify-end gap-2 text-right text-[#8fa0ba] '>
+        <div className='flex flex-wrap items-start justify-between gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 sm:items-center'>
+            <span className='font-semibold text-ui-text '>{cleanLabel}</span>
+            <span className='flex min-w-0 flex-wrap items-center justify-end gap-2 text-right text-ui-muted '>
                 <span className='min-w-0 break-all'>{cleanValue}</span>
                 <span className={`${workflowStatusClass(tone)} shrink-0`}>{label(tone)}</span>
             </span>
@@ -2356,13 +2356,13 @@ function OperatorRow({ label: rowLabel, value, tone }: { label: string, value: s
 function EmptyWorkspace() {
     return (
         <div className='grid gap-4 p-5'>
-            <div className='rounded-lg border border-dashed border-[#31415c] bg-[#0b121e] p-5'>
-                <h2 className='text-lg font-semibold text-[#edf4ff]'>No cases to review</h2>
-                <p className='mt-2 text-sm leading-6 text-[#aab7cc]'>Create watched terms, review source coverage, or run collection to produce the first actionable case.</p>
+            <div className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-5'>
+                <h2 className='text-lg font-semibold text-ui-text'>No cases to review</h2>
+                <p className='mt-2 text-sm leading-6 text-ui-muted'>Create watched terms, review source coverage, or run collection to produce the first actionable case.</p>
                 <div className='mt-4 flex flex-wrap gap-2'>
-                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center rounded-lg bg-[#315fe8] px-3 text-xs font-semibold text-white transition hover:bg-[#426ef0]'>Open dark web cases</Link>
-                    <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>Review sources</Link>
-                    <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>Configure delivery</Link>
+                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary'>Open dark web cases</Link>
+                    <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Review sources</Link>
+                    <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>Configure delivery</Link>
                 </div>
             </div>
         </div>
@@ -2379,32 +2379,32 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
     const dwmWorkspaceHref = item.kind === 'dwm_alert' ? relatedLinkHref(item, 'Open dark web case') || `/dashboard/dwm?alert=${encodeURIComponent(item.id)}` : ''
 
     return (
-        <section className='rounded-lg border border-[#27364f] bg-[#101827]'>
-            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#26344d] px-4 py-3 sm:items-center'>
+        <section className='rounded-lg border border-ui-border bg-ui-panel'>
+            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-ui-border px-4 py-3 sm:items-center'>
                 <div>
-                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Backed inspection</h3>
-                    <p className='mt-0.5 text-xs text-[#8fa0ba]'>Alert detail, case timeline, evidence, delivery attempts, and missing dependencies.</p>
+                    <h3 className='text-sm font-semibold text-ui-text'>Backed inspection</h3>
+                    <p className='mt-0.5 text-xs text-ui-muted'>Alert detail, case timeline, evidence, delivery attempts, and missing dependencies.</p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     {dwmWorkspaceHref && (
-                        <Link href={dwmWorkspaceHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
+                        <Link href={dwmWorkspaceHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>
                             Dark web case
                             <ExternalLink className='h-3.5 w-3.5' />
                         </Link>
                     )}
                     {item.persistent && item.kind === 'dwm_alert' && (
-                        <Link href={`/api/dwm/alerts/${encodeURIComponent(item.id)}`} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
+                        <Link href={`/api/dwm/alerts/${encodeURIComponent(item.id)}`} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>
                             Alert API
                             <ExternalLink className='h-3.5 w-3.5' />
                         </Link>
                     )}
                     {item.caseDetailHref && (
                         <>
-                            <Link href={item.caseDetailHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
+                            <Link href={item.caseDetailHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>
                                 Case API
                                 <ExternalLink className='h-3.5 w-3.5' />
                             </Link>
-                            <Link href={caseExportHref(item.caseDetailHref)} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
+                            <Link href={caseExportHref(item.caseDetailHref)} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>
                                 Case package
                                 <ExternalLink className='h-3.5 w-3.5' />
                             </Link>
@@ -2424,32 +2424,32 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
                     {blockedDependency && !caseDetail && <InspectionNotice tone='blocked' title='Case link pending' body={blockedDependency} />}
                     {caseDetail?.status === 'ready' ? (
                         <>
-                            <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+                            <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                                 <div className='flex flex-wrap items-center gap-2'>
-                                    <span className='text-sm font-semibold text-[#edf4ff]'>{caseDetail.detail.case?.id || 'case'}</span>
+                                    <span className='text-sm font-semibold text-ui-text'>{caseDetail.detail.case?.id || 'case'}</span>
                                     <span className={workflowStatusClass(caseDetail.detail.case?.status === 'closed' ? 'blocked' : 'ready')}>{label(caseDetail.detail.case?.status || 'syncing')}</span>
-                                    {caseDetail.detail.access?.role && <span className='rounded-full bg-[#0f1726] px-2 py-0.5 text-[11px] font-semibold text-[#aab7cc]'>{caseDetail.detail.access.role}</span>}
+                                    {caseDetail.detail.access?.role && <span className='rounded-full bg-ui-panel px-2 py-0.5 text-[11px] font-semibold text-ui-muted'>{caseDetail.detail.access.role}</span>}
                                     {caseDetail.detail.access?.visibilityDecision && <span className={workflowStatusClass(caseDetail.detail.access.visibilityDecision.allowed ? 'ready' : 'blocked')}>{caseDetail.detail.access.visibilityDecision.alertVisibilityPolicy}</span>}
                                 </div>
-                                <p className='mt-2 text-sm leading-6 text-[#c4cfdf]'>{caseDetail.detail.case?.summary || 'Case summary is being prepared from the latest evidence.'}</p>
-                                <div className='mt-3 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
-                                    <p><span className='font-semibold text-[#9fb0c8]'>Owner:</span> {caseDetail.detail.case?.assignedOwner || 'unassigned'}</p>
-                                    <p><span className='font-semibold text-[#9fb0c8]'>Alert:</span> {caseDetail.detail.case?.alertId || caseDetail.detail.alert?.id || 'none'}</p>
-                                    <p><span className='font-semibold text-[#9fb0c8]'>Delivery:</span> {caseDetail.detail.deliveryContext?.deliveryCount ?? 0} attempt(s)</p>
-                                    <p><span className='font-semibold text-[#9fb0c8]'>Updated:</span> {relativeTime(caseDetail.detail.case?.updatedAt || caseDetail.detail.generatedAt)}</p>
-                                    <p><span className='font-semibold text-[#9fb0c8]'>Mutate:</span> {caseDetail.detail.access?.readOnly ? 'read-only role' : 'allowed'}</p>
+                                <p className='mt-2 text-sm leading-6 text-ui-muted'>{caseDetail.detail.case?.summary || 'Case summary is being prepared from the latest evidence.'}</p>
+                                <div className='mt-3 grid gap-1 text-xs text-ui-muted sm:grid-cols-2'>
+                                    <p><span className='font-semibold text-ui-muted'>Owner:</span> {caseDetail.detail.case?.assignedOwner || 'unassigned'}</p>
+                                    <p><span className='font-semibold text-ui-muted'>Alert:</span> {caseDetail.detail.case?.alertId || caseDetail.detail.alert?.id || 'none'}</p>
+                                    <p><span className='font-semibold text-ui-muted'>Delivery:</span> {caseDetail.detail.deliveryContext?.deliveryCount ?? 0} attempt(s)</p>
+                                    <p><span className='font-semibold text-ui-muted'>Updated:</span> {relativeTime(caseDetail.detail.case?.updatedAt || caseDetail.detail.generatedAt)}</p>
+                                    <p><span className='font-semibold text-ui-muted'>Mutate:</span> {caseDetail.detail.access?.readOnly ? 'read-only role' : 'allowed'}</p>
                                 </div>
                             </div>
-                            <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
-                                <h4 className='text-sm font-semibold text-[#edf4ff]'>Allowed next actions</h4>
+                            <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
+                                <h4 className='text-sm font-semibold text-ui-text'>Allowed next actions</h4>
                                 <div className='mt-2 flex flex-wrap gap-2'>
                                     {(caseDetail.detail.nextAllowedActions || []).map(action => (
                                         <span key={action.id} title={action.disabledReason} className={workflowStatusClass(action.enabled ? 'ready' : 'blocked')}>{action.label}</span>
                                     ))}
                                     {!(caseDetail.detail.nextAllowedActions || []).length && (caseDetail.detail.nextActions || []).map(action => (
-                                        <span key={String(action)} className='rounded-full bg-[#0f1726] px-2 py-1 text-[11px] font-semibold text-[#aab7cc]'>{String(action)}</span>
+                                        <span key={String(action)} className='rounded-full bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted'>{String(action)}</span>
                                     ))}
-                                    {!(caseDetail.detail.nextAllowedActions || caseDetail.detail.nextActions || []).length && <span className='text-xs text-[#8fa0ba]'>No more actions for this case state.</span>}
+                                    {!(caseDetail.detail.nextAllowedActions || caseDetail.detail.nextActions || []).length && <span className='text-xs text-ui-muted'>No more actions for this case state.</span>}
                                 </div>
                             </div>
                         </>
@@ -2481,9 +2481,9 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
 
 function InspectionNotice({ tone, title, body }: { tone: 'neutral' | 'blocked', title: string, body: string }) {
     return (
-        <div className={`rounded-lg border p-3 ${tone === 'blocked' ? 'border-[#7a3520] bg-[#2c160f]' : 'border-[#27364f] bg-[#0b121e]'}`}>
-            <h4 className={`text-sm font-semibold ${tone === 'blocked' ? 'text-[#ffb598]' : 'text-[#edf4ff]'}`}>{title}</h4>
-            <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>{body}</p>
+        <div className={`rounded-lg border p-3 ${tone === 'blocked' ? 'border-ui-danger/35 bg-ui-danger/10' : 'border-ui-border bg-ui-raised'}`}>
+            <h4 className={`text-sm font-semibold ${tone === 'blocked' ? 'text-ui-danger' : 'text-ui-text'}`}>{title}</h4>
+            <p className='mt-1 text-xs leading-5 text-ui-muted'>{body}</p>
         </div>
     )
 }
@@ -2500,31 +2500,31 @@ function DeliveryEvidenceRows({ deliveries, selected, orgContext }: { deliveries
     }
 
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
-            <h4 className='text-sm font-semibold text-[#edf4ff]'>Webhook delivery evidence</h4>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
+            <h4 className='text-sm font-semibold text-ui-text'>Webhook delivery evidence</h4>
             <div className='mt-3 grid gap-2'>
                 {deliveries.map(delivery => {
                     const ledgerHref = deliveryLedgerHref(orgContext, selected, delivery)
                     return (
-                        <div key={delivery.id} className='rounded-lg border border-[#27364f] bg-[#101827] p-3'>
+                        <div key={delivery.id} className='rounded-lg border border-ui-border bg-ui-panel p-3'>
                             <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
-                                    <span className='font-mono text-xs font-semibold text-[#edf4ff]'>{delivery.id}</span>
+                                    <span className='font-mono text-xs font-semibold text-ui-text'>{delivery.id}</span>
                                     <span className={workflowStatusClass(delivery.status === 'delivered' || delivery.status === 'dry_run' ? 'ready' : delivery.status === 'failed' || delivery.status === 'skipped' ? 'blocked' : 'needs_action')}>{label(delivery.status)}</span>
-                                    {delivery.deliveryKind && <span className='rounded-full bg-[#162033] px-2 py-0.5 text-[11px] font-semibold text-[#7aa5ff]'>{delivery.deliveryKind}</span>}
+                                    {delivery.deliveryKind && <span className='rounded-full bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{delivery.deliveryKind}</span>}
                                 </div>
-                                <Link href={ledgerHref} className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a]'>
+                                <Link href={ledgerHref} className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
                                     Open ledger
                                 </Link>
                             </div>
-                            <div className='mt-2 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
-                                <p><span className='font-semibold text-[#9fb0c8]'>Alert:</span> {delivery.alertId}</p>
-                                <p><span className='font-semibold text-[#9fb0c8]'>Destination:</span> {delivery.webhookDestinationId || 'watchlist url'}</p>
-                                <p><span className='font-semibold text-[#9fb0c8]'>Attempted:</span> {relativeTime(delivery.attemptedAt)}</p>
-                                {'httpStatus' in delivery && delivery.httpStatus !== undefined && <p><span className='font-semibold text-[#9fb0c8]'>HTTP:</span> {delivery.httpStatus}</p>}
+                            <div className='mt-2 grid gap-1 text-xs text-ui-muted sm:grid-cols-2'>
+                                <p><span className='font-semibold text-ui-muted'>Alert:</span> {delivery.alertId}</p>
+                                <p><span className='font-semibold text-ui-muted'>Destination:</span> {delivery.webhookDestinationId || 'watchlist url'}</p>
+                                <p><span className='font-semibold text-ui-muted'>Attempted:</span> {relativeTime(delivery.attemptedAt)}</p>
+                                {'httpStatus' in delivery && delivery.httpStatus !== undefined && <p><span className='font-semibold text-ui-muted'>HTTP:</span> {delivery.httpStatus}</p>}
                             </div>
-                            <p className='mt-2 break-all font-mono text-[11px] text-[#8fa0ba]'>{delivery.endpointHash} · {delivery.payloadHash}</p>
-                            {delivery.error && <p className='mt-2 text-xs font-semibold text-[#ffb598]'>{delivery.error}</p>}
+                            <p className='mt-2 break-all font-mono text-[11px] text-ui-muted'>{delivery.endpointHash} · {delivery.payloadHash}</p>
+                            {delivery.error && <p className='mt-2 text-xs font-semibold text-ui-danger'>{delivery.error}</p>}
                         </div>
                     )
                 })}
@@ -2535,20 +2535,20 @@ function DeliveryEvidenceRows({ deliveries, selected, orgContext }: { deliveries
 
 function TimelineRows({ title, rows }: { title: string, rows: CaseTimelineItem[] }) {
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
-            <h4 className='text-sm font-semibold text-[#edf4ff]'>{title}</h4>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
+            <h4 className='text-sm font-semibold text-ui-text'>{title}</h4>
             <div className='mt-3 grid gap-3'>
                 {rows.map(row => (
                     <div key={row.id} className='grid grid-cols-[auto_1fr] gap-3'>
-                        <span className='mt-1 h-2.5 w-2.5 rounded-full bg-[#7aa5ff]' />
+                        <span className='mt-1 h-2.5 w-2.5 rounded-full bg-ui-primary' />
                         <div>
-                            <p className='text-sm font-semibold text-[#edf4ff]'>{sanitizeWorkbenchCopy(row.title) || row.title}</p>
-                            <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>{sanitizeWorkbenchCopy(row.detail) || row.detail}</p>
-                            <p className='mt-1 text-[11px] text-[#98a2b3]'>{relativeTime(row.at)}</p>
+                            <p className='text-sm font-semibold text-ui-text'>{sanitizeWorkbenchCopy(row.title) || row.title}</p>
+                            <p className='mt-1 text-xs leading-5 text-ui-muted'>{sanitizeWorkbenchCopy(row.detail) || row.detail}</p>
+                            <p className='mt-1 text-[11px] text-ui-muted'>{relativeTime(row.at)}</p>
                         </div>
                     </div>
                 ))}
-                {!rows.length && <p className='text-xs text-[#8fa0ba]'>Timeline updates with the next case event.</p>}
+                {!rows.length && <p className='text-xs text-ui-muted'>Timeline updates with the next case event.</p>}
             </div>
         </div>
     )
@@ -2559,23 +2559,23 @@ function AlertDetailSummary({ alert, fallback }: { alert: NonNullable<AlertDetai
     const webhookContext = alert.webhookContext
     const caseId = alert.caseId || alert.caseIdCandidate || workflowContext?.caseIdCandidate
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
             <div className='flex flex-wrap items-center gap-2'>
-                <span className='text-sm font-semibold text-[#edf4ff]'>{alert.id || fallback.id}</span>
+                <span className='text-sm font-semibold text-ui-text'>{alert.id || fallback.id}</span>
                 <span className={workflowStatusClass(alert.deliveryState === 'delivered' ? 'ready' : alert.deliveryState ? 'needs_action' : 'blocked')}>{label(alert.deliveryState || 'delivery pending')}</span>
                 <span className={workflowStatusClass(caseId ? 'ready' : 'needs_action')}>{caseId ? 'case linked' : 'case needed'}</span>
             </div>
-            <div className='mt-3 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
-                <p><span className='font-semibold text-[#9fb0c8]'>Review:</span> {label(alert.reviewState || fallback.status)}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Owner:</span> {alert.assignedOwner || fallback.owner || 'unassigned'}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Case state:</span> {label(alert.workflowStatus || alert.reviewState || fallback.status)}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Organization:</span> {alert.organizationId || workflowContext?.organizationId || 'syncing'}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Case:</span> {caseId || 'not linked'}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Sources:</span> {alert.sourceCount ?? fallback.sourceLabel}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Updated:</span> {relativeTime(alert.updatedAt || alert.firstSeenAt || fallback.updatedAt)}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Replays:</span> {alert.replayCount ?? 0}{alert.lastReplayedAt ? ` · ${relativeTime(alert.lastReplayedAt)}` : ''}</p>
-                <p className='break-all'><span className='font-semibold text-[#9fb0c8]'>Watchlists:</span> {(workflowContext?.watchlistIds || []).join(', ') || 'syncing'}</p>
-                <p className='break-all'><span className='font-semibold text-[#9fb0c8]'>Destinations:</span> {(webhookContext?.webhookDestinationIds || workflowContext?.webhookDestinationIds || []).join(', ') || (webhookContext?.hasWebhookRoute ? 'delivery available' : 'syncing')}</p>
+            <div className='mt-3 grid gap-1 text-xs text-ui-muted sm:grid-cols-2'>
+                <p><span className='font-semibold text-ui-muted'>Review:</span> {label(alert.reviewState || fallback.status)}</p>
+                <p><span className='font-semibold text-ui-muted'>Owner:</span> {alert.assignedOwner || fallback.owner || 'unassigned'}</p>
+                <p><span className='font-semibold text-ui-muted'>Case state:</span> {label(alert.workflowStatus || alert.reviewState || fallback.status)}</p>
+                <p><span className='font-semibold text-ui-muted'>Organization:</span> {alert.organizationId || workflowContext?.organizationId || 'syncing'}</p>
+                <p><span className='font-semibold text-ui-muted'>Case:</span> {caseId || 'not linked'}</p>
+                <p><span className='font-semibold text-ui-muted'>Sources:</span> {alert.sourceCount ?? fallback.sourceLabel}</p>
+                <p><span className='font-semibold text-ui-muted'>Updated:</span> {relativeTime(alert.updatedAt || alert.firstSeenAt || fallback.updatedAt)}</p>
+                <p><span className='font-semibold text-ui-muted'>Replays:</span> {alert.replayCount ?? 0}{alert.lastReplayedAt ? ` · ${relativeTime(alert.lastReplayedAt)}` : ''}</p>
+                <p className='break-all'><span className='font-semibold text-ui-muted'>Watchlists:</span> {(workflowContext?.watchlistIds || []).join(', ') || 'syncing'}</p>
+                <p className='break-all'><span className='font-semibold text-ui-muted'>Destinations:</span> {(webhookContext?.webhookDestinationIds || workflowContext?.webhookDestinationIds || []).join(', ') || (webhookContext?.hasWebhookRoute ? 'delivery available' : 'syncing')}</p>
             </div>
         </div>
     )
@@ -2588,28 +2588,28 @@ function AlertWorkflowReadiness({ detail }: { detail: AlertDetailPayload }) {
     const blockerCodes = [...(readiness?.blockerCodes || []), ...(downstream?.blockerCodes || [])]
         .filter((code, index, source) => source.indexOf(code) === index)
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
             <div className='flex flex-wrap items-center gap-2'>
-                <h4 className='text-sm font-semibold text-[#edf4ff]'>Workflow guard</h4>
+                <h4 className='text-sm font-semibold text-ui-text'>Workflow guard</h4>
                 <span className={workflowStatusClass(readiness?.ready === false || blockerCodes.length ? 'blocked' : 'ready')}>{readiness?.ready === false || blockerCodes.length ? 'syncing' : 'ready'}</span>
-                {readiness?.action && <span className='rounded-full bg-[#0f1726] px-2 py-0.5 text-[11px] font-semibold text-[#aab7cc]'>{label(readiness.action)}</span>}
+                {readiness?.action && <span className='rounded-full bg-ui-panel px-2 py-0.5 text-[11px] font-semibold text-ui-muted'>{label(readiness.action)}</span>}
             </div>
-            <div className='mt-3 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
-                <p><span className='font-semibold text-[#9fb0c8]'>Update:</span> {contract?.mutationRoute || '/v1/dwm/alerts/:id'}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Replay:</span> {contract?.replayRoute || '/v1/dwm/alerts/:id/replay'}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Event count:</span> {readiness?.currentWorkflowEventCount ?? contract?.idempotency?.workflowEventCount ?? 'checking'}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Updated:</span> {relativeTime(readiness?.currentUpdatedAt || contract?.idempotency?.updatedAt || detail.alert?.updatedAt || detail.generatedAt || '')}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Delivery route:</span> {downstream?.deliverySelection?.ready === false ? 'checking' : downstream?.deliverySelection?.selectedWebhookDestinationId || 'checking'}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Customer delivery:</span> {downstream?.customerStatus?.ready === false ? 'checking' : downstream?.customerStatus?.ready === true ? 'ready' : 'checking'}</p>
+            <div className='mt-3 grid gap-1 text-xs text-ui-muted sm:grid-cols-2'>
+                <p><span className='font-semibold text-ui-muted'>Update:</span> {contract?.mutationRoute || '/v1/dwm/alerts/:id'}</p>
+                <p><span className='font-semibold text-ui-muted'>Replay:</span> {contract?.replayRoute || '/v1/dwm/alerts/:id/replay'}</p>
+                <p><span className='font-semibold text-ui-muted'>Event count:</span> {readiness?.currentWorkflowEventCount ?? contract?.idempotency?.workflowEventCount ?? 'checking'}</p>
+                <p><span className='font-semibold text-ui-muted'>Updated:</span> {relativeTime(readiness?.currentUpdatedAt || contract?.idempotency?.updatedAt || detail.alert?.updatedAt || detail.generatedAt || '')}</p>
+                <p><span className='font-semibold text-ui-muted'>Delivery route:</span> {downstream?.deliverySelection?.ready === false ? 'checking' : downstream?.deliverySelection?.selectedWebhookDestinationId || 'checking'}</p>
+                <p><span className='font-semibold text-ui-muted'>Customer delivery:</span> {downstream?.customerStatus?.ready === false ? 'checking' : downstream?.customerStatus?.ready === true ? 'ready' : 'checking'}</p>
             </div>
             <div className='mt-3 flex flex-wrap gap-2'>
                 {blockerCodes.map(code => <span key={code} className={workflowStatusClass('blocked')}>{label(code)}</span>)}
-                {!blockerCodes.length && <span className='text-xs text-[#8fa0ba]'>Workflow lane is clear.</span>}
+                {!blockerCodes.length && <span className='text-xs text-ui-muted'>Workflow lane is clear.</span>}
             </div>
             {readiness?.blockers?.length ? (
                 <div className='mt-3 grid gap-2'>
                     {readiness.blockers.slice(0, 3).map(blocker => (
-                        <p key={`${blocker.code}:${blocker.field}`} className='rounded-md border border-[#7a3520] bg-[#2c160f] px-2 py-1 text-xs text-[#ffb598]'>
+                        <p key={`${blocker.code}:${blocker.field}`} className='rounded-md border border-ui-danger/35 bg-ui-danger/10 px-2 py-1 text-xs text-ui-danger'>
                             {label(blocker.code || 'workflow issue')}{blocker.detail ? `: ${blocker.detail}` : ''}
                         </p>
                     ))}
@@ -2628,23 +2628,23 @@ function AlertOperationalReadiness({ detail }: { detail: AlertDetailPayload }) {
     const blockerCodes = [...(delivery?.blockerCodes || []), ...(customerStatus?.blockerCodes || [])]
         .filter((code, index, source) => source.indexOf(code) === index)
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
             <div className='flex flex-wrap items-center gap-2'>
-                <h4 className='text-sm font-semibold text-[#edf4ff]'>Delivery lane</h4>
+                <h4 className='text-sm font-semibold text-ui-text'>Delivery lane</h4>
                 <span className={workflowStatusClass(delivery?.ready || customerStatus?.ready ? 'ready' : blockerCodes.length ? 'blocked' : 'needs_action')}>{delivery?.ready || customerStatus?.ready ? 'ready' : blockerCodes.length ? 'syncing' : 'review'}</span>
             </div>
-            <div className='mt-3 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
-                <p><span className='font-semibold text-[#9fb0c8]'>Next:</span> {next?.label || 'Review alert detail.'}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Action:</span> {label(next?.action || 'monitor')}{next?.requiresRationale ? ' · rationale required' : ''}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Delivery:</span> {label(delivery?.state || delivery?.lastDeliveryStatus || customerStatus?.deliveryState || 'checking')}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Customer delivery:</span> {customerStatus?.ready || customerStatus?.deliveryReady ? 'ready' : blockerCodes.length ? 'checking' : 'checking'}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Evidence:</span> {evidence?.evidenceCount ?? customerStatus?.evidenceCount ?? delivery?.evidenceCount ?? 0} item(s){evidence?.newestEvidenceAt ? ` · ${relativeTime(evidence.newestEvidenceAt)}` : ''}</p>
-                <p><span className='font-semibold text-[#9fb0c8]'>Source details:</span> {(provenance?.sourceIds || []).length} source(s), {(provenance?.captureIds || evidence?.captureIds || delivery?.selectedCaptureIds || customerStatus?.selectedCaptureIds || []).length} capture(s)</p>
+            <div className='mt-3 grid gap-1 text-xs text-ui-muted sm:grid-cols-2'>
+                <p><span className='font-semibold text-ui-muted'>Next:</span> {next?.label || 'Review alert detail.'}</p>
+                <p><span className='font-semibold text-ui-muted'>Action:</span> {label(next?.action || 'monitor')}{next?.requiresRationale ? ' · rationale required' : ''}</p>
+                <p><span className='font-semibold text-ui-muted'>Delivery:</span> {label(delivery?.state || delivery?.lastDeliveryStatus || customerStatus?.deliveryState || 'checking')}</p>
+                <p><span className='font-semibold text-ui-muted'>Customer delivery:</span> {customerStatus?.ready || customerStatus?.deliveryReady ? 'ready' : blockerCodes.length ? 'checking' : 'checking'}</p>
+                <p><span className='font-semibold text-ui-muted'>Evidence:</span> {evidence?.evidenceCount ?? customerStatus?.evidenceCount ?? delivery?.evidenceCount ?? 0} item(s){evidence?.newestEvidenceAt ? ` · ${relativeTime(evidence.newestEvidenceAt)}` : ''}</p>
+                <p><span className='font-semibold text-ui-muted'>Source details:</span> {(provenance?.sourceIds || []).length} source(s), {(provenance?.captureIds || evidence?.captureIds || delivery?.selectedCaptureIds || customerStatus?.selectedCaptureIds || []).length} capture(s)</p>
             </div>
-            {next?.reason ? <p className='mt-3 rounded-md border border-[#27364f] bg-[#101827] px-2 py-1 text-xs leading-5 text-[#aab7cc]'>{next.reason}</p> : null}
+            {next?.reason ? <p className='mt-3 rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs leading-5 text-ui-muted'>{next.reason}</p> : null}
             <div className='mt-3 flex flex-wrap gap-2'>
                 {blockerCodes.map(code => <span key={code} className={workflowStatusClass('blocked')}>{label(code)}</span>)}
-                {!blockerCodes.length && <span className='text-xs text-[#8fa0ba]'>Delivery and customer lanes are clear.</span>}
+                {!blockerCodes.length && <span className='text-xs text-ui-muted'>Delivery and customer lanes are clear.</span>}
             </div>
         </div>
     )
@@ -2652,8 +2652,8 @@ function AlertOperationalReadiness({ detail }: { detail: AlertDetailPayload }) {
 
 function AlertEvidenceRows({ evidence }: { evidence: NonNullable<NonNullable<AlertDetailPayload['alert']>['evidence']> }) {
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
-            <h4 className='text-sm font-semibold text-[#edf4ff]'>Alert evidence</h4>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
+            <h4 className='text-sm font-semibold text-ui-text'>Alert evidence</h4>
             <div className='mt-3 grid gap-2'>
                 {evidence.map((item, index) => {
                     const provenance = typeof item.provenance === 'string'
@@ -2661,24 +2661,24 @@ function AlertEvidenceRows({ evidence }: { evidence: NonNullable<NonNullable<Ale
                         : [item.provenance?.sourceId, item.provenance?.captureId, item.provenance?.captureMode].filter(Boolean).join(' · ')
                     const sourceHref = typeof item.provenance === 'object' && item.provenance?.sourceId ? sourceProfileHref(item.provenance.sourceId) : undefined
                     return (
-                        <div key={item.id || `${item.contentHash || 'alert-evidence'}:${index}`} className='rounded-lg border border-[#27364f] bg-[#101827] p-3'>
+                        <div key={item.id || `${item.contentHash || 'alert-evidence'}:${index}`} className='rounded-lg border border-ui-border bg-ui-panel p-3'>
                             <div className='flex flex-wrap items-center gap-2'>
-                                <span className='text-sm font-semibold text-[#edf4ff]'>{item.sourceName || item.sourceFamily || item.id || 'source evidence'}</span>
-                                {item.redactionState && <span className='rounded-full bg-[#162033] px-2 py-0.5 text-[11px] font-semibold text-[#7aa5ff]'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
-                                {item.captureMode && <span className='rounded-full bg-[#0f1726] px-2 py-0.5 text-[11px] font-semibold text-[#aab7cc]'>{String(item.captureMode).replaceAll('_', ' ')}</span>}
+                                <span className='text-sm font-semibold text-ui-text'>{item.sourceName || item.sourceFamily || item.id || 'source evidence'}</span>
+                                {item.redactionState && <span className='rounded-full bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
+                                {item.captureMode && <span className='rounded-full bg-ui-panel px-2 py-0.5 text-[11px] font-semibold text-ui-muted'>{String(item.captureMode).replaceAll('_', ' ')}</span>}
                                 {sourceHref ? (
-                                    <Link href={sourceHref} className='inline-flex min-h-7 items-center gap-1 rounded-lg border border-[#27364f] bg-[#0f1726] px-2 py-0.5 text-[11px] font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
+                                    <Link href={sourceHref} className='inline-flex min-h-7 items-center gap-1 rounded-lg border border-ui-border bg-ui-panel px-2 py-0.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35'>
                                         Open source
                                         <ExternalLink className='h-3 w-3' />
                                     </Link>
                                 ) : null}
                             </div>
-                            <p className='mt-2 text-xs leading-5 text-[#aab7cc]'>{item.excerpt || 'Safe excerpt is being prepared from this evidence.'}</p>
-                            <div className='mt-2 grid gap-1 text-xs text-[#8fa0ba]'>
-                                <p><span className='font-semibold text-[#9fb0c8]'>Observed:</span> {item.observedAt || item.firstSeenAt ? relativeTime(item.observedAt || item.firstSeenAt || '') : 'checking'}</p>
-                                <p className='break-all'><span className='font-semibold text-[#9fb0c8]'>Source details:</span> {customerOperationalText(provenance || 'syncing')}</p>
+                            <p className='mt-2 text-xs leading-5 text-ui-muted'>{item.excerpt || 'Safe excerpt is being prepared from this evidence.'}</p>
+                            <div className='mt-2 grid gap-1 text-xs text-ui-muted'>
+                                <p><span className='font-semibold text-ui-muted'>Observed:</span> {item.observedAt || item.firstSeenAt ? relativeTime(item.observedAt || item.firstSeenAt || '') : 'checking'}</p>
+                                <p className='break-all'><span className='font-semibold text-ui-muted'>Source details:</span> {customerOperationalText(provenance || 'syncing')}</p>
                             </div>
-                            <p className='mt-2 break-all font-mono text-[11px] text-[#8fa0ba]'>{item.contentHash || item.id || 'content hash pending'}</p>
+                            <p className='mt-2 break-all font-mono text-[11px] text-ui-muted'>{item.contentHash || item.id || 'content hash pending'}</p>
                         </div>
                     )
                 })}
@@ -2689,20 +2689,20 @@ function AlertEvidenceRows({ evidence }: { evidence: NonNullable<NonNullable<Ale
 
 function CaseEvidenceRows({ evidence }: { evidence: CaseEvidence[] }) {
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
-            <h4 className='text-sm font-semibold text-[#edf4ff]'>Case evidence</h4>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
+            <h4 className='text-sm font-semibold text-ui-text'>Case evidence</h4>
             <div className='mt-3 grid gap-2'>
                 {evidence.map(item => (
-                    <div key={item.id} className='rounded-lg border border-[#27364f] bg-[#101827] p-3'>
+                    <div key={item.id} className='rounded-lg border border-ui-border bg-ui-panel p-3'>
                         <div className='flex flex-wrap items-center gap-2'>
-                            <span className='text-sm font-semibold text-[#edf4ff]'>{item.sourceName || item.id}</span>
-                            {item.redactionState && <span className='rounded-full bg-[#162033] px-2 py-0.5 text-[11px] font-semibold text-[#7aa5ff]'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
+                            <span className='text-sm font-semibold text-ui-text'>{item.sourceName || item.id}</span>
+                            {item.redactionState && <span className='rounded-full bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
                         </div>
-                        <p className='mt-2 text-xs leading-5 text-[#aab7cc]'>{item.excerpt || 'Safe excerpt is being prepared from this evidence.'}</p>
-                        <p className='mt-2 break-all font-mono text-[11px] text-[#8fa0ba]'>{item.contentHash || item.id}</p>
+                        <p className='mt-2 text-xs leading-5 text-ui-muted'>{item.excerpt || 'Safe excerpt is being prepared from this evidence.'}</p>
+                        <p className='mt-2 break-all font-mono text-[11px] text-ui-muted'>{item.contentHash || item.id}</p>
                     </div>
                 ))}
-                {!evidence.length && <p className='text-xs text-[#8fa0ba]'>Evidence stream updates with the next normalized capture.</p>}
+                {!evidence.length && <p className='text-xs text-ui-muted'>Evidence stream updates with the next normalized capture.</p>}
             </div>
         </div>
     )
@@ -2710,30 +2710,30 @@ function CaseEvidenceRows({ evidence }: { evidence: CaseEvidence[] }) {
 
 function CaseWatchlistRows({ watchlists, orgContext }: { watchlists: CaseWatchlist[], orgContext?: WorkbenchOrgContext }) {
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
             <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
-                <h4 className='text-sm font-semibold text-[#edf4ff]'>Watchlist routing</h4>
-                <Link href={watchlistLedgerHref(orgContext)} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
+                <h4 className='text-sm font-semibold text-ui-text'>Watchlist routing</h4>
+                <Link href={watchlistLedgerHref(orgContext)} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35'>
                     Open watchlists
                     <ExternalLink className='h-3.5 w-3.5' />
                 </Link>
             </div>
             <div className='mt-3 grid gap-2'>
                 {watchlists.map(watchlist => (
-                    <div key={watchlist.id} className='rounded-lg border border-[#27364f] bg-[#101827] p-3'>
+                    <div key={watchlist.id} className='rounded-lg border border-ui-border bg-ui-panel p-3'>
                         <div className='flex flex-wrap items-center gap-2'>
-                            <span className='wrap-break-word text-sm font-semibold text-[#edf4ff]'>{watchlist.name || watchlist.id}</span>
+                            <span className='wrap-break-word text-sm font-semibold text-ui-text'>{watchlist.name || watchlist.id}</span>
                             <span className={workflowStatusClass(watchlist.status === 'active' ? 'ready' : 'needs_action')}>{label(watchlist.status)}</span>
-                            {watchlist.hasWebhookUrl || watchlist.webhookDestinationId ? <span className='rounded-full bg-[#162033] px-2 py-0.5 text-[11px] font-semibold text-[#7aa5ff]'>delivery routed</span> : null}
+                            {watchlist.hasWebhookUrl || watchlist.webhookDestinationId ? <span className='rounded-full bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>delivery routed</span> : null}
                         </div>
-                        <div className='mt-2 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
-                            <p><span className='font-semibold text-[#9fb0c8]'>Terms:</span> {watchlist.termCount ?? watchlist.matchedTerms?.length ?? 0}</p>
-                            <p className='break-all'><span className='font-semibold text-[#9fb0c8]'>Destination:</span> {watchlist.webhookDestinationId || (watchlist.hasWebhookUrl ? 'watchlist webhook url' : 'syncing')}</p>
-                            <p className='break-all sm:col-span-2'><span className='font-semibold text-[#9fb0c8]'>Matched:</span> {(watchlist.matchedTerms || []).map(term => `${term.kind || 'term'}:${term.value || 'syncing'}`).join(', ') || 'match stream is checking'}</p>
+                        <div className='mt-2 grid gap-1 text-xs text-ui-muted sm:grid-cols-2'>
+                            <p><span className='font-semibold text-ui-muted'>Terms:</span> {watchlist.termCount ?? watchlist.matchedTerms?.length ?? 0}</p>
+                            <p className='break-all'><span className='font-semibold text-ui-muted'>Destination:</span> {watchlist.webhookDestinationId || (watchlist.hasWebhookUrl ? 'watchlist webhook url' : 'syncing')}</p>
+                            <p className='break-all sm:col-span-2'><span className='font-semibold text-ui-muted'>Matched:</span> {(watchlist.matchedTerms || []).map(term => `${term.kind || 'term'}:${term.value || 'syncing'}`).join(', ') || 'match stream is checking'}</p>
                         </div>
                     </div>
                 ))}
-                {!watchlists.length && <p className='text-xs leading-5 text-[#8fa0ba]'>Watchlist routing appears here when the case is tied to customer terms.</p>}
+                {!watchlists.length && <p className='text-xs leading-5 text-ui-muted'>Watchlist routing appears here when the case is tied to customer terms.</p>}
             </div>
         </div>
     )
@@ -2761,10 +2761,10 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
 
     if (!hasBackedCase) {
         return (
-            <div className='grid gap-2 rounded-lg border border-[#7a3520] bg-[#2c160f] p-3'>
+            <div className='grid gap-2 rounded-lg border border-ui-danger/35 bg-ui-danger/10 p-3'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-[#ffb598]'>{hasBackedAlertWorkflow ? 'Backed alert workflow' : 'Session-local triage'}</p>
-                    <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>
+                    <p className='text-xs font-semibold uppercase text-ui-danger'>{hasBackedAlertWorkflow ? 'Backed alert workflow' : 'Session-local triage'}</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>
                         {hasBackedAlertWorkflow
                             ? 'Updates the persisted alert and refreshes detail. Case actions unlock when a case is linked.'
                             : item.missingDependency || 'Live case detail or persisted DWM alert is syncing. These controls only update this browser session until then.'}
@@ -2792,11 +2792,11 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
     const noteText = note.trim()
     const notificationState = customerNotificationActionState(caseDetail)
     return (
-        <div className='grid gap-2 rounded-lg border border-[#1f6f48] bg-[#0c261c] p-3'>
+        <div className='grid gap-2 rounded-lg border border-ui-success/35 bg-ui-success/10 p-3'>
             <div>
-                <p className='text-xs font-semibold uppercase text-[#147a3b]'>Live case actions</p>
-                <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Updates the selected case and refreshes the detail pane.</p>
-                {item.caseDetailHref && <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Case package includes evidence, timeline, delivery, and next actions.</p>}
+                <p className='text-xs font-semibold uppercase text-ui-success'>Live case actions</p>
+                <p className='mt-1 text-xs leading-5 text-ui-muted'>Updates the selected case and refreshes the detail pane.</p>
+                {item.caseDetailHref && <p className='mt-1 text-xs leading-5 text-ui-muted'>Case package includes evidence, timeline, delivery, and next actions.</p>}
             </div>
             <div className='flex flex-wrap gap-2'>
                 <CaseMutationButton
@@ -2907,7 +2907,7 @@ function CaseMutationButton({ item, action, label: actionLabel, busy, busyAction
             onClick={onClick}
             disabled={disabled}
             title={blockedReason}
-            className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
+            className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
         >
             {busyAction === `case:${item.id}:${action}` ? 'Saving...' : actionLabel}
         </button>
@@ -2949,16 +2949,16 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 <div className='min-w-0'>
                     <div className='flex flex-wrap items-center gap-2'>
                         <span className={severityClass(item.severity)}>{item.severity}</span>
-                        <span className='rounded-full bg-[#162033] px-2 py-0.5 text-xs font-semibold text-[#7aa5ff]'>{item.confidence}% confidence</span>
-                        <span className='rounded-full bg-[#15284b] px-2 py-0.5 text-xs font-semibold text-[#9fb0c8]'>{label(item.kind)}</span>
-                        <span className='rounded-full bg-[#0f1726] px-2 py-0.5 text-xs font-semibold text-[#aab7cc]'>{label(effectiveStatus)}</span>
-                        {item.persistent && <span className='rounded-full bg-[#0c261c] px-2 py-0.5 text-xs font-semibold text-[#147a3b]'>persistent workflow</span>}
+                        <span className='rounded-full bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-primary'>{item.confidence}% confidence</span>
+                        <span className='rounded-full bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-muted'>{label(item.kind)}</span>
+                        <span className='rounded-full bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-muted'>{label(effectiveStatus)}</span>
+                        {item.persistent && <span className='rounded-full bg-ui-success/10 px-2 py-0.5 text-xs font-semibold text-ui-success'>persistent workflow</span>}
                     </div>
-                    <h2 className={`${compact ? 'mt-2 text-xl' : 'mt-3 text-2xl'} font-semibold tracking-normal text-[#edf4ff]`}>{item.title}</h2>
-                    <p className='mt-1 text-sm text-[#aab7cc]'>{item.queue} · {item.routeLabel} · {relativeTime(item.updatedAt)}</p>
+                    <h2 className={`${compact ? 'mt-2 text-xl' : 'mt-3 text-2xl'} font-semibold tracking-normal text-ui-text`}>{item.title}</h2>
+                    <p className='mt-1 text-sm text-ui-muted'>{item.queue} · {item.routeLabel} · {relativeTime(item.updatedAt)}</p>
                 </div>
-                <div className='grid gap-1 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 text-xs text-[#8fa0ba]'>
-                    <span className='font-semibold text-[#edf4ff]'>{effectiveOwner}</span>
+                <div className='grid gap-1 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs text-ui-muted'>
+                    <span className='font-semibold text-ui-text'>{effectiveOwner}</span>
                     <span>{item.company || item.matchedTerm}</span>
                 </div>
             </div>
@@ -2979,10 +2979,10 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 orgContext={orgContext}
             />
 
-            <section className='grid gap-3 rounded-lg border border-[#26344d] bg-[#0b121e] p-4 lg:grid-cols-[0.48fr_minmax(0,1fr)]'>
+            <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-4 lg:grid-cols-[0.48fr_minmax(0,1fr)]'>
                 <label className='grid gap-2'>
-                    <span className='flex items-center gap-2 text-sm font-semibold text-[#edf4ff]'>
-                        <UserRound className='h-4 w-4 text-[#7aa5ff]' />
+                    <span className='flex items-center gap-2 text-sm font-semibold text-ui-text'>
+                        <UserRound className='h-4 w-4 text-ui-primary' />
                         Owner
                     </span>
                     {assignableMembers.length ? (
@@ -2990,7 +2990,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                             value={ownerValue}
                             onChange={event => onOwnerDraftChange(event.target.value)}
                             disabled={readOnly}
-                            className='h-10 rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-sm text-[#edf4ff] outline-none transition focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
+                            className='h-10 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
                         >
                             <option value=''>Unassigned</option>
                             {assignableMembers.map(member => (
@@ -3002,25 +3002,25 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                             value={ownerValue}
                             onChange={event => onOwnerDraftChange(event.target.value)}
                             placeholder='Assign analyst'
-                            className='h-10 rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-sm text-[#edf4ff] outline-none transition focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                            className='h-10 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                         />
                     )}
-                    <span className='text-[11px] text-[#8fa0ba]'>
+                    <span className='text-[11px] text-ui-muted'>
                         {assignableMembers.length
                             ? readOnly ? 'Member picker is read-only for this case.' : 'Assign owner saves to the active case.'
                             : 'Assignable teammate state is loading; manual owner text stays available.'}
                     </span>
                 </label>
                 <label className='grid gap-2'>
-                    <span className='flex items-center gap-2 text-sm font-semibold text-[#edf4ff]'>
-                        <MessageSquareText className='h-4 w-4 text-[#7aa5ff]' />
+                    <span className='flex items-center gap-2 text-sm font-semibold text-ui-text'>
+                        <MessageSquareText className='h-4 w-4 text-ui-primary' />
                         Decision rationale
                     </span>
                     <textarea
                         value={note}
                         onChange={event => onNoteChange(event.target.value)}
                         placeholder='Record validation, customer route, suppression reason, or follow-up owner'
-                        className='min-h-20 resize-y rounded-lg border border-[#27364f] bg-[#0f1726] px-3 py-2 text-sm text-[#edf4ff] outline-none transition focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                        className='min-h-20 resize-y rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                 </label>
                 <CaseActionRail
@@ -3116,11 +3116,11 @@ function CaseRouteStrip({ item, caseDetail, alertDetail, actionDeliveries, orgCo
     ]
 
     return (
-        <section data-case-route-strip='true' className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
+        <section data-case-route-strip='true' className='rounded-lg border border-ui-border bg-ui-raised p-3'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Case route</h3>
-                    <p className='mt-0.5 wrap-break-word text-xs text-[#8fa0ba]'>Current owner, matched scope, evidence, delivery, audit, and next action.</p>
+                    <h3 className='text-sm font-semibold text-ui-text'>Case route</h3>
+                    <p className='mt-0.5 wrap-break-word text-xs text-ui-muted'>Current owner, matched scope, evidence, delivery, audit, and next action.</p>
                 </div>
                 <span className={workflowStatusClass(routeCells.every(cell => cell.tone === 'ready') ? 'ready' : routeCells.some(cell => cell.tone === 'blocked') ? 'blocked' : 'needs_action')}>
                     {routeCells.filter(cell => cell.tone === 'ready').length}/{routeCells.length} ready
@@ -3135,22 +3135,22 @@ function CaseRouteStrip({ item, caseDetail, alertDetail, actionDeliveries, orgCo
                         onClick={event => {
                             if (!cell.href) event.preventDefault()
                         }}
-                        className={`min-w-0 rounded-lg border border-[#27364f] bg-[#101827] px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-[#7aa5ff] ${cell.href ? 'hover:bg-[#162033]' : 'cursor-default'}`}
+                        className={`min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${cell.href ? 'hover:bg-ui-raised' : 'cursor-default'}`}
                     >
                         <div className='flex min-w-0 items-center justify-between gap-2'>
-                            <p className='truncate text-[10px] font-semibold uppercase text-[#8fa0ba]'>{cell.label}</p>
+                            <p className='truncate text-[10px] font-semibold uppercase text-ui-muted'>{cell.label}</p>
                             <span className={`${workflowStatusClass(cell.tone)} shrink-0`}>{label(cell.tone)}</span>
                         </div>
-                        <p className='mt-1 wrap-break-word text-xs font-semibold text-[#edf4ff]'>{cell.value}</p>
+                        <p className='mt-1 wrap-break-word text-xs font-semibold text-ui-text'>{cell.value}</p>
                     </Link>
                 ))}
             </div>
-            <div className='mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#27364f] bg-[#101827] px-3 py-2'>
-                <p className='min-w-0 wrap-break-word text-xs leading-5 text-[#aab7cc]'>
-                    <span className='font-semibold text-[#dbe7ff]'>Next:</span> {nextAction}
+            <div className='mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>
+                <p className='min-w-0 wrap-break-word text-xs leading-5 text-ui-muted'>
+                    <span className='font-semibold text-ui-text'>Next:</span> {nextAction}
                 </p>
                 {caseHref ? (
-                    <Link href={caseExportHref(caseHref)} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
+                    <Link href={caseExportHref(caseHref)} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35'>
                         Case package
                         <ExternalLink className='h-3.5 w-3.5' />
                     </Link>
@@ -3173,28 +3173,28 @@ function SelectedWorkflowHandoff({ item, caseDetail, alertDetail, actionDeliveri
     const nextBlocked = steps.find(step => step.status === 'blocked' || step.status === 'needs_action')
 
     return (
-        <section data-selected-workflow-handoff='true' className='overflow-hidden rounded-lg border border-[#27364f] bg-[#0f1726]'>
-            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#26344d] bg-[#101827] px-4 py-3 sm:items-center'>
+        <section data-selected-workflow-handoff='true' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3 sm:items-center'>
                 <div className='min-w-0'>
-                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Investigation lanes</h3>
-                    <p className='mt-0.5 wrap-break-word text-xs text-[#8fa0ba]'>Stage, state, source, and next action.</p>
+                    <h3 className='text-sm font-semibold text-ui-text'>Investigation lanes</h3>
+                    <p className='mt-0.5 wrap-break-word text-xs text-ui-muted'>Stage, state, source, and next action.</p>
                 </div>
                 <div className='flex flex-wrap items-center gap-2 text-xs'>
                     <span className={workflowStatusClass(blockedCount ? 'blocked' : readyCount === steps.length ? 'ready' : 'needs_action')}>{readyCount}/{steps.length} ready</span>
-                    {nextBlocked ? <span className='wrap-break-word text-[#8fa0ba] '>Next: {nextBlocked.label}</span> : null}
+                    {nextBlocked ? <span className='wrap-break-word text-ui-muted '>Next: {nextBlocked.label}</span> : null}
                 </div>
             </div>
             <div className='grid min-w-0 gap-2 p-3 md:grid-cols-2'>
                 {steps.map(step => (
-                    <div key={step.id} data-selected-workflow-step={step.id} data-selected-workflow-state={step.status} className='grid min-w-0 gap-2 rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+                    <div key={step.id} data-selected-workflow-step={step.id} data-selected-workflow-state={step.status} className='grid min-w-0 gap-2 rounded-lg border border-ui-border bg-ui-raised p-3'>
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 sm:items-center'>
-                            <h4 className='wrap-break-word text-sm font-semibold text-[#edf4ff]'>{step.label}</h4>
+                            <h4 className='wrap-break-word text-sm font-semibold text-ui-text'>{step.label}</h4>
                             <span className={`${workflowStatusClass(step.status)} shrink-0`}>{label(step.status)}</span>
                         </div>
-                        <p className='wrap-break-word text-xs leading-5 text-[#aab7cc]'>{step.detail}</p>
-                        <p className='wrap-break-word text-[11px] text-[#8fa0ba]'><span className='font-semibold text-[#9fb0c8]'>Source:</span> {operatorSourceLabel(step.source)}</p>
+                        <p className='wrap-break-word text-xs leading-5 text-ui-muted'>{step.detail}</p>
+                        <p className='wrap-break-word text-[11px] text-ui-muted'><span className='font-semibold text-ui-muted'>Source:</span> {operatorSourceLabel(step.source)}</p>
                         {step.href ? (
-                            <Link href={step.href} className='inline-flex min-h-8 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
+                            <Link href={step.href} className='inline-flex min-h-8 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35'>
                                 <span className='truncate'>{step.actionLabel}</span>
                                 <ExternalLink className='h-3.5 w-3.5 shrink-0' />
                             </Link>
@@ -3350,30 +3350,30 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                 : item.caseDetailHref ? 'case detail loading' : item.missingDependency || 'case link pending'
 
     return (
-        <section className='rounded-lg border border-[#26344d] bg-[#0f1726]'>
-            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#26344d] px-4 py-3 sm:items-center'>
+        <section className='rounded-lg border border-ui-border bg-ui-panel'>
+            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-ui-border px-4 py-3 sm:items-center'>
                 <div>
-                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Continuity</h3>
-                    <p className='mt-0.5 text-xs text-[#8fa0ba]'>Assignee changes, rationale, action outcome, allowed moves, visibility, and refresh state.</p>
+                    <h3 className='text-sm font-semibold text-ui-text'>Continuity</h3>
+                    <p className='mt-0.5 text-xs text-ui-muted'>Assignee changes, rationale, action outcome, allowed moves, visibility, and refresh state.</p>
                 </div>
                 <span className={workflowStatusClass(caseDetail?.status === 'error' || (!detail && !item.caseDetailHref) ? 'blocked' : caseDetail?.status === 'loading' ? 'needs_action' : 'ready')}>{caseDetail?.status || (item.caseDetailHref ? 'pending' : 'syncing')}</span>
             </div>
             <div className='grid gap-3 p-4 xl:grid-cols-[0.85fr_1fr_0.85fr]'>
                 <div className='grid gap-3'>
                     <ContinuityBlock title='Assignee history'>
-                        <p className='text-xs text-[#8fa0ba]'>Latest owner: <span className='font-semibold text-[#dbe7ff]'>{caseRecord?.assignedOwner || item.owner || 'unassigned'}</span></p>
+                        <p className='text-xs text-ui-muted'>Latest owner: <span className='font-semibold text-ui-text'>{caseRecord?.assignedOwner || item.owner || 'unassigned'}</span></p>
                         <div className='mt-2 grid gap-2'>
                             {ownerEvents.map(event => (
                                 <ContinuityEvent key={event.id} title={event.toOwner || event.fromOwner || event.action} detail={`${event.fromOwner || 'unassigned'} -> ${event.toOwner || caseRecord?.assignedOwner || 'unassigned'} · ${event.actor || 'actor syncing'}`} at={event.at} />
                             ))}
-                            {!ownerEvents.length && <p className='text-xs leading-5 text-[#8fa0ba]'>Assignment history is live; latest owner is shown above.</p>}
+                            {!ownerEvents.length && <p className='text-xs leading-5 text-ui-muted'>Assignment history is live; latest owner is shown above.</p>}
                         </div>
                     </ContinuityBlock>
                     <ContinuityBlock title='Visibility decision'>
-                        <p className='text-xs leading-5 text-[#8fa0ba]'>
+                        <p className='text-xs leading-5 text-ui-muted'>
                             {visibility ? `${visibility.allowed ? 'Visible' : 'Needs access'} under ${visibility.alertVisibilityPolicy}; roles ${visibility.allowedRoles.join(', ')}${visibility.reason ? `; reason ${visibility.reason}` : ''}.` : 'Visibility check is loading the case access decision.'}
                         </p>
-                        <p className='mt-2 text-xs text-[#8fa0ba]'>Mutations: <span className='font-semibold text-[#dbe7ff]'>{detail?.access?.readOnly ? 'read-only' : detail ? 'allowed' : 'requires case detail'}</span></p>
+                        <p className='mt-2 text-xs text-ui-muted'>Mutations: <span className='font-semibold text-ui-text'>{detail?.access?.readOnly ? 'read-only' : detail ? 'allowed' : 'requires case detail'}</span></p>
                     </ContinuityBlock>
                 </div>
                 <ContinuityBlock title='Rationale timeline'>
@@ -3381,32 +3381,32 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                         {noteEvents.map(event => (
                             <ContinuityEvent key={event.id} title={label(event.action)} detail={event.note || 'No rationale'} at={event.at} />
                         ))}
-                        {caseRecord?.lastDecision && <p className='rounded-lg border border-[#27364f] bg-[#101827] p-2 text-xs leading-5 text-[#aab7cc]'>Last decision: {caseRecord.lastDecision}</p>}
-                        {decision?.status && <p className='rounded-lg border border-[#7a3520] bg-[#2c160f] p-2 text-xs leading-5 text-[#aab7cc]'>Session-local: {label(decision.status)}{decision.reason ? ` · ${decision.reason}` : ''}</p>}
-                        {!noteEvents.length && !caseRecord?.lastDecision && !decision?.status && <p className='text-xs leading-5 text-[#8fa0ba]'>Rationale timeline is watching for the first analyst note or decision.</p>}
+                        {caseRecord?.lastDecision && <p className='rounded-lg border border-ui-border bg-ui-panel p-2 text-xs leading-5 text-ui-muted'>Last decision: {caseRecord.lastDecision}</p>}
+                        {decision?.status && <p className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 p-2 text-xs leading-5 text-ui-muted'>Session-local: {label(decision.status)}{decision.reason ? ` · ${decision.reason}` : ''}</p>}
+                        {!noteEvents.length && !caseRecord?.lastDecision && !decision?.status && <p className='text-xs leading-5 text-ui-muted'>Rationale timeline is watching for the first analyst note or decision.</p>}
                     </div>
                 </ContinuityBlock>
                 <div className='grid gap-3'>
                     <ContinuityBlock title='Action outcome'>
-                        <p className={`text-xs leading-5 ${actionMessage ? actionMessage.ok ? 'text-[#147a3b]' : 'text-[#ffb598]' : 'text-[#8fa0ba]'}`}>
+                        <p className={`text-xs leading-5 ${actionMessage ? actionMessage.ok ? 'text-ui-success' : 'text-ui-danger' : 'text-ui-muted'}`}>
                             {actionMessage?.text || 'Console actions stream here.'}
                         </p>
-                        <p className='mt-2 text-xs text-[#8fa0ba]'>Refresh: {refreshText}</p>
+                        <p className='mt-2 text-xs text-ui-muted'>Refresh: {refreshText}</p>
                     </ContinuityBlock>
                     <ContinuityBlock title='Case package'>
                         <div data-case-replay-export-state={replayExport.status} className='grid gap-2'>
                             <div className='flex flex-wrap items-center gap-2'>
                                 <span className={workflowStatusClass(replayExport.status)}>{label(replayExport.status)}</span>
-                                <span className='text-xs text-[#8fa0ba]'>{replayExport.detail}</span>
+                                <span className='text-xs text-ui-muted'>{replayExport.detail}</span>
                             </div>
-                            <div className='grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2 xl:grid-cols-1'>
-                                <p><span className='font-semibold text-[#9fb0c8]'>Events:</span> {replayExport.workflowEventCount}</p>
-                                <p><span className='font-semibold text-[#9fb0c8]'>Timeline:</span> {replayExport.timelineCount}</p>
-                                <p><span className='font-semibold text-[#9fb0c8]'>Delivery rows:</span> {replayExport.deliveryCount}</p>
-                                <p><span className='font-semibold text-[#9fb0c8]'>Action payloads:</span> {replayExport.nextActionCount}</p>
+                            <div className='grid gap-1 text-xs text-ui-muted sm:grid-cols-2 xl:grid-cols-1'>
+                                <p><span className='font-semibold text-ui-muted'>Events:</span> {replayExport.workflowEventCount}</p>
+                                <p><span className='font-semibold text-ui-muted'>Timeline:</span> {replayExport.timelineCount}</p>
+                                <p><span className='font-semibold text-ui-muted'>Delivery rows:</span> {replayExport.deliveryCount}</p>
+                                <p><span className='font-semibold text-ui-muted'>Action payloads:</span> {replayExport.nextActionCount}</p>
                             </div>
                             {replayExport.href ? (
-                                <Link href={replayExport.href} className='inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
+                                <Link href={replayExport.href} className='inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35'>
                                     <span className='truncate'>Open case package</span>
                                     <ExternalLink className='h-3.5 w-3.5 shrink-0' />
                                 </Link>
@@ -3423,17 +3423,17 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                             {allowedActions.map(action => (
                                 <span key={action.id} title={action.disabledReason} className={workflowStatusClass(action.enabled ? 'ready' : 'blocked')}>{action.label}</span>
                             ))}
-                            {!allowedActions.length && <span className='text-xs text-[#8fa0ba]'>Action matrix is clear for this case state.</span>}
+                            {!allowedActions.length && <span className='text-xs text-ui-muted'>Action matrix is clear for this case state.</span>}
                         </div>
                     </ContinuityBlock>
                     <ContinuityBlock title='Customer notification'>
-                        <p className='text-xs leading-5 text-[#8fa0ba]'>
+                        <p className='text-xs leading-5 text-ui-muted'>
                             {notificationContext?.notified
                                 ? `Recorded ${notificationContext.notificationCount} notification${notificationContext.notificationCount === 1 ? '' : 's'}; latest ${notificationContext.latest?.id || 'delivery'} via ${label(notificationContext.latest?.deliveryMode || notificationContext.modes?.[0] || 'webhook_delivery')}.`
                                 : detail ? 'Customer notification has not been recorded for this case yet.' : 'Delivery state streams after case detail loads.'}
                         </p>
                         {notificationLedgerHref ? (
-                            <Link href={notificationLedgerHref} className='mt-2 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
+                            <Link href={notificationLedgerHref} className='mt-2 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35'>
                                 <span className='truncate'>Open delivery history</span>
                                 <ExternalLink className='h-3.5 w-3.5 shrink-0' />
                             </Link>
@@ -3444,7 +3444,7 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                             {latestTimeline.slice(0, 3).map(row => (
                                 <ContinuityEvent key={row.id} title={row.title} detail={row.detail || row.rationale || row.eventType || 'case event'} at={row.at} />
                             ))}
-                            {!latestTimeline.length && <p className='text-xs leading-5 text-[#8fa0ba]'>Timeline stream updates with case events.</p>}
+                            {!latestTimeline.length && <p className='text-xs leading-5 text-ui-muted'>Timeline stream updates with case events.</p>}
                         </div>
                     </ContinuityBlock>
                 </div>
@@ -3455,8 +3455,8 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
 
 function ContinuityBlock({ title, children }: { title: string, children: React.ReactNode }) {
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
-            <h4 className='text-xs font-semibold uppercase text-[#8fa0ba]'>{title}</h4>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
+            <h4 className='text-xs font-semibold uppercase text-ui-muted'>{title}</h4>
             <div className='mt-2'>{children}</div>
         </div>
     )
@@ -3464,10 +3464,10 @@ function ContinuityBlock({ title, children }: { title: string, children: React.R
 
 function ContinuityEvent({ title, detail, at }: { title: string, detail: string, at?: string }) {
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#101827] p-2'>
-            <p className='text-xs font-semibold text-[#edf4ff]'>{title}</p>
-            <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>{detail}</p>
-            {at && <p className='mt-1 text-[11px] text-[#98a2b3]'>{relativeTime(at)}</p>}
+        <div className='rounded-lg border border-ui-border bg-ui-panel p-2'>
+            <p className='text-xs font-semibold text-ui-text'>{title}</p>
+            <p className='mt-1 text-xs leading-5 text-ui-muted'>{detail}</p>
+            {at && <p className='mt-1 text-[11px] text-ui-muted'>{relativeTime(at)}</p>}
         </div>
     )
 }
@@ -3627,7 +3627,7 @@ type CaseWorkflowEvent = {
 function DecisionButton({ busy = false, disabledReason, onClick, children }: { busy?: boolean, disabledReason?: string, onClick: () => void | Promise<void>, children: string }) {
     const disabled = busy || Boolean(disabledReason)
     return (
-        <button type='button' onClick={onClick} disabled={disabled} title={disabledReason} className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'>
+        <button type='button' onClick={onClick} disabled={disabled} title={disabledReason} className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'>
             {children}
         </button>
     )
@@ -4135,19 +4135,19 @@ function workbenchSummary(cases: WorkbenchCase[]) {
 
 function WorkbenchStat({ icon, label: statLabel, value, detail, tone, className = '' }: { icon: React.ReactNode, label: string, value: string, detail: string, tone: 'neutral' | 'good' | 'warn', className?: string }) {
     const toneClass = tone === 'good'
-        ? 'text-[#9cf0bc]'
+        ? 'text-ui-success'
         : tone === 'warn'
-            ? 'text-[#ffd58a]'
-            : 'text-[#9db8ff]'
+            ? 'text-ui-warning'
+            : 'text-ui-primary'
 
     return (
-        <div className={`rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2 ${className}`}>
+        <div className={`rounded-lg border border-ui-border bg-ui-panel px-3 py-2 ${className}`}>
             <div className='flex items-center justify-between gap-3'>
-                <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8fa0ba]'>{statLabel}</p>
+                <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-ui-muted'>{statLabel}</p>
                 <span className={toneClass}>{icon}</span>
             </div>
-            <p className='mt-2 text-lg font-semibold text-[#edf4ff]'>{value}</p>
-            <p className='mt-0.5 truncate text-xs text-[#8fa0ba]'>{detail}</p>
+            <p className='mt-2 text-lg font-semibold text-ui-text'>{value}</p>
+            <p className='mt-0.5 truncate text-xs text-ui-muted'>{detail}</p>
         </div>
     )
 }
@@ -4189,16 +4189,16 @@ function queueSummary(cases: WorkbenchCase[]) {
 }
 
 function severityClass(severity: string) {
-    if (severity === 'critical') return 'rounded-full bg-[#2c160f] px-2 py-0.5 text-xs font-semibold text-[#ffd0c2]'
-    if (severity === 'high') return 'rounded-full bg-[#2c160f] px-2 py-0.5 text-xs font-semibold text-[#ffd0c2]'
-    if (severity === 'medium') return 'rounded-full bg-[#162033] px-2 py-0.5 text-xs font-semibold text-[#7aa5ff]'
-    return 'rounded-full bg-[#15284b] px-2 py-0.5 text-xs font-semibold text-[#aab7cc]'
+    if (severity === 'critical') return 'rounded-full bg-ui-danger/10 px-2 py-0.5 text-xs font-semibold text-ui-danger'
+    if (severity === 'high') return 'rounded-full bg-ui-danger/10 px-2 py-0.5 text-xs font-semibold text-ui-danger'
+    if (severity === 'medium') return 'rounded-full bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-primary'
+    return 'rounded-full bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-muted'
 }
 
 function workflowStatusClass(status: WorkbenchWorkflowStep['status']) {
-    if (status === 'ready') return 'rounded-full bg-[#0c261c] px-2 py-0.5 text-[11px] font-semibold text-[#9cf0bc] '
-    if (status === 'blocked') return 'rounded-full bg-[#2a220f] px-2 py-0.5 text-[11px] font-semibold text-[#ffd879] '
-    return 'rounded-full bg-[#162033] px-2 py-0.5 text-[11px] font-semibold text-[#7aa5ff] '
+    if (status === 'ready') return 'rounded-full bg-ui-success/10 px-2 py-0.5 text-[11px] font-semibold text-ui-success '
+    if (status === 'blocked') return 'rounded-full bg-ui-warning/10 px-2 py-0.5 text-[11px] font-semibold text-ui-warning '
+    return 'rounded-full bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-primary '
 }
 
 function label(value: string) {
