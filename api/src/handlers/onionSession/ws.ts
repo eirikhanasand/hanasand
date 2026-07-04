@@ -32,6 +32,7 @@ const DEFAULT_WIDTH = 1280
 const DEFAULT_HEIGHT = 760
 const MAX_DURATION_MS = 60 * 60 * 1000
 const FRAME_INTERVAL_MS = 900
+const MAX_SCRIPT_SAMPLE = 3200
 
 export function handleOnionSessionSocket(connection: WebSocket, sessionId: string, defaultNetwork: 'tor' | 'regular' = 'tor') {
     let browser: Browser | null = null
@@ -219,6 +220,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await toolPage.goto(toolUrl, { waitUntil: 'domcontentloaded', timeout: 25_000 })
                 await toolPage.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined)
                 const buffer = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
+                const evidence = await collectPageEvidence(toolPage)
                 send({
                     type: 'tool_capture',
                     sessionId,
@@ -228,6 +230,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     title: await toolPage.title().catch(() => ''),
                     capturedAt: startedAt,
                     image: buffer ? buffer.toString('base64') : null,
+                    evidence,
                     target,
                 })
             } catch (error) {
@@ -384,7 +387,143 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             title: await page.title().catch(() => ''),
             capturedAt: new Date().toISOString(),
             reason,
+            evidence: await collectPageEvidence(page),
         })
+    }
+}
+
+async function collectPageEvidence(page: Page) {
+    const snapshot = await page.evaluate(() => {
+        const text = document.body?.innerText || ''
+        const scripts = Array.from(document.scripts).map((script) => ({
+            src: script.src || '',
+            inline: script.src ? '' : (script.textContent || '').slice(0, 12000),
+        }))
+        const comments: string[] = []
+        const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_COMMENT)
+        let node = walker.nextNode()
+        while (node && comments.length < 20) {
+            const value = node.textContent?.trim()
+            if (value) comments.push(value.slice(0, 500))
+            node = walker.nextNode()
+        }
+        const forms = Array.from(document.forms).map((form) => ({
+            action: form.action || '',
+            method: form.method || 'get',
+            inputs: Array.from(form.querySelectorAll('input, textarea, select')).map((input) => {
+                const element = input as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+                return {
+                    name: element.getAttribute('name') || '',
+                    type: element.getAttribute('type') || element.tagName.toLowerCase(),
+                    autocomplete: element.getAttribute('autocomplete') || '',
+                }
+            }).slice(0, 20),
+        })).slice(0, 10)
+        const anchors = Array.from(document.links).map((link) => link.href).slice(0, 80)
+
+        return {
+            text: text.slice(0, 8000),
+            scripts,
+            comments,
+            forms,
+            anchors,
+            meta: Array.from(document.querySelectorAll('meta')).map((meta) => ({
+                name: meta.getAttribute('name') || meta.getAttribute('property') || '',
+                content: meta.getAttribute('content') || '',
+            })).filter(item => item.name || item.content).slice(0, 40),
+        }
+    }).catch(() => ({
+        text: '',
+        scripts: [] as Array<{ src: string; inline: string }>,
+        comments: [] as string[],
+        forms: [] as Array<{ action: string; method: string; inputs: Array<{ name: string; type: string; autocomplete: string }> }>,
+        anchors: [] as string[],
+        meta: [] as Array<{ name: string; content: string }>,
+    }))
+
+    const joined = [
+        page.url(),
+        snapshot.text,
+        snapshot.comments.join('\n'),
+        snapshot.anchors.join('\n'),
+        snapshot.forms.map(form => `${form.action} ${form.inputs.map(input => `${input.name}:${input.type}`).join(' ')}`).join('\n'),
+        snapshot.scripts.map(script => `${script.src}\n${script.inline}`).join('\n'),
+    ].join('\n')
+    const scripts = snapshot.scripts.map((script, index) => inspectScript(script, index)).filter(script => script.src || script.sample || script.obfuscationScore > 0)
+    const indicators = extractIndicators(joined)
+    const obfuscatedScripts = scripts.filter(script => script.obfuscationScore >= 3)
+    const forms = snapshot.forms.map(form => ({
+        action: form.action,
+        method: form.method,
+        sensitiveInputCount: form.inputs.filter(input => /pass|token|otp|card|cc|email|user|login/i.test(`${input.name} ${input.type} ${input.autocomplete}`)).length,
+        inputCount: form.inputs.length,
+    }))
+    const suspiciousReasons = [
+        obfuscatedScripts.length ? `${obfuscatedScripts.length} obfuscated script candidate${obfuscatedScripts.length === 1 ? '' : 's'}` : '',
+        indicators.ips.length ? `${indicators.ips.length} IP indicator${indicators.ips.length === 1 ? '' : 's'}` : '',
+        forms.some(form => form.sensitiveInputCount > 0) ? 'sensitive form fields present' : '',
+        /wallet|seed phrase|connect wallet|password|invoice|captcha|download|verify account/i.test(snapshot.text) ? 'social-engineering language present' : '',
+    ].filter(Boolean)
+
+    return {
+        url: page.url(),
+        textExcerpt: snapshot.text.replace(/\s+/g, ' ').trim().slice(0, 900),
+        indicators,
+        comments: snapshot.comments.slice(0, 8),
+        forms,
+        scripts,
+        obfuscatedScripts,
+        verdict: suspiciousReasons.length >= 2 || obfuscatedScripts.length ? 'suspicious' : 'unknown',
+        confidence: Math.min(95, 35 + suspiciousReasons.length * 15 + obfuscatedScripts.length * 10),
+        reasons: suspiciousReasons.length ? suspiciousReasons : ['No high-signal malicious pattern was extracted from the rendered page yet.'],
+        deobfuscationTasks: obfuscatedScripts.map(script => ({
+            scriptId: script.id,
+            source: script.src || 'inline',
+            webcrackReady: Boolean(script.sample),
+            sample: script.sample,
+        })),
+    }
+}
+
+function inspectScript(script: { src: string; inline: string }, index: number) {
+    const value = script.inline || ''
+    const longStringCount = (value.match(/["'`][A-Za-z0-9+/=]{80,}["'`]/g) || []).length
+    const evalCount = (value.match(/\b(eval|Function|setTimeout|setInterval)\s*\(/g) || []).length
+    const atobCount = (value.match(/\b(atob|btoa|unescape|decodeURIComponent)\s*\(/g) || []).length
+    const hexEscapeCount = (value.match(/\\x[0-9a-f]{2}|\\u[0-9a-f]{4}/gi) || []).length
+    const charCodeCount = (value.match(/fromCharCode|charCodeAt/g) || []).length
+    const entropyHint = value.length > 600 ? Math.min(3, Math.floor(uniqueRatio(value) * 4)) : 0
+    const obfuscationScore = longStringCount + evalCount + atobCount + Math.min(3, Math.floor(hexEscapeCount / 8)) + charCodeCount + entropyHint
+    return {
+        id: `script_${index + 1}`,
+        src: script.src,
+        inlineBytes: value.length,
+        obfuscationScore,
+        reasons: [
+            longStringCount ? 'long encoded strings' : '',
+            evalCount ? 'dynamic execution' : '',
+            atobCount ? 'base64/URI decoding' : '',
+            hexEscapeCount ? 'hex/unicode escapes' : '',
+            charCodeCount ? 'character-code construction' : '',
+        ].filter(Boolean),
+        sample: value ? value.slice(0, MAX_SCRIPT_SAMPLE) : '',
+    }
+}
+
+function uniqueRatio(value: string) {
+    if (!value) return 0
+    return new Set(value).size / value.length
+}
+
+function extractIndicators(value: string) {
+    const domains = value.match(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi) || []
+    const ips = (value.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) || [])
+        .filter(ip => ip.split('.').every(part => Number(part) >= 0 && Number(part) <= 255))
+    const urls = value.match(/https?:\/\/[^\s"'<>]+/gi) || []
+    return {
+        domains: Array.from(new Set(domains.map(item => item.toLowerCase()))).slice(0, 80),
+        ips: Array.from(new Set(ips)).slice(0, 80),
+        urls: Array.from(new Set(urls)).slice(0, 80),
     }
 }
 
