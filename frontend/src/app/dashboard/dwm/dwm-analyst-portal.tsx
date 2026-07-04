@@ -588,7 +588,7 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
         <section data-dwm-workflow-snapshot className='border-b border-ui-border bg-ui-raised'>
             <div className='flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
                 <div>
-                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Action path</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Workflow</p>
                     <p className='mt-1 text-sm font-semibold text-ui-text'>Watchlist to source, alert, case, and delivery.</p>
                 </div>
                 <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-ui-muted'>
@@ -597,9 +597,9 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
             </div>
             <div className='border-t border-ui-border px-4 py-3'>
                 <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
-                    <p className='text-xs leading-5 text-ui-muted'>Use this path when a source match needs to become a customer case and delivery.</p>
+                    <p className='text-xs leading-5 text-ui-muted'>Use this workflow when a source match needs to become a customer case and delivery.</p>
                     <a href='#dwm-workflow-actions' className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
-                        Run path
+                        Run workflow
                     </a>
                 </div>
                 <div className='grid grid-cols-2 gap-x-3 gap-y-2 lg:grid-cols-3 2xl:grid-cols-6'>
@@ -898,7 +898,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                     <div>
                         <p className='text-xs font-semibold uppercase text-ui-muted'>Why this matters</p>
                         <p className='mt-2 text-sm leading-6 text-ui-muted'>{routingContext.reason}</p>
-                        <p className='mt-1 text-xs font-semibold text-ui-muted'>Customer-safe evidence: {stateLabel(routingContext.customerVisibleEvidence)} · Alert key {alert.webhookDelivery.dedupeKey}</p>
+                        <p className='mt-1 text-xs font-semibold text-ui-muted'>Customer-safe evidence: {stateLabel(routingContext.customerVisibleEvidence)} · Alert key deduplicated</p>
                     </div>
                 </div>
             </section>
@@ -942,7 +942,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                 <CaseBrief label='What happened' value={safeAlertSummary(alert)} />
                 <CaseBrief label='Next action' value={alert.recommendedAction} />
                 {alert.workflowNote && <CaseBrief label='Latest note' value={alert.workflowNote} />}
-                <CaseBrief label='Delivery destination' value={`${stateLabel(alert.webhookDelivery.recommendedRoute)} · ${alert.webhookDelivery.dedupeKey}`} />
+                <CaseBrief label='Delivery destination' value={`${stateLabel(alert.webhookDelivery.recommendedRoute)} · ${alert.webhookDelivery.dedupeKey ? 'deduplicated alert' : 'pending alert key'}`} />
             </section>
 
             <InvestigationTabs active={investigationTab} onChange={setInvestigationTab} />
@@ -1188,7 +1188,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
         <section data-dwm-workflow-spine className='rounded-lg border border-ui-border bg-ui-raised'>
             <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-ui-primary'>Action path</p>
+                    <p className='text-xs font-semibold uppercase text-ui-primary'>Workflow</p>
                     <h3 className='mt-0.5 text-base font-semibold text-ui-text'>Watchlist match to customer handoff</h3>
                 </div>
                 <a href='#dwm-workflow-actions' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
@@ -1881,7 +1881,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions }: { latestCaptures: 
             detail: newestCapture ? `${newestCapture.sourceName} ${relativeTimeLabel(newestCapture.collectedAt)}` : 'Approved source records appear after duplicate and safety checks.',
         },
         {
-            stage: 'Case path',
+            stage: 'Case link',
             state: 'Select or rebuild alert',
             action: 'Rebuild alerts',
             detail: 'Matches become reviewable alerts with evidence, provenance, and delivery state.',
@@ -2062,10 +2062,10 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
                             <div className='grid grid-cols-2 gap-2 text-[11px] text-ui-muted'>
                                 <p><span className='font-semibold text-ui-muted'>HTTP:</span> {delivery.httpStatus ?? (delivery.dryRun ? 'dry run' : 'pending')}</p>
                                 <p><span className='font-semibold text-ui-muted'>Attempt:</span> {delivery.attemptCount ?? 1}</p>
-                                <p className='col-span-2 break-all'><span className='font-semibold text-ui-muted'>Destination:</span> {delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || delivery.destinationId || 'redacted destination'}</p>
-                                <p className='break-all'><span className='font-semibold text-ui-muted'>Request:</span> {delivery.requestId || delivery.auditEventId || 'not linked'}</p>
-                                <p className='break-all'><span className='font-semibold text-ui-muted'>Alert key:</span> {delivery.dedupeKey}</p>
-                                <p className='break-all'><span className='font-semibold text-ui-muted'>Payload:</span> {delivery.payloadHash}</p>
+                                <p className='col-span-2 wrap-break-word'><span className='font-semibold text-ui-muted'>Destination:</span> {delivery.endpointHint || delivery.endpointHash ? 'configured destination' : delivery.webhookDestinationId || delivery.destinationId ? 'saved destination' : 'redacted destination'}</p>
+                                <p><span className='font-semibold text-ui-muted'>Request:</span> {delivery.requestId || delivery.auditEventId ? 'linked' : 'pending'}</p>
+                                <p><span className='font-semibold text-ui-muted'>Alert:</span> {delivery.dedupeKey ? 'deduplicated' : 'pending'}</p>
+                                <p><span className='font-semibold text-ui-muted'>Payload:</span> {delivery.payloadHash ? 'signed' : 'pending'}</p>
                                 <p><span className='font-semibold text-ui-muted'>Retry:</span> {delivery.nextRetryAt ? relativeTimeLabel(delivery.nextRetryAt) : retryStateLabel(delivery)}</p>
                                 <p><span className='font-semibold text-ui-muted'>Audit:</span> {delivery.auditEventId || 'pending'}</p>
                             </div>
