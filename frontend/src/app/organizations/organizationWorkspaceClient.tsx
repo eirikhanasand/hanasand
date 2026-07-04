@@ -1355,7 +1355,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
         {
             id: 'access',
             label: 'Access',
-            value: activeMembers.length ? `${activeMembers.length} active` : 'No active members',
+            value: activeMembers.length ? `${activeMembers.length} active` : 'Invite team',
             detail: adminMembers.length ? `${adminMembers.length} admin${adminMembers.length === 1 ? '' : 's'} · ${pendingInvites.length} pending` : 'Add an owner or admin',
             href: '#members',
             tone: adminMembers.length ? 'ready' : 'blocked',
@@ -1363,7 +1363,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
         {
             id: 'watchlists',
             label: 'Watchlists',
-            value: activeTerms.length ? `${activeTerms.length} active term${activeTerms.length === 1 ? '' : 's'}` : 'No active terms',
+            value: activeTerms.length ? `${activeTerms.length} active term${activeTerms.length === 1 ? '' : 's'}` : 'Add watch term',
             detail: bundle.watchlists.length ? `${bundle.watchlists.length} shared item${bundle.watchlists.length === 1 ? '' : 's'}` : 'Create a shared watchlist term',
             href: '#watchlists',
             tone: activeTerms.length ? 'ready' : 'blocked',
@@ -1371,7 +1371,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
         {
             id: 'delivery',
             label: 'Delivery',
-            value: configuredDestinations.length ? `${configuredDestinations.length} destination${configuredDestinations.length === 1 ? '' : 's'}` : 'Add route',
+            value: configuredDestinations.length ? `${configuredDestinations.length} destination${configuredDestinations.length === 1 ? '' : 's'}` : 'Set delivery',
             detail: failedDeliveries.length ? `${failedDeliveries.length} failed delivery` : bundle.deliveries.length ? `${bundle.deliveries.length} delivery event${bundle.deliveries.length === 1 ? '' : 's'}` : 'Test a Discord or webhook route',
             href: '#destinations',
             tone: failedDeliveries.length ? 'warning' : configuredDestinations.length ? 'ready' : 'blocked',
@@ -1379,7 +1379,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
         {
             id: 'cases',
             label: 'Cases',
-            value: bundle.alerts.length || routedCases.length ? `${bundle.alerts.length} alert${bundle.alerts.length === 1 ? '' : 's'} · ${routedCases.length} case${routedCases.length === 1 ? '' : 's'}` : 'Awaiting routed work',
+            value: bundle.alerts.length || routedCases.length ? `${bundle.alerts.length} alert${bundle.alerts.length === 1 ? '' : 's'} · ${routedCases.length} case${routedCases.length === 1 ? '' : 's'}` : 'Waiting for match',
             detail: organization.tenantId ? `Tenant ${organization.tenantId}` : 'Set alert matching scope',
             href: '#delivery-history',
             tone: bundle.alerts.length || routedCases.length ? 'ready' : 'neutral',
