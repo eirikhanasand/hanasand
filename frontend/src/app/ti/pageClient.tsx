@@ -340,9 +340,8 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
                         </div>
                         <div className='grid min-w-0 content-start gap-3' data-ti-actor-visual='true'>
-                            <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                             {selected ? (
-                                <section data-ti-actor-evidence-spotlight='true' className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel'>
+                                <section id='ti-selected-evidence' data-ti-actor-evidence-spotlight='true' className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel'>
                                     <div className='flex flex-wrap items-start justify-between gap-3'>
                                         <div className='min-w-0'>
                                             <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Selected evidence</p>
@@ -357,8 +356,8 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <EvidenceMetric label='First seen' value={selected.timestamp} />
                                     </div>
                                     <div className='flex flex-wrap gap-2'>
-                                        <a href='#ti-selected-evidence' className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'>
-                                            Inspect evidence
+                                        <a href='#ti-evidence-drilldown' className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'>
+                                            Source context
                                         </a>
                                         <a href='#ti-actions' className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-text bg-ui-text px-3 text-xs font-semibold text-ui-canvas transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-text dark:bg-ui-text dark:text-ui-canvas'>
                                             Review actions
@@ -366,6 +365,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     </div>
                                 </section>
                             ) : null}
+                            <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                         </div>
                     </div>
                 </div>
@@ -461,7 +461,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                     <main className='order-1 min-w-0 p-4 lg:order-none'>
                         {selected ? (
                             <div className='grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden'>
-                                <section id='ti-selected-evidence' data-ti-detail='true' className='rounded-lg border border-ui-border bg-ui-panel p-4 dark:border-ui-border dark:bg-ui-panel'>
+                                <section id='ti-evidence-drilldown' data-ti-detail='true' className='rounded-lg border border-ui-border bg-ui-panel p-4 dark:border-ui-border dark:bg-ui-panel'>
                                     <div className='flex flex-wrap items-start justify-between gap-3'>
                                         <div className='min-w-0'>
                                             <div className='flex flex-wrap items-center gap-2'>
@@ -9626,7 +9626,7 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                         </svg>
                     </>
                 ) : (
-                    <MapCoverageFallback regions={regionalAreas} actor={actor} actionability={actionability} />
+                    <MapCoverageFallback regions={regionalAreas} actor={actor} actionability={actionability} compact={compact} />
                 )}
             </div>
             {hasPoints ? (
@@ -9653,13 +9653,13 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
     )
 }
 
-function MapCoverageFallback({ regions, actor, actionability }: { regions: string[]; actor: TiActorIntelligenceProfile; actionability: TiActionabilityModel }) {
-    const families = actor.sourceCoverage.sourceFamilies.slice(0, 4)
-    const gaps = actor.sourceCoverage.missing.slice(0, 3)
-    const sourceRows = actor.provenanceRows.slice(0, 3)
+function MapCoverageFallback({ regions, actor, actionability, compact = false }: { regions: string[]; actor: TiActorIntelligenceProfile; actionability: TiActionabilityModel; compact?: boolean }) {
+    const families = actor.sourceCoverage.sourceFamilies.slice(0, compact ? 3 : 4)
+    const gaps = actor.sourceCoverage.missing.slice(0, compact ? 1 : 3)
+    const sourceRows = compact ? [] : actor.provenanceRows.slice(0, 3)
     return (
-        <div data-ti-geo-coverage-fallback='true' className='grid gap-3 bg-ui-panel p-4 dark:bg-ui-canvas'>
-            <div className='grid gap-3 md:grid-cols-3'>
+        <div data-ti-geo-coverage-fallback='true' className={`${compact ? 'gap-2 p-3' : 'gap-3 p-4'} grid bg-ui-panel dark:bg-ui-canvas`}>
+            <div className={`grid gap-2 ${compact ? 'sm:grid-cols-3' : 'md:grid-cols-3'}`}>
                 <CoverageFallbackMetric label='Regions' value={regions.length ? regions.join(', ') : 'No country-level rows'} />
                 <CoverageFallbackMetric label='Source rows' value={`${actor.sourceCoverage.totalRows}`} />
                 <CoverageFallbackMetric label='Newest' value={actor.sourceCoverage.latestReportDate ? formatDate(actor.sourceCoverage.latestReportDate) : formatDate(actor.lastSeen)} />
@@ -9685,24 +9685,28 @@ function MapCoverageFallback({ regions, actor, actionability }: { regions: strin
                     </div>
                 ))}
             </div>
-            <div className='grid gap-2 sm:grid-cols-2'>
-                {sourceRows.map(row => (
-                    <div key={`${row.sourceName}-${row.provenance}`} className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs dark:border-ui-border dark:bg-ui-raised'>
-                        <p className='wrap-break-word font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}</p>
-                        <p className='mt-1 wrap-break-word text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.shownBecause)}</p>
-                        <p className='mt-2 text-[11px] text-ui-muted dark:text-ui-muted'>{[row.reportDate ? formatDate(row.reportDate) : '', typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : '', row.captureId ? `capture ${row.captureId}` : 'capture needed'].filter(Boolean).join(' · ')}</p>
+            {!compact ? (
+                <>
+                    <div className='grid gap-2 sm:grid-cols-2'>
+                        {sourceRows.map(row => (
+                            <div key={`${row.sourceName}-${row.provenance}`} className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs dark:border-ui-border dark:bg-ui-raised'>
+                                <p className='wrap-break-word font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}</p>
+                                <p className='mt-1 wrap-break-word text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.shownBecause)}</p>
+                                <p className='mt-2 text-[11px] text-ui-muted dark:text-ui-muted'>{[row.reportDate ? formatDate(row.reportDate) : '', typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : '', row.captureId ? `capture ${row.captureId}` : 'capture needed'].filter(Boolean).join(' · ')}</p>
+                            </div>
+                        ))}
+                        {!sourceRows.length ? (
+                            <div className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-3 text-xs text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>
+                                Add source name, report date, and provenance before using geography for customer routing.
+                            </div>
+                        ) : null}
                     </div>
-                ))}
-                {!sourceRows.length ? (
-                    <div className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-3 text-xs text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>
-                        Add source name, report date, and provenance before using geography for customer routing.
+                    <div className='flex min-w-0 flex-wrap gap-2'>
+                        <span className={sourceHealthChipClass(gaps.length ? 'review' : 'ready')}>{gaps.length ? `${gaps.length} source question${gaps.length === 1 ? '' : 's'}` : 'source context ready'}</span>
+                        <span className={sourceHealthChipClass(actionability.watchlistRelevance.terms.length ? 'ready' : 'review')}>{actionability.watchlistRelevance.terms.length ? `${actionability.watchlistRelevance.terms.length} watch terms` : 'watch term needed'}</span>
                     </div>
-                ) : null}
-            </div>
-            <div className='flex min-w-0 flex-wrap gap-2'>
-                <span className={sourceHealthChipClass(gaps.length ? 'review' : 'ready')}>{gaps.length ? `${gaps.length} source question${gaps.length === 1 ? '' : 's'}` : 'source context ready'}</span>
-                <span className={sourceHealthChipClass(actionability.watchlistRelevance.terms.length ? 'ready' : 'review')}>{actionability.watchlistRelevance.terms.length ? `${actionability.watchlistRelevance.terms.length} watch terms` : 'watch term needed'}</span>
-            </div>
+                </>
+            ) : null}
         </div>
     )
 }
