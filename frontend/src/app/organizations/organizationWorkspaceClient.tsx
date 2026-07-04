@@ -534,6 +534,8 @@ export default function OrganizationWorkspaceClient() {
 
     const saveSettings = () => selectedOrganization && runAction('save-settings', async () => {
         if (!settingsDirty) return 'No settings changes.'
+        const validationMessage = settingsValidationMessage(settingsDraft)
+        if (validationMessage) throw new Error(validationMessage)
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/settings`, {
             method: 'PUT',
             body: JSON.stringify(settingsDraft),
@@ -1241,6 +1243,8 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
 }
 
 function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canManage, busy, onSave, onReset }: { settingsDraft: OrganizationSettings, setSettingsDraft: (next: OrganizationSettings) => void, settingsDirty: boolean, canManage: boolean, busy: string, onSave: () => void, onReset: () => void }) {
+    const validationMessage = settingsValidationMessage(settingsDraft)
+    const saving = busy === 'save-settings'
     return (
         <details id='settings' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-settings-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
@@ -1256,13 +1260,15 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
                 <SelectField label='Alert visibility' value={settingsDraft.alertVisibilityPolicy || 'members'} options={alertPolicies} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, alertVisibilityPolicy: value })} />
                 <SelectField label='Lifecycle' value={settingsDraft.lifecycleStatus || 'active'} options={lifecycleStatuses} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, lifecycleStatus: value })} />
                 <Field label='Retention days' type='number' value={String(settingsDraft.retentionDays || 365)} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, retentionDays: Number(value) || 365 })} />
+                {validationMessage && <p className='rounded-md bg-ui-danger/10 px-3 py-2 text-xs font-semibold text-ui-danger dark:bg-ui-danger/10 dark:text-ui-danger md:col-span-2'>{validationMessage}</p>}
             </div>
             <div className='flex flex-wrap items-center justify-end gap-2 border-t border-ui-border px-4 py-3 dark:border-ui-border'>
+                {saving && <InlineBusy label='Saving settings' marker='data-org-settings-busy' />}
                 {settingsDirty && <span className='mr-auto rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>Unsaved changes</span>}
                 <button type='button' className={secondaryButtonClass} disabled={!canManage || !settingsDirty || Boolean(busy)} onClick={onReset}>
                     Reset
                 </button>
-                <button type='button' className={primaryButtonClass} disabled={!canManage || !settingsDirty || Boolean(busy)} onClick={onSave}>
+                <button type='button' className={primaryButtonClass} disabled={!canManage || !settingsDirty || Boolean(validationMessage) || Boolean(busy)} onClick={onSave}>
                     <Settings className='h-4 w-4' />
                     Save settings
                 </button>
@@ -2544,6 +2550,14 @@ function normalizeSettings(settings: OrganizationSettings = {}) {
         lifecycleStatus: settings.lifecycleStatus || 'active',
         retentionDays: Number(settings.retentionDays || 365),
     }
+}
+
+function settingsValidationMessage(settings: OrganizationSettings = {}) {
+    const slug = (settings.slug || '').trim()
+    const retentionDays = Number(settings.retentionDays || 365)
+    if (slug && slugifyOrganizationName(slug) !== slug) return 'Use lowercase letters, numbers, and hyphens for slug.'
+    if (!Number.isFinite(retentionDays) || retentionDays < 30 || retentionDays > 3650) return 'Retention days must be between 30 and 3650.'
+    return ''
 }
 
 function settingsEqual(left: OrganizationSettings = {}, right: OrganizationSettings = {}) {
