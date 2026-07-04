@@ -1103,10 +1103,10 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
                 <div className='min-w-0'>
                     <h2 className='flex items-center gap-2 text-base font-semibold text-ui-primary dark:text-ui-primary'>
                         <CircleAlert className='h-4 w-4 text-ui-primary dark:text-ui-primary' />
-                        DWM context is scoped to this organization
+                        DWM routing for this organization
                     </h2>
                     <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>
-                        Use this workspace to manage the watchlist, delivery route, and team access for the selected {selectedSubject.type}.
+                        Manage the selected {selectedSubject.type}, delivery route, and team access from one scoped view.
                     </p>
                     <div className='mt-3 flex flex-wrap gap-2'>
                         {scopedValues.map(([label, value]) => (
@@ -1205,10 +1205,10 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                 <div className='min-w-0'>
                     <h2 className='flex items-center gap-2 text-base font-semibold text-ui-text dark:text-white'>
                         <ShieldCheck className='h-4 w-4 text-ui-primary' />
-                        Workspace launch path
+                        Notification setup
                     </h2>
                     <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>
-                        {completed}/{rows.length} complete. Finish the next required action, then validate delivery from a real alert.
+                        {completed}/{rows.length} complete. Keep watchlists, destinations, and alert context ready for safe replay.
                     </p>
                 </div>
                 <div className='rounded-lg border border-ui-primary/35 bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
