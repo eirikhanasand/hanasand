@@ -2114,26 +2114,44 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
             <div className='mt-4 grid gap-2'>
                 {activity.length === 0 && <EmptyLine text='No actions in this browser session yet.' />}
                 {activity.length > 0 && selectedRows.length === 0 && selectedSubject.type !== 'organization' && <EmptyLine text='No activity for the selected row.' />}
-                {visibleRows.map(item => (
-                    <div key={item.id} className='rounded-lg border border-ui-border p-3 dark:border-ui-border'>
-                        <div className='flex items-start gap-2'>
-                            {item.ok ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-ui-danger' />}
-                            <div className='min-w-0 flex-1'>
-                                <div className='flex flex-wrap items-center gap-2'>
-                                    <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(item.title) || item.title}</p>
-                                    {item.subjectType && <span className='rounded-md bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>{item.subjectType}</span>}
-                                </div>
-                                <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(item.detail) || item.detail}</p>
-                                {item.metadata && item.metadata.length > 0 && (
-                                    <div className='mt-2 grid gap-1 text-[11px] text-ui-muted dark:text-ui-muted'>
-                                        {item.metadata.slice(0, 3).map(row => <span key={`${item.id}-${row.label}`} className='truncate'>{row.label}: {sanitizeOrganizationDisplayCopy(row.value) || row.value}</span>)}
+                {visibleRows.map(item => {
+                    const itemSubject = activitySubjectFromItem(item, organization.id)
+                    const selected = itemSubject?.type === selectedSubject.type && itemSubject.id === selectedSubject.id
+                    return (
+                        <div
+                            key={item.id}
+                            role='button'
+                            tabIndex={0}
+                            aria-pressed={selected}
+                            className={`rounded-lg border p-3 text-left transition ${selected ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-panel' : 'border-ui-border hover:bg-ui-raised dark:border-ui-border dark:hover:bg-ui-panel'}`}
+                            onClick={() => itemSubject && onSelectSubject(itemSubject)}
+                            onKeyDown={event => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault()
+                                    if (itemSubject) onSelectSubject(itemSubject)
+                                }
+                            }}
+                            data-org-activity-row='true'
+                        >
+                            <div className='flex items-start gap-2'>
+                                {item.ok ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-ui-danger' />}
+                                <div className='min-w-0 flex-1'>
+                                    <div className='flex flex-wrap items-center gap-2'>
+                                        <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(item.title) || item.title}</p>
+                                        {item.subjectType && <span className='rounded-md bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>{item.subjectType}</span>}
                                     </div>
-                                )}
-                                <p className='mt-2 text-xs text-ui-muted dark:text-ui-muted'>{formatDate(item.at)}</p>
+                                    <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(item.detail) || item.detail}</p>
+                                    {item.metadata && item.metadata.length > 0 && (
+                                        <div className='mt-2 grid gap-1 text-[11px] text-ui-muted dark:text-ui-muted'>
+                                            {item.metadata.slice(0, 3).map(row => <span key={`${item.id}-${row.label}`} className='truncate'>{row.label}: {sanitizeOrganizationDisplayCopy(row.value) || row.value}</span>)}
+                                        </div>
+                                    )}
+                                    <p className='mt-2 text-xs text-ui-muted dark:text-ui-muted'>{formatDate(item.at)}</p>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    )
+                })}
             </div>
         </section>
     )
@@ -2567,6 +2585,11 @@ function activitySubjectFromRowKey(rowKey: string | undefined, organizationId: s
     if (rowKey.startsWith('watchlist-')) return { type: 'watchlist', id: rowKey.replace(/^watchlist-/, '') }
     if (rowKey.startsWith('destination-')) return { type: 'destination', id: rowKey.replace(/^destination-/, '') }
     return organizationId ? { type: 'organization', id: organizationId } : null
+}
+
+function activitySubjectFromItem(item: ActivityItem, organizationId: string): ActivitySubject {
+    if (item.subjectType && item.subjectId) return { type: item.subjectType, id: item.subjectId }
+    return activitySubjectFromRowKey(item.id, organizationId) || { type: 'organization', id: organizationId }
 }
 
 function activityItemSubject(subject: ActivitySubject | null) {

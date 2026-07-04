@@ -49,6 +49,9 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('function stopRowSelectionKeys')
     expect(page).toContain('onKeyDown={stopRowSelectionKeys}')
     expect(page).toContain('event.stopPropagation()')
+    expect(page).toContain('data-org-activity-row=\'true\'')
+    expect(page).toContain('activitySubjectFromItem(item, organization.id)')
+    expect(page).toContain('onClick={() => itemSubject && onSelectSubject(itemSubject)}')
 
     expect(page).toContain('bg-ui-text px-4 text-sm font-semibold text-ui-canvas')
     expect(page).not.toContain('dark:text-white')
