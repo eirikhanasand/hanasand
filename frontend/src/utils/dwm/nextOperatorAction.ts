@@ -28,7 +28,7 @@ export function dwmNextOperatorAction(input: DwmNextOperatorActionInput): DwmNex
     if (input.reviewState === 'resolved' || input.deliveryState === 'muted' || input.reviewState === 'false_positive') {
         return {
             kind: 'reopen',
-            label: 'Reopen if this still needs work',
+            label: 'Reopen for review',
             detail: 'This alert is no longer active. Reopen it only if new evidence or a customer request requires review.',
             cta: 'Reopen',
             disabled: !input.reopenReady,

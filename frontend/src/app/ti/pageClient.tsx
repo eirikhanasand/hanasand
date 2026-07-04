@@ -6202,8 +6202,8 @@ function TopEvidenceQueuePreview({ items, selectedId, onSelect }: { items: Analy
         <section data-ti-top-evidence-queue='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex min-w-0 items-center justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Evidence queue</p>
-                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Top findings with source basis and handoff state.</p>
+                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Evidence review</p>
+                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Prioritized findings with source basis and analyst context.</p>
                 </div>
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>{items.length} rows</span>
             </div>
