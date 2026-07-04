@@ -12,6 +12,7 @@ const publicRoutes = [
     '/developers',
     '/eirik',
     '/eirik/motivation',
+    '/pwned',
     '/pricing',
     '/privacy',
     '/solutions',

@@ -32,15 +32,20 @@ test('public enterprise pages avoid casual competitive and procurement copy', as
     }
 })
 
-test('public buyer navigation keeps password utility out of the primary monitoring journey', async () => {
+test('public buyer navigation keeps Bloom hash lookup discoverable without raw-secret framing', async () => {
     const header = await readFile(path.join(root, 'src/components/header/header.tsx'), 'utf8')
     const footer = await readFile(path.join(root, 'src/components/footer/footer.tsx'), 'utf8')
     const sitemap = await readFile(path.join(root, 'src/app/sitemap.ts'), 'utf8')
+    const pwnedPage = await readFile(path.join(root, 'src/app/pwned/pageClient.tsx'), 'utf8')
+    const pwnedClient = await readFile(path.join(root, 'src/utils/pwned/checkHash.ts'), 'utf8')
 
-    expect(header).not.toContain('Password Exposure Utility')
-    expect(header).not.toContain('Password exposure utility')
-    expect(header).not.toContain("href: '/pwned'")
-    expect(footer).not.toContain('Password Utility')
-    expect(footer).not.toContain("href: '/pwned'")
-    expect(sitemap).not.toContain("'/pwned'")
+    expect(header).toContain('Bloom Hash Exposure Lookup')
+    expect(header).toMatch(/href: '\/pwned'/)
+    expect(footer).toContain('Bloom Hash Lookup')
+    expect(footer).toMatch(/href: '\/pwned'/)
+    expect(sitemap).toMatch(/'\/pwned'/)
+    expect(pwnedPage).toContain('SHA-1 hash')
+    expect(pwnedPage).toContain('This page does not ask for the underlying secret.')
+    expect(pwnedClient).toContain('Enter a complete 40-character SHA-1 hash.')
+    expect(pwnedClient).not.toContain('window.crypto.subtle.digest')
 })
