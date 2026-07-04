@@ -6128,13 +6128,13 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
 
 function ActorSummaryFact({ icon, label, value, meta }: { icon: ReactNode; label: string; value: string; meta: string }) {
     return (
-        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 dark:border-[#273244] dark:bg-[#131c29]'>
-            <p className='inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>
-                <span className='shrink-0 text-[#3056d3] dark:text-[#9ab3ff]'>{icon}</span>
+        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 dark:border-ui-border dark:bg-ui-raised'>
+            <p className='inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>
+                <span className='shrink-0 text-ui-primary dark:text-ui-primary'>{icon}</span>
                 <span className='truncate'>{label}</span>
             </p>
-            <p className='mt-1 wrap-break-word text-sm font-semibold leading-5 text-[#171a21] dark:text-[#eef4ff]'>{value}</p>
-            <p className='mt-1 wrap-break-word text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>{meta}</p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{value}</p>
+            <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{meta}</p>
         </div>
     )
 }

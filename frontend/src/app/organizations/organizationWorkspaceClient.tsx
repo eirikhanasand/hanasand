@@ -911,6 +911,7 @@ export default function OrganizationWorkspaceClient() {
                                         focus={requestedFocus}
                                     />
                                 )}
+                                <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} canManage={canManage} />
                                 <OrgActionStrip
                                     alertId={selectedAlertId}
                                     canManage={canManage}
@@ -988,6 +989,84 @@ export default function OrganizationWorkspaceClient() {
                         )}
                     </main>
                 </div>
+            </div>
+        </section>
+    )
+}
+
+function WorkspaceHealthStrip({ organization, bundle, canManage }: { organization: OrganizationSummary, bundle: OrgBundle, canManage: boolean }) {
+    const activeMembers = bundle.members.filter(member => member.status === 'active')
+    const adminMembers = bundle.members.filter(member => member.status === 'active' && (member.role === 'owner' || member.role === 'admin'))
+    const pendingInvites = bundle.invites.filter(invite => invite.status === 'pending')
+    const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active') === 'active')
+    const configuredDestinations = bundle.webhooks.filter(destination => destination.deliveryReady || destination.status === 'active' || destination.status === 'configured')
+    const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status === 'failed' || Boolean(delivery.error))
+    const routedCases = bundle.cases.filter(item => item.status !== 'closed')
+    const rows = [
+        {
+            id: 'access',
+            label: 'Access',
+            value: activeMembers.length ? `${activeMembers.length} active` : 'No active members',
+            detail: adminMembers.length ? `${adminMembers.length} admin${adminMembers.length === 1 ? '' : 's'} · ${pendingInvites.length} pending` : 'Add an owner or admin',
+            href: '#members',
+            tone: adminMembers.length ? 'ready' : 'blocked',
+        },
+        {
+            id: 'watchlists',
+            label: 'Watchlists',
+            value: activeTerms.length ? `${activeTerms.length} active term${activeTerms.length === 1 ? '' : 's'}` : 'No active terms',
+            detail: bundle.watchlists.length ? `${bundle.watchlists.length} shared item${bundle.watchlists.length === 1 ? '' : 's'}` : 'Create a shared watchlist term',
+            href: '#watchlists',
+            tone: activeTerms.length ? 'ready' : 'blocked',
+        },
+        {
+            id: 'delivery',
+            label: 'Delivery',
+            value: configuredDestinations.length ? `${configuredDestinations.length} destination${configuredDestinations.length === 1 ? '' : 's'}` : 'No destination',
+            detail: failedDeliveries.length ? `${failedDeliveries.length} failed delivery` : bundle.deliveries.length ? `${bundle.deliveries.length} delivery event${bundle.deliveries.length === 1 ? '' : 's'}` : 'Test a Discord or webhook route',
+            href: '#destinations',
+            tone: failedDeliveries.length ? 'warning' : configuredDestinations.length ? 'ready' : 'blocked',
+        },
+        {
+            id: 'cases',
+            label: 'Cases',
+            value: bundle.alerts.length || routedCases.length ? `${bundle.alerts.length} alert${bundle.alerts.length === 1 ? '' : 's'} · ${routedCases.length} case${routedCases.length === 1 ? '' : 's'}` : 'No routed work',
+            detail: organization.tenantId ? `Tenant ${organization.tenantId}` : 'Waiting for org-scoped alert matches',
+            href: '#delivery-history',
+            tone: bundle.alerts.length || routedCases.length ? 'ready' : 'neutral',
+        },
+    ] as const
+
+    return (
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-health-strip='true'>
+            <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+                <div className='min-w-0'>
+                    <h2 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
+                        <ShieldCheck className='h-4 w-4 text-ui-primary' />
+                        Workspace health
+                    </h2>
+                    <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayName(organization)} · {canManage ? 'admin controls enabled' : 'read-only access'}</p>
+                </div>
+                <a href='#audit' className={secondaryButtonClass}>
+                    <ExternalLink className='h-4 w-4' />
+                    Activity
+                </a>
+            </div>
+            <div className='mt-3 grid gap-2 md:grid-cols-4'>
+                {rows.map(row => (
+                    <a
+                        key={row.id}
+                        href={row.href}
+                        className={`min-w-0 rounded-lg border px-3 py-2 transition hover:border-ui-primary/35 ${row.tone === 'ready' ? 'border-ui-success/35 bg-ui-success/10 dark:border-ui-success/35 dark:bg-ui-success/10' : row.tone === 'warning' ? 'border-ui-warning/35 bg-ui-warning/10 dark:border-ui-warning/35 dark:bg-ui-warning/10' : row.tone === 'blocked' ? 'border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-canvas' : 'border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-panel'}`}
+                    >
+                        <span className='flex items-center justify-between gap-2'>
+                            <span className='truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
+                            <StatusPill status={row.tone === 'ready' ? 'ready' : row.tone === 'warning' ? 'review' : row.tone === 'blocked' ? 'needs action' : 'waiting'} />
+                        </span>
+                        <span className='mt-2 block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
+                        <span className='mt-1 block truncate text-xs text-ui-muted dark:text-ui-muted'>{row.detail}</span>
+                    </a>
+                ))}
             </div>
         </section>
     )

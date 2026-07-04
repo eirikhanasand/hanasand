@@ -31,8 +31,14 @@ for (const token of [
     'stroke=\'#d92d20\'',
     'fill=\'#ffffff\'',
     'dark:fill-[#0b111a]',
+    'border-[#eef1f5]',
+    'bg-[#fbfcfe]',
+    'dark:bg-[#131c29]',
+    'text-[#586274]',
+    'text-[#171a21]',
+    'text-[#eef4ff]',
 ]) {
-    assert.equal(tiPage.includes(token), false, `Public TI actor map should use semantic SVG tokens instead of ${token}`)
+    assert.equal(tiPage.includes(token), false, `Public TI should use semantic tokens instead of ${token}`)
 }
 
 const riskyLightChipPatterns = [

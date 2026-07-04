@@ -62,7 +62,7 @@ export default function TestStatsPageClient() {
                 <div className='flex items-start justify-between gap-3 border-b border-ui-border pb-3'>
                     <div>
                         <div className='flex items-center gap-2'>
-                            <ChartColumn className='h-4 w-4 stroke-[#3056d3]' />
+                            <ChartColumn className='h-4 w-4 text-ui-primary' />
                             <h1 className='text-base font-semibold text-ui-text'>Service check results</h1>
                         </div>
                         <p className='mt-1.5 text-sm leading-5 text-ui-muted'>Find a check by scan id, then open the full report.</p>
@@ -84,7 +84,7 @@ export default function TestStatsPageClient() {
                     <button
                         type='submit'
                         disabled={!canSearch}
-                        className='h-10 w-full rounded-lg bg-ui-text px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
+                        className='h-10 w-full rounded-lg bg-ui-text px-3 text-sm font-semibold text-ui-canvas transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
                     >
                         Search
                     </button>
