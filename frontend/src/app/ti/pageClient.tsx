@@ -875,7 +875,7 @@ function SelectedEvidenceRail({
                     </div>
                     {continuityGaps.length ? (
                         <div data-ti-continuity-gaps='true' className='grid min-w-0 gap-1 rounded-md border border-ui-warning/25 bg-ui-warning/10 p-2'>
-                            <p className='text-[10px] font-semibold uppercase text-ui-warning dark:text-ui-warning'>Handoff gaps</p>
+                            <p className='text-[10px] font-semibold uppercase text-ui-warning dark:text-ui-warning'>Missing links</p>
                             <div className='flex min-w-0 flex-wrap gap-1'>
                                 {continuityGaps.map(gap => (
                                     <span key={gap} className='max-w-full wrap-break-word rounded-md border border-ui-warning/25 bg-ui-panel px-1.5 py-1 text-[10px] font-semibold leading-4 text-ui-warning dark:bg-ui-panel dark:text-ui-warning'>
