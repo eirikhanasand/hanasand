@@ -1905,7 +1905,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions }: { latestCaptures: 
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-4 py-3'>
                     <div>
                         <p className='text-[10px] font-semibold uppercase text-ui-primary'>Exposure operations</p>
-                        <h3 className='mt-1 text-base font-semibold text-ui-text'>No alert is waiting for review</h3>
+                        <h3 className='mt-1 text-base font-semibold text-ui-text'>Monitoring for reviewable alerts</h3>
                     </div>
                     <span className='rounded-full border border-ui-success/35 bg-ui-success/10 px-2.5 py-1 text-xs font-semibold text-ui-success'>Monitoring live</span>
                 </div>

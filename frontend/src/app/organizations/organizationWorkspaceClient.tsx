@@ -2156,7 +2156,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                         <input value={draft.url} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, url: event.target.value } }))} className={inputClass} placeholder='Leave blank to keep the stored redacted endpoint' />
                                         {draftUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
                                     </label>
-                                    {!draftUrlInvalid && !draftNameDuplicate && !draftChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-3'>No changes to save.</p>}
+                                    {!draftUrlInvalid && !draftNameDuplicate && !draftChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-3'>Destination settings are current.</p>}
                                     <div className='flex flex-wrap gap-2 md:col-span-3' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                         <button type='button' className={primaryButtonClass} disabled={draftUrlInvalid || draftNameDuplicate || !draftChanged || Boolean(busy)} onClick={() => onUpdate(destination, draft)}>
                                             <CheckCircle2 className='h-4 w-4' />
@@ -2366,7 +2366,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                         <textarea value={edit.notes} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [item.id]: { ...edit, notes: event.target.value } }))} className={`${inputClass} min-h-20 resize-y`} />
                                     </label>
                                     {editDuplicate && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning md:col-span-2'>This term already exists in this organization.</p>}
-                                    {!editDuplicate && !editChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-2'>No changes to save.</p>}
+                                    {!editDuplicate && !editChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-2'>Watchlist term is current.</p>}
                                     <div className='flex flex-wrap gap-2 md:col-span-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                         <button type='button' className={primaryButtonClass} disabled={!edit.value.trim() || editDuplicate || !editChanged || Boolean(busy)} onClick={() => onSave(item)}>
                                             <CheckCircle2 className='h-4 w-4' />
@@ -2388,7 +2388,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                                 <StatusPill status={item.status} />
                                             </div>
                                             <p className='mt-2 line-clamp-2 break-words text-base font-semibold text-ui-text dark:text-ui-text'>{item.value}</p>
-                                            <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{item.notes || 'No notes.'}</p>
+                                            <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{item.notes || 'Add routing context.'}</p>
                                             <div className='mt-2 grid gap-1 text-xs text-ui-muted dark:text-ui-muted sm:grid-cols-2'>
                                                 <span className='truncate'>Org: {sanitizeOrganizationDisplayCopy(item.organizationId || organization.id)}</span>
                                                 <span className='truncate'>Owner: {item.updatedBy || item.createdBy || 'system'}</span>
@@ -2738,7 +2738,7 @@ function DeliveryReference({ delivery, organizationId }: { delivery: DeliveryRow
         <div className='grid gap-1 text-xs'>
             {delivery.caseId ? <a href={caseHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>Case {delivery.caseId}</a> : null}
             {delivery.alertId ? <a href={alertHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>Alert {delivery.alertId}</a> : null}
-            {!delivery.caseId && !delivery.alertId ? <span className='truncate text-ui-muted dark:text-ui-muted'>No alert attached</span> : null}
+            {!delivery.caseId && !delivery.alertId ? <span className='truncate text-ui-muted dark:text-ui-muted'>Attach alert after replay</span> : null}
             <span className='truncate text-ui-muted dark:text-ui-muted'>{delivery.watchlistItemId || delivery.watchlistId || delivery.actionId || 'watchlist pending'}</span>
         </div>
     )
