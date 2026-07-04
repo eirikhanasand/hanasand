@@ -39,13 +39,43 @@ test.describe('homepage surface border theme tokens', () => {
 
                 function parseRgb(value: string) {
                     const match = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/)
-                    if (!match) throw new Error(`Unsupported color: ${value}`)
+                    if (!match) return parseOklab(value)
                     return {
                         r: Number(match[1]),
                         g: Number(match[2]),
                         b: Number(match[3]),
                         a: match[4] === undefined ? 1 : Number(match[4]),
                     }
+                }
+
+                function parseOklab(value: string) {
+                    const match = value.match(/oklab\(\s*([-\d.]+%?)\s+([-\d.]+%?)\s+([-\d.]+%?)(?:\s*\/\s*([-\d.]+%?))?\s*\)/)
+                    if (!match) throw new Error(`Unsupported color: ${value}`)
+
+                    const L = parseCssNumber(match[1], 1)
+                    const a = parseCssNumber(match[2], 0.4)
+                    const b = parseCssNumber(match[3], 0.4)
+                    const alpha = match[4] === undefined ? 1 : parseCssNumber(match[4], 1)
+                    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+                    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+                    const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
+
+                    return {
+                        r: linearToRgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+                        g: linearToRgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+                        b: linearToRgb(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+                        a: alpha,
+                    }
+                }
+
+                function parseCssNumber(value: string, percentBase: number) {
+                    return value.endsWith('%') ? Number(value.slice(0, -1)) / 100 * percentBase : Number(value)
+                }
+
+                function linearToRgb(value: number) {
+                    const clamped = Math.min(1, Math.max(0, value))
+                    const encoded = clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * clamped ** (1 / 2.4) - 0.055
+                    return Math.round(encoded * 255)
                 }
 
                 function srgb(value: number) {

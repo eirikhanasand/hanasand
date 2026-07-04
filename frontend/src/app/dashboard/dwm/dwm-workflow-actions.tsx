@@ -633,25 +633,38 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     ] satisfies RouteQueueAction[]
 
     return (
-        <div data-dwm-workflow-runbook className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 text-ui-text'>
-            <section className='flex flex-wrap items-start justify-between gap-3'>
+        <div data-dwm-workflow-runbook className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 text-ui-text sm:p-4'>
+            <section className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.62fr)] lg:items-start'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-primary'>Monitoring route</p>
-                    <h2 className='mt-1 text-lg font-semibold tracking-normal text-ui-text'>Watchlist to case route</h2>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>Update the watchlist, run collection, rebuild alerts, open a case, and test delivery from one path.</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Monitoring route</p>
+                    <h2 className='mt-1 text-lg font-semibold tracking-normal text-ui-text'>Watchlist to case</h2>
+                    <div className='mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5'>
+                        <RouteStateCard label='Terms' value={String(effectiveTermCount)} detail={termCount ? 'ready' : 'needed'} tone={termCount ? 'ok' : 'warn'} />
+                        <RouteStateCard label='Sources' value={`${activeSourceCount}/${sourceCount}`} detail={sourceCount ? 'active' : 'load pack'} tone={activeSourceCount ? 'ok' : 'warn'} />
+                        <RouteStateCard label='Captures' value={String(captureCount)} detail={latestRunStatus ? `${latestRunStatus}${latestRunCaptureCount ? ` · ${latestRunCaptureCount}` : ''}` : 'idle'} tone={captureCount ? 'ok' : 'neutral'} />
+                        <RouteStateCard label='Alerts' value={String(alertCount)} detail={`${telemetry?.watchlistMatchCount ?? 0} matches`} tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
+                        <RouteStateCard label='Webhook' value={deliveryCount ? `${deliveryCount}` : webhookConfigured ? 'staged' : 'none'} detail={deliveryCount ? 'attempts' : webhookConfigured ? 'test' : 'add URL'} tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
+                    </div>
                 </div>
                 {result ? (
-                    <p data-dwm-workflow-result className={`max-w-xl rounded-lg border px-3 py-2 text-sm ${result.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>
-                        {result.message}
-                    </p>
-                ) : null}
+                    <div data-dwm-workflow-result className={`rounded-lg border px-3 py-2 text-sm leading-5 ${result.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>
+                        <p className='font-semibold'>{result.ok ? 'Route updated' : 'Action blocked'}</p>
+                        <p className='mt-1 text-xs leading-5'>{result.message}</p>
+                    </div>
+                ) : (
+                    <div className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
+                        <p className='text-[10px] font-semibold uppercase text-ui-subtle'>Route state</p>
+                        <p className='mt-1 text-sm font-semibold text-ui-text'>{alertCount ? `${alertCount} alert${alertCount === 1 ? '' : 's'} ready` : termCount ? 'Ready to collect' : 'Add watchlist terms'}</p>
+                        <p className='mt-1 text-xs leading-5 text-ui-muted'>{deliveryCount ? `${deliveryCount} delivery attempt${deliveryCount === 1 ? '' : 's'} recorded.` : 'Stage a webhook when the case needs customer notification.'}</p>
+                    </div>
+                )}
             </section>
 
             <section data-dwm-route-queue className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div className='min-w-0'>
-                        <h3 className='text-sm font-semibold text-ui-text'>Next actions</h3>
-                        <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Run a backed step, or use Run to case after watchlist and source context are ready.</p>
+                        <h3 className='text-sm font-semibold text-ui-text'>Commands</h3>
+                        <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Every command calls the DWM API and refreshes the queue.</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         {organizationId ? (
@@ -687,42 +700,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 {lastRoute ? <RouteRunSummary route={lastRoute} /> : null}
             </section>
 
-            <section className='grid grid-cols-2 gap-3 xl:grid-cols-5'>
-                <RouteStateCard label='Watch terms' value={String(effectiveTermCount)} detail={termCount ? 'Ready for matching' : 'Customer terms needed'} tone={termCount ? 'ok' : 'warn'} />
-                <RouteStateCard label='Sources' value={`${activeSourceCount}/${sourceCount}`} detail={sourceCount ? 'Active monitored sources' : 'Run source pack or add a channel'} tone={activeSourceCount ? 'ok' : 'warn'} />
-                <RouteStateCard label='Captures' value={String(captureCount)} detail={latestRunStatus ? `${latestRunStatus}${latestRunCaptureCount ? ` · ${latestRunCaptureCount} latest` : ''}` : 'No run loaded'} tone={captureCount ? 'ok' : 'neutral'} />
-                <RouteStateCard label='Alerts' value={String(alertCount)} detail={`${telemetry?.watchlistMatchCount ?? 0} source match${(telemetry?.watchlistMatchCount ?? 0) === 1 ? '' : 'es'}`} tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
-                <RouteStateCard label='Webhook' value={deliveryCount ? `${deliveryCount} attempt${deliveryCount === 1 ? '' : 's'}` : webhookConfigured ? 'URL ready' : 'Not tested'} detail={webhookConfigured ? 'Test before customer send' : 'Paste HTTPS endpoint to dry-run'} tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
-            </section>
-
-            <section className='overflow-hidden rounded-lg border border-ui-border bg-ui-raised'>
-                <div className='overflow-x-auto'>
-                    <table className='w-full min-w-[820px] text-left text-xs'>
-                        <thead className='bg-ui-panel text-[10px] uppercase text-ui-subtle'>
-                            <tr>
-                                <th className='px-3 py-2 font-semibold'>Stage</th>
-                                <th className='px-3 py-2 font-semibold'>Current state</th>
-                                <th className='px-3 py-2 font-semibold'>Use next</th>
-                                <th className='px-3 py-2 font-semibold'>Operator command</th>
-                            </tr>
-                        </thead>
-                        <tbody className='divide-y divide-ui-border'>
-                            <RouteStepRow stage='1. Watchlist' state={termCount ? `${termCount} terms saved or staged` : 'Customer terms needed'} next='Company, domain, supplier, brand, and product terms define alert scope.' command={termCount ? 'Save and rebuild alerts' : 'Prepare starter list'} tone={termCount ? 'ok' : 'warn'} />
-                            <RouteStepRow stage='2. Sources' state={sourceCount ? `${activeSourceCount}/${sourceCount} active` : 'No source inventory loaded'} next='Enable public Telegram, public advisory, and metadata-only source packs before relying on matches.' command='Expand Telegram / Approve metadata' tone={activeSourceCount ? 'ok' : 'warn'} />
-                            <RouteStepRow stage='3. Captures' state={captureCount ? `${captureCount} safe captures` : 'No accepted captures'} next='Run collection to pull safe excerpts and metadata into review.' command='Run Telegram collection' tone={captureCount ? 'ok' : 'neutral'} />
-                            <RouteStepRow stage='4. Alert and case' state={alertCount ? `${alertCount} alerts ready` : 'No active alert'} next='Rebuild after source changes, then open the alert as a case with source context.' command='Run to case / Open case' tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
-                            <RouteStepRow stage='5. Delivery' state={deliveryCount ? `${deliveryCount} delivery attempts` : webhookConfigured ? 'Webhook URL staged' : 'No delivery tested'} next='Use dry-run before sending customer notifications.' command='Test webhook / Send webhooks' tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
             <div className='grid gap-4 xl:grid-cols-2 2xl:grid-cols-[1.05fr_0.95fr_0.95fr]'>
                 <form onSubmit={saveWatchlist} className='rounded-lg border border-ui-border bg-ui-raised p-4 shadow-sm'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
                             <h2 className='text-base font-semibold text-ui-text'>Customer watchlist</h2>
-                            <p className='mt-1 text-sm leading-6 text-ui-subtle'>Terms matched against collected evidence before an alert enters review or delivery.</p>
+                            <p className='mt-1 text-xs leading-5 text-ui-subtle'>Company, domain, vendor, brand, and product terms.</p>
                         </div>
                         <BellRing className='h-5 w-5 text-ui-primary' />
                     </div>
@@ -730,13 +713,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         value={terms}
                         onChange={event => setTerms(event.target.value)}
                         placeholder={'your-company.com\nPrimary supplier\nCustomer brand'}
-                        className='mt-4 min-h-36 w-full resize-y rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
-                    />
-                    <input
-                        value={webhookUrl}
-                        onChange={event => setWebhookUrl(event.target.value)}
-                        placeholder='Webhook URL, optional'
-                        className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                        className='mt-3 min-h-28 w-full resize-y rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                     <div className='mt-3 flex flex-wrap gap-2'>
                         <button disabled={busy || Boolean(watchlistDisabledReason)} title={watchlistDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
@@ -903,13 +880,13 @@ function RouteQueueCard({ action }: { action: RouteQueueAction }) {
                 ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
                 : 'border-ui-border bg-ui-panel text-ui-muted'
     return (
-        <article className='grid min-h-44 min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-panel p-3'>
+        <article className='grid min-h-36 min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-panel p-3'>
             <div className='min-w-0'>
                 <div className='flex items-start justify-between gap-2'>
                     <h4 className='min-w-0 wrap-break-word text-sm font-semibold text-ui-text'>{action.label}</h4>
                     <span className={`max-w-[55%] shrink-0 truncate rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClass}`} title={action.state}>{action.state}</span>
                 </div>
-                <p className='mt-2 line-clamp-3 text-xs leading-5 text-ui-subtle'>{action.detail}</p>
+                <p className='mt-2 line-clamp-2 text-xs leading-5 text-ui-subtle'>{action.detail}</p>
             </div>
             <button
                 type='button'
@@ -963,30 +940,6 @@ function RouteRunSummary({ route }: { route: WorkflowRouteSummary }) {
     )
 }
 
-function RouteStepRow({ stage, state, next, command, tone }: { stage: string, state: string, next: string, command: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
-    const toneClass = tone === 'ok'
-        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
-        : tone === 'warn'
-            ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
-            : tone === 'bad'
-                ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
-                : 'border-ui-border bg-ui-panel text-ui-muted'
-    return (
-        <tr className='align-top transition hover:bg-ui-raised'>
-            <td className='px-3 py-3'>
-                <p className='text-sm font-semibold text-ui-text'>{stage}</p>
-            </td>
-            <td className='px-3 py-3'>
-                <span className={`inline-flex max-w-full rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClass}`}>
-                    <span className='truncate' title={state}>{state}</span>
-                </span>
-            </td>
-            <td className='px-3 py-3 text-sm leading-5 text-ui-muted'>{next}</td>
-            <td className='px-3 py-3 font-semibold text-ui-text'>{command}</td>
-        </tr>
-    )
-}
-
 function RouteStateCard({ label, value, detail, tone }: { label: string, value: string, detail: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
     const toneClass = tone === 'ok'
         ? 'text-ui-success'
@@ -996,13 +949,13 @@ function RouteStateCard({ label, value, detail, tone }: { label: string, value: 
                 ? 'text-ui-danger'
                 : 'text-ui-primary'
     return (
-        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-            <div className='flex items-center justify-between gap-3 text-ui-subtle'>
-                <p className='text-xs font-semibold uppercase'>{label}</p>
-                <Activity className='h-4 w-4' />
+        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
+            <div className='flex items-center justify-between gap-2 text-ui-subtle'>
+                <p className='truncate text-[10px] font-semibold uppercase'>{label}</p>
+                <Activity className='h-3.5 w-3.5 shrink-0' />
             </div>
-            <p className={`mt-2 truncate text-lg font-semibold ${toneClass}`}>{value}</p>
-            <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-subtle'>{detail}</p>
+            <p className={`mt-1 truncate text-base font-semibold ${toneClass}`}>{value}</p>
+            <p className='truncate text-[11px] leading-4 text-ui-subtle'>{detail}</p>
         </div>
     )
 }

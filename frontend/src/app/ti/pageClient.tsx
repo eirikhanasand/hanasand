@@ -2884,8 +2884,8 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
                     </div>
                 ))}
             </div>
-            <div className='hidden overflow-x-auto md:block'>
-                <table className='min-w-[720px] w-full border-collapse text-left text-xs'>
+            <div className='overflow-x-auto max-md:!hidden md:block'>
+                <table className='min-w-[720px] w-full border-collapse text-left text-xs max-md:!hidden'>
                     <thead className='bg-ui-panel text-[11px] uppercase text-ui-muted dark:bg-ui-panel dark:text-ui-muted'>
                         <tr>
                             <th className='px-3 py-2 font-semibold'>Source</th>
