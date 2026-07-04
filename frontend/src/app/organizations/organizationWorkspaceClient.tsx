@@ -2833,7 +2833,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                     {contextRows.map(row => (
                         <div key={row.label} className='min-w-0 rounded-md bg-ui-panel px-2 py-1.5 dark:bg-ui-panel'>
                             <dt className='truncate font-semibold text-ui-muted dark:text-ui-muted'>{row.label}</dt>
-                            <dd className='truncate font-mono text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(row.value) || row.value}</dd>
+                            <dd className='truncate font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(row.value) || row.value}</dd>
                         </div>
                     ))}
                 </dl>
