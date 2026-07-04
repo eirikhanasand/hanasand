@@ -3205,6 +3205,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
 }
 
 function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifact; handoffs: ActorArtifactHandoffs }) {
+    const [showRoutingChecks, setShowRoutingChecks] = useState(false)
     const bridge = handoffs.authBridge
     const selectedArtifactPayload = selectedArtifactPayloadFor(artifact, handoffs)
     const payloadRows = [
@@ -3328,41 +3329,46 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
             <div data-ti-artifact-workflow-readiness='true' className='mt-4 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
-                        <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Selected review status</p>
-                        <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                            Selected detail review state for watchlist, alert, case, and source review work.
-                        </p>
+                        <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Routing checks</p>
+                        <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>Watchlist, alert, case, and source actions tied to this detail.</p>
                     </div>
-                    <span className={workflowRows.every(row => !row.blocked) ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>
-                        {workflowRows.filter(row => !row.blocked).length}/{workflowRows.length} ready
-                    </span>
+                    <div className='flex flex-wrap items-center gap-2'>
+                        <span className={workflowRows.every(row => !row.blocked) ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>
+                            {workflowRows.filter(row => !row.blocked).length}/{workflowRows.length} ready
+                        </span>
+                        <button type='button' onClick={() => setShowRoutingChecks(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
+                            {showRoutingChecks ? 'Hide checks' : 'Show checks'}
+                        </button>
+                    </div>
                 </div>
-                <div className='mt-3 grid gap-2 md:grid-cols-2'>
-                    {workflowRows.map(row => (
-                        <div key={`workflow-${row.id}`} className='rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised'>
-                            <div className='flex flex-wrap items-center justify-between gap-2'>
-                                <p className='min-w-0 wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{row.label}</p>
-                                <span className={row.blocked ? decisionStepStatusClass('blocked') : decisionStepStatusClass('ready')}>
-                                    {row.blocked ? 'syncing' : 'ready'}
-                                </span>
-                            </div>
-                            <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.endpoint)}</p>
-                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                {row.readiness?.missing.length ? displayRequirementList(row.readiness.missing.slice(0, 2)) : row.missing.length ? displayRequirementList(row.missing.slice(0, 2)) : 'Required artifact context is present.'}
-                            </p>
-                            {row.readiness ? (
-                                <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
-                                    <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                        {actionOwnerLabel(row.readiness.ownerLane)}
-                                    </span>
-                                    <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                        {row.readiness.sourceRequestCount} source request{row.readiness.sourceRequestCount === 1 ? '' : 's'}
+                {showRoutingChecks ? (
+                    <div className='mt-3 grid gap-2 md:grid-cols-2'>
+                        {workflowRows.map(row => (
+                            <div key={`workflow-${row.id}`} className='rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised'>
+                                <div className='flex flex-wrap items-center justify-between gap-2'>
+                                    <p className='min-w-0 wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{row.label}</p>
+                                    <span className={row.blocked ? decisionStepStatusClass('blocked') : decisionStepStatusClass('ready')}>
+                                        {row.blocked ? 'syncing' : 'ready'}
                                     </span>
                                 </div>
-                            ) : null}
-                        </div>
-                    ))}
-                </div>
+                                <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.endpoint)}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
+                                    {row.readiness?.missing.length ? displayRequirementList(row.readiness.missing.slice(0, 2)) : row.missing.length ? displayRequirementList(row.missing.slice(0, 2)) : 'Required artifact context is present.'}
+                                </p>
+                                {row.readiness ? (
+                                    <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                        <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
+                                            {actionOwnerLabel(row.readiness.ownerLane)}
+                                        </span>
+                                        <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
+                                            {row.readiness.sourceRequestCount} source request{row.readiness.sourceRequestCount === 1 ? '' : 's'}
+                                        </span>
+                                    </div>
+                                ) : null}
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
             </div>
         </section>
     )
