@@ -1,6 +1,7 @@
 import { DashboardPage } from '@/components/dashboard/ui'
 import type { DwmProductSnapshot } from '@/utils/dwm/product'
 import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
+import { cookies, headers } from 'next/headers'
 import { DwmAnalystPortal } from './dwm-analyst-portal'
 
 export const dynamic = 'force-dynamic'
@@ -16,11 +17,12 @@ export default async function DashboardDwmPage({
         tenantId: firstParam(params?.tenantId)?.trim() || 'default',
         organizationId: firstParam(params?.organizationId)?.trim() || undefined,
     }
+    const scraperHeaders = await dwmScraperHeaders()
     const [snapshotResult, operationsResult, alertsResult, deliveriesResult] = await Promise.all([
-        loadDwmSnapshot(scope),
-        loadDwmOperations(scope),
-        loadDwmAlerts(scope),
-        loadDwmDeliveries(scope),
+        loadDwmSnapshot(scope, scraperHeaders),
+        loadDwmOperations(scope, scraperHeaders),
+        loadDwmAlerts(scope, scraperHeaders),
+        loadDwmDeliveries(scope, scraperHeaders),
     ])
     const snapshot = snapshotResult.data
     const operations = operationsResult.data
@@ -56,7 +58,7 @@ function firstParam(value: string | string[] | undefined) {
     return value
 }
 
-async function loadDwmSnapshot(scope: DwmPageScope): Promise<LoadResult<DwmProductSnapshot>> {
+async function loadDwmSnapshot(scope: DwmPageScope, headers: HeadersInit): Promise<LoadResult<DwmProductSnapshot>> {
     const base = tiScraperApiBase()
     if (!base) return {
         data: emptyDwmProductSnapshot('missing scraper base', undefined, scope.tenantId),
@@ -70,7 +72,7 @@ async function loadDwmSnapshot(scope: DwmPageScope): Promise<LoadResult<DwmProdu
         setDwmScopeParams(target, scope)
         target.searchParams.set('demo', 'false')
 
-        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(8000) })
+        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(8000) })
         if (!response.ok) return {
             data: emptyDwmProductSnapshot(`DWM stream ${response.status}`, undefined, scope.tenantId),
             state: 'error',
@@ -112,14 +114,14 @@ function emptyDwmProductSnapshot(reason: string, generatedAt = new Date().toISOS
     }
 }
 
-async function loadDwmOperations(scope: DwmPageScope): Promise<LoadResult<DwmOperationsSnapshot | null>> {
+async function loadDwmOperations(scope: DwmPageScope, headers: HeadersInit): Promise<LoadResult<DwmOperationsSnapshot | null>> {
     const base = tiScraperApiBase()
     if (!base) return { data: null, state: 'missing', label: 'Collection syncing', detail: 'Collection state is loading.' }
 
     try {
         const target = new URL('/v1/dwm/operations', base)
         setDwmScopeParams(target, scope)
-        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(2500) })
         if (!response.ok) return { data: null, state: 'error', label: `Collection ${response.status}`, detail: 'Collection could not load current source state.' }
         return { data: await response.json() as DwmOperationsSnapshot, state: 'live', label: 'Collection live', detail: 'Collection is showing source and evidence state.' }
     } catch (error) {
@@ -127,14 +129,14 @@ async function loadDwmOperations(scope: DwmPageScope): Promise<LoadResult<DwmOpe
     }
 }
 
-async function loadDwmAlerts(scope: DwmPageScope): Promise<LoadResult<DwmAlertInboxItem[]>> {
+async function loadDwmAlerts(scope: DwmPageScope, headers: HeadersInit): Promise<LoadResult<DwmAlertInboxItem[]>> {
     const base = tiScraperApiBase()
     if (!base) return { data: [], state: 'missing', label: 'Alerts syncing', detail: 'Saved alert state is loading.' }
 
     try {
         const target = new URL('/v1/dwm/alerts', base)
         setDwmScopeParams(target, scope)
-        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(2500) })
         if (!response.ok) return { data: [], state: 'error', label: `Alerts ${response.status}`, detail: 'The alert stream could not load saved alerts.' }
         const payload = await response.json() as { alerts?: DwmAlertInboxItem[] }
         return { data: payload.alerts || [], state: 'live', label: 'Alerts live', detail: `${(payload.alerts || []).length} saved alert(s).` }
@@ -143,14 +145,14 @@ async function loadDwmAlerts(scope: DwmPageScope): Promise<LoadResult<DwmAlertIn
     }
 }
 
-async function loadDwmDeliveries(scope: DwmPageScope): Promise<LoadResult<DwmDeliveryItem[]>> {
+async function loadDwmDeliveries(scope: DwmPageScope, headers: HeadersInit): Promise<LoadResult<DwmDeliveryItem[]>> {
     const base = tiScraperApiBase()
     if (!base) return { data: [], state: 'missing', label: 'Deliveries syncing', detail: 'Delivery state is loading.' }
 
     try {
         const target = new URL('/v1/dwm/webhooks/deliveries', base)
         setDwmScopeParams(target, scope)
-        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(2500) })
         if (!response.ok) return { data: [], state: 'error', label: `Deliveries ${response.status}`, detail: 'The delivery ledger could not load delivery attempts.' }
         const payload = await response.json() as { deliveries?: DwmDeliveryItem[] }
         const deliveries = (payload.deliveries || []).sort((a, b) => b.attemptedAt.localeCompare(a.attemptedAt))
@@ -163,6 +165,26 @@ async function loadDwmDeliveries(scope: DwmPageScope): Promise<LoadResult<DwmDel
 function setDwmScopeParams(target: URL, scope: DwmPageScope) {
     target.searchParams.set('tenantId', scope.tenantId)
     if (scope.organizationId) target.searchParams.set('organizationId', scope.organizationId)
+}
+
+async function dwmScraperHeaders(): Promise<HeadersInit> {
+    const cookieStore = await cookies()
+    const requestHeaders = await headers()
+    const token = cookieStore.get('access_token')?.value || bearerToken(requestHeaders.get('authorization')) || ''
+    const id = cookieStore.get('id')?.value || requestHeaders.get('id') || ''
+    const actorId = requestHeaders.get('x-actor-id') || id
+    const userEmail = requestHeaders.get('x-user-email') || ''
+    return {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(id ? { id } : {}),
+        ...(actorId ? { 'x-actor-id': actorId } : {}),
+        ...(userEmail ? { 'x-user-email': userEmail } : {}),
+    }
+}
+
+function bearerToken(value: string | null) {
+    if (!value?.startsWith('Bearer ')) return ''
+    return value.slice('Bearer '.length).trim()
 }
 
 type DwmPageScope = {
