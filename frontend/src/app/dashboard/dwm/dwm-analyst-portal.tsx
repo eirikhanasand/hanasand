@@ -1939,7 +1939,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions }: { latestCaptures: 
             <div className='rounded-lg border border-ui-border bg-ui-panel'>
                 <div className='border-b border-ui-border px-4 py-3'>
                     <h3 className='text-sm font-semibold text-ui-text'>Recent capture review</h3>
-                    <p className='mt-0.5 text-xs text-ui-muted'>Useful for tuning watchlist terms without dumping raw rows.</p>
+                    <p className='mt-0.5 text-xs text-ui-muted'>Useful for tuning watchlist terms without exposing full source rows.</p>
                 </div>
                 <div className='grid gap-2 p-4'>
                     {latestCaptures.slice(0, 8).map(capture => (
@@ -2302,7 +2302,7 @@ function buildAnalystBrief(
         whyItMatters: routingContext.reason,
         nextAction: alert.recommendedAction,
         readyForCustomer,
-        evidenceBoundary: `Show ${visibleCounts}; keep raw leaked files and secrets out of the customer update.`,
+        evidenceBoundary: `Show ${visibleCounts}; keep source files and secrets out of the customer update.`,
         sourceRecords: `${evidenceSummary.evidenceCount} record${evidenceSummary.evidenceCount === 1 ? '' : 's'} across ${sourceFamilies || stateLabel(alert.sourceFamily)}, newest ${freshness}.`,
         workflowReadiness: workflowContext.hasWebhookRoute
             ? `${stateLabel(routingContext.queue)} is available; ${workflowContext.lastDelivery ? `last delivery ${stateLabel(workflowContext.lastDelivery.status)} ${relativeTimeLabel(workflowContext.lastDelivery.attemptedAt)}` : 'test delivery before sending'}.`

@@ -9006,7 +9006,7 @@ function selectedTriageBriefFor(
                 ? 'Source reference is present, but the public result does not yet include a capture ID. Verify before customer-facing escalation.'
                 : 'No source reference is attached to the selected result. Treat this as context until source evidence is added.',
         proofTone,
-        safetyBoundary: 'Public TI results are metadata-only. This view does not expose raw leak files, credential values, or webhook secrets.',
+        safetyBoundary: 'Public TI results are metadata-only. This view does not expose source files, credential values, or webhook secrets.',
         labels: [
             { label: 'Severity', value: formatLabel(selected.severity) },
             { label: 'Evidence strength', value: sourceBasis },
