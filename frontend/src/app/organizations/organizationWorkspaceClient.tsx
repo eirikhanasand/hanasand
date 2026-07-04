@@ -959,7 +959,7 @@ export default function OrganizationWorkspaceClient() {
                                     <div className='grid min-w-0 content-start gap-5'>
                                         <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
                                         <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
-                                        <DestinationPanel destinations={bundle.webhooks} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={setSelectedActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} />
+                                        <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={setSelectedActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} />
                                     </div>
                                 </section>
 
@@ -1417,7 +1417,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
     )
 }
 
-function DestinationPanel({ destinations, canManage, busy, rowMessages, selectedSubject, createDraft, setCreateDraft, editing, setEditing, onSelectSubject, onCreate, onTest, onUpdate, onDelete }: { destinations: WebhookDestination[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, createDraft: DestinationCreateDraft, setCreateDraft: (next: DestinationCreateDraft) => void, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onCreate: () => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onDelete: (destination: WebhookDestination) => void }) {
+function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessages, selectedSubject, createDraft, setCreateDraft, editing, setEditing, onSelectSubject, onCreate, onTest, onUpdate, onDelete }: { destinations: WebhookDestination[], deliveries: DeliveryRow[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, createDraft: DestinationCreateDraft, setCreateDraft: (next: DestinationCreateDraft) => void, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onCreate: () => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onDelete: (destination: WebhookDestination) => void }) {
     const createUrl = createDraft.url.trim()
     const createUrlInvalid = Boolean(createUrl) && !validDestinationUrl(createUrl)
     const createNameDuplicate = destinationNameInUse(destinations, normalizeDestinationName(createDraft.name) || defaultDestinationName(createDraft.kind))
@@ -1460,6 +1460,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                 {destinations.map(destination => {
                     const draft = editing[destination.id]
                     const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
+                    const latestDelivery = latestDeliveryForDestination(destination, deliveries)
                     const draftUrl = draft?.url.trim() || ''
                     const draftUrlInvalid = Boolean(draftUrl) && !validDestinationUrl(draftUrl)
                     const draftNameDuplicate = draft ? destinationNameInUse(destinations, normalizeDestinationName(draft.name) || destination.name || destination.id, destination.id) : false
@@ -1519,6 +1520,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                                         <span className='truncate'>Type: {destination.kind || destination.type || 'webhook'}</span>
                                         <span className='truncate'>Hash: {sanitizeOrganizationDisplayCopy(destination.endpointHash || 'not returned')}</span>
                                     </span>
+                                    <DestinationDeliverySummary delivery={latestDelivery} />
                                     <span className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()}>
                                         <button type='button' className={secondaryButtonClass} disabled={Boolean(busy)} onClick={() => onTest(destination)}>
                                             <RefreshCw className='h-4 w-4' />
@@ -1708,6 +1710,32 @@ function WatchlistDestinationSummary({ item, delivery }: { item: WatchlistItem, 
             <span className='truncate text-ui-muted dark:text-ui-muted'>{item.webhookEndpointHint || delivery?.endpointHint || 'No endpoint'}</span>
             <span className='truncate font-mono text-ui-muted dark:text-ui-muted'>{item.webhookEndpointHash || delivery?.endpointHash || 'no_route_hash'}</span>
             <span className='truncate text-ui-muted dark:text-ui-muted'>Last delivery: {delivery?.status || 'none'}</span>
+        </div>
+    )
+}
+
+function DestinationDeliverySummary({ delivery }: { delivery?: DeliveryRow | null }) {
+    if (!delivery) {
+        return (
+            <div className='grid gap-1 rounded-md bg-ui-raised px-3 py-2 text-xs text-ui-muted dark:bg-ui-canvas dark:text-ui-muted' data-org-destination-latest='empty'>
+                <span>No delivery attempts yet.</span>
+                <span>Run a dry test or replay from delivery history.</span>
+            </div>
+        )
+    }
+    const failed = delivery.status === 'failed' || Boolean(delivery.error)
+    return (
+        <div className={`grid gap-1 rounded-md px-3 py-2 text-xs ${failed ? 'bg-ui-warning/10 text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning' : 'bg-ui-raised text-ui-muted dark:bg-ui-canvas dark:text-ui-muted'}`} data-org-destination-latest='true'>
+            <span className='flex flex-wrap items-center gap-2'>
+                <span className='font-semibold text-ui-text dark:text-ui-text'>Last {delivery.dryRun ? 'test' : 'delivery'}:</span>
+                <StatusPill status={delivery.status || 'attempt'} />
+                <span>{formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}</span>
+            </span>
+            <span className='truncate'>{failed ? sanitizeOrganizationDisplayCopy(delivery.error || delivery.errorClass || 'Delivery failed.') : sanitizeOrganizationDisplayCopy(delivery.responseSummary || delivery.errorClass || 'No failure reported.')}</span>
+            <span className='truncate font-mono'>Trace: {deliveryTraceLabel(delivery)}</span>
+            {(delivery.nextRetryAt || delivery.attemptCount !== undefined || delivery.retryCount !== undefined) && (
+                <span className='truncate'>Retry: {delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
+            )}
         </div>
     )
 }
@@ -1909,9 +1937,21 @@ function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, 
 }
 
 function ActivityPanel({ organization, bundle, activity, selectedSubject, onSelectSubject }: { organization: OrganizationSummary, bundle: OrgBundle, activity: ActivityItem[], selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
+    const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
     const selectedRows = activityRowsForSubject(activity, selectedSubject)
     const contextRows = selectedContextRows(selectedSubject, organization, bundle)
     const visibleRows = selectedSubject.type === 'organization' ? activity : selectedRows
+    const copySelectedActivity = async () => {
+        try {
+            const heading = `${organization.name || organization.id} · ${selectedSubject.type}`
+            const context = contextRows.map(row => `${row.label}: ${row.value}`)
+            const rows = visibleRows.slice(0, 8).map(item => `${formatDate(item.at)} · ${item.title} · ${item.detail}`)
+            await navigator.clipboard.writeText([heading, ...context, ...rows].filter(Boolean).join('\n'))
+            setCopyStatus({ ok: true, text: 'Activity copied.' })
+        } catch {
+            setCopyStatus({ ok: false, text: 'Copy failed.' })
+        }
+    }
     return (
         <section id='audit' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <SectionTitle icon={<CheckCircle2 className='h-4 w-4' />} title='Activity' detail='Selected row, delivery, and team actions.' />
@@ -1921,9 +1961,15 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                         <p className='truncate text-sm font-semibold text-ui-text dark:text-white'>{sanitizeOrganizationDisplayCopy(selectedSubjectLabel(selectedSubject, organization, bundle))}</p>
                         <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{selectedSubject.type}</p>
                     </div>
-                    <button type='button' className={secondaryButtonClass} onClick={() => onSelectSubject({ type: 'organization', id: organization.id })}>
-                        All
-                    </button>
+                    <div className='flex flex-wrap gap-2'>
+                        <button type='button' className={secondaryButtonClass} onClick={() => void copySelectedActivity()} data-org-activity-copy='true'>
+                            <Copy className='h-4 w-4' />
+                            Copy
+                        </button>
+                        <button type='button' className={secondaryButtonClass} onClick={() => onSelectSubject({ type: 'organization', id: organization.id })}>
+                            All
+                        </button>
+                    </div>
                 </div>
                 <dl className='grid gap-2 text-xs sm:grid-cols-2'>
                     {contextRows.map(row => (
@@ -1933,6 +1979,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                         </div>
                     ))}
                 </dl>
+                <RowStatus message={copyStatus} />
             </div>
             <div className='mt-4 grid gap-2'>
                 {activity.length === 0 && <EmptyLine text='No actions in this browser session yet.' />}
