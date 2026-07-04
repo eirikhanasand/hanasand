@@ -239,12 +239,17 @@ function Results({ result }: { result: TiSearchResponse }) {
         }
     })
     const queueCounts = queueCountsFor(filteredWorkItems, localDecisions)
+    const alertContextValue = actionability.relatedAlerts.length
+        ? `${actionability.relatedAlerts.length} linked`
+        : actionability.alertGenerationReadiness.candidateCount
+            ? `${actionability.alertGenerationReadiness.candidateCount} candidates`
+            : 'watchlist needed'
     const profileStats = [
         { icon: <ShieldCheck className='h-3.5 w-3.5' />, label: 'Sources', value: sourceCountLabel(sources.length) },
         { icon: <Activity className='h-3.5 w-3.5' />, label: 'Freshness', value: formatDate(result.lastSeen || result.generatedAt) },
         { icon: <Inbox className='h-3.5 w-3.5' />, label: 'Open reviews', value: `${queueCounts.open} open` },
-        { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Related alerts', value: String(actionability.relatedAlerts.length) },
-        { icon: <Database className='h-3.5 w-3.5' />, label: 'Source questions', value: `${openGapCount} open` },
+        { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Alert context', value: alertContextValue },
+        { icon: <Database className='h-3.5 w-3.5' />, label: 'Collection gaps', value: `${openGapCount} open` },
     ]
     const sectionOverview = sectionOverviewFor({ result, actorIntel, actionability, workItems, victimObservations, watchlist })
     const commandLinks = [
@@ -1653,10 +1658,20 @@ function ActorActionStrip({
         ...actor.infrastructure,
         ...actor.malwareTools,
     ]).slice(0, 24)
+    const alertSummary = actionability.relatedAlerts.length
+        ? `${actionability.relatedAlerts.length} linked alerts`
+        : actionability.alertGenerationReadiness.candidateCount
+            ? `${actionability.alertGenerationReadiness.candidateCount} alert candidates`
+            : 'watchlist before alert'
+    const caseSummary = actionability.relatedCases.length
+        ? `${actionability.relatedCases.length} linked cases`
+        : actionability.caseReviewIntake.summary.total
+            ? `${actionability.caseReviewIntake.summary.total} case candidates`
+            : 'case source needed'
     const actionSummary = [
         `${actionability.watchlistRelevance.terms.length} watch terms`,
-        `${actionability.relatedAlerts.length} alerts`,
-        `${actionability.relatedCases.length} cases`,
+        alertSummary,
+        caseSummary,
         `${actionability.enrichmentGapQueue.length} source questions`,
     ]
     return (
@@ -5141,6 +5156,18 @@ function SelectedWorkflowSummaryPanel({
     const deliveryReady = deliveryPlan?.state === 'ready'
     const sourceCount = sourceDrilldown?.rows.length ?? 0
     const owner = caseOwnership?.owner.label ?? 'unassigned'
+    const alertValue = deliveryPlan?.summary.alerts
+        ? `${deliveryPlan.summary.alerts} linked`
+        : alertPlan?.readiness.candidateCount
+            ? `${alertPlan.readiness.candidateCount} candidates`
+            : 'watchlist needed'
+    const caseRouteValue = deliveryPlan?.summary.caseRoutes
+        ? `${deliveryPlan.summary.caseRoutes} linked`
+        : caseOwnership?.summary.caseCandidates
+            ? `${caseOwnership.summary.caseCandidates} candidates`
+            : caseDraft
+                ? 'draft ready'
+                : 'source needed'
     return (
         <Panel title='Selected workflow' description='Source, alert, and case state for the selected finding.' icon={<ShieldAlert className='h-4 w-4' />}>
             <div className='grid gap-3'>
@@ -5151,10 +5178,10 @@ function SelectedWorkflowSummaryPanel({
                     </p>
                 </div>
                 <div className='grid grid-cols-2 gap-2'>
-                    <EvidenceMetric label='Source rows' value={String(sourceCount)} />
+                    <EvidenceMetric label='Source rows' value={sourceCount ? String(sourceCount) : 'source needed'} />
                     <EvidenceMetric label='Owner' value={owner} />
-                    <EvidenceMetric label='Alerts' value={String(deliveryPlan?.summary.alerts ?? alertPlan?.readiness.matchedCandidateCount ?? 0)} />
-                    <EvidenceMetric label='Case routes' value={String(deliveryPlan?.summary.caseRoutes ?? caseOwnership?.summary.caseCandidates ?? 0)} />
+                    <EvidenceMetric label='Alert context' value={alertValue} />
+                    <EvidenceMetric label='Case path' value={caseRouteValue} />
                 </div>
                 <div className='flex min-w-0 flex-wrap gap-1.5'>
                     <span className={decisionStepStatusClass(alertReady ? 'ready' : 'review')}>alert {alertReady ? 'linked' : 'review'}</span>
@@ -6085,11 +6112,16 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
     const methodNames = techniques.map(item => item.attackId || item.name).filter(Boolean)
     const motivation = actor.motivation.slice(0, 2).join(' · ') || 'Motivation not stated'
     const sourceMeta = `${sourceCountLabel(sourceCount)} · latest ${formatDate(latestDate)} · ${sourceBasisLabel(actor.confidence)}`
+    const captureMeta = actor.sourceCoverage.captureRows
+        ? `${actor.sourceCoverage.captureRows} captured page${actor.sourceCoverage.captureRows === 1 ? '' : 's'}`
+        : actor.sourceCoverage.missing.length
+            ? 'capture evidence needed'
+            : 'capture optional'
     const workflowSummary = [
         `${sourceCountLabel(sourceCount)} linked`,
         actionability.watchlistRelevance.terms.length ? `${actionability.watchlistRelevance.terms.length} watch terms` : 'watch term needed',
-        actionability.relatedAlerts.length ? `${actionability.relatedAlerts.length} alerts` : 'no routed alert',
-        actionability.relatedCases.length ? `${actionability.relatedCases.length} cases` : 'case candidate ready',
+        actionability.relatedAlerts.length ? `${actionability.relatedAlerts.length} linked alerts` : actionability.alertGenerationReadiness.candidateCount ? `${actionability.alertGenerationReadiness.candidateCount} alert candidates` : 'watchlist before alert',
+        actionability.relatedCases.length ? `${actionability.relatedCases.length} linked cases` : actionability.caseReviewIntake.summary.total ? `${actionability.caseReviewIntake.summary.total} case candidates` : 'case source needed',
     ].join(' · ')
     const facts = [
         {
@@ -6120,7 +6152,7 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
             icon: <Database className='h-4 w-4' />,
             label: 'Source coverage',
             value: sourceMeta,
-            meta: `${actor.sourceCoverage.captureRows} captured page${actor.sourceCoverage.captureRows === 1 ? '' : 's'}`,
+            meta: captureMeta,
         },
         {
             icon: <Clock3 className='h-4 w-4' />,
