@@ -1430,8 +1430,8 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
                         </div>
                         <p className='mt-2 text-sm leading-6 text-ui-muted'>{safeEvidenceExcerpt(selectedEvidence.excerpt)}</p>
                         <div className='mt-3 grid gap-2 text-[11px] text-ui-muted sm:grid-cols-2'>
-                            <p><span className='font-semibold text-ui-muted'>Evidence ID:</span> {selectedEvidence.provenance?.captureId ?? selectedEvidence.id}</p>
-                            <p><span className='font-semibold text-ui-muted'>Source:</span> {selectedEvidence.provenance?.sourceId ?? selectedEvidence.sourceName}</p>
+                            <p><span className='font-semibold text-ui-muted'>Evidence:</span> {evidenceReferenceState(selectedEvidence)}</p>
+                            <p><span className='font-semibold text-ui-muted'>Source:</span> {sourceReferenceState(selectedEvidence)}</p>
                             <p><span className='font-semibold text-ui-muted'>State:</span> {stateLabel(selectedEvidence.redactionState)}</p>
                             <p className='flex flex-wrap items-center gap-2'>
                                 <span><span className='font-semibold text-ui-muted'>Hash:</span> {evidenceHashState(selectedEvidence.contentHash, copiedHash)}</span>
@@ -1461,7 +1461,7 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
                                     <td className='px-3 py-2 font-semibold text-ui-muted'>{shortTime(item.observedAt || item.firstSeenAt || alert.firstSeenAt)}</td>
                                     <td className='px-3 py-2'>
                                         <p className='max-w-[180px] truncate font-semibold text-ui-text' title={item.sourceName}>{item.sourceName}</p>
-                                        <p className='mt-0.5 text-[11px] text-ui-muted'>{item.provenance?.sourceId ?? item.provenance?.captureId ?? item.id}</p>
+                                        <p className='mt-0.5 text-[11px] text-ui-muted'>{sourceReferenceState(item)}</p>
                                     </td>
                                     <td className='px-3 py-2 font-semibold text-ui-muted'>{stateLabel(item.sourceFamily)}</td>
                                     <td className='px-3 py-2'>
@@ -2625,6 +2625,17 @@ function deliveryDestinationState(row: Pick<DeliveryItem, 'endpointHint' | 'endp
 function evidenceHashState(value?: string | null, copiedValue?: string) {
     if (!value) return 'hash pending'
     return copiedValue === value ? 'hash copied' : 'hash available'
+}
+
+function evidenceReferenceState(item: PortalAlert['evidence'][number]) {
+    if (item.provenance?.captureId || item.id) return 'capture linked'
+    return 'capture pending'
+}
+
+function sourceReferenceState(item: PortalAlert['evidence'][number]) {
+    if (item.provenance?.sourceId) return 'source linked'
+    if (item.provenance?.captureId || item.id) return 'capture linked'
+    return item.sourceName || 'source pending'
 }
 
 function organizationScopeLabel(value?: string | null) {

@@ -125,7 +125,7 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
                                 <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-muted'>{(alert.deliveryState || 'pending_review').replaceAll('_', ' ')}</span>
                                 <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-muted'>{alert.workflowEvents?.length || 0} events</span>
                             </div>
-                            <p className='mt-1 text-sm text-ui-muted'>Matched <span className='font-mono'>{alert.matchedTerm.value}</span> from {alert.sourceFamily.replaceAll('_', ' ')} · {alert.artifactType.replaceAll('_', ' ')}</p>
+                            <p className='mt-1 text-sm text-ui-muted'>Matched <span className='font-semibold text-ui-text'>{alert.matchedTerm.value}</span> from {alert.sourceFamily.replaceAll('_', ' ')} · {alert.artifactType.replaceAll('_', ' ')}</p>
                             <p className='mt-2 line-clamp-2 text-sm leading-6 text-ui-text'>{safeAlertSummary(alert)}</p>
                             {alert.workflowNote && <p className='mt-2 text-sm font-semibold text-ui-primary'>{alert.workflowNote}</p>}
                         </div>
@@ -150,7 +150,7 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
                                             <span className='rounded-full border border-ui-primary/35 bg-ui-primary/10 px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{item.redactionState.replaceAll('_', ' ')}</span>
                                         </div>
                                         <p className='mt-2 line-clamp-2 text-xs leading-5 text-ui-muted'>{safeEvidenceExcerpt(item.excerpt)}</p>
-                                        <p className='mt-2 break-all font-mono text-[11px] text-ui-muted'>{item.contentHash}</p>
+                                        <p className='mt-2 text-[11px] font-semibold text-ui-muted'>{evidenceHashState(item.contentHash)}</p>
                                     </div>
                                 ))}
                                 {!evidencePreview.length && (
@@ -224,6 +224,10 @@ function ActionButton({ busy, onClick, icon, children }: { busy: boolean, onClic
             {children}
         </button>
     )
+}
+
+function evidenceHashState(value?: string | null) {
+    return value ? 'hash available' : 'hash pending'
 }
 
 function severityClass(severity: string) {
