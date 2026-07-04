@@ -11,6 +11,8 @@ test('ti source inventory keeps source health primary while summary and coverage
     expect(source).toContain('data-ti-source-inventory-metrics')
     expect(source).toContain('data-ti-source-capture-coverage-disclosure')
     expect(source).toContain('data-ti-source-capture-coverage')
+    expect(source).toContain('ChevronDown')
+    expect(source).toContain('group-open:rotate-180')
 
     expect(source.indexOf('data-ti-source-inventory-summary-disclosure')).toBeLessThan(source.indexOf('Source health'))
     expect(source.indexOf('Source health')).toBeLessThan(source.indexOf('Sources to review'))

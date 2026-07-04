@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, Bot, Camera, CheckCircle2, Clock3, ExternalLink, PauseCircle, ShieldAlert } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Bot, Camera, CheckCircle2, ChevronDown, Clock3, ExternalLink, PauseCircle, ShieldAlert } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { formatTiDate, getTiAdminOverview, type TiAdminSource } from '@/utils/tiAdmin/ops'
 import ManualRunButton from '../manualRunButton'
@@ -35,10 +35,16 @@ export default function TiSourcesPage() {
                 actions={<ManualRunButton label='Run all sources' />}
             />
 
-            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-ti-source-inventory-summary-disclosure>
+            <details className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-ti-source-inventory-summary-disclosure>
                 <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                    <span>Source inventory summary</span>
-                    <span className='text-xs font-medium text-ui-muted'>{activeCount}/{sources.length} active · {reviewCount} in review · {staleCount} stale</span>
+                    <span className='inline-flex items-center gap-2'>
+                        <Bot className='h-4 w-4 text-ui-primary' />
+                        Source inventory summary
+                    </span>
+                    <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
+                        {activeCount}/{sources.length} active · {reviewCount} in review · {staleCount} stale
+                        <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
+                    </span>
                 </summary>
                 <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-5' data-ti-source-inventory-metrics>
                     <Metric title='Active' value={`${activeCount}/${sources.length}`} detail='collecting sources' tone='ok' />
@@ -173,10 +179,13 @@ export default function TiSourcesPage() {
                     </div>
                 </DashboardPanel>
 
-                <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-ti-source-capture-coverage-disclosure>
+                <details className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-ti-source-capture-coverage-disclosure>
                     <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
                         <span className='inline-flex items-center gap-2'><Camera className='h-4 w-4 text-ui-primary' /> Capture coverage</span>
-                        <span className='text-xs font-medium text-ui-muted'>{captures.length} captures across {sources.length} sources</span>
+                        <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
+                            {captures.length} captures across {sources.length} sources
+                            <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
+                        </span>
                     </summary>
                     <div className='grid gap-3 border-t border-ui-border p-4' data-ti-source-capture-coverage>
                         {sourceRows.map(row => (
