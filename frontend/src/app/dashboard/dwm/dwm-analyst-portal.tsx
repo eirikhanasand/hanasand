@@ -357,17 +357,13 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
             <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
                 <div className='border-b border-ui-border bg-ui-raised px-4 py-3 text-ui-text'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
-                            <StatusPill label='Cases' value={String(alerts.length)} tone={alerts.length ? 'warn' : 'neutral'} />
-                            <StatusPill label='Active' value={String(activeCount)} tone={activeCount ? 'warn' : 'neutral'} className='hidden sm:block' />
-                            <StatusPill label='Critical' value={String(criticalCount)} tone={criticalCount ? 'warn' : 'neutral'} />
-                            <StatusPill label='Ready' value={String(readyCount)} tone={readyCount ? 'good' : 'neutral'} />
-                            <StatusPill label='Fresh' value={String(freshCount)} tone={freshCount ? 'good' : 'neutral'} className='hidden sm:block' />
-                            <StatusPill label='80%+' value={String(highConfidenceCount)} tone={highConfidenceCount ? 'good' : 'neutral'} className='hidden sm:block' />
-                            <StatusPill label='Watchlist' value={`${watchTermCount} terms`} tone={watchTermCount ? 'good' : 'warn'} />
-                            <StatusPill label='Webhook' value={webhookState} tone={webhookReady(webhookState) ? 'good' : 'warn'} />
-                            <StatusPill label='Latest run' value={latestRunLabel} tone={operations?.latestRun?.status === 'completed' ? 'good' : 'neutral'} />
-                            <StatusPill label='API' value={apiProblemCount ? `${apiProblemCount} issue${apiProblemCount === 1 ? '' : 's'}` : 'Live'} tone={apiProblemCount ? 'warn' : 'good'} className='hidden sm:block' />
+                        <div className='min-w-0 flex-1 border-l border-ui-border pl-3 dark:border-ui-border'>
+                            <p className='wrap-break-word text-sm font-semibold text-ui-text'>
+                                {alerts.length} cases · {activeCount} active · {criticalCount} critical · {readyCount} ready
+                            </p>
+                            <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted'>
+                                {freshCount} fresh · {highConfidenceCount} at 80%+ confidence · {watchTermCount} watchlist terms · webhook {webhookState} · run {latestRunLabel} · {apiProblemCount ? `${apiProblemCount} data issue${apiProblemCount === 1 ? '' : 's'}` : 'data live'}
+                            </p>
                         </div>
                         <div className='min-w-0 text-left sm:shrink-0 sm:text-right'>
                             <p className='text-[10px] font-semibold uppercase text-ui-primary'>Monitoring state</p>
@@ -2134,16 +2130,6 @@ function ActorPanel({ snapshot }: { snapshot: DwmProductSnapshot }) {
                 {!snapshot.actorOverviews.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Actor profiles are checking metadata. Linked profiles stream here as evidence attaches to known actors.</p>}
             </div>
         </section>
-    )
-}
-
-function StatusPill({ label, value, tone, className = '' }: { label: string, value: string, tone: 'good' | 'warn' | 'neutral', className?: string }) {
-    const toneClass = tone === 'good' ? 'border-ui-success text-ui-success' : tone === 'warn' ? 'border-ui-warning text-ui-warning' : 'border-ui-border text-ui-text'
-    return (
-        <div className={`shrink-0 border-l py-1 pl-2 ${toneClass} ${className}`}>
-            <p className='text-[10px] font-semibold uppercase opacity-75'>{label}</p>
-            <p className='mt-0.5 text-sm font-semibold'>{value}</p>
-        </div>
     )
 }
 
