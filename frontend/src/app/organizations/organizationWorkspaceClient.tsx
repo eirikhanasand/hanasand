@@ -2395,13 +2395,13 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                 </div>
                             ) : (
                                 <div className='grid gap-3'>
-                                    <div className='grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)_auto] lg:items-start'>
+                                    <div className='grid gap-3 2xl:grid-cols-[minmax(16rem,1fr)_minmax(17rem,0.8fr)_auto] 2xl:items-start' data-org-watchlist-row-layout='true'>
                                         <div className='min-w-0'>
                                             <div className='flex flex-wrap items-center gap-2'>
                                                 <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{item.kind}</span>
                                                 <StatusPill status={item.status} />
                                             </div>
-                                            <p className='mt-2 wrap-break-word text-base font-semibold text-ui-text dark:text-ui-text'>{item.value}</p>
+                                            <p className='mt-2 line-clamp-2 break-words text-base font-semibold text-ui-text dark:text-ui-text'>{item.value}</p>
                                             <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{item.notes || 'No notes.'}</p>
                                             <div className='mt-2 grid gap-1 text-xs text-ui-muted dark:text-ui-muted sm:grid-cols-2'>
                                                 <span className='truncate'>Org: {sanitizeOrganizationDisplayCopy(item.organizationId || organization.id)}</span>
@@ -2565,7 +2565,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                     </a>
                 </div>
             </div>
-            <div className='grid gap-2 md:grid-cols-[8rem_minmax(12rem,1fr)_auto]'>
+            <div className='grid gap-2 xl:grid-cols-[8rem_minmax(16rem,1fr)_auto]'>
                 <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={!canManage || Boolean(busy)} onChange={value => onDraftChange({ ...draft, kind: value as DestinationDraft['kind'] })} />
                 <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                     URL
@@ -2574,7 +2574,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                 </label>
                 <label className='grid content-end'>
                     <span className='sr-only'>Test destination</span>
-                    <button type='button' className={primaryButtonClass} disabled={!canManage || !destinationUrl || destinationUrlInvalid || Boolean(busy)} onClick={() => onTest('save')}>
+                    <button type='button' className={`${primaryButtonClass} whitespace-nowrap`} disabled={!canManage || !destinationUrl || destinationUrlInvalid || Boolean(busy)} onClick={() => onTest('save')}>
                         <CheckCircle2 className='h-4 w-4' />
                         Test and save
                     </button>
