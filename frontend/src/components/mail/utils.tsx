@@ -46,9 +46,9 @@ export const emptyComposer: ComposerState = {
     attachments: [],
 }
 
-export const toolbarButton = 'inline-flex h-8 items-center gap-1.5 rounded-xl border border-ui-border bg-ui-raised px-2.5 text-[11px] font-medium text-ui-text transition hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-45'
+export const toolbarButton = 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-raised px-2.5 text-[11px] font-medium text-ui-text transition hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-45'
 export const iconButton = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-ui-border bg-ui-raised text-ui-muted transition hover:border-ui-primary hover:bg-ui-panel hover:text-ui-text disabled:cursor-not-allowed disabled:opacity-45'
-export const subtleInput = 'h-8 rounded-xl border border-ui-border bg-ui-raised px-3 text-xs text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:bg-ui-panel'
+export const subtleInput = 'h-8 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:bg-ui-panel'
 
 export function composeFromReply(mode: ComposerMode, message: MailMessage, ownAddress?: string): ComposerState {
     const subject = mode === 'forward'
@@ -208,8 +208,8 @@ export function AttachmentPreview({ attachment, mailboxUser }: { attachment: Mai
     const url = mailBlobUrl(mailboxUser, attachment.blobId, attachment.name)
     if (attachment.type.startsWith('image/')) {
         return (
-            <a href={url} target='_blank' rel='noopener noreferrer' className='rounded-2xl border border-ui-border bg-ui-raised p-2.5 transition hover:bg-ui-panel'>
-                <Image src={url} alt={attachment.name} className='h-36 w-full rounded-xl object-cover' />
+            <a href={url} target='_blank' rel='noopener noreferrer' className='rounded-lg border border-ui-border bg-ui-raised p-2.5 transition hover:bg-ui-panel'>
+                <Image src={url} alt={attachment.name} className='h-36 w-full rounded-lg object-cover' />
                 <p className='mt-2 truncate text-[11px] font-medium text-ui-text'>{attachment.name}</p>
             </a>
         )
@@ -217,8 +217,8 @@ export function AttachmentPreview({ attachment, mailboxUser }: { attachment: Mai
 
     if (attachment.type === 'application/pdf') {
         return (
-            <div className='rounded-2xl border border-ui-border bg-ui-raised p-2.5'>
-                <iframe title={attachment.name} src={url} className='h-48 w-full rounded-xl bg-ui-canvas' />
+            <div className='rounded-lg border border-ui-border bg-ui-raised p-2.5'>
+                <iframe title={attachment.name} src={url} className='h-48 w-full rounded-lg bg-ui-canvas' />
                 <a href={url} target='_blank' rel='noopener noreferrer' className='mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-ui-text'>
                     {attachment.name}
                     <Forward className='h-3.5 w-3.5' />
@@ -228,7 +228,7 @@ export function AttachmentPreview({ attachment, mailboxUser }: { attachment: Mai
     }
 
     return (
-        <a href={url} target='_blank' rel='noopener noreferrer' className='rounded-2xl border border-ui-border bg-ui-raised p-2.5 text-[11px] text-ui-muted transition hover:bg-ui-panel'>
+        <a href={url} target='_blank' rel='noopener noreferrer' className='rounded-lg border border-ui-border bg-ui-raised p-2.5 text-[11px] text-ui-muted transition hover:bg-ui-panel'>
             <p className='truncate font-medium text-ui-text'>{attachment.name}</p>
             <p className='mt-1 text-[10px] text-ui-muted'>{attachment.type} • {prettyBytes(attachment.size)}</p>
         </a>

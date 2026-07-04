@@ -19,7 +19,7 @@ export function MessageRow({ message, active, onClick }: {
         <button
             data-testid={`mail-message-${message.id}`}
             onClick={onClick}
-            className={`w-full rounded-2xl border px-3 py-2 text-left transition ${
+            className={`w-full rounded-lg border px-3 py-2 text-left transition ${
                 active
                     ? 'border-ui-primary bg-ui-primary/10'
                     : 'border-transparent bg-ui-raised hover:border-ui-border hover:bg-ui-panel'
@@ -139,7 +139,7 @@ export function Composer({
                         onChange={(event) => patch({ body: event.target.value })}
                     />
 
-                    <label className='inline-flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-dashed border-ui-border bg-ui-raised px-3 py-2 text-[11px] text-ui-muted hover:bg-ui-panel hover:text-ui-text'>
+                    <label className='inline-flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-dashed border-ui-border bg-ui-raised px-3 py-2 text-[11px] text-ui-muted hover:bg-ui-panel hover:text-ui-text'>
                         <Paperclip className='h-3.5 w-3.5' />
                         Add attachments
                         <input
@@ -158,7 +158,7 @@ export function Composer({
                     {!!state.attachments.length && (
                         <div className='grid gap-2 md:grid-cols-2'>
                             {state.attachments.map((attachment, index) => (
-                                <div key={`${attachment.name}-${index}`} className='rounded-2xl border border-ui-border bg-ui-raised px-3 py-2'>
+                                <div key={`${attachment.name}-${index}`} className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
                                     <div className='flex items-start justify-between gap-3'>
                                         <div className='min-w-0'>
                                             <p className='truncate text-xs font-medium text-ui-text'>{attachment.name}</p>
@@ -182,7 +182,7 @@ export function Composer({
                     <p className='text-[11px] text-ui-muted'>Sending as `{mailboxUser}`</p>
                     <div className='flex items-center gap-2'>
                         <button type='button' className={toolbarButton} onClick={onClose}>Cancel</button>
-                        <button data-testid='mail-compose-send' type='submit' className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-ui-primary px-3 text-[11px] font-medium text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45' disabled={submitting}>
+                        <button data-testid='mail-compose-send' type='submit' className='inline-flex h-8 items-center gap-1.5 rounded-lg bg-ui-primary px-3 text-[11px] font-medium text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45' disabled={submitting}>
                             <Send className='h-3.5 w-3.5' />
                             {submitting ? 'Sending…' : 'Send'}
                         </button>
@@ -249,13 +249,13 @@ function RecipientField({
                 onChange={(event) => onChange(event.target.value)}
             />
             {!!visibleSuggestions.length && (
-                <div className='absolute left-0 right-0 top-[calc(100%+0.35rem)] z-10 rounded-2xl border border-ui-border bg-ui-panel p-1 shadow-xl backdrop-blur-xl'>
+                <div className='absolute left-0 right-0 top-[calc(100%+0.35rem)] z-10 rounded-lg border border-ui-border bg-ui-panel p-1 shadow-xl backdrop-blur-xl'>
                     {visibleSuggestions.map((recipient) => (
                         <button
                             key={recipient.email}
                             type='button'
                             data-testid={`mail-recipient-suggestion-${recipient.email.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
-                            className='flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-ui-raised'
+                            className='flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left transition hover:bg-ui-raised'
                             onMouseDown={(event) => event.preventDefault()}
                             onClick={() => applySuggestion(recipient)}
                         >
