@@ -1477,7 +1477,7 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
                         </tbody>
                     </table>
                 </div>
-                {!visibleEvidence.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>No evidence for this source family yet.</p>}
+                {!visibleEvidence.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Choose another source family or rebuild alerts.</p>}
             </div>
         </div>
     )
@@ -2080,7 +2080,7 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
                         </div>
                     )
                 })}
-                {!visible.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>No delivery attempt is attached to this alert yet. Use Test or Send on the selected alert, then inspect the redacted destination, request id, retry state, and case trail here.</p>}
+                {!visible.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Test or send this alert to start delivery history.</p>}
             </div>
         </section>
     )

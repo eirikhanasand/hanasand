@@ -2328,7 +2328,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                 )}
                 {watchlists.length === 0 && (
                     <div className='rounded-lg border border-dashed border-ui-primary/35 bg-ui-panel p-4 text-sm leading-6 text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>
-                        <p className='font-semibold text-ui-text dark:text-ui-text'>No watchlist terms yet.</p>
+                        <p className='font-semibold text-ui-text dark:text-ui-text'>Create first watchlist term.</p>
                         <p className='mt-1'>Add a company, domain, vendor, or actor term.</p>
                     </div>
                 )}
@@ -2443,8 +2443,8 @@ function WatchlistDestinationSummary({ item, delivery }: { item: WatchlistItem, 
                 <span className='font-semibold text-ui-text dark:text-ui-text'>Destination</span>
                 <StatusPill status={destinationConfigured(item) ? 'configured' : 'none'} />
             </div>
-            <span className='truncate text-ui-muted dark:text-ui-muted'>{item.webhookEndpointHint || delivery?.endpointHint || 'No endpoint'}</span>
-            <span className='truncate font-mono text-ui-muted dark:text-ui-muted'>{item.webhookEndpointHash || delivery?.endpointHash || 'no_route_hash'}</span>
+            <span className='truncate text-ui-muted dark:text-ui-muted'>{item.webhookEndpointHint || delivery?.endpointHint || 'Set destination'}</span>
+            <span className='truncate font-mono text-ui-muted dark:text-ui-muted'>{item.webhookEndpointHash || delivery?.endpointHash || 'destination pending'}</span>
             <span className='truncate text-ui-muted dark:text-ui-muted'>Last delivery: {delivery?.status || 'none'}</span>
         </div>
     )
@@ -2454,7 +2454,7 @@ function DestinationDeliverySummary({ delivery }: { delivery?: DeliveryRow | nul
     if (!delivery) {
         return (
             <div className='grid gap-1 rounded-md bg-ui-raised px-3 py-2 text-xs text-ui-muted dark:bg-ui-canvas dark:text-ui-muted' data-org-destination-latest='empty'>
-                <span>No delivery attempts yet.</span>
+                <span>Test destination to start history.</span>
                 <span>Run a dry test or replay from delivery history.</span>
             </div>
         )
@@ -2467,7 +2467,7 @@ function DestinationDeliverySummary({ delivery }: { delivery?: DeliveryRow | nul
                 <StatusPill status={delivery.status || 'attempt'} />
                 <span>{formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}</span>
             </span>
-            <span className='truncate'>{failed ? sanitizeOrganizationDisplayCopy(delivery.error || delivery.errorClass || 'Delivery failed.') : sanitizeOrganizationDisplayCopy(delivery.responseSummary || delivery.errorClass || 'No failure reported.')}</span>
+            <span className='truncate'>{failed ? sanitizeOrganizationDisplayCopy(delivery.error || delivery.errorClass || 'Delivery failed.') : sanitizeOrganizationDisplayCopy(delivery.responseSummary || delivery.errorClass || 'Delivery accepted.')}</span>
             <span className='truncate font-mono'>Trace: {deliveryTraceLabel(delivery)}</span>
             {(delivery.nextRetryAt || delivery.attemptCount !== undefined || delivery.retryCount !== undefined) && (
                 <span className='truncate'>Retry: {delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
