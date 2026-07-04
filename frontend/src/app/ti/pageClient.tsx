@@ -5875,7 +5875,7 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
         <div data-ti-selected-case-ownership='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
                 <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
-                    Case workflow · {plan.summary.caseCandidates} candidates · {plan.summary.replayReady} replay-ready · {plan.summary.relatedAlerts} alerts · {plan.summary.captures} captures
+                    Case actions · {plan.summary.caseCandidates} candidates · {plan.summary.replayReady} replay-ready · {plan.summary.relatedAlerts} alerts · {plan.summary.captures} captures
                 </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(plan.state)}>{decisionStepStatusLabel(plan.state)}</span>
@@ -6236,14 +6236,16 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
         <div data-ti-selected-alert-action-plan='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
                 <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
-                    Alert workflow · {plan.readiness.matchedCandidateCount}/{plan.readiness.candidateCount} matches · {plan.sourceRefs.captureIds.length} captures · {plan.readiness.generationEvidenceWindowReady ? 'evidence current' : 'evidence pending'}
+                    Alert actions · {plan.readiness.matchedCandidateCount}/{plan.readiness.candidateCount} matches · {plan.sourceRefs.captureIds.length} captures · {plan.readiness.generationEvidenceWindowReady ? 'evidence current' : 'evidence pending'}
                 </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(status)}>{decisionStepStatusLabel(status)}</span>
                     <CopyPayloadButton label='Alert action plan' payload={plan} />
                 </div>
             </div>
-            <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.handoff.route || plan.route)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>
+                {plan.handoff.route || plan.route ? 'Console action path available.' : 'Console action path pending.'}
+            </p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                 {plan.watchlist.terms.slice(0, 4).map(term => (
@@ -6270,7 +6272,9 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                                 {row.casePath ? <span className={sourceHealthChipClass('ready')}>{displayRequirementText(row.casePath)}</span> : null}
                                 {row.captureIds.length ? <span className={sourceHealthChipClass('ready')}>{row.captureIds.length} capture{row.captureIds.length === 1 ? '' : 's'}</span> : <span className={sourceHealthChipClass('blocked')}>capture needed</span>}
                             </div>
-                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.route)}</p>
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
+                                {row.route ? 'Source action path available.' : 'Source action path pending.'}
+                            </p>
                             {row.blockers.length ? (
                                 <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(row.blockers.slice(0, 3))}</p>
                             ) : null}
@@ -6301,14 +6305,16 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
         <div data-ti-selected-delivery-readiness='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
                 <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
-                    Delivery workflow · {plan.summary.alerts} alerts · {plan.summary.captures} captures · {plan.summary.destinations} destinations · {plan.summary.caseRoutes} case routes
+                    Delivery actions · {plan.summary.alerts} alerts · {plan.summary.captures} captures · {plan.summary.destinations} destinations · {plan.summary.caseRoutes} case routes
                 </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(plan.state)}>{decisionStepStatusLabel(plan.state)}</span>
                     <CopyPayloadButton label='Delivery status' payload={plan} />
                 </div>
             </div>
-            <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.handoff.route || plan.route)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>
+                {plan.handoff.route || plan.route ? 'Delivery action path available.' : 'Delivery action path pending.'}
+            </p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 grid gap-2'>
                 {plan.alerts.slice(0, 3).map(alert => (
@@ -9664,8 +9670,8 @@ function relevanceLabelForStaged(status: StagedHandoff['relevanceState']) {
 function readinessOwnerLabel(owner: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']) {
     if (owner === 'public-ti') return 'Public TI'
     if (owner === 'org') return 'Organization'
-    if (owner === 'alert') return 'Alert workflow'
-    if (owner === 'case') return 'Case workflow'
+    if (owner === 'alert') return 'Alert actions'
+    if (owner === 'case') return 'Case actions'
     if (owner === 'webhook') return 'Webhook delivery'
     if (owner === 'entitlement') return 'Entitlement'
     return 'Source collection'
