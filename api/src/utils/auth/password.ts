@@ -7,7 +7,7 @@ export async function validatePassword(password: string) {
     }
 
     const pwned = await checkPwned(password)
-    if ('count' in pwned) {
+    if (!pwned.ok) {
         return {
             valid: false,
             error: `This password is weak, and has been pwned ${pwned.count} ${pwned.count === 1 ? 'time' : 'times'}.`

@@ -67,6 +67,19 @@ export default async function ensureSchema() {
         reservedUsernames.map(username => `${username} reserved account`),
     ])
     await run('UPDATE users SET reserved = TRUE WHERE lower(id) = ANY($1::text[])', [reservedUsernames])
+    await run(`
+        UPDATE users
+        SET active = TRUE,
+            deactivated_at = NULL,
+            deactivated_by = NULL,
+            deletion_requested_at = NULL,
+            deletion_scheduled_at = NULL,
+            name = CASE
+                WHEN name = id || ' reserved account' THEN 'Eirik Hanasand'
+                ELSE name
+            END
+        WHERE lower(id) = ANY($1::text[])
+    `, [(process.env.HANASAND_OWNER_USER_IDS || 'eirikhanasand').split(',').map(id => id.trim().toLowerCase()).filter(Boolean)])
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS user_agent TEXT NOT NULL DEFAULT \'\'')
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()')
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ')

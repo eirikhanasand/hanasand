@@ -8342,7 +8342,7 @@ function organizationWatchlistAlertCaseProofBlockers(input: {
         blockers.push({
             code: 'no_active_org',
             severity: 'blocker',
-            message: 'An active organization and tenant id are required for org-scoped alert/case proof.',
+            message: 'An active organization and tenant id are required for org-scoped alert/case handoff.',
         })
     }
 
@@ -8350,7 +8350,7 @@ function organizationWatchlistAlertCaseProofBlockers(input: {
         blockers.push({
             code: 'no_active_admin',
             severity: 'blocker',
-            message: 'Org alert/case proof requires at least one active owner/admin.',
+            message: 'Org alert/case handoff requires at least one active owner/admin.',
         })
     }
 
