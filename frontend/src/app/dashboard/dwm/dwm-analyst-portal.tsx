@@ -2316,5 +2316,14 @@ function stateLabel(value: string) {
 function relativeTimeLabel(value: string) {
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return value
+    const deltaMs = Date.now() - date.getTime()
+    const absMinutes = Math.round(Math.abs(deltaMs) / 60000)
+    const suffix = deltaMs >= 0 ? 'ago' : 'from now'
+    if (absMinutes < 1) return deltaMs >= 0 ? 'just now' : 'under 1 min from now'
+    if (absMinutes < 60) return `${absMinutes} min ${suffix}`
+    const absHours = Math.round(absMinutes / 60)
+    if (absHours < 24) return `${absHours} hr ${suffix}`
+    const absDays = Math.round(absHours / 24)
+    if (absDays < 7) return `${absDays} day${absDays === 1 ? '' : 's'} ${suffix}`
     return shortTime(value)
 }
