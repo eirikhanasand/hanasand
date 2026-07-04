@@ -5777,8 +5777,20 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
     onRelevance: (state: LocalRelevanceMark['state']) => void
     onStage: () => void
 }) {
+    const [showWorkflowDetails, setShowWorkflowDetails] = useState(false)
     const readyForCase = Boolean(reviewHandoff?.caseHandoff.ready)
     const readyForAlert = Boolean(reviewHandoff?.alertHandoff.ready)
+    const workflowDetailCount = [
+        caseDraft,
+        caseOwnership,
+        caseCreateRequest,
+        watchlistPlan,
+        alertPlan,
+        deliveryPlan,
+        enrichmentTriage,
+        caseActionTrail,
+        reviewHandoff,
+    ].filter(Boolean).length
     return (
         <Panel title='Session Notes' description='These controls are local to this browser session. Use them for scratch triage only; persisted ownership, delivery, and audit history live in the authenticated console.' icon={<ClipboardList className='h-4 w-4' />}>
             <div className='grid gap-3'>
@@ -5829,14 +5841,50 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                         <ActionButton icon={<XCircle className='h-3.5 w-3.5' />} onClick={() => onRelevance('not_relevant')}>Not relevant</ActionButton>
                     </div>
                 </div>
-                {caseDraft ? <SelectedCaseDraftPanel draft={caseDraft} /> : null}
-                {caseOwnership ? <SelectedCaseOwnershipPanel plan={caseOwnership} /> : null}
-                {caseCreateRequest ? <SelectedCaseCreateRequestPanel request={caseCreateRequest} /> : null}
-                {watchlistPlan ? <SelectedWatchlistPlanPanel plan={watchlistPlan} /> : null}
-                {alertPlan ? <SelectedAlertActionPlanPanel plan={alertPlan} /> : null}
-                {deliveryPlan ? <SelectedDeliveryReadinessPanel plan={deliveryPlan} /> : null}
-                {enrichmentTriage ? <SelectedEnrichmentTriagePanel triage={enrichmentTriage} /> : null}
-                {caseActionTrail ? <CaseActionTrailPanel trail={caseActionTrail} /> : null}
+                {workflowDetailCount ? (
+                    <button type='button' onClick={() => setShowWorkflowDetails(value => !value)} className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
+                        {showWorkflowDetails ? 'Hide workflow detail' : `Show workflow detail (${workflowDetailCount})`}
+                    </button>
+                ) : null}
+                {showWorkflowDetails ? (
+                    <>
+                        {caseDraft ? <SelectedCaseDraftPanel draft={caseDraft} /> : null}
+                        {caseOwnership ? <SelectedCaseOwnershipPanel plan={caseOwnership} /> : null}
+                        {caseCreateRequest ? <SelectedCaseCreateRequestPanel request={caseCreateRequest} /> : null}
+                        {watchlistPlan ? <SelectedWatchlistPlanPanel plan={watchlistPlan} /> : null}
+                        {alertPlan ? <SelectedAlertActionPlanPanel plan={alertPlan} /> : null}
+                        {deliveryPlan ? <SelectedDeliveryReadinessPanel plan={deliveryPlan} /> : null}
+                        {enrichmentTriage ? <SelectedEnrichmentTriagePanel triage={enrichmentTriage} /> : null}
+                        {caseActionTrail ? <CaseActionTrailPanel trail={caseActionTrail} /> : null}
+                        {reviewHandoff ? (
+                            <div data-ti-selected-review-handoff='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
+                                <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                                    <div className='min-w-0'>
+                                        <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Selected review package</p>
+                                        <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
+                                            Copyable evidence, rationale, and review state for authenticated case review. This does not save public-page notes.
+                                        </p>
+                                    </div>
+                                    <CopyPayloadButton label='Selected review package' payload={reviewHandoff} />
+                                </div>
+                                <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                    <span className={readyForAlert ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
+                                        alert {readyForAlert ? 'ready' : 'syncing'}
+                                    </span>
+                                    <span className={readyForCase ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
+                                        case {readyForCase ? 'ready' : 'syncing'}
+                                    </span>
+                                    <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
+                                        {reviewHandoff.evidenceBasis.length} evidence item{reviewHandoff.evidenceBasis.length === 1 ? '' : 's'}
+                                    </span>
+                                </div>
+                                {reviewHandoff.blockers.length ? (
+                                    <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(reviewHandoff.blockers.slice(0, 2))}</p>
+                                ) : null}
+                            </div>
+                        ) : null}
+                    </>
+                ) : null}
                 <button
                     type='button'
                     onClick={onStage}
@@ -5846,33 +5894,6 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                     <ClipboardList className='h-3.5 w-3.5' />
                     Stage handoff
                 </button>
-                {reviewHandoff ? (
-                    <div data-ti-selected-review-handoff='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
-                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                            <div className='min-w-0'>
-                                <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Selected review package</p>
-                                <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                                    Copyable evidence, rationale, and review state for authenticated case review. This does not save public-page notes.
-                                </p>
-                            </div>
-                            <CopyPayloadButton label='Selected review package' payload={reviewHandoff} />
-                        </div>
-                        <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
-                            <span className={readyForAlert ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
-                                alert {readyForAlert ? 'ready' : 'syncing'}
-                            </span>
-                            <span className={readyForCase ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
-                                case {readyForCase ? 'ready' : 'syncing'}
-                            </span>
-                            <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                {reviewHandoff.evidenceBasis.length} evidence item{reviewHandoff.evidenceBasis.length === 1 ? '' : 's'}
-                            </span>
-                        </div>
-                        {reviewHandoff.blockers.length ? (
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(reviewHandoff.blockers.slice(0, 2))}</p>
-                        ) : null}
-                    </div>
-                ) : null}
             </div>
         </Panel>
     )
