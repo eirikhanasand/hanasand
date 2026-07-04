@@ -17,7 +17,7 @@ test('DWM case detail keeps row-heavy evidence behind disclosures', async () => 
     expect(source).toContain('sendWebhook')
     expect(source).toContain('Manage destination')
     expect(source).toContain('Delivery history')
-    expect(source).toContain("focus: 'destinations'")
+    expect(source).toContain('focus: \'destinations\'')
     expect(source).toContain('latestDelivery.nextRetryAt')
     expect(source).toContain('latestDelivery.requestId || latestDelivery.auditEventId')
     expect(source).toContain('Case export')

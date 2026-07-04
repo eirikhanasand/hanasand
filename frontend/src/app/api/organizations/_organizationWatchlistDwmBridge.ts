@@ -3,9 +3,10 @@ import { cookies } from 'next/headers'
 import { authApiUrl } from '@/utils/auth/authApiUrl'
 
 type MutationMethod = 'POST' | 'PUT' | 'DELETE'
+type JsonRecord = Record<string, unknown>
 
 type ProxyResult = {
-    payload: Record<string, any>
+    payload: JsonRecord
     status: number
 }
 
@@ -43,7 +44,7 @@ export async function proxyOrganizationWatchlistMutation(request: NextRequest, p
     return NextResponse.json({ ...organizationResult.payload, dwmAlertBridge }, { status: organizationResult.status, headers: { 'cache-control': 'no-store' } })
 }
 
-export function buildDwmWatchlistMirrorPayload(input: { organizationId: string, watchlistItem: Record<string, any> | undefined }): DwmWatchlistMirrorPayload | null {
+export function buildDwmWatchlistMirrorPayload(input: { organizationId: string, watchlistItem: JsonRecord | undefined }): DwmWatchlistMirrorPayload | null {
     const item = input.watchlistItem
     const value = String(item?.value ?? item?.term ?? '').trim()
     const itemId = String(item?.id ?? item?.watchlistItemId ?? '').trim()
@@ -64,11 +65,11 @@ export function buildDwmWatchlistMirrorPayload(input: { organizationId: string, 
     }
 }
 
-export function buildDwmWatchlistMirrorPayloads(input: { organizationId: string, organizationPayload: Record<string, any> }): DwmWatchlistMirrorPayload[] {
+export function buildDwmWatchlistMirrorPayloads(input: { organizationId: string, organizationPayload: JsonRecord }): DwmWatchlistMirrorPayload[] {
     const items = [
         input.organizationPayload.watchlistItem,
         ...arrayOfRecords(input.organizationPayload.archivedItems),
-    ].filter(Boolean) as Record<string, any>[]
+    ].filter(Boolean) as JsonRecord[]
     const payloads = items
         .map(watchlistItem => buildDwmWatchlistMirrorPayload({ organizationId: input.organizationId, watchlistItem }))
         .filter((payload): payload is DwmWatchlistMirrorPayload => Boolean(payload))
@@ -112,7 +113,7 @@ async function forwardOrganizationMutation(request: NextRequest, path: string, m
     }
 }
 
-async function mirrorOrganizationWatchlistToDwm(request: NextRequest, organizationId: string, organizationPayload: Record<string, any>) {
+async function mirrorOrganizationWatchlistToDwm(request: NextRequest, organizationId: string, organizationPayload: JsonRecord) {
     const base = process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
     const mirrorPayloads = buildDwmWatchlistMirrorPayloads({ organizationId, organizationPayload })
     if (!base) {
@@ -224,15 +225,15 @@ async function fetchDwmAlertPreview(base: string, alertId: string, organizationI
     return buildDwmWatchlistMirrorAlertPreview(payload)
 }
 
-export function buildDwmWatchlistMirrorAlertPreview(payload: Record<string, any>): DwmWatchlistMirrorAlertPreview | undefined {
-    const alert = payload.alert && typeof payload.alert === 'object' ? payload.alert : payload
+export function buildDwmWatchlistMirrorAlertPreview(payload: JsonRecord): DwmWatchlistMirrorAlertPreview | undefined {
+    const alert = objectValue(payload.alert) ?? payload
     const id = stringValue(alert.id ?? payload.alertId)
     if (!id) return undefined
     const evidence = Array.isArray(alert.evidence) ? alert.evidence : []
     const evidenceSummary = objectValue(alert.evidenceSummary)
     const workflowContext = objectValue(alert.workflowContext)
     const matchReason = objectValue(alert.matchReason ?? workflowContext?.matchReason)
-    const firstEvidence = evidence.find((item: any) => item && typeof item === 'object') ?? {}
+    const firstEvidence = evidence.map(objectValue).find(Boolean) ?? {}
     const matchedTerm = stringValue(alert.matchedTerm?.value ?? matchReason?.matchedTerm?.value ?? matchReason?.matchedTerm)
     return {
         id,
@@ -248,9 +249,9 @@ export function buildDwmWatchlistMirrorAlertPreview(payload: Record<string, any>
     }
 }
 
-function arrayOfRecords(value: unknown): Record<string, any>[] {
+function arrayOfRecords(value: unknown): JsonRecord[] {
     if (!Array.isArray(value)) return []
-    return value.filter((item): item is Record<string, any> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    return value.filter((item): item is JsonRecord => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
 }
 
 function normalizeDwmTermKind(value: unknown) {
@@ -264,7 +265,7 @@ function bearerToken(value: string | null) {
     return value.slice('Bearer '.length).trim()
 }
 
-function parseJsonObject(text: string): Record<string, any> {
+function parseJsonObject(text: string): JsonRecord {
     try {
         const parsed = text ? JSON.parse(text) : {}
         return parsed && typeof parsed === 'object' ? parsed : {}
@@ -273,8 +274,8 @@ function parseJsonObject(text: string): Record<string, any> {
     }
 }
 
-function objectValue(value: unknown): Record<string, any> | undefined {
-    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : undefined
+function objectValue(value: unknown): JsonRecord | undefined {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : undefined
 }
 
 function stringValue(value: unknown) {

@@ -14,7 +14,7 @@ export default function SummaryGrid({
         ? 'Scan running'
         : attention
             ? 'Scanner needs review'
-            : 'Scanner is quiet'
+            : 'Scanner operating normally'
 
     return (
         <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.55fr)] lg:items-start'>

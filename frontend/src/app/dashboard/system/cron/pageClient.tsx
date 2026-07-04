@@ -209,7 +209,7 @@ function primaryHeadline(summary: { failed: number, running: number, total: numb
     if (summary.failed === 1) return '1 job needs review'
     if (summary.failed) return `${summary.failed} jobs need review`
     if (summary.running) return `${summary.running} job${summary.running === 1 ? '' : 's'} running now`
-    return 'All scheduled jobs are quiet'
+    return 'All scheduled jobs operating normally'
 }
 
 function needsAttention(job: ManagedCronJob) {

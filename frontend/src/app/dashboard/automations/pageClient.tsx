@@ -531,7 +531,7 @@ function routeQueueHeadline(total: number, failing: number) {
     if (!total) return 'No routes yet'
     if (failing === 1) return '1 route needs attention'
     if (failing) return `${failing} routes need attention`
-    return 'Routes are quiet'
+    return 'Routes operating normally'
 }
 
 function IconButton({ label, icon, onClick, tone = 'default', disabled = false }: { label: string, icon: React.ReactNode, onClick: () => void, tone?: 'default' | 'danger', disabled?: boolean }) {

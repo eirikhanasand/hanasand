@@ -354,7 +354,7 @@ export default function OnionSessionPageClient() {
                                     }
                                 }}
                                 aria-label='Remote browser target URL'
-                                className='h-9 min-w-[14rem] flex-1 rounded-md border border-ui-border bg-ui-canvas px-3 font-mono text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                                className='h-9 min-w-56 flex-1 rounded-md border border-ui-border bg-ui-canvas px-3 font-mono text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                             />
                             {sessionState === 'live' ? (
                                 <button type='button' data-onion-action='end' className='inline-flex h-9 items-center justify-center gap-2 rounded-md border border-ui-danger/30 bg-ui-danger/15 px-3 text-sm font-semibold text-ui-danger'>
