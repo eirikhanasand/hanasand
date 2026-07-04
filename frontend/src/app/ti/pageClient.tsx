@@ -2749,7 +2749,7 @@ function StructuredProvenancePanel({ rows, actor, actionability, query }: { rows
                                     ) : null}
                                 </div>
                             </div>
-                            <p className='mt-1 break-all font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.provenance)}</p>
+                            <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.provenance)}</p>
                             <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{row.shownBecause}</p>
                         </div>
                     )
@@ -2903,7 +2903,7 @@ function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenc
                                 <p className='wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                     {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'Source reference needed'} · {item.captureIds.length ? `${item.captureIds.length} capture reference${item.captureIds.length === 1 ? '' : 's'}` : 'capture needed'} · {item.missing.length ? `needs ${item.missing.map(coverageMissingLabel).join(', ')}` : 'case context ready'}
                                 </p>
-                                {item.provenanceRefs[0] ? <p className='break-all font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{item.provenanceRefs[0]}</p> : null}
+                                {item.provenanceRefs[0] ? <p className='wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(item.provenanceRefs[0])}</p> : null}
                             </div>
                         </div>
                     )
@@ -2976,7 +2976,7 @@ function CampaignTimelinePanel({ timeline }: { timeline: TiActorIntelligenceProf
                                 <p className='wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                     {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'source reference needed'} · {item.provenanceRefs.length ? `${item.provenanceRefs.length} source detail${item.provenanceRefs.length === 1 ? '' : 's'}` : 'source detail needed'} · {item.missing.length ? `needs ${item.missing.map(coverageMissingLabel).join(', ')}` : 'case context ready'}
                                 </p>
-                                {item.provenanceRefs[0] ? <p className='break-all font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{item.provenanceRefs[0]}</p> : null}
+                                {item.provenanceRefs[0] ? <p className='wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(item.provenanceRefs[0])}</p> : null}
                             </div>
                         </div>
                     )
@@ -4959,13 +4959,22 @@ function sourceHealthChipClass(state: SourceHealthRow['state']) {
     return 'max-w-full wrap-break-word rounded-md border border-ui-warning/35 bg-ui-warning/10 px-2 py-1 text-[11px] font-semibold text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'
 }
 
+function compactSourceReferenceLabel(value: string) {
+    const cleaned = displayRequirementText(value).trim()
+    if (!cleaned) return 'Source reference attached.'
+    if (/^https?:\/\//i.test(value) || /[/?=&]{2,}/.test(value)) return 'Source reference attached.'
+    if (/[{}[\]]/.test(value) || /\b[a-f0-9]{24,}\b/i.test(value)) return 'Source reference attached.'
+    if (cleaned.length > 96) return 'Source reference attached.'
+    return cleaned
+}
+
 function sourceHealthEvidenceLabel(row: SourceHealthRow) {
     if (row.captureId) return `capture ${row.captureId}`
     const hasFieldPath = row.provenance.includes('[') || row.provenance.includes(']') || /sourceProvenance|relatedAlerts|handoffs|actorIntelligence/i.test(row.provenance)
     if (hasFieldPath) {
         return `${formatLabel(row.sourceFamily)} evidence request`
     }
-    return displayRequirementText(row.provenance)
+    return compactSourceReferenceLabel(row.provenance)
 }
 
 function sourceHealthFieldLabel(value: string) {
@@ -5573,7 +5582,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                             {formatLabel(row.sourceFamily)} · {formatDate(row.timestamp)} · {row.parserStatus}
                                         </p>
-                                        <p className='mt-1 break-all font-mono text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
+                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                             {sourceHealthEvidenceLabel(row)}
                                         </p>
                                     </div>
@@ -6021,7 +6030,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='wrap-break-word text-[11px] font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}{row.sourceId ? ` · source ${row.sourceId}` : ''}</p>
-                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.provenance)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.provenance)}</p>
                                 </div>
                                 <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? `capture ${row.captureId}` : 'capture needed'}</span>
                             </div>
@@ -6148,7 +6157,7 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                                                 </div>
                                                 <span className={sourceHealthChipClass(source.captureId ? 'ready' : 'blocked')}>{source.captureId ? `capture ${source.captureId}` : 'capture needed'}</span>
                                             </div>
-                                            <p className='mt-1 break-all font-mono text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(source.provenance)}</p>
+                                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(source.provenance)}</p>
                                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{source.shownBecause}</p>
                                         </div>
                                     ))}
@@ -6422,7 +6431,7 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='wrap-break-word text-[11px] font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}{row.sourceId ? ` · source ${row.sourceId}` : ''}</p>
-                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.provenance)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.provenance)}</p>
                                 </div>
                                 <span className={sourceHealthChipClass(row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'blocked' : 'review')}>
                                     {row.captureId ? `capture ${row.captureId}` : 'capture needed'}
