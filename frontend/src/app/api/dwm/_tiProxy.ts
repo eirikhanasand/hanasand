@@ -17,6 +17,8 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
         const cookieStore = await cookies()
         const token = cookieStore.get('access_token')?.value || bearerToken(request.headers.get('authorization')) || ''
         const id = cookieStore.get('id')?.value || request.headers.get('id') || ''
+        const actorId = request.headers.get('x-actor-id') || id
+        const userEmail = request.headers.get('x-user-email') || ''
         const impersonationToken = cookieStore.get('impersonation_token')?.value || request.headers.get('x-impersonation-token') || ''
         const target = new URL(path, base)
         for (const [key, value] of request.nextUrl.searchParams.entries()) {
@@ -33,6 +35,8 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
                 'x-organization-id': request.headers.get('x-organization-id') || '',
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 ...(id ? { id } : {}),
+                ...(actorId ? { 'x-actor-id': actorId, 'x-user-id': actorId } : {}),
+                ...(userEmail ? { 'x-user-email': userEmail } : {}),
                 ...(impersonationToken ? { 'x-impersonation-token': impersonationToken } : {}),
             },
             signal: AbortSignal.timeout(options.timeoutMs ?? 12000),

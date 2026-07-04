@@ -367,13 +367,13 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
         : '/organizations?focus=destinations'
 
     return (
-        <main className='grid gap-3 text-ui-text'>
-            <section className='rounded-lg border border-ui-border bg-ui-canvas'>
-                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
-                    <div className='min-w-0'>
+        <main className='grid min-w-0 gap-3 text-ui-text'>
+            <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-canvas'>
+                <div className='grid min-w-0 gap-3 border-b border-ui-border px-4 py-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between'>
+                    <div className='min-w-0 flex-1'>
                         <Link href='/dashboard/dwm' className='inline-flex items-center gap-2 text-[11px] font-semibold uppercase text-ui-primary'><ArrowLeft className='h-3.5 w-3.5' />DWM cases</Link>
                         <h1 className='mt-2 min-w-0 wrap-break-word text-xl font-semibold text-ui-text'>{caseRecord.title || caseRecord.id}</h1>
-                        <p className='mt-1 text-xs text-ui-muted'>{caseRecord.id} · {caseRecord.organizationId || organizationId || 'organization pending'} · alert {caseRecord.alertId || alertContext?.id || alertId || 'pending'}</p>
+                        <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{caseRecord.id} · {caseRecord.organizationId || organizationId || 'organization pending'} · alert {caseRecord.alertId || alertContext?.id || alertId || 'pending'}</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         <CasePill label='Status' value={caseRecord.status || 'open'} tone={caseRecord.status === 'closed' ? 'neutral' : 'ready'} />
@@ -382,8 +382,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                     </div>
                 </div>
 
-                <div className='grid gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_360px]'>
-                    <section className='grid gap-3'>
+                <div className='grid min-w-0 gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_360px]'>
+                    <section className='grid min-w-0 gap-3'>
                         <CaseCommandBar
                             caseId={caseRecord.id}
                             tenantId={scopedTenantId}
@@ -412,43 +412,47 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
                         <WorkflowStrip detail={state.detail} exportPayload={state.exportPayload} />
 
-                        <CollapsiblePanel title='Evidence rows' action={`${evidence.length} rows`}>
-                            <div className='overflow-hidden rounded-lg border border-ui-border'>
-                                <table className='w-full min-w-[760px] text-left text-xs'>
-                                    <thead className='bg-ui-panel text-ui-muted'>
-                                        <tr>
-                                            <th className='px-3 py-2 font-semibold'>Source</th>
-                                            <th className='px-3 py-2 font-semibold'>Observed</th>
-                                            <th className='px-3 py-2 font-semibold'>Excerpt</th>
-                                            <th className='px-3 py-2 font-semibold'>Provenance</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className='divide-y divide-ui-border bg-ui-canvas'>
-                                        {evidence.length ? evidence.map((row, index) => (
-                                            <tr key={row.id || index}>
-                                                <td className='px-3 py-2 align-top font-semibold text-ui-text'>{row.sourceName || row.provenance?.sourceId || 'source pending'}<p className='text-[11px] font-normal text-ui-muted'>{stateLabel(row.sourceFamily)}</p></td>
-                                                <td className='px-3 py-2 align-top text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</td>
-                                                <td className='max-w-xl px-3 py-2 align-top text-ui-text'>{row.safeExcerpt || row.excerpt || 'No safe excerpt available.'}</td>
-                                                <td className='px-3 py-2 align-top font-mono text-[11px] text-ui-muted'>{row.provenance?.captureId || row.id || 'capture pending'}<p>{row.contentHash || row.provenance?.contentHash || 'hash pending'}</p></td>
+                        <section className='grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]'>
+                            <Panel title='Evidence' action={`${evidence.length} rows`}>
+                                <div className='overflow-x-auto rounded-lg border border-ui-border'>
+                                    <table className='w-full min-w-[760px] text-left text-xs'>
+                                        <thead className='bg-ui-canvas text-ui-muted'>
+                                            <tr>
+                                                <th className='px-3 py-2 font-semibold'>Source</th>
+                                                <th className='px-3 py-2 font-semibold'>Observed</th>
+                                                <th className='px-3 py-2 font-semibold'>Excerpt</th>
+                                                <th className='px-3 py-2 font-semibold'>Provenance</th>
                                             </tr>
-                                        )) : (
-                                            <tr><td colSpan={4} className='px-3 py-8 text-center text-ui-muted'>No evidence rows are attached to this case.</td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </CollapsiblePanel>
+                                        </thead>
+                                        <tbody className='divide-y divide-ui-border bg-ui-panel'>
+                                            {evidence.length ? evidence.map((row, index) => (
+                                                <tr key={row.id || index} className='hover:bg-ui-raised'>
+                                                    <td className='px-3 py-2 align-top font-semibold text-ui-text'>{row.sourceName || row.provenance?.sourceId || 'source pending'}<p className='text-[11px] font-normal text-ui-muted'>{stateLabel(row.sourceFamily)}</p></td>
+                                                    <td className='px-3 py-2 align-top text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</td>
+                                                    <td className='max-w-xl px-3 py-2 align-top text-ui-text'>{row.safeExcerpt || row.excerpt || 'No safe excerpt available.'}</td>
+                                                    <td className='px-3 py-2 align-top font-mono text-[11px] text-ui-muted'>{row.provenance?.captureId || row.id || 'capture pending'}<p>{row.contentHash || row.provenance?.contentHash || 'hash pending'}</p></td>
+                                                </tr>
+                                            )) : (
+                                                <tr><td colSpan={4} className='px-3 py-8 text-center text-ui-muted'>No evidence rows are attached to this case.</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </Panel>
 
-                        <CollapsiblePanel title='Audit timeline' action={`${timeline.length} events`}>
-                            <div className='grid gap-2'>
-                                {timeline.length ? timeline.map((row, index) => (
-                                    <TimelineItem key={row.id || index} row={row} />
-                                )) : <EmptyLine text='No workflow events have been recorded yet.' />}
-                            </div>
-                        </CollapsiblePanel>
+                            <Panel title='Audit timeline' action={`${timeline.length} events`}>
+                                <div className='max-h-[420px] overflow-y-auto pr-1'>
+                                    <div className='grid gap-2'>
+                                        {timeline.length ? timeline.map((row, index) => (
+                                            <TimelineItem key={row.id || index} row={row} compact />
+                                        )) : <EmptyLine text='No workflow events have been recorded yet.' />}
+                                    </div>
+                                </div>
+                            </Panel>
+                        </section>
                     </section>
 
-                    <aside data-dwm-case-action-dock className='order-first grid content-start gap-3 xl:order-none'>
+                    <aside data-dwm-case-action-dock className='order-first grid min-w-0 content-start gap-3 xl:order-none'>
                         <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
                             <div className='flex items-center justify-between gap-2'>
                                 <h2 className='text-sm font-semibold text-ui-text'>Analyst actions</h2>
@@ -458,7 +462,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                             <input value={owner} onChange={event => setOwner(event.target.value)} placeholder='owner@company.com' className='mt-1 h-10 w-full rounded-lg border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary/35' />
                             <label className='mt-3 block text-[10px] font-semibold uppercase text-ui-muted'>Reason</label>
                             <textarea value={note} onChange={event => setNote(event.target.value)} placeholder='Decision rationale, delivery context, or customer note.' className='mt-1 min-h-24 w-full resize-y rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm leading-6 text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary/35' />
-                            <div className='mt-3 grid grid-cols-2 gap-2'>
+                            <div className='mt-3 grid gap-2 sm:grid-cols-2'>
                                 {actions.map(action => <ActionButton key={action.id} action={action} busy={busy === action.id} disabled={readOnly || busy !== null || !action.enabled} onClick={() => runAction(action)} />)}
                             </div>
                             <button type='button' onClick={notifyCustomer} disabled={readOnly || busy !== null} className='mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
@@ -474,22 +478,22 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                     <KeyValue label='Attempted' value={relativeTime(latestDelivery.attemptedAt)} />
                                     <KeyValue label='Endpoint' value={latestDelivery.endpointHint || latestDelivery.endpointHash || latestDelivery.webhookDestinationId || latestDelivery.destinationId || 'destination pending'} mono />
                                     <KeyValue label='Dedupe' value={latestDelivery.dedupeKey || 'pending'} mono />
-                                    <div className='grid grid-cols-2 gap-2'>
+                                    <div className='grid gap-2 sm:grid-cols-2'>
                                         <KeyValue label='Request' value={latestDelivery.requestId || latestDelivery.auditEventId || 'pending'} mono />
                                         <KeyValue label='Retry' value={latestDelivery.nextRetryAt ? relativeTime(latestDelivery.nextRetryAt) : latestDelivery.errorClass ? stateLabel(latestDelivery.errorClass) : `${latestDelivery.attemptCount ?? latestDelivery.retryCount ?? 0} attempts`} />
                                     </div>
-                                    <div className='grid grid-cols-2 gap-2'>
+                                    <div className='grid gap-2 sm:grid-cols-2'>
                                         <KeyValue label='Mode' value={latestDelivery.dryRun ? 'Dry run' : latestDelivery.httpStatus ? `HTTP ${latestDelivery.httpStatus}` : 'queued'} />
                                         <KeyValue label='Case link' value={caseRecord.id} mono />
                                     </div>
                                     {latestDelivery.error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-ui-danger'>{latestDelivery.error}</p> : null}
                                 </div>
                             ) : <EmptyLine text='No webhook delivery attempt is attached to this case.' />}
-                            <div className='mt-3 grid grid-cols-2 gap-2'>
+                            <div className='mt-3 grid gap-2 sm:grid-cols-2'>
                                 <CommandLink href={destinationHref}>Manage destination</CommandLink>
                                 <CommandLink href={deliveryHistoryHref}>Delivery history</CommandLink>
                             </div>
-                            <div className='mt-3 grid grid-cols-2 gap-2'>
+                            <div className='mt-3 grid gap-2 sm:grid-cols-2'>
                                 <button type='button' onClick={() => sendWebhook(true)} disabled={readOnly || busy !== null || !(caseRecord.alertId || alertId)} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
                                     {busy === 'webhook-test' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}Test
                                 </button>
@@ -537,13 +541,13 @@ function RouteHandoffStrip({ routeRun, detail, exportPayload, latestDelivery }: 
 
     return (
         <section data-dwm-case-route-handoff className='rounded-lg border border-ui-border bg-ui-panel p-3'>
-            <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
+            <div className='grid gap-3'>
                 <div className='min-w-0'>
                     <p className='text-[10px] font-semibold uppercase text-ui-primary'>Route handoff</p>
                     <h2 className='mt-1 text-sm font-semibold text-ui-text'>Case opened from {label.toLowerCase()}</h2>
                     <p className='mt-1 text-xs leading-5 text-ui-muted'>Review the matched evidence, delivery state, and case decision before customer notification.</p>
                 </div>
-                <div className='grid grid-cols-2 gap-2 sm:grid-cols-5'>
+                <div className='grid grid-cols-2 gap-2 md:grid-cols-5'>
                     {cells.map(cell => (
                         <div key={cell.label} className='min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2'>
                             <p className='text-[10px] font-semibold uppercase text-ui-muted'>{cell.label}</p>
@@ -604,7 +608,7 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
 
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
-            <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
+            <div className='grid gap-3'>
                 <div className='min-w-0'>
                     <p className='text-[10px] font-semibold uppercase text-ui-primary'>Case command</p>
                     <div className='mt-2 grid gap-2 text-xs sm:grid-cols-4'>
@@ -614,7 +618,7 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
                         <CommandFact label='Delivery' value={lastDelivery} tone={latestDelivery?.status === 'failed' ? 'warn' : 'neutral'} />
                     </div>
                 </div>
-                <div className='flex flex-wrap gap-2 lg:justify-end'>
+                <div className='flex flex-wrap gap-2'>
                     <CommandLink href={`/dashboard/dwm${dashboardScope}`}>Queue</CommandLink>
                     <CommandLink href={organizationHref}>Organization</CommandLink>
                     {alertHref ? <CommandLink href={alertHref}>Alert record</CommandLink> : null}
@@ -638,10 +642,19 @@ function CommandFact({ label, value, mono = false, tone = 'neutral' }: { label: 
 }
 
 function CommandLink({ href, children }: { href: string, children: ReactNode }) {
+    const className = 'inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
+    if (href.startsWith('/api/')) {
+        return (
+            <a href={href} className={className}>
+                {children}
+            </a>
+        )
+    }
+
     return (
-        <a href={href} className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
+        <Link href={href} className={className}>
             {children}
-        </a>
+        </Link>
     )
 }
 
@@ -657,20 +670,6 @@ function Panel({ title, action, children }: { title: string, action?: string, ch
     )
 }
 
-function CollapsiblePanel({ title, action, children }: { title: string, action?: string, children: ReactNode }) {
-    return (
-        <details className='rounded-lg border border-ui-border bg-ui-panel'>
-            <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
-                <span>{title}</span>
-                {action ? <span className='rounded-full border border-ui-border bg-ui-canvas px-2 py-0.5 text-[10px] font-semibold uppercase text-ui-primary'>{action}</span> : null}
-            </summary>
-            <div className='border-t border-ui-border p-3'>
-                {children}
-            </div>
-        </details>
-    )
-}
-
 function Metric({ label, value, detail }: { label: string, value: string, detail: string }) {
     return (
         <div className='rounded-lg border border-ui-border bg-ui-panel p-3'>
@@ -681,8 +680,21 @@ function Metric({ label, value, detail }: { label: string, value: string, detail
     )
 }
 
-function TimelineItem({ row }: { row: TimelineRow }) {
+function TimelineItem({ row, compact = false }: { row: TimelineRow, compact?: boolean }) {
     const when = row.timestamp || row.at
+    if (compact) {
+        return (
+            <div className='rounded-lg border border-ui-border bg-ui-canvas p-3 text-xs'>
+                <div className='flex items-start justify-between gap-3'>
+                    <p className='font-semibold text-ui-text'>{stateLabel(row.action || row.eventType)}</p>
+                    <p className='shrink-0 text-ui-muted'>{relativeTime(when)}</p>
+                </div>
+                <p className='mt-1 wrap-break-word leading-5 text-ui-muted'>{row.rationale || row.note || row.source || 'Workflow event recorded.'}</p>
+                <p className='mt-2 font-mono text-[11px] text-ui-muted'>{row.actor || 'system'}{row.workflow?.toStatus ? ` · ${stateLabel(row.workflow.toStatus)}` : ''}</p>
+            </div>
+        )
+    }
+
     return (
         <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-canvas p-3 text-xs md:grid-cols-[160px_minmax(0,1fr)_180px]'>
             <div className='text-ui-muted'>{relativeTime(when)}</div>
