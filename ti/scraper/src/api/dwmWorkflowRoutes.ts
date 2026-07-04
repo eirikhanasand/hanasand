@@ -434,7 +434,91 @@ export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions, re
   if (access.error) return access.error;
   const tenantId = scope.tenantId;
   const deliveries = (options.store as any).listDwmWebhookDeliveries?.() ?? [];
-  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, deliveries: deliveries.filter((row: any) => row.tenantId === tenantId) });
+  return json({
+    organization: scope.organization,
+    visibilityDecision: access.visibilityDecision,
+    deliveries: deliveries
+      .filter((row: any) => row.tenantId === tenantId)
+      .map((row: any) => withDwmWebhookOperatorDeliveryTrace(row))
+  });
+}
+
+function withDwmWebhookOperatorDeliveryTrace(delivery: any): any {
+  const attemptedAt = String(delivery.attemptedAt ?? delivery.updatedAt ?? delivery.createdAt ?? nowIso());
+  const createdAt = String(delivery.createdAt ?? attemptedAt);
+  const updatedAt = String(delivery.updatedAt ?? attemptedAt);
+  const attemptCount = Number.isFinite(Number(delivery.attemptCount)) && Number(delivery.attemptCount) > 0
+    ? Number(delivery.attemptCount)
+    : 1;
+  const errorClass = delivery.errorClass ?? classifyWebhookDeliveryError(delivery);
+  const nextRetryAt = delivery.nextRetryAt ?? nextWebhookRetryAt(delivery, attemptedAt, attemptCount, errorClass);
+  const requestId = delivery.requestId ?? stableId("dwm_webhook_request", `${delivery.id}:${delivery.dedupeKey ?? ""}`);
+  const auditAction = delivery.auditAction ?? webhookAuditActionForDelivery(delivery, nextRetryAt);
+  const auditEventId = delivery.auditEventId ?? stableId("dwm_webhook_audit", `${delivery.id}:${auditAction}:${attemptedAt}`);
+
+  return {
+    ...delivery,
+    requestId,
+    auditEventId,
+    auditAction,
+    createdAt,
+    updatedAt,
+    attemptedAt,
+    attemptCount,
+    errorClass,
+    nextRetryAt,
+    retryable: Boolean(nextRetryAt),
+    responseSummary: delivery.responseSummary ?? webhookDeliveryResponseSummary(delivery, errorClass),
+    redactedDestination: {
+      webhookDestinationId: delivery.webhookDestinationId,
+      endpointHash: delivery.endpointHash,
+      endpointExposed: false
+    }
+  };
+}
+
+function classifyWebhookDeliveryError(delivery: any): string | undefined {
+  if (!delivery.error && delivery.status !== "failed" && delivery.status !== "skipped") return undefined;
+  if (delivery.status === "skipped") {
+    if (delivery.endpointHash === "missing_webhook_url") return "missing_webhook_url";
+    if (delivery.endpointHash === "disabled_webhook_destination") return "disabled_destination";
+    if (delivery.endpointHash === "replay_already_delivered") return "duplicate_replay";
+    if (delivery.endpointHash === "retired_watchlist") return "retired_watchlist";
+    return "selection_blocked";
+  }
+  const httpStatus = Number(delivery.httpStatus);
+  if (Number.isFinite(httpStatus) && httpStatus >= 500) return "upstream_5xx";
+  if (Number.isFinite(httpStatus) && httpStatus >= 400) return "upstream_4xx";
+  if (String(delivery.error ?? "").toLowerCase().includes("timeout")) return "timeout";
+  if (String(delivery.error ?? "").toLowerCase().includes("network")) return "network_error";
+  return "delivery_failed";
+}
+
+function nextWebhookRetryAt(delivery: any, attemptedAt: string, attemptCount: number, errorClass?: string): string | undefined {
+  if (delivery.status !== "failed") return undefined;
+  if (delivery.dryRun === true) return undefined;
+  if (errorClass === "upstream_4xx") return undefined;
+  const attemptedMs = Date.parse(attemptedAt);
+  if (!Number.isFinite(attemptedMs)) return undefined;
+  const delayMinutes = [1, 5, 15, 60][Math.min(Math.max(attemptCount - 1, 0), 3)];
+  return new Date(attemptedMs + delayMinutes * 60_000).toISOString();
+}
+
+function webhookAuditActionForDelivery(delivery: any, nextRetryAt?: string): string {
+  if (delivery.status === "dry_run" && delivery.alertId === "webhook_test") return "delivery.tested";
+  if (delivery.status === "dry_run") return "delivery.replayed";
+  if (delivery.status === "delivered") return "delivery.delivered";
+  if (delivery.status === "failed") return nextRetryAt ? "delivery.retry_scheduled" : "delivery.failed";
+  if (delivery.status === "skipped") return "delivery.skipped";
+  return "delivery.recorded";
+}
+
+function webhookDeliveryResponseSummary(delivery: any, errorClass?: string): string {
+  if (delivery.status === "dry_run") return "Dry-run delivery rendered without external network.";
+  if (delivery.status === "delivered") return `Webhook accepted delivery${delivery.httpStatus ? ` with HTTP ${delivery.httpStatus}` : ""}.`;
+  if (delivery.status === "failed") return delivery.error ? `Delivery failed: ${String(delivery.error)}` : `Delivery failed${errorClass ? `: ${errorClass}` : ""}.`;
+  if (delivery.status === "skipped") return delivery.error ? String(delivery.error) : "Delivery was skipped before sending.";
+  return "Delivery attempt recorded.";
 }
 
 export function getDwmAlertGenerationReadiness(url: URL, options: ApiServerOptions, request?: Request): Response {
@@ -651,7 +735,13 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     }
   }
 
-  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, deliveredAt: generatedAt, attemptedCount: deliveries.length, deliveries });
+  return json({
+    organization: scope.organization,
+    visibilityDecision: access.visibilityDecision,
+    deliveredAt: generatedAt,
+    attemptedCount: deliveries.length,
+    deliveries: deliveries.map((delivery) => withDwmWebhookOperatorDeliveryTrace(delivery))
+  });
 }
 
 export async function testDwmWebhook(request: Request, options: ApiServerOptions): Promise<Response> {
@@ -705,8 +795,8 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
   };
 
   if (body.dryRun === true) {
-    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "dry_run", httpStatus: 0 });
-    return json({ visibilityDecision: access.visibilityDecision, testedAt: generatedAt, ok: true, dryRun: true, delivery });
+    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, id: stableId("dwm_delivery", `${deliveryId}:dry_run`), status: "dry_run", httpStatus: 0 });
+    return json({ visibilityDecision: access.visibilityDecision, testedAt: generatedAt, ok: true, dryRun: true, delivery: withDwmWebhookOperatorDeliveryTrace(delivery) });
   }
 
   try {
@@ -716,11 +806,11 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
       body: JSON.stringify(requestBody)
     });
     const ok = response.status >= 200 && response.status < 300;
-    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status });
-    return json({ visibilityDecision: access.visibilityDecision, testedAt: generatedAt, ok, delivery }, ok ? 200 : 502);
+    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, id: stableId("dwm_delivery", `${deliveryId}:${response.status}`), status: ok ? "delivered" : "failed", httpStatus: response.status });
+    return json({ visibilityDecision: access.visibilityDecision, testedAt: generatedAt, ok, delivery: withDwmWebhookOperatorDeliveryTrace(delivery) }, ok ? 200 : 502);
   } catch (error) {
-    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "failed", httpStatus: 0, error: error instanceof Error ? error.message : String(error) });
-    return json({ visibilityDecision: access.visibilityDecision, testedAt: generatedAt, ok: false, delivery }, 502);
+    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, id: stableId("dwm_delivery", `${deliveryId}:network_error`), status: "failed", httpStatus: 0, error: error instanceof Error ? error.message : String(error) });
+    return json({ visibilityDecision: access.visibilityDecision, testedAt: generatedAt, ok: false, delivery: withDwmWebhookOperatorDeliveryTrace(delivery) }, 502);
   }
 }
 

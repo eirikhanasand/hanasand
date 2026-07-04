@@ -180,7 +180,37 @@ describe("dwm webhook delivery", () => {
       deliveryHistoryRefs: [delivered.deliveries[0].id],
       lastDeliveryStatus: "delivered"
     });
+    expect(delivered.deliveries[0]).toMatchObject({
+      requestId: expect.stringMatching(/^dwm_webhook_request_/),
+      auditEventId: expect.stringMatching(/^dwm_webhook_audit_/),
+      auditAction: "delivery.delivered",
+      responseSummary: expect.stringContaining("Webhook accepted delivery"),
+      attemptCount: 1,
+      retryable: false,
+      redactedDestination: {
+        endpointHash: expect.stringMatching(/^endpoint_/),
+        endpointExposed: false
+      },
+      createdAt: delivered.deliveries[0].attemptedAt,
+      updatedAt: delivered.deliveries[0].attemptedAt
+    });
     expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
+
+    const historyResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliveries?tenantId=tenant_acme"), options);
+    const history = await historyResponse.json() as any;
+    expect(historyResponse.status).toBe(200);
+    expect(history.deliveries[0]).toMatchObject({
+      id: delivered.deliveries[0].id,
+      alertId: alertBeforeDelivery.id,
+      requestId: delivered.deliveries[0].requestId,
+      auditEventId: delivered.deliveries[0].auditEventId,
+      auditAction: "delivery.delivered",
+      responseSummary: expect.stringContaining("Webhook accepted delivery"),
+      redactedDestination: {
+        endpointExposed: false
+      }
+    });
+    expect(JSON.stringify(history)).not.toContain("dwm/token");
 
     const duplicateResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
       method: "POST",
@@ -192,7 +222,11 @@ describe("dwm webhook delivery", () => {
     expect(duplicate.deliveries[0]).toMatchObject({
       status: "skipped",
       endpointHash: "replay_already_delivered",
-      error: "Delivery selection blocked by replay already delivered."
+      error: "Delivery selection blocked by replay already delivered.",
+      auditAction: "delivery.skipped",
+      errorClass: "duplicate_replay",
+      responseSummary: "Delivery selection blocked by replay already delivered.",
+      retryable: false
     });
     expect(seen).toHaveLength(1);
   });
@@ -477,6 +511,17 @@ describe("dwm webhook delivery", () => {
     expect(delivered.attemptedCount).toBe(1);
     expect(delivered.deliveries[0].status).toBe("skipped");
     expect(delivered.deliveries[0].error).toContain("No webhook URL");
+    expect(delivered.deliveries[0]).toMatchObject({
+      requestId: expect.stringMatching(/^dwm_webhook_request_/),
+      auditEventId: expect.stringMatching(/^dwm_webhook_audit_/),
+      auditAction: "delivery.skipped",
+      errorClass: "missing_webhook_url",
+      responseSummary: expect.stringContaining("No webhook URL"),
+      retryable: false,
+      redactedDestination: {
+        endpointExposed: false
+      }
+    });
     expect((store as any).listDwmAlerts()[0].deliveryReadinessContext).toMatchObject({
       state: "blocked",
       blockerCodes: expect.arrayContaining(["delivery_disabled"]),
@@ -518,10 +563,72 @@ describe("dwm webhook delivery", () => {
     expect(tested.ok).toBe(true);
     expect(tested.delivery.status).toBe("delivered");
     expect(tested.delivery.alertId).toBe("webhook_test");
+    expect(tested.delivery).toMatchObject({
+      requestId: expect.stringMatching(/^dwm_webhook_request_/),
+      auditEventId: expect.stringMatching(/^dwm_webhook_audit_/),
+      auditAction: "delivery.delivered",
+      responseSummary: expect.stringContaining("Webhook accepted delivery"),
+      redactedDestination: {
+        endpointExposed: false
+      }
+    });
     expect(seen[0].url).toBe("https://hooks.example.com/dwm");
     expect(seen[0].body.eventType).toBe("darkweb.monitoring.test");
     expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.test");
     expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
+  });
+
+  test("surfaces retryable and terminal failure state in delivery history", async () => {
+    const store = new InMemoryScraperStore();
+    const statuses = [503, 400];
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      webhookFetch: async () => new Response("failed", { status: statuses.shift() ?? 500 })
+    };
+
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_retry", terms: ["acme.com"], webhookUrl: "https://hooks.example.com/retry" })
+    }), options);
+
+    const retryableResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/test", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_retry" })
+    }), options);
+    const retryable = await retryableResponse.json() as any;
+    expect(retryableResponse.status).toBe(502);
+    expect(retryable.delivery).toMatchObject({
+      status: "failed",
+      httpStatus: 503,
+      errorClass: "upstream_5xx",
+      retryable: true,
+      auditAction: "delivery.retry_scheduled",
+      responseSummary: expect.stringContaining("Delivery failed")
+    });
+    expect(retryable.delivery.nextRetryAt).toMatch(/T/);
+
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    const terminalResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/test", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_retry" })
+    }), options);
+    const terminal = await terminalResponse.json() as any;
+    expect(terminalResponse.status).toBe(502);
+    expect(terminal.delivery).toMatchObject({
+      status: "failed",
+      httpStatus: 400,
+      errorClass: "upstream_4xx",
+      retryable: false,
+      auditAction: "delivery.failed"
+    });
+    expect(terminal.delivery.nextRetryAt).toBeUndefined();
+
+    const historyResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliveries?tenantId=tenant_retry"), options);
+    const history = await historyResponse.json() as any;
+    expect(history.deliveries).toHaveLength(2);
+    expect(history.deliveries.map((delivery: any) => delivery.auditEventId)).toEqual(expect.arrayContaining([retryable.delivery.auditEventId, terminal.delivery.auditEventId]));
+    expect(JSON.stringify(history)).not.toContain("https://hooks.example.com/retry");
   });
 
   test("attaches a dry-run Discord route to the matched watchlist for real alert replay", async () => {
