@@ -1,0 +1,18 @@
+import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+
+const root = process.cwd()
+
+test('profile account actions use shared theme tokens for destructive controls', async () => {
+    const source = await readFile(path.join(root, 'src/components/profile/accountActions.tsx'), 'utf8')
+
+    expect(source).toContain('Delete account')
+    expect(source).toContain('Delete account?')
+    expect(source).toContain('bg-ui-danger px-4 text-sm font-bold text-ui-canvas')
+    expect(source).toContain('border-ui-danger/40 bg-ui-danger/10')
+
+    expect(source).not.toContain('text-white')
+    expect(source).not.toContain('dark:text-ui-canvas')
+    expect(source).not.toMatch(/\b(?:bg|text|border)-\[#/)
+})

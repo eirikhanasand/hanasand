@@ -189,7 +189,7 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
                         </div>
                         <div className='flex justify-end gap-2'>
                             <button onClick={() => setConfirmDelete(false)} className='h-9 rounded-lg px-3 text-sm font-semibold text-ui-muted hover:bg-ui-raised'>Cancel</button>
-                            <button disabled={busy} onClick={() => void deleteAccount()} className='h-9 rounded-lg bg-ui-danger px-4 text-sm font-bold text-white hover:bg-ui-danger disabled:opacity-60'>
+                            <button disabled={busy} onClick={() => void deleteAccount()} className='h-9 rounded-lg bg-ui-danger px-4 text-sm font-bold text-ui-canvas hover:bg-ui-danger disabled:opacity-60'>
                                 {busy ? 'Scheduling' : 'Delete'}
                             </button>
                         </div>
