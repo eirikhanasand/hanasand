@@ -2509,7 +2509,7 @@ function DeliveryPayloadPreview({ delivery, compact = false }: { delivery: Deliv
             )}
             {fields.length === 0 && fieldNames.length > 0 && <p className='truncate text-ui-muted dark:text-ui-muted'>Fields: {fieldNames.map(sanitizeOrganizationDisplayCopy).join(', ')}</p>}
             {context.matchReason && !compact && <p className='line-clamp-2 text-ui-muted dark:text-ui-muted'>Match: {sanitizeOrganizationDisplayCopy(context.matchReason)}</p>}
-            {route && !compact && <p className='truncate font-mono text-ui-muted dark:text-ui-muted'>Route: {sanitizeOrganizationDisplayCopy(route)}</p>}
+            {route && !compact && <p className='truncate text-ui-muted dark:text-ui-muted'>Linked case or alert available.</p>}
         </div>
     )
 }
@@ -2877,7 +2877,7 @@ function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, tit
     const copyRoute = async () => {
         try {
             await navigator.clipboard.writeText(route)
-            setCopyStatus({ ok: true, text: 'Route copied.' })
+            setCopyStatus({ ok: true, text: 'Records link copied.' })
         } catch {
             setCopyStatus({ ok: false, text: 'Copy failed.' })
         }
@@ -2887,7 +2887,7 @@ function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, tit
             <div className='flex items-center justify-between gap-3'>
                 <h3 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>{icon}{title}</h3>
                 <div className='flex items-center gap-1'>
-                    <button type='button' className={iconButtonClass} aria-label={`Copy ${title} route`} onClick={() => void copyRoute()} data-org-scope-copy='true'>
+                    <button type='button' className={iconButtonClass} aria-label={`Copy ${title} records link`} onClick={() => void copyRoute()} data-org-scope-copy='true'>
                         <Copy className='h-4 w-4' />
                     </button>
                     <a href={route} className={iconButtonClass} aria-label={`Open ${title} records`}>
@@ -2905,7 +2905,6 @@ function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, tit
                 ))}
             </div>
             <div className='mt-3'><RowStatus message={copyStatus} /></div>
-            <p className='mt-3 truncate font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(route) || route}</p>
         </div>
     )
 }
