@@ -2269,58 +2269,58 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
             </div>
             {busyLabel && <InlineBusy label={busyLabel} marker='data-org-watchlist-busy' />}
             <div className='mt-2'><RowStatus message={rowMessages['watchlists-cleanup']} /></div>
-            <div className='mt-4 rounded-lg border border-ui-primary/35 bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel' data-org-watchlist-starter='true'>
-                <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                    <div className='min-w-0'>
-                        <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary dark:text-ui-primary'>Scope starter</p>
-                        <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>Choose a term type, then enter the real company, domain, supplier, actor, or keyword value.</p>
-                    </div>
-                    <span className='shrink-0 rounded-lg border border-ui-primary/35 bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-primary dark:border-ui-primary/35 dark:bg-ui-canvas dark:text-ui-primary'>
-                        {watchlists.length} saved
+            <details className='mt-4 overflow-hidden rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-canvas' data-org-watchlist-starter='true' data-org-watchlist-add-disclosure='true' open={watchlists.length === 0 ? true : undefined}>
+                <summary className='flex min-h-12 cursor-pointer list-none flex-col gap-2 px-3 py-2 outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span className='flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
+                        <span>Add shared term</span>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{watchlists.length} saved</span>
                     </span>
+                    <span className='text-xs font-semibold text-ui-primary dark:text-ui-primary'>Company, domain, vendor, actor</span>
+                </summary>
+                <div className='grid gap-3 border-t border-ui-border p-3 dark:border-ui-border'>
+                    <div className='flex flex-wrap gap-2'>
+                        {suggestions.map(suggestion => (
+                            <button
+                                key={suggestion.id}
+                                type='button'
+                                disabled={!canManage || suggestion.disabled || Boolean(busy)}
+                                onClick={() => setDraft({ kind: suggestion.kind, value: suggestion.value, notes: suggestion.notes })}
+                                className='inline-flex min-h-9 max-w-full items-center gap-2 rounded-md border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:border-ui-border disabled:bg-ui-panel disabled:text-ui-muted dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary dark:hover:bg-ui-primary/15 dark:disabled:border-ui-border dark:disabled:bg-ui-panel dark:disabled:text-ui-muted'
+                                data-org-watchlist-suggestion='true'
+                            >
+                                <span className='truncate'>{suggestion.label}</span>
+                                <span className='max-w-40 truncate font-mono'>{suggestion.value}</span>
+                            </button>
+                        ))}
+                        {watchlistTemplates.map(template => (
+                            <button
+                                key={template.label}
+                                type='button'
+                                disabled={!canManage || Boolean(busy)}
+                                onClick={() => setDraft({ kind: template.kind, value: '', notes: template.notes })}
+                                className='inline-flex min-h-9 items-center rounded-md border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                            >
+                                {template.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className='grid gap-3 md:grid-cols-[9rem_1fr_auto]' data-org-watchlist-create-grid='true'>
+                        <SelectField label='Type' value={draft.kind} options={watchlistKinds} disabled={!canManage} onChange={value => setDraft({ ...draft, kind: value as WatchlistKind })} />
+                        <Field label='Term' value={draft.value} disabled={!canManage} onChange={value => setDraft({ ...draft, value })} placeholder='company.com, supplier, brand, actor' />
+                        <div className='grid content-end'>
+                            <button type='button' className={`${primaryButtonClass} whitespace-nowrap`} disabled={!canManage || !draft.value.trim() || draftDuplicate || Boolean(busy)} onClick={onCreate}>
+                                <BellRing className='h-4 w-4' />
+                                Add term
+                            </button>
+                        </div>
+                        <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted md:col-span-3'>
+                            Notes
+                            <textarea value={draft.notes} disabled={!canManage} onChange={event => setDraft({ ...draft, notes: event.target.value })} className={`${inputClass} min-h-16 resize-y`} placeholder='Reason, owner, routing context' />
+                        </label>
+                        {draftDuplicate && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning md:col-span-3'>This term already exists in this organization.</p>}
+                    </div>
                 </div>
-                <div className='mt-3 flex flex-wrap gap-2'>
-                    {suggestions.map(suggestion => (
-                        <button
-                            key={suggestion.id}
-                            type='button'
-                            disabled={!canManage || suggestion.disabled || Boolean(busy)}
-                            onClick={() => setDraft({ kind: suggestion.kind, value: suggestion.value, notes: suggestion.notes })}
-                            className='inline-flex min-h-9 max-w-full items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary dark:hover:bg-ui-primary/15 dark:disabled:border-ui-border dark:disabled:bg-ui-canvas dark:disabled:text-ui-muted'
-                            data-org-watchlist-suggestion='true'
-                        >
-                            <span className='truncate'>{suggestion.label}</span>
-                            <span className='max-w-40 truncate font-mono'>{suggestion.value}</span>
-                        </button>
-                    ))}
-                    {watchlistTemplates.map(template => (
-                        <button
-                            key={template.label}
-                            type='button'
-                            disabled={!canManage || Boolean(busy)}
-                            onClick={() => setDraft({ kind: template.kind, value: '', notes: template.notes })}
-                            className='inline-flex min-h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
-                        >
-                            {template.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-            <div className='mt-4 grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[9rem_1fr]'>
-                <SelectField label='Type' value={draft.kind} options={watchlistKinds} disabled={!canManage} onChange={value => setDraft({ ...draft, kind: value as WatchlistKind })} />
-                <Field label='Term' value={draft.value} disabled={!canManage} onChange={value => setDraft({ ...draft, value })} placeholder='company.com, supplier name, brand, actor' />
-                <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted md:col-span-2'>
-                    Notes
-                    <textarea value={draft.notes} disabled={!canManage} onChange={event => setDraft({ ...draft, notes: event.target.value })} className={`${inputClass} min-h-20 resize-y`} placeholder='Why this term matters to the organization' />
-                </label>
-                <div className='md:col-span-2'>
-                    {draftDuplicate && <p className='mb-2 rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>This term already exists in this organization.</p>}
-                    <button type='button' className={primaryButtonClass} disabled={!canManage || !draft.value.trim() || draftDuplicate || Boolean(busy)} onClick={onCreate}>
-                        <BellRing className='h-4 w-4' />
-                        Add shared term
-                    </button>
-                </div>
-            </div>
+            </details>
 
             <div className='mt-5 grid gap-3'>
                 {watchlists.length > 0 && (
@@ -2363,7 +2363,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                 {watchlists.length === 0 && (
                     <div className='rounded-lg border border-dashed border-ui-primary/35 bg-ui-panel p-4 text-sm leading-6 text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>
                         <p className='font-semibold text-ui-text dark:text-ui-text'>No watchlist terms yet.</p>
-                        <p className='mt-1'>Start with a scope template, enter a real customer-owned term, then save it to generate org-scoped alert terms and delivery context.</p>
+                        <p className='mt-1'>Add a company, domain, vendor, or actor term.</p>
                     </div>
                 )}
                 {watchlists.length > 0 && visibleWatchlists.length === 0 && (
