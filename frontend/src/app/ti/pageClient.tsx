@@ -5889,24 +5889,15 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
 
 function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan }) {
     return (
-        <div data-ti-selected-case-ownership='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Case ownership</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        Selected evidence mapped to case candidates, replay state, and owner blockers.
-                    </p>
-                </div>
+        <div data-ti-selected-case-ownership='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
+                <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
+                    Case workflow · {plan.summary.caseCandidates} candidates · {plan.summary.replayReady} replay-ready · {plan.summary.relatedAlerts} alerts · {plan.summary.captures} captures
+                </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(plan.state)}>{decisionStepStatusLabel(plan.state)}</span>
                     <CopyPayloadButton label='Case ownership' payload={plan} />
                 </div>
-            </div>
-            <div className='mt-3 grid grid-cols-2 gap-2'>
-                <EvidenceMetric label='Candidates' value={`${plan.summary.caseCandidates}`} />
-                <EvidenceMetric label='Replay ready' value={`${plan.summary.replayReady}`} />
-                <EvidenceMetric label='Alerts' value={`${plan.summary.relatedAlerts}`} />
-                <EvidenceMetric label='Captures' value={`${plan.summary.captures}`} />
             </div>
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                 <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
