@@ -1417,6 +1417,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
     const createUrl = createDraft.url.trim()
     const createUrlInvalid = Boolean(createUrl) && !validDestinationUrl(createUrl)
     const createNameDuplicate = destinationNameInUse(destinations, normalizeDestinationName(createDraft.name) || defaultDestinationName(createDraft.kind))
+    const busyLabel = destinationBusyLabel(busy)
     return (
         <details id='destinations' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-destinations-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
@@ -1426,6 +1427,12 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                 </span>
             </summary>
             <div className='grid gap-2 border-t border-ui-border p-4 dark:border-ui-border'>
+                {busyLabel && (
+                    <div className='inline-flex w-fit items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' data-org-destination-busy='true'>
+                        <Loader2 className='h-3.5 w-3.5 animate-spin' />
+                        {busyLabel}
+                    </div>
+                )}
                 {canManage && (
                     <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' data-org-destination-create='true'>
                         <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem]'>
@@ -2152,6 +2159,15 @@ function sentenceCase(value: string) {
 
 function actionLabel(value: string) {
     return value.split('-').map(sentenceCase).join(' ')
+}
+
+function destinationBusyLabel(value: string) {
+    if (value === 'create-destination') return 'Adding destination'
+    if (value === 'test-destination') return 'Testing destination'
+    if (value === 'update-destination') return 'Updating destination'
+    if (value === 'delete-destination') return 'Removing destination'
+    if (value === 'replay-delivery') return 'Replaying delivery'
+    return ''
 }
 
 function formatDate(value: string | undefined) {
