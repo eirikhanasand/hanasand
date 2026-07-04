@@ -240,6 +240,15 @@ type ActivitySubject = {
     id: string
 }
 
+type WatchlistSuggestion = {
+    id: string
+    label: string
+    kind: WatchlistKind
+    value: string
+    notes: string
+    disabled: boolean
+}
+
 type ApiError = Error & { status?: number }
 
 const initialBundle: OrgBundle = {
@@ -319,6 +328,45 @@ function organizationNameInUse(organizations: OrganizationSummary[], name: strin
     })
 }
 
+function starterWatchlistSuggestions(organization: OrganizationSummary, watchlists: WatchlistItem[]): WatchlistSuggestion[] {
+    const candidates: Array<Omit<WatchlistSuggestion, 'disabled'>> = []
+    const name = normalizeOrganizationName(organizationDisplayName(organization))
+    if (name && name !== 'Organization') {
+        candidates.push({
+            id: 'company-name',
+            label: 'Company name',
+            kind: 'company',
+            value: name,
+            notes: 'Primary organization name monitored for source mentions.',
+        })
+    }
+
+    const domain = [organization.slug, organization.id, organization.name]
+        .map(value => firstDomainCandidate(String(value || '')))
+        .find(Boolean)
+    if (domain) {
+        candidates.push({
+            id: 'domain',
+            label: 'Domain',
+            kind: 'domain',
+            value: domain,
+            notes: 'Organization domain monitored for exposure mentions.',
+        })
+    }
+
+    return candidates
+        .filter((candidate, index, list) => list.findIndex(item => item.kind === candidate.kind && item.value.toLowerCase() === candidate.value.toLowerCase()) === index)
+        .map(candidate => ({
+            ...candidate,
+            disabled: isDuplicateWatchlistTerm(watchlists, candidate.kind, candidate.value),
+        }))
+}
+
+function firstDomainCandidate(value: string) {
+    const match = value.toLowerCase().match(/\b[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.[a-z]{2,}\b/)
+    return match?.[0]
+}
+
 export default function OrganizationWorkspaceClient() {
     const searchParams = useSearchParams()
     const requestedOrganizationId = searchParams.get('organizationId')?.trim() || ''
@@ -326,6 +374,8 @@ export default function OrganizationWorkspaceClient() {
     const requestedDestinationId = searchParams.get('destinationId')?.trim() || ''
     const requestedAlertId = searchParams.get('alertId')?.trim() || searchParams.get('alert')?.trim() || ''
     const requestedCaseId = searchParams.get('caseId')?.trim() || ''
+    const requestedInviteId = searchParams.get('inviteId')?.trim() || ''
+    const requestedMemberId = searchParams.get('memberId')?.trim() || ''
     const requestedFocus = searchParams.get('focus')?.trim() || ''
     const [organizations, setOrganizations] = useState<OrganizationSummary[]>([])
     const [selectedId, setSelectedId] = useState('')
@@ -358,9 +408,10 @@ export default function OrganizationWorkspaceClient() {
     const archivedWatchlists = bundle.watchlists.filter(item => item.status === 'archived')
     const hasConfiguredDestination = bundle.watchlists.some(destinationConfigured)
     const watchlistDraftDuplicate = isDuplicateWatchlistTerm(bundle.watchlists, watchlistDraft.kind, watchlistDraft.value)
+    const watchlistSuggestions = selectedOrganization ? starterWatchlistSuggestions(selectedOrganization, bundle.watchlists) : []
     const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
     const activityRows = useMemo(() => organizationActivityRows(activity, bundle), [activity, bundle])
-    const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedFocus)
+    const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedInviteId || requestedMemberId || requestedFocus)
     const settingsDirty = useMemo(() => !settingsEqual(settingsDraft, bundle.settings || {}), [settingsDraft, bundle.settings])
     const normalizedCreateName = normalizeOrganizationName(createName)
     const createNameInUse = normalizedCreateName ? organizationNameInUse(organizations, normalizedCreateName) : false
@@ -452,13 +503,27 @@ export default function OrganizationWorkspaceClient() {
         setSelectedActivitySubject(requestedSubjectFromSearch({
             organizationId,
             focus: requestedFocus,
+            inviteId: requestedInviteId,
+            memberId: requestedMemberId,
             watchlistId: requestedWatchlistId,
             destinationId: requestedDestinationId,
             alertId: requestedAlertId,
             caseId: requestedCaseId,
         }, nextBundle))
         setBusy('')
-    }, [requestedAlertId, requestedCaseId, requestedDestinationId, requestedFocus, requestedWatchlistId])
+    }, [requestedAlertId, requestedCaseId, requestedDestinationId, requestedFocus, requestedInviteId, requestedMemberId, requestedWatchlistId])
+
+    const selectOrganization = useCallback((organizationId: string) => {
+        setSelectedId(organizationId)
+        const subject = { type: 'organization', id: organizationId } as ActivitySubject
+        setSelectedActivitySubject(subject)
+        replaceOrganizationWorkspaceSelectionUrl(organizationId, subject)
+    }, [])
+
+    const selectActivitySubject = useCallback((subject: ActivitySubject) => {
+        setSelectedActivitySubject(subject)
+        replaceOrganizationWorkspaceSelectionUrl(selectedOrganization?.id || selectedId, subject)
+    }, [selectedId, selectedOrganization?.id])
 
     useEffect(() => {
         void loadOrganizations()
@@ -489,7 +554,7 @@ export default function OrganizationWorkspaceClient() {
                 setRowMessages(current => ({ ...current, [rowKey]: { ok: true, text: nextMessage || 'Saved.' } }))
             }
             if (actionSubject) {
-                setSelectedActivitySubject(actionSubject)
+                selectActivitySubject(actionSubject)
             }
             setActivity(current => [{
                 id: `${label}-${Date.now()}`,
@@ -888,7 +953,7 @@ export default function OrganizationWorkspaceClient() {
                                     <button
                                         type='button'
                                         key={organization.id}
-                                        onClick={() => setSelectedId(organization.id)}
+                                        onClick={() => selectOrganization(organization.id)}
                                         className={`grid gap-1 rounded-lg px-3 py-3 text-left transition ${selectedOrganization?.id === organization.id ? 'bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary' : 'hover:bg-ui-raised dark:hover:bg-ui-panel/6'}`}
                                     >
                                         <span className='flex items-center justify-between gap-2 text-sm font-semibold'>
@@ -944,6 +1009,7 @@ export default function OrganizationWorkspaceClient() {
                                             busy={busy}
                                             draft={watchlistDraft}
                                             setDraft={setWatchlistDraft}
+                                            suggestions={watchlistSuggestions}
                                             editing={editingWatchlist}
                                             setEditing={setEditingWatchlist}
                                             onCreate={() => void createWatchlist()}
@@ -961,14 +1027,14 @@ export default function OrganizationWorkspaceClient() {
                                             rowMessages={rowMessages}
                                             draftDuplicate={watchlistDraftDuplicate}
                                             selectedSubject={selectedActivitySubject}
-                                            onSelectSubject={setSelectedActivitySubject}
+                                            onSelectSubject={selectActivitySubject}
                                         />
                                         <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
                                     </div>
                                     <div className='grid min-w-0 content-start gap-5'>
-                                        <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
-                                        <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
-                                        <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={setSelectedActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} />
+                                        <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
+                                        <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
+                                        <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} />
                                     </div>
                                 </section>
 
@@ -986,7 +1052,7 @@ export default function OrganizationWorkspaceClient() {
                                         <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
                                     </div>
                                     <div className='min-w-0'>
-                                        <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} />
+                                        <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} />
                                     </div>
                                 </section>
                             </div>
@@ -1671,7 +1737,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
     )
 }
 
-function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
+function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const archivedCount = watchlists.filter(item => item.status === 'archived').length
     const busyLabel = watchlistBusyLabel(busy)
     return (
@@ -1696,6 +1762,19 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                     </span>
                 </div>
                 <div className='mt-3 flex flex-wrap gap-2'>
+                    {suggestions.map(suggestion => (
+                        <button
+                            key={suggestion.id}
+                            type='button'
+                            disabled={!canManage || suggestion.disabled || Boolean(busy)}
+                            onClick={() => setDraft({ kind: suggestion.kind, value: suggestion.value, notes: suggestion.notes })}
+                            className='inline-flex min-h-9 max-w-full items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary dark:hover:bg-ui-primary/15 dark:disabled:border-ui-border dark:disabled:bg-ui-canvas dark:disabled:text-ui-muted'
+                            data-org-watchlist-suggestion='true'
+                        >
+                            <span className='truncate'>{suggestion.label}</span>
+                            <span className='max-w-40 truncate font-mono'>{suggestion.value}</span>
+                        </button>
+                    ))}
                     {watchlistTemplates.map(template => (
                         <button
                             key={template.label}
@@ -2570,6 +2649,8 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
 function requestedSubjectFromSearch(input: {
     organizationId: string
     focus: string
+    inviteId: string
+    memberId: string
     watchlistId: string
     destinationId: string
     alertId: string
@@ -2577,13 +2658,48 @@ function requestedSubjectFromSearch(input: {
 }, bundle: OrgBundle): ActivitySubject {
     if (input.caseId && bundle.cases.some(item => item.id === input.caseId)) return { type: 'case', id: input.caseId }
     if (input.alertId && bundle.alerts.some(item => item.id === input.alertId)) return { type: 'alert', id: input.alertId }
+    if (input.inviteId && bundle.invites.some(item => item.id === input.inviteId)) return { type: 'invite', id: input.inviteId }
+    if (input.memberId && bundle.members.some(item => item.userId === input.memberId)) return { type: 'member', id: input.memberId }
     if (input.destinationId && bundle.webhooks.some(item => item.id === input.destinationId)) return { type: 'destination', id: input.destinationId }
     if (input.watchlistId && bundle.watchlists.some(item => item.id === input.watchlistId)) return { type: 'watchlist', id: input.watchlistId }
+    if (input.focus === 'invites' && bundle.invites[0]?.id) return { type: 'invite', id: bundle.invites[0].id }
+    if (input.focus === 'members' && bundle.members[0]?.userId) return { type: 'member', id: bundle.members[0].userId }
     if (input.focus === 'cases' && bundle.cases[0]?.id) return { type: 'case', id: bundle.cases[0].id }
     if (input.focus === 'alerts' && bundle.alerts[0]?.id) return { type: 'alert', id: bundle.alerts[0].id }
     if ((input.focus === 'destinations' || input.focus === 'webhooks') && bundle.webhooks[0]?.id) return { type: 'destination', id: bundle.webhooks[0].id }
     if (input.focus === 'watchlists' && bundle.watchlists[0]?.id) return { type: 'watchlist', id: bundle.watchlists[0].id }
     return { type: 'organization', id: input.organizationId }
+}
+
+function replaceOrganizationWorkspaceSelectionUrl(organizationId: string, subject: ActivitySubject) {
+    if (typeof window === 'undefined' || !organizationId) return
+    const url = new URL(window.location.href)
+    url.searchParams.set('organizationId', organizationId)
+    for (const key of ['inviteId', 'memberId', 'watchlistId', 'watchlistItemId', 'destinationId', 'alertId', 'alert', 'caseId']) {
+        url.searchParams.delete(key)
+    }
+    if (subject.type === 'invite') {
+        url.searchParams.set('focus', 'invites')
+        url.searchParams.set('inviteId', subject.id)
+    } else if (subject.type === 'member') {
+        url.searchParams.set('focus', 'members')
+        url.searchParams.set('memberId', subject.id)
+    } else if (subject.type === 'watchlist') {
+        url.searchParams.set('focus', 'watchlists')
+        url.searchParams.set('watchlistId', subject.id)
+    } else if (subject.type === 'destination') {
+        url.searchParams.set('focus', 'destinations')
+        url.searchParams.set('destinationId', subject.id)
+    } else if (subject.type === 'alert') {
+        url.searchParams.set('focus', 'alerts')
+        url.searchParams.set('alertId', subject.id)
+    } else if (subject.type === 'case') {
+        url.searchParams.set('focus', 'cases')
+        url.searchParams.set('caseId', subject.id)
+    } else {
+        url.searchParams.delete('focus')
+    }
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
 }
 
 function activitySubjectFromRowKey(rowKey: string | undefined, organizationId: string | undefined): ActivitySubject | null {

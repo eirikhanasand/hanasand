@@ -10,8 +10,16 @@ test('organization workspace scopes alert workflow by selected tenant and role',
 
     assert.match(source, /const \[selectedId, setSelectedId\] = useState\(''\)/)
     assert.match(source, /requestedOrganizationId \|\| selectedId/)
-    assert.match(source, /onClick=\{\(\) => setSelectedId\(organization\.id\)\}/)
+    assert.match(source, /onClick=\{\(\) => selectOrganization\(organization\.id\)\}/)
     assert.match(source, /selectedOrganization\?\.id === organization\.id/)
+    assert.match(source, /replaceOrganizationWorkspaceSelectionUrl\(organizationId, subject\)/)
+    assert.match(source, /replaceOrganizationWorkspaceSelectionUrl\(selectedOrganization\?\.id \|\| selectedId, subject\)/)
+    assert.match(source, /url\.searchParams\.set\('organizationId', organizationId\)/)
+    assert.match(source, /url\.searchParams\.set\('watchlistId', subject\.id\)/)
+    assert.match(source, /url\.searchParams\.set\('destinationId', subject\.id\)/)
+    assert.match(source, /url\.searchParams\.set\('inviteId', subject\.id\)/)
+    assert.match(source, /url\.searchParams\.set\('memberId', subject\.id\)/)
+    assert.match(source, /window\.history\.replaceState\(window\.history\.state, '', `\$\{url\.pathname\}\$\{url\.search\}\$\{url\.hash\}`\)/)
 
     assert.match(source, /selectedOrganization\?\.role === 'owner' \|\| selectedOrganization\?\.role === 'admin'/)
     assert.match(source, /disabled=\{!canManage \|\| !draft\.value\.trim\(\) \|\| draftDuplicate \|\| Boolean\(busy\)\}/)
