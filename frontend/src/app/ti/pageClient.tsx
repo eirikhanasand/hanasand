@@ -3117,7 +3117,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                         {term.kind}: {term.value}
                                     </span>
                                 ))}
-                                {!selectedArtifact.watchlistTerms.length ? <span className='text-xs text-ui-muted dark:text-ui-muted'>No watch term attached.</span> : null}
+                                {!selectedArtifact.watchlistTerms.length ? <span className='text-xs text-ui-muted dark:text-ui-muted'>Attach watch term.</span> : null}
                             </div>
                         </div>
                     ) : (
@@ -3168,16 +3168,16 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
             <div className='mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='grid gap-3 md:grid-cols-2'>
                     <EvidencePanel title='Evidence'>
-                        {artifact.evidence.length ? artifact.evidence.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>No evidence text is attached to this detail.</li>}
+                        {artifact.evidence.length ? artifact.evidence.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Review source evidence before routing.</li>}
                     </EvidencePanel>
                     <EvidencePanel title='Source details'>
                         {artifact.provenance.length ? artifact.provenance.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Source details are missing for this detail.</li>}
                     </EvidencePanel>
                     <EvidencePanel title='Watchlist relevance'>
-                        {artifact.watchlistTerms.length ? artifact.watchlistTerms.map(term => <li key={`${term.kind}-${term.value}`}>{term.kind}: {term.value}. {displayRequirementText(term.notes)}</li>) : <li>No customer watchlist term is attached to this detail.</li>}
+                        {artifact.watchlistTerms.length ? artifact.watchlistTerms.map(term => <li key={`${term.kind}-${term.value}`}>{term.kind}: {term.value}. {displayRequirementText(term.notes)}</li>) : <li>Attach customer watchlist term.</li>}
                     </EvidencePanel>
                     <EvidencePanel title='Open source questions'>
-                        {artifact.enrichmentTasks.length ? artifact.enrichmentTasks.map(task => <li key={task}>{displayRequirementText(task)}</li>) : <li>No open source question is attached to this detail.</li>}
+                        {artifact.enrichmentTasks.length ? artifact.enrichmentTasks.map(task => <li key={task}>{displayRequirementText(task)}</li>) : <li>Source questions are clear.</li>}
                     </EvidencePanel>
                 </div>
                 <div className='grid min-w-0 max-w-full content-start gap-2 overflow-hidden'>
@@ -3223,7 +3223,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                     </div>
                                 </div>
                             )) : (
-                                <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>No source request is attached to this detail.</p>
+                                <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Create source request before customer handoff.</p>
                             )}
                         </div>
                         {bridge.missing.length ? (
@@ -3736,7 +3736,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         source: 'TI search service',
         provenance: result.mode,
         confidence: result.confidence,
-        evidence: result.notes.length ? result.notes : ['No evidence text is attached to this result yet.'],
+        evidence: result.notes.length ? result.notes : ['Keep polling or search a related alias for source evidence.'],
         nextActions: ['Leave this query open while polling continues.', 'Search an alias, domain, company name, CVE, or supplier term.', 'Open the customer console to save the work.'],
         priority: priorityByRow.get('collection-searching'),
     }]
@@ -3865,7 +3865,7 @@ function WatchlistRelevanceWorkbench({
                             })}
                         </tbody>
                     </table>
-                    {!rows.length ? <p className='p-4 text-sm text-ui-muted dark:text-ui-muted'>No watchlist term is linked to this result.</p> : null}
+                    {!rows.length ? <p className='p-4 text-sm text-ui-muted dark:text-ui-muted'>Link a watchlist term to route this result.</p> : null}
                 </div>
                 <div className='min-w-0 border-t border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised xl:border-l xl:border-t-0'>
                     {selectedRow ? (
@@ -4413,7 +4413,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                             </div>
                         </div>
                     )) : (
-                        <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>No source coverage is attached to this actor result.</p>
+                        <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>Add source coverage before customer handoff.</p>
                     )}
                 </div>
             </div>
@@ -4451,7 +4451,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                             </div>
                         </div>
                     )) : (
-                        <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>No organization watchlist intersection is attached yet.</p>
+                        <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>Connect an organization watchlist to activate routing.</p>
                     )}
                 </div>
             </div>
