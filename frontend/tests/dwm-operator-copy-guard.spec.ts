@@ -18,6 +18,8 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     expect(workflowActions).toContain('#delivery-history')
     expect(workflowActions).toContain('Open delivery log')
     expect(workflowActions).toContain('alert linked')
+    expect(workflowActions).toContain('data-dwm-command-disabled-reason=\'true\'')
+    expect(workflowActions).toContain('{action.disabledReason}')
     expect(workflowActions).not.toContain('{route.alertId}</span>')
 
     expect(dwmPage).not.toContain('returning live')

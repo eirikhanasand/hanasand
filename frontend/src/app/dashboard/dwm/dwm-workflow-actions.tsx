@@ -887,6 +887,11 @@ function RouteQueueCard({ action }: { action: RouteQueueAction }) {
                     <span className={`max-w-[55%] shrink-0 truncate rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClass}`} title={action.state}>{action.state}</span>
                 </div>
                 <p className='mt-2 line-clamp-2 text-xs leading-5 text-ui-subtle'>{action.detail}</p>
+                {action.disabled && action.disabledReason ? (
+                    <p className='mt-2 rounded-md border border-ui-warning/30 bg-ui-warning/10 px-2 py-1 text-xs font-semibold leading-5 text-ui-warning' data-dwm-command-disabled-reason='true'>
+                        {action.disabledReason}
+                    </p>
+                ) : null}
             </div>
             <button
                 type='button'
