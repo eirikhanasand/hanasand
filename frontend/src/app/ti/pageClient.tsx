@@ -14,7 +14,8 @@ import { useRouter } from 'next/navigation'
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
 
-const TI_WORKBENCH_PREVIEW_ROWS = 2
+const TI_WORKBENCH_PREVIEW_ROWS = 1
+const TI_SELECTED_CONTEXT_ROWS = 3
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const router = useRouter()
@@ -3576,7 +3577,7 @@ function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWork
 }
 
 function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSourceDrilldown }) {
-    const rows = drilldown.rows.slice(0, 5)
+    const rows = drilldown.rows.slice(0, TI_SELECTED_CONTEXT_ROWS)
     if (!rows.length) return null
     return (
         <div data-ti-selected-evidence-context='true' className='mt-4 overflow-hidden rounded-lg border border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-raised'>
@@ -3659,7 +3660,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
             </div>
 
             <div className='mt-3 grid min-w-0 gap-2 md:grid-cols-2'>
-                {drilldown.rows.length ? drilldown.rows.slice(0, 4).map(row => (
+                {drilldown.rows.length ? drilldown.rows.slice(0, TI_SELECTED_CONTEXT_ROWS).map(row => (
                     <div key={row.rowId} className='min-w-0 rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-panel'>
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>

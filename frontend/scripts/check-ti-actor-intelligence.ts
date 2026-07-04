@@ -678,6 +678,8 @@ for (const [label, source] of [
 }
 assert(pageClientSource.includes('Console actions'), 'Public TI page should use professional console action language.')
 assert(pageClientSource.includes('Decision flow'), 'Public TI page should expose a compact decision flow.')
+assert(pageClientSource.includes('const TI_WORKBENCH_PREVIEW_ROWS = 1'), 'Public TI dense workbenches should default to one visible row before expansion.')
+assert(pageClientSource.includes('const TI_SELECTED_CONTEXT_ROWS = 3'), 'Public TI selected source context should stay capped before expansion.')
 assert(pageClientSource.includes('Review status'), 'Public TI page should expose consumer-ready workflow state.')
 assert(pageClientSource.includes('data-ti-consumer-readiness'), 'Public TI page should expose consumer readiness rows for render checks.')
 assert(pageClientSource.includes('data-ti-consumer-field-readiness'), 'Public TI consumer readiness should expose required field readiness chips.')
