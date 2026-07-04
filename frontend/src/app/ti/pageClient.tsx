@@ -799,6 +799,14 @@ function SelectedEvidenceRail({
     const owner = caseOwnership?.owner.label ?? 'unassigned'
     const alertValue = selectedAlertContinuityValue(deliveryPlan, alertPlan, captureCount)
     const caseValue = selectedCaseContinuityValue(deliveryPlan, caseOwnership, caseDraft, captureCount)
+    const continuityRefs = selectedContinuityRefs({
+        sourceCount,
+        captureCount,
+        watchlistPlan,
+        alertPlan,
+        caseOwnership,
+        deliveryPlan,
+    })
     const continuityGaps = selectedContinuityGaps({
         captureCount,
         sourceDrilldown,
@@ -873,6 +881,14 @@ function SelectedEvidenceRail({
                             <ContinuityRow key={row.label} label={row.label} value={row.value} state={row.state} href={row.href} fallback={row.fallback} />
                         ))}
                     </div>
+                    <div data-ti-auth-continuity-refs='true' className='flex min-w-0 flex-wrap gap-1'>
+                        {continuityRefs.map(ref => (
+                            <span key={ref.label} className='inline-flex max-w-full items-center gap-1 rounded-md bg-ui-raised px-1.5 py-1 text-[10px] leading-4 text-ui-muted dark:bg-ui-panel dark:text-ui-muted'>
+                                <span className='shrink-0 font-semibold uppercase'>{ref.label}</span>
+                                <span className={`min-w-0 wrap-break-word font-semibold ${ref.state === 'ready' ? 'text-ui-success' : ref.state === 'blocked' ? 'text-ui-warning' : 'text-ui-text dark:text-ui-text'}`}>{ref.value}</span>
+                            </span>
+                        ))}
+                    </div>
                     {continuityGaps.length ? (
                         <div data-ti-continuity-gaps='true' className='grid min-w-0 gap-1 rounded-md border border-ui-warning/25 bg-ui-warning/10 p-2'>
                             <p className='text-[10px] font-semibold uppercase text-ui-warning dark:text-ui-warning'>Missing links</p>
@@ -903,6 +919,58 @@ function SelectedEvidenceRail({
             </div>
         </section>
     )
+}
+
+function selectedContinuityRefs(input: {
+    sourceCount: number
+    captureCount: number
+    watchlistPlan: SelectedWatchlistPlan | null
+    alertPlan: SelectedAlertActionPlan | null
+    caseOwnership: SelectedCaseOwnershipPlan | null
+    deliveryPlan: SelectedDeliveryReadinessPlan | null
+}) {
+    const alertRefs = unique([
+        ...(input.alertPlan?.sourceRefs.alertIds ?? []),
+        ...(input.caseOwnership?.sourceRefs.alertIds ?? []),
+        ...(input.deliveryPlan?.sourceRefs.alertIds ?? []),
+    ])
+    const caseRoutes = unique([
+        ...(input.caseOwnership?.sourceRefs.casePaths ?? []),
+        ...(input.deliveryPlan?.sourceRefs.casePaths ?? []),
+    ])
+    const destinationIds = input.deliveryPlan?.sourceRefs.destinationIds ?? []
+    const watchRefs = unique([
+        ...(input.watchlistPlan?.intersections.map(item => item.watchlistItemId).filter((value): value is string => Boolean(value)) ?? []),
+        ...(input.watchlistPlan?.terms.map(term => term.value) ?? []),
+    ])
+
+    return [
+        {
+            label: 'Captures',
+            value: input.captureCount ? `${input.captureCount}/${input.sourceCount || input.captureCount}` : 'attach',
+            state: input.captureCount ? 'ready' : 'blocked',
+        },
+        {
+            label: 'Alerts',
+            value: alertRefs.length ? `${alertRefs.length} linked` : input.alertPlan?.readiness.candidateCount ? `${input.alertPlan.readiness.candidateCount} review` : 'none',
+            state: alertRefs.length ? 'ready' : input.alertPlan?.readiness.candidateCount ? 'review' : 'blocked',
+        },
+        {
+            label: 'Cases',
+            value: caseRoutes.length ? `${caseRoutes.length} route${caseRoutes.length === 1 ? '' : 's'}` : input.caseOwnership?.summary.caseCandidates ? `${input.caseOwnership.summary.caseCandidates} review` : 'none',
+            state: caseRoutes.length ? 'ready' : input.caseOwnership?.summary.caseCandidates ? 'review' : 'blocked',
+        },
+        {
+            label: 'Watch',
+            value: watchRefs.length ? `${watchRefs.length} ref${watchRefs.length === 1 ? '' : 's'}` : 'term needed',
+            state: input.watchlistPlan?.ready || watchRefs.length ? 'ready' : 'review',
+        },
+        {
+            label: 'Destinations',
+            value: destinationIds.length ? `${destinationIds.length} ready` : 'choose',
+            state: destinationIds.length ? 'ready' : 'blocked',
+        },
+    ] as const
 }
 
 function selectedContinuityGaps(input: {
