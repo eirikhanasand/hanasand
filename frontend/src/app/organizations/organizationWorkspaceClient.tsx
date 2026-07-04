@@ -1504,6 +1504,9 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
     const alertHref = alertId
         ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organization.id)}`
         : ''
+    const deliveryHref = destinationId || focus === 'destinations' || focus === 'webhooks'
+        ? '#delivery-history'
+        : ''
     return (
         <section className='rounded-lg border border-ui-primary/35 bg-ui-primary/10 p-4 shadow-sm dark:border-ui-primary/35 dark:bg-ui-panel' data-dwm-handoff='true'>
             <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
@@ -1527,6 +1530,7 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
                 <div className='grid gap-2 sm:grid-cols-2 lg:flex'>
                     <ActionAnchor href='#audit' icon={<CheckCircle2 className='h-4 w-4' />} label='Review context' />
                     <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Manage watchlist' />
+                    {deliveryHref && <ActionAnchor href={deliveryHref} icon={<Webhook className='h-4 w-4' />} label='Open delivery log' />}
                     {caseHref && <ActionAnchor href={caseHref} icon={<ExternalLink className='h-4 w-4' />} label='Open case' />}
                     {alertHref && <ActionAnchor href={alertHref} icon={<ExternalLink className='h-4 w-4' />} label='Open alert' />}
                 </div>
