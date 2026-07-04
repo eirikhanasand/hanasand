@@ -54,11 +54,19 @@ export type DashboardWebhookDelivery = {
 function sanitizeDeliveryCopy(value: string | undefined) {
     if (!value) return value
     return value
+        .replace(/hanasand-live-proof-\d+/gi, 'Hanasand live org')
+        .replace(/hanasand-live-proof/gi, 'Hanasand live org')
         .replace(/hanasand-live-status-\d+/gi, 'Hanasand live org')
         .replace(/hanasand-live-status/gi, 'Hanasand live org')
+        .replace(/Route not found/gi, 'Endpoint unavailable')
+        .replace(/not_found/gi, 'endpoint unavailable')
         .replace(/receipt/gi, 'delivery')
         .replace(/proof/gi, 'status')
         .replace(/readiness/gi, 'status')
+}
+
+function deliveryDisplayText(value: string | undefined, fallback = 'Delivery detail unavailable') {
+    return sanitizeDeliveryCopy(value)?.trim() || fallback
 }
 
 export type DashboardWebhookAlertOption = {
@@ -330,7 +338,7 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                                         <PreviewLine label='Route' value={selectedAlert?.routeLabel || 'syncing'} />
                                         <PreviewLine label='Destination' value={selectedDestination?.endpointHint || selectedDestination?.endpointHash || 'destination syncing'} />
                                     </div>
-                                    <pre className='max-h-[260px] overflow-auto rounded-lg border border-ui-border bg-ui-panel p-3 text-[11px] leading-5 text-ui-text'>{JSON.stringify(preview, null, 2)}</pre>
+                                    <WebhookPreviewSummary preview={preview} />
                                 </div>
                             ) : (
                                 <div className='mt-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 p-3 text-sm text-ui-warning'>Select an alert and destination to render the Discord body.</div>
@@ -470,6 +478,30 @@ function buildPreview(organization: DashboardWebhookOrganization | undefined, de
     }
 }
 
+function WebhookPreviewSummary({ preview }: { preview: NonNullable<ReturnType<typeof buildPreview>> }) {
+    const embed = preview.embeds[0]
+    const fieldRows = embed.fields.slice(0, 7)
+    return (
+        <div className='grid max-h-[260px] gap-2 overflow-auto rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-text' data-webhook-preview-summary='true'>
+            <div>
+                <p className='text-[11px] font-semibold uppercase tracking-wide text-ui-muted'>Discord dry-run body</p>
+                <p className='mt-1 line-clamp-2 font-semibold'>{deliveryDisplayText(embed.title, 'Alert body pending')}</p>
+                <p className='mt-1 line-clamp-2 text-ui-muted'>{deliveryDisplayText(embed.description, 'Evidence summary pending')}</p>
+            </div>
+            <div className='grid gap-1'>
+                {fieldRows.map(field => (
+                    <PreviewLine key={`${field.name}-${field.value}`} label={deliveryDisplayText(field.name, 'Field')} value={deliveryDisplayText(String(field.value || ''), 'Pending')} />
+                ))}
+            </div>
+            <div className='grid gap-1 rounded-md bg-ui-raised px-2 py-1.5 text-[11px] text-ui-muted'>
+                <span className='truncate'>Alert: {deliveryDisplayText(preview.hanasand.alertId, 'selected alert')}</span>
+                <span className='truncate'>Destination: {deliveryDisplayText(preview.hanasand.destinationTarget, 'redacted destination')}</span>
+                <span className='truncate'>Route: {deliveryDisplayText(preview.hanasand.casePath || preview.hanasand.routeUrl, 'case route pending')}</span>
+            </div>
+        </div>
+    )
+}
+
 function upsertDestination(current: DashboardWebhookDestination[], destination: DashboardWebhookDestination) {
     const next = current.filter(item => item.id !== destination.id)
     return [destination, ...next].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
@@ -481,12 +513,12 @@ function upsertDelivery(current: DashboardWebhookDelivery[], delivery: Dashboard
 }
 
 function errorMessage(error: unknown) {
-    return error instanceof Error ? error.message : String(error)
+    return deliveryDisplayText(error instanceof Error ? error.message : String(error), 'Request failed.')
 }
 
 function deliveryStatusDetail(delivery: DashboardWebhookDelivery) {
-    if (delivery.error) return delivery.error
-    if (delivery.errorClass) return delivery.errorClass
+    if (delivery.error) return deliveryDisplayText(delivery.error)
+    if (delivery.errorClass) return deliveryDisplayText(delivery.errorClass)
     if (delivery.httpStatus) return `HTTP ${delivery.httpStatus}`
     if (delivery.payloadHash) return delivery.payloadHash
     return 'clear'

@@ -330,6 +330,10 @@ function sanitizeOrganizationDisplayCopy(value: unknown) {
         .replace(new RegExp('read' + 'iness', 'gi'), 'status')
 }
 
+function organizationDeliveryErrorText(value: unknown) {
+    return sanitizeOrganizationDisplayCopy(value) || 'Delivery error redacted.'
+}
+
 function stopRowSelectionKeys(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Enter' || event.key === ' ') {
         event.stopPropagation()
@@ -2605,7 +2609,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                 <span className='truncate'>Last delivery: {deliveryStatus}</span>
                 <span className='truncate'>Tenant: {sanitizeOrganizationDisplayCopy(item.tenantId || organization.tenantId || 'default')}</span>
             </div>
-            {delivery?.error && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{delivery.error}</p>}
+            {delivery?.error && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{organizationDeliveryErrorText(delivery.error)}</p>}
             {delivery && <DeliveryPayloadPreview delivery={delivery} compact />}
         </div>
     )
@@ -2683,7 +2687,7 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                                             </td>
                                             <td className='max-w-64 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                                 <DeliveryReference delivery={delivery} organizationId={organization.id} />
-                                                {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
+                                                {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{organizationDeliveryErrorText(delivery.error)}</p>}
                                                 {!delivery.error && delivery.responseSummary && <p className='mt-1 line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
                                                 <div className='mt-2'>
                                                     <DeliveryPayloadPreview delivery={delivery} compact />
@@ -2750,7 +2754,7 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, canManage, busy, r
                 {delivery.httpStatus !== undefined && <span className='truncate'>HTTP {delivery.httpStatus}</span>}
                 {delivery.errorClass && <span className='truncate text-right'>{sanitizeOrganizationDisplayCopy(delivery.errorClass)}</span>}
             </div>
-            {delivery.error && <p className='line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
+            {delivery.error && <p className='line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{organizationDeliveryErrorText(delivery.error)}</p>}
             {!delivery.error && delivery.responseSummary && <p className='line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
             <DeliveryPayloadPreview delivery={delivery} compact />
             <div className='grid gap-2'>
