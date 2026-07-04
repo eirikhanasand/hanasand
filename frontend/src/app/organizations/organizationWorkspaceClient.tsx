@@ -1182,7 +1182,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
         {
             id: 'delivery',
             label: 'Delivery',
-            value: configuredDestinations.length ? `${configuredDestinations.length} destination${configuredDestinations.length === 1 ? '' : 's'}` : 'No destination',
+            value: configuredDestinations.length ? `${configuredDestinations.length} destination${configuredDestinations.length === 1 ? '' : 's'}` : 'Add route',
             detail: failedDeliveries.length ? `${failedDeliveries.length} failed delivery` : bundle.deliveries.length ? `${bundle.deliveries.length} delivery event${bundle.deliveries.length === 1 ? '' : 's'}` : 'Test a Discord or webhook route',
             href: '#destinations',
             tone: failedDeliveries.length ? 'warning' : configuredDestinations.length ? 'ready' : 'blocked',
@@ -1190,8 +1190,8 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
         {
             id: 'cases',
             label: 'Cases',
-            value: bundle.alerts.length || routedCases.length ? `${bundle.alerts.length} alert${bundle.alerts.length === 1 ? '' : 's'} · ${routedCases.length} case${routedCases.length === 1 ? '' : 's'}` : 'No routed work',
-            detail: organization.tenantId ? `Tenant ${organization.tenantId}` : 'Waiting for org-scoped alert matches',
+            value: bundle.alerts.length || routedCases.length ? `${bundle.alerts.length} alert${bundle.alerts.length === 1 ? '' : 's'} · ${routedCases.length} case${routedCases.length === 1 ? '' : 's'}` : 'Awaiting routed work',
+            detail: organization.tenantId ? `Tenant ${organization.tenantId}` : 'Set alert matching scope',
             href: '#delivery-history',
             tone: bundle.alerts.length || routedCases.length ? 'ready' : 'neutral',
         },
@@ -1238,74 +1238,53 @@ function EmptyWorkspacePreview() {
             id: 'watchlists',
             icon: <BellRing className='h-4 w-4' />,
             title: 'Shared watchlists',
-            detail: 'Company, domain, supplier, actor, keyword',
-            state: 'Create org first',
+            detail: 'Add the company, domain, supplier, actor, or keyword terms that should create scoped DWM alerts.',
         },
         {
             id: 'destinations',
             icon: <Webhook className='h-4 w-4' />,
             title: 'Webhook destinations',
-            detail: 'Discord, webhook, dry test, replay',
-            state: 'Waiting for org',
+            detail: 'Save a redacted Discord or webhook route, dry-test it, then replay customer notifications from alert history.',
         },
         {
             id: 'audit',
             icon: <CheckCircle2 className='h-4 w-4' />,
             title: 'Activity',
-            detail: 'Invites, role changes, delivery actions',
-            state: 'No events',
+            detail: 'Track invites, role changes, watchlist edits, delivery tests, and case handoffs in one activity rail.',
         },
     ]
 
     return (
-        <div className='grid gap-4'>
-            <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-empty-focused-create='true'>
-                <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start'>
-                    <div className='min-w-0'>
-                        <div className='flex min-w-0 items-start gap-3'>
-                            <div className='grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>
-                                <Building2 className='h-5 w-5' />
-                            </div>
-                            <div className='min-w-0'>
-                                <h2 className='text-xl font-semibold text-ui-text dark:text-ui-text'>Create the first organization</h2>
-                                <div className='mt-3 flex flex-wrap gap-2 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
-                                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Org</span>
-                                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Members</span>
-                                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Watchlists</span>
-                                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Destinations</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <ol className='grid gap-2 text-sm text-ui-muted dark:text-ui-muted'>
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-empty-focused-create='true'>
+            <div className='flex min-w-0 items-start gap-3'>
+                <div className='grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>
+                    <Building2 className='h-5 w-5' />
+                </div>
+                <div className='min-w-0'>
+                    <h2 className='text-xl font-semibold text-ui-text dark:text-ui-text'>Set up customer monitoring</h2>
+                    <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
+                        Create an organization, seed the first watchlist term, then attach delivery and review activity from the same workspace.
+                    </p>
+                    <ol className='mt-4 grid gap-2 text-sm text-ui-muted dark:text-ui-muted'>
                         {setupRails.map((step, index) => (
-                            <li key={step.id} className='grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas'>
+                            <li key={step.id} className='grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas'>
                                 <span className='flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ui-primary/10 text-xs font-bold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{index + 1}</span>
                                 <span className='min-w-0'>
-                                    <span className='block truncate font-semibold text-ui-text dark:text-ui-text'>{step.title}</span>
-                                    <span className='block truncate text-xs'>{step.detail}</span>
+                                    <span className='flex items-center gap-2 font-semibold text-ui-text dark:text-ui-text'>{step.icon}{step.title}</span>
+                                    <span className='mt-0.5 block text-xs leading-5'>{step.detail}</span>
                                 </span>
-                                <span className='hidden rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold dark:border-ui-border dark:bg-ui-panel sm:inline-flex'>{step.state}</span>
                             </li>
                         ))}
                     </ol>
-                </div>
-            </section>
-            <section className='grid gap-3 md:grid-cols-3'>
-                {setupRails.map(item => (
-                    <div key={item.id} id={item.id} className='min-w-0 rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                        <div className='flex items-center justify-between gap-3'>
-                            <span className='inline-flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
-                                <span className='grid h-8 w-8 place-items-center rounded-lg bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{item.icon}</span>
-                                {item.title}
-                            </span>
-                            <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{item.state}</span>
-                        </div>
-                        <p className='mt-3 truncate text-sm text-ui-muted dark:text-ui-muted'>{item.detail}</p>
+                    <div className='mt-4 flex flex-wrap gap-2 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Org</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Members</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Watchlists</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Destinations</span>
                     </div>
-                ))}
-            </section>
-        </div>
+                </div>
+            </div>
+        </section>
     )
 }
 
@@ -1898,8 +1877,18 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
 }
 
 function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
+    const [watchlistQuery, setWatchlistQuery] = useState('')
+    const [watchlistStatusFilter, setWatchlistStatusFilter] = useState('all')
     const archivedCount = watchlists.filter(item => item.status === 'archived').length
     const busyLabel = watchlistBusyLabel(busy)
+    const normalizedWatchlistQuery = normalizeWatchlistValue(watchlistQuery)
+    const visibleWatchlists = watchlists.filter(item => {
+        const statusMatches = watchlistStatusFilter === 'all' || item.status === watchlistStatusFilter
+        if (!statusMatches) return false
+        if (!normalizedWatchlistQuery) return true
+        return watchlistSearchText(item, organization).includes(normalizedWatchlistQuery)
+    })
+    const filtersActive = Boolean(watchlistQuery.trim()) || watchlistStatusFilter !== 'all'
     return (
         <section id='watchlists' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
@@ -1965,13 +1954,55 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
             </div>
 
             <div className='mt-5 grid gap-3'>
+                {watchlists.length > 0 && (
+                    <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[minmax(0,1fr)_10rem_auto]' data-org-watchlist-filter-strip='true'>
+                        <label className='grid min-w-0 gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                            Search terms
+                            <input
+                                value={watchlistQuery}
+                                disabled={Boolean(busy)}
+                                onChange={event => setWatchlistQuery(event.target.value)}
+                                className={inputClass}
+                                placeholder='Domain, supplier, owner, alert ref'
+                            />
+                        </label>
+                        <SelectField
+                            label='Status'
+                            value={watchlistStatusFilter}
+                            options={['all', 'active', 'paused', 'archived']}
+                            disabled={Boolean(busy)}
+                            onChange={setWatchlistStatusFilter}
+                        />
+                        <div className='grid content-end gap-1'>
+                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-2 text-center text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted' data-org-watchlist-filter-count='true'>
+                                {visibleWatchlists.length}/{watchlists.length} shown
+                            </span>
+                            <button
+                                type='button'
+                                className={secondaryButtonClass}
+                                disabled={!filtersActive || Boolean(busy)}
+                                onClick={() => {
+                                    setWatchlistQuery('')
+                                    setWatchlistStatusFilter('all')
+                                }}
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+                )}
                 {watchlists.length === 0 && (
                     <div className='rounded-lg border border-dashed border-ui-primary/35 bg-ui-panel p-4 text-sm leading-6 text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>
                         <p className='font-semibold text-ui-text dark:text-ui-text'>No watchlist terms yet.</p>
                         <p className='mt-1'>Start with a scope template, enter a real customer-owned term, then save it to generate org-scoped alert terms and delivery context.</p>
                     </div>
                 )}
-                {watchlists.map(item => {
+                {watchlists.length > 0 && visibleWatchlists.length === 0 && (
+                    <div className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm text-ui-muted dark:border-ui-border dark:bg-ui-panel' data-org-watchlist-filter-empty='true'>
+                        No watchlist terms match this view.
+                    </div>
+                )}
+                {visibleWatchlists.map(item => {
                     const edit = editing[item.id]
                     const editDuplicate = edit ? isDuplicateWatchlistTerm(watchlists, edit.kind, edit.value, item.id) : false
                     const editChanged = edit ? watchlistDraftChanged(item, edit) : false
@@ -3288,6 +3319,22 @@ function watchlistDraftChanged(item: WatchlistItem, draft: { kind: WatchlistKind
 
 function normalizeWatchlistValue(value: string) {
     return value.trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/g, '').toLowerCase()
+}
+
+function watchlistSearchText(item: WatchlistItem, organization: OrganizationSummary) {
+    return [
+        item.kind,
+        item.value,
+        item.status,
+        item.notes,
+        item.organizationId || organization.id,
+        item.tenantId || organization.tenantId,
+        item.createdBy,
+        item.updatedBy,
+        item.alertGenerationRef,
+        item.webhookEndpointHint,
+        item.webhookEndpointHash,
+    ].filter(Boolean).join(' ').toLowerCase()
 }
 
 function alertsForWatchlist(item: WatchlistItem, alerts: ScopedAlert[]) {
