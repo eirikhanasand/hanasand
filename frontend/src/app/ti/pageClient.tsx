@@ -332,7 +332,7 @@ function Results({ result }: { result: TiSearchResponse }) {
             <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel'>
                 {renderMobileWorkbar && mobileEvidenceWorkbar ? <div className='border-b border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
                 <div className='grid gap-4 border-b border-ui-border bg-ui-panel p-4 dark:border-ui-border dark:bg-ui-panel'>
-                    <div className='grid min-w-0 gap-4 xl:grid-cols-[minmax(320px,0.78fr)_minmax(520px,1.22fr)] xl:items-start'>
+                    <div data-ti-desktop-action-first-grid='true' className='grid min-w-0 gap-3 xl:grid-cols-[minmax(260px,0.52fr)_minmax(680px,1.48fr)] xl:items-start 2xl:grid-cols-[minmax(260px,0.5fr)_minmax(680px,1.25fr)_minmax(220px,0.35fr)]'>
                         <div className='grid min-w-0 content-start gap-4'>
                             <div className='min-w-0'>
                                 <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center'>
@@ -343,9 +343,9 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         </span>
                                     ) : null}
                                 </div>
-                                <p className='mt-3 max-w-3xl text-base leading-7 text-ui-muted dark:text-ui-muted'>{displayRequirementText(result.summary)}</p>
+                                <p className='mt-3 line-clamp-3 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(result.summary)}</p>
                             </div>
-                            <div className='flex min-w-0 flex-wrap gap-2'>
+                            <div data-ti-compact-actor-fact-bar='true' className='flex min-w-0 flex-wrap gap-x-3 gap-y-1'>
                                 {profileStats.map(item => (
                                     <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
                                 ))}
@@ -372,26 +372,26 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     onReview={() => applyDecision('reviewing')}
                                 />
                             ) : null}
-                            <section data-ti-geo-subordinate='true' className='rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-panel'>
-                                <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 px-3 py-2'>
-                                    <div className='min-w-0'>
-                                        <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Geography</p>
-                                        <p className='mt-0.5 wrap-break-word text-xs text-ui-muted dark:text-ui-muted'>
-                                            {actorIntel.geographies.length ? `${actorIntel.geographies.slice(0, 3).join(', ')}${actorIntel.geographies.length > 3 ? ` +${actorIntel.geographies.length - 3}` : ''}` : 'Country coverage needs source detail.'}
-                                        </p>
-                                    </div>
-                                    <button
-                                        type='button'
-                                        onClick={() => setShowGeoCoverage(value => !value)}
-                                        aria-expanded={showGeoCoverage}
-                                        className='inline-flex min-h-8 shrink-0 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'
-                                    >
-                                        {showGeoCoverage ? 'Hide map' : 'Open map'}
-                                    </button>
-                                </div>
-                                {showGeoCoverage ? <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact /> : null}
-                            </section>
                         </div>
+                        <section data-ti-geo-subordinate='true' className='rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-panel xl:col-start-2 2xl:col-start-auto'>
+                            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 px-3 py-2'>
+                                <div className='min-w-0'>
+                                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Geography</p>
+                                    <p className='mt-0.5 wrap-break-word text-xs text-ui-muted dark:text-ui-muted'>
+                                        {actorIntel.geographies.length ? `${actorIntel.geographies.slice(0, 3).join(', ')}${actorIntel.geographies.length > 3 ? ` +${actorIntel.geographies.length - 3}` : ''}` : 'Country coverage needs source detail.'}
+                                    </p>
+                                </div>
+                                <button
+                                    type='button'
+                                    onClick={() => setShowGeoCoverage(value => !value)}
+                                    aria-expanded={showGeoCoverage}
+                                    className='inline-flex min-h-8 shrink-0 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'
+                                >
+                                    {showGeoCoverage ? 'Hide map' : 'Open map'}
+                                </button>
+                            </div>
+                            {showGeoCoverage ? <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact /> : null}
+                        </section>
                     </div>
                 </div>
                 {renderDesktopActions ? (
