@@ -2711,7 +2711,7 @@ function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorInt
         { label: 'Newest evidence', value: actor.sourceCoverage.latestReportDate ? formatDate(actor.sourceCoverage.latestReportDate) : 'Not dated' },
         { label: 'Generated', value: formatDate(actor.freshness.generatedAt) },
         { label: 'Source results', value: String(actor.sourceCoverage.totalRows) },
-        { label: 'Captured pages', value: String(actor.sourceCoverage.captureRows) },
+        { label: 'Capture status', value: captureCoverageLabel(actor.sourceCoverage) },
     ]
 
     return (
@@ -2967,16 +2967,21 @@ function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfil
     const metrics = [
         { label: 'Source results', value: String(coverage.totalRows) },
         { label: 'Dated activity', value: String(coverage.datedRows) },
-        { label: 'Captures', value: String(coverage.captureRows) },
+        { label: 'Capture status', value: captureCoverageLabel(coverage) },
         { label: 'Latest', value: coverage.latestReportDate ? formatDate(coverage.latestReportDate) : 'Not dated' },
     ]
+    const coverageCopy = coverage.captureRows
+        ? 'Replayable source captures are attached for analyst review.'
+        : coverage.missing.includes('sourceProvenance[].captureId')
+            ? 'Attach capture evidence before case replay or delivery review.'
+            : coverage.stale ? 'Refresh source coverage before sending this to review.' : 'Evidence dates and source references are current.'
     return (
         <div data-ti-source-coverage='true' className='min-w-0 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
             <div className='flex flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source coverage</p>
                     <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {coverage.stale ? 'Refresh source coverage before sending this to review.' : 'Evidence dates and source references are current.'}
+                        {coverageCopy}
                     </p>
                 </div>
                 <span className={coverage.stale ? 'rounded-md bg-ui-warning/10 px-2 py-1 text-[11px] font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning' : 'rounded-md bg-ui-success/10 px-2 py-1 text-[11px] font-semibold text-ui-success dark:bg-ui-success/10 dark:text-ui-success'}>
@@ -3005,6 +3010,12 @@ function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfil
             ) : null}
         </div>
     )
+}
+
+function captureCoverageLabel(coverage: TiActorIntelligenceProfile['sourceCoverage']) {
+    if (coverage.captureRows) return `${coverage.captureRows} capture${coverage.captureRows === 1 ? '' : 's'} linked`
+    if (coverage.missing.includes('sourceProvenance[].captureId')) return 'capture evidence needed'
+    return 'capture optional'
 }
 
 function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenceProfile['techniqueCoverage'] }) {

@@ -771,6 +771,8 @@ assert(pageClientSource.includes('sourceRows = compact ? []'), 'Compact geograph
 assert(pageClientSource.includes('MapCoverageFallback regions={regionalAreas} actor={actor} actionability={actionability} compact={compact}'), 'Geography fallback should respect compact first-viewport rendering.')
 assert(pageClientSource.includes('label: \'Alert context\''), 'Public TI top stats should show alert context instead of dead related-alert counters.')
 assert(!pageClientSource.includes('label: \'Related alerts\''), 'Public TI top stats should not render a dead related-alerts zero counter.')
+assert(pageClientSource.includes('Capture status'), 'Public TI source coverage should render capture status instead of a dead captured-pages counter.')
+assert(!pageClientSource.includes('Captured pages'), 'Public TI source coverage should not expose captured-pages zero-counter copy.')
 assert(pageClientSource.includes('capture evidence needed'), 'Actor source coverage should turn missing captures into an operational source requirement.')
 assert(pageClientSource.includes('alert candidates'), 'Public TI alert summaries should show candidate workflow state when no alert is linked.')
 assert(pageClientSource.includes('case candidates'), 'Public TI case summaries should show case candidate workflow state when no case is linked.')
