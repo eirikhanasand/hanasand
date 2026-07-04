@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Archive, BellRing, Building2, CheckCircle2, CircleAlert, Copy, ExternalLink, Loader2, Pause, Pencil, Play, RefreshCw, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
 
@@ -281,6 +281,12 @@ function sanitizeOrganizationDisplayCopy(value: unknown) {
         .replace(new RegExp('rec' + 'eipt', 'gi'), 'delivery')
         .replace(new RegExp('pro' + 'of', 'gi'), 'status')
         .replace(new RegExp('read' + 'iness', 'gi'), 'status')
+}
+
+function stopRowSelectionKeys(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.stopPropagation()
+    }
 }
 
 function organizationDisplayName(organization: Pick<OrganizationSummary, 'name' | 'slug' | 'id'> | undefined) {
@@ -1414,7 +1420,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
                                         </span>
                                         <RowStatus message={rowMessages[`invite-${invite.id}`]} />
                                     </span>
-                                    <span className='flex gap-1 sm:justify-end'>
+                                    <span className='flex gap-1 sm:justify-end' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                         <button type='button' aria-label='Copy invite link' className={iconButtonClass} disabled={!canCopy} onClick={event => { event.stopPropagation(); onCopyInvite(invite) }}><Copy className='h-4 w-4' /></button>
                                         <button type='button' aria-label='Resend invite' className={iconButtonClass} disabled={!canResend} onClick={event => { event.stopPropagation(); onInviteAction(invite, 'resend') }}><RefreshCw className='h-4 w-4' /></button>
                                         <ConfirmActionButton ariaLabel='Revoke invite' disabled={!canRevoke} onConfirm={() => onInviteAction(invite, 'revoke')} icon={<Trash2 className='h-4 w-4' />} />
@@ -1480,7 +1486,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                         </td>
                                         <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                             {canMutateMember ? (
-                                                <div className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()}>
+                                                <div className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                                     <select className={compactSelectClass} value={selectedRole} disabled={Boolean(busy)} onChange={event => setPendingRoles(current => ({ ...current, [member.userId]: event.target.value as OrganizationRole }))}>
                                                         {roleOptions.map(option => <option key={option} value={option}>{option}</option>)}
                                                     </select>
@@ -1597,7 +1603,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                 <StatusPill status={destinationStatus} />
                             </span>
                             {draft ? (
-                                <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem_8rem]'>
+                                <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem_8rem]' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                     <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                                         Name
                                         <input value={draft.name} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, name: event.target.value } }))} className={inputClass} />
@@ -1611,7 +1617,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                         {draftUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
                                     </label>
                                     {!draftUrlInvalid && !draftNameDuplicate && !draftChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-3'>No changes to save.</p>}
-                                    <div className='flex flex-wrap gap-2 md:col-span-3' onClick={event => event.stopPropagation()}>
+                                    <div className='flex flex-wrap gap-2 md:col-span-3' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                         <button type='button' className={primaryButtonClass} disabled={draftUrlInvalid || draftNameDuplicate || !draftChanged || Boolean(busy)} onClick={() => onUpdate(destination, draft)}>
                                             <CheckCircle2 className='h-4 w-4' />
                                             Save
@@ -1631,7 +1637,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                         <span className='truncate'>Hash: {sanitizeOrganizationDisplayCopy(destination.endpointHash || 'not returned')}</span>
                                     </span>
                                     <DestinationDeliverySummary delivery={latestDelivery} />
-                                    <span className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()}>
+                                    <span className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                         <button type='button' className={secondaryButtonClass} disabled={Boolean(busy)} onClick={() => onTest(destination)}>
                                             <RefreshCw className='h-4 w-4' />
                                             Test
@@ -1746,7 +1752,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                             }}
                         >
                             {edit ? (
-                                <div className='grid gap-3 md:grid-cols-[9rem_1fr]'>
+                                <div className='grid gap-3 md:grid-cols-[9rem_1fr]' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                     <SelectField label='Type' value={edit.kind} options={watchlistKinds} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [item.id]: { ...edit, kind: value as WatchlistKind } }))} />
                                     <Field label='Term' value={edit.value} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [item.id]: { ...edit, value } }))} />
                                     <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted md:col-span-2'>
@@ -1755,7 +1761,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                     </label>
                                     {editDuplicate && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning md:col-span-2'>This term already exists in this organization.</p>}
                                     {!editDuplicate && !editChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-2'>No changes to save.</p>}
-                                    <div className='flex flex-wrap gap-2 md:col-span-2'>
+                                    <div className='flex flex-wrap gap-2 md:col-span-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                         <button type='button' className={primaryButtonClass} disabled={!edit.value.trim() || editDuplicate || !editChanged || Boolean(busy)} onClick={() => onSave(item)}>
                                             <CheckCircle2 className='h-4 w-4' />
                                             Save
@@ -1786,7 +1792,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                         </div>
                                         <WatchlistDestinationSummary item={item} delivery={deliveryResults[item.id] || latestDeliveryForWatchlist(item, deliveries)} />
                                         {canManage && (
-                                            <div className='flex flex-wrap gap-2'>
+                                            <div className='flex flex-wrap gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                                 <button type='button' aria-label='Edit watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [item.id]: { kind: item.kind, value: item.value, notes: item.notes || '' } }))}>
                                                     <Pencil className='h-4 w-4' />
                                                 </button>
@@ -1877,7 +1883,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
         <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' onClick={event => {
             event.stopPropagation()
             onSelect()
-        }}>
+        }} onKeyDown={stopRowSelectionKeys}>
             <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
                 <div className='min-w-0'>
                     <p className='flex flex-wrap items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
@@ -2276,6 +2282,9 @@ function ConfirmActionButton({ ariaLabel, disabled, onConfirm, icon }: { ariaLab
                 if (event.key === 'Escape') {
                     event.stopPropagation()
                     setConfirming(false)
+                }
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.stopPropagation()
                 }
             }}
             onClick={event => {
