@@ -2062,68 +2062,126 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                 {scopedDeliveries.length === 0 ? (
                     <EmptyLine text={selectedSubject.type === 'organization' ? 'No delivery attempts for this organization yet.' : 'No delivery attempts for the selected row.'} />
                 ) : (
-                    <table className='min-w-full border-separate border-spacing-0 text-left text-sm'>
-                        <thead className='bg-ui-raised text-xs uppercase tracking-[0.08em] text-ui-muted dark:bg-ui-canvas dark:text-ui-muted'>
-                            <tr>
-                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>State</th>
-                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Target</th>
-                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Alert / case</th>
-                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Retry</th>
-                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>When</th>
-                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {scopedDeliveries.map(delivery => {
-                                const replayable = canReplayDelivery(delivery)
-                                const replayLabel = delivery.status === 'failed' || delivery.nextRetryAt ? 'Retry' : 'Replay'
-                                return (
-                                    <tr key={delivery.id} className='align-top hover:bg-ui-raised dark:hover:bg-ui-panel'>
-                                        <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                            <div className='grid gap-1'>
-                                                <StatusPill status={delivery.status || 'attempt'} />
-                                                <span className='text-xs text-ui-muted dark:text-ui-muted'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'webhook'}</span>
-                                                {delivery.httpStatus !== undefined && <span className='text-xs text-ui-muted dark:text-ui-muted'>HTTP {delivery.httpStatus}</span>}
-                                            </div>
-                                        </td>
-                                        <td className='max-w-56 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                            <p className='truncate font-mono text-xs text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || 'redacted destination')}</p>
-                                            <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{delivery.webhookDestinationId || delivery.requestId || delivery.id}</p>
-                                            <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
-                                        </td>
-                                        <td className='max-w-64 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                            <DeliveryReference delivery={delivery} organizationId={organization.id} />
-                                            {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
-                                            {!delivery.error && delivery.responseSummary && <p className='mt-1 line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
-                                        </td>
-                                        <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                            <div className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
-                                                <span>{delivery.errorClass ? sanitizeOrganizationDisplayCopy(delivery.errorClass) : delivery.nextRetryAt ? 'scheduled' : 'none'}</span>
-                                                <span>{delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
-                                                {delivery.dedupeKey && <span className='max-w-40 truncate font-mono'>{delivery.dedupeKey}</span>}
-                                            </div>
-                                        </td>
-                                        <td className='border-b border-ui-border px-3 py-2 text-xs text-ui-muted dark:border-ui-border dark:text-ui-muted'>
-                                            {formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}
-                                        </td>
-                                        <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                            <div className='grid gap-2'>
-                                                <button type='button' className={secondaryButtonClass} disabled={!canManage || !replayable || Boolean(busy)} onClick={() => onReplay(delivery)}>
-                                                    <RefreshCw className='h-4 w-4' />
-                                                    {replayLabel}
-                                                </button>
-                                                {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>Needs destination and alert context</span>}
-                                                <RowStatus message={rowMessages[`delivery-${delivery.id}`]} />
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
+                    <>
+                        <div className='grid gap-2 p-2 md:hidden' data-org-delivery-mobile-list='true'>
+                            {scopedDeliveries.map(delivery => (
+                                <DeliveryHistoryMobileRow
+                                    key={delivery.id}
+                                    delivery={delivery}
+                                    organizationId={organization.id}
+                                    canManage={canManage}
+                                    busy={busy}
+                                    rowMessage={rowMessages[`delivery-${delivery.id}`]}
+                                    onReplay={onReplay}
+                                />
+                            ))}
+                        </div>
+                        <table className='hidden min-w-full border-separate border-spacing-0 text-left text-sm md:table' data-org-delivery-desktop-table='true'>
+                            <thead className='bg-ui-raised text-xs uppercase tracking-[0.08em] text-ui-muted dark:bg-ui-canvas dark:text-ui-muted'>
+                                <tr>
+                                    <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>State</th>
+                                    <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Target</th>
+                                    <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Alert / case</th>
+                                    <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Retry</th>
+                                    <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>When</th>
+                                    <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {scopedDeliveries.map(delivery => {
+                                    const replayable = canReplayDelivery(delivery)
+                                    const replayLabel = delivery.status === 'failed' || delivery.nextRetryAt ? 'Retry' : 'Replay'
+                                    return (
+                                        <tr key={delivery.id} className='align-top hover:bg-ui-raised dark:hover:bg-ui-panel'>
+                                            <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                                <div className='grid gap-1'>
+                                                    <StatusPill status={delivery.status || 'attempt'} />
+                                                    <span className='text-xs text-ui-muted dark:text-ui-muted'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'webhook'}</span>
+                                                    {delivery.httpStatus !== undefined && <span className='text-xs text-ui-muted dark:text-ui-muted'>HTTP {delivery.httpStatus}</span>}
+                                                </div>
+                                            </td>
+                                            <td className='max-w-56 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                                <p className='truncate font-mono text-xs text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || 'redacted destination')}</p>
+                                                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{delivery.webhookDestinationId || delivery.requestId || delivery.id}</p>
+                                                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
+                                            </td>
+                                            <td className='max-w-64 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                                <DeliveryReference delivery={delivery} organizationId={organization.id} />
+                                                {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
+                                                {!delivery.error && delivery.responseSummary && <p className='mt-1 line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
+                                            </td>
+                                            <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                                <div className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
+                                                    <span>{delivery.errorClass ? sanitizeOrganizationDisplayCopy(delivery.errorClass) : delivery.nextRetryAt ? 'scheduled' : 'none'}</span>
+                                                    <span>{delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
+                                                    {delivery.dedupeKey && <span className='max-w-40 truncate font-mono'>{delivery.dedupeKey}</span>}
+                                                </div>
+                                            </td>
+                                            <td className='border-b border-ui-border px-3 py-2 text-xs text-ui-muted dark:border-ui-border dark:text-ui-muted'>
+                                                {formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}
+                                            </td>
+                                            <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                                <div className='grid gap-2'>
+                                                    <button type='button' className={secondaryButtonClass} disabled={!canManage || !replayable || Boolean(busy)} onClick={() => onReplay(delivery)}>
+                                                        <RefreshCw className='h-4 w-4' />
+                                                        {replayLabel}
+                                                    </button>
+                                                    {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>Needs destination and alert context</span>}
+                                                    <RowStatus message={rowMessages[`delivery-${delivery.id}`]} />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </>
                 )}
             </div>
         </section>
+    )
+}
+
+function DeliveryHistoryMobileRow({ delivery, organizationId, canManage, busy, rowMessage, onReplay }: {
+    delivery: DeliveryRow
+    organizationId: string
+    canManage: boolean
+    busy: string
+    rowMessage?: RowMessage
+    onReplay: (delivery: DeliveryRow) => void
+}) {
+    const replayable = canReplayDelivery(delivery)
+    const replayLabel = delivery.status === 'failed' || delivery.nextRetryAt ? 'Retry' : 'Replay'
+    return (
+        <article className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-canvas' data-org-delivery-mobile-row='true'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                <StatusPill status={delivery.status || 'attempt'} />
+                <span className='text-xs font-medium text-ui-muted dark:text-ui-muted'>{formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}</span>
+            </div>
+            <div className='min-w-0'>
+                <p className='truncate font-mono text-xs font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || 'redacted destination')}</p>
+                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
+                <div className='mt-2'>
+                    <DeliveryReference delivery={delivery} organizationId={organizationId} />
+                </div>
+            </div>
+            <div className='grid grid-cols-2 gap-2 text-xs text-ui-muted dark:text-ui-muted'>
+                <span className='truncate'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'webhook'}</span>
+                <span className='truncate text-right'>{delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
+                {delivery.httpStatus !== undefined && <span className='truncate'>HTTP {delivery.httpStatus}</span>}
+                {delivery.errorClass && <span className='truncate text-right'>{sanitizeOrganizationDisplayCopy(delivery.errorClass)}</span>}
+            </div>
+            {delivery.error && <p className='line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
+            {!delivery.error && delivery.responseSummary && <p className='line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
+            <div className='grid gap-2'>
+                <button type='button' className={secondaryButtonClass} disabled={!canManage || !replayable || Boolean(busy)} onClick={() => onReplay(delivery)}>
+                    <RefreshCw className='h-4 w-4' />
+                    {replayLabel}
+                </button>
+                {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>Needs destination and alert context</span>}
+                <RowStatus message={rowMessage} />
+            </div>
+        </article>
     )
 }
 
