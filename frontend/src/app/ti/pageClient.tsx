@@ -2604,9 +2604,9 @@ function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorInt
                 <div className='min-w-0 rounded-md border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-panel'>
                     <p className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source follow-up</p>
                     <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {sourceBlockers.length ? sourceBlockers.slice(0, 3).map(blocker => (
+                        {sourceBlockers.length ? sourceBlockers.slice(0, 2).map(blocker => (
                             <li key={`${blocker.code}-${blocker.field}`} className='wrap-break-word'>{readinessOwnerLabel(blocker.ownerLane)}: {displayRequirementText(blocker.handoff)}</li>
-                        )) : actor.sourceCoverage.missing.length ? actor.sourceCoverage.missing.slice(0, 3).map(item => (
+                        )) : actor.sourceCoverage.missing.length ? actor.sourceCoverage.missing.slice(0, 2).map(item => (
                             <li key={item} className='wrap-break-word'>Source collection: attach {coverageMissingLabel(item)}.</li>
                         )) : <li>Source evidence is sufficient for review.</li>}
                     </ul>
@@ -2614,7 +2614,7 @@ function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorInt
                 <div className='min-w-0 rounded-md border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-panel'>
                     <p className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Review follow-up</p>
                     <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {workflowBlockers.length ? workflowBlockers.slice(0, 3).map(blocker => (
+                        {workflowBlockers.length ? workflowBlockers.slice(0, 2).map(blocker => (
                             <li key={`${blocker.code}-${blocker.field}`} className='wrap-break-word'>{readinessOwnerLabel(blocker.ownerLane)}: {displayRequirementText(blocker.handoff)}</li>
                         )) : <li>Required review identifiers are present.</li>}
                     </ul>
@@ -4790,7 +4790,7 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
             </div>
             {showFollowUps && actionability.readiness.blockers.length ? (
                 <div className='mt-3 grid gap-2'>
-                    {actionability.readiness.blockers.slice(0, 5).map(blocker => (
+                    {actionability.readiness.blockers.slice(0, 3).map(blocker => (
                         <div key={`${blocker.code}-${blocker.field}`} className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-2 dark:border-ui-warning/35 dark:bg-ui-warning/10'>
                             <div className='flex flex-wrap items-center justify-between gap-2'>
                                 <p className='min-w-0 wrap-break-word text-xs font-semibold text-ui-warning'>{readinessOwnerLabel(blocker.ownerLane)}</p>
