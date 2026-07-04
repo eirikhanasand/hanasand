@@ -767,11 +767,11 @@ function SelectedEvidenceRail({
     onReview: () => void
 }) {
     const alertReady = Boolean(reviewHandoff?.alertHandoff.ready || alertPlan?.ready)
-    const caseReady = Boolean(reviewHandoff?.caseHandoff.ready || caseDraft)
     const deliveryReady = deliveryPlan?.state === 'ready'
     const watchReady = Boolean(watchlistPlan?.ready || watchlistHref)
     const sourceCount = sourceDrilldown?.rows.length ?? 0
     const captureCount = sourceDrilldown?.rows.filter(row => Boolean(row.captureId)).length ?? 0
+    const caseReady = Boolean(reviewHandoff?.caseHandoff.ready || (caseDraft && captureCount > 0))
     const owner = caseOwnership?.owner.label ?? 'unassigned'
     const alertValue = selectedAlertContinuityValue(deliveryPlan, alertPlan, captureCount)
     const caseValue = selectedCaseContinuityValue(deliveryPlan, caseOwnership, caseDraft, captureCount)
