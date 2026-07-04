@@ -389,7 +389,18 @@ function inviteSearchText(invite: OrganizationInvite) {
     ].filter(value => value !== undefined && value !== null).join(' ').toLowerCase()
 }
 
-function destinationSearchText(destination: WebhookDestination, latestDelivery?: DeliveryRow | null) {
+function destinationSearchText(destination: WebhookDestination, destinationDeliveries: DeliveryRow[] = []) {
+    const deliveryFields = destinationDeliveries.flatMap(delivery => [
+        delivery.status,
+        delivery.deliveryKind,
+        delivery.alertId,
+        delivery.caseId,
+        delivery.watchlistId,
+        delivery.requestId,
+        delivery.auditEventId,
+        delivery.dedupeKey,
+        delivery.payloadHash,
+    ])
     return [
         destination.id,
         destination.name,
@@ -399,12 +410,7 @@ function destinationSearchText(destination: WebhookDestination, latestDelivery?:
         destination.endpointHint,
         destination.endpointHash,
         destination.deliveryReady ? 'ready configured' : undefined,
-        latestDelivery?.status,
-        latestDelivery?.deliveryKind,
-        latestDelivery?.alertId,
-        latestDelivery?.caseId,
-        latestDelivery?.watchlistId,
-        latestDelivery?.requestId,
+        ...deliveryFields,
     ].filter(value => value !== undefined && value !== null).join(' ').toLowerCase()
 }
 
@@ -1938,14 +1944,14 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
     const normalizedDestinationQuery = destinationQuery.trim().toLowerCase()
     const visibleDestinations = destinations.filter(destination => {
         const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
-        const latestDelivery = latestDeliveryForDestination(destination, deliveries)
+        const destinationDeliveries = deliveriesForDestination(destination, deliveries)
         const statusMatches = destinationStatusFilter === 'all' || destinationStatus === destinationStatusFilter
         if (!statusMatches) return false
         const destinationKind = destination.kind || destination.type || 'webhook'
         const kindMatches = destinationKindFilter === 'all' || destinationKind === destinationKindFilter
         if (!kindMatches) return false
         if (!normalizedDestinationQuery) return true
-        return destinationSearchText(destination, latestDelivery).includes(normalizedDestinationQuery)
+        return destinationSearchText(destination, destinationDeliveries).includes(normalizedDestinationQuery)
     })
     const destinationFiltersActive = Boolean(destinationQuery.trim()) || destinationStatusFilter !== 'all' || destinationKindFilter !== 'all'
     return (
@@ -3611,13 +3617,16 @@ function latestDeliveryForWatchlist(item: WatchlistItem, deliveries: DeliveryRow
 }
 
 function latestDeliveryForDestination(destination: WebhookDestination, deliveries: DeliveryRow[]) {
-    return deliveries
-        .filter(delivery => {
-            if (delivery.webhookDestinationId === destination.id) return true
-            if (destination.endpointHash && delivery.endpointHash === destination.endpointHash) return true
-            return false
-        })
+    return deliveriesForDestination(destination, deliveries)
         .sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
+}
+
+function deliveriesForDestination(destination: WebhookDestination, deliveries: DeliveryRow[]) {
+    return deliveries.filter(delivery => {
+        if ((delivery.webhookDestinationId || delivery.destinationId) === destination.id) return true
+        if (destination.endpointHash && delivery.endpointHash === destination.endpointHash) return true
+        return false
+    })
 }
 
 function deliveryMatchesSubject(delivery: DeliveryRow, subject: ActivitySubject) {

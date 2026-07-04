@@ -83,7 +83,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('const [destinationStatusFilter, setDestinationStatusFilter] = useState(\'all\')')
     expect(page).toContain('const [destinationKindFilter, setDestinationKindFilter] = useState(\'all\')')
     expect(page).toContain('const visibleDestinations = destinations.filter')
-    expect(page).toContain('destinationSearchText(destination, latestDelivery).includes(normalizedDestinationQuery)')
+    expect(page).toContain('destinationSearchText(destination, destinationDeliveries).includes(normalizedDestinationQuery)')
+    expect(page).toContain('function deliveriesForDestination')
     expect(page).toContain('function destinationSearchText')
     expect(page).toContain('No destinations match this view.')
 
