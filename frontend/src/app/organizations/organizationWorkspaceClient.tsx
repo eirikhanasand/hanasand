@@ -617,8 +617,10 @@ export default function OrganizationWorkspaceClient() {
     const sendInvite = () => selectedOrganization && runAction('send-invite', async () => {
         const emails = parseInviteEmails(inviteEmails)
         const invalidEmails = invalidInviteEmails(inviteEmails)
+        const conflicts = inviteEmailConflicts(emails, bundle.invites, bundle.members)
         if (invalidEmails.length) throw new Error(`Invalid email: ${invalidEmails[0]}`)
         if (!emails.length) throw new Error('Enter at least one email.')
+        if (conflicts.length) throw new Error(`Already in this workspace: ${conflicts[0]}`)
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/invites`, {
             method: 'POST',
             body: JSON.stringify({
@@ -1032,7 +1034,7 @@ export default function OrganizationWorkspaceClient() {
                                         <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
                                     </div>
                                     <div className='grid min-w-0 content-start gap-5'>
-                                        <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
+                                        <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
                                         <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
                                         <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} />
                                     </div>
@@ -1432,10 +1434,11 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
     )
 }
 
-function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onInvite, onInviteAction, onCopyInvite }: { emails: string, setEmails: (value: string) => void, role: OrganizationRole, setRole: (value: OrganizationRole) => void, invites: OrganizationInvite[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onInvite: () => void, onInviteAction: (invite: OrganizationInvite, action: 'revoke' | 'resend') => void, onCopyInvite: (invite: OrganizationInvite) => void }) {
+function InvitePanel({ emails, setEmails, role, setRole, invites, members, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onInvite, onInviteAction, onCopyInvite }: { emails: string, setEmails: (value: string) => void, role: OrganizationRole, setRole: (value: OrganizationRole) => void, invites: OrganizationInvite[], members: OrganizationMember[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onInvite: () => void, onInviteAction: (invite: OrganizationInvite, action: 'revoke' | 'resend') => void, onCopyInvite: (invite: OrganizationInvite) => void }) {
     const parsedEmails = parseInviteEmails(emails)
     const invalidEmails = invalidInviteEmails(emails)
-    const canSendInvite = canManage && parsedEmails.length > 0 && invalidEmails.length === 0 && !busy
+    const inviteConflicts = inviteEmailConflicts(parsedEmails, invites, members)
+    const canSendInvite = canManage && parsedEmails.length > 0 && invalidEmails.length === 0 && inviteConflicts.length === 0 && !busy
     const busyLabel = inviteBusyLabel(busy)
     return (
         <section id='invites' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
@@ -1446,7 +1449,8 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
                     Emails
                     <textarea value={emails} disabled={!canManage} onChange={event => setEmails(event.target.value)} className={`${inputClass} min-h-24 resize-y`} placeholder='analyst@company.com, admin@company.com' />
                     {invalidEmails.length > 0 && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Invalid: {invalidEmails.slice(0, 2).join(', ')}{invalidEmails.length > 2 ? ` +${invalidEmails.length - 2}` : ''}</span>}
-                    {invalidEmails.length === 0 && parsedEmails.length > 0 && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>{parsedEmails.length} recipient{parsedEmails.length === 1 ? '' : 's'}</span>}
+                    {invalidEmails.length === 0 && inviteConflicts.length > 0 && <span className='text-xs font-semibold text-ui-warning dark:text-ui-warning' data-org-invite-conflicts='true'>Already in this workspace: {inviteConflicts.slice(0, 2).join(', ')}{inviteConflicts.length > 2 ? ` +${inviteConflicts.length - 2}` : ''}</span>}
+                    {invalidEmails.length === 0 && inviteConflicts.length === 0 && parsedEmails.length > 0 && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>{parsedEmails.length} recipient{parsedEmails.length === 1 ? '' : 's'}</span>}
                 </label>
                 <SelectField label='Role' value={role} options={roleOptions} disabled={!canManage} onChange={value => setRole(value as OrganizationRole)} />
                 <button type='button' className={primaryButtonClass} disabled={!canSendInvite} onClick={onInvite}>
@@ -2918,6 +2922,17 @@ function parseInviteEmails(value: string) {
 
 function invalidInviteEmails(value: string) {
     return parseInviteEmails(value).filter(email => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+}
+
+function inviteEmailConflicts(emails: string[], invites: OrganizationInvite[], members: OrganizationMember[]) {
+    const activeInviteEmails = new Set(invites
+        .filter(invite => !['revoked', 'expired'].includes(invite.status.toLowerCase()))
+        .map(invite => invite.email.toLowerCase()))
+    const activeMemberEmailIds = new Set(members
+        .filter(member => !['removed', 'revoked', 'inactive'].includes(member.status.toLowerCase()))
+        .map(member => member.userId.toLowerCase())
+        .filter(value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)))
+    return emails.filter(email => activeInviteEmails.has(email.toLowerCase()) || activeMemberEmailIds.has(email.toLowerCase()))
 }
 
 function inviteActionAllowed(invite: OrganizationInvite, action: 'copy' | 'resend' | 'revoke') {
