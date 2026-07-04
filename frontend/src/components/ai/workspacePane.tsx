@@ -153,7 +153,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
     }, [activeRepo?.id, activeRepo?.stackType])
 
     return (
-        <aside className='flex h-full min-h-0 w-full max-w-full min-w-0 flex-col gap-3 overflow-hidden rounded-2xl bg-ui-raised p-3 outline outline-ui-border'>
+        <aside className='flex h-full min-h-0 w-full max-w-full min-w-0 flex-col gap-3 overflow-hidden rounded-lg bg-ui-raised p-3 outline outline-ui-border'>
             <Panel
                 icon={<TerminalSquare className='h-4 w-4' />}
                 title='Workspace'
@@ -198,7 +198,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     {ownershipSummary.boundaryWarnings.length ? (
                         <div className='space-y-1'>
                             {ownershipSummary.boundaryWarnings.map((warning) => (
-                                <div key={warning} className='rounded-xl bg-ui-warning/8 px-3 py-2 text-xs text-ui-warning outline outline-ui-warning/40'>
+                                <div key={warning} className='rounded-lg bg-ui-warning/8 px-3 py-2 text-xs text-ui-warning outline outline-ui-warning/40'>
                                     {warning}
                                 </div>
                             ))}
@@ -207,7 +207,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     {ownershipSummary.recentUsage.length ? (
                         <div className='space-y-1'>
                             {ownershipSummary.recentUsage.slice(0, 4).map((event) => (
-                                <div key={`${event.kind}-${event.createdAt}-${event.actorId || 'system'}`} className='rounded-xl bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
+                                <div key={`${event.kind}-${event.createdAt}-${event.actorId || 'system'}`} className='rounded-lg bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
                                     <div className='flex items-center justify-between gap-3'>
                                         <span className='truncate font-medium text-ui-text'>{formatUsageKind(event.kind)}</span>
                                         <span className='shrink-0 text-[10px] uppercase tracking-[0.14em] text-ui-muted'>{formatActivityTime(event.createdAt)}</span>
@@ -238,8 +238,8 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 {activeConversation?.collaboration?.canInvite ? (
                     <>
                         <div className='grid grid-cols-[minmax(0,1fr)_6.5rem] gap-2'>
-                            <input value={collaboratorUserId} onChange={(event) => setCollaboratorUserId(event.target.value)} placeholder='user id' className='min-w-0 rounded-xl bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
-                            <select value={collaboratorRole} onChange={(event) => setCollaboratorRole(event.target.value === 'reviewer' ? 'reviewer' : 'editor')} className='rounded-xl bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border'>
+                            <input value={collaboratorUserId} onChange={(event) => setCollaboratorUserId(event.target.value)} placeholder='user id' className='min-w-0 rounded-lg bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
+                            <select value={collaboratorRole} onChange={(event) => setCollaboratorRole(event.target.value === 'reviewer' ? 'reviewer' : 'editor')} className='rounded-lg bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border'>
                                 <option value='editor'>Editor</option>
                                 <option value='reviewer'>Reviewer</option>
                             </select>
@@ -248,7 +248,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                             type='button'
                             onClick={() => void onInviteCollaborator({ userId: collaboratorUserId, role: collaboratorRole })}
                             disabled={collaboratorPending || (activeConversation.collaboration.remainingSeats <= 0 && !activeConversation.collaboration.collaborators.some((collaborator) => collaborator.userId === collaboratorUserId.trim()))}
-                            className='rounded-xl bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text outline outline-ui-border transition-colors hover:text-ui-primary disabled:opacity-60'
+                            className='rounded-lg bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text outline outline-ui-border transition-colors hover:text-ui-primary disabled:opacity-60'
                         >
                             {collaboratorPending ? 'Inviting...' : 'Invite collaborator'}
                         </button>
@@ -260,7 +260,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 {activeConversation?.collaboration?.collaborators?.length ? (
                     <div className='space-y-1'>
                         {activeConversation.collaboration.collaborators.slice(0, 6).map((collaborator) => (
-                            <div key={collaborator.userId} className='flex items-center justify-between gap-3 rounded-xl bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
+                            <div key={collaborator.userId} className='flex items-center justify-between gap-3 rounded-lg bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
                                 <div className='min-w-0'>
                                     <div className='truncate'>{collaborator.name || collaborator.userId}</div>
                                     <div className='truncate text-[10px] text-ui-muted'>{collaborator.userId}</div>
@@ -301,7 +301,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 <Stat label='Report owners' value={reportOwners.length ? String(reportOwners.length) : 'None yet'} />
                 <Stat label='Repo boundary' value={ownershipSummary ? `${ownershipSummary.externalRepositoryCount} external` : 'Unknown'} />
                 <Stat label='Preview boundary' value={ownershipSummary ? `${ownershipSummary.externalVmCount} external` : 'Unknown'} />
-                <div className='rounded-xl bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
+                <div className='rounded-lg bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
                     Latest preview: {latestRelease ? `${latestRelease.accessPolicy.replaceAll('_', ' ')} via ${latestRelease.vmName}` : 'No report details yet'}
                 </div>
                 <div className='text-xs text-ui-muted'>
@@ -316,7 +316,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             >
                 {trustRelease && trust ? (
                     <>
-                        <div className='rounded-xl bg-ui-success/8 px-3 py-2 text-xs text-ui-success outline outline-ui-success/40'>
+                        <div className='rounded-lg bg-ui-success/8 px-3 py-2 text-xs text-ui-success outline outline-ui-success/40'>
                             {trust.noLockIn.headline}
                         </div>
                         <TrustItem icon={<History className='h-3.5 w-3.5' />} label='Version history' value={trust.versionHistory.summary} />
@@ -348,7 +348,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         </div>
                         <div className='space-y-1'>
                             {trust.sla.slice(0, 4).map((item) => (
-                                <div key={item.tier} className='rounded-xl bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
+                                <div key={item.tier} className='rounded-lg bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
                                     <span className='font-semibold text-ui-text'>{item.tier}:</span> {item.promise}
                                 </div>
                             ))}
@@ -367,7 +367,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 {releases.length ? (
                     <div className='max-h-52 space-y-2 overflow-y-auto pr-1'>
                         {releases.slice(0, 6).map((release) => (
-                            <div key={release.id} className='rounded-xl bg-ui-raised px-3 py-3 outline outline-ui-border'>
+                            <div key={release.id} className='rounded-lg bg-ui-raised px-3 py-3 outline outline-ui-border'>
                                 <div className='flex items-start justify-between gap-3'>
                                     <div className='min-w-0'>
                                         <div className='truncate text-sm font-medium text-ui-text'>{release.vmName}</div>
@@ -415,8 +415,8 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 subtitle='Import a public or private repository.'
             >
                 <div className='flex gap-2'>
-                    <input value={importInput} onChange={(event) => onImportInputChange(event.target.value)} placeholder='owner/repo, URL, or repo#branch:path' className='min-w-0 flex-1 rounded-xl bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
-                    <button type='button' onClick={() => void onImportRepo()} disabled={importPending} className='rounded-xl bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity disabled:opacity-60'>
+                    <input value={importInput} onChange={(event) => onImportInputChange(event.target.value)} placeholder='owner/repo, URL, or repo#branch:path' className='min-w-0 flex-1 rounded-lg bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
+                    <button type='button' onClick={() => void onImportRepo()} disabled={importPending} className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity disabled:opacity-60'>
                         {importPending ? 'Importing' : 'Import'}
                     </button>
                 </div>
@@ -427,7 +427,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     type='password'
                     autoComplete='off'
                     spellCheck={false}
-                    className='rounded-xl bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted'
+                    className='rounded-lg bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted'
                 />
                 <div className='text-xs text-ui-muted'>
                     Tokens are only sent with the current import or refresh request and are cleared again after successful use.
@@ -440,8 +440,8 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 title='Starter'
                 subtitle='Create a Docker-ready Next.js workspace.'
             >
-                <input value={starterName} onChange={(event) => setStarterName(event.target.value)} placeholder='Project name' className='rounded-xl bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
-                <button type='button' onClick={() => void onScaffoldStarter('nextjs_docker', starterName)} className='rounded-xl bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity hover:opacity-90'>
+                <input value={starterName} onChange={(event) => setStarterName(event.target.value)} placeholder='Project name' className='rounded-lg bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
+                <button type='button' onClick={() => void onScaffoldStarter('nextjs_docker', starterName)} className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity hover:opacity-90'>
                     Create workspace
                 </button>
             </Panel>
@@ -457,13 +457,13 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                             key={environment}
                             type='button'
                             onClick={() => setDeployEnvironment(environment)}
-                            className={`rounded-xl px-3 py-2 text-sm font-semibold outline transition-colors ${deployEnvironment === environment ? 'bg-ui-primary/12 text-ui-primary outline-ui-primary/20' : 'bg-ui-raised text-ui-muted outline-ui-border hover:text-ui-text'}`}
+                            className={`rounded-lg px-3 py-2 text-sm font-semibold outline transition-colors ${deployEnvironment === environment ? 'bg-ui-primary/12 text-ui-primary outline-ui-primary/20' : 'bg-ui-raised text-ui-muted outline-ui-border hover:text-ui-text'}`}
                         >
                             {environment === 'production' ? 'Production' : 'Staging'}
                         </button>
                     ))}
                 </div>
-                <div className='min-w-0 overflow-hidden rounded-xl bg-ui-raised px-3 py-3 text-xs text-ui-muted outline outline-ui-border'>
+                <div className='min-w-0 overflow-hidden rounded-lg bg-ui-raised px-3 py-3 text-xs text-ui-muted outline outline-ui-border'>
                     <div className='flex min-w-0 items-center gap-2 text-ui-text'>
                         <ShieldCheck className='h-3.5 w-3.5 text-ui-primary' />
                         <span className='min-w-0 wrap-break-word font-semibold'>{deployProfile.title}</span>
@@ -490,11 +490,11 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     </div>
                 ) : null}
                 <div className='grid grid-cols-[minmax(0,1fr)_5rem] gap-2'>
-                    <input value={deployVmName} onChange={(event) => setDeployVmName(event.target.value)} placeholder='Launch target' className='min-w-0 rounded-xl bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
-                    <input value={deployPort} onChange={(event) => setDeployPort(event.target.value)} placeholder='3000' inputMode='numeric' className='min-w-0 rounded-xl bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
+                    <input value={deployVmName} onChange={(event) => setDeployVmName(event.target.value)} placeholder='Launch target' className='min-w-0 rounded-lg bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
+                    <input value={deployPort} onChange={(event) => setDeployPort(event.target.value)} placeholder='3000' inputMode='numeric' className='min-w-0 rounded-lg bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
                 </div>
-                <input value={deployHealthPath} onChange={(event) => setDeployHealthPath(event.target.value)} placeholder='/health or /' className='rounded-xl bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
-                <div className='rounded-xl bg-ui-raised px-3 py-3 outline outline-ui-border'>
+                <input value={deployHealthPath} onChange={(event) => setDeployHealthPath(event.target.value)} placeholder='/health or /' className='rounded-lg bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
+                <div className='rounded-lg bg-ui-raised px-3 py-3 outline outline-ui-border'>
                     <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-ui-muted'>Launch checklist</div>
                     <div className='grid gap-1.5'>
                         {deployProfile.checklist.map((item) => (
@@ -502,7 +502,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         ))}
                     </div>
                 </div>
-                <div className='rounded-xl bg-ui-raised px-3 py-3 outline outline-ui-border'>
+                <div className='rounded-lg bg-ui-raised px-3 py-3 outline outline-ui-border'>
                     <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-ui-muted'>Env placeholders</div>
                     {envPlaceholders.length ? (
                         <div className='flex flex-wrap gap-1.5'>
@@ -522,13 +522,13 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         Suggested for {activeRepo.stackType.replaceAll('_', ' ')}: {activeRepo.stackType === 'nextjs_docker' ? '3000 and /' : '3001 and /ready'}.
                     </div>
                 ) : null}
-                <select value={deployAccessPolicy} onChange={(event) => setDeployAccessPolicy(event.target.value as AIDeploymentAccessPolicy)} className='rounded-xl bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border'>
+                <select value={deployAccessPolicy} onChange={(event) => setDeployAccessPolicy(event.target.value as AIDeploymentAccessPolicy)} className='rounded-lg bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border'>
                     <option value='owner_only'>Owner only preview</option>
                     <option value='collaborators'>Collaborators</option>
                     <option value='public_preview'>Public preview</option>
                 </select>
                 {deployQuota ? (
-                    <div className='rounded-xl bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
+                    <div className='rounded-lg bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
                         <div>
                             Checks: {deployQuota.used}/{deployQuota.limit} in {deployQuota.windowMinutes} min. {deployQuota.remaining} left.
                         </div>
@@ -542,14 +542,14 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     type='button'
                     onClick={() => void onStartDeployment({ vmName: deployVmName, port: deployPort, healthPath: deployHealthPath, accessPolicy: deployAccessPolicy, environment: deployEnvironment })}
                     disabled={deployPending}
-                    className='rounded-xl bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity hover:opacity-90 disabled:opacity-60'
+                    className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity hover:opacity-90 disabled:opacity-60'
                 >
                     {deployPending ? 'Checking launch target...' : 'Run launch check'}
                 </button>
                 {deployments.length ? (
                     <div className='max-h-48 space-y-2 overflow-y-auto pr-1'>
                         {deployments.slice(0, 5).map((deployment) => (
-                            <div key={deployment.id} className='rounded-xl bg-ui-raised px-3 py-3 outline outline-ui-border'>
+                            <div key={deployment.id} className='rounded-lg bg-ui-raised px-3 py-3 outline outline-ui-border'>
                                 <div className='flex items-start justify-between gap-3'>
                                     <div className='min-w-0'>
                                         <div className='truncate text-sm font-medium text-ui-text'>{deployment.vmName}</div>
@@ -587,7 +587,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 grow
             >
                 {importedRepos.length ? importedRepos.map((repo) => (
-                    <div key={repo.id} className={`rounded-xl px-3 py-3 outline ${repo.id === activeRepoId ? 'bg-ui-primary/10 outline-ui-primary/18' : 'bg-ui-panel outline-ui-border'}`}>
+                    <div key={repo.id} className={`rounded-lg px-3 py-3 outline ${repo.id === activeRepoId ? 'bg-ui-primary/10 outline-ui-primary/18' : 'bg-ui-panel outline-ui-border'}`}>
                         <div className='flex items-start justify-between gap-3'>
                             <div className='min-w-0'>
                                 <div className='truncate text-sm font-medium text-ui-text'>{repo.fullName}</div>
@@ -645,7 +645,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             >
                 <div className='max-h-40 space-y-2 overflow-y-auto pr-1'>
                     {initialShares.length ? initialShares.slice(0, 40).map((share) => (
-                        <div key={share.id} className={`rounded-xl px-3 py-3 outline ${share.id === activeConversation?.workspaceId ? 'bg-ui-primary/10 outline-ui-primary/18' : 'bg-ui-panel outline-ui-border'}`}>
+                        <div key={share.id} className={`rounded-lg px-3 py-3 outline ${share.id === activeConversation?.workspaceId ? 'bg-ui-primary/10 outline-ui-primary/18' : 'bg-ui-panel outline-ui-border'}`}>
                             <div className='flex items-start justify-between gap-3'>
                                 <div className='min-w-0'>
                                     <div className='truncate text-sm text-ui-text'>{share.alias || share.id}</div>
@@ -691,7 +691,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     subtitle={selectedPath || 'Selected content'}
                     grow
                 >
-                    <pre className='max-h-72 overflow-auto rounded-xl bg-ui-raised p-3 text-xs leading-5 text-ui-text'>{selectedContent.slice(0, 12000)}</pre>
+                    <pre className='max-h-72 overflow-auto rounded-lg bg-ui-raised p-3 text-xs leading-5 text-ui-text'>{selectedContent.slice(0, 12000)}</pre>
                 </Panel>
             ) : null}
         </aside>
@@ -712,9 +712,9 @@ function Panel({
     grow?: boolean
 }) {
     return (
-        <section className={`min-w-0 max-w-full rounded-2xl bg-ui-panel p-3 outline outline-ui-border ${grow ? 'min-h-0 flex-1' : ''}`}>
+        <section className={`min-w-0 max-w-full rounded-lg bg-ui-panel p-3 outline outline-ui-border ${grow ? 'min-h-0 flex-1' : ''}`}>
             <div className='flex items-start gap-3'>
-                <div className='mt-0.5 rounded-xl bg-ui-primary/12 p-2 text-ui-primary outline outline-ui-primary/18'>
+                <div className='mt-0.5 rounded-lg bg-ui-primary/12 p-2 text-ui-primary outline outline-ui-primary/18'>
                     {icon}
                 </div>
                 <div className='min-w-0'>
@@ -729,7 +729,7 @@ function Panel({
 
 function Stat({ label, value }: { label: string, value: string }) {
     return (
-        <div className='rounded-xl bg-ui-raised px-3 py-2 outline outline-ui-border'>
+        <div className='rounded-lg bg-ui-raised px-3 py-2 outline outline-ui-border'>
             <div className='text-[10px] uppercase tracking-[0.18em] text-ui-muted'>{label}</div>
             <div className='mt-1 text-sm text-ui-text'>{value}</div>
         </div>
@@ -738,7 +738,7 @@ function Stat({ label, value }: { label: string, value: string }) {
 
 function TrustItem({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
     return (
-        <div className='grid grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-xl bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
+        <div className='grid grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-lg bg-ui-raised px-3 py-2 text-xs text-ui-muted outline outline-ui-border'>
             <span className='mt-0.5 text-ui-primary'>{icon}</span>
             <div className='min-w-0'>
                 <div className='text-[10px] uppercase tracking-[0.18em] text-ui-muted'>{label}</div>
@@ -750,7 +750,7 @@ function TrustItem({ icon, label, value }: { icon: React.ReactNode, label: strin
 
 function Empty({ text }: { text: string }) {
     return (
-        <div className='rounded-xl bg-ui-raised px-3 py-4 text-sm text-ui-muted outline outline-ui-border'>
+        <div className='rounded-lg bg-ui-raised px-3 py-4 text-sm text-ui-muted outline outline-ui-border'>
             {text}
         </div>
     )

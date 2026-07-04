@@ -15,4 +15,5 @@ test('ai workspace pane action buttons use shared theme tokens', async () => {
     expect(source).not.toContain('text-white')
     expect(source).not.toContain('dark:text-ui-canvas')
     expect(source).not.toMatch(/\b(?:bg|text|border)-\[#/)
+    expect(source).not.toMatch(/rounded-(?:xl|2xl|3xl)/)
 })
