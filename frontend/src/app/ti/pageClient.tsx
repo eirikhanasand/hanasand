@@ -6106,24 +6106,15 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
 function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
     const status: DecisionStep['status'] = plan.ready ? 'ready' : plan.blockers.length || plan.state === 'missing_terms' ? 'blocked' : 'review'
     return (
-        <div data-ti-selected-watchlist-plan='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Watchlist plan</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        Selected evidence mapped to watchlist terms, organization intersections, and source refs.
-                    </p>
-                </div>
+        <div data-ti-selected-watchlist-plan='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
+                <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
+                    Watchlist workflow · {plan.terms.length} terms · {plan.relevanceRows.filter(item => item.fit === 'matched').length} matches · {plan.sourceRefs.alertIds.length} alerts · {plan.sourceRefs.captureIds.length} captures
+                </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(status)}>{decisionStepStatusLabel(status)}</span>
                     <CopyPayloadButton label='Watchlist plan' payload={plan} />
                 </div>
-            </div>
-            <div className='mt-3 grid grid-cols-2 gap-2'>
-                <EvidenceMetric label='Terms' value={`${plan.terms.length}`} />
-                <EvidenceMetric label='Matches' value={`${plan.relevanceRows.filter(item => item.fit === 'matched').length}`} />
-                <EvidenceMetric label='Alerts' value={`${plan.sourceRefs.alertIds.length}`} />
-                <EvidenceMetric label='Captures' value={`${plan.sourceRefs.captureIds.length}`} />
             </div>
             <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.route)}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.nextAction)}</p>
