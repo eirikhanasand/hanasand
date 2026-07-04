@@ -909,7 +909,7 @@ function RouteRunSummary({ route, organizationId }: { route: WorkflowRouteSummar
         { label: 'Sources', value: route.sourceCount === undefined ? 'unchanged' : String(route.sourceCount) },
         { label: 'Captures', value: route.captureCount === undefined ? 'pending' : String(route.captureCount) },
         { label: 'Alerts', value: route.alertCount === undefined ? 'pending' : String(route.alertCount) },
-        { label: 'Case', value: route.caseId || 'not opened' },
+        { label: 'Case', value: route.caseId ? 'case linked' : 'not opened' },
         { label: 'Delivery', value: route.deliveryAttempts === undefined ? route.deliveryState || 'not run' : `${route.deliveryAttempts} attempt${route.deliveryAttempts === 1 ? '' : 's'}` },
     ]
     return (
@@ -930,7 +930,7 @@ function RouteRunSummary({ route, organizationId }: { route: WorkflowRouteSummar
                             Open delivery log
                         </Link>
                     ) : null}
-                    {route.alertId ? <span className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 font-mono text-[11px] text-ui-muted'>{route.alertId}</span> : null}
+                    {route.alertId ? <span className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-muted'>alert linked</span> : null}
                 </div>
             </div>
             <div className='mt-3 grid grid-cols-2 gap-2 lg:grid-cols-6'>

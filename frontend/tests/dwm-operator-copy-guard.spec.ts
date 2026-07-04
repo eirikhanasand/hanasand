@@ -17,6 +17,8 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     expect(workflowActions).toContain('focus: \'destinations\'')
     expect(workflowActions).toContain('#delivery-history')
     expect(workflowActions).toContain('Open delivery log')
+    expect(workflowActions).toContain('alert linked')
+    expect(workflowActions).not.toContain('{route.alertId}</span>')
 
     expect(dwmPage).not.toContain('returning live')
     expect(dwmPage).not.toContain('returning source')
