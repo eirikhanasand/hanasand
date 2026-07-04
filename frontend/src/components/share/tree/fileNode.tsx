@@ -147,7 +147,7 @@ export default function FileNode({
             <li className='space-y-1' onClick={(e) => e.stopPropagation()}>
                 <div
                     onClick={handleFolderClick}
-                    className={`group/node flex items-center gap-2 cursor-pointer ${isFolderActive ? 'bg-[#f07d33]/18 outline outline-1 outline-[#f07d33]/35' : 'hover:bg-light/70'} rounded-md px-2 py-1 text-bright/80 text-sm`}
+                    className={`group/node flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm ${isFolderActive ? 'border border-ui-primary/35 bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}
                 >
                     {open ? <FolderOpen size={16} /> : <Folder size={16} />}
                     {isRenaming ? (
@@ -172,7 +172,7 @@ export default function FileNode({
                         onDelete={handleDelete}
                     />}
                 </div>
-                {!hasChildren && <div className='ml-3.5 group-hover:bg-light/70 rounded-md'>
+                {!hasChildren && <div className='ml-3.5 rounded-md group-hover:bg-ui-raised'>
                     <NewFile
                         isCreatingNewFile={isCreatingNewFile}
                         display={isFolderActive}
@@ -220,10 +220,10 @@ export default function FileNode({
                 setTree={setTree}
                 setShare={setShare}
             />
-            <div className={`group/node flex items-center gap-2 rounded-md px-2 py-1 ${isActive ? 'bg-[#f07d33]/18 outline outline-1 outline-[#f07d33]/35' : 'hover:bg-light/70'}`}>
+            <div className={`group/node flex items-center gap-2 rounded-md px-2 py-1 ${isActive ? 'border border-ui-primary/35 bg-ui-primary/10' : 'hover:bg-ui-raised'}`}>
                 {isRenaming ? (
                     <>
-                        <File size={14} className='shrink-0 text-[#f07d33]' />
+                        <File size={14} className='shrink-0 text-ui-primary' />
                         <RenameInput
                             value={renameValue}
                             setValue={setRenameValue}
@@ -236,8 +236,8 @@ export default function FileNode({
                     </>
                 ) : (
                     <Link prefetch={false} href={`/s/${file.id}`} className='flex min-w-0 flex-1 items-center gap-2'>
-                        <File size={14} className={`${isActive ? 'text-[#f07d33]' : 'text-bright/80'}`} />
-                        <span className={`truncate text-sm ${isActive ? 'font-semibold text-bright' : 'text-bright/80'}`}>{file.name}</span>
+                        <File size={14} className={`${isActive ? 'text-ui-primary' : 'text-ui-muted'}`} />
+                        <span className={`truncate text-sm ${isActive ? 'font-semibold text-ui-text' : 'text-ui-muted'}`}>{file.name}</span>
                     </Link>
                 )}
                 {!isRenaming && <NodeActions
@@ -281,7 +281,7 @@ function RenameInput({
                     onCancel()
                 }
             }}
-            className='min-w-0 flex-1 rounded border border-[#f07d33]/35 bg-black/25 px-1 text-sm text-bright outline-none'
+            className='min-w-0 flex-1 rounded border border-ui-primary/35 bg-ui-panel px-1 text-sm text-ui-text outline-none'
         />
     )
 }
@@ -301,7 +301,7 @@ function NodeActions({
     onDuplicate: () => void
     onDelete: () => void
 }) {
-    const buttonClass = 'grid h-6 w-6 place-items-center rounded text-bright/42 opacity-0 transition hover:bg-bright/10 hover:text-bright group-hover/node:opacity-100 focus:opacity-100'
+    const buttonClass = 'grid h-6 w-6 place-items-center rounded text-ui-muted opacity-0 transition hover:bg-ui-panel hover:text-ui-text group-hover/node:opacity-100 focus:opacity-100 disabled:cursor-not-allowed disabled:opacity-40'
 
     return (
         <div className='ml-auto flex shrink-0 items-center gap-0.5'>
@@ -317,7 +317,7 @@ function NodeActions({
             <button type='button' aria-label='Duplicate item' disabled={busy} onClick={(event) => { event.preventDefault(); event.stopPropagation(); onDuplicate() }} className={buttonClass}>
                 <Copy className='h-3.5 w-3.5' />
             </button>
-            <button type='button' aria-label='Delete item' disabled={busy} onClick={(event) => { event.preventDefault(); event.stopPropagation(); onDelete() }} className={`${buttonClass} hover:text-red-200`}>
+            <button type='button' aria-label='Delete item' disabled={busy} onClick={(event) => { event.preventDefault(); event.stopPropagation(); onDelete() }} className={`${buttonClass} hover:text-ui-danger`}>
                 <Trash2 className='h-3.5 w-3.5' />
             </button>
         </div>

@@ -9,11 +9,9 @@ export default function Page() {
             <DashboardHeader
                 eyebrow='Monitoring'
                 title='Workspaces'
-                description='Keep watchlists, review notes, and customer-facing monitoring work in one place.'
+                description='Open active workspaces, see recent movement, and jump into files without a dead landing page.'
             />
-            <div className='max-w-3xl'>
-                <Projects />
-            </div>
+            <Projects />
         </DashboardPage>
     )
 }

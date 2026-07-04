@@ -14,16 +14,16 @@ const primarySolutions = [
     {
         title: 'Dark Web Monitoring',
         eyebrow: 'Monitoring',
-        detail: 'Watch companies, domains, executives, brands, and vendors across Telegram, actor-page metadata, public advisories, and clear-web corroboration.',
+        detail: 'Watch companies, domains, executives, brands, and vendors across leak-site updates, public indexes, advisories, and approved source records.',
         href: '/solutions/dwm',
         icon: ShieldCheck,
-        points: ['147 mapped sources, 116 active in preview', 'Session, token, API-key, vendor, and actor claims', 'Webhook-ready alert packet with confidence and action'],
+        points: ['Mapped source coverage with active health checks', 'Company, vendor, actor, and criminal-group claims', 'Alert packet with confidence, source context, and next action'],
         price: 'From $49/mo',
     },
     {
         title: 'Onion Session Workspace',
         eyebrow: 'Controlled review',
-        detail: 'Open short-lived remote onion sessions for source validation, metadata capture, analyst notes, and evidence-safe handoff.',
+        detail: 'Open short-lived remote sessions for source validation, safe context capture, analyst notes, and evidence-safe handoff.',
         href: '/solutions/onion-session',
         icon: Network,
         points: ['10-60 minute isolated sessions', 'Read-only and fresh-circuit controls', 'Evidence packet instead of local raw-content handling'],
@@ -32,25 +32,28 @@ const primarySolutions = [
     {
         title: 'Threat Intelligence Search',
         eyebrow: 'Console',
-        detail: 'Search actors, companies, CVEs, and monitored claims from one clean UI while preserving review state and alert context.',
+        detail: 'Search criminal groups, companies, CVEs, and monitored claims from one clean UI while preserving review state and alert context.',
         href: '/ti',
         icon: Radar,
-        points: ['Actor overviews', 'Company exposure search', 'Alert context'],
+        points: ['Criminal-group overviews', 'Company exposure search', 'Alert context'],
         price: 'Console',
     },
+]
+
+const utilitySolutions = [
     {
-        title: 'Bloom Filter Exposure Checks',
-        eyebrow: 'Privacy-first',
-        detail: 'Check sensitive values without turning password or breach material into a public dashboard.',
+        title: 'Password Exposure Checks',
+        eyebrow: 'Separate utility',
+        detail: 'Check password exposure through the standalone utility. This stays separate from company exposure monitoring.',
         href: '/pwned',
         icon: LockKeyhole,
-        points: ['Private matching', 'Low-friction checks', 'Clean customer workflow'],
-        price: 'Privacy-first',
+        points: ['Dedicated utility flow', 'Exact-match result', 'Not part of the monitoring buyer path'],
+        price: 'Utility',
     },
     {
-        title: 'Load Testing',
-        eyebrow: '5 free tries',
-        detail: 'Run permitted endpoint checks against URLs you control, keep result links, and upgrade into monthly check tiers when launch work gets serious.',
+        title: 'Endpoint Checks',
+        eyebrow: 'Separate utility',
+        detail: 'Run permitted checks against URLs you control. This is a launch-readiness tool, separate from company exposure monitoring.',
         href: '/test',
         icon: Gauge,
         points: ['5 checks before payment', 'Starter and team tiers', 'Shareable result links'],
@@ -59,30 +62,30 @@ const primarySolutions = [
 ]
 
 const platformItems = [
-    { title: 'Short-span access', detail: 'Session controls for short-lived onion review, with P2P network expansion designed into the workspace.', icon: Network },
-    { title: 'API delivery', detail: 'Structured fields for actor, company, source, date, claim summary, and recommended action.', icon: Code2 },
-    { title: 'Graph pivots', detail: 'Actor, victim, sector, country, source, and CVE pivots that fit analyst workflows.', icon: Waypoints },
-    { title: 'Notification pipeline', detail: 'Webhook-shaped packets designed for Slack, incident queues, and vendor-risk workflows.', icon: BellRing },
-    { title: 'Exposure index', detail: 'Searchable company and actor records without exposing raw leaked material.', icon: Database },
+    { title: 'Short-span access', detail: 'Session controls for short-lived onion review, with source safety boundaries built into the workspace.', icon: Network },
+    { title: 'API delivery', detail: 'Structured fields for criminal group, company, source, date, claim summary, and recommended action.', icon: Code2 },
+    { title: 'Investigation pivots', detail: 'Jump between group, named company, sector, country, source, and CVE context without losing the alert.', icon: Waypoints },
+    { title: 'Notification pipeline', detail: 'Small alert packets designed for Slack, incident queues, and vendor-risk workflows.', icon: BellRing },
+    { title: 'Exposure index', detail: 'Searchable company and criminal-group records without exposing raw leaked material.', icon: Database },
 ]
 
 export default function SolutionsPage() {
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-[#f7f8fb] text-[#171a21]'>
-            <section className='border-b border-[#e3e7ee] bg-white'>
+        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
+            <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-16 md:px-8 md:py-22'>
                     <div className='grid max-w-4xl gap-5'>
-                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Solutions</p>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>Solutions</p>
                         <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Fast company exposure monitoring, packaged for teams that need answers now.</h1>
-                        <p className='max-w-3xl text-lg leading-8 text-[#596170]'>
-                            Hanasand turns actor pages, public indexes, and watched sources into alerts and API records that tell a buyer who was mentioned, what was claimed, when it changed, and what to review next.
+                        <p className='max-w-3xl text-lg leading-8 text-ui-muted'>
+                            Hanasand turns leak sites, public indexes, and watched sources into alerts and API records that show your team who was mentioned, what data was listed, when it changed, and what to review next.
                         </p>
                         <div className='flex flex-wrap gap-3'>
-                            <Link href='/solutions/onion-session' className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
-                                Open onion sessions
+                            <Link href='/solutions/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                                View dark web monitoring
                                 <ArrowRight className='h-4 w-4' />
                             </Link>
-                            <Link href='/contact' className='inline-flex h-11 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
+                            <Link href='/contact' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
                                 Contact sales
                             </Link>
                         </div>
@@ -92,29 +95,29 @@ export default function SolutionsPage() {
                         {primarySolutions.map((solution) => {
                             const Icon = solution.icon
                             return (
-                                <Link key={solution.title} href={solution.href} className='group grid gap-5 rounded-lg border border-[#e0e5ed] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#c9d2df] hover:shadow-[0_18px_50px_rgba(26,35,55,0.12)]'>
+                                <Link key={solution.title} href={solution.href} className='group grid gap-5 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-md'>
                                     <div className='flex items-start justify-between gap-3'>
-                                        <span className='grid h-12 w-12 place-items-center rounded-lg border border-[#dfe6f1] bg-[#f7f9fc] text-[#3056d3]'>
+                                        <span className='grid h-12 w-12 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
                                             <Icon className='h-5 w-5' />
                                         </span>
-                                        <span className='rounded-full bg-[#eef3ff] px-2.5 py-1 text-xs font-semibold text-[#3056d3]'>{solution.eyebrow}</span>
+                                        <span className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-primary'>{solution.eyebrow}</span>
                                     </div>
                                     <div className='grid gap-2'>
-                                        <h2 className='text-xl font-semibold text-[#171a21]'>{solution.title}</h2>
-                                        <p className='text-sm leading-6 text-[#596170]'>{solution.detail}</p>
+                                        <h2 className='text-xl font-semibold text-ui-text'>{solution.title}</h2>
+                                        <p className='text-sm leading-6 text-ui-muted'>{solution.detail}</p>
                                     </div>
-                                    <div className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] px-3 py-2 text-sm font-semibold text-[#171a21]'>
+                                    <div className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-text'>
                                         {solution.price}
                                     </div>
-                                    <div className='grid gap-2 border-t border-[#eef1f5] pt-4'>
+                                    <div className='grid gap-2 border-t border-ui-border pt-4'>
                                         {solution.points.map(point => (
-                                            <span key={point} className='flex items-start gap-2 text-sm leading-6 text-[#3d4656]'>
-                                                <span className='mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#3056d3]' />
+                                            <span key={point} className='flex items-start gap-2 text-sm leading-6 text-ui-text'>
+                                                <span className='mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-ui-primary' />
                                                 {point}
                                             </span>
                                         ))}
                                     </div>
-                                    <span className='inline-flex items-center gap-2 text-sm font-semibold text-[#3056d3]'>
+                                    <span className='inline-flex items-center gap-2 text-sm font-semibold text-ui-primary'>
                                         Open solution
                                         <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
                                     </span>
@@ -125,23 +128,53 @@ export default function SolutionsPage() {
                 </div>
             </section>
 
-            <section className='bg-[#f7f8fb]'>
+            <section className='bg-ui-canvas'>
                 <div className='mx-auto grid max-w-7xl gap-6 px-4 py-14 md:px-8 lg:grid-cols-[0.72fr_1.28fr]'>
                     <div className='grid content-start gap-3'>
-                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Platform fit</p>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>Platform fit</p>
                         <h2 className='text-3xl font-semibold'>Built for notification and review workflows, not data dumps.</h2>
                     </div>
                     <div className='grid gap-4 md:grid-cols-2'>
                         {platformItems.map((item) => {
                             const Icon = item.icon
                             return (
-                                <article key={item.title} className='grid gap-3 rounded-lg border border-[#e0e5ed] bg-white p-4 shadow-sm'>
-                                    <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
-                                        <span className='text-[#3056d3]'><Icon className='h-4 w-4' /></span>
+                                <article key={item.title} className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
+                                    <div className='flex items-center gap-2 text-sm font-semibold text-ui-text'>
+                                        <span className='text-ui-primary'><Icon className='h-4 w-4' /></span>
                                         {item.title}
                                     </div>
-                                    <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
+                                    <p className='text-sm leading-6 text-ui-muted'>{item.detail}</p>
                                 </article>
+                            )
+                        })}
+                    </div>
+                </div>
+            </section>
+
+            <section className='border-t border-ui-border bg-ui-panel'>
+                <div className='mx-auto grid max-w-7xl gap-4 px-4 py-10 md:px-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-center'>
+                    <div>
+                        <p className='text-sm font-semibold uppercase text-ui-muted'>Also available</p>
+                        <h2 className='mt-2 text-2xl font-semibold text-ui-text'>Utilities stay separate from the monitoring buyer journey.</h2>
+                    </div>
+                    <div className='grid gap-4 md:grid-cols-2'>
+                        {utilitySolutions.map((solution) => {
+                            const Icon = solution.icon
+                            return (
+                                <Link key={solution.title} href={solution.href} className='group grid gap-3 rounded-lg border border-ui-border bg-ui-canvas p-4 transition hover:border-ui-primary hover:bg-ui-panel'>
+                                    <div className='flex items-start justify-between gap-3'>
+                                        <span className='grid h-10 w-10 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
+                                            <Icon className='h-4 w-4' />
+                                        </span>
+                                        <span className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{solution.eyebrow}</span>
+                                    </div>
+                                    <h3 className='text-lg font-semibold text-ui-text'>{solution.title}</h3>
+                                    <p className='text-sm leading-6 text-ui-muted'>{solution.detail}</p>
+                                    <span className='inline-flex items-center gap-2 text-sm font-semibold text-ui-primary'>
+                                        Open utility
+                                        <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
+                                    </span>
+                                </Link>
                             )
                         })}
                     </div>

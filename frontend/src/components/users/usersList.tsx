@@ -16,14 +16,14 @@ export default function UsersList({ users, roles }: { users: UserWithRole[], rol
         <>
             <div className='flex items-center justify-between gap-3'>
                 <div>
-                    <h1 className='text-base font-semibold text-bright'>Users</h1>
-                    <p className='mt-1 text-sm text-bright/40'>{visibleUsers.length} shown</p>
+                    <h1 className='text-base font-semibold text-ui-text'>Users</h1>
+                    <p className='mt-1 text-sm text-ui-muted'>{visibleUsers.length} shown</p>
                 </div>
                 {reservedCount > 0 && (
                     <button
                         type='button'
                         onClick={() => setShowReserved((value) => !value)}
-                        className='h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-sm font-semibold text-bright/70 hover:bg-white/10'
+                        className='h-9 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:bg-ui-panel'
                     >
                         {showReserved ? 'Hide reserved' : 'Show reserved'}
                     </button>

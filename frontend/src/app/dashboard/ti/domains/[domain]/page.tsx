@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Camera, CheckCircle2, Clock3, DatabaseZap, ExternalLink, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, Camera, CheckCircle2, Clock3, DatabaseZap, ExternalLink, Radio, ShieldAlert, Zap } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { domainCaptures, formatTiDate, getTiAdminDomain, sourceById } from '@/utils/tiAdmin/ops'
 
@@ -20,26 +20,29 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
     const staleSources = sources.filter(source => new Date(source!.nextRunAt).getTime() < Date.now())
     const latestCapture = captures[0]
     const statusTone = domain.status === 'review' ? 'watch' : domain.status === 'watching' ? 'ok' : 'neutral'
+    const hotSource = sources
+        .filter(source => Boolean(source))
+        .sort((a, b) => new Date(b!.lastRunAt).getTime() - new Date(a!.lastRunAt).getTime())[0]
 
     return (
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Monitored entity'
                 title={domain.company}
-                description={`${domain.domain} · ${domain.resultCount} results · ${sources.length} sources`}
+                description={`${domain.domain} is being watched across ${sources.length} source${sources.length === 1 ? '' : 's'}.`}
             />
 
             <div className='flex flex-wrap items-center justify-between gap-3'>
-                <Link href='/dashboard/ti/domains' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] hover:bg-[#f2f5f9]'>
+                <Link href='/dashboard/ti/domains' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:border-ui-border hover:bg-ui-raised'>
                     <ArrowLeft className='h-4 w-4' />
                     Entities
                 </Link>
                 <div className='flex flex-wrap gap-2'>
-                    <Link href='/dashboard/ti/workbench' className='inline-flex h-9 items-center gap-2 rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white hover:bg-[#2b2f39]'>
+                    <Link href='/dashboard/ti/workbench' className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-text hover:bg-ui-primary'>
                         <ShieldAlert className='h-4 w-4' />
-                        Open in workbench
+                        Open recent attacks
                     </Link>
-                    <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] hover:bg-[#f2f5f9]'>
+                    <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:border-ui-border hover:bg-ui-raised'>
                         Source inventory
                     </Link>
                 </div>
@@ -47,65 +50,89 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
 
             <DashboardPanel className='overflow-hidden'>
                 <div className='grid gap-0 lg:grid-cols-[1.3fr_0.7fr]'>
-                    <div className='bg-[#101522] p-5 text-white'>
+                    <div className='bg-ui-raised p-5 text-ui-text'>
                         <div className='flex flex-wrap items-start justify-between gap-4'>
                             <div>
                                 <div className='flex flex-wrap items-center gap-2'>
-                                    <StatusPill label={domain.status} tone={statusTone} />
+                                    <StatusPill label={operationalStateLabel(domain.status)} tone={statusTone} />
                                     {staleSources.length ? <StatusPill label={`${staleSources.length} stale source${staleSources.length === 1 ? '' : 's'}`} tone='watch' /> : <StatusPill label='sources current' tone='ok' />}
                                 </div>
                                 <h2 className='mt-4 text-2xl font-semibold'>{domain.domain}</h2>
-                                <p className='mt-2 text-sm text-[#c7d0df]'>Matched terms: {domain.matchedTerms.join(', ')}</p>
+                                <p className='mt-2 text-sm text-ui-muted'>Matched terms: {domain.matchedTerms.join(', ')}</p>
                             </div>
                             <div className='grid gap-2 text-right text-sm'>
-                                <span className='text-[#9aa4b5]'>Last seen</span>
+                                <span className='text-ui-muted'>Last seen</span>
                                 <span className='font-semibold'>{formatTiDate(domain.lastSeenAt)}</span>
                             </div>
                         </div>
                     </div>
-                    <div className='grid grid-cols-2 gap-0 border-l border-[#e0e5ed] bg-white sm:grid-cols-4 lg:grid-cols-2'>
+                    <div className='grid grid-cols-2 gap-0 border-l border-ui-border bg-ui-canvas sm:grid-cols-4 lg:grid-cols-2'>
                         <CaseMetric title='Results' value={`${domain.resultCount}`} icon={<DatabaseZap className='h-4 w-4' />} />
                         <CaseMetric title='Evidence' value={`${captures.length}`} icon={<Camera className='h-4 w-4' />} />
                         <CaseMetric title='Sources' value={`${sources.length}`} icon={<CheckCircle2 className='h-4 w-4' />} />
-                        <CaseMetric title='Latest' value={latestCapture ? shortTime(latestCapture.capturedAt) : 'None'} icon={<Clock3 className='h-4 w-4' />} />
+                        <CaseMetric title='Latest' value={latestCapture ? shortTime(latestCapture.capturedAt) : 'checking'} icon={<Clock3 className='h-4 w-4' />} />
                     </div>
                 </div>
             </DashboardPanel>
 
+            <div className='grid gap-3 xl:grid-cols-3'>
+                <OperationCard
+                    icon={<Radio className='h-4 w-4' />}
+                    title='Entity operation'
+                    value={domain.status === 'review' ? 'analyst review' : domain.status === 'watching' ? 'watching' : 'low-noise watch'}
+                    detail={`${domain.resultCount} result${domain.resultCount === 1 ? '' : 's'} tracked for ${domain.company}`}
+                    tone={statusTone}
+                />
+                <OperationCard
+                    icon={<Zap className='h-4 w-4' />}
+                    title='Active source'
+                    value={hotSource?.name || 'source queue'}
+                    detail={hotSource ? `last checked ${shortAge(hotSource.lastRunAt)}; next lease ${shortAge(hotSource.nextRunAt)}` : 'source registry is checking coverage'}
+                    tone={staleSources.length ? 'watch' : 'ok'}
+                />
+                <OperationCard
+                    icon={<DatabaseZap className='h-4 w-4' />}
+                    title='Evidence stream'
+                    value={latestCapture ? latestCapture.title : 'checking'}
+                    detail={latestCapture ? `${latestCapture.actor} via ${sourceById(latestCapture.sourceId)?.name || latestCapture.sourceId}` : 'collectors are checking this entity for new mentions'}
+                    tone={captures.length ? 'ok' : 'neutral'}
+                />
+            </div>
+
             <div className='grid gap-4 xl:grid-cols-[1.15fr_0.85fr]'>
                 <DashboardPanel className='overflow-hidden'>
-                    <div className='border-b border-[#e0e5ed] bg-[#fbfcfe] px-4 py-3'>
-                        <h2 className='text-base font-semibold text-[#171a21]'>Evidence review</h2>
+                    <div className='border-b border-ui-border bg-ui-panel px-4 py-3'>
+                        <h2 className='text-base font-semibold text-ui-text'>Evidence stream</h2>
                     </div>
                     <div className='overflow-x-auto'>
-                        <table className='min-w-full divide-y divide-[#edf0f5] text-sm'>
-                            <thead className='bg-white text-left text-xs font-semibold uppercase text-[#667085]'>
+                        <table className='min-w-full divide-y divide-ui-border text-sm'>
+                            <thead className='bg-ui-raised text-left text-xs font-semibold uppercase text-ui-muted'>
                                 <tr>
                                     <th className='px-4 py-3'>Evidence</th>
                                     <th className='px-4 py-3'>Actor</th>
                                     <th className='px-4 py-3'>Source</th>
-                                    <th className='px-4 py-3'>Captured</th>
-                                    <th className='px-4 py-3'>Boundary</th>
+                                    <th className='px-4 py-3'>Seen</th>
+                                    <th className='px-4 py-3'>Handling</th>
                                     <th className='px-4 py-3 text-right'>Action</th>
                                 </tr>
                             </thead>
-                            <tbody className='divide-y divide-[#edf0f5] bg-white'>
+                            <tbody className='divide-y divide-ui-border bg-ui-canvas'>
                                 {captures.map(capture => {
                                     const source = sourceById(capture.sourceId)
                                     return (
-                                        <tr key={capture.id} className='align-top hover:bg-[#fbfcfe]'>
-                                            <td className='px-4 py-4'>
-                                                <p className='font-semibold text-[#171a21]'>{capture.title}</p>
-                                                <p className='mt-1 max-w-xl text-[#596170]'>{capture.resultSummary}</p>
+                                        <tr key={capture.id} className='align-top hover:bg-ui-panel'>
+                                            <td className='px-4 py-3'>
+                                                <p className='font-semibold text-ui-text'>{capture.title}</p>
+                                                <p className='mt-1 max-w-xl text-ui-muted'>{capture.resultSummary}</p>
                                             </td>
-                                            <td className='px-4 py-4 font-semibold text-[#171a21]'>{capture.actor}</td>
-                                            <td className='px-4 py-4'>
-                                                <Link href={`/dashboard/ti/sources/${capture.sourceId}`} className='font-semibold text-[#3056d3] hover:underline'>{source?.name || capture.sourceId}</Link>
+                                            <td className='px-4 py-3 font-semibold text-ui-text'>{capture.actor}</td>
+                                            <td className='px-4 py-3'>
+                                                <Link href={`/dashboard/ti/sources/${capture.sourceId}`} className='font-semibold text-ui-primary hover:underline'>{source?.name || capture.sourceId}</Link>
                                             </td>
-                                            <td className='whitespace-nowrap px-4 py-4 text-[#596170]'>{formatTiDate(capture.capturedAt)}</td>
-                                            <td className='px-4 py-4 text-[#596170]'>{capture.metadata.find(item => item.label === 'Collection boundary')?.value || source?.legalNotes || 'metadata only'}</td>
-                                            <td className='px-4 py-4 text-right'>
-                                                <a href={capture.pageUrl} target='_blank' rel='noopener noreferrer' className='inline-flex h-8 items-center gap-1 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] hover:bg-[#f2f5f9]'>
+                                            <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatTiDate(capture.capturedAt)}</td>
+                                            <td className='px-4 py-3 text-ui-muted'>{capture.metadata.find(item => item.label === 'Collection boundary')?.value || source?.legalNotes || 'metadata only'}</td>
+                                            <td className='px-4 py-3 text-right'>
+                                                <a href={capture.pageUrl} target='_blank' rel='noopener noreferrer' className='inline-flex h-8 items-center gap-1 rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text hover:border-ui-border hover:bg-ui-raised'>
                                                     Open
                                                     <ExternalLink className='h-3 w-3' />
                                                 </a>
@@ -115,7 +142,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                                 })}
                                 {!captures.length ? (
                                     <tr>
-                                        <td colSpan={6} className='px-4 py-8 text-center text-sm text-[#667085]'>No evidence is attached to this entity yet.</td>
+                                        <td colSpan={6} className='px-4 py-8 text-center text-sm text-ui-muted'>Evidence for this entity streams here as sources report it.</td>
                                     </tr>
                                 ) : null}
                             </tbody>
@@ -124,26 +151,26 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                 </DashboardPanel>
 
                 <DashboardPanel className='p-5'>
-                    <h2 className='text-base font-semibold text-[#171a21]'>Source coverage</h2>
+                    <h2 className='text-base font-semibold text-ui-text'>Source checks</h2>
                     <div className='mt-4 grid gap-3'>
                         {sources.map(source => {
                             if (!source) return null
                             const stale = new Date(source.nextRunAt).getTime() < Date.now()
                             const sourceCaptures = captures.filter(capture => capture.sourceId === source.id)
                             return (
-                                <Link key={source.id} href={`/dashboard/ti/sources/${source.id}`} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4 hover:border-[#c8d1df]'>
+                                <Link key={source.id} href={`/dashboard/ti/sources/${source.id}`} className='rounded-lg border border-ui-border bg-ui-raised p-3 hover:border-ui-border hover:bg-ui-panel'>
                                     <div className='flex flex-wrap items-start justify-between gap-3'>
                                         <div>
-                                            <p className='font-semibold text-[#171a21]'>{source.name}</p>
-                                            <p className='mt-1 text-xs text-[#667085]'>{source.family} · {source.accessMethod}</p>
+                                            <p className='font-semibold text-ui-text'>{source.name}</p>
+                                            <p className='mt-1 text-xs text-ui-muted'>{source.family} · {source.accessMethod}</p>
                                         </div>
-                                        <StatusPill label={stale ? 'stale' : source.status} tone={stale ? 'watch' : source.status === 'active' ? 'ok' : 'neutral'} />
+                                        <StatusPill label={stale ? 'stale' : operationalStateLabel(source.status)} tone={stale ? 'watch' : source.status === 'active' ? 'ok' : 'neutral'} />
                                     </div>
                                     <div className='mt-3 grid gap-2 text-sm sm:grid-cols-2'>
-                                        <Inline label='Last run' value={formatTiDate(source.lastRunAt)} />
-                                        <Inline label='Next run' value={formatTiDate(source.nextRunAt)} />
-                                        <Inline label='Cadence' value={`${source.cadenceMinutes}m`} />
-                                        <Inline label='Entity captures' value={`${sourceCaptures.length}`} />
+                                        <Inline label='Checked' value={shortAge(source.lastRunAt)} />
+                                        <Inline label='Lease due' value={shortAge(source.nextRunAt)} />
+                                        <Inline label='Interval' value={`${source.cadenceMinutes}m`} />
+                                        <Inline label='Added here' value={`${sourceCaptures.length}`} />
                                     </div>
                                 </Link>
                             )
@@ -153,49 +180,67 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
             </div>
 
             <DashboardPanel className='p-5'>
-                <h2 className='text-base font-semibold text-[#171a21]'>Capture cards</h2>
+                <h2 className='text-base font-semibold text-ui-text'>Captured evidence</h2>
                 <div className='mt-4 grid gap-4 xl:grid-cols-2'>
                     {captures.map(capture => (
-                        <article key={capture.id} className='grid gap-4 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4 md:grid-cols-[15rem_1fr]'>
-                            <div className='grid min-h-44 content-between rounded-lg bg-[#0e1520] p-4 text-white'>
-                                <span className='w-fit rounded-full bg-white/10 px-2 py-1 text-xs'>{capture.actor}</span>
+                        <article key={capture.id} className='grid gap-4 rounded-lg border border-ui-border bg-ui-raised p-3 md:grid-cols-[15rem_1fr]'>
+                            <div className='grid min-h-44 content-between rounded-lg bg-ui-canvas p-4 text-ui-text'>
+                                <span className='w-fit rounded-full bg-ui-panel px-2 py-1 text-xs'>{capture.actor}</span>
                                 <div>
                                     <p className='text-lg font-semibold'>{capture.domain}</p>
-                                    <p className='mt-1 text-xs text-[#c7d0df]'>{capture.screenshotLabel}</p>
+                                    <p className='mt-1 text-xs text-ui-muted'>{capture.screenshotLabel}</p>
                                 </div>
                             </div>
                             <div>
-                                <h3 className='text-base font-semibold text-[#171a21]'>{capture.title}</h3>
+                                <h3 className='text-base font-semibold text-ui-text'>{capture.title}</h3>
                                 <div className='mt-3 grid gap-2'>
                                     {capture.metadata.map(item => <Inline key={`${capture.id}-${item.label}`} label={item.label} value={item.value} />)}
                                 </div>
                             </div>
                         </article>
                     ))}
-                    {!captures.length ? <p className='rounded-lg border border-dashed border-[#d8dee9] p-4 text-sm text-[#667085]'>No capture cards yet.</p> : null}
+                    {!captures.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted'>Collectors are checking this entity; accepted captures attach here.</p> : null}
                 </div>
             </DashboardPanel>
         </DashboardPage>
     )
 }
 
+function OperationCard({ icon, title, value, detail, tone }: { icon: ReactNode, title: string, value: string, detail: string, tone: 'neutral' | 'ok' | 'watch' | 'bad' }) {
+    return (
+        <DashboardPanel className='overflow-hidden p-0'>
+            <div className='flex items-center justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>
+                <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text'>
+                    <span className={toneText(tone)}>{icon}</span>
+                    <span className='truncate'>{title}</span>
+                </div>
+                <span className={`h-2 w-2 rounded-full ${toneDot(tone)}`} />
+            </div>
+            <div className='p-4'>
+                <p className='line-clamp-1 text-base font-semibold text-ui-text'>{value}</p>
+                <p className='mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-ui-muted'>{detail}</p>
+            </div>
+        </DashboardPanel>
+    )
+}
+
 function CaseMetric({ title, value, icon }: { title: string, value: string, icon: ReactNode }) {
     return (
-        <div className='border-b border-r border-[#edf0f5] p-4 last:border-r-0 lg:last:border-r'>
-            <div className='flex items-center justify-between text-[#667085]'>
+        <div className='border-b border-r border-ui-border p-4 last:border-r-0 lg:last:border-r'>
+            <div className='flex items-center justify-between text-ui-muted'>
                 <p className='text-xs font-semibold uppercase'>{title}</p>
                 {icon}
             </div>
-            <p className='mt-2 text-xl font-semibold text-[#171a21]'>{value}</p>
+            <p className='mt-2 text-xl font-semibold text-ui-text'>{value}</p>
         </div>
     )
 }
 
 function Inline({ label, value }: { label: string, value: string }) {
     return (
-        <div className='rounded-lg border border-[#edf0f5] bg-white px-3 py-2'>
-            <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
-            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21]'>{value}</p>
+        <div className='rounded-lg border border-ui-border bg-ui-canvas px-3 py-2'>
+            <p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold text-ui-text'>{value}</p>
         </div>
     )
 }
@@ -205,11 +250,32 @@ function StatusPill({ label, tone }: { label: string, tone: 'neutral' | 'ok' | '
     return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${classes.bg} ${classes.text}`}>{label}</span>
 }
 
+function toneText(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
+    if (tone === 'ok') return 'text-ui-success'
+    if (tone === 'watch') return 'text-ui-warning'
+    if (tone === 'bad') return 'text-ui-danger'
+    return 'text-ui-primary'
+}
+
+function toneDot(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
+    if (tone === 'ok') return 'bg-ui-success shadow-[0_0_14px_rgba(49,196,141,0.65)]'
+    if (tone === 'watch') return 'bg-ui-warning shadow-[0_0_14px_rgba(246,180,95,0.45)]'
+    if (tone === 'bad') return 'bg-ui-danger shadow-[0_0_14px_rgba(255,122,89,0.45)]'
+    return 'bg-ui-primary shadow-[0_0_14px_rgba(157,180,255,0.45)]'
+}
+
 function toneClass(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
-    if (tone === 'ok') return { bg: 'bg-[#e9f8ef]', text: 'text-[#147a3b]' }
-    if (tone === 'watch') return { bg: 'bg-[#fff4d6]', text: 'text-[#8a5a00]' }
-    if (tone === 'bad') return { bg: 'bg-[#fff4f2]', text: 'text-[#a33428]' }
-    return { bg: 'bg-[#eef3ff]', text: 'text-[#3056d3]' }
+    if (tone === 'ok') return { bg: 'bg-ui-success/10', text: 'text-ui-success' }
+    if (tone === 'watch') return { bg: 'bg-ui-warning/10', text: 'text-ui-warning' }
+    if (tone === 'bad') return { bg: 'bg-ui-danger/10', text: 'text-ui-danger' }
+    return { bg: 'bg-ui-primary/10', text: 'text-ui-text' }
+}
+
+function operationalStateLabel(value: string) {
+    if (value === 'blocked') return 'syncing'
+    if (value === 'needs_action') return 'reviewing'
+    if (value === 'review') return 'reviewing'
+    return value.replaceAll('_', ' ')
 }
 
 function shortTime(value: string) {
@@ -220,4 +286,14 @@ function shortTime(value: string) {
         minute: '2-digit',
         timeZone: 'Europe/Oslo',
     }).format(new Date(value))
+}
+
+function shortAge(value: string) {
+    const parsed = new Date(value).getTime()
+    if (!Number.isFinite(parsed)) return 'checking'
+    const diffMinutes = Math.round((parsed - Date.now()) / 60000)
+    const abs = Math.abs(diffMinutes)
+    const unit = abs < 60 ? `${abs}m` : abs < 2880 ? `${Math.round(abs / 60)}h` : `${Math.round(abs / 1440)}d`
+    if (diffMinutes > 0) return `in ${unit}`
+    return `${unit} ago`
 }

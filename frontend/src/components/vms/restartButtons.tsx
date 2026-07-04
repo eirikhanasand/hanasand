@@ -71,13 +71,13 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
     return (
         <div onClick={handleClick} className={`${forceVisible ? 'flex' : 'flex'} min-w-0 flex-col items-end gap-2 rounded-md`}>
             <div className='flex h-9 items-center justify-end gap-1'>
-                {!isRunning && <button type='button' aria-label={`Start ${vm.name}`} onClick={handleStart} disabled={disabled} className='grid h-9 w-9 place-items-center rounded-md text-green-700 transition hover:bg-green-50 disabled:cursor-wait disabled:opacity-50'>
+                {!isRunning && <button type='button' aria-label={`Start ${vm.name}`} onClick={handleStart} disabled={disabled} className='grid h-9 w-9 place-items-center rounded-md text-ui-success transition hover:bg-ui-success disabled:cursor-wait disabled:opacity-50 dark:text-ui-success dark:hover:bg-ui-success/10'>
                     <Play className='w-4 h-4' />
                 </button>}
-                {isRunning && <button type='button' aria-label={`Restart ${vm.name}`} onClick={handleRestart} disabled={disabled} className='grid h-9 w-9 place-items-center rounded-md text-blue-700 transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-50'>
+                {isRunning && <button type='button' aria-label={`Restart ${vm.name}`} onClick={handleRestart} disabled={disabled} className='grid h-9 w-9 place-items-center rounded-md text-ui-primary transition hover:bg-ui-primary disabled:cursor-wait disabled:opacity-50 dark:text-ui-primary dark:hover:bg-ui-primary/10'>
                     <RefreshCcw className='w-4 h-4' />
                 </button>}
-                {isRunning && <button type='button' aria-label={`Stop ${vm.name}`} onClick={handleStop} disabled={disabled} className='grid h-9 w-9 place-items-center rounded-md text-red-700 transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-50'>
+                {isRunning && <button type='button' aria-label={`Stop ${vm.name}`} onClick={handleStop} disabled={disabled} className='grid h-9 w-9 place-items-center rounded-md text-ui-danger transition hover:bg-ui-danger disabled:cursor-wait disabled:opacity-50 dark:text-ui-danger dark:hover:bg-ui-danger/10'>
                     <StopCircle className='w-4 h-4' />
                 </button>}
             </div>

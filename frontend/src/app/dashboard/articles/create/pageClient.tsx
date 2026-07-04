@@ -56,16 +56,16 @@ export default function CreateClient() {
         <div className={`relative grid gap-4 ${editing ? '' : 'px-4 md:px-[18vw]'}`}>
             <div className='flex items-center justify-between gap-3'>
                 <div>
-                    <div className='flex items-center gap-2 text-[#3056d3]'>
+                    <div className='flex items-center gap-2 text-ui-primary'>
                         <FilePlus2 className='h-4 w-4' />
-                        <p className='text-xs font-semibold uppercase text-[#3056d3]'>Article editor</p>
+                        <p className='text-xs font-semibold uppercase text-ui-primary'>Article editor</p>
                     </div>
-                    <h1 className='mt-2 text-xl font-medium text-[#171a21]'>{text}</h1>
+                    <h1 className='mt-2 text-xl font-medium text-ui-text'>{text}</h1>
                 </div>
                 <button
                     type='button'
                     onClick={handleCreate}
-                    className='inline-flex h-9 items-center gap-2 rounded-lg bg-[#22252d] px-3.5 text-sm font-medium text-white transition hover:bg-[#111318]'
+                    className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-primary px-3.5 text-sm font-medium text-ui-text transition hover:opacity-90'
                 >
                     <Plus className='h-4 w-4' />
                     Create
@@ -75,12 +75,12 @@ export default function CreateClient() {
             <div className='grid w-full gap-4'>
                 {content.length > 10 ? (
                     <div className='grid gap-2'>
-                        <label className='text-sm font-medium text-[#394150]'>Article ID</label>
+                        <label className='text-sm font-medium text-ui-text'>Article ID</label>
                         <input
                             value={id || ''}
                             placeholder='example.md'
                             onChange={(e) => setId(e.target.value.replaceAll('.md', ''))}
-                            className='h-10 w-full rounded-lg border border-[#dfe5ee] bg-white px-3 text-sm text-[#171a21] outline-none transition placeholder:text-[#9aa4b2] focus:border-[#3056d3]'
+                            className='h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/35'
                         />
                     </div>
                 ) : <></>}
@@ -89,7 +89,7 @@ export default function CreateClient() {
                     setEditing={setEditing}
                     customSaveLogic={true}
                     hideSaveButton
-                    className='rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm'
+                    className='rounded-lg border border-ui-border bg-ui-raised p-2 shadow-sm shadow-ui-canvas/20'
                     id={id || ''}
                     content={content.split('\n')}
                     onChange={setContent}

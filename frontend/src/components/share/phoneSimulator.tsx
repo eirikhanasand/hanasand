@@ -78,29 +78,29 @@ export default function PhoneSimulator({ share, open }: PhoneSimulatorProps) {
     const isOnline = state === 'online'
 
     return (
-        <section className='mt-3 rounded-4xl bg-black/35 p-4 text-bright outline outline-dark/80'>
-            <div className='mx-auto w-full max-w-72 rounded-[2.4rem] border border-bright/15 bg-[#080908] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.55)]'>
-                <div className='relative overflow-hidden rounded-4xl border border-bright/10 bg-linear-to-br from-[#1a2119] via-[#11140f] to-black px-4 py-5'>
-                    <div className='mb-5 flex items-center justify-between text-xs font-semibold text-bright/70'>
+        <section className='mt-3 rounded-4xl border border-ui-border bg-ui-panel p-4 text-ui-text shadow-sm'>
+            <div className='mx-auto w-full max-w-72 rounded-[2.4rem] border border-ui-border bg-ui-canvas p-2 shadow-lg shadow-ui-canvas/10'>
+                <div className='relative overflow-hidden rounded-4xl border border-ui-border bg-ui-panel px-4 py-5'>
+                    <div className='mb-5 flex items-center justify-between text-xs font-semibold text-ui-muted'>
                         <span>00:34</span>
-                        <div className='h-6 w-20 rounded-full bg-black/70' />
-                        {isOnline ? <Wifi className='h-4 w-4 text-green-400' /> : <WifiOff className='h-4 w-4 text-bright/40' />}
+                        <div className='h-6 w-20 rounded-full bg-ui-canvas' />
+                        {isOnline ? <Wifi className='h-4 w-4 text-ui-success' /> : <WifiOff className='h-4 w-4 text-ui-muted' />}
                     </div>
 
                     <div className='mb-5'>
-                        <div className='mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-bright/8 outline outline-bright/10'>
-                            <Smartphone className='h-6 w-6 text-bright/85' />
+                        <div className='mb-3 flex h-12 w-12 items-center justify-center rounded-lg border border-ui-border bg-ui-raised'>
+                            <Smartphone className='h-6 w-6 text-ui-primary' />
                         </div>
                         <h2 className='text-2xl font-semibold tracking-tight'>Expo phone</h2>
-                        <p className='mt-2 text-sm leading-5 text-bright/55'>{message}</p>
+                        <p className='mt-2 text-sm leading-5 text-ui-muted'>{message}</p>
                     </div>
 
-                    <div className={`rounded-2xl border p-3 ${isOnline ? 'border-green-400/25 bg-green-400/8' : 'border-bright/10 bg-black/25'}`}>
+                    <div className={`rounded-lg border p-3 ${isOnline ? 'border-ui-success/30 bg-ui-success/10' : 'border-ui-border bg-ui-raised'}`}>
                         <div className='flex items-center gap-2 text-sm font-semibold'>
-                            <span className={`h-2 w-2 rounded-full ${isOnline ? 'bg-green-400' : isBusy ? 'bg-orange-300' : 'bg-bright/35'}`} />
+                            <span className={`h-2 w-2 rounded-full ${isOnline ? 'bg-ui-success' : isBusy ? 'bg-ui-warning' : 'bg-ui-muted'}`} />
                             {isOnline ? 'Metro online' : isBusy ? 'Starting Metro' : 'Ready to start'}
                         </div>
-                        <p className='mt-2 text-xs leading-5 text-bright/50'>
+                        <p className='mt-2 text-xs leading-5 text-ui-muted'>
                             Runs `npm start` in the connected share VM and probes `localhost:8081/status`.
                         </p>
                     </div>
@@ -110,7 +110,7 @@ export default function PhoneSimulator({ share, open }: PhoneSimulatorProps) {
                             type='button'
                             onClick={startExpo}
                             disabled={!share || isBusy}
-                            className='inline-flex items-center justify-center gap-2 rounded-2xl bg-bright px-3 py-2 text-sm font-semibold text-black transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50'
+                            className='inline-flex items-center justify-center gap-2 rounded-lg bg-ui-text px-3 py-2 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
                         >
                             {state === 'starting' ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Play className='h-4 w-4' />}
                             npm start
@@ -119,17 +119,17 @@ export default function PhoneSimulator({ share, open }: PhoneSimulatorProps) {
                             type='button'
                             onClick={() => void checkExpo()}
                             disabled={!share || isBusy}
-                            className='inline-flex items-center justify-center gap-2 rounded-2xl bg-bright/8 px-3 py-2 text-sm font-semibold text-bright outline outline-bright/10 transition hover:bg-bright/12 disabled:cursor-not-allowed disabled:opacity-50'
+                            className='inline-flex items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-text transition hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-50'
                         >
                             {state === 'checking' ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
                             Check
                         </button>
                     </div>
 
-                    <div className='mt-4 rounded-2xl bg-black/30 p-3 text-xs leading-5 text-bright/50 outline outline-bright/8'>
-                        <p className='font-semibold text-bright/70'>VM terminal</p>
+                    <div className='mt-4 rounded-lg border border-ui-border bg-ui-raised p-3 text-xs leading-5 text-ui-muted'>
+                        <p className='font-semibold text-ui-text'>VM terminal</p>
                         <p>{isConnected ? 'Connected to project shell.' : 'Connecting to project shell...'}</p>
-                        <pre className='mt-2 max-h-24 overflow-hidden whitespace-pre-wrap text-[11px] text-bright/45'>
+                        <pre className='mt-2 max-h-24 overflow-hidden whitespace-pre-wrap text-[11px] text-ui-muted'>
                             {recentOutput || lastBody || 'Expo output appears here after npm start.'}
                         </pre>
                     </div>

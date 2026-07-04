@@ -10,7 +10,7 @@ export default function Button({ text, onClick, className }: ButtonProps) {
             type='button'
             aria-label={text}
             onClick={onClick}
-            className={`h-7 w-fit items-center rounded-md border border-bright/10 px-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-bright/48 transition hover:bg-bright/8 hover:text-bright/72 ${className}`}
+            className={`h-7 w-fit items-center rounded-md border border-ui-border px-2.5 text-[10px] font-medium uppercase tracking-normal text-ui-muted transition hover:bg-ui-raised hover:text-ui-text ${className}`}
         >
             <h1>{text}</h1>
         </button>

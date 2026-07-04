@@ -13,12 +13,12 @@ type ButtonProps = {
 }
 
 const variants = {
-    primary: 'bg-[#f07d33]/70 outline-[#f07d33]/50 hover:bg-[#f07d33]/90',
-    secondary: 'bg-[#f07d33]/70 outline-[#f07d33] hover:bg-[#f07d33]/90',
-    warning: 'bg-yellow-500/70 outline-yellow-500 hover:bg-yellow-500/90',
-    danger: 'bg-red-600/70 outline-red-600 hover:bg-red-600/90',
-    success: 'bg-green-600/70 outline-green-600 hover:bg-green-600/90',
-    info: 'bg-blue-600/70 outline-blue-600 hover:bg-blue-600/90'
+    primary: 'border-ui-primary bg-ui-primary text-ui-canvas hover:opacity-90',
+    secondary: 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary',
+    warning: 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning hover:bg-ui-warning/15',
+    danger: 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger hover:bg-ui-danger/15',
+    success: 'border-ui-success/35 bg-ui-success/10 text-ui-success hover:bg-ui-success/15',
+    info: 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary hover:bg-ui-primary/15'
 }
 
 export default function Button({
@@ -41,9 +41,9 @@ export default function Button({
                 onClick={onClick}
                 aria-label={text}
                 className={`
-                    ${bg} cursor-pointer px-4 rounded-md min-h-8 h-8 flex
+                    ${bg} cursor-pointer px-4 rounded-lg min-h-8 h-8 flex
                     justify-evenly items-center gap-2 select-none
-                    focus:outline-none border-0 outline w-fit ${className}
+                    border outline-none focus:ring-2 focus:ring-ui-primary/20 w-fit disabled:cursor-not-allowed disabled:opacity-55 ${className}
                 `}
             >
                 <h1 className='font-bold'>{icon || ''}</h1>
@@ -56,8 +56,8 @@ export default function Button({
         return (
             <div
                 className={`
-                    ${bg} cursor-not-allowed px-4 rounded-md h-8 flex w-fit
-                    justify-evenly items-center gap-2 select-none ${className}
+                    ${bg} cursor-not-allowed px-4 rounded-lg h-8 flex w-fit
+                    justify-evenly items-center gap-2 select-none border opacity-55 ${className}
                 `}
             >
                 <h1 className='font-bold'>{icon || ''}</h1>
@@ -70,8 +70,8 @@ export default function Button({
         <Link
             href={path}
             className={`
-                ${bg} cursor-pointer px-4 rounded-md h-8 flex w-fit
-                justify-evenly items-center gap-2 select-none ${className}
+                ${bg} cursor-pointer px-4 rounded-lg h-8 flex w-fit
+                justify-evenly items-center gap-2 select-none border transition focus:outline-none focus:ring-2 focus:ring-ui-primary/20 ${className}
             `}
         >
             <h1 className='font-bold'>{icon || ''}</h1>

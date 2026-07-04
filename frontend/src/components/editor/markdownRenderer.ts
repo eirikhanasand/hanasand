@@ -21,13 +21,13 @@ export function configureMarkdownRenderer() {
                 return `<img src='${token.href}' alt='${token.title}' width='300' />`
             },
             link(token: { href: string, title?: string | null, text: string }) {
-                return `<a href='${token.href}' title='${token.title}' target='_blank' rel='noopener noreferrer' class='text-blue-500 underline'>${token.text}</a>`
+                return `<a href='${token.href}' title='${token.title}' target='_blank' rel='noopener noreferrer' class='text-ui-primary underline'>${token.text}</a>`
             },
             codespan(token: { text: string }) {
-                return `<code class='break-all bg-extralight p-0.3 rounded-xs'>${token.text}</code>`
+                return `<code class='break-all bg-ui-raised p-0.3 rounded-xs'>${token.text}</code>`
             },
             hr() {
-                return '<hr class=\'my-6 border-t-2 border-white-400 opacity-50\' />'
+                return '<hr class=\'my-6 border-t-2 border-ui-border opacity-80\' />'
             },
         }
     })

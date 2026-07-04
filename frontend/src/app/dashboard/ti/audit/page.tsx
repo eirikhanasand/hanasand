@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, ClipboardList, Clock3, Radio } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { getTiEnrichmentOverview } from '@/utils/tiAdmin/enrichment'
-import { formatTiDate } from '@/utils/tiAdmin/ops'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +11,7 @@ export default async function TiAuditPage() {
     const sortedEvents = [...auditLog].sort((a, b) => new Date(b.happenedAt).getTime() - new Date(a.happenedAt).getTime())
     const failedEvents = sortedEvents.filter(event => !['ok', 'ready', 'success', 'completed', 'published'].includes(event.result.toLowerCase()))
     const lastEvent = sortedEvents[0]
+    const failedIds = new Set(failedEvents.map(event => event.id))
 
     return (
         <DashboardPage>
@@ -21,88 +21,87 @@ export default async function TiAuditPage() {
                 description='Management actions, queue decisions, worker events, and profile-cache changes.'
             />
 
-            <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-5'>
+            <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-5'>
                 <Metric title='Events' value={`${stats.auditedEvents || sortedEvents.length}`} icon={<ClipboardList className='h-4 w-4' />} />
                 <Metric title='Failures' value={`${failedEvents.length}`} tone={failedEvents.length ? 'bad' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                 <Metric title='Refreshes' value={`${stats.totalRefreshes}`} icon={<CheckCircle2 className='h-4 w-4' />} />
-                <Metric title='Worker' value={worker.state} tone={worker.state === 'running' ? 'ok' : worker.state === 'error' || worker.state === 'unavailable' ? 'bad' : 'watch'} icon={<Radio className='h-4 w-4' />} />
-                <Metric title='Last action' value={lastEvent ? shortTime(lastEvent.happenedAt) : 'None'} icon={<Clock3 className='h-4 w-4' />} />
+                <Metric title='Worker' value={operationalStateLabel(worker.state)} tone={worker.state === 'running' ? 'ok' : worker.state === 'error' || worker.state === 'unavailable' ? 'bad' : 'watch'} icon={<Radio className='h-4 w-4' />} />
+                <Metric title='Last action' value={lastEvent ? shortTime(lastEvent.happenedAt) : 'Checking'} icon={<Clock3 className='h-4 w-4' />} />
             </div>
 
-            <div className='grid gap-4 xl:grid-cols-[0.85fr_1.15fr]'>
-                <DashboardPanel className='p-5'>
-                    <h2 className='text-base font-semibold text-[#171a21]'>Needs review</h2>
-                    <div className='mt-4 grid gap-3'>
-                        {failedEvents.slice(0, 6).map(event => (
-                            <article key={event.id} className='rounded-lg border border-[#ffd5d0] bg-[#fffaf8] p-4'>
-                                <div className='flex flex-wrap items-start justify-between gap-2'>
-                                    <div>
-                                        <p className='font-mono text-xs font-semibold uppercase text-[#667085]'>{event.action}</p>
-                                        <p className='mt-1 font-semibold text-[#171a21]'>{event.target}</p>
-                                    </div>
-                                    <StatusPill label={event.result} tone='bad' />
-                                </div>
-                                <div className='mt-3 grid gap-2 sm:grid-cols-2'>
-                                    <AuditFact label='Age' value={shortAge(event.happenedAt)} />
-                                    <AuditFact label='Actor' value={event.actor} />
-                                    <AuditFact label='Target' value={event.target} />
-                                    <AuditFact label='Route' value={auditRouteLabel(event)} />
-                                </div>
-                                <p className='mt-3 text-sm text-[#596170]'>{event.detail}</p>
-                                <div className='mt-3 flex flex-wrap items-center justify-between gap-2'>
-                                    <span className='text-xs text-[#667085]'>{formatTiDate(event.happenedAt)}</span>
-                                    <Link className='rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#3056d3] hover:border-[#b8c5ff] hover:bg-[#f4f7ff]' href={auditEventHref(event)}>
-                                        Open console
-                                    </Link>
-                                </div>
-                            </article>
-                        ))}
-                        {!failedEvents.length ? <p className='rounded-lg border border-dashed border-[#d8dee9] p-4 text-sm text-[#667085]'>No failed or blocked audit events.</p> : null}
-                    </div>
-                </DashboardPanel>
-
-                <DashboardPanel className='overflow-hidden'>
-                    <div className='border-b border-[#e0e5ed] bg-[#fbfcfe] px-4 py-3'>
-                        <div className='flex flex-wrap items-center justify-between gap-3'>
-                            <h2 className='text-base font-semibold text-[#171a21]'>Event log</h2>
-                            <div className='flex flex-wrap gap-2 text-xs font-semibold'>
-                                <StatusPill label={`worker ${worker.state}`} tone={worker.state === 'running' ? 'ok' : 'watch'} />
-                                <span className='rounded-full border border-[#d8dee9] bg-white px-2 py-1 text-[#596170]'>cursor {worker.cursor}</span>
+            <div className='grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]'>
+                <DashboardPanel className='min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0'>
+                    <div className='border-b border-ui-border bg-ui-raised px-3 py-2'>
+                        <div className='flex flex-wrap items-center justify-between gap-2'>
+                            <div>
+                                <h2 className='text-sm font-semibold text-ui-text'>Timeline</h2>
+                                <p className='mt-0.5 text-[11px] text-ui-muted'>{sortedEvents.length} events sorted newest first</p>
+                            </div>
+                            <div className='flex flex-wrap gap-1.5 text-[11px] font-semibold'>
+                                <StatusPill label={`worker ${operationalStateLabel(worker.state)}`} tone={worker.state === 'running' ? 'ok' : 'watch'} />
+                                <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-ui-muted'>cursor {worker.cursor}</span>
                             </div>
                         </div>
                     </div>
-                    <div className='overflow-x-auto'>
-                        <table className='min-w-full divide-y divide-[#edf0f5] text-sm'>
-                            <thead className='bg-white text-left text-xs font-semibold uppercase text-[#667085]'>
+                    <div className='max-h-[calc(100vh-18rem)] min-h-72 overflow-auto'>
+                        <table className='min-w-full border-separate border-spacing-0 text-xs'>
+                            <thead className='sticky top-0 z-10 bg-ui-panel/95 text-left text-[10px] font-semibold uppercase text-ui-muted backdrop-blur'>
                                 <tr>
-                                    <th className='px-4 py-3'>Time</th>
-                                    <th className='px-4 py-3'>Actor</th>
-                                    <th className='px-4 py-3'>Action</th>
-                                    <th className='px-4 py-3'>Target</th>
-                                    <th className='px-4 py-3'>Result</th>
-                                    <th className='px-4 py-3'>Detail</th>
+                                    <th className='border-b border-ui-border px-3 py-2'>Time</th>
+                                    <th className='border-b border-ui-border px-3 py-2'>Actor</th>
+                                    <th className='border-b border-ui-border px-3 py-2'>Action</th>
+                                    <th className='border-b border-ui-border px-3 py-2'>Target</th>
+                                    <th className='border-b border-ui-border px-3 py-2'>Result</th>
+                                    <th className='border-b border-ui-border px-3 py-2'>Detail</th>
                                 </tr>
                             </thead>
-                            <tbody className='divide-y divide-[#edf0f5] bg-white'>
+                            <tbody className='bg-ui-panel'>
                                 {sortedEvents.map(event => (
-                                    <tr key={event.id} className='align-top hover:bg-[#fbfcfe]'>
-                                        <td className='whitespace-nowrap px-4 py-4 text-[#596170]'>{formatTiDate(event.happenedAt)}</td>
-                                        <td className='px-4 py-4 font-mono text-[#171a21]'>{event.actor}</td>
-                                        <td className='px-4 py-4 font-mono text-[#3056d3]'>{event.action}</td>
-                                        <td className='px-4 py-4 font-mono text-[#344054]'>
-                                            <Link className='hover:text-[#3056d3] hover:underline' href={auditEventHref(event)}>{event.target}</Link>
+                                    <tr key={event.id} className='align-top transition hover:bg-ui-raised'>
+                                        <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 text-ui-muted'>{compactTime(event.happenedAt)}</td>
+                                        <td className='max-w-28 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>{event.actor}</td>
+                                        <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5 font-mono font-semibold text-ui-primary'>{event.action}</td>
+                                        <td className='max-w-44 border-b border-ui-border px-3 py-1.5 font-mono text-ui-text'>
+                                            <Link className='hover:text-ui-primary hover:underline' href={auditEventHref(event)}>{event.target}</Link>
                                         </td>
-                                        <td className='px-4 py-4'><StatusPill label={event.result} tone={failedEvents.includes(event) ? 'bad' : 'ok'} /></td>
-                                        <td className='px-4 py-4 text-[#596170]'>{event.detail}</td>
+                                        <td className='whitespace-nowrap border-b border-ui-border px-3 py-1.5'><StatusPill label={event.result} tone={failedIds.has(event.id) ? 'bad' : 'ok'} /></td>
+                                        <td className='max-w-[34rem] border-b border-ui-border px-3 py-1.5 text-ui-muted'>
+                                            <span className='line-clamp-2'>{event.detail}</span>
+                                        </td>
                                     </tr>
                                 ))}
                                 {!sortedEvents.length ? (
                                     <tr>
-                                        <td colSpan={6} className='px-4 py-8 text-center text-sm text-[#667085]'>No audit events returned by the API.</td>
+                                        <td colSpan={6} className='px-4 py-8 text-center text-sm text-ui-muted'>Audit events stream here as they arrive.</td>
                                     </tr>
                                 ) : null}
                             </tbody>
                         </table>
+                    </div>
+                </DashboardPanel>
+
+                <DashboardPanel className='min-h-0 overflow-hidden border-ui-border bg-ui-panel p-0'>
+                    <div className='border-b border-ui-border bg-ui-raised px-3 py-2'>
+                        <h2 className='text-sm font-semibold text-ui-text'>Events to review</h2>
+                        <p className='mt-0.5 text-[11px] text-ui-muted'>{failedEvents.length} event{failedEvents.length === 1 ? '' : 's'}</p>
+                    </div>
+                    <div className='max-h-[calc(100vh-19rem)] min-h-72 overflow-auto p-2'>
+                        <div className='grid gap-1.5'>
+                            {failedEvents.slice(0, 24).map(event => (
+                                <Link key={event.id} href={auditEventHref(event)} className='grid gap-1 rounded-md border border-ui-border bg-ui-raised px-2.5 py-2 text-left transition hover:border-ui-primary hover:bg-ui-panel'>
+                                    <div className='flex min-w-0 items-center justify-between gap-2'>
+                                        <span className='truncate font-mono text-[11px] font-semibold text-ui-primary'>{event.action}</span>
+                                        <StatusPill label={event.result} tone='bad' />
+                                    </div>
+                                    <p className='truncate font-mono text-[11px] text-ui-text'>{event.target}</p>
+                                    <div className='flex min-w-0 items-center justify-between gap-2 text-[10px] text-ui-muted'>
+                                        <span className='truncate'>{event.actor}</span>
+                                        <span className='shrink-0'>{shortAge(event.happenedAt)}</span>
+                                    </div>
+                                </Link>
+                            ))}
+                            {!failedEvents.length ? <p className='rounded-md border border-dashed border-ui-border p-3 text-xs text-ui-muted'>Audit stream is live; no failed events in the current window.</p> : null}
+                        </div>
                     </div>
                 </DashboardPanel>
             </div>
@@ -112,28 +111,19 @@ export default async function TiAuditPage() {
 
 function Metric({ title, value, icon, tone = 'neutral' }: { title: string, value: string, icon: ReactNode, tone?: 'neutral' | 'ok' | 'watch' | 'bad' }) {
     return (
-        <DashboardPanel className='p-4'>
+        <DashboardPanel className='border-ui-border bg-ui-panel p-3'>
             <div className={`flex items-center justify-between ${toneClass(tone).text}`}>
-                <p className='text-xs font-semibold uppercase text-[#667085]'>{title}</p>
+                <p className='text-[10px] font-semibold uppercase text-ui-muted'>{title}</p>
                 {icon}
             </div>
-            <p className='mt-3 text-2xl font-semibold capitalize text-[#171a21]'>{value}</p>
+            <p className='mt-2 truncate text-lg font-semibold capitalize text-ui-text'>{value}</p>
         </DashboardPanel>
     )
 }
 
 function StatusPill({ label, tone }: { label: string, tone: 'neutral' | 'ok' | 'watch' | 'bad' }) {
     const classes = toneClass(tone)
-    return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${classes.bg} ${classes.text}`}>{label}</span>
-}
-
-function AuditFact({ label, value }: { label: string, value: string }) {
-    return (
-        <div className='rounded-md border border-[#f3d4ca] bg-white px-2 py-1.5'>
-            <p className='text-[9px] font-semibold uppercase text-[#8c95a5]'>{label}</p>
-            <p className='mt-0.5 truncate text-xs font-semibold text-[#344054]' title={value}>{value}</p>
-        </div>
-    )
+    return <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${classes.bg} ${classes.text}`}>{label}</span>
 }
 
 function auditEventHref(event: { action: string, target: string }) {
@@ -145,19 +135,28 @@ function auditEventHref(event: { action: string, target: string }) {
     return '/dashboard/ti/workbench'
 }
 
-function auditRouteLabel(event: { action: string, target: string }) {
-    const href = auditEventHref(event)
-    if (href.endsWith('/sources')) return 'source ops'
-    if (href.endsWith('/domains')) return 'domain queue'
-    if (href.endsWith('/enrichment')) return 'actor enrichment'
-    return 'case workbench'
+function toneClass(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
+    if (tone === 'ok') return { bg: 'bg-ui-success/15', text: 'text-ui-success' }
+    if (tone === 'watch') return { bg: 'bg-ui-warning/15', text: 'text-ui-warning' }
+    if (tone === 'bad') return { bg: 'bg-ui-danger/15', text: 'text-ui-danger' }
+    return { bg: 'bg-ui-primary/15', text: 'text-ui-primary' }
 }
 
-function toneClass(tone: 'neutral' | 'ok' | 'watch' | 'bad') {
-    if (tone === 'ok') return { bg: 'bg-[#e9f8ef]', text: 'text-[#147a3b]' }
-    if (tone === 'watch') return { bg: 'bg-[#fff4d6]', text: 'text-[#8a5a00]' }
-    if (tone === 'bad') return { bg: 'bg-[#fff4f2]', text: 'text-[#a33428]' }
-    return { bg: 'bg-[#eef3ff]', text: 'text-[#3056d3]' }
+function operationalStateLabel(value: string) {
+    if (value === 'blocked') return 'syncing'
+    if (value === 'needs_action') return 'reviewing'
+    if (value === 'review') return 'reviewing'
+    return value.replaceAll('_', ' ')
+}
+
+function compactTime(value: string) {
+    return new Intl.DateTimeFormat('en', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Europe/Oslo',
+    }).format(new Date(value))
 }
 
 function shortTime(value: string) {
@@ -172,7 +171,7 @@ function shortTime(value: string) {
 
 function shortAge(value: string) {
     const delta = Date.now() - new Date(value).getTime()
-    if (!Number.isFinite(delta)) return 'unknown'
+    if (!Number.isFinite(delta)) return 'checking'
     const minutes = Math.max(0, Math.round(delta / 60_000))
     if (minutes < 60) return `${minutes}m`
     const hours = Math.round(minutes / 60)

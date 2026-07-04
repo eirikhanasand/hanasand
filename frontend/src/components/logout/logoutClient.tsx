@@ -17,8 +17,8 @@ export default function LogoutClient({ logoutServer }: { logoutServer: boolean }
     }
 
     return (
-        <div className='absolute top-0 left-0 p-10 grid place-items-center w-full'>
-            <Notify background='bg-dark/60 outline outline-dark' className='w-sm' color='bg-blue-800/80' fullWidth message='Successfully logged out. Welcome back later!' />
+        <div className='absolute left-0 top-0 grid w-full place-items-center p-10'>
+            <Notify className='w-sm' color='info' fullWidth message='Successfully logged out. Welcome back later!' />
         </div>
     )
 }

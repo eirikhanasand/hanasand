@@ -88,7 +88,7 @@ export default function Content({
     }, [id, setTest, reconnect, setIsConnected, setParticipants, setRerun, setError])
 
     return (
-        <div className='min-h-[30rem] min-w-0 max-w-full space-y-3 overflow-hidden rounded-lg border border-[#dfe5ee] bg-white p-3 shadow-sm dark:border-[#233149] dark:bg-[#101827] md:h-full'>
+        <div className='min-h-[30rem] min-w-0 max-w-full space-y-3 overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm md:h-full'>
             <TestContent test={test} showLogs={showLogs} showErrors={showErrors} />
             <ErrorNotice compact message={error as string | null} />
         </div>

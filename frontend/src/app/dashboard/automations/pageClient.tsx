@@ -21,9 +21,9 @@ const maxActiveAutomations = 10
 const dwmWebhookDraftKey = 'hanasand:dwm-webhook-subscription'
 const draftSelectionId = '__new_alert_draft__'
 const discordWebhookFileDestination = 'discord-webhook-file:/Users/eirikhanasand/Desktop/webhooktoday.txt'
-const inputClass = 'rounded-lg border border-[#27364f] bg-[#080e18] px-3 py-2 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#6e7d92] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
-const disclosureClass = 'rounded-lg border border-[#27364f] bg-[#0b121e]'
-const disclosureSummaryClass = 'flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-[#edf4ff] outline-none transition hover:bg-[#15284b] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'
+const inputClass = 'rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+const disclosureClass = 'rounded-lg border border-ui-border bg-ui-raised'
+const disclosureSummaryClass = 'flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'
 const newAutomationDraft = (prompt = ''): AutomationPayload => ({
     name: 'General system alert',
     prompt,
@@ -244,27 +244,27 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 
     return (
         <div className='grid min-h-0 gap-3 xl:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]'>
-            <section className='rounded-lg border border-[#26344d] bg-[#101827] p-2 shadow-sm'>
+            <section className='rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm'>
                 <div className='mb-2 flex items-center justify-between gap-2 px-2 py-1'>
                     <div>
-                        <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Route queue</p>
-                        <h2 className='text-sm font-semibold text-[#edf4ff]'>{routeQueueHeadline(automations.length, failingAutomationCount)}</h2>
-                        <p className='mt-0.5 text-xs text-[#8fa0ba]'>{activeAutomationCount}/{maxActiveAutomations} active routes</p>
+                        <p className='text-[10px] font-semibold uppercase text-ui-primary'>Route queue</p>
+                        <h2 className='text-sm font-semibold text-ui-text'>{routeQueueHeadline(automations.length, failingAutomationCount)}</h2>
+                        <p className='mt-0.5 text-xs text-ui-muted'>{activeAutomationCount}/{maxActiveAutomations} active routes</p>
                     </div>
-                    <button type='button' className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#27364f] bg-[#0f1726] text-[#9db8ff] hover:bg-[#162033]' onClick={newAutomation} title='New alert' aria-label='New alert'>
+                    <button type='button' className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary hover:bg-ui-panel' onClick={newAutomation} title='New alert' aria-label='New alert'>
                         <Plus className='h-4 w-4' />
                     </button>
                 </div>
-                <details className='mb-2 rounded-lg border border-[#27364f] bg-[#0b121e]'>
-                    <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-2 py-2 text-xs font-semibold text-[#dbe7ff] outline-none hover:bg-[#15284b] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'>
+                <details className='mb-2 rounded-lg border border-ui-border bg-ui-raised'>
+                    <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-2 py-2 text-xs font-semibold text-ui-text outline-none hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
                         <span>Templates</span>
-                        <span className='text-[#8fa0ba]'>Mail, Discord</span>
+                        <span className='text-ui-muted'>Mail, Discord</span>
                     </summary>
-                    <div className='grid grid-cols-2 gap-2 border-t border-[#27364f] p-2'>
-                        <button type='button' className='rounded-lg border border-[#27364f] bg-[#0f1726] px-2 py-2 text-left text-xs font-semibold text-[#dbe7ff] hover:border-[#3c5072] hover:bg-[#15284b]' onClick={useMailAlertTemplate}>
+                    <div className='grid grid-cols-2 gap-2 border-t border-ui-border p-2'>
+                        <button type='button' className='rounded-lg border border-ui-border bg-ui-raised px-2 py-2 text-left text-xs font-semibold text-ui-text hover:border-ui-primary/40 hover:bg-ui-panel' onClick={useMailAlertTemplate}>
                             Mail health
                         </button>
-                        <button type='button' className='rounded-lg border border-[#27364f] bg-[#0f1726] px-2 py-2 text-left text-xs font-semibold text-[#dbe7ff] hover:border-[#3c5072] hover:bg-[#15284b]' onClick={useSystemAlertTemplate}>
+                        <button type='button' className='rounded-lg border border-ui-border bg-ui-raised px-2 py-2 text-left text-xs font-semibold text-ui-text hover:border-ui-primary/40 hover:bg-ui-panel' onClick={useSystemAlertTemplate}>
                             Discord alert
                         </button>
                     </div>
@@ -273,33 +273,33 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     {automations.map(automation => (
                         <button
                             key={automation.id}
-                            className={`rounded-lg border p-3 text-left transition ${automation.id === selectedId ? 'border-[#3c5072] bg-[#15284b]' : 'border-[#27364f] bg-[#0b121e] hover:bg-[#15284b]'}`}
+                            className={`rounded-lg border p-3 text-left transition ${automation.id === selectedId ? 'border-ui-primary/40 bg-ui-panel' : 'border-ui-border bg-ui-raised hover:bg-ui-panel'}`}
                             onClick={() => void selectAutomation(automation)}
                         >
                             <div className='flex items-center justify-between gap-2'>
-                                <span className='truncate text-sm font-semibold text-[#edf4ff]'>{automation.name}</span>
-                                <span className={`rounded-full px-2 py-0.5 text-[11px] ${automation.status === 'active' ? 'bg-[#0c261c] text-[#9cf0bc]' : 'bg-[#152033] text-[#aab7cc]'}`}>{automation.status}</span>
+                                <span className='truncate text-sm font-semibold text-ui-text'>{automation.name}</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[11px] ${automation.status === 'active' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-raised text-ui-muted'}`}>{automation.status}</span>
                             </div>
-                            <div className='mt-3 grid grid-cols-2 gap-2 text-[11px] text-[#8fa0ba]'>
+                            <div className='mt-3 grid grid-cols-2 gap-2 text-[11px] text-ui-muted'>
                                 <QueueFact label='Next' value={shortDate(automation.nextRunAt || automation.runAt)} />
                                 <QueueFact label='Last' value={automation.lastStatus || 'checking'} tone={automation.consecutiveFailures ? 'bad' : automation.lastStatus === 'completed' ? 'ok' : 'neutral'} />
                             </div>
                             <div className='mt-2 flex items-center justify-between gap-2'>
-                                <p className='truncate text-[11px] text-[#8fa0ba]'>{alertCategoryLabel(automation.actionType)}</p>
-                                <p className='truncate text-right text-[11px] font-semibold text-[#aab7cc]'>{deliveryTargetLabel(automation.modelName, automation.actionType)}</p>
+                                <p className='truncate text-[11px] text-ui-muted'>{alertCategoryLabel(automation.actionType)}</p>
+                                <p className='truncate text-right text-[11px] font-semibold text-ui-muted'>{deliveryTargetLabel(automation.modelName, automation.actionType)}</p>
                             </div>
                         </button>
                     ))}
-                    {!automations.length && <p className='p-3 text-sm leading-6 text-[#aab7cc]'>Alert routing is ready. Create a monitoring, mail, system, or delivery-test route to start checks.</p>}
+                    {!automations.length && <p className='p-3 text-sm leading-6 text-ui-muted'>Alert routing is ready. Create a monitoring, mail, system, or delivery-test route to start checks.</p>}
                 </div>
             </section>
 
-            <section className='rounded-lg border border-[#26344d] bg-[#101827] p-4 shadow-sm'>
+            <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
                 <div className='grid gap-4'>
                     <div className='flex flex-wrap items-center justify-between gap-2'>
                         <div>
-                            <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Alert control</p>
-                            <h2 className='text-lg font-semibold text-[#edf4ff]'>{selected ? selected.name : 'New alert'}</h2>
+                            <p className='text-[10px] font-semibold uppercase text-ui-primary'>Alert control</p>
+                            <h2 className='text-lg font-semibold text-ui-text'>{selected ? selected.name : 'New alert'}</h2>
                         </div>
                         <div className='flex flex-wrap gap-2'>
                             <IconButton label='Refresh' icon={<RefreshCw className='h-4 w-4' />} onClick={() => void load()} />
@@ -307,7 +307,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                         </div>
                     </div>
 
-                    <section className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+                    <section className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                         <div className='grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center'>
                             <div className='min-w-0'>
                                 <div className='flex flex-wrap items-center gap-2'>
@@ -315,36 +315,36 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                         <DeliveryIcon status={selected?.lastStatus} failures={selected?.consecutiveFailures || 0} />
                                         {selectedHealth.label}
                                     </span>
-                                    <span className='rounded-full border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff]'>
+                                    <span className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-text'>
                                         {alertCategoryLabel(draft.actionType)}
                                     </span>
-                                    <span className='rounded-full border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff]'>
+                                    <span className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-text'>
                                         {deliveryTargetLabel(draft.modelName, draft.actionType)}
                                     </span>
                                 </div>
-                                <p className='mt-2 text-sm leading-6 text-[#aab7cc]'>{selectedHealth.detail}</p>
+                                <p className='mt-2 text-sm leading-6 text-ui-muted'>{selectedHealth.detail}</p>
                             </div>
-                            <div className='grid min-w-40 gap-1 rounded-lg border border-[#27364f] bg-[#0f1726] px-3 py-2 text-sm'>
-                                <span className='text-[10px] font-semibold uppercase text-[#8fa0ba]'>Next check</span>
-                                <span className='font-semibold text-[#edf4ff]'>{selected ? shortDate(selected.nextRunAt || selected.runAt) : 'After create'}</span>
-                                <span className='text-xs text-[#8fa0ba]'>{scheduleShort(selected || draft)}</span>
+                            <div className='grid min-w-40 gap-1 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm'>
+                                <span className='text-[10px] font-semibold uppercase text-ui-muted'>Next check</span>
+                                <span className='font-semibold text-ui-text'>{selected ? shortDate(selected.nextRunAt || selected.runAt) : 'After create'}</span>
+                                <span className='text-xs text-ui-muted'>{scheduleShort(selected || draft)}</span>
                             </div>
                         </div>
                     </section>
 
                     {webhookDraft && (
-                        <div className='rounded-lg border border-[#3c5072] bg-[#15284b] p-4'>
+                        <div className='rounded-lg border border-ui-primary/40 bg-ui-panel p-4'>
                             <div className='flex flex-col gap-3 md:flex-row md:items-start md:justify-between'>
                                 <div className='min-w-0'>
-                                    <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Dark web monitoring</p>
-                                    <h3 className='mt-1 text-sm font-semibold text-[#edf4ff]'>Webhook route ready to create</h3>
-                                    <p className='mt-1 text-sm leading-6 text-[#aab7cc]'>Watch {formatTerms(webhookDraft.terms)} and send matched exposure alerts to {redactWebhookEndpoint(webhookDraft.endpoint)}.</p>
+                                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Dark web monitoring</p>
+                                    <h3 className='mt-1 text-sm font-semibold text-ui-text'>Webhook route ready to create</h3>
+                                    <p className='mt-1 text-sm leading-6 text-ui-muted'>Watch {formatTerms(webhookDraft.terms)} and send matched exposure alerts to {redactWebhookEndpoint(webhookDraft.endpoint)}.</p>
                                 </div>
                                 <div className='flex shrink-0 flex-wrap gap-2'>
-                                    <button type='button' onClick={useWebhookDraft} className='rounded-lg bg-[#315fe8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#426ef0]'>
+                                    <button type='button' onClick={useWebhookDraft} className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90'>
                                         Use route
                                     </button>
-                                    <button type='button' onClick={clearWebhookDraft} className='rounded-lg border border-[#27364f] bg-[#0f1726] px-3 py-2 text-sm font-semibold text-[#aab7cc] hover:border-[#3c5072] hover:text-[#edf4ff]'>
+                                    <button type='button' onClick={clearWebhookDraft} className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-muted hover:border-ui-primary/40 hover:text-ui-text'>
                                         Clear
                                     </button>
                                 </div>
@@ -353,37 +353,37 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     )}
 
                     {!webhookDraft && initialSetup && (
-                        <div className='rounded-lg border border-[#3c5072] bg-[#15284b] p-4'>
+                        <div className='rounded-lg border border-ui-primary/40 bg-ui-panel p-4'>
                             <div className='flex flex-col gap-3 md:flex-row md:items-start md:justify-between'>
                                 <div className='min-w-0'>
-                                    <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Dark web monitoring</p>
-                                    <h3 className='mt-1 text-sm font-semibold text-[#edf4ff]'>Webhook route ready to create</h3>
-                                    <p className='mt-1 text-sm leading-6 text-[#aab7cc]'>The route is prefilled for company, domain, vendor, and product monitoring. Add the delivery endpoint, then create it.</p>
+                                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Dark web monitoring</p>
+                                    <h3 className='mt-1 text-sm font-semibold text-ui-text'>Webhook route ready to create</h3>
+                                    <p className='mt-1 text-sm leading-6 text-ui-muted'>The route is prefilled for company, domain, vendor, and product monitoring. Add the delivery endpoint, then create it.</p>
                                 </div>
-                                <button type='button' onClick={() => setStatus('Review the route and create it to start delivery.')} className='shrink-0 rounded-lg bg-[#315fe8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#426ef0]'>
+                                <button type='button' onClick={() => setStatus('Review the route and create it to start delivery.')} className='shrink-0 rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90'>
                                     Use route
                                 </button>
                             </div>
                         </div>
                     )}
 
-                    <section className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+                    <section className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                         <div className='mb-3 flex items-center justify-between gap-3'>
                             <div>
-                                <h3 className='text-sm font-semibold text-[#edf4ff]'>Alert settings</h3>
-                                <p className='mt-0.5 text-xs text-[#8fa0ba]'>Start with the route name, alert type, and where notifications should go.</p>
+                                <h3 className='text-sm font-semibold text-ui-text'>Alert settings</h3>
+                                <p className='mt-0.5 text-xs text-ui-muted'>Start with the route name, alert type, and where notifications should go.</p>
                             </div>
-                            <span className={draft.status === 'active' ? 'rounded-full bg-[#0c261c] px-2 py-1 text-xs font-semibold text-[#9cf0bc]' : 'rounded-full bg-[#152033] px-2 py-1 text-xs font-semibold text-[#aab7cc]'}>
+                            <span className={draft.status === 'active' ? 'rounded-full bg-ui-success/10 px-2 py-1 text-xs font-semibold text-ui-success' : 'rounded-full bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'}>
                                 {draft.status}
                             </span>
                         </div>
                         <div className='grid gap-3 md:grid-cols-3'>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-[#aab7cc]'>Alert name</span>
+                                <span className='text-xs font-medium text-ui-muted'>Alert name</span>
                                 <input className={inputClass} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} />
                             </label>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-[#aab7cc]'>Alert type</span>
+                                <span className='text-xs font-medium text-ui-muted'>Alert type</span>
                                 <select className={inputClass} value={draft.actionType} onChange={event => setDraft({ ...draft, actionType: event.target.value as AutomationPayload['actionType'] })}>
                                     <option value='agent_prompt'>Monitoring check</option>
                                     <option value='mail_health_check'>Mail health alert</option>
@@ -392,7 +392,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                 </select>
                             </label>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-[#aab7cc]'>Destination</span>
+                                <span className='text-xs font-medium text-ui-muted'>Destination</span>
                                 <input className={inputClass} value={draft.modelName || ''} placeholder='discord-webhook-file:/absolute/path, webhook, email, or analyst review' onChange={event => setDraft({ ...draft, modelName: event.target.value.trim() || null })} />
                             </label>
                         </div>
@@ -401,33 +401,33 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     <details data-testid='automation-schedule-settings' className={disclosureClass}>
                         <summary className={disclosureSummaryClass}>
                             <span>Schedule and notification policy</span>
-                            <span className='text-xs font-medium text-[#8fa0ba]'>{scheduleShort(draft)} · {draft.notifyOn || 'failure'}</span>
+                            <span className='text-xs font-medium text-ui-muted'>{scheduleShort(draft)} · {draft.notifyOn || 'failure'}</span>
                         </summary>
-                        <div className='grid gap-3 border-t border-[#27364f] p-3 md:grid-cols-2 2xl:grid-cols-5'>
+                        <div className='grid gap-3 border-t border-ui-border p-3 md:grid-cols-2 2xl:grid-cols-5'>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-[#aab7cc]'>Cadence</span>
+                                <span className='text-xs font-medium text-ui-muted'>Cadence</span>
                                 <select className={inputClass} value={draft.scheduleKind} onChange={event => setDraft({ ...draft, scheduleKind: event.target.value as AutomationPayload['scheduleKind'] })}>
                                     <option value='interval'>Recurring</option>
                                     <option value='once'>Once</option>
                                 </select>
                             </label>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-[#aab7cc]'>Check every</span>
+                                <span className='text-xs font-medium text-ui-muted'>Check every</span>
                                 <input className={`${inputClass} disabled:opacity-45`} type='number' min={1} disabled={draft.scheduleKind !== 'interval'} value={draft.intervalMinutes || 30} onChange={event => setDraft({ ...draft, intervalMinutes: Number(event.target.value) })} />
                             </label>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-[#aab7cc]'>First check</span>
+                                <span className='text-xs font-medium text-ui-muted'>First check</span>
                                 <input className={`${inputClass} disabled:opacity-45`} type='datetime-local' disabled={draft.scheduleKind !== 'once'} value={draft.runAt || ''} onChange={event => setDraft({ ...draft, runAt: event.target.value })} />
                             </label>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-[#aab7cc]'>Status</span>
+                                <span className='text-xs font-medium text-ui-muted'>Status</span>
                                 <select className={inputClass} value={draft.status} onChange={event => setDraft({ ...draft, status: event.target.value as AutomationPayload['status'] })}>
                                     <option value='active'>Active</option>
                                     <option value='paused'>Paused</option>
                                 </select>
                             </label>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-[#aab7cc]'>Notify</span>
+                                <span className='text-xs font-medium text-ui-muted'>Notify</span>
                                 <select className={inputClass} value={draft.notifyOn || 'failure'} onChange={event => setDraft({ ...draft, notifyOn: event.target.value as AutomationPayload['notifyOn'] })}>
                                     <option value='failure'>Delivery issues</option>
                                     <option value='always'>Every check</option>
@@ -435,7 +435,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                 </select>
                             </label>
                             <label className='grid gap-1.5 2xl:col-span-2'>
-                                <span className='text-xs font-medium text-[#aab7cc]'>Timezone</span>
+                                <span className='text-xs font-medium text-ui-muted'>Timezone</span>
                                 <input className={inputClass} value={draft.timezone || 'UTC'} onChange={event => setDraft({ ...draft, timezone: event.target.value })} />
                             </label>
                         </div>
@@ -444,14 +444,14 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     <details data-testid='automation-matching-rules' className={disclosureClass}>
                         <summary className={disclosureSummaryClass}>
                             <span>Matching rules</span>
-                            <span className='min-w-0 truncate text-right text-xs font-medium text-[#8fa0ba]'>{extractRuleTerms(draft.prompt)}</span>
+                            <span className='min-w-0 truncate text-right text-xs font-medium text-ui-muted'>{extractRuleTerms(draft.prompt)}</span>
                         </summary>
-                        <div className='grid gap-3 border-t border-[#27364f] p-3 lg:grid-cols-[1fr_0.55fr]'>
+                        <div className='grid gap-3 border-t border-ui-border p-3 lg:grid-cols-[1fr_0.55fr]'>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-[#aab7cc]'>Prompt and match policy</span>
+                                <span className='text-xs font-medium text-ui-muted'>Prompt and match policy</span>
                                 <textarea className={`${inputClass} min-h-28 leading-6`} value={draft.prompt} onChange={event => setDraft({ ...draft, prompt: event.target.value })} />
                             </label>
-                            <div className='grid content-start gap-2 rounded-lg border border-[#27364f] bg-[#0f1726] p-3 text-xs text-[#aab7cc]'>
+                            <div className='grid content-start gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 text-xs text-ui-muted'>
                                 <RouteRule label='Terms' value={extractRuleTerms(draft.prompt)} />
                                 <RouteRule label='Payload' value={draft.prompt.toLowerCase().includes('actor') && draft.prompt.toLowerCase().includes('matchedterm') ? 'actor + match fields' : 'custom fields'} />
                                 <RouteRule label='Filter' value={draft.prompt.toLowerCase().includes('only send') ? 'new or updated matches' : 'all matches'} />
@@ -462,30 +462,30 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     </details>
 
                     {selected?.pausedReason && (
-                        <div className='rounded-lg border border-[#6f551f] bg-[#241d0f] p-3 text-sm leading-6 text-[#ffd58a]'>
+                        <div className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 text-sm leading-6 text-ui-warning'>
                             {selected.pausedReason}
                         </div>
                     )}
 
                     <div className='flex flex-wrap items-center gap-2'>
-                        <button type='button' className='inline-flex items-center gap-2 rounded-lg bg-[#315fe8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#426ef0] disabled:opacity-50' onClick={() => void saveAutomation()} disabled={busy === 'save'}>
+                        <button type='button' className='inline-flex items-center gap-2 rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50' onClick={() => void saveAutomation()} disabled={busy === 'save'}>
                             <WandSparkles className='h-4 w-4' />
                             {selected ? 'Save alert' : 'Create alert'}
                         </button>
-                        <button type='button' className='rounded-lg border border-[#27364f] bg-[#0f1726] px-3 py-2 text-sm font-semibold text-[#aab7cc] hover:border-[#3c5072] hover:text-[#edf4ff]' onClick={cancelDraft} disabled={busy === 'save'}>
+                        <button type='button' className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-muted hover:border-ui-primary/40 hover:text-ui-text' onClick={cancelDraft} disabled={busy === 'save'}>
                             Cancel
                         </button>
-                        {status && <span className='text-sm text-[#aab7cc]'>{status}</span>}
+                        {status && <span className='text-sm text-ui-muted'>{status}</span>}
                     </div>
 
                     {selected && (
                         <details className={disclosureClass}>
                             <summary className={disclosureSummaryClass}>
                                 <span>More route actions</span>
-                                <span className='text-xs font-medium text-[#8fa0ba]'>Secondary</span>
+                                <span className='text-xs font-medium text-ui-muted'>Secondary</span>
                             </summary>
-                            <div className='flex flex-wrap items-center justify-between gap-3 border-t border-[#27364f] p-3'>
-                                <p className='text-sm text-[#aab7cc]'>Delete this alert route only when the delivery path is no longer owned or useful.</p>
+                            <div className='flex flex-wrap items-center justify-between gap-3 border-t border-ui-border p-3'>
+                                <p className='text-sm text-ui-muted'>Delete this alert route only when the delivery path is no longer owned or useful.</p>
                                 <IconButton label='Delete' icon={<Trash2 className='h-4 w-4' />} tone='danger' onClick={() => void removeAutomation(selected.id)} disabled={busy.startsWith('delete-')} />
                             </div>
                         </details>
@@ -495,9 +495,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                         <details data-testid='automation-run-history' className={disclosureClass}>
                             <summary className={disclosureSummaryClass}>
                                 <span>Run history</span>
-                                <span className='text-xs font-medium text-[#8fa0ba]'>{selected.runCount} checks · latest {selected.lastStatus || 'checking'}</span>
+                                <span className='text-xs font-medium text-ui-muted'>{selected.runCount} checks · latest {selected.lastStatus || 'checking'}</span>
                             </summary>
-                            <div className='grid gap-3 border-t border-[#27364f] p-3'>
+                            <div className='grid gap-3 border-t border-ui-border p-3'>
                                 <div className='grid gap-2 sm:grid-cols-4'>
                                     <InfoCard icon={<CalendarClock className='h-4 w-4' />} label='Next check' value={formatDate(selected.nextRunAt)} />
                                     <InfoCard icon={<DeliveryIcon status={selected.lastStatus} failures={selected.consecutiveFailures || 0} />} label='Latest result' value={`${selected.lastStatus || 'Checking'}${selected.consecutiveFailures ? ` · ${selected.consecutiveFailures} issues` : ''}`} />
@@ -506,17 +506,17 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                 </div>
                                 <div className='grid gap-2'>
                                     {runs.map(run => (
-                                        <div key={run.id} className='rounded-lg border border-[#27364f] bg-[#0f1726] p-3'>
-                                            <div className='flex flex-wrap items-center justify-between gap-2 text-xs text-[#8fa0ba]'>
+                                        <div key={run.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'>
+                                            <div className='flex flex-wrap items-center justify-between gap-2 text-xs text-ui-muted'>
                                                 <span>{formatDate(run.startedAt)}</span>
-                                                <span className={run.status === 'failed' ? 'font-semibold text-[#ffb598]' : run.status === 'completed' ? 'font-semibold text-[#9cf0bc]' : 'font-semibold text-[#9db8ff]'}>{run.status}{run.durationMs ? ` · ${(run.durationMs / 1000).toFixed(1)}s` : ''}</span>
+                                                <span className={run.status === 'failed' ? 'font-semibold text-ui-danger' : run.status === 'completed' ? 'font-semibold text-ui-success' : 'font-semibold text-ui-primary'}>{run.status}{run.durationMs ? ` · ${(run.durationMs / 1000).toFixed(1)}s` : ''}</span>
                                             </div>
                                             {run.status === 'failed'
                                                 ? <ErrorNotice compact className='mt-2' message={run.error || run.result || 'Run failed.'} />
-                                                : <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-[#aab7cc]'>{run.result || 'Running...'}</p>}
+                                                : <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-ui-muted'>{run.result || 'Running...'}</p>}
                                         </div>
                                     ))}
-                                    {!runs.length && <p className='text-sm leading-6 text-[#aab7cc]'>This route is armed. Use Check now to record the first run, or let the scheduled check write the next row.</p>}
+                                    {!runs.length && <p className='text-sm leading-6 text-ui-muted'>This route is armed. Use Check now to record the first run, or let the scheduled check write the next row.</p>}
                                 </div>
                             </div>
                         </details>
@@ -536,7 +536,7 @@ function routeQueueHeadline(total: number, failing: number) {
 
 function IconButton({ label, icon, onClick, tone = 'default', disabled = false }: { label: string, icon: React.ReactNode, onClick: () => void, tone?: 'default' | 'danger', disabled?: boolean }) {
     return (
-        <button type='button' title={label} disabled={disabled} onClick={onClick} className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold disabled:opacity-50 ${tone === 'danger' ? 'border-[#7a3520] bg-[#2c160f] text-[#ffb598] hover:bg-[#3a1b12]' : 'border-[#27364f] bg-[#0f1726] text-[#aab7cc] hover:border-[#3c5072] hover:text-[#edf4ff]'}`}>
+        <button type='button' title={label} disabled={disabled} onClick={onClick} className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold disabled:opacity-50 ${tone === 'danger' ? 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger hover:bg-ui-danger/15' : 'border-ui-border bg-ui-raised text-ui-muted hover:border-ui-primary/40 hover:text-ui-text'}`}>
             {icon}
             {label}
         </button>
@@ -545,42 +545,42 @@ function IconButton({ label, icon, onClick, tone = 'default', disabled = false }
 
 function InfoCard({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
     return (
-        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
-            <div className='mb-2 text-[#9db8ff]'>{icon}</div>
-            <p className='text-[11px] uppercase text-[#8fa0ba]'>{label}</p>
-            <p className='mt-1 truncate text-sm font-semibold text-[#edf4ff]'>{value}</p>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
+            <div className='mb-2 text-ui-primary'>{icon}</div>
+            <p className='text-[11px] uppercase text-ui-muted'>{label}</p>
+            <p className='mt-1 truncate text-sm font-semibold text-ui-text'>{value}</p>
         </div>
     )
 }
 
 function routeHealthToneClass(tone: 'ok' | 'bad' | 'neutral') {
-    if (tone === 'bad') return 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
-    if (tone === 'ok') return 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'
-    return 'border-[#27364f] bg-[#0f1726] text-[#9db8ff]'
+    if (tone === 'bad') return 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+    if (tone === 'ok') return 'border-ui-success/35 bg-ui-success/10 text-ui-success'
+    return 'border-ui-border bg-ui-raised text-ui-primary'
 }
 
 function RouteRule({ label, value }: { label: string, value: string }) {
     return (
-        <div className='flex items-center justify-between gap-3 rounded-lg border border-[#27364f] bg-[#0f1726] px-3 py-2'>
-            <span className='font-semibold text-[#8fa0ba]'>{label}</span>
-            <span className='truncate text-right font-semibold text-[#edf4ff]' title={value}>{value}</span>
+        <div className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
+            <span className='font-semibold text-ui-muted'>{label}</span>
+            <span className='truncate text-right font-semibold text-ui-text' title={value}>{value}</span>
         </div>
     )
 }
 
 function QueueFact({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'ok' | 'bad' }) {
-    const toneClass = tone === 'bad' ? 'text-[#ffb598]' : tone === 'ok' ? 'text-[#9cf0bc]' : 'text-[#dbe7ff]'
+    const toneClass = tone === 'bad' ? 'text-ui-danger' : tone === 'ok' ? 'text-ui-success' : 'text-ui-text'
     return (
-        <div className='rounded-md border border-[#27364f] bg-[#0f1726] px-2 py-1'>
-            <p className='text-[9px] font-semibold uppercase text-[#8fa0ba]'>{label}</p>
+        <div className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>
+            <p className='text-[9px] font-semibold uppercase text-ui-muted'>{label}</p>
             <p className={`mt-0.5 truncate font-semibold ${toneClass}`}>{value}</p>
         </div>
     )
 }
 
 function DeliveryIcon({ status, failures }: { status?: string | null, failures: number }) {
-    if (failures || status === 'failed') return <AlertTriangle className='h-4 w-4 text-[#ffb598]' />
-    if (status === 'completed' || status === 'success') return <CheckCircle2 className='h-4 w-4 text-[#9cf0bc]' />
+    if (failures || status === 'failed') return <AlertTriangle className='h-4 w-4 text-ui-danger' />
+    if (status === 'completed' || status === 'success') return <CheckCircle2 className='h-4 w-4 text-ui-success' />
     return <Send className='h-4 w-4' />
 }
 

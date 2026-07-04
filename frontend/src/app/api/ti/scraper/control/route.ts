@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
             maxTasks: 40,
             tenantId: 'hanasand-dashboard',
             requesterId: 'dashboard/ti/control',
-            reason: 'operator requested source operations run',
+            reason: 'operator requested collection run',
         })
     }
 
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
             approveMetadataOnly: body.approveMetadataOnly === true,
             approvedBy: 'dashboard/ti/control',
             decidedBy: 'dashboard/ti/control',
-            reason: body.reason || 'operator source action from source operations workbench',
+            reason: body.reason || 'operator source action from collection view',
         })
     }
 

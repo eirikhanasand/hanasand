@@ -50,10 +50,10 @@ function LiveScanner({ data, scanStatus }: { data: GetVulnerabilities | null, sc
     const tone = state === 'scanning' || state === 'watching' ? 'ok' : state === 'blocked' ? 'bad' : 'watch'
 
     return (
-        <section className='mb-3 overflow-hidden rounded-lg border border-[#22334d] bg-[#0f172a]'>
-            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#22334d] bg-[#101722] px-3 py-2.5'>
-                <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-[#d8deea]'>
-                    <Radar className='h-4 w-4 text-[#9db4ff]' />
+        <section className='mb-3 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-3 py-2.5'>
+                <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text'>
+                    <Radar className='h-4 w-4 text-ui-primary' />
                     Continuous scanner
                 </div>
                 <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${toneClass(tone)}`}>{operationalStateLabel(state)}</span>
@@ -64,12 +64,12 @@ function LiveScanner({ data, scanStatus }: { data: GetVulnerabilities | null, sc
                 <LiveFact icon={<Clock3 className='h-4 w-4' />} label='next action' value={scanStatus.paused ? 'paused' : scanStatus.nextRunAt ? shortTime(scanStatus.nextRunAt) : 'watching images'} detail={customerOperationalText(scanStatus.blockerAction || scanStatus.staleReason || scanStatus.lastError || 'Scanner is healthy and publishing findings')} tone={scanStatus.blocker || scanStatus.lastError || scanStatus.stale ? 'watch' : 'ok'} />
             </div>
             {scanStatus.logs.length ? (
-                <div className='grid border-t border-[#22334d] bg-[#0b1220]'>
+                <div className='grid border-t border-ui-border bg-ui-raised'>
                     {scanStatus.logs.slice(-4).reverse().map(log => (
-                        <div key={`${log.at}-${log.message}`} className='grid grid-cols-[8rem_4rem_minmax(0,1fr)] gap-3 border-b border-[#1f314a] px-3 py-1.5 text-xs last:border-b-0'>
-                            <span className='font-mono text-[#8795ad]'>{shortTime(log.at)}</span>
-                            <span className={log.level === 'error' ? 'font-semibold text-[#ff9b6b]' : log.level === 'warn' ? 'font-semibold text-[#f6b45f]' : 'font-semibold text-[#9db4ff]'}>{log.level}</span>
-                            <span className='line-clamp-1 text-[#aab6ca]'><TerminalSquare className='mr-1 inline h-3.5 w-3.5' />{log.message}</span>
+                        <div key={`${log.at}-${log.message}`} className='grid grid-cols-[8rem_4rem_minmax(0,1fr)] gap-3 border-b border-ui-border px-3 py-1.5 text-xs last:border-b-0'>
+                            <span className='font-mono text-ui-muted'>{shortTime(log.at)}</span>
+                            <span className={log.level === 'error' ? 'font-semibold text-ui-danger' : log.level === 'warn' ? 'font-semibold text-ui-warning' : 'font-semibold text-ui-primary'}>{log.level}</span>
+                            <span className='line-clamp-1 text-ui-muted'><TerminalSquare className='mr-1 inline h-3.5 w-3.5' />{log.message}</span>
                         </div>
                     ))}
                 </div>
@@ -80,27 +80,27 @@ function LiveScanner({ data, scanStatus }: { data: GetVulnerabilities | null, sc
 
 function LiveFact({ icon, label, value, detail, tone }: { icon: ReactNode, label: string, value: string, detail: string, tone: 'ok' | 'watch' | 'bad' }) {
     return (
-        <div className='min-w-0 rounded-md border border-[#22334d] bg-[#0b1220] p-2.5'>
+        <div className='min-w-0 rounded-md border border-ui-border bg-ui-raised p-2.5'>
             <div className={`flex items-center gap-2 ${toneText(tone)}`}>
                 {icon}
                 <p className='text-[10px] font-semibold uppercase'>{label}</p>
             </div>
-            <p className='mt-2 line-clamp-1 text-sm font-semibold text-[#d8deea]'>{value}</p>
-            <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#aab6ca]'>{detail}</p>
+            <p className='mt-2 line-clamp-1 text-sm font-semibold text-ui-text'>{value}</p>
+            <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted'>{detail}</p>
         </div>
     )
 }
 
 function toneClass(tone: 'ok' | 'watch' | 'bad') {
-    if (tone === 'ok') return 'border-[#285c3b] bg-[#102318] text-[#7bd39a]'
-    if (tone === 'bad') return 'border-[#6d3a20] bg-[#29130b] text-[#ff9b6b]'
-    return 'border-[#6f4a19] bg-[#281a0b] text-[#f6b45f]'
+    if (tone === 'ok') return 'border-ui-success/35 bg-ui-success/10 text-ui-success'
+    if (tone === 'bad') return 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+    return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
 }
 
 function toneText(tone: 'ok' | 'watch' | 'bad') {
-    if (tone === 'ok') return 'text-[#7bd39a]'
-    if (tone === 'bad') return 'text-[#ff9b6b]'
-    return 'text-[#f6b45f]'
+    if (tone === 'ok') return 'text-ui-success'
+    if (tone === 'bad') return 'text-ui-danger'
+    return 'text-ui-warning'
 }
 
 function operationalStateLabel(value: string) {

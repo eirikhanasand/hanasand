@@ -34,7 +34,7 @@ function Weeks() {
     }
 
     for (let i = 0; i < 52; i++) {
-        data.push(<Week data={get7Numbers()} />)
+        data.push(<Week key={i} data={get7Numbers()} />)
     }
 
     return data
@@ -45,11 +45,11 @@ function Week({data}: {data: number[]}) {
     const cell = 'h-2.5 w-2.5 rounded-sm'
 
     function getCellColor(value: number): string {
-        if (value < 4000) return 'bg-gray-800'
-        if (value < 7500) return 'bg-green-900'
-        if (value < 12000) return 'bg-green-700'
-        if (value < 16000) return 'bg-green-600'
-        return 'bg-green-400'
+        if (value < 4000) return 'bg-ui-border'
+        if (value < 7500) return 'bg-ui-success/25'
+        if (value < 12000) return 'bg-ui-success/45'
+        if (value < 16000) return 'bg-ui-success/70'
+        return 'bg-ui-success'
     }
 
     for (let i = 0; i < 7; i++) {

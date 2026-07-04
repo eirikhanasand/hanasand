@@ -65,9 +65,9 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
     const visibleChecks = currentStatus.checks.filter((check) => isCurrentPublicCheck(check, nowMs))
     const { endpointCount, domainCount, liveSurfaceCount } = trafficSummary
     const statusTone = {
-        up: 'border-[#bde8ca] bg-[#e9f8ef] text-[#11612f]',
-        degraded: 'border-[#f8df9b] bg-[#fff8e1] text-[#8a5a00]',
-        down: 'border-[#fecdca] bg-[#fff1f0] text-[#912018]',
+        up: 'border-ui-success bg-ui-success/15 text-ui-success',
+        degraded: 'border-ui-warning bg-ui-warning/15 text-ui-warning',
+        down: 'border-ui-danger bg-ui-danger/15 text-ui-danger',
     }
 
     return (
@@ -75,16 +75,16 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
             <section className='grid gap-4'>
                 <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.36fr)]'>
                     <div>
-                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Status</p>
-                        <h1 className='mt-2 text-4xl font-semibold tracking-normal text-[#171a21]'>Service health</h1>
-                        <p className='mt-3 max-w-2xl text-sm leading-6 text-[#596170]'>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>Status</p>
+                        <h1 className='mt-2 text-4xl font-semibold tracking-normal text-ui-text'>Service health</h1>
+                        <p className='mt-3 max-w-2xl text-sm leading-6 text-ui-muted'>
                             Public availability for the Hanasand web, monitoring, and notification surfaces.
                         </p>
                     </div>
                     <div className={`grid gap-3 rounded-lg border p-4 shadow-sm ${statusTone[currentStatus.overall]}`}>
                         <div className='flex items-center justify-between gap-3'>
                             <span className='text-xs font-semibold uppercase'>Overall health</span>
-                            <span className='rounded-md bg-white/70 px-2 py-1 text-xs font-semibold'>{currentStatus.overall.toUpperCase()}</span>
+                            <span className='rounded-md bg-ui-panel px-2 py-1 text-xs font-semibold'>{currentStatus.overall.toUpperCase()}</span>
                         </div>
                         <div className='text-2xl font-semibold'>{statusHeadline(currentStatus.overall)}</div>
                         <p className='text-sm leading-6'>
@@ -99,9 +99,9 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                         const serviceLabel = publicStatusLabel(check.service)
                         const checkLabel = publicStatusLabel(check.check_name)
                         return (
-                            <div key={`${check.service}-${check.check_name}`} className='grid min-h-[22rem] rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
+                            <div key={`${check.service}-${check.check_name}`} className='grid min-h-[22rem] rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
                                 <div className='flex items-start justify-between gap-4'>
-                                    <div className={`grid h-10 w-10 place-items-center rounded-lg border ${check.status === 'up' ? 'border-[#bde8ca] bg-[#e9f8ef] text-[#147a3b]' : check.status === 'degraded' ? 'border-[#f8df9b] bg-[#fff8e1] text-[#8a5a00]' : 'border-[#fecdca] bg-[#fff1f0] text-[#b42318]'}`}>
+                                    <div className={`grid h-10 w-10 place-items-center rounded-lg border ${check.status === 'up' ? 'border-ui-success bg-ui-success/15 text-ui-success' : check.status === 'degraded' ? 'border-ui-warning bg-ui-warning/15 text-ui-warning' : 'border-ui-danger bg-ui-danger/15 text-ui-danger'}`}>
                                         <Icon className='h-4 w-4' />
                                     </div>
                                     <span className={`grid h-8 w-8 place-items-center rounded-lg border text-xs font-semibold ${statusTone[check.status]}`}>
@@ -113,41 +113,41 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                                         }
                                     </span>
                                 </div>
-                                <p className='mt-5 text-xs font-semibold uppercase text-[#667085]'>{serviceLabel}</p>
-                                <h3 className='mt-2 text-lg font-semibold text-[#171a21]'>{checkLabel}</h3>
-                                <div className='mt-4 grid gap-2 text-sm text-[#596170]'>
-                                    <div className='flex items-center gap-2 rounded-lg border border-[#e0e5ed] bg-[#f8fafc] px-3 py-2'>
-                                        <HeartPulse className='h-4 w-4 shrink-0 text-[#147a3b]' />
+                                <p className='mt-5 text-xs font-semibold uppercase text-ui-muted'>{serviceLabel}</p>
+                                <h3 className='mt-2 text-lg font-semibold text-ui-text'>{checkLabel}</h3>
+                                <div className='mt-4 grid gap-2 text-sm text-ui-muted'>
+                                    <div className='flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
+                                        <HeartPulse className='h-4 w-4 shrink-0 text-ui-success' />
                                         <span>Uptime</span>
-                                        <span className='ml-auto font-semibold text-[#171a21]'>{check.uptime_30d}%</span>
+                                        <span className='ml-auto font-semibold text-ui-text'>{check.uptime_30d}%</span>
                                     </div>
-                                    <div className='flex items-center gap-2 rounded-lg border border-[#e0e5ed] bg-[#f8fafc] px-3 py-2'>
-                                        <Timer className='h-4 w-4 shrink-0 text-[#3056d3]' />
+                                    <div className='flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
+                                        <Timer className='h-4 w-4 shrink-0 text-ui-primary' />
                                         <span>Latency</span>
-                                        <span className='ml-auto font-semibold text-[#171a21]'>{check.latency_ms}ms</span>
+                                        <span className='ml-auto font-semibold text-ui-text'>{check.latency_ms}ms</span>
                                     </div>
-                                    <div className='flex items-center gap-2 rounded-lg border border-[#e0e5ed] bg-[#f8fafc] px-3 py-2'>
-                                        <Binoculars className='h-4 w-4 shrink-0 text-[#667085]' />
+                                    <div className='flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
+                                        <Binoculars className='h-4 w-4 shrink-0 text-ui-muted' />
                                         <span>Last check</span>
-                                        <span className='ml-auto text-right font-semibold text-[#171a21]'>{relativeTime(check.checked_at, now)}</span>
+                                        <span className='ml-auto text-right font-semibold text-ui-text'>{relativeTime(check.checked_at, now)}</span>
                                     </div>
                                 </div>
                                 {check.message && check.status !== 'up' ? (
                                     <ErrorNotice compact className='mt-3' message={check.message} />
                                 ) : check.message ? (
-                                    <p className='mt-3 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-3 py-2 text-sm leading-6 text-[#596170]'>
+                                    <p className='mt-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm leading-6 text-ui-muted'>
                                         {check.message}
                                     </p>
                                 ) : null}
                             </div>
                         )
                     })}
-                    {!visibleChecks.length && <div className='grid min-h-72 place-items-center rounded-lg border border-dashed border-[#cfd7e4] bg-white p-6 text-center text-sm text-[#596170] shadow-sm md:col-span-2 xl:col-span-4'>
+                    {!visibleChecks.length && <div className='grid min-h-72 place-items-center rounded-lg border border-dashed border-ui-border bg-ui-panel p-6 text-center text-sm text-ui-muted shadow-sm md:col-span-2 xl:col-span-4'>
                         <div>
-                            <div className='mx-auto grid h-11 w-11 place-items-center rounded-lg border border-[#dfe5ee] bg-[#f8fafc] text-[#3056d3]'>
+                            <div className='mx-auto grid h-11 w-11 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
                                 <Inbox className='h-5 w-5' />
                             </div>
-                            <h2 className='mt-3 text-base font-semibold text-[#171a21]'>No public monitor checks yet</h2>
+                            <h2 className='mt-3 text-base font-semibold text-ui-text'>No public monitor checks yet</h2>
                             <p className='mt-1 max-w-md leading-6'>The status page is healthy, but no current public checks are available yet.</p>
                         </div>
                     </div>}
@@ -175,10 +175,10 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                         ? `${liveSurfaceCount} monitored surface${liveSurfaceCount === 1 ? '' : 's'} reported live activity in the last window.`
                         : 'No unusual public traffic spike is visible in the current status window.'}
                 />
-                <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm md:col-span-3'>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Latest check</p>
-                    <h3 className='mt-3 text-lg font-semibold text-[#171a21]'>Checked {relativeTime(latestCheckedAt(currentStatus), now)}</h3>
-                    <p className='mt-1 text-sm text-[#596170]'>
+                <div className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm md:col-span-3'>
+                    <p className='text-xs font-semibold uppercase text-ui-muted'>Latest check</p>
+                    <h3 className='mt-3 text-lg font-semibold text-ui-text'>Checked {relativeTime(latestCheckedAt(currentStatus), now)}</h3>
+                    <p className='mt-1 text-sm text-ui-muted'>
                         The time updates live; checks refresh in the background.
                     </p>
                 </div>
@@ -203,16 +203,16 @@ function statusHeadline(status: ServiceStatus['overall']) {
 
 function SummaryCard({ icon, label, title, body }: { icon: React.ReactNode, label: string, title: string, body: string }) {
     return (
-        <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
+        <div className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
             <div className='flex items-start justify-between gap-4'>
-                <div className='grid h-10 w-10 place-items-center rounded-lg border border-[#dfe5ee] bg-[#f8fafc] text-[#3056d3]'>
+                <div className='grid h-10 w-10 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
                     {icon}
                 </div>
-                <Code2 className='h-4 w-4 text-[#98a2b3]' />
+                <Code2 className='h-4 w-4 text-ui-muted' />
             </div>
-            <p className='mt-4 text-xs font-semibold uppercase text-[#667085]'>{label}</p>
-            <h3 className='mt-2 text-lg font-semibold text-[#171a21]'>{title}</h3>
-            <p className='mt-2 text-sm leading-6 text-[#596170]'>{body}</p>
+            <p className='mt-4 text-xs font-semibold uppercase text-ui-muted'>{label}</p>
+            <h3 className='mt-2 text-lg font-semibold text-ui-text'>{title}</h3>
+            <p className='mt-2 text-sm leading-6 text-ui-muted'>{body}</p>
         </div>
     )
 }

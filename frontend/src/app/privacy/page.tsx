@@ -44,11 +44,11 @@ export default function PrivacyPage() {
                 },
                 {
                     title: '7. How Hanasand uses information',
-                    body: 'Hanasand uses information to provide the service, authenticate users, route alerts, deliver webhooks, support customer workflows, maintain source and parser quality, enforce permissions, prevent abuse, secure infrastructure, troubleshoot incidents, comply with law, bill for services, and communicate about product or account matters.',
+                    body: 'Hanasand uses information to provide the service, authenticate users, route alerts, deliver webhooks, support customer review steps, maintain source and parsing quality, enforce permissions, prevent abuse, secure infrastructure, troubleshoot incidents, comply with law, bill for services, and communicate about product or account matters.',
                     bullets: [
                         'To deliver alerts, search results, API responses, notifications, and dashboard views requested by the customer.',
                         'To maintain audit trails, security controls, rate limits, fraud prevention, and support workflows.',
-                        'To improve reliability, source quality, parser confidence, product usability, and operational performance.',
+                        'To improve reliability, source quality, parsing accuracy, product usability, and operational performance.',
                     ],
                 },
                 {

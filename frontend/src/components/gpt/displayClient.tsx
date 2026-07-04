@@ -32,13 +32,13 @@ export default function DisplayClient({
 
     return (
         <div
-            className='w-full rounded-xl bg-dark/35 p-4 text-left outline outline-dark transition-colors hover:bg-dark/50'
+            className='w-full rounded-xl bg-ui-canvas/35 p-4 text-left outline outline-ui-border transition-colors hover:bg-ui-canvas/50'
         >
             <div className='flex flex-col gap-4'>
                 <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
                     <div>
-                        <h3 className='text-lg font-semibold text-bright/90'>{client.name}</h3>
-                        <p className='text-sm text-bright/50'>
+                        <h3 className='text-lg font-semibold text-ui-text/90'>{client.name}</h3>
+                        <p className='text-sm text-ui-text/50'>
                             {client.ram.length} RAM, {client.cpu.length} CPU, {client.gpu.length} GPU sensors
                         </p>
                     </div>
@@ -64,13 +64,13 @@ export default function DisplayClient({
                         <button
                             type='button'
                             onClick={() => setOpen(prev => !prev)}
-                            className='flex h-9 w-9 items-center justify-center rounded-full bg-[#f07d33]/12 text-[#f07d33] outline outline-[#f07d33]/20'
+                            className='flex h-9 w-9 items-center justify-center rounded-full bg-ui-primary/12 text-ui-primary outline outline-ui-primary/20'
                         >
                             {open ? <ChevronUp className='h-4 w-4' /> : <ChevronDown className='h-4 w-4' />}
                         </button>
                     </div>
                 </div>
-                <div className='grid gap-3 border-t border-dark/80 pt-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center'>
+                <div className='grid gap-3 border-t border-ui-border pt-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center'>
                     <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
                         <ModelStat title='Current tokens' value={client.model.currentTokens.toString()} />
                         <ModelStat title='Active requests' value={`${laneCapacity.active}/${laneCapacity.max}`} />
@@ -78,7 +78,7 @@ export default function DisplayClient({
                             title='Context'
                             value={`${client.model.contextTokens}/${lanes[0]?.contextMaxTokens || client.model.contextMaxTokens || 0}`}
                         />
-                        <ModelStat title='Status' value={client.model.status} highlight={client.model.status} />
+                        <ModelStat title='Status' value={operationalStateLabel(client.model.status)} highlight={client.model.status} />
                     </div>
                     <div className='flex justify-start md:justify-end'>
                         <Button
@@ -96,7 +96,7 @@ export default function DisplayClient({
 
 function Open({ client }: { client: GPT_Client }) {
     return (
-        <div className='space-y-4 border-t border-dark/80 pt-4'>
+        <div className='space-y-4 border-t border-ui-border pt-4'>
             {(client.lanes || []).length ? (
                 <MetricSection
                     title='Inference lanes'
@@ -127,13 +127,13 @@ function Open({ client }: { client: GPT_Client }) {
 
 function MetricSection({ title, icon, items }: { title: string, icon: ReactNode, items: ReactNode[] }) {
     return (
-        <div className='rounded-xl bg-dark/25 p-4 outline outline-dark'>
-            <div className='mb-3 flex items-center gap-2 text-bright/35'>
+        <div className='rounded-xl bg-ui-canvas/25 p-4 outline outline-ui-border'>
+            <div className='mb-3 flex items-center gap-2 text-ui-text/35'>
                 {icon}
                 <h4 className='text-sm font-semibold uppercase tracking-[0.18em]'>{title}</h4>
             </div>
             <div className='space-y-2'>
-                {items.length ? items : <p className='text-sm text-bright/45'>No metrics reported.</p>}
+                {items.length ? items : <p className='text-sm text-ui-text/45'>No metrics reported.</p>}
             </div>
         </div>
     )
@@ -142,10 +142,10 @@ function MetricSection({ title, icon, items }: { title: string, icon: ReactNode,
 function StatPill({ label, value, icon }: { label: string, value: string, icon: ReactNode }) {
     return (
         <span
-            className='inline-flex items-center gap-2 rounded-full bg-[#f07d33]/12 px-3 py-1 text-sm font-semibold text-bright/90 outline outline-[#f07d33]/20'
+            className='inline-flex items-center gap-2 rounded-full bg-ui-primary/12 px-3 py-1 text-sm font-semibold text-ui-text/90 outline outline-ui-primary/20'
         >
             {icon}
-            <span className='text-[10px] uppercase tracking-[0.18em] text-bright/35'>{label}</span>
+            <span className='text-[10px] uppercase tracking-[0.18em] text-ui-text/35'>{label}</span>
             <span>{value}</span>
         </span>
     )
@@ -153,16 +153,16 @@ function StatPill({ label, value, icon }: { label: string, value: string, icon: 
 
 function ModelStat({ title, value, highlight }: { title: string, value: string, highlight?: string }) {
     const highlightClass = highlight === 'error'
-        ? 'text-red-400'
+        ? 'text-ui-danger'
         : highlight === 'generating'
-            ? 'text-emerald-400'
+            ? 'text-ui-success'
             : highlight === 'preparing'
-                ? 'text-yellow-400'
-                : 'text-bright/90'
+                ? 'text-ui-warning'
+                : 'text-ui-text/90'
 
     return (
-        <div className='rounded-xl bg-dark/20 px-3 py-2 outline outline-dark'>
-            <div className='text-[10px] uppercase tracking-[0.18em] text-bright/35'>{title}</div>
+        <div className='rounded-xl bg-ui-canvas/20 px-3 py-2 outline outline-ui-border'>
+            <div className='text-[10px] uppercase tracking-[0.18em] text-ui-text/35'>{title}</div>
             <div className={`mt-1 text-sm font-semibold ${highlightClass}`}>{value}</div>
         </div>
     )
@@ -175,11 +175,11 @@ function Lane({ lane }: { lane: GPT_ModelLaneMetrics }) {
     const tierLabel = lane.tier === 'strong' ? 'Strong' : 'Fast'
 
     return (
-        <div className='rounded-xl bg-dark/20 p-3 outline outline-dark'>
+        <div className='rounded-xl bg-ui-canvas/20 p-3 outline outline-ui-border'>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
                 <div>
-                    <div className='text-sm font-semibold text-bright/90'>{lane.label || `Lane ${lane.index + 1}`} · {tierLabel}</div>
-                    <div className='mt-1 text-xs text-bright/45'>{lane.model || lane.gpuName} • {gpuLabel}</div>
+                    <div className='text-sm font-semibold text-ui-text/90'>{lane.label || `Lane ${lane.index + 1}`} · {tierLabel}</div>
+                    <div className='mt-1 text-xs text-ui-text/45'>{lane.model || lane.gpuName} • {gpuLabel}</div>
                 </div>
                 <div className='grid gap-2 sm:grid-cols-4 lg:min-w-[34rem]'>
                     <LaneMetric label='capacity' value={`${lane.availableRequests}/${lane.maxRequests}`} tone={capacityPercent < 75 ? 'ok' : 'warn'} />
@@ -194,7 +194,7 @@ function Lane({ lane }: { lane: GPT_ModelLaneMetrics }) {
 
 function LaneMetric({ label, value, tone }: { label: string, value: string, tone: 'ok' | 'warn' }) {
     return (
-        <div className={`rounded-lg px-3 py-2 ${tone === 'ok' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-yellow-500/10 text-yellow-300'}`}>
+        <div className={`rounded-lg px-3 py-2 ${tone === 'ok' ? 'bg-ui-success/10 text-ui-success' : 'bg-ui-warning/10 text-ui-warning'}`}>
             <div className='text-[10px] uppercase tracking-[0.18em] text-current/70'>{label}</div>
             <div className='mt-1 text-sm font-semibold'>{value}</div>
         </div>
@@ -207,4 +207,11 @@ function averageMetric(values: number[]) {
     }
 
     return Math.ceil(values.reduce((sum, value) => sum + value, 0) / values.length * 100)
+}
+
+function operationalStateLabel(value: string) {
+    if (value === 'blocked') return 'syncing'
+    if (value === 'needs_action') return 'reviewing'
+    if (value === 'action_required') return 'reviewing'
+    return value.replaceAll('_', ' ')
 }

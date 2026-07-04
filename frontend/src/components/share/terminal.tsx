@@ -168,16 +168,16 @@ export default function Terminal({
                     aria-label='Open terminal panel'
                     onClick={handleChange}
                     data-testid='share-terminal-toggle'
-                    className='fixed bottom-2 left-1/2 -translate-x-1/2 bg-dark/40 hover:bg-dark px-8 py-1 rounded-md cursor-pointer transition-all border border-light/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_2px_4px_rgba(0,0,0,0.4)] backdrop-blur-md z-100'
+                    className='fixed bottom-2 left-1/2 z-100 -translate-x-1/2 cursor-pointer rounded-md border border-ui-border bg-ui-panel px-8 py-1 shadow-lg backdrop-blur-md transition-all hover:bg-ui-raised'
                 >
-                    <div className='mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-[2.5px]' />
+                    <div className='mx-auto mt-[2.5px] h-1 w-10 rounded-full bg-ui-muted group-hover:bg-ui-primary/30' />
                 </button>
             )}
 
             {/* Console container */}
             <div
                 data-testid='share-terminal-panel'
-                className={`fixed inset-x-0 flex w-screen max-w-none flex-col overflow-hidden bg-[#1e1e1e] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-all duration-150 ease-in-out z-100 ${open ? 'visible' : 'invisible'}`}
+                className={`fixed inset-x-0 z-100 flex w-screen max-w-none flex-col overflow-hidden bg-ui-canvas text-ui-text shadow-lg transition-all duration-150 ease-in-out ${open ? 'visible' : 'invisible'}`}
                 style={{
                     bottom: 0,
                     height: open ? `${height}px` : '0px',
@@ -188,18 +188,18 @@ export default function Terminal({
                     onMouseDown={handleMouseDown}
                     role='separator'
                     aria-label='Resize terminal panel'
-                    className='group absolute top-0 w-full h-2 cursor-row-resize hover:bg-light/10'
+                    className='group absolute top-0 h-2 w-full cursor-row-resize hover:bg-ui-primary/10'
                 >
-                    <div className='mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-1.25' />
+                    <div className='mx-auto mt-1.25 h-1 w-10 rounded-full bg-ui-muted group-hover:bg-ui-primary/30' />
                 </div>
 
                 {/* Header bar */}
-                <div className='flex min-h-[38px] shrink-0 flex-wrap justify-between gap-2 px-3 py-1.5 bg-dark/60 text-xs text-gray-400 border-t border-light/20'>
+                <div className='flex min-h-[38px] shrink-0 flex-wrap justify-between gap-2 border-t border-ui-border bg-ui-panel px-3 py-1.5 text-xs text-ui-muted'>
                     <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
-                        <span className='font-semibold text-bright/78'>Browser terminal</span>
+                        <span className='font-semibold text-ui-text'>Browser terminal</span>
                         <span>{isConnected
-                            ? <Wifi className='w-3.5 h-3.5 stroke-green-500' />
-                            : <WifiOff className='w-3.5 h-3.5 stroke-red-500' />
+                            ? <Wifi className='h-3.5 w-3.5 text-ui-success' />
+                            : <WifiOff className='h-3.5 w-3.5 text-ui-danger' />
                         }</span>
                         <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${lifecycleTone(lifecycle)}`}>
                             {lifecycleLabel(lifecycle)}
@@ -208,7 +208,7 @@ export default function Terminal({
                             <Eye className='h-3.5 w-3.5' />
                             <h1>{participants}</h1>
                         </span>
-                        <span className='max-w-[42vw] truncate text-bright/55 sm:max-w-[55vw]'>
+                        <span className='max-w-[42vw] truncate text-ui-muted sm:max-w-[55vw]'>
                             {status}
                         </span>
                     </div>
@@ -218,7 +218,7 @@ export default function Terminal({
                             aria-label='Reconnect browser terminal'
                             title='Reconnect terminal'
                             onClick={reconnect}
-                            className='grid h-7 w-7 place-items-center rounded-md text-bright/52 transition hover:bg-bright/10 hover:text-bright'
+                            className='grid h-7 w-7 place-items-center rounded-md text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-text'
                         >
                             <RefreshCw size={14} />
                         </button>
@@ -227,7 +227,7 @@ export default function Terminal({
                             aria-label='Restart browser terminal'
                             title='Restart terminal'
                             onClick={restart}
-                            className='grid h-7 w-7 place-items-center rounded-md text-bright/52 transition hover:bg-bright/10 hover:text-bright'
+                            className='grid h-7 w-7 place-items-center rounded-md text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-text'
                         >
                             <Power size={14} />
                         </button>
@@ -235,14 +235,14 @@ export default function Terminal({
                             type='button'
                             aria-label='Close terminal panel'
                             onClick={() => setOpen(false)}
-                            className='grid h-7 w-7 place-items-center rounded-md text-bright/52 transition hover:bg-bright/10 hover:text-bright'
+                            className='grid h-7 w-7 place-items-center rounded-md text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-text'
                         >
                             <ChevronDown size={16} />
                         </button>
                     </div>
                 </div>
 
-                <div className='relative min-h-0 w-full flex-1 overflow-hidden px-2 pb-2 pt-0 text-sm font-mono text-gray-300'>
+                <div className='relative min-h-0 w-full flex-1 overflow-hidden px-2 pb-2 pt-0 text-sm font-mono text-ui-muted'>
                     {share && <TerminalViewer
                         open={open}
                         share={share}
@@ -254,9 +254,9 @@ export default function Terminal({
                     />}
                     <form
                         onSubmit={handleCommandSubmit}
-                        className='absolute inset-x-2 bottom-2 z-20 flex flex-wrap items-center gap-2 rounded-md border border-bright/10 bg-[#171a14]/96 px-2 py-1.5 shadow-lg backdrop-blur sm:flex-nowrap'
+                        className='absolute inset-x-2 bottom-2 z-20 flex flex-wrap items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-2 py-1.5 shadow-lg backdrop-blur sm:flex-nowrap'
                     >
-                        <span className='rounded bg-bright/7 px-2 py-1 text-[11px] font-semibold text-bright/52'>
+                        <span className='rounded bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-primary'>
                             Command
                         </span>
                         <input
@@ -265,7 +265,7 @@ export default function Terminal({
                             value={command}
                             onChange={(event) => setCommand(event.target.value)}
                             placeholder={isConnected ? 'Run a command...' : 'Terminal is reconnecting...'}
-                            className='min-w-0 flex-1 bg-transparent px-1 text-sm text-bright outline-none placeholder:text-bright/34 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9de18f]'
+                            className='min-w-0 flex-1 bg-transparent px-1 text-sm text-ui-text outline-none placeholder:text-ui-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary'
                             autoComplete='off'
                             spellCheck={false}
                         />
@@ -273,7 +273,7 @@ export default function Terminal({
                             type='submit'
                             aria-label='Send terminal command'
                             disabled={!command.trim()}
-                            className='grid h-8 w-8 place-items-center rounded-md bg-[#9de18f]/14 text-[#b7f0aa] transition hover:bg-[#9de18f]/24 disabled:cursor-not-allowed disabled:opacity-40'
+                            className='grid h-8 w-8 place-items-center rounded-md bg-ui-success/15 text-ui-success transition hover:bg-ui-success/25 disabled:cursor-not-allowed disabled:opacity-40'
                         >
                             <Send size={15} />
                         </button>
@@ -309,19 +309,19 @@ function lifecycleLabel(lifecycle: TerminalLifecycle) {
 function lifecycleTone(lifecycle: TerminalLifecycle) {
     switch (lifecycle) {
         case 'ready':
-            return 'border-[#9de18f]/35 bg-[#9de18f]/12 text-[#b7f0aa]'
+            return 'border-ui-success/35 bg-ui-success/10 text-ui-success'
         case 'waking':
         case 'preparing':
         case 'connecting':
-            return 'border-[#f0c66d]/30 bg-[#f0c66d]/10 text-[#f0d58e]'
+            return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
         case 'idle':
-            return 'border-bright/12 bg-bright/6 text-bright/58'
+            return 'border-ui-border bg-ui-raised text-ui-muted'
         case 'shutting_down':
         case 'error':
-            return 'border-red-400/30 bg-red-400/10 text-red-200'
+            return 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
         case 'closed':
         default:
-            return 'border-bright/10 bg-bright/5 text-bright/48'
+            return 'border-ui-border bg-ui-raised text-ui-muted'
     }
 }
 

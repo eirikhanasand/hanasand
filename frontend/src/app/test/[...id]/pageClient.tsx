@@ -102,21 +102,21 @@ function LeftSide({
     }
 
     return (
-        <aside className='flex min-h-0 w-full min-w-0 flex-col gap-3 rounded-lg border border-[#dfe5ee] bg-white p-3 shadow-sm dark:border-[#233149] dark:bg-[#101827] md:h-full'>
+        <aside className='flex min-h-0 w-full min-w-0 flex-col gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm md:h-full'>
             <div className='flex-1 overflow-auto pr-1'>
-                <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#e3e8f0] pb-3 dark:border-[#273752]'>
+                <div className='flex flex-wrap items-start justify-between gap-3 border-b border-ui-border pb-3'>
                     <div>
-                        <h1 className='text-base font-semibold text-[#171a21] dark:text-[#f5f7fb]'>Check details</h1>
-                        <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b8c2d4]'>Live status, target, and recent activity.</p>
+                        <h1 className='text-base font-semibold text-ui-text'>Check details</h1>
+                        <p className='mt-1 text-xs leading-5 text-ui-muted'>Live status, target, and recent activity.</p>
                     </div>
                     <div className='flex items-center gap-2'>
                         {isConnected ? (
-                            <div className='flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/12 dark:text-emerald-200'>
+                            <div className='flex h-8 items-center gap-1.5 rounded-lg border border-ui-success/30 bg-ui-success/10 px-2.5 text-ui-success'>
                                 <Wifi className='h-4 w-4' />
                                 <span className='text-xs font-medium'>Connected</span>
                             </div>
                         ) : (
-                            <div className='flex h-8 items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2.5 text-orange-700 dark:border-orange-400/30 dark:bg-orange-400/12 dark:text-orange-200'>
+                            <div className='flex h-8 items-center gap-1.5 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-2.5 text-ui-warning'>
                                 <WifiOff className='h-4 w-4' />
                                 <span className='text-xs font-medium'>Offline</span>
                             </div>
@@ -139,14 +139,14 @@ function LeftSide({
                 <MetaRow icon={<Watch />} label='Created' value={prettyDate(test.created_at)} />
                 {test.logs.length > 0 && <button
                     onClick={() => setShowLogs(prev => !prev)}
-                    className='flex w-full min-w-0 items-center gap-2 rounded-lg p-2 text-left text-[#344054] transition hover:bg-[#f2f5f9] dark:text-[#d5dceb] dark:hover:bg-white/6'
+                    className='flex w-full min-w-0 items-center gap-2 rounded-lg p-2 text-left text-ui-text transition hover:bg-ui-raised'
                 >
-                    <Logs className='h-4 w-4 shrink-0 text-[#667085] dark:text-[#9aa8bf]' />
+                    <Logs className='h-4 w-4 shrink-0 text-ui-muted' />
                     <span className='min-w-0 wrap-break-word text-sm'>{showLogs ? 'Hide' : 'Show'} ({test.logs.length}) logs</span>
                 </button>}
                 {test.errors.length > 0 && <button
                     onClick={() => setShowErrors(prev => !prev)}
-                    className='flex w-full min-w-0 items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-left text-red-700 transition hover:bg-red-100 dark:border-red-400/30 dark:bg-red-400/12 dark:text-red-200 dark:hover:bg-red-400/18'
+                    className='flex w-full min-w-0 items-center gap-2 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-left text-ui-danger transition hover:bg-ui-danger/15'
                 >
                     <Bug className='h-4 w-4 shrink-0' />
                     <span className='min-w-0 wrap-break-word text-sm'>{showErrors ? 'Hide' : 'Show'} ({test.errors.length}) errors</span>
@@ -156,8 +156,8 @@ function LeftSide({
                 <button
                     onClick={handleRerun}
                     className={`group flex h-10 w-full min-w-0 items-center justify-center gap-2 rounded-lg text-sm font-medium transition ${rerun
-                        ? 'cursor-not-allowed border border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-400/30 dark:bg-yellow-400/12 dark:text-yellow-100'
-                        : 'cursor-pointer border border-[#d8dee9] bg-white text-[#344054] hover:bg-[#f2f5f9] dark:border-[#30415f] dark:bg-[#0b1220] dark:text-[#e2e8f4] dark:hover:bg-[#141f31]'
+                        ? 'cursor-not-allowed border border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+                        : 'cursor-pointer border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'
                     }`}
                 >
                     {rerun ? <Hourglass className='h-4 w-4 shrink-0' /> : <RefreshCw className='h-4 w-4 shrink-0' />}
@@ -170,9 +170,9 @@ function LeftSide({
 
 function MetaRow({ icon, label, value }: { icon: ReactNode, label: string, value: ReactNode }) {
     return (
-        <div className='grid min-w-0 grid-cols-[1.25rem_minmax(4.75rem,0.35fr)_minmax(0,1fr)] items-start gap-2 rounded-lg p-2 text-sm text-[#344054] transition hover:bg-[#f2f5f9] dark:text-[#d5dceb] dark:hover:bg-white/6'>
-            <span className='grid h-5 w-5 shrink-0 place-items-center text-[#667085] dark:text-[#9aa8bf] [&>svg]:h-4 [&>svg]:w-4'>{icon}</span>
-            <span className='text-xs font-semibold uppercase leading-5 text-[#667085] dark:text-[#9aa8bf]'>{label}</span>
+        <div className='grid min-w-0 grid-cols-[1.25rem_minmax(4.75rem,0.35fr)_minmax(0,1fr)] items-start gap-2 rounded-lg p-2 text-sm text-ui-text transition hover:bg-ui-raised'>
+            <span className='grid h-5 w-5 shrink-0 place-items-center text-ui-muted [&>svg]:h-4 [&>svg]:w-4'>{icon}</span>
+            <span className='text-xs font-semibold uppercase leading-5 text-ui-muted'>{label}</span>
             <span className='min-w-0 flex-1 wrap-break-word leading-5'>{value}</span>
         </div>
     )

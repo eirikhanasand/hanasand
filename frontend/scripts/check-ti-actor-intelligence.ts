@@ -922,7 +922,7 @@ assert(pageClientSource.includes('readinessOwnerLabel(row.ownerLane)'), 'Selecte
 assert(pageClientSource.includes('sourceRequestRouteLabel(row.remediationPath)'), 'Selected enrichment triage should render remediation routes in analyst language.')
 assert(pageClientSource.includes('actorEnrichmentConsumerLabel(readiness.consumer)'), 'Selected enrichment triage should render consumer readiness in analyst language.')
 assert(pageClientSource.includes('data-ti-evidence-priority'), 'Selected evidence should expose backed priority proof.')
-assert(pageClientSource.includes('dark:border-[#273244]'), 'Public TI dense intelligence panels should have dark-mode border guardrails.')
+assert(pageClientSource.includes('dark:border-ui-border'), 'Public TI dense intelligence panels should have dark-mode border guardrails.')
 assert(pageClientSource.includes('grid-cols-[minmax(0,1fr)]'), 'Public TI selected intelligence stack should constrain mobile grid width.')
 assert(pageClientSource.includes('flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'), 'Public TI action clusters should wrap complete controls on narrow widths.')
 assert(!pageClientSource.includes('truncate font-semibold'), 'Public TI profile stats should wrap values instead of clipping mobile status text.')

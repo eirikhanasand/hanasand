@@ -80,13 +80,13 @@ export default function Box({ box, setBox, share, detached = false }: BoxProps) 
         : 'relative h-full min-h-0 w-full'
 
     const panelClass = detached
-        ? 'grid max-h-[min(48rem,calc(100vh-7rem))] min-h-[30rem] min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden rounded-xl border border-bright/10 bg-background/96 p-2 shadow-2xl shadow-black/45 backdrop-blur-md'
-        : 'grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden rounded-lg border border-bright/8 bg-black/10 p-2'
+        ? 'grid max-h-[min(48rem,calc(100vh-7rem))] min-h-[30rem] min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden rounded-lg border border-ui-border bg-ui-canvas/95 p-2 shadow-2xl shadow-ui-canvas/45 backdrop-blur-md'
+        : 'grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-2'
 
     return (
         <div className={wrapperClass}>
             <section className={panelClass}>
-                <div className='flex min-w-0 items-center justify-between gap-2 rounded-lg border border-bright/8 bg-black/12 px-2 py-1.5'>
+                <div className='flex min-w-0 items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-panel px-2 py-1.5'>
                     <RecentRequests
                         recentRequests={recentRequests}
                         activeRequestId={selectedRequestId ?? selectedRequest?.id ?? null}
@@ -106,7 +106,7 @@ export default function Box({ box, setBox, share, detached = false }: BoxProps) 
                                     setBox(false)
                                 }
                             }}
-                            className='grid h-8 w-8 place-items-center rounded-full text-bright/55 hover:bg-white/8 hover:text-bright'
+                            className='grid h-8 w-8 place-items-center rounded-full text-ui-muted hover:bg-ui-raised hover:text-ui-text'
                             aria-label={detached ? 'Attach request workbench' : 'Detach request workbench'}
                         >
                             {detached ? <PanelTopClose className='h-4 w-4' /> : <PanelTopOpen className='h-4 w-4' />}
@@ -116,7 +116,7 @@ export default function Box({ box, setBox, share, detached = false }: BoxProps) 
                                 closeDetachedBox()
                             }
                             setBox(false)
-                        }} className='grid h-8 w-8 place-items-center rounded-full text-bright/55 hover:bg-white/8 hover:text-bright' aria-label='Close requests'>
+                        }} className='grid h-8 w-8 place-items-center rounded-full text-ui-muted hover:bg-ui-raised hover:text-ui-text' aria-label='Close requests'>
                             <X className='h-4 w-4' />
                         </button>
                     </div>

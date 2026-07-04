@@ -58,16 +58,16 @@ export default function TestStatsPageClient() {
 
     return (
         <div className='grid h-full w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] items-stretch gap-3 overflow-hidden p-4 md:p-5 lg:grid-cols-[minmax(21rem,0.72fr)_minmax(0,1.28fr)] lg:grid-rows-1 xl:grid-cols-[minmax(23rem,0.64fr)_minmax(0,1.36fr)]'>
-            <section className='grid min-h-0 min-w-0 content-start gap-4 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
-                <div className='flex items-start justify-between gap-3 border-b border-[#e0e5ed] pb-3'>
+            <section className='grid min-h-0 min-w-0 content-start gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
+                <div className='flex items-start justify-between gap-3 border-b border-ui-border pb-3'>
                     <div>
                         <div className='flex items-center gap-2'>
                             <ChartColumn className='h-4 w-4 stroke-[#3056d3]' />
-                            <h1 className='text-base font-semibold text-[#171a21]'>Service check results</h1>
+                            <h1 className='text-base font-semibold text-ui-text'>Service check results</h1>
                         </div>
-                        <p className='mt-1.5 text-sm leading-5 text-[#596170]'>Find a check by scan id, then open the full report.</p>
+                        <p className='mt-1.5 text-sm leading-5 text-ui-muted'>Find a check by scan id, then open the full report.</p>
                     </div>
-                    <Link href='/test' className='inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:border-[#bdc7d5]'>
+                    <Link href='/test' className='inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-border'>
                         <ArrowLeft className='h-4 w-4' />
                         New check
                     </Link>
@@ -75,7 +75,7 @@ export default function TestStatsPageClient() {
                 <form onSubmit={handleSubmit} className='grid gap-3'>
                     <ErrorNotice compact message={error as string | null} />
                     <input
-                        className='z-10 h-10 w-full rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
+                        className='z-10 h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
                         placeholder='Scan id'
                         onChange={(e) => setQuery(e.target.value)}
                         value={query}
@@ -84,18 +84,18 @@ export default function TestStatsPageClient() {
                     <button
                         type='submit'
                         disabled={!canSearch}
-                        className='h-10 w-full rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:border disabled:border-[#d8dee9] disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]'
+                        className='h-10 w-full rounded-lg bg-ui-text px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
                     >
                         Search
                     </button>
                 </form>
                 {test && (
-                    <div className='grid min-w-0 gap-3 rounded-lg border border-[#e0e5ed] bg-[#f8fafc] p-3 text-sm text-[#596170]'>
+                    <div className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>
                         <ResultRow icon={<Rocket className='h-4 w-4' />} label='Scan' value={test.id} />
                         <ResultRow icon={<Globe className='h-4 w-4' />} label='URL' value={test.url} breakAll />
                         <ResultRow icon={<Watch className='h-4 w-4' />} label='Created' value={prettyDate(test.created_at)} />
                         <ResultRow icon={<Eye className='h-4 w-4' />} label='Visits' value={String(test.visits)} />
-                        <Link href={`/test/${test.id}`} className='mt-1 inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] transition hover:border-[#bdc7d5]'>
+                        <Link href={`/test/${test.id}`} className='mt-1 inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-border'>
                             Open Scan
                             <ArrowRight className='h-4 w-4' />
                         </Link>
@@ -103,8 +103,8 @@ export default function TestStatsPageClient() {
                 )}
             </section>
             <section className='grid min-h-0 min-w-0 grid-cols-1 gap-3 lg:grid-cols-2'>
-                <RecentScans title='My Recent Scans' empty='No personal scans yet.' scans={myScans} mine className='hidden lg:grid' />
-                <RecentScans title='Recent Scans' empty='No recent scans yet.' scans={recentScans} />
+                <RecentScans title='My Recent Scans' readyMessage='Personal check lane is ready.' scans={myScans} mine className='hidden lg:grid' />
+                <RecentScans title='Recent Scans' readyMessage='Global check lane is listening.' scans={recentScans} />
             </section>
         </div>
     )
@@ -113,9 +113,9 @@ export default function TestStatsPageClient() {
 function ResultRow({ icon, label, value, breakAll = false }: { icon: ReactNode, label: string, value: string, breakAll?: boolean }) {
     return (
         <div className='grid min-w-0 grid-cols-[1rem_minmax(4rem,0.28fr)_minmax(0,1fr)] items-center gap-2 text-xs'>
-            <span className='text-[#667085]'>{icon}</span>
-            <span className='text-[#667085]'>{label}</span>
-            <span className={`min-w-0 text-[#344054] ${breakAll ? 'break-all' : 'truncate'}`}>{value}</span>
+            <span className='text-ui-muted'>{icon}</span>
+            <span className='text-ui-muted'>{label}</span>
+            <span className={`min-w-0 text-ui-text ${breakAll ? 'break-all' : 'truncate'}`}>{value}</span>
         </div>
     )
 }

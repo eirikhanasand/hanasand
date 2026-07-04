@@ -4,12 +4,12 @@ import { Bug } from 'lucide-react'
 export default function EmptyState({ scanStatus }: { scanStatus: GetVulnerabilities['scanStatus'] }) {
     const state = emptyStateCopy(scanStatus)
     return (
-        <div className='w-full rounded-2xl border border-[#26354d] bg-[#070d15] px-6 py-10 text-center'>
-            <div className='mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#111827] text-orange-300'>
+        <div className='w-full rounded-lg border border-ui-border bg-ui-panel px-6 py-10 text-center'>
+            <div className='mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-ui-raised text-ui-warning'>
                 <Bug className='h-6 w-6' />
             </div>
-            <h2 className='mt-4 font-semibold text-[#e8eef8]'>{state.title}</h2>
-            <p className='mx-auto mt-2 max-w-2xl text-sm leading-6 text-[#c8d3e3]'>{state.message}</p>
+            <h2 className='mt-4 font-semibold text-ui-text'>{state.title}</h2>
+            <p className='mx-auto mt-2 max-w-2xl text-sm leading-6 text-ui-muted'>{state.message}</p>
         </div>
     )
 }

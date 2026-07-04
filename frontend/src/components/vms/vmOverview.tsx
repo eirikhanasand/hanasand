@@ -10,7 +10,7 @@ type VMDetailsProps = {
 
 export default function VMOverview({ boxStyle, boxTitleStyle, vm, details }: VMDetailsProps) {
     const editors = Array.isArray(vm.access_users) && vm.access_users.length ? vm.access_users.join(', ') : 'Only you'
-    const description = details?.description || 'No description'
+    const description = details?.description || 'Description stream is empty'
 
     return (
         <div className={boxStyle}>

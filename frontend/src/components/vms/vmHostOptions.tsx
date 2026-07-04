@@ -62,9 +62,9 @@ export default function VMHostOptions({ boxStyle, boxTitleStyle, vm, onUpdate }:
             <div className='flex items-center justify-between gap-3'>
                 <div>
                     <h2 className={boxTitleStyle}>Host options</h2>
-                    <p className='mt-1 text-xs text-bright/45'>{vm.primary_host || 'ovhcloud'} primary{vm.failover_host ? `, ${vm.failover_host} standby` : ''}</p>
+                    <p className='mt-1 text-xs text-ui-muted'>{vm.primary_host || 'ovhcloud'} primary{vm.failover_host ? `, ${vm.failover_host} standby` : ''}</p>
                 </div>
-                <Server className='h-4 w-4 text-bright/45' />
+                <Server className='h-4 w-4 text-ui-muted' />
             </div>
             <FeatureToggle
                 title='Always running'
@@ -89,7 +89,7 @@ export default function VMHostOptions({ boxStyle, boxTitleStyle, vm, onUpdate }:
                     type='button'
                     onClick={runFailover}
                     disabled={loading === 'swap'}
-                    className='h-9 rounded-lg border border-white/10 bg-white/4 px-3 text-left text-sm text-bright/75 transition hover:bg-white/7 disabled:cursor-wait disabled:opacity-55'
+                    className='h-9 rounded-lg border border-ui-border bg-ui-raised px-3 text-left text-sm text-ui-text transition hover:bg-ui-panel disabled:cursor-wait disabled:opacity-55'
                 >
                     Fail over to {vm.failover_host}
                 </button>
@@ -121,18 +121,18 @@ function FeatureToggle({
             type='button'
             onClick={onClick}
             disabled={loading || !premium}
-            className='grid min-h-16 grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-white/10 bg-white/3 p-3 text-left transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60'
+            className='grid min-h-16 grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 text-left transition hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-60'
         >
-            <span className='grid h-9 w-9 place-items-center rounded-md bg-white/[0.045] text-bright/70'>{icon}</span>
+            <span className='grid h-9 w-9 place-items-center rounded-md bg-ui-panel text-ui-muted'>{icon}</span>
             <span className='min-w-0'>
-                <span className='flex items-center gap-2 text-sm font-medium text-bright/82'>
+                <span className='flex items-center gap-2 text-sm font-medium text-ui-text'>
                     {title}
-                    {!premium && <Crown className='h-3.5 w-3.5 text-amber-200/80' />}
+                    {!premium && <Crown className='h-3.5 w-3.5 text-ui-warning' />}
                 </span>
-                <span className='mt-0.5 block text-xs leading-5 text-bright/42'>{premium ? description : 'Premium option'}</span>
+                <span className='mt-0.5 block text-xs leading-5 text-ui-muted'>{premium ? description : 'Premium option'}</span>
             </span>
-            <span className={`h-5 w-9 rounded-full p-0.5 transition ${enabled ? 'bg-green-400/65' : 'bg-white/12'}`}>
-                <span className={`block h-4 w-4 rounded-full bg-bright transition ${enabled ? 'translate-x-4' : ''}`} />
+            <span className={`h-5 w-9 rounded-full p-0.5 transition ${enabled ? 'bg-ui-success/70' : 'bg-ui-border'}`}>
+                <span className={`block h-4 w-4 rounded-full bg-ui-panel transition ${enabled ? 'translate-x-4' : ''}`} />
             </span>
         </button>
     )

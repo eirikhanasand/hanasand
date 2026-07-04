@@ -11,7 +11,7 @@ export function Toggle<T extends string | boolean>(props: {
     right: { value: T, text?: string, label?: string, icon?: ReactNode }
 }) {
     return (
-        <div className='inline-flex rounded-full border border-white/10 bg-white/3 p-1 text-xs text-bright/70'>
+        <div className='inline-flex rounded-full border border-ui-border bg-ui-panel p-1 text-xs text-ui-muted'>
             {[props.left, props.right].map(option => {
                 const active = option.value === props.value
                 return (
@@ -21,7 +21,7 @@ export function Toggle<T extends string | boolean>(props: {
                         onClick={() => props.onChange(option.value)}
                         aria-pressed={active}
                         className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 transition ${
-                            active ? 'bg-white/12 text-bright' : 'hover:bg-white/5'
+                            active ? 'bg-ui-raised text-ui-text' : 'hover:bg-ui-raised hover:text-ui-text'
                         }`}
                     >
                         {option.icon}
@@ -38,7 +38,7 @@ export function SeverityPill({ severity, count, compact }: {
     count: number
     compact?: boolean
 }) {
-    const tone = severityTone[severity] || 'border-white/10 text-bright/70'
+    const tone = severityTone[severity] || 'border-ui-border text-ui-muted'
     return (
         <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${compact ? '' : 'text-xs'} ${tone}`}>
             <span>{severity}</span>
@@ -48,9 +48,9 @@ export function SeverityPill({ severity, count, compact }: {
 }
 
 const severityTone: Record<SeverityLevel, string> = {
-    critical: 'border-red-400/25 bg-red-500/8 text-red-100',
-    high: 'border-orange-400/25 bg-orange-500/8 text-orange-100',
-    medium: 'border-amber-300/25 bg-amber-400/8 text-amber-100',
-    low: 'border-emerald-400/25 bg-emerald-500/8 text-emerald-100',
-    unknown: 'border-white/10 bg-white/3 text-bright/70',
+    critical: 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger',
+    high: 'border-ui-danger/25 bg-ui-danger/10 text-ui-danger',
+    medium: 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning',
+    low: 'border-ui-success/30 bg-ui-success/10 text-ui-success',
+    unknown: 'border-ui-border bg-ui-panel text-ui-muted',
 }

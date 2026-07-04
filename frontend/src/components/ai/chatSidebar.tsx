@@ -33,15 +33,15 @@ export default function ChatSidebar(props: ChatSidebarProps) {
     const [showArchived, setShowArchived] = useState(false)
     const [searchOpen, setSearchOpen] = useState(false)
     return (
-        <aside className='flex min-h-0 flex-col border-r border-[#e0e5ed] bg-white p-4'>
+        <aside className='flex min-h-0 flex-col border-r border-ui-border bg-ui-panel p-4 text-ui-text'>
             <div className='flex items-center justify-between gap-2 pb-4'>
-                <button type='button' onClick={onNewConversation} className='inline-flex h-9 items-center gap-2 rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#2b2f39]'>
+                <button type='button' onClick={onNewConversation} className='inline-flex h-9 items-center gap-2 rounded-lg bg-ui-text px-3 text-sm font-semibold text-ui-canvas transition-opacity hover:opacity-90'>
                     <MessageSquarePlus className='h-4 w-4' />
                     New session
                 </button>
                 <div className='flex items-center gap-1'>
                     <IconButton label='Search sessions' icon={<Search className='h-4 w-4' />} active={searchOpen} onClick={() => setSearchOpen((prev) => !prev)} />
-                    <Link href='/s' aria-label='Open context' className='grid h-9 w-9 place-items-center rounded-lg text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
+                    <Link href='/s' aria-label='Open context' className='grid h-9 w-9 place-items-center rounded-lg text-ui-muted transition-colors hover:bg-ui-raised hover:text-ui-text'>
                         <SquareArrowOutUpRight className='h-4 w-4' />
                     </Link>
                 </div>
@@ -49,17 +49,17 @@ export default function ChatSidebar(props: ChatSidebarProps) {
 
             {searchOpen ? (
                 <label className='relative mb-3 block'>
-                    <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#667085]' />
+                    <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-muted' />
                     <input
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
                         placeholder='Search sessions'
-                        className='w-full rounded-lg border border-[#d8dee9] bg-white py-2.5 pl-10 pr-3 text-sm text-[#171a21] outline-none placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
+                        className='w-full rounded-lg border border-ui-border bg-ui-raised py-2.5 pl-10 pr-3 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/15'
                     />
                 </label>
             ) : null}
 
-            <div className='mb-3 flex items-center justify-between px-1 text-[11px] font-semibold uppercase text-[#667085]'>
+            <div className='mb-3 flex items-center justify-between px-1 text-[11px] font-semibold uppercase text-ui-muted'>
                 <span>Sessions</span>
                 <span>{conversations.length}</span>
             </div>
@@ -73,8 +73,8 @@ export default function ChatSidebar(props: ChatSidebarProps) {
                 onSelectConversation={onSelectConversation}
             />
 
-            <div className='mt-5 border-t border-[#e0e5ed] pt-4'>
-                <button type='button' onClick={() => setShowArchived((prev) => !prev)} className='flex min-h-8 w-full items-center justify-between rounded-lg px-1 text-[11px] font-semibold uppercase text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
+            <div className='mt-5 border-t border-ui-border pt-4'>
+                <button type='button' onClick={() => setShowArchived((prev) => !prev)} className='flex min-h-8 w-full items-center justify-between rounded-lg px-1 text-[11px] font-semibold uppercase text-ui-muted transition-colors hover:bg-ui-raised hover:text-ui-text'>
                     <span>Archived</span>
                     <span>{archivedConversations.length}</span>
                 </button>
@@ -115,7 +115,7 @@ function ConversationList({
 }) {
     if (!conversations.length) {
         return (
-            <div className='px-1 py-3 text-sm text-[#667085]'>
+            <div className='px-1 py-3 text-sm text-ui-muted'>
                 No {archived ? 'archived' : 'active'} sessions yet.
             </div>
         )
@@ -135,7 +135,7 @@ function ConversationList({
                             onSelectConversation(conversation.id)
                         }
                     }}
-                    className={`group flex items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${conversation.id === activeConversationId ? 'bg-[#eef3ff] text-[#2546a8]' : 'text-[#344054] hover:bg-[#f8fafc]'}`}
+                    className={`group flex items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${conversation.id === activeConversationId ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}
                 >
                     <div className='min-w-0 flex-1 overflow-hidden'>
                         <div className='truncate text-sm'>{conversationTitle(conversation.title)}</div>
@@ -170,7 +170,7 @@ function conversationTitle(title?: string | null) {
 
 function IconButton({ label, icon, active = false, onClick }: { label: string, icon: React.ReactNode, active?: boolean, onClick: () => void }) {
     return (
-        <button type='button' aria-label={label} onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${active ? 'bg-[#eef3ff] text-[#3056d3]' : 'text-[#667085] hover:bg-[#f8fafc] hover:text-[#171a21]'}`}>
+        <button type='button' aria-label={label} onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${active ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}>
             {icon}
         </button>
     )
@@ -188,7 +188,7 @@ function MiniButton({
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
 }) {
     return (
-        <button type='button' aria-label={label} onClick={onClick} className={`grid h-8 w-8 place-items-center rounded-lg transition-colors ${danger ? 'text-[#b42318] hover:bg-[#fff1f0]' : 'text-[#667085] hover:bg-[#f8fafc] hover:text-[#171a21]'}`}>
+        <button type='button' aria-label={label} onClick={onClick} className={`grid h-8 w-8 place-items-center rounded-lg transition-colors ${danger ? 'text-ui-danger hover:bg-ui-danger/10' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}>
             {icon}
         </button>
     )

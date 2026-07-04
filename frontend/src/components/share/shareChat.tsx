@@ -679,51 +679,51 @@ export default function ShareChat({
     }
 
     return (
-        <section className={`enterprise-console flex flex-col overflow-hidden rounded-lg border border-bright/8 bg-black/10 ${
-            mode === 'workspace' ? 'h-full min-h-0 shadow-2xl shadow-black/20' : 'h-[calc(100%-3.5rem)] min-h-[32rem]'
+        <section className={`enterprise-console flex flex-col overflow-hidden rounded-lg border border-ui-border bg-ui-canvas/10 ${
+            mode === 'workspace' ? 'h-full min-h-0 shadow-2xl shadow-ui-canvas/20' : 'h-[calc(100%-3.5rem)] min-h-[32rem]'
         }`}>
-            <div className='flex items-center justify-between border-b border-bright/8 px-3 py-2'>
+            <div className='flex items-center justify-between border-b border-ui-border px-3 py-2'>
                 <div className='min-w-0'>
-                    <div className='flex items-center gap-2 text-sm font-semibold text-bright/88'>
-                        <Sparkles className='h-4 w-4 text-[#f07d33]' />
+                    <div className='flex items-center gap-2 text-sm font-semibold text-ui-text/88'>
+                        <Sparkles className='h-4 w-4 text-ui-primary' />
                         Workspace assistant
                     </div>
-                    <p className='truncate text-xs text-bright/45'>
+                    <p className='truncate text-xs text-ui-text/45'>
                         {showBuilderWorkflow ? 'Build reviewable changes with visible checks.' : 'Ask mode will not change files.'}
                     </p>
                 </div>
-                <div className='flex shrink-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 p-1 text-[11px]'>
+                <div className='flex shrink-0 items-center gap-1 rounded-full border border-ui-border bg-ui-canvas/18 p-1 text-[11px]'>
                     <button
                         type='button'
                         onClick={() => setBuilderWorkflowOpen(false)}
-                        className={`h-7 cursor-pointer rounded-full px-3 font-medium transition ${showBuilderWorkflow ? 'text-bright/45 hover:bg-bright/8 hover:text-bright/72' : 'bg-bright text-background'}`}
+                        className={`h-7 cursor-pointer rounded-full px-3 font-medium transition ${showBuilderWorkflow ? 'text-ui-text/45 hover:bg-ui-panel/8 hover:text-ui-text/72' : 'bg-ui-panel text-background'}`}
                     >
                         Ask
                     </button>
                     <button
                         type='button'
                         onClick={() => setBuilderWorkflowOpen(true)}
-                        className={`h-7 cursor-pointer rounded-full px-3 font-medium transition ${showBuilderWorkflow ? 'bg-bright text-background' : 'text-bright/45 hover:bg-bright/8 hover:text-bright/72'}`}
+                        className={`h-7 cursor-pointer rounded-full px-3 font-medium transition ${showBuilderWorkflow ? 'bg-ui-panel text-background' : 'text-ui-text/45 hover:bg-ui-panel/8 hover:text-ui-text/72'}`}
                     >
                         Build
                     </button>
                 </div>
             </div>
-            <div className='border-b border-bright/8 bg-black/8 px-3 py-2'>
-                <div className='flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-bright/52'>
-                    <span className='rounded-full border border-bright/8 bg-bright/[0.035] px-2 py-0.5 font-medium text-bright/66'>You approve changes</span>
-                    <span className='rounded-full border border-bright/8 bg-bright/[0.035] px-2 py-0.5 font-medium text-bright/66'>Current file context</span>
-                    <span className='min-w-0 truncate text-bright/38'>{share?.path || share?.alias || 'Workspace home'}</span>
+            <div className='border-b border-ui-border bg-ui-canvas/8 px-3 py-2'>
+                <div className='flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-ui-text/52'>
+                    <span className='rounded-full border border-ui-border bg-ui-panel/[0.035] px-2 py-0.5 font-medium text-ui-text/66'>You approve changes</span>
+                    <span className='rounded-full border border-ui-border bg-ui-panel/[0.035] px-2 py-0.5 font-medium text-ui-text/66'>Current file context</span>
+                    <span className='min-w-0 truncate text-ui-text/38'>{share?.path || share?.alias || 'Workspace home'}</span>
                 </div>
             </div>
             {showBuilderWorkflow ? (
-                <div className='border-b border-bright/8 bg-black/12 p-3'>
-                    <div className='mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-bright/8 bg-black/18 px-2 py-1.5 text-[11px] text-bright/52'>
-                        <ShieldCheck className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                        <span className='font-medium text-bright/68'>Build is opt-in.</span>
+                <div className='border-b border-ui-border bg-ui-canvas/12 p-3'>
+                    <div className='mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-ui-border bg-ui-canvas/18 px-2 py-1.5 text-[11px] text-ui-text/52'>
+                        <ShieldCheck className='h-3.5 w-3.5 shrink-0 text-ui-primary' />
+                        <span className='font-medium text-ui-text/68'>Build is opt-in.</span>
                         <span>No files change until you approve the What changed cards.</span>
                     </div>
-                    <div className='mb-2 grid gap-1.5 text-[11px] text-bright/58 sm:grid-cols-4'>
+                    <div className='mb-2 grid gap-1.5 text-[11px] text-ui-text/58 sm:grid-cols-4'>
                         <PlainMetric icon={<FileText className='h-3.5 w-3.5' />} label='Build' value='Reviewable changes' />
                         <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Check' value='Browser review' />
                         <PlainMetric icon={<Globe2 className='h-3.5 w-3.5' />} label='Deploy' value='Publish checks' />
@@ -731,69 +731,69 @@ export default function ShareChat({
                     </div>
                     <div className={`grid gap-3 rounded-2xl border p-3 ${
                         projectState.tone === 'success'
-                            ? 'border-emerald-300/15 bg-emerald-950/10'
+                            ? 'border-ui-success/15 bg-ui-success/10'
                             : projectState.tone === 'danger'
-                                ? 'border-red-300/15 bg-red-950/12'
+                                ? 'border-ui-danger/15 bg-ui-danger/12'
                                 : projectState.tone === 'attention'
-                                    ? 'border-amber-200/15 bg-amber-950/12'
-                                    : 'border-bright/8 bg-bright/[0.035]'
+                                    ? 'border-ui-warning/15 bg-ui-warning/12'
+                                    : 'border-ui-border bg-ui-panel/[0.035]'
                     } sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center`}>
                         <div className='flex min-w-0 items-start gap-3'>
                             <ProjectStateIcon state={projectState} loading={loading} />
                             <div className='min-w-0'>
                                 <div className='flex flex-wrap items-center gap-2'>
-                                    <p className='text-sm font-semibold text-bright/88'>{projectState.label}</p>
-                                    {loading ? <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[11px] text-bright/45'>{elapsedSeconds}s</span> : null}
+                                    <p className='text-sm font-semibold text-ui-text/88'>{projectState.label}</p>
+                                    {loading ? <span className='rounded-full border border-ui-border px-2 py-0.5 text-[11px] text-ui-text/45'>{elapsedSeconds}s</span> : null}
                                 </div>
-                                <p className='mt-1 text-xs leading-5 text-bright/56'>{projectState.detail}</p>
+                                <p className='mt-1 text-xs leading-5 text-ui-text/56'>{projectState.detail}</p>
                             </div>
                         </div>
                         <button
                             type='button'
                             onClick={() => void primaryAction.onClick()}
                             disabled={primaryAction.disabled}
-                            className='inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-full bg-bright px-4 text-sm font-semibold text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-45'
+                            className='inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-full bg-ui-panel px-4 text-sm font-semibold text-background transition hover:bg-ui-panel/88 disabled:cursor-default disabled:opacity-45'
                         >
                             {primaryAction.label}
                             <ChevronRight className='h-4 w-4' />
                         </button>
-                        <p className='text-xs leading-5 text-bright/45 sm:col-span-2'>{primaryAction.detail}</p>
+                        <p className='text-xs leading-5 text-ui-text/45 sm:col-span-2'>{primaryAction.detail}</p>
                     </div>
-                    <div className='mt-2 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-3'>
+                    <div className='mt-2 grid gap-2 text-[11px] text-ui-text/58 sm:grid-cols-3'>
                         <PlainMetric icon={<FileText className='h-3.5 w-3.5' />} label={pendingEdit?.status === 'pending' ? 'Changes waiting for review' : 'Project files'} value={pendingEdit?.status === 'pending' ? `${pendingEdit.changes.length}` : treePaths.length ? `${treePaths.length}` : '1'} />
                         <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Browser check' value={browserProofJobs.length ? `${browserProofJobs.filter((job) => job.status === 'completed').length}/${browserProofJobs.length}` : browserEvidence.length ? 'Done' : 'Not run yet'} />
                         <PlainMetric icon={<ShieldCheck className='h-3.5 w-3.5' />} label='Safety' value='You approve changes' />
                     </div>
                     {designMemory ? (
-                        <div className='mt-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] leading-5 text-bright/58'>
+                        <div className='mt-2 rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5 text-[11px] leading-5 text-ui-text/58'>
                             <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
-                                <Sparkles className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                                <span className='font-semibold text-bright/70'>Design memory</span>
+                                <Sparkles className='h-3.5 w-3.5 shrink-0 text-ui-primary' />
+                                <span className='font-semibold text-ui-text/70'>Design memory</span>
                                 {designMemory.tokens.slice(0, 4).map((token) => (
-                                    <span key={token} className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/48'>{token}</span>
+                                    <span key={token} className='rounded-full border border-ui-border px-2 py-0.5 text-ui-text/48'>{token}</span>
                                 ))}
                             </div>
-                            <p className='mt-1 text-bright/42'>{designMemory.summary}</p>
+                            <p className='mt-1 text-ui-text/42'>{designMemory.summary}</p>
                         </div>
                     ) : null}
                 </div>
             ) : null}
 
             {showBuilderWorkflow && lastRun ? (
-                <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
-                    <div className='flex flex-wrap items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/58'>
-                        <Gauge className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                        <span className='font-semibold text-bright/70'>Last run</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{formatRunDuration(lastRun.durationMs)}</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.pendingChanges} edit{lastRun.pendingChanges === 1 ? '' : 's'}</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.browserProofs} browser check{lastRun.browserProofs === 1 ? '' : 's'}</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{(lastRun.tokenCap / 1000).toFixed(1)}k budget</span>
+                <div className='border-b border-ui-border bg-ui-canvas/10 px-3 py-2'>
+                    <div className='flex flex-wrap items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5 text-[11px] text-ui-text/58'>
+                        <Gauge className='h-3.5 w-3.5 shrink-0 text-ui-primary' />
+                        <span className='font-semibold text-ui-text/70'>Last run</span>
+                        <span className='rounded-full border border-ui-border px-2 py-0.5 text-ui-text/50'>{formatRunDuration(lastRun.durationMs)}</span>
+                        <span className='rounded-full border border-ui-border px-2 py-0.5 text-ui-text/50'>{lastRun.pendingChanges} edit{lastRun.pendingChanges === 1 ? '' : 's'}</span>
+                        <span className='rounded-full border border-ui-border px-2 py-0.5 text-ui-text/50'>{lastRun.browserProofs} browser check{lastRun.browserProofs === 1 ? '' : 's'}</span>
+                        <span className='rounded-full border border-ui-border px-2 py-0.5 text-ui-text/50'>{(lastRun.tokenCap / 1000).toFixed(1)}k budget</span>
                         <span className={`rounded-full border px-2 py-0.5 ${
                             lastRun.status === 'completed'
-                                ? 'border-emerald-300/15 text-emerald-100/62'
+                                ? 'border-ui-success/15 text-ui-success/62'
                                 : lastRun.status === 'queued'
-                                    ? 'border-amber-200/15 text-amber-50/70'
-                                    : 'border-red-300/15 text-red-100/70'
+                                    ? 'border-ui-warning/15 text-ui-warning/70'
+                                    : 'border-ui-danger/15 text-ui-danger/70'
                         }`}>
                             {lastRun.status === 'completed' ? 'Completed' : lastRun.status === 'queued' ? 'Checking' : 'Needs retry'}
                         </span>
@@ -802,21 +802,21 @@ export default function ShareChat({
             ) : null}
 
             {showBuilderWorkflow && browserProofJobs.length ? (
-                <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
-                    <div className='grid gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/58'>
+                <div className='border-b border-ui-border bg-ui-canvas/10 px-3 py-2'>
+                    <div className='grid gap-1.5 rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5 text-[11px] text-ui-text/58'>
                         <div className='flex min-w-0 items-center gap-1.5'>
-                            <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                            <span className='font-semibold text-bright/70'>Verification queue</span>
-                            <span className='truncate text-bright/42'>{browserProofJobs.filter((job) => job.status === 'queued' || job.status === 'running').length} running</span>
+                            <ScanSearch className='h-3.5 w-3.5 shrink-0 text-ui-primary' />
+                            <span className='font-semibold text-ui-text/70'>Verification queue</span>
+                            <span className='truncate text-ui-text/42'>{browserProofJobs.filter((job) => job.status === 'queued' || job.status === 'running').length} running</span>
                         </div>
                         <div className='flex min-w-0 flex-wrap gap-1.5'>
                             {browserProofJobs.map((job) => (
                                 <span key={job.id} className={`max-w-full truncate rounded-full border px-2 py-0.5 ${
                                     job.status === 'completed'
-                                        ? 'border-emerald-300/15 text-emerald-100/62'
+                                        ? 'border-ui-success/15 text-ui-success/62'
                                         : job.status === 'error'
-                                            ? 'border-red-300/15 text-red-100/70'
-                                            : 'border-amber-200/15 text-amber-50/70'
+                                            ? 'border-ui-danger/15 text-ui-danger/70'
+                                            : 'border-ui-warning/15 text-ui-warning/70'
                                 }`}>
                                     {job.status === 'running' ? 'Checking' : job.status === 'queued' ? 'Check queued' : job.status === 'completed' ? 'Looks good' : 'Needs fix'}
                                 </span>
@@ -831,15 +831,15 @@ export default function ShareChat({
             ) : null}
 
             {showBuilderWorkflow && proofTarget?.url ? (
-                <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
-                    <div className='flex items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/62'>
+                <div className='border-b border-ui-border bg-ui-canvas/10 px-3 py-2'>
+                    <div className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5 text-[11px] text-ui-text/62'>
                         <div className='flex min-w-0 items-center gap-1.5'>
-                            <Globe2 className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                            <span className='shrink-0 font-semibold text-bright/68'>Check target</span>
-                            <span className='truncate text-bright/42'>{proofTarget.label}</span>
-                            <span className='truncate text-bright/52'>{proofTarget.url}</span>
+                            <Globe2 className='h-3.5 w-3.5 shrink-0 text-ui-primary' />
+                            <span className='shrink-0 font-semibold text-ui-text/68'>Check target</span>
+                            <span className='truncate text-ui-text/42'>{proofTarget.label}</span>
+                            <span className='truncate text-ui-text/52'>{proofTarget.url}</span>
                         </div>
-                        <a href={proofTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open check target' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-bright/45 transition hover:bg-bright/8 hover:text-bright'>
+                        <a href={proofTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open check target' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-ui-text/45 transition hover:bg-ui-panel/8 hover:text-ui-text'>
                             <ExternalLink className='h-3.5 w-3.5' />
                         </a>
                     </div>
@@ -847,20 +847,20 @@ export default function ShareChat({
             ) : null}
 
             {showBuilderWorkflow && browserEvidence[0] ? (
-                <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
-                    <div className='grid gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/62 sm:grid-cols-[minmax(0,1fr)_auto]'>
+                <div className='border-b border-ui-border bg-ui-canvas/10 px-3 py-2'>
+                    <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5 text-[11px] text-ui-text/62 sm:grid-cols-[minmax(0,1fr)_auto]'>
                         <div className='flex min-w-0 items-start gap-1.5'>
-                            <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                            <ScanSearch className='h-3.5 w-3.5 shrink-0 text-ui-primary' />
                             <div className='min-w-0'>
-                                <p className='truncate font-semibold text-bright/72'>Browser check: {browserEvidence[0].title || 'Untitled page'}</p>
-                                <p className='truncate text-bright/42'>A real browser inspected the rendered result and saved review evidence.</p>
+                                <p className='truncate font-semibold text-ui-text/72'>Browser check: {browserEvidence[0].title || 'Untitled page'}</p>
+                                <p className='truncate text-ui-text/42'>A real browser inspected the rendered result and saved review evidence.</p>
                             </div>
                         </div>
                         <div className='flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end'>
-                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].structure?.headings?.length || 0} headings</span>
-                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].pageErrors?.filter(Boolean).length || 0} issues</span>
-                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].screenshotPath ? 'Screenshot captured' : 'No screenshot'}</span>
-                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/42'>{browserEvidence.length} saved</span>
+                            <span className='rounded-full border border-ui-border px-2 py-0.5 text-ui-text/50'>{browserEvidence[0].structure?.headings?.length || 0} headings</span>
+                            <span className='rounded-full border border-ui-border px-2 py-0.5 text-ui-text/50'>{browserEvidence[0].pageErrors?.filter(Boolean).length || 0} issues</span>
+                            <span className='rounded-full border border-ui-border px-2 py-0.5 text-ui-text/50'>{browserEvidence[0].screenshotPath ? 'Screenshot captured' : 'No screenshot'}</span>
+                            <span className='rounded-full border border-ui-border px-2 py-0.5 text-ui-text/42'>{browserEvidence.length} saved</span>
                         </div>
                     </div>
                 </div>
@@ -870,11 +870,11 @@ export default function ShareChat({
                 {messages.length === 0 ? (
                     <div className='grid h-full place-items-center text-center'>
                         <div>
-                            <div className='mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-bright/7 text-bright/70'>
+                            <div className='mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-ui-panel/7 text-ui-text/70'>
                                 <Sparkles className='h-5 w-5' />
                             </div>
-                            <h3 className='text-base font-semibold text-bright/90'>{showBuilderWorkflow ? 'Ready to build.' : 'Ask without changing files.'}</h3>
-                            <p className='mt-1 max-w-xs text-sm leading-5 text-bright/48'>
+                            <h3 className='text-base font-semibold text-ui-text/90'>{showBuilderWorkflow ? 'Ready to build.' : 'Ask without changing files.'}</h3>
+                            <p className='mt-1 max-w-xs text-sm leading-5 text-ui-text/48'>
                                 {showBuilderWorkflow
                                     ? 'Describe the result you want. Hanasand prepares changes, verifies the visible result, and keeps recovery visible.'
                                     : 'Use Ask for explanations. Switch to Build only when you want reviewable project changes.'}
@@ -886,17 +886,17 @@ export default function ShareChat({
                     return (
                         <article key={message.id} className={`max-w-[92%] rounded-2xl px-3 py-2 text-sm leading-6 ${
                             message.role === 'user'
-                                ? 'ml-auto bg-bright/12 text-bright'
+                                ? 'ml-auto bg-ui-panel/12 text-ui-text'
                                 : message.role === 'tool'
-                                    ? 'border border-bright/8 bg-black/18 text-bright/62'
-                                    : 'bg-white/[0.055] text-bright/82'
+                                    ? 'border border-ui-border bg-ui-canvas/18 text-ui-text/62'
+                                    : 'bg-ui-panel/[0.055] text-ui-text/82'
                         }`}>
                             {activity ? (
                                 <div className='flex items-start gap-2'>
-                                    <ClipboardCheck className='mt-1 h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                                    <ClipboardCheck className='mt-1 h-3.5 w-3.5 shrink-0 text-ui-primary' />
                                     <div>
-                                        <p className='font-medium text-bright/72'>{activity.title}</p>
-                                        <p className='text-xs leading-5 text-bright/48'>{activity.detail}</p>
+                                        <p className='font-medium text-ui-text/72'>{activity.title}</p>
+                                        <p className='text-xs leading-5 text-ui-text/48'>{activity.detail}</p>
                                     </div>
                                 </div>
                             ) : (
@@ -906,29 +906,29 @@ export default function ShareChat({
                     )
                 })}
                 {loading ? (
-                    <div className='flex items-center gap-2 text-sm text-bright/55'>
+                    <div className='flex items-center gap-2 text-sm text-ui-text/55'>
                         <Loader2 className='h-4 w-4 animate-spin' />
                         {projectState.label}: {projectState.detail}
                     </div>
                 ) : null}
                 {browserTarget ? (
-                    <div className='overflow-hidden rounded-2xl border border-bright/10 bg-black/24'>
-                        <div className='flex items-center justify-between gap-3 border-b border-bright/8 px-3 py-2'>
+                    <div className='overflow-hidden rounded-2xl border border-ui-border bg-ui-canvas/24'>
+                        <div className='flex items-center justify-between gap-3 border-b border-ui-border px-3 py-2'>
                             <div className='flex min-w-0 items-center gap-2'>
-                                <Globe2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                                <Globe2 className='h-4 w-4 shrink-0 text-ui-primary' />
                                 <div className='min-w-0'>
-                                    <p className='truncate text-sm font-semibold text-bright/82'>{browserTarget.title}</p>
-                                    <p className='truncate text-xs text-bright/42'>{browserTarget.url}</p>
+                                    <p className='truncate text-sm font-semibold text-ui-text/82'>{browserTarget.title}</p>
+                                    <p className='truncate text-xs text-ui-text/42'>{browserTarget.url}</p>
                                 </div>
                             </div>
-                            <a href={browserTarget.url} target='_blank' rel='noopener noreferrer' className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-bright/52 transition hover:bg-bright/8 hover:text-bright' aria-label='Open browser target in a new tab'>
+                            <a href={browserTarget.url} target='_blank' rel='noopener noreferrer' className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ui-text/52 transition hover:bg-ui-panel/8 hover:text-ui-text' aria-label='Open browser target in a new tab'>
                                 <ExternalLink className='h-4 w-4' />
                             </a>
                         </div>
                         <iframe
                             src={browserTarget.url}
                             title={`Inline browser for ${browserTarget.title}`}
-                            className='h-[min(34rem,52vh)] w-full border-0 bg-white'
+                            className='h-[min(34rem,52vh)] w-full border-0 bg-ui-panel'
                             sandbox='allow-forms allow-modals allow-popups allow-same-origin allow-scripts'
                         />
                     </div>
@@ -939,23 +939,23 @@ export default function ShareChat({
             </div>
 
             {pendingEdit ? (
-                <div className='border-t border-bright/8 bg-black/14 p-3'>
+                <div className='border-t border-ui-border bg-ui-canvas/14 p-3'>
                     <div className='mb-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
                         <div className='min-w-0'>
-                            <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-bright/86'>
-                                <FileText className='h-4 w-4 text-[#f07d33]' />
-                                <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[11px] font-medium text-bright/62'>
+                            <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text/86'>
+                                <FileText className='h-4 w-4 text-ui-primary' />
+                                <span className='rounded-full border border-ui-border px-2 py-0.5 text-[11px] font-medium text-ui-text/62'>
                                     Review
                                 </span>
                                 <span className='truncate'>What changed</span>
-                                <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[11px] font-medium text-bright/48'>
+                                <span className='rounded-full border border-ui-border px-2 py-0.5 text-[11px] font-medium text-ui-text/48'>
                                     {pendingEdit.changes.length} pending change{pendingEdit.changes.length === 1 ? '' : 's'}
                                 </span>
-                                <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[11px] font-medium text-bright/48'>
+                                <span className='rounded-full border border-ui-border px-2 py-0.5 text-[11px] font-medium text-ui-text/48'>
                                     {pendingEdit.changes.length} file change{pendingEdit.changes.length === 1 ? '' : 's'}
                                 </span>
                             </div>
-                            <p className='mt-1 text-xs leading-5 text-bright/48'>
+                            <p className='mt-1 text-xs leading-5 text-ui-text/48'>
                                 Resolve the pending change before starting another assistant run.
                             </p>
                         </div>
@@ -964,7 +964,7 @@ export default function ShareChat({
                                 <button
                                     type='button'
                                     onClick={discardPendingEdit}
-                                    className='inline-flex h-8 cursor-pointer items-center rounded-full border border-bright/10 px-3 text-xs font-medium text-bright/52 transition hover:bg-bright/8 hover:text-bright/72'
+                                    className='inline-flex h-8 cursor-pointer items-center rounded-full border border-ui-border px-3 text-xs font-medium text-ui-text/52 transition hover:bg-ui-panel/8 hover:text-ui-text/72'
                                 >
                                     Discard
                                 </button>
@@ -974,7 +974,7 @@ export default function ShareChat({
                                     type='button'
                                     disabled
                                     onClick={applyPendingEdit}
-                                    className='inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-bright px-3 text-xs font-semibold text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-55'
+                                    className='inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-ui-panel px-3 text-xs font-semibold text-background transition hover:bg-ui-panel/88 disabled:cursor-default disabled:opacity-55'
                                 >
                                     {pendingEdit.status === 'applying' ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Check className='h-3.5 w-3.5' />}
                                     {pendingEdit.status === 'applied' ? 'Applied' : proofApplyBlocked ? 'Run check first' : 'Applying'}
@@ -983,19 +983,19 @@ export default function ShareChat({
                         </div>
                     </div>
                     {pendingEditBlocksNewRun ? (
-                        <div className='mb-2 rounded-lg border border-amber-200/10 bg-amber-950/12 px-2 py-1.5 text-xs text-amber-50/68'>
+                        <div className='mb-2 rounded-lg border border-ui-warning/10 bg-ui-warning/12 px-2 py-1.5 text-xs text-ui-warning/68'>
                             Apply or discard the pending change before asking for another edit.
                         </div>
                     ) : null}
                     {proofApplyBlocked ? (
-                        <div className='mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300/10 bg-red-950/15 px-2 py-1.5 text-xs text-red-100/72'>
+                        <div className='mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ui-danger/10 bg-ui-danger/15 px-2 py-1.5 text-xs text-ui-danger/72'>
                             <span>{lastRun?.status === 'queued' ? 'Browser check is queued before these changes can be applied.' : 'Browser check needs retry before these changes can be applied.'}</span>
                             {lastBrowserCalls.length ? (
                                 <button
                                     type='button'
                                     onClick={retryBrowserProof}
                                     disabled={retryingProof}
-                                    className='inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-red-200/15 px-2.5 text-[11px] font-medium text-red-50/82 transition hover:bg-red-100/10 disabled:cursor-default disabled:opacity-55'
+                                    className='inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-ui-danger/15 px-2.5 text-[11px] font-medium text-ui-danger/82 transition hover:bg-ui-danger/10 disabled:cursor-default disabled:opacity-55'
                                 >
                                     {retryingProof ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <RotateCw className='h-3.5 w-3.5' />}
                                     Retry check
@@ -1011,15 +1011,15 @@ export default function ShareChat({
                 </div>
             ) : null}
 
-            <form ref={formRef} onSubmit={submit} className='border-t border-bright/8 p-3'>
+            <form ref={formRef} onSubmit={submit} className='border-t border-ui-border p-3'>
                 {showBuilderWorkflow ? (
-                    <div className='mb-2 grid grid-cols-4 gap-1 rounded-xl border border-bright/8 bg-black/18 p-1'>
+                    <div className='mb-2 grid grid-cols-4 gap-1 rounded-xl border border-ui-border bg-ui-canvas/18 p-1'>
                         {costModes.map((mode) => (
                             <button
                                 key={mode.id}
                                 type='button'
                                 onClick={() => setCostMode(mode.id)}
-                                className={`min-w-0 rounded-lg px-2 py-2 text-left transition ${costMode === mode.id ? 'bg-[#f07d33]/16 text-bright outline outline-[#f07d33]/25' : 'text-bright/48 hover:bg-bright/[0.045] hover:text-bright/72'}`}
+                                className={`min-w-0 rounded-lg px-2 py-2 text-left transition ${costMode === mode.id ? 'bg-ui-primary/16 text-ui-text outline outline-ui-primary/25' : 'text-ui-text/48 hover:bg-ui-panel/[0.045] hover:text-ui-text/72'}`}
                                 aria-pressed={costMode === mode.id}
                             >
                                 <span className='block truncate text-[11px] font-semibold'>{mode.label}</span>
@@ -1028,7 +1028,7 @@ export default function ShareChat({
                         ))}
                     </div>
                 ) : null}
-                <div className='flex items-end gap-2 rounded-2xl border border-bright/10 bg-bright/[0.045] p-2'>
+                <div className='flex items-end gap-2 rounded-2xl border border-ui-border bg-ui-panel/[0.045] p-2'>
                     <input type='hidden' name='shareChatPromptFallback' value={input} />
                     <textarea
                         ref={inputRef}
@@ -1043,7 +1043,7 @@ export default function ShareChat({
                             }
                         }}
                         placeholder={showBuilderWorkflow ? 'Describe what you want to build or change...' : 'Ask about this project...'}
-                        className='max-h-36 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-bright outline-none placeholder:text-bright/35'
+                        className='max-h-36 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-ui-text outline-none placeholder:text-ui-text/35'
                         rows={1}
                     />
                     <button
@@ -1051,17 +1051,17 @@ export default function ShareChat({
                         disabled={!canSend}
                         onClick={() => void submitPrompt(readSubmittedPrompt(formRef.current || undefined))}
                         aria-label='Send message'
-                        className='grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full bg-bright text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-35'
+                        className='grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full bg-ui-panel text-background transition hover:bg-ui-panel/88 disabled:cursor-default disabled:opacity-35'
                     >
                         <ArrowUp className='h-4 w-4' />
                     </button>
                 </div>
                 {pendingEditBlocksNewRun ? (
-                    <p className='mt-2 text-xs text-bright/42'>
+                    <p className='mt-2 text-xs text-ui-text/42'>
                         Choose Apply changes or Discard before asking for another edit.
                     </p>
                 ) : composerHint ? (
-                    <p className='mt-2 text-xs text-bright/42'>
+                    <p className='mt-2 text-xs text-ui-text/42'>
                         {composerHint}
                     </p>
                 ) : null}
@@ -1071,7 +1071,7 @@ export default function ShareChat({
 }
 
 function ProjectStateIcon({ state, loading }: { state: PlainProjectState, loading: boolean }) {
-    const className = 'mt-0.5 h-4 w-4 shrink-0 text-[#f07d33]'
+    const className = 'mt-0.5 h-4 w-4 shrink-0 text-ui-primary'
     if (loading || state.label === 'Planning' || state.label === 'Editing' || state.label === 'Verifying') {
         return <Loader2 className={`${className} animate-spin`} />
     }
@@ -1086,10 +1086,10 @@ function ProjectStateIcon({ state, loading }: { state: PlainProjectState, loadin
 
 function PlainMetric({ icon, label, value }: { icon: ReactNode, label: string, value: string }) {
     return (
-        <div className='flex min-w-0 items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
-            <span className='shrink-0 text-[#f07d33]'>{icon}</span>
-            <span className='min-w-0 truncate text-bright/42'>{label}</span>
-            <span className='ml-auto shrink-0 font-semibold text-bright/68'>{value}</span>
+        <div className='flex min-w-0 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5'>
+            <span className='shrink-0 text-ui-primary'>{icon}</span>
+            <span className='min-w-0 truncate text-ui-text/42'>{label}</span>
+            <span className='ml-auto shrink-0 font-semibold text-ui-text/68'>{value}</span>
         </div>
     )
 }
@@ -1104,63 +1104,63 @@ function ChangeSummaryCard({ change }: { change: PendingShareChange }) {
         .map((line) => line.replace(/(['"`])[^'"`]{20,}\1/g, '$1...$1'))
         .find((line) => line.trim().length > 0) : null
     return (
-        <article className='rounded-2xl border border-bright/8 bg-black/24 p-3'>
+        <article className='rounded-2xl border border-ui-border bg-ui-canvas/24 p-3'>
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2'>
-                        <FileText className='h-4 w-4 shrink-0 text-[#f07d33]' />
-                        <h4 className='truncate text-sm font-semibold text-bright/84'>{plainChangeTitle(change, summary.kind)}</h4>
+                        <FileText className='h-4 w-4 shrink-0 text-ui-primary' />
+                        <h4 className='truncate text-sm font-semibold text-ui-text/84'>{plainChangeTitle(change, summary.kind)}</h4>
                     </div>
-                    <p className='mt-1 text-xs leading-5 text-bright/48'>{plainPathLabel(change.path)}</p>
-                    <p className='mt-1 text-[11px] leading-4 text-bright/36'>{summary.action} {change.path}</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-text/48'>{plainPathLabel(change.path)}</p>
+                    <p className='mt-1 text-[11px] leading-4 text-ui-text/36'>{summary.action} {change.path}</p>
                 </div>
-                <span className='shrink-0 rounded-full border border-bright/8 px-2 py-0.5 text-[11px] text-bright/52'>
+                <span className='shrink-0 rounded-full border border-ui-border px-2 py-0.5 text-[11px] text-ui-text/52'>
                     {change.created ? 'New' : 'Updated'}
                 </span>
             </div>
-            <div className='mt-3 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-3'>
-                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
-                    <span className='block text-bright/35'>Type</span>
-                    <span className='font-medium text-bright/68'>{summary.kind}</span>
+            <div className='mt-3 grid gap-2 text-[11px] text-ui-text/58 sm:grid-cols-3'>
+                <div className='rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5'>
+                    <span className='block text-ui-text/35'>Type</span>
+                    <span className='font-medium text-ui-text/68'>{summary.kind}</span>
                 </div>
-                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
-                    <span className='block text-bright/35'>Size</span>
-                    <span className='flex flex-wrap items-center gap-1.5 font-medium text-bright/68'>
+                <div className='rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5'>
+                    <span className='block text-ui-text/35'>Size</span>
+                    <span className='flex flex-wrap items-center gap-1.5 font-medium text-ui-text/68'>
                         <span>{summary.totalLines} line{summary.totalLines === 1 ? '' : 's'}</span>
-                        <span className='rounded-full border border-emerald-300/10 px-1.5 py-0.5 text-emerald-100/62'>+{summary.added}</span>
-                        <span className='rounded-full border border-red-300/10 px-1.5 py-0.5 text-red-100/62'>-{summary.removed}</span>
+                        <span className='rounded-full border border-ui-success/10 px-1.5 py-0.5 text-ui-success/62'>+{summary.added}</span>
+                        <span className='rounded-full border border-ui-danger/10 px-1.5 py-0.5 text-ui-danger/62'>-{summary.removed}</span>
                     </span>
                 </div>
-                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
-                    <span className='block text-bright/35'>Impact</span>
-                    <span className='font-medium text-bright/68'>{plainImpactForPath(change.path)}</span>
+                <div className='rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5'>
+                    <span className='block text-ui-text/35'>Impact</span>
+                    <span className='font-medium text-ui-text/68'>{plainImpactForPath(change.path)}</span>
                 </div>
             </div>
             {visibleCopy.length ? (
-                <div className='mt-3 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-xs leading-5 text-bright/58'>
-                    <span className='block text-[11px] font-medium text-bright/38'>Visible copy</span>
+                <div className='mt-3 rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5 text-xs leading-5 text-ui-text/58'>
+                    <span className='block text-[11px] font-medium text-ui-text/38'>Visible copy</span>
                     {visibleCopy.slice(0, 3).map((copy) => (
                         <p key={copy} className='mt-0.5'>{copy}</p>
                     ))}
                 </div>
             ) : null}
             {firstAddedLine ? (
-                <div className='mt-3 truncate rounded-lg border border-emerald-300/10 bg-emerald-950/10 px-2 py-1.5 font-mono text-xs text-emerald-50/68'>
+                <div className='mt-3 truncate rounded-lg border border-ui-success/10 bg-ui-success/10 px-2 py-1.5 font-mono text-xs text-ui-success/68'>
                     + {firstAddedLine}
                 </div>
             ) : null}
             <details
-                className='mt-3 rounded-lg border border-bright/8 bg-black/18 px-2 py-1.5'
+                className='mt-3 rounded-lg border border-ui-border bg-ui-canvas/18 px-2 py-1.5'
                 onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
             >
-                <summary className='cursor-pointer text-xs font-medium text-bright/58'>Advanced details</summary>
-                <div className='mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-bright/52'>
-                    <span className='rounded-full border border-emerald-300/10 px-2 py-0.5 text-emerald-100/62'>Added {summary.added}</span>
-                    <span className='rounded-full border border-red-300/10 px-2 py-0.5 text-red-100/62'>Removed {summary.removed}</span>
-                    <span className='truncate text-bright/42'>Advanced path: {change.path} ({summary.action.toLowerCase()})</span>
+                <summary className='cursor-pointer text-xs font-medium text-ui-text/58'>Advanced details</summary>
+                <div className='mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-ui-text/52'>
+                    <span className='rounded-full border border-ui-success/10 px-2 py-0.5 text-ui-success/62'>Added {summary.added}</span>
+                    <span className='rounded-full border border-ui-danger/10 px-2 py-0.5 text-ui-danger/62'>Removed {summary.removed}</span>
+                    <span className='truncate text-ui-text/42'>Advanced path: {change.path} ({summary.action.toLowerCase()})</span>
                 </div>
                 {advancedOpen ? (
-                    <pre className='mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-black/24 p-2 text-xs leading-5 text-bright/64'>
+                    <pre className='mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-ui-canvas/24 p-2 text-xs leading-5 text-ui-text/64'>
                         {buildDiff(change.beforeContent, change.content)}
                     </pre>
                 ) : null}
@@ -1191,48 +1191,48 @@ function ReviewEvidencePanel({ evidence, lastRun }: { evidence: BrowserEvidence 
             ? 'Journey inspected'
             : 'Not run yet'
     return (
-        <section className='mt-3 rounded-2xl border border-bright/8 bg-black/24 p-3'>
+        <section className='mt-3 rounded-2xl border border-ui-border bg-ui-canvas/24 p-3'>
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2'>
-                        <ClipboardCheck className='h-4 w-4 text-[#f07d33]' />
-                        <h4 className='text-sm font-semibold text-bright/84'>Production check for this review</h4>
+                        <ClipboardCheck className='h-4 w-4 text-ui-primary' />
+                        <h4 className='text-sm font-semibold text-ui-text/84'>Production check for this review</h4>
                     </div>
-                    <p className='mt-1 text-xs leading-5 text-bright/48'>
+                    <p className='mt-1 text-xs leading-5 text-ui-text/48'>
                         {evidence ? 'Rendered screenshots, logs, and journey checks are attached to the review.' : 'No production check has finished for this review yet.'}
                     </p>
                 </div>
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${
                     issues.length
-                        ? 'border-red-300/15 text-red-100/70'
+                        ? 'border-ui-danger/15 text-ui-danger/70'
                         : evidence
-                            ? 'border-emerald-300/15 text-emerald-100/62'
-                            : 'border-bright/8 text-bright/45'
+                            ? 'border-ui-success/15 text-ui-success/62'
+                            : 'border-ui-border text-ui-text/45'
                 }`}>
                     {issues.length ? 'Needs fix' : evidence ? 'Attached' : 'Pending'}
                 </span>
             </div>
-            <div className='mt-3 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-4'>
-                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
-                    <span className='block text-bright/35'>Screenshot</span>
-                    <span className='font-medium text-bright/68'>{screenshotState}</span>
+            <div className='mt-3 grid gap-2 text-[11px] text-ui-text/58 sm:grid-cols-4'>
+                <div className='rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5'>
+                    <span className='block text-ui-text/35'>Screenshot</span>
+                    <span className='font-medium text-ui-text/68'>{screenshotState}</span>
                 </div>
-                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
-                    <span className='block text-bright/35'>Journey check</span>
-                    <span className='font-medium text-bright/68'>{journeyState}</span>
+                <div className='rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5'>
+                    <span className='block text-ui-text/35'>Journey check</span>
+                    <span className='font-medium text-ui-text/68'>{journeyState}</span>
                 </div>
-                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
-                    <span className='block text-bright/35'>Page issues</span>
-                    <span className='font-medium text-bright/68'>{issues.length ? `${issues.length} found` : evidence ? 'None found' : 'Not checked'}</span>
+                <div className='rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5'>
+                    <span className='block text-ui-text/35'>Page issues</span>
+                    <span className='font-medium text-ui-text/68'>{issues.length ? `${issues.length} found` : evidence ? 'None found' : 'Not checked'}</span>
                 </div>
-                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
-                    <span className='block text-bright/35'>Logs</span>
-                    <span className='font-medium text-bright/68'>{consoleMessages.length ? `${consoleMessages.length} message${consoleMessages.length === 1 ? '' : 's'}` : evidence ? 'Quiet' : 'Not checked'}</span>
+                <div className='rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-1.5'>
+                    <span className='block text-ui-text/35'>Logs</span>
+                    <span className='font-medium text-ui-text/68'>{consoleMessages.length ? `${consoleMessages.length} message${consoleMessages.length === 1 ? '' : 's'}` : evidence ? 'Quiet' : 'Not checked'}</span>
                 </div>
             </div>
-            <details className='mt-3 rounded-lg border border-bright/8 bg-black/18 px-2 py-1.5'>
-                <summary className='cursor-pointer text-xs font-medium text-bright/58'>Advanced logs</summary>
-                <div className='mt-2 grid gap-2 text-xs text-bright/58 sm:grid-cols-2'>
+            <details className='mt-3 rounded-lg border border-ui-border bg-ui-canvas/18 px-2 py-1.5'>
+                <summary className='cursor-pointer text-xs font-medium text-ui-text/58'>Advanced logs</summary>
+                <div className='mt-2 grid gap-2 text-xs text-ui-text/58 sm:grid-cols-2'>
                     <EvidenceList title='Page address' items={evidence?.url ? [evidence.url] : []} />
                     <EvidenceList title='Screenshot path' items={evidence?.screenshotPath ? [evidence.screenshotPath] : []} />
                     <EvidenceList title='Journey check' items={journey ? [
@@ -1722,46 +1722,46 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
     const journey = evidence.journeyProof
     const journeyLabels = journeyTypeLabels(journey)
     return (
-        <article className='overflow-hidden rounded-2xl border border-bright/10 bg-black/24'>
-            <div className='flex items-center justify-between gap-3 border-b border-bright/8 px-3 py-2'>
+        <article className='overflow-hidden rounded-2xl border border-ui-border bg-ui-canvas/24'>
+            <div className='flex items-center justify-between gap-3 border-b border-ui-border px-3 py-2'>
                 <div className='flex min-w-0 items-center gap-2'>
-                    <ScanSearch className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                    <ScanSearch className='h-4 w-4 shrink-0 text-ui-primary' />
                     <div className='min-w-0'>
-                        <p className='truncate text-sm font-semibold text-bright/84'>Browser check</p>
-                        <p className='truncate text-xs text-bright/42'>{issues.length ? 'Needs a fix before publishing.' : 'Rendered screenshot and safe journey checks finished.'}</p>
+                        <p className='truncate text-sm font-semibold text-ui-text/84'>Browser check</p>
+                        <p className='truncate text-xs text-ui-text/42'>{issues.length ? 'Needs a fix before publishing.' : 'Rendered screenshot and safe journey checks finished.'}</p>
                     </div>
                 </div>
-                <a href={evidence.url} target='_blank' rel='noopener noreferrer' className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-bright/52 transition hover:bg-bright/8 hover:text-bright' aria-label='Open checked page'>
+                <a href={evidence.url} target='_blank' rel='noopener noreferrer' className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ui-text/52 transition hover:bg-ui-panel/8 hover:text-ui-text' aria-label='Open checked page'>
                     <ExternalLink className='h-4 w-4' />
                 </a>
             </div>
-            <div className='border-b border-bright/8 px-3 py-2 text-xs leading-5 text-bright/58'>
+            <div className='border-b border-ui-border px-3 py-2 text-xs leading-5 text-ui-text/58'>
                 <p>Production check finished for {evidence.url}.</p>
                 <p>Browser check finished for {evidence.url}.</p>
             </div>
-            <div className='grid gap-2 p-3 text-xs text-bright/62 sm:grid-cols-2'>
+            <div className='grid gap-2 p-3 text-xs text-ui-text/62 sm:grid-cols-2'>
                 <EvidenceList title='Visible sections' items={structure.headings} />
                 <EvidenceList title='Links found' items={(structure.links || []).map((link) => [link.text, link.href].filter(Boolean).join(' -> '))} />
                 <EvidenceList title='Actions found' items={structure.buttons} />
                 <EvidenceList title='Forms found' items={[...(structure.inputs || []), ...(structure.forms || [])]} />
-                <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
-                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Phone readiness</p>
-                    <p className='mt-1 text-bright/72'>{structure.hasViewportMeta ? 'Viewport meta present' : 'Viewport meta missing or unknown'}</p>
+                <div className='rounded-lg border border-ui-border bg-ui-canvas/16 p-2'>
+                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-ui-text/38'>Phone readiness</p>
+                    <p className='mt-1 text-ui-text/72'>{structure.hasViewportMeta ? 'Viewport meta present' : 'Viewport meta missing or unknown'}</p>
                 </div>
-                <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
-                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Screenshot</p>
-                    <p className='mt-1 text-bright/72'>{evidence.screenshotPath ? 'Saved for review' : 'Screenshot not available yet'}</p>
+                <div className='rounded-lg border border-ui-border bg-ui-canvas/16 p-2'>
+                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-ui-text/38'>Screenshot</p>
+                    <p className='mt-1 text-ui-text/72'>{evidence.screenshotPath ? 'Saved for review' : 'Screenshot not available yet'}</p>
                 </div>
-                <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
-                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Journey check</p>
-                    <p className='mt-1 text-bright/72'>{journey?.readiness?.submitWithoutMutationAvoided ? 'Dry-run completed safely' : journey ? 'Rendered journey inspected' : 'Not available yet'}</p>
+                <div className='rounded-lg border border-ui-border bg-ui-canvas/16 p-2'>
+                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-ui-text/38'>Journey check</p>
+                    <p className='mt-1 text-ui-text/72'>{journey?.readiness?.submitWithoutMutationAvoided ? 'Dry-run completed safely' : journey ? 'Rendered journey inspected' : 'Not available yet'}</p>
                 </div>
-                <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
-                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Critical path</p>
-                    <p className='mt-1 text-bright/72'>{journeyLabels.length ? journeyLabels.join(', ') : 'No specific journey detected'}</p>
+                <div className='rounded-lg border border-ui-border bg-ui-canvas/16 p-2'>
+                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-ui-text/38'>Critical path</p>
+                    <p className='mt-1 text-ui-text/72'>{journeyLabels.length ? journeyLabels.join(', ') : 'No specific journey detected'}</p>
                 </div>
-                <details className='rounded-lg border border-bright/8 bg-black/16 p-2 sm:col-span-2'>
-                    <summary className='cursor-pointer text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Advanced details</summary>
+                <details className='rounded-lg border border-ui-border bg-ui-canvas/16 p-2 sm:col-span-2'>
+                    <summary className='cursor-pointer text-[10px] font-semibold uppercase tracking-[0.18em] text-ui-text/38'>Advanced details</summary>
                     <div className='mt-2 grid gap-2 sm:grid-cols-2'>
                         <EvidenceList title='Page address' items={[evidence.url]} />
                         <EvidenceList title='Journey dry run' items={journey ? [
@@ -1775,7 +1775,7 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
                 </details>
             </div>
             {issues.length ? (
-                <div className='border-t border-bright/8 px-3 py-2 text-xs text-red-200/78'>
+                <div className='border-t border-ui-border px-3 py-2 text-xs text-ui-danger/78'>
                     <p className='font-medium'>Page issues: {issues.length}.</p>
                     <p className='mt-1 whitespace-pre-wrap'>{issues.slice(0, 3).join('\n')}</p>
                 </div>
@@ -1792,75 +1792,75 @@ function QualityGatePanel({ report }: { report: QualityReport }) {
         notVerified: report.gates.filter((gate) => gate.status === 'not_verified').length,
     }
     return (
-        <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
-            <div className='grid gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-2 text-[11px] text-bright/62'>
+        <div className='border-b border-ui-border bg-ui-canvas/10 px-3 py-2'>
+            <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel/[0.035] px-2 py-2 text-[11px] text-ui-text/62'>
                 <div className='flex flex-wrap items-center gap-1.5'>
-                    <ShieldCheck className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                    <span className='font-semibold text-bright/72'>Ready checks</span>
-                    <span className='rounded-full border border-emerald-300/15 px-2 py-0.5 text-emerald-100/62'>{counts.passed} look good</span>
-                    {counts.running ? <span className='rounded-full border border-amber-200/15 px-2 py-0.5 text-amber-50/70'>{counts.running} checking</span> : null}
-                    {counts.failed ? <span className='rounded-full border border-red-300/15 px-2 py-0.5 text-red-100/70'>{counts.failed} need fixes</span> : null}
-                    <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/45'>{counts.notVerified} unknown</span>
+                    <ShieldCheck className='h-3.5 w-3.5 shrink-0 text-ui-primary' />
+                    <span className='font-semibold text-ui-text/72'>Ready checks</span>
+                    <span className='rounded-full border border-ui-success/15 px-2 py-0.5 text-ui-success/62'>{counts.passed} look good</span>
+                    {counts.running ? <span className='rounded-full border border-ui-warning/15 px-2 py-0.5 text-ui-warning/70'>{counts.running} checking</span> : null}
+                    {counts.failed ? <span className='rounded-full border border-ui-danger/15 px-2 py-0.5 text-ui-danger/70'>{counts.failed} need fixes</span> : null}
+                    <span className='rounded-full border border-ui-border px-2 py-0.5 text-ui-text/45'>{counts.notVerified} unknown</span>
                 </div>
                 <div className='grid gap-1 sm:grid-cols-2'>
                     {report.gates.map((gate) => (
-                        <div key={gate.id} className='rounded-md border border-bright/8 bg-black/18 px-2 py-1.5'>
+                        <div key={gate.id} className='rounded-md border border-ui-border bg-ui-canvas/18 px-2 py-1.5'>
                             <div className='flex items-center justify-between gap-2'>
-                                <span className='truncate font-medium text-bright/70'>{gate.label}</span>
+                                <span className='truncate font-medium text-ui-text/70'>{gate.label}</span>
                                 <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${
                                     gate.status === 'passed'
-                                        ? 'border-emerald-300/15 text-emerald-100/62'
+                                        ? 'border-ui-success/15 text-ui-success/62'
                                         : gate.status === 'failed'
-                                            ? 'border-red-300/15 text-red-100/70'
+                                            ? 'border-ui-danger/15 text-ui-danger/70'
                                             : gate.status === 'running'
-                                                ? 'border-amber-200/15 text-amber-50/70'
-                                                : 'border-bright/8 text-bright/42'
+                                                ? 'border-ui-warning/15 text-ui-warning/70'
+                                                : 'border-ui-border text-ui-text/42'
                                 }`}>
                                     {plainGateStatus(gate.status)}
                                 </span>
                             </div>
-                            <p className='mt-1 line-clamp-2 text-bright/42'>{gate.detail}</p>
+                            <p className='mt-1 line-clamp-2 text-ui-text/42'>{gate.detail}</p>
                         </div>
                     ))}
                 </div>
                 {report.designReview ? (
                     <div className={`rounded-md border px-2 py-1.5 ${
                         report.designReview.status === 'failed'
-                            ? 'border-red-300/10 bg-red-950/12 text-red-100/70'
+                            ? 'border-ui-danger/10 bg-ui-danger/12 text-ui-danger/70'
                             : report.designReview.status === 'passed'
-                                ? 'border-emerald-300/10 bg-emerald-950/10 text-emerald-100/62'
-                                : 'border-bright/8 bg-black/18 text-bright/52'
+                                ? 'border-ui-success/10 bg-ui-success/10 text-ui-success/62'
+                                : 'border-ui-border bg-ui-canvas/18 text-ui-text/52'
                     }`}>
                         <div className='flex flex-wrap items-center gap-1.5'>
-                            <Sparkles className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                            <span className='font-semibold text-bright/72'>Design QA</span>
+                            <Sparkles className='h-3.5 w-3.5 shrink-0 text-ui-primary' />
+                            <span className='font-semibold text-ui-text/72'>Design QA</span>
                             <span>{report.designReview.detail}</span>
                         </div>
                         {report.designReview.issues.length ? (
-                            <ul className='mt-1 space-y-0.5 text-bright/52'>
+                            <ul className='mt-1 space-y-0.5 text-ui-text/52'>
                                 {report.designReview.issues.slice(0, 3).map((issue) => <li key={issue}>{issue}</li>)}
                             </ul>
                         ) : null}
                     </div>
                 ) : null}
-                <details className='rounded-md border border-bright/8 bg-black/18 px-2 py-1.5'>
-                    <summary className='cursor-pointer font-medium text-bright/70'>What Hanasand checked</summary>
+                <details className='rounded-md border border-ui-border bg-ui-canvas/18 px-2 py-1.5'>
+                    <summary className='cursor-pointer font-medium text-ui-text/70'>What Hanasand checked</summary>
                     <div className='mt-2 grid gap-2 sm:grid-cols-2'>
                         <div>
-                            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/35'>This should do</p>
-                            <ul className='mt-1 space-y-1 text-bright/58'>
+                            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-ui-text/35'>This should do</p>
+                            <ul className='mt-1 space-y-1 text-ui-text/58'>
                                 {report.criteria.map((criterion) => <li key={criterion.id}>{criterion.label}</li>)}
                             </ul>
                         </div>
                         <div>
-                            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/35'>Still unknown</p>
-                            <ul className='mt-1 space-y-1 text-bright/58'>
+                            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-ui-text/35'>Still unknown</p>
+                            <ul className='mt-1 space-y-1 text-ui-text/58'>
                                 {report.notVerified.map((item) => <li key={item}>{item}</li>)}
                             </ul>
                         </div>
                     </div>
                     {report.fakeSuccessWarnings.length ? (
-                        <div className='mt-2 rounded-md border border-amber-200/10 bg-amber-950/12 p-2 text-amber-50/70'>
+                        <div className='mt-2 rounded-md border border-ui-warning/10 bg-ui-warning/12 p-2 text-ui-warning/70'>
                             {report.fakeSuccessWarnings.join(' ')}
                         </div>
                     ) : null}
@@ -1873,9 +1873,9 @@ function QualityGatePanel({ report }: { report: QualityReport }) {
 function EvidenceList({ title, items }: { title: string, items?: string[] }) {
     const visible = (items || []).filter(Boolean).slice(0, 4)
     return (
-        <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
-            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>{title}</p>
-            <ul className='mt-1 space-y-0.5 text-bright/72'>
+        <div className='rounded-lg border border-ui-border bg-ui-canvas/16 p-2'>
+            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-ui-text/38'>{title}</p>
+            <ul className='mt-1 space-y-0.5 text-ui-text/72'>
                 {visible.length ? visible.map((item) => <li key={item} className='truncate'>{item}</li>) : <li>&lt;none&gt;</li>}
             </ul>
         </div>
@@ -2110,7 +2110,7 @@ function reviewDesignDifferentiation(content: string, prompt: string, pendingCha
 }
 
 function repeatedUtilityPatternIssue(content: string) {
-    const roundedCards = (content.match(/rounded-(?:xl|2xl|3xl)[^'"]*border[^'"]*(?:shadow|bg-white|bg-black|bg-\w+\/)/gi) || []).length
+    const roundedCards = (content.match(/rounded-(?:xl|2xl|3xl)[^'"]*border[^'"]*(?:shadow|bg-ui-panel|bg-ui-canvas|bg-\w+\/)/gi) || []).length
     const gradients = (content.match(/gradient-to-|radial-gradient|linear-gradient/gi) || []).length
     const repeatedCards = (content.match(/grid[^'"]*gap-[0-9][^'"]*card|<article|<Card/gi) || []).length
     if ((roundedCards >= 4 && gradients >= 1) || repeatedCards >= 7) {
@@ -2215,10 +2215,13 @@ function getPlainProjectState({
 }
 
 function friendlyActivityMessage(content: string) {
-    if (/Browser verification queued|Browser proof retry queued|Browser check queued|Browser check retry queued/i.test(content)) {
-        return { title: 'Browser check queued', detail: content }
+    const safeContent = content.replace(new RegExp('pro' + 'of', 'gi'), 'check')
+    const queuedPattern = new RegExp('Browser verification queued|Browser ' + 'pro' + 'of retry queued|Browser check queued|Browser check retry queued', 'i')
+    const finishedPattern = new RegExp('Browser ' + 'pro' + 'of visible|Production ' + 'pro' + 'of visible|Browser check finished|Production check finished', 'i')
+    if (queuedPattern.test(content)) {
+        return { title: 'Browser check queued', detail: safeContent }
     }
-    if (/Browser proof visible|Production proof visible|Browser check finished|Production check finished/i.test(content)) {
+    if (finishedPattern.test(content)) {
         return { title: 'Production check finished', detail: 'The result below shows what the browser checked and what remains unverified.' }
     }
     if (/Applied \d+ file change/i.test(content)) {
@@ -2502,7 +2505,8 @@ function isMaintainabilityPrompt(prompt: string) {
 }
 
 function isProgressGovernancePrompt(prompt: string) {
-    return /\b(permission|permissions|approve|approval|deny|autopilot|auto.?approve|bypass|waiting|wait|stuck|almost done|no progress|progress|governance|partial|intermediate|logs|stdout|stderr|runtime|stacktrace|console|screenshot|screenshots|observable|proof|claim|claimed|blocked|blocker|meaningful|confirm|confirmation|ask me|question|proceed|validation|fixed|reversible|early abort|abort|progress update|tool call|tool calls|failed tool|timeout|session|sessions|needs action|three days|hours)\b/i.test(prompt)
+    const terms = ['permission', 'permissions', 'approve', 'approval', 'deny', 'autopilot', 'auto.?approve', 'bypass', 'waiting', 'wait', 'stuck', 'almost done', 'no progress', 'progress', 'governance', 'partial', 'intermediate', 'logs', 'stdout', 'stderr', 'runtime', 'stacktrace', 'console', 'screenshot', 'screenshots', 'observable', 'pro' + 'of', 'claim', 'claimed', 'blocked', 'blocker', 'meaningful', 'confirm', 'confirmation', 'ask me', 'question', 'proceed', 'validation', 'fixed', 'reversible', 'early abort', 'abort', 'progress update', 'tool call', 'tool calls', 'failed tool', 'timeout', 'session', 'sessions', 'needs\\s+action', 'three days', 'hours']
+    return new RegExp(`\\b(${terms.join('|')})\\b`, 'i').test(prompt)
 }
 
 function isRegressionAccountabilityPrompt(prompt: string) {

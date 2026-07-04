@@ -476,12 +476,12 @@ export default function RateLimitsPageClient({
             <DashboardPanel className='p-4 sm:p-5'>
                 <div className='grid gap-4 2xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:items-start'>
                     <div className='max-w-3xl'>
-                        <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>System</p>
-                        <h1 className='mt-1 text-xl font-semibold tracking-[-0.04em] text-bright/94'>Traffic policy and access keys</h1>
-                        <p className='mt-2 text-sm leading-6 text-bright/72'>
+                        <p className='text-[11px] uppercase tracking-[0.24em] text-ui-muted'>System</p>
+                        <h1 className='mt-1 text-xl font-semibold text-ui-text'>Traffic policy and access keys</h1>
+                        <p className='mt-2 text-sm leading-6 text-ui-muted'>
                             Control request pressure, route exceptions, and owner-linked integration keys from one console.
                         </p>
-                        <p className='mt-2 text-xs leading-5 text-bright/42'>
+                        <p className='mt-2 text-xs leading-5 text-ui-muted'>
                             Saves take effect immediately for live traffic. Route rows below show what is protected and which keys can use it.
                         </p>
                     </div>
@@ -493,7 +493,7 @@ export default function RateLimitsPageClient({
                     </div>
                 </div>
                 <div className='mt-4 flex flex-wrap items-center gap-2'>
-                    <div className='inline-flex rounded-xl border border-white/10 bg-black/20 p-1' role='group' aria-label='Rate-limit workspace'>
+                    <div className='inline-flex rounded-lg border border-ui-border bg-ui-raised p-1' role='group' aria-label='Rate-limit workspace'>
                         {([
                             ['keys', 'Access keys'],
                             ['policy', 'Traffic policy'],
@@ -503,7 +503,7 @@ export default function RateLimitsPageClient({
                                 type='button'
                                 onClick={() => setWorkspace(key)}
                                 className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                                    workspace === key ? 'bg-[#f07d33]/18 text-[#ffd2b0]' : 'text-bright/58 hover:bg-white/6 hover:text-bright/86'
+                                    workspace === key ? 'bg-ui-primary/15 text-ui-primary' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'
                                 }`}
                             >
                                 {label}
@@ -512,28 +512,28 @@ export default function RateLimitsPageClient({
                     </div>
                     {workspace === 'policy' ? (
                         <>
-                            <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
+                            <label className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted'>
                                 <input
                                     type='checkbox'
                                     checked={settings.enabled}
                                     onChange={(event) => setSettings((prev) => ({ ...prev, enabled: event.target.checked }))}
-                                    className='h-4 w-4 accent-[#f07d33]'
+                                    className='h-4 w-4 accent-ui-primary'
                                 />
                                 Enabled
                             </label>
-                            <div className='rounded-xl border border-white/10 bg-black/15 px-3 py-2 text-xs text-bright/55'>
+                            <div className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs text-ui-muted'>
                                 Global changes apply to new requests immediately.
                             </div>
                             <div className='flex flex-wrap items-center gap-2 sm:ml-auto'>
-                                <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
-                                    <span className='text-xs text-bright/52'>Updated</span>
+                                <label className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted'>
+                                    <span className='text-xs text-ui-muted'>Updated</span>
                                     <span>{settings.updatedAt ? new Date(settings.updatedAt).toLocaleString() : 'never'}</span>
                                 </label>
                                 <button
                                     type='button'
                                     onClick={saveSettings}
                                     disabled={saving || !overrideValidation.valid}
-                                    className='inline-flex items-center gap-2 rounded-xl border border-[#f07d33]/25 bg-[#f07d33]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#f07d33]/14 disabled:cursor-not-allowed disabled:opacity-60'
+                                    className='inline-flex items-center gap-2 rounded-lg border border-ui-primary/30 bg-ui-primary/10 px-3 py-2 text-sm text-ui-primary transition-colors hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'
                                 >
                                     <Save className='h-4 w-4' />
                                     {saving ? 'Saving...' : 'Save policy'}
@@ -541,14 +541,14 @@ export default function RateLimitsPageClient({
                             </div>
                         </>
                     ) : (
-                        <div className={`rounded-xl border px-3 py-2 text-sm sm:ml-auto ${draftReady ? 'border-emerald-500/20 bg-emerald-500/8 text-emerald-100' : 'border-amber-500/20 bg-amber-500/8 text-amber-100'}`}>
+                        <div className={`rounded-lg border px-3 py-2 text-sm sm:ml-auto ${draftReady ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'}`}>
                             {draftReadiness}
                         </div>
                     )}
                 </div>
-                <div className='mt-3 flex flex-wrap items-center gap-3 text-xs text-bright/48'>
+                <div className='mt-3 flex flex-wrap items-center gap-3 text-xs text-ui-muted'>
                     {settings.updatedBy ? <span>saved by `{settings.updatedBy}`</span> : null}
-                    {message ? <span className='text-[#fdc89c]'>{message}</span> : null}
+                    {message ? <span className='text-ui-warning'>{message}</span> : null}
                 </div>
             </DashboardPanel>
 
@@ -559,10 +559,10 @@ export default function RateLimitsPageClient({
                             <DashboardPanel key={scope} className='p-4 sm:p-5'>
                                 <div className='flex items-start justify-between gap-3'>
                                     <div>
-                                        <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>{scope}</p>
-                                        <h2 className='mt-1 text-base font-semibold text-bright/90'>Default policy</h2>
+                                        <p className='text-[11px] uppercase tracking-[0.24em] text-ui-muted'>{scope}</p>
+                                        <h2 className='mt-1 text-base font-semibold text-ui-text'>Default policy</h2>
                                     </div>
-                                    <div className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-bright/55'>
+                                    <div className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-[11px] text-ui-muted'>
                                         all routes
                                     </div>
                                 </div>
@@ -587,16 +587,16 @@ export default function RateLimitsPageClient({
                     <DashboardPanel className='p-4 sm:p-5'>
                         <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
                             <div>
-                                <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>Overrides</p>
-                                <h2 className='mt-1 text-base font-semibold text-bright/90'>Per-endpoint tuning</h2>
-                                <p className='mt-1 text-sm text-bright/60'>
+                                <p className='text-[11px] uppercase tracking-[0.24em] text-ui-muted'>Overrides</p>
+                                <h2 className='mt-1 text-base font-semibold text-ui-text'>Per-endpoint tuning</h2>
+                                <p className='mt-1 text-sm text-ui-muted'>
                                     Tighten or loosen specific routes without changing the global traffic policy.
                                 </p>
                             </div>
                             <button
                                 type='button'
                                 onClick={addOverride}
-                                className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
+                                className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
                             >
                                 <Plus className='h-4 w-4' />
                                 Add override
@@ -605,13 +605,13 @@ export default function RateLimitsPageClient({
 
                         <div className='mt-4 grid gap-3'>
                             {settings.overrides.length ? settings.overrides.map((override) => (
-                                <div key={override.id} className='grid gap-3 rounded-2xl border border-white/10 bg-black/15 p-3 lg:grid-cols-[auto_minmax(0,1fr)_10rem_10rem_8rem_auto] lg:items-end'>
-                                    <label className='inline-flex items-center gap-2 text-sm text-bright/70'>
+                                <div key={override.id} className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 lg:grid-cols-[auto_minmax(0,1fr)_10rem_10rem_8rem_auto] lg:items-end'>
+                                    <label className='inline-flex items-center gap-2 text-sm text-ui-muted'>
                                         <input
                                             type='checkbox'
                                             checked={override.enabled}
                                             onChange={(event) => updateOverride(override.id, 'enabled', event.target.checked)}
-                                            className='h-4 w-4 accent-[#f07d33]'
+                                            className='h-4 w-4 accent-ui-primary'
                                         />
                                         Enabled
                                     </label>
@@ -650,7 +650,7 @@ export default function RateLimitsPageClient({
                             )}
                         </div>
                         {!overrideValidation.valid ? (
-                            <div className='mt-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-sm text-amber-100'>
+                            <div className='mt-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
                                 {overrideValidation.message}
                             </div>
                         ) : null}
@@ -662,16 +662,16 @@ export default function RateLimitsPageClient({
                 <DashboardPanel className='p-4 sm:p-5'>
                     <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
                         <div>
-                            <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>Access keys</p>
-                            <h2 className='mt-1 text-base font-semibold text-bright/90'>Tiered tokens</h2>
-                            <p className='mt-1 text-sm text-bright/60'>
+                            <p className='text-[11px] uppercase tracking-[0.24em] text-ui-muted'>Access keys</p>
+                            <h2 className='mt-1 text-base font-semibold text-ui-text'>Tiered tokens</h2>
+                            <p className='mt-1 text-sm text-ui-muted'>
                                 Pick an owner, choose the routes this key can use, and set the budget for each scope.
                             </p>
                         </div>
-                        {keyMessage ? <div className='text-sm text-[#fdc89c]'>{keyMessage}</div> : null}
+                        {keyMessage ? <div className='text-sm text-ui-warning'>{keyMessage}</div> : null}
                     </div>
 
-                    <div className='mt-4 rounded-2xl border border-white/10 bg-black/15 p-4'>
+                    <div className='mt-4 rounded-lg border border-ui-border bg-ui-panel p-4'>
                         <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                             <OwnerUserPicker
                                 label='Owner'
@@ -693,28 +693,28 @@ export default function RateLimitsPageClient({
                         </div>
                         <div className='mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end'>
                             <TextField label='Description' value={draft.description} onChange={(value) => setDraft((prev) => ({ ...prev, description: value }))} />
-                            <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
+                            <label className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted'>
                                 <input
                                     type='checkbox'
                                     checked={draft.enabled}
                                     onChange={(event) => setDraft((prev) => ({ ...prev, enabled: event.target.checked }))}
-                                    className='h-4 w-4 accent-[#f07d33]'
+                                    className='h-4 w-4 accent-ui-primary'
                                 />
                                 Enabled
                             </label>
                         </div>
-                        <div className='mt-3 flex flex-wrap items-center gap-2 text-xs text-bright/54'>
-                            <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 uppercase tracking-[0.18em] text-bright/48'>Preset</span>
+                        <div className='mt-3 flex flex-wrap items-center gap-2 text-xs text-ui-muted'>
+                            <span className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 uppercase tracking-[0.18em] text-ui-muted'>Preset</span>
                             <span>{draftTierPreset.label}: {draftTierPreset.description}</span>
                             <span>New scopes inherit this tier. Changing it updates every draft scope.</span>
                         </div>
 
                         <div className='mt-4 flex items-center justify-between gap-3'>
-                            <h3 className='text-sm font-medium text-bright/84'>Scoped endpoint limits</h3>
+                            <h3 className='text-sm font-medium text-ui-text'>Scoped endpoint limits</h3>
                             <button
                                 type='button'
                                 onClick={addScopeToDraft}
-                                className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
+                                className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
                             >
                                 <Plus className='h-4 w-4' />
                                 Add scope
@@ -734,13 +734,13 @@ export default function RateLimitsPageClient({
                                     onRemove={() => removeDraftScope(scope.id)}
                                 />
                             )) : (
-                                <div className='rounded-2xl border border-dashed border-white/12 bg-black/20 px-4 py-5'>
-                                    <p className='text-sm font-medium text-bright/82'>No endpoint scope yet.</p>
-                                    <p className='mt-1 text-sm leading-6 text-bright/55'>Add the first allowed route before issuing this key.</p>
+                                <div className='rounded-lg border border-dashed border-ui-border bg-ui-raised px-4 py-5'>
+                                    <p className='text-sm font-medium text-ui-text'>No endpoint scope yet.</p>
+                                    <p className='mt-1 text-sm leading-6 text-ui-muted'>Add the first allowed route before issuing this key.</p>
                                     <button
                                         type='button'
                                         onClick={addScopeToDraft}
-                                        className='mt-3 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
+                                        className='mt-3 inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
                                     >
                                         <Plus className='h-4 w-4' />
                                         Add first scope
@@ -749,7 +749,7 @@ export default function RateLimitsPageClient({
                             )}
                         </div>
                         {!draftScopeValidation.valid ? (
-                            <div className='mt-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-sm text-amber-100'>
+                            <div className='mt-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
                                 {draftScopeValidation.message}
                             </div>
                         ) : null}
@@ -759,7 +759,7 @@ export default function RateLimitsPageClient({
                                 type='button'
                                 onClick={createKey}
                                 disabled={saving || !draftReady}
-                                className='inline-flex items-center gap-2 rounded-xl border border-[#f07d33]/25 bg-[#f07d33]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#f07d33]/14 disabled:cursor-not-allowed disabled:opacity-60'
+                                className='inline-flex items-center gap-2 rounded-lg border border-ui-primary/30 bg-ui-primary/10 px-3 py-2 text-sm text-ui-primary transition-colors hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'
                             >
                                 <Save className='h-4 w-4' />
                                 {saving ? 'Issuing...' : 'Issue API key'}
@@ -768,7 +768,7 @@ export default function RateLimitsPageClient({
                                 <button
                                     type='button'
                                     onClick={() => navigator.clipboard.writeText(issuedSecret)}
-                                    className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78 transition-colors hover:bg-white/8'
+                                    className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
                                 >
                                     <Copy className='h-4 w-4' />
                                     Copy `{issuedSecret}`
@@ -854,30 +854,30 @@ function ApiKeyCard({
     const tierPreset = tierPresetMap[apiKey.tier] || tierPresetMap.custom || fallbackTierPresets[fallbackTierPresets.length - 1]
 
     return (
-        <div className='rounded-2xl border border-white/10 bg-black/15 p-4'>
+        <div className='rounded-lg border border-ui-border bg-ui-panel p-4'>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
                 <div>
                     <div className='flex flex-wrap items-center gap-2'>
-                        <h3 className='text-base font-semibold text-bright/90'>{apiKey.name}</h3>
-                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-bright/50'>
+                        <h3 className='text-base font-semibold text-ui-text'>{apiKey.name}</h3>
+                        <span className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-ui-muted'>
                             {tierPreset.label}
                         </span>
-                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-bright/50'>{apiKey.keyPrefix}</span>
+                        <span className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-[11px] text-ui-muted'>{apiKey.keyPrefix}</span>
                     </div>
-                    <p className='mt-2 text-sm text-bright/60'>{apiKey.description || 'No description set.'}</p>
-                    <div className='mt-2 flex flex-wrap gap-3 text-xs text-bright/45'>
+                    <p className='mt-2 text-sm text-ui-muted'>{apiKey.description || 'No description set.'}</p>
+                    <div className='mt-2 flex flex-wrap gap-3 text-xs text-ui-muted'>
                         <span>Owner `{apiKey.ownerId}`</span>
                         <span>Created {new Date(apiKey.createdAt).toLocaleString()}</span>
                         <span>Last used {apiKey.lastUsedAt ? new Date(apiKey.lastUsedAt).toLocaleString() : 'never'}</span>
                     </div>
                 </div>
                 <div className='flex flex-wrap items-center gap-2'>
-                    <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
+                    <label className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted'>
                         <input
                             type='checkbox'
                             checked={apiKey.enabled}
                             onChange={(event) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, enabled: event.target.checked } : entry))}
-                            className='h-4 w-4 accent-[#f07d33]'
+                            className='h-4 w-4 accent-ui-primary'
                         />
                         Enabled
                     </label>
@@ -885,7 +885,7 @@ function ApiKeyCard({
                         type='button'
                         onClick={() => updateKey(apiKey)}
                         disabled={saving || !scopeValidation.valid}
-                        className='inline-flex items-center gap-2 rounded-xl border border-[#f07d33]/25 bg-[#f07d33]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#f07d33]/14 disabled:cursor-not-allowed disabled:opacity-60'
+                        className='inline-flex items-center gap-2 rounded-lg border border-ui-primary/30 bg-ui-primary/10 px-3 py-2 text-sm text-ui-primary transition-colors hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'
                     >
                         <Save className='h-4 w-4' />
                         Save key
@@ -893,7 +893,7 @@ function ApiKeyCard({
                     <button
                         type='button'
                         onClick={() => deleteKey(apiKey.id)}
-                        className='inline-flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/8 px-3 py-2 text-sm text-red-100 transition-colors hover:bg-red-500/14'
+                        className='inline-flex items-center gap-2 rounded-lg border border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-sm text-ui-danger transition-colors hover:bg-ui-danger/15'
                     >
                         <Trash2 className='h-4 w-4' />
                         Delete
@@ -901,12 +901,12 @@ function ApiKeyCard({
                 </div>
             </div>
 
-            <details className='mt-4 rounded-2xl border border-white/10 bg-black/15'>
-                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-bright/84'>
+            <details className='mt-4 rounded-lg border border-ui-border bg-ui-panel'>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text'>
                     <span>Key settings</span>
-                    <span className='text-xs font-medium text-bright/45'>{tierPreset.label} · {apiKey.expiresAt ? 'expires' : 'no expiry'}</span>
+                    <span className='text-xs font-medium text-ui-muted'>{tierPreset.label} · {apiKey.expiresAt ? 'expires' : 'no expiry'}</span>
                 </summary>
-                <div className='grid gap-3 border-t border-white/10 p-4 md:grid-cols-2 xl:grid-cols-4'>
+                <div className='grid gap-3 border-t border-ui-border p-4 md:grid-cols-2 xl:grid-cols-4'>
                     <TextField label='Name' value={apiKey.name} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, name: value } : entry))} />
                     <SelectField
                         label='Tier'
@@ -927,23 +927,23 @@ function ApiKeyCard({
                     <div className='md:col-span-2 xl:col-span-4'>
                         <TextField label='Description' value={apiKey.description || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, description: value || null } : entry))} />
                     </div>
-                    <p className='text-xs leading-5 text-bright/54 md:col-span-2 xl:col-span-4'>
+                    <p className='text-xs leading-5 text-ui-muted md:col-span-2 xl:col-span-4'>
                         {tierPreset.description}
                     </p>
                 </div>
             </details>
 
-            <details className='mt-3 rounded-2xl border border-white/10 bg-black/15'>
-                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-bright/84'>
+            <details className='mt-3 rounded-lg border border-ui-border bg-ui-panel'>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text'>
                     <span>Endpoint scopes</span>
-                    <span className='text-xs font-medium text-bright/45'>{apiKey.scopes.length} route{apiKey.scopes.length === 1 ? '' : 's'}</span>
+                    <span className='text-xs font-medium text-ui-muted'>{apiKey.scopes.length} route{apiKey.scopes.length === 1 ? '' : 's'}</span>
                 </summary>
-                <div className='grid gap-3 border-t border-white/10 p-4'>
+                <div className='grid gap-3 border-t border-ui-border p-4'>
                     <div className='flex justify-end'>
                         <button
                             type='button'
                             onClick={() => addScopeToKey(apiKey.id)}
-                            className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
+                            className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition-colors hover:bg-ui-raised'
                         >
                             <Plus className='h-4 w-4' />
                             Add scope
@@ -967,7 +967,7 @@ function ApiKeyCard({
                 </div>
             </details>
             {!scopeValidation.valid ? (
-                <div className='mt-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-sm text-amber-100'>
+                <div className='mt-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
                     {scopeValidation.message}
                 </div>
             ) : null}
@@ -1041,18 +1041,18 @@ function ApiKeyScopeEditor({
     onRemove: () => void
 }) {
     return (
-        <div className='rounded-2xl border border-white/10 bg-black/20 p-3'>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
             <div className='mb-3 flex items-center justify-between gap-3'>
-                <p className='text-sm font-medium text-bright/80'>{title}</p>
+                <p className='text-sm font-medium text-ui-text'>{title}</p>
                 <RemoveButton onClick={onRemove} />
             </div>
             <div className='grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_repeat(4,minmax(0,1fr))] lg:items-end'>
-                <label className='inline-flex items-center gap-2 text-sm text-bright/70'>
+                <label className='inline-flex items-center gap-2 text-sm text-ui-muted'>
                     <input
                         type='checkbox'
                         checked={scope.enabled}
                         onChange={(event) => onChange({ ...scope, enabled: event.target.checked })}
-                        className='h-4 w-4 accent-[#f07d33]'
+                        className='h-4 w-4 accent-ui-primary'
                     />
                     Enabled
                 </label>
@@ -1097,9 +1097,9 @@ function StatChip({
     value: string
 }) {
     return (
-        <div className='rounded-2xl border border-white/10 bg-black/15 px-3 py-3'>
-            <p className='text-[10px] uppercase tracking-[0.22em] text-bright/38'>{label}</p>
-            <p className='mt-1 text-base font-semibold text-bright/88'>{value}</p>
+        <div className='rounded-lg border border-ui-border bg-ui-panel px-3 py-3'>
+            <p className='text-[10px] uppercase tracking-[0.22em] text-ui-muted'>{label}</p>
+            <p className='mt-1 text-base font-semibold text-ui-text'>{value}</p>
         </div>
     )
 }
@@ -1114,12 +1114,12 @@ function TextField({
     onChange: (value: string) => void
 }) {
     return (
-        <label className='grid gap-1.5 text-sm text-bright/68'>
+        <label className='grid gap-1.5 text-sm text-ui-muted'>
             <span>{label}</span>
             <input
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
-                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#f07d33]/35'
+                className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
             />
         </label>
     )
@@ -1137,14 +1137,14 @@ function NumberField({
     onChange: (value: number) => void
 }) {
     return (
-        <label className='grid gap-1.5 text-sm text-bright/68'>
+        <label className='grid gap-1.5 text-sm text-ui-muted'>
             <span>{label}</span>
             <input
                 type='number'
                 min={min}
                 value={value}
                 onChange={(event) => onChange(Number(event.target.value || 0))}
-                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#f07d33]/35'
+                className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
             />
         </label>
     )
@@ -1162,12 +1162,12 @@ function SelectField({
     onChange: (value: string) => void
 }) {
     return (
-        <label className='grid gap-1.5 text-sm text-bright/68'>
+        <label className='grid gap-1.5 text-sm text-ui-muted'>
             <span>{label}</span>
             <select
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
-                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#f07d33]/35'
+                className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
             >
                 {options.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
@@ -1212,7 +1212,7 @@ function OwnerUserPicker({
     return (
         <div
             ref={rootRef}
-            className='relative grid gap-1.5 text-sm text-bright/68'
+            className='relative grid gap-1.5 text-sm text-ui-muted'
             onBlur={(event) => {
                 if (!rootRef.current?.contains(event.relatedTarget as Node | null)) {
                     setOpen(false)
@@ -1221,7 +1221,7 @@ function OwnerUserPicker({
         >
             <span>{label}</span>
             <div className='relative'>
-                <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bright/35' />
+                <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-muted' />
                 <input
                     role='combobox'
                     aria-label={label}
@@ -1239,32 +1239,32 @@ function OwnerUserPicker({
                         if (event.key === 'Escape') setOpen(false)
                     }}
                     placeholder='Search users or paste exact ID'
-                    className='w-full rounded-xl border border-white/10 bg-black/20 py-2 pl-9 pr-3 text-sm text-bright outline-none transition-colors focus:border-[#f07d33]/35'
+                    className='w-full rounded-lg border border-ui-border bg-ui-raised py-2 pl-9 pr-3 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
                 />
             </div>
             {selectedUser ? (
-                <div className='text-xs text-bright/52'>Selected {formatOwnerUser(selectedUser)}</div>
+                <div className='text-xs text-ui-muted'>Selected {formatOwnerUser(selectedUser)}</div>
             ) : exactFallback ? (
-                <div className='text-xs text-bright/52'>Using exact ID `{exactFallback}`</div>
+                <div className='text-xs text-ui-muted'>Using exact ID `{exactFallback}`</div>
             ) : (
-                <div className='text-xs text-bright/42'>Select a user or paste a known user ID.</div>
+                <div className='text-xs text-ui-muted'>Select a user or paste a known user ID.</div>
             )}
             {open ? (
                 <div
                     id={listId}
                     role='listbox'
-                    className='absolute left-0 right-0 top-[4.6rem] z-30 max-h-64 overflow-auto rounded-xl border border-white/10 bg-[#101015] p-1 shadow-2xl shadow-black/30'
+                    className='absolute left-0 right-0 top-[4.6rem] z-30 max-h-64 overflow-auto rounded-lg border border-ui-border bg-ui-panel p-1 shadow-2xl shadow-ui-canvas/30'
                 >
                     {loading ? (
-                        <div className='px-3 py-2 text-xs text-bright/52'>Loading users...</div>
+                        <div className='px-3 py-2 text-xs text-ui-muted'>Loading users...</div>
                     ) : error ? (
-                        <div className='grid gap-2 px-3 py-2 text-xs text-bright/58'>
+                        <div className='grid gap-2 px-3 py-2 text-xs text-ui-muted'>
                             <span>{error}</span>
                             <button
                                 type='button'
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() => void onRefresh()}
-                                className='inline-flex w-fit items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-bright/75 transition-colors hover:bg-white/8'
+                                className='inline-flex w-fit items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-2.5 py-1.5 text-ui-muted transition-colors hover:bg-ui-raised'
                             >
                                 <RefreshCw className='h-3.5 w-3.5' />
                                 Retry
@@ -1283,14 +1283,14 @@ function OwnerUserPicker({
                                     setQuery(formatOwnerUser(user))
                                     setOpen(false)
                                 }}
-                                className='grid w-full gap-1 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/8 aria-selected:bg-[#f07d33]/10'
+                                className='grid w-full gap-1 rounded-lg px-3 py-2 text-left transition-colors hover:bg-ui-raised aria-selected:bg-ui-primary/10'
                             >
-                                <span className='text-sm text-bright/82'>{user.name || user.id}</span>
-                                <span className='text-xs text-bright/45'>{ownerUserMeta(user)}</span>
+                                <span className='text-sm text-ui-text'>{user.name || user.id}</span>
+                                <span className='text-xs text-ui-muted'>{ownerUserMeta(user)}</span>
                             </button>
                         ))
                     ) : (
-                        <div className='px-3 py-2 text-xs text-bright/52'>No matching users. Paste an exact ID to use it.</div>
+                        <div className='px-3 py-2 text-xs text-ui-muted'>No matching users. Paste an exact ID to use it.</div>
                     )}
                 </div>
             ) : null}
@@ -1310,14 +1310,14 @@ function RouteChooser({
     onChange: (value: string) => void
 }) {
     return (
-        <label className='grid gap-1.5 text-sm text-bright/68'>
+        <label className='grid gap-1.5 text-sm text-ui-muted'>
             <span>{label}</span>
             <input
                 list='rate-limit-routes'
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={routeOptions[0] || 'GET /api/'}
-                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#f07d33]/35'
+                className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
             />
         </label>
     )
@@ -1381,7 +1381,7 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
         <button
             type='button'
             onClick={onClick}
-            className='inline-flex items-center justify-center rounded-xl border border-red-500/20 bg-red-500/8 px-3 py-2 text-red-100 transition-colors hover:bg-red-500/14'
+            className='inline-flex items-center justify-center rounded-lg border border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-ui-danger transition-colors hover:bg-ui-danger/15'
         >
             <Trash2 className='h-4 w-4' />
         </button>
@@ -1390,7 +1390,7 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
 
 function EmptyState({ message }: { message: string }) {
     return (
-        <div className='rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-6 text-sm text-bright/52'>
+        <div className='rounded-lg border border-dashed border-ui-border bg-ui-panel px-4 py-6 text-sm text-ui-muted'>
             {message}
         </div>
     )

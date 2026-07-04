@@ -56,7 +56,7 @@ export default function OpenFiles({ openFiles, setOpenFiles }: OpenFilesProps) {
 
 function File({ file, pathname, setOpenFiles }: FileProps) {
     const selected = pathname.includes(`/${file.id}`)
-    const color = selected ? 'text-bright/70' : 'text-bright/40 hover:text-[#f07d33]'
+    const color = selected ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-muted hover:border-ui-primary/35 hover:text-ui-text'
 
     function handleClose(e: React.MouseEvent<HTMLDivElement, MouseEvent>) {
         e.stopPropagation()
@@ -65,9 +65,9 @@ function File({ file, pathname, setOpenFiles }: FileProps) {
     }
 
     return (
-        <Link prefetch={false} href={`/s/${file.id}`} className={`group rounded-md outline outline-dark py-0.8 px-3 hover:pr-0 flex items-center justify-between gap-2 ${color}`}>
+        <Link prefetch={false} href={`/s/${file.id}`} className={`group flex items-center justify-between gap-2 rounded-md border px-3 py-0.8 transition hover:pr-0 ${color}`}>
             <h1 className='text-sm'>{file.name}</h1>
-            <div onClick={handleClose} className='hidden group-hover:block p-0.5 hover:bg-bright/10 rounded-sm'>
+            <div onClick={handleClose} className='hidden rounded-sm p-0.5 hover:bg-ui-panel group-hover:block'>
                 <X className='h-4 w-4' />
             </div>
         </Link>

@@ -548,30 +548,30 @@ const zeroCandidateAlertGenerationCases = buildReadinessCases({
 })
 const liveProofOrganizationState = {
     organizations: [{
-        id: 'hanasand-live-proof-20260628',
-        tenantId: 'hanasand-live-proof-20260628',
-        name: 'Hanasand live proof',
-        slug: 'hanasand-live-proof-20260628',
+        id: 'hanasand-live-org-20260628',
+        tenantId: 'hanasand-live-org-20260628',
+        name: 'Hanasand live org',
+        slug: 'hanasand-live-org-20260628',
         status: 'active',
         alertVisibilityPolicy: 'members',
         createdAt: '2026-06-28T12:00:00.000Z',
         updatedAt: '2026-06-28T12:00:00.000Z',
     }],
     selectedOrganization: {
-        id: 'hanasand-live-proof-20260628',
-        tenantId: 'hanasand-live-proof-20260628',
-        name: 'Hanasand live proof',
-        slug: 'hanasand-live-proof-20260628',
+        id: 'hanasand-live-org-20260628',
+        tenantId: 'hanasand-live-org-20260628',
+        name: 'Hanasand live org',
+        slug: 'hanasand-live-org-20260628',
         status: 'active',
         alertVisibilityPolicy: 'members',
         createdAt: '2026-06-28T12:00:00.000Z',
         updatedAt: '2026-06-28T12:00:00.000Z',
     },
     members: [{
-        id: 'mem_live_proof',
-        organizationId: 'hanasand-live-proof-20260628',
-        email: 'live-proof@hanasand.com',
-        userId: 'user_live_proof',
+        id: 'mem_live_org',
+        organizationId: 'hanasand-live-org-20260628',
+        email: 'live-org@hanasand.com',
+        userId: 'user_live_org',
         role: 'owner',
         status: 'active',
         acceptedAt: '2026-06-28T12:00:00.000Z',
@@ -582,12 +582,12 @@ const liveProofOrganizationState = {
     webhooks: [],
 } satisfies DwmOrganizationState
 const liveProofIdentity = resolveDashboardViewerIdentity({
-    userId: 'user_live_proof',
-    userName: 'Live Proof',
+    userId: 'user_live_org',
+    userName: 'Live Org',
     members: liveProofOrganizationState.members,
 })
 const liveProofAlertsUrl = new URL('https://ti-scraper.example/v1/dwm/alerts')
-applyScope(liveProofAlertsUrl, { tenantId: 'hanasand-live-proof-20260628', organizationId: 'hanasand-live-proof-20260628' }, liveProofIdentity)
+applyScope(liveProofAlertsUrl, { tenantId: 'hanasand-live-org-20260628', organizationId: 'hanasand-live-org-20260628' }, liveProofIdentity)
 const deniedAlertAccess = {
     status: 'visibility_denied',
     code: 'organization_visibility_denied',
@@ -597,7 +597,7 @@ const deniedAlertAccess = {
 } satisfies DwmAlertAccessState
 const deniedAlertReadinessCases = buildReadinessCases({
     backendConfigured: true,
-    scope: { tenantId: 'hanasand-live-proof-20260628', organizationId: 'hanasand-live-proof-20260628' },
+    scope: { tenantId: 'hanasand-live-org-20260628', organizationId: 'hanasand-live-org-20260628' },
     watchlists: [],
     operations: null,
     deliveries: [],
@@ -962,7 +962,7 @@ const publicTiWatchlistPayload = {
         ownerLane: 'source',
         route: '/dashboard/ti/enrichment',
         sourceFamily: 'source_capture',
-        requestedFields: ['source provenance', 'capture id'],
+        requestedFields: ['source details', 'capture id'],
     }],
 } satisfies PublicTiHandoffPayload
 const stalePublicTiPayload = {
@@ -979,7 +979,7 @@ const stalePublicTiPayload = {
         freshness: '2025-01-01T00:00:00.000Z',
         readiness: { state: 'stale', label: 'Stale evidence', blockers: ['fresh source after 2025-01-01'] },
     },
-    blockers: [{ code: 'stale_evidence', detail: 'Fresh source is required after 2025-01-01 before claiming alert-ready status.' }],
+    blockers: [{ code: 'stale_evidence', detail: 'Fresh source is required after 2025-01-01 before sending this to review.' }],
 } satisfies PublicTiHandoffPayload
 const publicTiDecode = validatePublicTiHandoffPayload(publicTiWatchlistPayload)
 const malformedPublicTiDecode = validatePublicTiHandoffPayload({ schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION, source: PUBLIC_TI_HANDOFF_SOURCE, action: 'nope' })
@@ -1260,10 +1260,10 @@ const readOnlyCaseDetail = {
 
 void _contract
 if (cases.some(item => item.id === 'case_workflow_readiness')) {
-    throw new Error('Case workflow queue item must be backed by product-progress analystWorkflow readiness.')
+    throw new Error('Case workflow item must be backed by product-progress analystWorkflow readiness.')
 }
 if (cases.some(item => item.id === 'source_worker_readiness')) {
-    throw new Error('Source worker queue item must be backed by product-progress sourceGrowth readiness.')
+    throw new Error('Source worker item must be backed by product-progress sourceGrowth readiness.')
 }
 const productProgressCaseWorkflow = expectWorkbenchCase(productProgressCases, 'case_workflow_readiness')
 void (productProgressCaseWorkflow.status satisfies string)
@@ -1280,33 +1280,33 @@ if (productProgressCaseWorkflow.actions?.find(action => action.id === 'open_case
 const productProgressSourceWorker = expectWorkbenchCase(productProgressCases, 'source_worker_readiness')
 void (productProgressSourceWorker.status satisfies string)
 void (productProgressSourceWorker.evidence.find(item => item.id === 'ev_source_worker_readiness')?.provenance satisfies string | undefined)
-if (productProgressSourceWorker.relatedLinks.find(link => link.href === '/dashboard/ti/sources')?.label !== 'Source operations') {
-    throw new Error('Expected source worker readiness to deep-link to source operations.')
+if (productProgressSourceWorker.relatedLinks.find(link => link.href === '/dashboard/ti/sources')?.label !== 'Collection') {
+    throw new Error('Expected source worker readiness to deep-link to collection.')
 }
 if (productProgressSourceWorker.actions?.find(action => action.id === 'open_source_worker_readiness')?.href !== '/dashboard/ti/sources') {
-    throw new Error('Expected source worker action to open source operations.')
+    throw new Error('Expected source worker action to open collection.')
 }
 if (productProgressSourceWorker.actions?.find(action => action.id === 'inspect_source_worker_proof')?.href !== '/api/ti/scraper/control?q=LockBit') {
-    throw new Error('Expected source worker action to expose the backed source proof route.')
+    throw new Error('Expected source worker action to expose the source status route.')
 }
 const productProgressAlertGeneration = expectWorkbenchCase(productProgressCases, 'alert_generation')
 void (productProgressAlertGeneration.evidence.find(item => item.id === 'ev_alert_generation')?.provenance satisfies string | undefined)
 if (productProgressAlertGeneration.status !== 'ready') {
-    throw new Error('Expected backed alert generation proof to mark the queue item ready.')
+    throw new Error('Expected alert generation status to mark the work item ready.')
 }
 if (productProgressAlertGeneration.actions?.find(action => action.id === 'open_alert_generation_readiness')?.href !== '/api/dwm/alerts/generation-readiness') {
-    throw new Error('Expected alert generation queue item to deep-link to generation readiness.')
+    throw new Error('Expected alert generation work item to deep-link to generation readiness.')
 }
 const scopedAlertQueueHref = '/api/dwm/alerts?organizationId=org_acme'
 if (productProgressAlertGeneration.actions?.find(action => action.id === 'open_alert_queue')?.href !== scopedAlertQueueHref) {
-    throw new Error('Expected alert generation queue item to expose the scoped alert queue.')
+    throw new Error('Expected alert generation work item to expose scoped alerts.')
 }
 if (productProgressAlertGeneration.relatedLinks.find(link => link.href === scopedAlertQueueHref)?.label !== 'Alerts API') {
     throw new Error('Expected alert generation links to include the scoped alerts API.')
 }
 const zeroCandidateAlertGeneration = expectWorkbenchCase(zeroCandidateAlertGenerationCases, 'alert_generation')
 if (zeroCandidateAlertGeneration.status === 'ready' || !zeroCandidateAlertGeneration.missingDependency?.includes('no alert candidates')) {
-    throw new Error('Expected zero-candidate alert generation proof to stay blocked with an explicit reason.')
+    throw new Error('Expected zero-candidate alert generation status to stay blocked with an explicit reason.')
 }
 const organizationReadinessCase = expectWorkbenchCase(cases, 'setup_organization')
 if (organizationReadinessCase.actions?.find(action => action.id === 'inspect_org_members')?.href !== '/api/organizations/org_acme/members') {
@@ -1397,7 +1397,7 @@ void expectProductReadinessWorkflow(productProgressOrgContext, 'webhook_delivery
 void expectProductReadinessWorkflow(productProgressOrgContext, 'analyst_workflow', 'Case action replay')
 void expectProductReadinessWorkflow(productProgressOrgContext, 'helpdesk_audit', 'Support audit')
 void expectProductReadinessWorkflow(productProgressOrgContext, 'public_ti_provenance', 'Public TI handoff')
-void expectProductReadinessWorkflow(productProgressOrgContext, 'deploy_probe', 'Deploy proof')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'deploy_probe', 'Deploy check')
 void expectProductReadinessAction(productProgressOrgContext, 'org_members', 'inspect_org_members', '/api/organizations/org_acme/members')
 void expectProductReadinessAction(productProgressOrgContext, 'shared_watchlists', 'inspect_watchlist_coverage', '/api/organizations/org_acme/alert-readiness')
 if (expectProductReadinessAction(productProgressOrgContext, 'shared_watchlists', 'rebuild_alerts', '/api/dwm/alerts/rebuild').body?.organizationId !== 'org_acme') {
@@ -1442,7 +1442,7 @@ void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_prob
 void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').queuedValidationJobs satisfies number | undefined)
 void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').parserSourceFamilyCount satisfies number | undefined)
 if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').parserSourceFamilyCount !== 2) {
-    throw new Error('Expected source inventory readiness to expose parser-family coverage from source-pack proof.')
+    throw new Error('Expected source inventory readiness to expose parser-family coverage from source-pack status.')
 }
 if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').contractLookupRows !== 1) {
     throw new Error('Expected source inventory readiness to expose contract lookup rows.')

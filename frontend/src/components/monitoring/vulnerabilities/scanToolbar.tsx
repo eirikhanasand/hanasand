@@ -22,26 +22,26 @@ export default function ScanToolbar(props: Props) {
     const handleRunScan = useRunScan(props)
 
     return (
-        <div className='mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#22334d] bg-[#0f172a] p-2'>
+        <div className='mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-ui-border bg-ui-panel p-2'>
             <div className='flex flex-wrap items-center gap-2 pr-px'>
-                <div className='px-2 text-sm font-medium text-[#aab7cc]'>
+                <div className='px-2 text-sm font-medium text-ui-muted'>
                     {props.sorting.images.length}/{props.data?.images.length || 0} images in queue
                 </div>
-                <div className='inline-flex rounded-md border border-[#22334d] bg-[#0b1220] p-0.5 text-sm'>
+                <div className='inline-flex rounded-md border border-ui-border bg-ui-raised p-0.5 text-sm'>
                     {(['impact', 'alphabetical'] as const).map((mode) => (
                         <button
                             key={mode}
                             type='button'
                             onClick={() => props.sorting.setSortMode(mode)}
                             className={`rounded px-2.5 py-1 transition ${
-                                props.sorting.sortMode === mode ? 'bg-[#20365f] text-[#edf4ff]' : 'text-[#aab7cc] hover:bg-[#142033]'
+                                props.sorting.sortMode === mode ? 'bg-ui-primary/15 text-ui-text' : 'text-ui-muted hover:bg-ui-panel'
                             }`}
                         >
                             {mode === 'impact' ? 'Impact' : 'A-Z'}
                         </button>
                     ))}
                 </div>
-                <div className='inline-flex rounded-md border border-[#22334d] bg-[#0b1220] p-0.5 text-sm'>
+                <div className='inline-flex rounded-md border border-ui-border bg-ui-raised p-0.5 text-sm'>
                     <button
                         type='button'
                         onClick={() => {
@@ -50,7 +50,7 @@ export default function ScanToolbar(props: Props) {
                             }
                         }}
                         className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 transition ${
-                            !props.expansion.areAllExpanded ? 'bg-[#20365f] text-[#edf4ff]' : 'text-[#aab7cc] hover:bg-[#142033]'
+                            !props.expansion.areAllExpanded ? 'bg-ui-primary/15 text-ui-text' : 'text-ui-muted hover:bg-ui-panel'
                         }`}
                     >
                         <Rows3 className='h-4.5 w-4.5' />
@@ -64,7 +64,7 @@ export default function ScanToolbar(props: Props) {
                             }
                         }}
                         className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 transition ${
-                            props.expansion.areAllExpanded ? 'bg-[#20365f] text-[#edf4ff]' : 'text-[#aab7cc] hover:bg-[#142033]'
+                            props.expansion.areAllExpanded ? 'bg-ui-primary/15 text-ui-text' : 'text-ui-muted hover:bg-ui-panel'
                         }`}
                     >
                         <LayoutGrid className='h-4.5 w-4.5' />

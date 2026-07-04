@@ -37,7 +37,7 @@ function normalizeStatus(payload: Partial<ServiceStatus>): ServiceStatus {
             latency_ms: Number(check.latency_ms) || 0,
             message: check.message || null,
             checked_at: check.checked_at || new Date().toISOString(),
-            uptime_30d: check.uptime_30d || 'n/a',
+            uptime_30d: check.uptime_30d || 'metering',
         }))
         : []
 

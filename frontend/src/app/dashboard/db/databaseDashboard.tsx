@@ -26,6 +26,11 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
             : activeQueryCount > 0
                 ? `${activeQueryCount} active query${activeQueryCount === 1 ? '' : 'ies'} are running with no long-running rows right now.`
                 : `${overview.databaseCount ?? databaseRows.length} databases are indexed; use the inventory to confirm storage and backup context.`
+    const queryStateText = unavailable
+        ? 'Long-running query state: telemetry reconnecting.'
+        : longRunningQueries.length
+            ? `Long-running query state: ${longRunningQueries.length} long-running query${longRunningQueries.length === 1 ? '' : 'ies'} need review.`
+            : 'Long-running query state: no long-running queries right now.'
 
     return (
         <DashboardPage>
@@ -57,6 +62,7 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                         </div>
                         <h2 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h2>
                         <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
+                        <p className='mt-2 text-sm font-semibold text-ui-text' data-db-long-running-state>{queryStateText}</p>
                     </div>
                     <Link
                         href={primaryHref}

@@ -62,7 +62,7 @@ export default async function page() {
     const publicServiceStatus = toPublicServiceStatus(serviceStatus)
 
     return (
-        <div className='min-h-[calc(100vh-4.5rem)] bg-[#f7f8fb] px-4 py-8 text-[#171a21] md:px-8'>
+        <div className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-8 text-ui-text md:px-8'>
             <StatusDashboard
                 trafficSummary={{
                     endpointCount: endpointMetrics.length,

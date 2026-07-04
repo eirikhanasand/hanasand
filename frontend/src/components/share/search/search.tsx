@@ -149,22 +149,22 @@ export default function Search({
     }
 
     return (
-        <div onClick={() => setVisible(false)} className='absolute inset-0 z-80 grid place-items-start justify-center bg-background/28 px-3 pt-[12vh] backdrop-blur-md'>
+        <div onClick={() => setVisible(false)} className='absolute inset-0 z-80 grid place-items-start justify-center bg-ui-canvas/30 px-3 pt-[12vh] backdrop-blur-md'>
             <div
                 role='dialog'
                 aria-modal='true'
                 aria-label='Command palette'
                 onClick={(e) => e.stopPropagation()}
-                className='z-10 grid max-h-[72vh] w-full max-w-2xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-bright/10 bg-background/88 p-2 shadow-2xl shadow-black/35'
+                className='z-10 grid max-h-[72vh] w-full max-w-2xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-ui-border bg-ui-panel/95 p-2 shadow-lg shadow-ui-canvas/10'
             >
-                <div className='flex min-h-12 items-center justify-between gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-3'>
+                <div className='flex min-h-12 items-center justify-between gap-2 rounded-lg border border-ui-border bg-ui-raised px-3'>
                     <div className='flex min-w-0 flex-1 items-center gap-2'>
-                        <SearchCode className='h-4 w-4 shrink-0 stroke-[#f07d33]' />
+                        <SearchCode className='h-4 w-4 shrink-0 stroke-ui-primary' />
                         <input
                             ref={inputRef}
                             aria-label='Command search'
                             placeholder='Search commands'
-                            className='h-10 min-w-0 flex-1 bg-transparent text-sm font-normal text-bright/76 caret-[#f07d33] outline-none placeholder:text-bright/32'
+                            className='h-10 min-w-0 flex-1 bg-transparent text-sm font-normal text-ui-text caret-ui-primary outline-none placeholder:text-ui-muted'
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
@@ -174,7 +174,7 @@ export default function Search({
                         type='button'
                         aria-label='Close command search'
                         onClick={() => setVisible(false)}
-                        className='grid h-8 w-8 place-items-center rounded-lg text-bright/45 transition hover:bg-bright/8 hover:text-bright sm:hidden'
+                        className='grid h-8 w-8 place-items-center rounded-lg text-ui-muted transition hover:bg-ui-panel hover:text-ui-text sm:hidden'
                     >
                         <X className='h-4 w-4' />
                     </button>
@@ -189,7 +189,7 @@ export default function Search({
                             setAction={setAction}
                         />)
                     ) : (
-                        <div className='rounded-lg border border-bright/8 bg-bright/[0.025] px-3 py-4 text-sm font-normal text-bright/42'>
+                        <div className='rounded-lg border border-ui-border bg-ui-raised px-3 py-4 text-sm font-normal text-ui-muted'>
                             Start typing to filter workspace actions.
                         </div>
                     )}

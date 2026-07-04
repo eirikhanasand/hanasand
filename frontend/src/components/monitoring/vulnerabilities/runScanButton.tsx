@@ -10,8 +10,8 @@ export default function RunScanButton({
     onClick: () => void
 }) {
     const className = disabled
-        ? 'cursor-wait border-amber-400/20 bg-amber-500/10 text-amber-200'
-        : 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200 hover:border-emerald-300/30 hover:bg-emerald-500/15'
+        ? 'cursor-wait border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+        : 'border-ui-success/30 bg-ui-success/10 text-ui-success hover:border-ui-success/35 hover:bg-ui-success/15'
 
     return (
         <button

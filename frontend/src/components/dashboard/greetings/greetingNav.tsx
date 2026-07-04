@@ -10,28 +10,28 @@ export default async function GreetingNav({ text, id }: { text: string, id: stri
     const isAdmin = roles.some((role) => typeof role === 'string' ? role.includes('admin') : role.id?.includes('admin'))
 
     return (
-        <div className='flex w-full rounded-lg justify-between items-center'>
-            <h1 className='text-lg md:text-2xl font-semibold flex-1'>{text}</h1>
+        <div className='flex w-full items-center justify-between rounded-lg'>
+            <h1 className='flex-1 text-lg font-semibold md:text-2xl'>{text}</h1>
             <div className='hidden md:flex gap-2'>
-                {isAdmin && <div className='grid h-fit w-fit px-2 py-1 outline-1 outline-dark rounded-lg gap-2 group cursor-pointer'>
+                {isAdmin && <div className='group grid h-fit w-fit cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
                     <Link href='/dashboard/management' className='flex justify-between px-9 items-center gap-2'>
-                        <SquareChartGantt className='w-5 h-5 group-hover:stroke-[#f07d33]' />
+                        <SquareChartGantt className='h-5 w-5 text-ui-muted group-hover:text-ui-primary' />
                         <h1 className='font-semibold text-base self-center'>Management</h1>
                     </Link>
                 </div>}
-                {isAdmin && <div className='grid h-fit w-fit px-2 py-1 outline-1 outline-dark rounded-lg gap-2 group cursor-pointer'>
+                {isAdmin && <div className='group grid h-fit w-fit cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
                     <Link href='/dashboard/logs' className='flex justify-between px-9 items-center gap-2'>
-                        <FileWarning className='w-5 h-5 group-hover:stroke-[#f07d33]' />
+                        <FileWarning className='h-5 w-5 text-ui-muted group-hover:text-ui-primary' />
                         <h1 className='font-semibold text-base self-center'>Logs</h1>
                     </Link>
                 </div>}
-                <div className='grid h-fit w-fit px-2 py-1 outline-1 outline-dark rounded-lg gap-2 group cursor-pointer'>
+                <div className='group grid h-fit w-fit cursor-pointer gap-2 rounded-lg border border-ui-border px-2 py-1'>
                     <Link href='/dashboard/mail' className='flex justify-between px-9 items-center gap-2'>
-                        <Inbox className='w-5 h-5 group-hover:stroke-[#f07d33]' />
+                        <Inbox className='h-5 w-5 text-ui-muted group-hover:text-ui-primary' />
                         <h1 className='font-semibold text-base self-center'>Mail</h1>
                     </Link>
                 </div>
-                <div className='grid h-fit w-fit px-2 py-1 outline-1 outline-dark rounded-lg gap-2'>
+                <div className='grid h-fit w-fit gap-2 rounded-lg border border-ui-border px-2 py-1'>
                     <Link href={`/profile/${id}`} className='flex justify-between px-10 group cursor-pointer items-center'>
                         <div className='user-icon' />
                         <h1 className='font-semibold text-base self-center'>Profile</h1>

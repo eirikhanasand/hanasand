@@ -113,7 +113,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
         } catch (cause) {
             const rawMessage = cause instanceof Error ? cause.message : ''
             const message = /failed to fetch|networkerror|load failed/i.test(rawMessage)
-                ? 'Mail is unavailable right now. The rest of the console is still ready.'
+                ? 'Mail is reconnecting. The rest of the console is still ready.'
                 : rawMessage || 'Unable to load the mailbox.'
             if (silent) {
                 setBackgroundIssue(message)
@@ -192,16 +192,16 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
     return (
         <DashboardPage>
-            <div className='flex flex-wrap items-center justify-between gap-2 rounded-[1.4rem] border border-white/8 bg-white/2.5 px-3 py-2.5 sm:px-4'>
+            <div className='flex flex-wrap items-center justify-between gap-2 rounded-[1.4rem] border border-ui-border bg-ui-panel px-3 py-2.5 sm:px-4'>
                 <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
                     <div className='mr-1 hidden min-w-0 sm:block'>
-                        <p className='text-[10px] uppercase tracking-[0.28em] text-bright/30'>Mail</p>
-                        <p className='truncate text-[11px] text-bright/46'>{overview?.mailboxAddress || 'Communication'}</p>
+                        <p className='text-[10px] uppercase tracking-[0.28em] text-ui-muted'>Mail</p>
+                        <p className='truncate text-[11px] text-ui-muted'>{overview?.mailboxAddress || 'Communication'}</p>
                     </div>
                     <button
                         data-testid='mail-compose-button'
                         disabled={!overview}
-                        className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-400/14 px-3 text-[11px] font-medium text-orange-100 transition hover:bg-orange-400/20 disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-bright/28'
+                        className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-ui-primary px-3 text-[11px] font-medium text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted'
                         onClick={() => setComposer({ ...emptyComposer, open: true })}
                     >
                         <MailPlus className='h-3.5 w-3.5' />
@@ -227,7 +227,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     )}
 
                     <div className='relative min-w-0 flex-1 sm:min-w-52 sm:max-w-sm'>
-                        <Search className='pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-bright/30' />
+                        <Search className='pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-ui-muted' />
                         <input
                             value={query}
                             onChange={event => setQuery(event.target.value)}
@@ -238,14 +238,23 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </div>
 
                 {showStaleWarning && (
-                    <div className='inline-flex items-center gap-1.5 text-[11px] text-red-200/85'>
+                    <div className='inline-flex items-center gap-1.5 text-[11px] text-ui-danger'>
                         <Clock3 className='h-3.5 w-3.5' />
                         Updated {formatRelativeTime(lastSuccessAt!, now)} ago
                     </div>
                 )}
             </div>
 
-            {error && <ErrorNotice compact message={error} />}
+            {error && (
+                <ErrorNotice
+                    compact
+                    variant='info'
+                    title='Mail reconnecting'
+                    message={error}
+                    actionLabel='Retry'
+                    onAction={() => void load({ mailboxUser, mailboxId: null, messageId: null })}
+                />
+            )}
 
             {showStaleWarning && backgroundIssue && (
                 <ErrorNotice compact message={`Background sync paused. Last successful update was ${formatRelativeTime(lastSuccessAt!, now)} ago.`} />
@@ -259,8 +268,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     <div className='relative z-10'>
                         <div className='flex items-center justify-between pb-2'>
                             <div className='min-w-0'>
-                                <p className='text-[10px] uppercase tracking-[0.28em] text-bright/35'>Folders</p>
-                                {!sidebarCompact && <p className='mt-1 truncate text-[11px] text-bright/50'>{overview?.mailboxAddress || 'Mailbox'}</p>}
+                                <p className='text-[10px] uppercase tracking-[0.28em] text-ui-muted'>Folders</p>
+                                {!sidebarCompact && <p className='mt-1 truncate text-[11px] text-ui-muted'>{overview?.mailboxAddress || 'Mailbox'}</p>}
                             </div>
                             <div className='flex items-center gap-1'>
                                 <button
@@ -292,8 +301,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     }}
                                     className={`flex w-full items-center justify-between rounded-2xl border px-2.5 py-2 text-left text-xs transition ${
                                         selectedMailboxId === mailbox.id
-                                            ? 'border-orange-300/30 bg-orange-300/10 text-bright'
-                                            : 'border-transparent text-bright/70 hover:border-white/10 hover:bg-white/4 hover:text-bright'
+                                            ? 'border-ui-primary bg-ui-primary/10 text-ui-text'
+                                            : 'border-transparent text-ui-muted hover:border-ui-border hover:bg-ui-raised hover:text-ui-text'
                                     }`}
                                     title={mailbox.name}
                                 >
@@ -301,17 +310,17 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                         {iconForMailbox(mailbox.role)}
                                         {!sidebarCompact && <span className='truncate'>{mailbox.name}</span>}
                                     </span>
-                                    {!sidebarCompact && <span className='text-[10px] text-bright/35'>{mailbox.unreadEmails || 0}</span>}
+                                    {!sidebarCompact && <span className='text-[10px] text-ui-muted'>{mailbox.unreadEmails || 0}</span>}
                                 </button>
                             ))}
                         </div>
 
-                        <details className={`mt-3 rounded-2xl border border-white/8 bg-white/2.5 ${sidebarCompact ? 'hidden' : ''}`}>
-                            <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
+                        <details className={`mt-3 rounded-2xl border border-ui-border bg-ui-raised ${sidebarCompact ? 'hidden' : ''}`}>
+                            <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-ui-muted'>
                                 <span className='inline-flex items-center gap-1.5'><FolderInput className='h-3.5 w-3.5' /> Rules</span>
-                                <span className='text-bright/28'>{overview?.filters.length || 0}</span>
+                                <span className='text-ui-muted'>{overview?.filters.length || 0}</span>
                             </summary>
-                            <div className='border-t border-white/8 px-3 py-3'>
+                            <div className='border-t border-ui-border px-3 py-3'>
                                 <form
                                     className='grid gap-2'
                                     onSubmit={async (event) => {
@@ -354,8 +363,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     </select>
                                     <input name='contains' required placeholder='contains...' className={`${subtleInput} w-full`} />
                                     <input name='mailboxName' required placeholder='target folder' className={`${subtleInput} w-full`} />
-                                    <label className='inline-flex items-center gap-2 text-[11px] text-bright/52'>
-                                        <input type='checkbox' name='markRead' className='h-3.5 w-3.5 rounded border-white/15 bg-transparent' />
+                                    <label className='inline-flex items-center gap-2 text-[11px] text-ui-muted'>
+                                        <input type='checkbox' name='markRead' className='h-3.5 w-3.5 rounded border-ui-border bg-ui-raised' />
                                         mark read after moving
                                     </label>
                                     <button className={`${toolbarButton} justify-center`} disabled={creatingFilter}>
@@ -366,16 +375,16 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 {!!overview?.filters.length && (
                                     <div className='mt-2 grid gap-1.5'>
                                         {overview.filters.map(rule => (
-                                            <div key={rule.id} className='rounded-2xl border border-white/8 bg-black/10 px-2.5 py-2'>
+                                            <div key={rule.id} className='rounded-2xl border border-ui-border bg-ui-panel px-2.5 py-2'>
                                                 <div className='flex items-start justify-between gap-2'>
                                                     <div className='min-w-0'>
-                                                        <p className='truncate text-[11px] font-medium text-bright/85'>{rule.name}</p>
-                                                        <p className='mt-1 text-[10px] leading-4 text-bright/42'>
+                                                        <p className='truncate text-[11px] font-medium text-ui-text'>{rule.name}</p>
+                                                        <p className='mt-1 text-[10px] leading-4 text-ui-muted'>
                                                             {rule.criteria.field} contains {rule.criteria.contains} → {rule.action.mailboxName}
                                                         </p>
                                                     </div>
                                                     <button
-                                                        className='text-[10px] text-red-200/75 hover:text-red-100'
+                                                        className='text-[10px] text-ui-danger hover:underline'
                                                         onClick={async () => {
                                                             try {
                                                                 await deleteFilter(rule.id, overview.mailboxUser)
@@ -395,23 +404,23 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             </div>
                         </details>
 
-                        <details className={`mt-2 rounded-2xl border border-white/8 bg-white/2.5 ${sidebarCompact ? 'hidden' : ''}`}>
-                            <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
+                        <details className={`mt-2 rounded-2xl border border-ui-border bg-ui-raised ${sidebarCompact ? 'hidden' : ''}`}>
+                            <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-ui-muted'>
                                 <span className='inline-flex items-center gap-1.5'><ShieldCheck className='h-3.5 w-3.5' /> Mail health</span>
                                 <span className={`rounded-full px-2 py-0.5 text-[10px] ${
                                     overview?.health?.status === 'healthy'
-                                        ? 'bg-emerald-500/12 text-emerald-100'
+                                        ? 'bg-ui-success/15 text-ui-success'
                                         : overview?.health?.status === 'warning'
-                                            ? 'bg-amber-500/12 text-amber-100'
-                                            : 'bg-red-500/12 text-red-100'
+                                            ? 'bg-ui-warning/15 text-ui-warning'
+                                            : 'bg-ui-danger/15 text-ui-danger'
                                 }`}
                                 >
                                     {overview?.health?.status || 'unknown'}
                                 </span>
                             </summary>
                             {overview?.health && (
-                                <div className='border-t border-white/8 px-3 py-3'>
-                                    <div className='flex items-center justify-between gap-2 text-[10px] text-bright/42'>
+                                <div className='border-t border-ui-border px-3 py-3'>
+                                    <div className='flex items-center justify-between gap-2 text-[10px] text-ui-muted'>
                                         <span className='inline-flex items-center gap-1.5'>
                                             <Radar className='h-3.5 w-3.5' />
                                             checked {formatDate(overview.health.checkedAt)}
@@ -424,22 +433,22 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                         {overview.health.checks.map(check => (
                                             <div
                                                 key={check.id}
-                                                className='min-w-0 rounded-2xl border border-white/8 bg-black/10 px-2.5 py-2'
+                                                className='min-w-0 rounded-2xl border border-ui-border bg-ui-panel px-2.5 py-2'
                                             >
                                                 <div className='flex items-center justify-between gap-2'>
-                                                    <p className='min-w-0 wrap-break-word text-[11px] font-medium text-bright/84'>{check.label}</p>
+                                                    <p className='min-w-0 wrap-break-word text-[11px] font-medium text-ui-text'>{check.label}</p>
                                                     <span className={`rounded-full px-2 py-0.5 text-[10px] ${
                                                         check.status === 'healthy'
-                                                            ? 'bg-emerald-500/12 text-emerald-100'
+                                                            ? 'bg-ui-success/15 text-ui-success'
                                                             : check.status === 'warning'
-                                                                ? 'bg-amber-500/12 text-amber-100'
-                                                                : 'bg-red-500/12 text-red-100'
+                                                                ? 'bg-ui-warning/15 text-ui-warning'
+                                                                : 'bg-ui-danger/15 text-ui-danger'
                                                     }`}
                                                     >
                                                         {check.status}
                                                     </span>
                                                 </div>
-                                                <p className='mt-1 wrap-break-word text-[10px] leading-4 text-bright/42'>{check.detail}</p>
+                                                <p className='mt-1 wrap-break-word text-[10px] leading-4 text-ui-muted'>{check.detail}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -447,18 +456,18 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             )}
                         </details>
 
-                        <details className={`mt-2 rounded-2xl border border-white/8 bg-white/2.5 ${sidebarCompact ? 'hidden' : ''}`}>
-                            <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
+                        <details className={`mt-2 rounded-2xl border border-ui-border bg-ui-raised ${sidebarCompact ? 'hidden' : ''}`}>
+                            <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-ui-muted'>
                                 <span className='inline-flex items-center gap-1.5'><Settings2 className='h-3.5 w-3.5' /> Client access</span>
-                                <span className='text-bright/28'>IMAP</span>
+                                <span className='text-ui-muted'>IMAP</span>
                             </summary>
                             {overview && (
-                                <div className='border-t border-white/8 px-3 py-3 text-[11px] leading-5 text-bright/56'>
-                                    <p>IMAP `{overview.settings.imapHost}:{overview.settings.imapPort}`</p>
-                                    <p>SMTP `{overview.settings.smtpHost}:{overview.settings.smtpPort}`</p>
-                                    <p>ManageSieve `{overview.settings.host}:{overview.settings.managesievePort}`</p>
-                                    <p className='mt-1'>Username `{overview.settings.username}`</p>
-                                    <p>Address `{overview.settings.address}`</p>
+                                <div className='border-t border-ui-border px-3 py-3 text-[11px] leading-5 text-ui-muted'>
+                                    <p>IMAP {overview.settings.imapHost}:{overview.settings.imapPort}</p>
+                                    <p>SMTP {overview.settings.smtpHost}:{overview.settings.smtpPort}</p>
+                                    <p>ManageSieve {overview.settings.host}:{overview.settings.managesievePort}</p>
+                                    <p className='mt-1'>Username {overview.settings.username}</p>
+                                    <p>Address {overview.settings.address}</p>
                                     <p>Password is hidden. Use account settings to rotate client credentials.</p>
                                 </div>
                             )}
@@ -467,9 +476,9 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </aside>
 
                 <section className={`${dashboardPanelClass} order-3 p-2.5 xl:order-2`}>
-                    <div className='flex items-center gap-2 px-1 pb-2 text-[10px] uppercase tracking-[0.24em] text-bright/30'>
+                    <div className='flex items-center gap-2 px-1 pb-2 text-[10px] uppercase tracking-[0.24em] text-ui-muted'>
                         <span>{overview?.mailboxes.find(mailbox => mailbox.id === selectedMailboxId)?.name || 'Mailbox'}</span>
-                        <span className='text-bright/15'>•</span>
+                        <span className='text-ui-muted'>•</span>
                         <span>{filteredMessages.length}</span>
                     </div>
 
@@ -486,22 +495,22 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             />
                         ))}
                         {!filteredMessages.length && !loading && (
-                            <div className='rounded-2xl border border-dashed border-white/10 px-3 py-4 text-xs text-bright/42'>
-                                {query ? 'Nothing in this mailbox matches the current search.' : 'This mailbox is quiet right now.'}
+                            <div className='rounded-2xl border border-dashed border-ui-border px-3 py-4 text-xs text-ui-muted'>
+                                {query ? 'Nothing in this mailbox matches the current search.' : 'Mailbox stream is live; no recent messages.'}
                             </div>
                         )}
                     </div>
                 </section>
 
                 <section className={`${dashboardPanelClass} order-2 p-3 xl:order-3`}>
-                    {loading && !overview && <div className='px-2 py-6 text-xs text-bright/42'>Loading mailbox…</div>}
-                    {!loading && !selectedMessage && <div className='rounded-2xl border border-dashed border-white/10 px-4 py-8 text-xs text-bright/42'>Choose a message to read it here.</div>}
+                    {loading && !overview && <div className='px-2 py-6 text-xs text-ui-muted'>Loading mailbox…</div>}
+                    {!loading && !selectedMessage && <div className='rounded-2xl border border-dashed border-ui-border px-4 py-8 text-xs text-ui-muted'>Choose a message to read it here.</div>}
                     {selectedMessage && overview && (
                         <div className='grid gap-3'>
-                            <div className='flex flex-wrap items-center justify-between gap-2 border-b border-white/8 pb-3'>
+                            <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border pb-3'>
                                 <div className='min-w-0'>
-                                    <h2 className='truncate text-lg font-semibold tracking-[-0.03em] text-bright'>{selectedMessage.subject}</h2>
-                                    <div className='mt-1 grid gap-0.5 text-[11px] text-bright/52'>
+                                    <h2 className='truncate text-lg font-semibold tracking-[-0.03em] text-ui-text'>{selectedMessage.subject}</h2>
+                                    <div className='mt-1 grid gap-0.5 text-[11px] text-ui-muted'>
                                         <p>From {selectedMessage.from.map(formatMailboxAddress).join(', ')}</p>
                                         <p>To {selectedMessage.to.map(formatMailboxAddress).join(', ')}</p>
                                         {!!selectedMessage.cc.length && <p>CC {selectedMessage.cc.map(formatMailboxAddress).join(', ')}</p>}
@@ -570,8 +579,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             </div>
 
                             {!!selectedMessage.attachments.length && (
-                                <div className='rounded-2xl border border-white/10 bg-white/3 p-3'>
-                                    <div className='mb-2 text-[11px] font-medium uppercase tracking-[0.22em] text-bright/34'>Attachments</div>
+                                <div className='rounded-2xl border border-ui-border bg-ui-raised p-3'>
+                                    <div className='mb-2 text-[11px] font-medium uppercase tracking-[0.22em] text-ui-muted'>Attachments</div>
                                     <div className='grid gap-2 lg:grid-cols-2'>
                                         {selectedMessage.attachments.map(attachment => (
                                             <AttachmentPreview key={attachment.blobId} attachment={attachment} mailboxUser={overview.mailboxUser} />
@@ -583,12 +592,12 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             {selectedMessage.htmlBody ? (
                                 <iframe
                                     title='HTML mail'
-                                    className='min-h-128 w-full rounded-2xl border border-white/10 bg-[#0d100d]'
+                                    className='min-h-128 w-full rounded-2xl border border-ui-border bg-ui-canvas'
                                     sandbox='allow-popups allow-popups-to-escape-sandbox'
                                     srcDoc={renderedHtml}
                                 />
                             ) : (
-                                <article className='min-h-128 rounded-2xl border border-white/10 bg-white/3 px-4 py-3 text-[13px] leading-6 whitespace-pre-wrap text-bright/82'>
+                                <article className='min-h-128 rounded-2xl border border-ui-border bg-ui-raised px-4 py-3 text-[13px] leading-6 whitespace-pre-wrap text-ui-text'>
                                     {selectedMessage.textBody}
                                 </article>
                             )}
@@ -630,12 +639,12 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 />
             )}
             {mailboxModalOpen && overview && (
-                <div className='fixed inset-0 z-1300 grid place-items-center bg-black/50 p-4 backdrop-blur-sm'>
-                    <div className='w-full max-w-md rounded-3xl border border-white/10 bg-[#0f120f] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.32)]'>
+                <div className='fixed inset-0 z-1300 grid place-items-center bg-ui-canvas/75 p-4 backdrop-blur-sm'>
+                    <div className='w-full max-w-md rounded-3xl border border-ui-border bg-ui-panel p-5 shadow-xl'>
                         <div className='flex items-center justify-between gap-3'>
                             <div>
-                                <p className='text-[10px] uppercase tracking-[0.28em] text-bright/35'>Mailbox</p>
-                                <h3 className='mt-1 text-lg font-semibold text-bright'>Create folder</h3>
+                                <p className='text-[10px] uppercase tracking-[0.28em] text-ui-muted'>Mailbox</p>
+                                <h3 className='mt-1 text-lg font-semibold text-ui-text'>Create folder</h3>
                             </div>
                             <button className={iconButton} onClick={() => { setMailboxModalOpen(false); setMailboxDraft('') }}>
                                 <Trash2 className='h-3.5 w-3.5 rotate-45' />
@@ -646,14 +655,14 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 value={mailboxDraft}
                                 onChange={(event) => setMailboxDraft(event.target.value)}
                                 placeholder='Projects, Receipts, Alerts...'
-                                className='rounded-xl border border-white/10 bg-white/3 px-3 py-2.5 text-sm text-bright outline-none placeholder:text-bright/28'
+                                className='rounded-xl border border-ui-border bg-ui-raised px-3 py-2.5 text-sm text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary'
                             />
                             <div className='flex justify-end gap-2'>
                                 <button className={toolbarButton} onClick={() => { setMailboxModalOpen(false); setMailboxDraft('') }}>
                                     Cancel
                                 </button>
                                 <button
-                                    className='inline-flex items-center justify-center rounded-xl bg-orange-400/90 px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'
+                                    className='inline-flex items-center justify-center rounded-xl bg-ui-primary px-4 py-2 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'
                                     disabled={!mailboxDraft.trim() || creatingMailbox}
                                     onClick={async () => {
                                         setCreatingMailbox(true)

@@ -19,7 +19,7 @@ export default function Login({ serverToken }: { serverToken: boolean }) {
     }
 
     return (
-        <div className='group grid h-10 w-10 place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827]'>
+        <div className='group grid h-10 w-10 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>
             <LoginIcon />
         </div>
     )

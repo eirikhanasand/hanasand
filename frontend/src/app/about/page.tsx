@@ -18,7 +18,7 @@ const principles = [
     },
     {
         title: 'Clean fields make alerts usable',
-        detail: 'Every alert should tell the buyer the actor, company, data mentioned, timing, source, sector, country, review state, and delivery history.',
+        detail: 'Every alert should tell the buyer the actor, company, data mentioned, timing, source, sector, country, review status, and delivery history.',
         icon: Waypoints,
     },
     {
@@ -32,49 +32,49 @@ const focus = [
     'Recent ransomware attacks and leak-site changes',
     'Company, domain, brand, subsidiary, and supplier watchlists',
     'Actor overviews shaped for UI navigation and analyst review',
-    'Bloom-filter style exposure checks where sensitive data should stay out of dashboards',
+    'Separate password exposure checks where sensitive values should stay out of dashboards',
 ]
 
 export default function AboutPage() {
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-[#f7f8fb] text-[#171a21]'>
-            <section className='border-b border-[#e3e7ee] bg-white'>
+        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
+            <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-14 md:px-8 md:py-20 lg:grid-cols-[0.9fr_1.1fr] lg:items-center'>
                     <div className='grid gap-5'>
-                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Company</p>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>Company</p>
                         <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Hanasand monitors company exposure across leak sites and recent claims.</h1>
-                        <p className='max-w-2xl text-lg leading-8 text-[#596170]'>
+                        <p className='max-w-2xl text-lg leading-8 text-ui-muted'>
                             The product centers on high-speed, reviewable threat intelligence: recent mentions, actor context, company matching, and clean delivery.
                         </p>
                         <div className='flex flex-wrap gap-3'>
-                            <Link href='/ti' className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                            <Link href='/ti' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
                                 Open intelligence search
                                 <ArrowRight className='h-4 w-4' />
                             </Link>
-                            <Link href='/contact' className='inline-flex h-11 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
+                            <Link href='/contact' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
                                 Contact sales
                             </Link>
-                            <Link href='/trust' className='inline-flex h-11 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
+                            <Link href='/trust' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
                                 Trust center
                             </Link>
                         </div>
                     </div>
 
-                    <div className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4 shadow-[0_20px_70px_rgba(26,35,55,0.10)]'>
-                        <div className='rounded-lg border border-[#e2e8f0] bg-white p-5'>
+                    <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-4 shadow-md'>
+                        <div className='rounded-lg border border-ui-border bg-ui-panel p-5'>
                             <div className='flex items-center gap-3'>
-                                <span className='grid h-12 w-12 place-items-center rounded-lg border border-[#dfe6f1] bg-[#f7f9fc] text-[#3056d3]'>
+                                <span className='grid h-12 w-12 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
                                     <Building2 className='h-5 w-5' />
                                 </span>
                                 <div>
                                     <h2 className='text-lg font-semibold'>Current product focus</h2>
-                                    <p className='text-sm text-[#667085]'>Monitoring workflows for buyers who need recent exposure activity.</p>
+                                    <p className='text-sm text-ui-muted'>Monitoring workflows for buyers who need recent exposure activity.</p>
                                 </div>
                             </div>
                             <div className='mt-5 grid gap-3'>
                                 {focus.map((item) => (
-                                    <div key={item} className='flex items-start gap-2 text-sm leading-6 text-[#3d4656]'>
-                                        <CheckCircle2 className='mt-1 h-4 w-4 shrink-0 text-[#147a3b]' />
+                                    <div key={item} className='flex items-start gap-2 text-sm leading-6 text-ui-text'>
+                                        <CheckCircle2 className='mt-1 h-4 w-4 shrink-0 text-ui-success' />
                                         <span>{item}</span>
                                     </div>
                                 ))}
@@ -84,18 +84,18 @@ export default function AboutPage() {
                 </div>
             </section>
 
-            <section className='bg-[#f7f8fb]'>
+            <section className='bg-ui-canvas'>
                 <div className='mx-auto grid max-w-7xl gap-4 px-4 py-12 md:px-8 lg:grid-cols-3'>
                     {principles.map((item) => {
                         const Icon = item.icon
                         return (
-                            <article key={item.title} className='grid gap-4 rounded-lg border border-[#e0e5ed] bg-white p-5 shadow-sm'>
-                                <span className='grid h-11 w-11 place-items-center rounded-lg border border-[#dfe6f1] bg-[#f7f9fc] text-[#3056d3]'>
+                            <article key={item.title} className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm'>
+                                <span className='grid h-11 w-11 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
                                     <Icon className='h-5 w-5' />
                                 </span>
                                 <div className='grid gap-2'>
                                     <h2 className='text-lg font-semibold'>{item.title}</h2>
-                                    <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
+                                    <p className='text-sm leading-6 text-ui-muted'>{item.detail}</p>
                                 </div>
                             </article>
                         )

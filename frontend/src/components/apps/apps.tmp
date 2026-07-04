@@ -17,7 +17,7 @@ const apps: AppFeature[] = [
         description: 'Drop images or video, preview the result, and keep a usable history instead of a dead-end upload screen.',
         image: '/images/assets/iphone-events.png',
         href: '/upload',
-        icon: <Upload className='h-4 w-4 text-orange-300' />,
+        icon: <Upload className='h-4 w-4 text-ui-warning' />,
         eyebrow: 'Media'
     },
     {
@@ -25,7 +25,7 @@ const apps: AppFeature[] = [
         description: 'Generate redirects, check stats, and keep the link tooling close to the rest of the site instead of off on its own island.',
         image: '/images/assets/pecubit.png',
         href: '/g',
-        icon: <Link2 className='h-4 w-4 text-sky-300' />,
+        icon: <Link2 className='h-4 w-4 text-ui-primary' />,
         eyebrow: 'Links'
     },
     {
@@ -33,7 +33,7 @@ const apps: AppFeature[] = [
         description: 'Security and performance tools live in the same system, with room for repeatable scans and future Codex-driven workflows.',
         image: '/images/assets/project.jpg',
         href: '/test',
-        icon: <Flame className='h-4 w-4 text-red-300' />,
+        icon: <Flame className='h-4 w-4 text-ui-danger' />,
         eyebrow: 'Ops'
     },
     {
@@ -41,7 +41,7 @@ const apps: AppFeature[] = [
         description: 'Thoughts, articles, and status views are part of the same operational surface, so publishing and monitoring stay connected.',
         image: '/images/assets/city.jpg',
         href: '/status',
-        icon: <Eye className='h-4 w-4 text-emerald-300' />,
+        icon: <Eye className='h-4 w-4 text-ui-success' />,
         eyebrow: 'Visibility'
     },
 ]
@@ -51,29 +51,29 @@ export default function Apps() {
         <section className='grid gap-5 p-4 md:p-16'>
             <div className='grid gap-2'>
                 <h1 className='text-foreground text-2xl font-semibold'>Built Into The Site</h1>
-                <p className='max-w-2xl text-sm text-bright/55'>The useful parts are not hidden behind a mockup. These are live paths that already tie into the system.</p>
+                <p className='max-w-2xl text-sm text-ui-muted'>The useful parts are not hidden behind a mockup. These are live paths that already tie into the system.</p>
             </div>
             <div className='grid gap-4 md:grid-cols-2'>
                 {apps.map((app) => (
                     <Link
                         key={app.title}
                         href={app.href}
-                        className='group grid gap-4 overflow-hidden rounded-lg border border-white/10 bg-white/4 p-4 transition hover:bg-white/7'
+                        className='group grid gap-4 overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-4 transition hover:bg-ui-raised'
                     >
                         <div className='relative aspect-[16/10] overflow-hidden rounded-lg'>
                             <Image src={app.image} alt={app.title} fill className='object-cover transition duration-300 group-hover:scale-[1.02]' />
                         </div>
                         <div className='grid gap-3'>
                             <div className='flex items-center justify-between gap-3'>
-                                <div className='flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-bright/55'>
+                                <div className='flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted'>
                                     {app.icon}
                                     {app.eyebrow}
                                 </div>
-                                <ArrowUpRight className='h-4 w-4 text-bright/35 transition group-hover:text-bright/80' />
+                                <ArrowUpRight className='h-4 w-4 text-ui-muted transition group-hover:text-ui-text' />
                             </div>
                             <div className='grid gap-2'>
                                 <h2 className='text-lg font-semibold text-bright'>{app.title}</h2>
-                                <p className='text-sm leading-6 text-bright/65'>{app.description}</p>
+                                <p className='text-sm leading-6 text-ui-muted'>{app.description}</p>
                             </div>
                         </div>
                     </Link>

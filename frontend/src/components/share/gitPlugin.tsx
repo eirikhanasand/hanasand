@@ -307,14 +307,14 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
     }
 
     return (
-        <section className='rounded-lg bg-dark/35 p-3 outline outline-dark'>
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
             <div className='flex items-start gap-2'>
-                <div className='grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#f07d33]/12 text-[#f07d33] outline outline-[#f07d33]/18'>
+                <div className='grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-ui-primary/25 bg-ui-primary/10 text-ui-primary'>
                     <GitBranch className='h-4 w-4' />
                 </div>
                 <div className='min-w-0'>
-                    <div className='text-xs font-semibold text-bright/86'>Git</div>
-                    <div className='mt-0.5 text-[11px] leading-4 text-bright/42'>
+                    <div className='text-xs font-semibold text-ui-text'>Git</div>
+                    <div className='mt-0.5 text-[11px] leading-4 text-ui-muted'>
                         Import or pull from GitHub, Forgejo, GitLab, or any public Git URL.
                     </div>
                 </div>
@@ -322,7 +322,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
 
             <div className='mt-3 grid gap-2'>
                 {!isSignedIn ? (
-                    <div className='rounded-lg bg-amber-400/8 p-2 text-[11px] leading-4 text-amber-100/82 outline outline-amber-200/10'>
+                    <div className='rounded-lg border border-ui-warning/30 bg-ui-warning/10 p-2 text-[11px] leading-4 text-ui-warning'>
                         <div className='flex items-center gap-2 font-semibold'>
                             <LockKeyhole className='h-3.5 w-3.5' />
                             Sign in for Git access
@@ -338,7 +338,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                     onChange={(event) => setInput(event.target.value)}
                     placeholder='owner/repo, GitHub URL, or public Git URL'
                     spellCheck={false}
-                    className='min-w-0 rounded-lg bg-black/18 px-2.5 py-2 text-xs text-bright/86 outline outline-dark placeholder:text-bright/28'
+                    className='min-w-0 rounded-lg border border-ui-border bg-ui-raised px-2.5 py-2 text-xs text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary'
                 />
                 <input
                     value={githubToken}
@@ -347,7 +347,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                     type='password'
                     autoComplete='off'
                     spellCheck={false}
-                    className='min-w-0 rounded-lg bg-black/18 px-2.5 py-2 text-xs text-bright/86 outline outline-dark placeholder:text-bright/28'
+                    className='min-w-0 rounded-lg border border-ui-border bg-ui-raised px-2.5 py-2 text-xs text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary'
                 />
 
                 <div className='grid grid-cols-2 gap-2'>
@@ -355,7 +355,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                         type='button'
                         onClick={() => void syncRepository('import')}
                         disabled={!isSignedIn || Boolean(pending)}
-                        className='inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#f07d33] px-2 text-xs font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-55'
+                        className='inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-ui-primary px-2 text-xs font-semibold text-ui-canvas transition-opacity hover:opacity-90 disabled:opacity-55'
                     >
                         {pending === 'import' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <GitBranch className='h-3.5 w-3.5' />}
                         Load
@@ -364,23 +364,23 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                         type='button'
                         onClick={() => void syncRepository('pull')}
                         disabled={!isSignedIn || Boolean(pending) || !currentInput}
-                        className='inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-dark/45 px-2 text-xs font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-55'
+                        className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-2 text-xs font-semibold text-ui-text transition-colors hover:border-ui-primary hover:text-ui-primary disabled:opacity-55'
                     >
                         {pending === 'pull' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <GitPullRequestArrow className='h-3.5 w-3.5' />}
                         Pull
                     </button>
                 </div>
 
-                <div className='rounded-lg bg-black/12 p-2.5 outline outline-dark'>
+                <div className='rounded-lg border border-ui-border bg-ui-raised p-2.5'>
                     <div className='flex items-center justify-between gap-2'>
                         <div>
-                            <div className='text-[11px] font-semibold text-bright/74'>Auto pull</div>
-                            <div className='text-[10px] leading-4 text-bright/38'>{autoPullMinutes ? `Syncs remote every ${autoPullMinutes} min while this workspace is open` : 'Disabled for this workspace'}</div>
+                            <div className='text-[11px] font-semibold text-ui-text'>Auto pull</div>
+                            <div className='text-[10px] leading-4 text-ui-muted'>{autoPullMinutes ? `Syncs remote every ${autoPullMinutes} min while this workspace is open` : 'Disabled for this workspace'}</div>
                         </div>
                         <select
                             value={autoPullMinutes}
                             onChange={(event) => setAutoPullMinutes(Number(event.target.value))}
-                            className='h-8 rounded-lg bg-dark/70 px-2 text-[11px] font-semibold text-bright/74 outline outline-dark'
+                            className='h-8 rounded-lg border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text outline-none focus:border-ui-primary'
                         >
                             {autoPullOptions.map(option => (
                                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -390,7 +390,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                 </div>
 
                 {(syncProgress || languageOverview.length) ? (
-                    <div className='rounded-lg bg-black/12 p-2.5 outline outline-dark'>
+                    <div className='rounded-lg border border-ui-border bg-ui-raised p-2.5'>
                         {syncProgress ? (
                             <SyncProgressMeter progress={syncProgress} startedAt={syncStartedAt} />
                         ) : null}
@@ -400,17 +400,17 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                     </div>
                 ) : null}
 
-                <div className='rounded-lg bg-black/12 p-2.5 outline outline-dark'>
+                <div className='rounded-lg border border-ui-border bg-ui-raised p-2.5'>
                     <div className='flex items-center justify-between gap-2'>
                         <div className='min-w-0'>
-                            <div className='text-[11px] font-semibold text-bright/74'>Changes</div>
-                            <div className='truncate text-[10px] leading-4 text-bright/38'>{gitStatus?.branchSummary || stored?.branch || 'No status loaded'}</div>
+                            <div className='text-[11px] font-semibold text-ui-text'>Changes</div>
+                            <div className='truncate text-[10px] leading-4 text-ui-muted'>{gitStatus?.branchSummary || stored?.branch || 'No status loaded'}</div>
                         </div>
                         <button
                             type='button'
                             onClick={() => void loadGitStatus()}
                             disabled={!isSignedIn || Boolean(pending)}
-                            className='inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-dark/55 px-2 text-[11px] font-semibold text-bright/78 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-55'
+                            className='inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition-colors hover:border-ui-primary hover:text-ui-primary disabled:opacity-55'
                         >
                             {pending === 'status' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <RotateCcw className='h-3.5 w-3.5' />}
                             Status
@@ -419,8 +419,8 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
 
                     {gitStatus?.files.length ? (
                         <div className='mt-2 space-y-1.5'>
-                            <div className='flex items-center justify-between text-[10px] text-bright/42'>
-                                <button type='button' onClick={stageAll} className='font-semibold text-[#f07d33] hover:text-[#ffb080]'>
+                            <div className='flex items-center justify-between text-[10px] text-ui-muted'>
+                                <button type='button' onClick={stageAll} className='font-semibold text-ui-primary hover:underline'>
                                     Stage all
                                 </button>
                                 <span>{selectedPaths.size}/{gitStatus.files.length} staged</span>
@@ -431,36 +431,36 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                                         key={file.path}
                                         type='button'
                                         onClick={() => togglePath(file.path)}
-                                        className='flex min-h-8 w-full items-center gap-2 rounded-lg bg-dark/32 px-2 text-left text-[11px] text-bright/66 outline outline-dark/70 transition-colors hover:text-bright'
+                                        className='flex min-h-8 w-full items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-2 text-left text-[11px] text-ui-muted transition-colors hover:border-ui-primary hover:text-ui-text'
                                     >
-                                        <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${selectedPaths.has(file.path) ? 'border-[#f07d33] bg-[#f07d33] text-black' : 'border-bright/18'}`}>
+                                        <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${selectedPaths.has(file.path) ? 'border-ui-primary bg-ui-primary text-ui-canvas' : 'border-ui-border'}`}>
                                             {selectedPaths.has(file.path) ? <Check className='h-3 w-3' /> : null}
                                         </span>
-                                        <span className='shrink-0 font-mono text-[10px] text-bright/38'>{file.index}{file.workingTree}</span>
+                                        <span className='shrink-0 font-mono text-[10px] text-ui-muted'>{file.index}{file.workingTree}</span>
                                         <span className='min-w-0 truncate'>{file.path}</span>
                                     </button>
                                 ))}
                             </div>
                         </div>
                     ) : gitStatus ? (
-                        <div className='mt-2 rounded-lg bg-dark/24 px-2 py-2 text-[11px] text-bright/46 outline outline-dark'>No changed files.</div>
+                        <div className='mt-2 rounded-lg border border-ui-border bg-ui-panel px-2 py-2 text-[11px] text-ui-muted'>No changed files.</div>
                     ) : null}
                 </div>
 
-                <div className='rounded-lg bg-black/12 p-2.5 outline outline-dark'>
-                    <div className='text-[11px] font-semibold text-bright/74'>Commit and push</div>
+                <div className='rounded-lg border border-ui-border bg-ui-raised p-2.5'>
+                    <div className='text-[11px] font-semibold text-ui-text'>Commit and push</div>
                     <input
                         value={commitMessage}
                         onChange={(event) => setCommitMessage(event.target.value)}
                         placeholder='Commit message'
-                        className='mt-2 min-w-0 rounded-lg bg-black/18 px-2.5 py-2 text-xs text-bright/86 outline outline-dark placeholder:text-bright/28'
+                        className='mt-2 min-w-0 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-2 text-xs text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary'
                     />
                     <div className='mt-2 grid grid-cols-3 gap-2'>
                         <button
                             type='button'
                             onClick={() => void pullGitWorkspace()}
                             disabled={!isSignedIn || Boolean(pending)}
-                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-dark/45 px-2 text-[11px] font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-55'
+                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition-colors hover:border-ui-primary hover:text-ui-primary disabled:opacity-55'
                         >
                             {pending === 'pull' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <GitPullRequestArrow className='h-3.5 w-3.5' />}
                             Pull
@@ -469,7 +469,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                             type='button'
                             onClick={() => void commitSelectedFiles()}
                             disabled={!isSignedIn || Boolean(pending) || !selectedPaths.size || !commitMessage.trim()}
-                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-dark/45 px-2 text-[11px] font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-55'
+                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition-colors hover:border-ui-primary hover:text-ui-primary disabled:opacity-55'
                         >
                             {pending === 'commit' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <GitCommitHorizontal className='h-3.5 w-3.5' />}
                             Commit
@@ -478,7 +478,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                             type='button'
                             onClick={() => void pushGitWorkspace()}
                             disabled={!isSignedIn || Boolean(pending)}
-                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#f07d33] px-2 text-[11px] font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-55'
+                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-ui-primary px-2 text-[11px] font-semibold text-ui-canvas transition-opacity hover:opacity-90 disabled:opacity-55'
                         >
                             {pending === 'push' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <SendHorizontal className='h-3.5 w-3.5' />}
                             Push
@@ -487,16 +487,16 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                 </div>
 
                 {stored ? (
-                    <div className='rounded-lg bg-black/12 px-2.5 py-2 text-[11px] leading-4 text-bright/48 outline outline-dark'>
-                        <div className='truncate text-bright/70'>{stored.fullName}</div>
+                    <div className='rounded-lg border border-ui-border bg-ui-raised px-2.5 py-2 text-[11px] leading-4 text-ui-muted'>
+                        <div className='truncate text-ui-text'>{stored.fullName}</div>
                         <div className='mt-0.5 flex items-center gap-1.5'>
                             <RotateCcw className='h-3 w-3' />
                             {stored.branch}{stored.sourcePath ? ` / ${stored.sourcePath}` : ''}
                         </div>
-                        <div className='mt-1 text-bright/42'>Last synced {formatSyncTime(stored.lastSyncedAt || stored.updatedAt)}</div>
+                        <div className='mt-1 text-ui-muted'>Last synced {formatSyncTime(stored.lastSyncedAt || stored.updatedAt)}</div>
                     </div>
                 ) : null}
-                {status ? <div className='text-[11px] leading-4 text-emerald-200/80'>{status}</div> : null}
+                {status ? <div className='text-[11px] leading-4 text-ui-success'>{status}</div> : null}
                 {error ? <ErrorNotice compact message={error} /> : null}
             </div>
         </section>
@@ -515,14 +515,14 @@ function SyncProgressMeter({ progress, startedAt }: { progress: AISyncProgress, 
 
     return (
         <div>
-            <div className='flex items-center justify-between gap-2 text-[11px] font-semibold text-bright/74'>
+            <div className='flex items-center justify-between gap-2 text-[11px] font-semibold text-ui-text'>
                 <span>Sync progress</span>
                 <span>{progress.syncedFiles}/{progress.totalFiles} files</span>
             </div>
-            <div className='mt-2 h-2 overflow-hidden rounded-full bg-dark/70 outline outline-dark'>
-                <div className='h-full rounded-full bg-[#f07d33]' style={{ width: `${percentage}%` }} />
+            <div className='mt-2 h-2 overflow-hidden rounded-full border border-ui-border bg-ui-panel'>
+                <div className='h-full rounded-full bg-ui-primary' style={{ width: `${percentage}%` }} />
             </div>
-            <div className='mt-1.5 flex items-center justify-between gap-2 text-[10px] leading-4 text-bright/40'>
+            <div className='mt-1.5 flex items-center justify-between gap-2 text-[10px] leading-4 text-ui-muted'>
                 <span className='min-w-0 truncate'>{progress.currentPath || 'Preparing files...'}</span>
                 <span className='inline-flex shrink-0 items-center gap-1'>
                     <Clock3 className='h-3 w-3' />
@@ -536,16 +536,16 @@ function SyncProgressMeter({ progress, startedAt }: { progress: AISyncProgress, 
 function LanguageOverview({ stats }: { stats: LanguageStat[] }) {
     return (
         <div className='mt-3'>
-            <div className='text-[11px] font-semibold text-bright/74'>Language overview</div>
+            <div className='text-[11px] font-semibold text-ui-text'>Language overview</div>
             <div className='mt-2 space-y-1.5'>
                 {stats.map(stat => (
                     <div key={stat.language}>
-                        <div className='mb-1 flex items-center justify-between text-[10px] text-bright/44'>
+                        <div className='mb-1 flex items-center justify-between text-[10px] text-ui-muted'>
                             <span>{stat.language}</span>
                             <span>{stat.percentage}% · {stat.files} file{stat.files === 1 ? '' : 's'}</span>
                         </div>
-                        <div className='h-1.5 overflow-hidden rounded-full bg-dark/60'>
-                            <div className='h-full rounded-full bg-bright/45' style={{ width: `${stat.percentage}%` }} />
+                        <div className='h-1.5 overflow-hidden rounded-full bg-ui-panel'>
+                            <div className='h-full rounded-full bg-ui-muted' style={{ width: `${stat.percentage}%` }} />
                         </div>
                     </div>
                 ))}

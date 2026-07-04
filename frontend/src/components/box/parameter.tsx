@@ -20,7 +20,7 @@ export default function Parameter({ parameter, value, setParameters }: Parameter
                     value={parameter}
                     onChange={handleChange}
                 />
-                <div className='w-full h-px bg-bright/4 group-hover:bg-bright/40' />
+                <div className='h-px w-full bg-ui-border group-hover:bg-ui-primary/50' />
             </div>
             <div className='group'>
                 <input
@@ -28,7 +28,7 @@ export default function Parameter({ parameter, value, setParameters }: Parameter
                     value={value}
                     onChange={handleChange}
                 />
-                <div className='w-full h-px bg-bright/4 group-hover:bg-bright/40' />
+                <div className='h-px w-full bg-ui-border group-hover:bg-ui-primary/50' />
             </div>
         </div>
     )

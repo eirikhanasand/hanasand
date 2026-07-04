@@ -13,7 +13,7 @@ export default function ShareIcon({ baseStyles, isShare, href }: ShareIconProps)
             <div className={baseStyles}>
                 <FileCode />
             </div>
-            <Code className={`${!isShare && 'hidden'} group-hover:block absolute stroke-[#f07d33] pointer-events-none stroke-4 bg-dark group-hover:bg-dark-reverse w-2.5 h-2.5 mt-[5px] z-100`} />
+            <Code className={`${!isShare && 'hidden'} pointer-events-none absolute z-100 mt-[5px] h-2.5 w-2.5 bg-ui-panel stroke-4 stroke-ui-primary group-hover:block group-hover:bg-ui-raised`} />
         </LinkorDiv>
     )
 }

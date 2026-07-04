@@ -31,8 +31,8 @@ export default function Apps() {
                     />
                 )
             })}
-            <div className='text-gray-500 grid place-items-center p-8 font-semibold self-center'>
-                <h1 className='max-w-[80vw] py-50 md:py-10 text-center'>More soon.</h1>
+            <div className='grid place-items-center self-center p-8 font-semibold text-ui-muted'>
+                <h1 className='max-w-[80vw] py-20 text-center md:py-10'>More soon.</h1>
             </div>
         </div>
     )
@@ -42,8 +42,8 @@ function AppView({text, image, reverse}: AppViewProps) {
     if (reverse) {
         return (
             <div className='grid md:grid-cols-2'>
-                <div className='left_div grid place-items-center px-20'>
-                    <p className='text-center text-5xl py-50 md:py-0 md:text-7xl text-balance'>{text}</p>
+                <div className='left_div grid place-items-center px-6 md:px-20'>
+                    <p className='py-20 text-center text-5xl text-balance md:py-0 md:text-7xl'>{text}</p>
                 </div>
                 <AppImage image={image} />
             </div>
@@ -53,8 +53,8 @@ function AppView({text, image, reverse}: AppViewProps) {
     return (
         <div className='flex md:grid flex-col-reverse md:grid-cols-2'>
             <AppImage image={image} />
-            <div className='left_div grid place-items-center px-20'>
-                <p className='text-center py-50 md:py-0 text-5xl md:text-7xl text-balance'>{text}</p>
+            <div className='left_div grid place-items-center px-6 md:px-20'>
+                <p className='py-20 text-center text-5xl text-balance md:py-0 md:text-7xl'>{text}</p>
             </div>
         </div>
     )
@@ -67,7 +67,7 @@ function AppImage({image}: {image: string}) {
                 height={900}
                 width={450}
                 src={image}
-                alt='React Native Gambling App'
+                alt='Mobile application preview'
                 quality={100}
             />
         </div>

@@ -25,7 +25,7 @@ export default function ImageSummaryActions({
                 </span>
             ))}
             {image.totalVulnerabilities === 0 ? (
-                <span className='inline-flex items-center rounded-full border border-[#285c3b] bg-[#102318] px-2 py-0.5 text-xs font-semibold text-[#7bd39a]'>clear</span>
+                <span className='inline-flex items-center rounded-full border border-ui-success/35 bg-ui-success/10 px-2 py-0.5 text-xs font-semibold text-ui-success'>clear</span>
             ) : null}
             <button
                 type='button'
@@ -36,8 +36,8 @@ export default function ImageSummaryActions({
                 aria-expanded={isExpanded}
                 aria-label={isExpanded ? `Collapse ${image.image}` : `Expand ${image.image}`}
                 className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md
-                    border border-[#22334d] bg-[#0b1220] text-[#aab7cc] transition
-                    hover:border-[#315b92] hover:bg-[#142033]'
+                    border border-ui-border bg-ui-raised text-ui-muted transition
+                    hover:border-ui-primary/35 hover:bg-ui-panel'
             >
                 <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
             </button>

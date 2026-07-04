@@ -6,11 +6,11 @@
 }
 
 .dark .theme-toggle_svg {
-    fill: #f5f7fb;
+    fill: var(--ui-text);
 }
 
 .dark .group:hover .theme-toggle_svg {
-    fill: #8fb2ff;
+    fill: var(--ui-primary);
 }
 
 .theme-toggle_sun-ray {
@@ -40,20 +40,20 @@
 
 .light .theme-toggle_sun-moon {
     transform: scale(1.9);
-    fill: #171a21;
+    fill: var(--ui-text);
 }
 
 .light .group:hover .theme-toggle_sun-moon {
     transform: scale(1.9);
-    fill: #3056d3;
+    fill: var(--ui-primary);
 }
 
 .dark .theme-toggle_sun-moon {
     transform: scale(1);
-    fill: #f5f7fb;
+    fill: var(--ui-text);
 }
 
 .dark .group:hover .theme-toggle_sun-moon {
     transform: scale(1);
-    fill: #8fb2ff;
+    fill: var(--ui-primary);
 }

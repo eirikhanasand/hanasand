@@ -92,7 +92,7 @@ export function formatHeaders(headers?: Record<string, string>) {
 
 export function formatRequestLine(request?: ToolResponse['request']) {
     if (!request) {
-        return 'Request details will appear here.'
+        return 'Run a request to inspect request details.'
     }
 
     return `${request.method} ${request.url}`

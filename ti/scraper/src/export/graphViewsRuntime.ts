@@ -11,5 +11,5 @@ export const buildGraphBackendAdapterCutoverContractDto = () => compactContract(
 export const buildGraphBackendMigrationCertificationDto = () => compactContract("graph_backend_migration");
 export const buildGraphQueryCostControlsDto = () => ({ maxDepth: 2, maxRelationships: 500, defaultLimit: 50 });
 export const buildGraphRelationshipDriftMonitorDto = (snapshot: PersistedGraphSnapshot) => ({ driftSignals: [], relationshipCount: snapshot.relationships.length });
-export const buildGraphRelationshipExplainabilityDto = (_snapshot: PersistedGraphSnapshot, relationshipId?: string) => ({ relationshipId, explanation: "relationship is evidence-backed when confidence and review state permit export" });
+export const buildGraphRelationshipExplainabilityDto = (_snapshot: PersistedGraphSnapshot, relationshipId?: string) => ({ relationshipId, explanation: "relationship can export when source detail and review state permit export" });
 export const downgradeAndExpireStaleRelationships = (snapshot: PersistedGraphSnapshot) => ({ ...snapshot, relationships: snapshot.relationships.map((rel: any) => ({ ...rel, reviewState: rel.reviewState ?? "proposed" })) });

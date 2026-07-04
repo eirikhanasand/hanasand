@@ -115,21 +115,21 @@ export default function Code({
             <main
                 aria-busy='true'
                 aria-label='Loading workspace editor'
-                className='grid h-full w-full overflow-hidden rounded-lg outline outline-dark'
+                className='grid h-full w-full overflow-hidden rounded-lg border border-ui-border'
             >
                 <div className='flex h-full min-h-0 w-full'>
-                    <div className='hidden w-12 shrink-0 border-r border-bright/8 bg-bright/[0.018] p-2 sm:block'>
+                    <div className='hidden w-12 shrink-0 border-r border-ui-border bg-ui-raised p-2 sm:block'>
                         {Array.from({ length: 14 }).map((_, index) => (
-                            <div key={index} className='mb-2 h-3 rounded bg-bright/8' />
+                            <div key={index} className='mb-2 h-3 rounded bg-ui-border' />
                         ))}
                     </div>
                     <div className='min-w-0 flex-1 space-y-3 p-4'>
-                        <div className='h-4 w-44 animate-pulse rounded bg-bright/12' />
-                        <div className='h-3 w-11/12 animate-pulse rounded bg-bright/8' />
-                        <div className='h-3 w-9/12 animate-pulse rounded bg-bright/8' />
-                        <div className='h-3 w-10/12 animate-pulse rounded bg-bright/8' />
-                        <div className='mt-5 h-3 w-7/12 animate-pulse rounded bg-bright/8' />
-                        <div className='h-3 w-8/12 animate-pulse rounded bg-bright/8' />
+                        <div className='h-4 w-44 animate-pulse rounded bg-ui-border' />
+                        <div className='h-3 w-11/12 animate-pulse rounded bg-ui-border' />
+                        <div className='h-3 w-9/12 animate-pulse rounded bg-ui-border' />
+                        <div className='h-3 w-10/12 animate-pulse rounded bg-ui-border' />
+                        <div className='mt-5 h-3 w-7/12 animate-pulse rounded bg-ui-border' />
+                        <div className='h-3 w-8/12 animate-pulse rounded bg-ui-border' />
                     </div>
                 </div>
             </main>

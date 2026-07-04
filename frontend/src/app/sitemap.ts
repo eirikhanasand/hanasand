@@ -21,6 +21,11 @@ const publicRoutes = [
     '/status',
     '/terms',
     '/ti',
+    '/trust',
+    '/trust/security-overview',
+    '/trust/dpa-and-data',
+    '/trust/subprocessors',
+    '/trust/sla-onboarding',
 ]
 
 const articleRoutes = [

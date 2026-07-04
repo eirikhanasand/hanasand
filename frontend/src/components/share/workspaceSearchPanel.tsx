@@ -23,8 +23,8 @@ type WorkspaceSearchPanelProps = {
     setError: Dispatch<SetStateAction<string | boolean | null>>
 }
 
-const inputClass = 'w-full rounded-lg border border-bright/10 bg-black/25 px-3 py-2 text-sm text-bright/90 outline-none transition focus:border-[#f07d33]/70 focus:bg-black/35'
-const iconButtonClass = 'grid h-8 w-8 place-items-center rounded-lg border border-bright/10 bg-bright/3 text-bright/60 transition hover:border-[#f07d33]/40 hover:text-bright'
+const inputClass = 'w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:bg-ui-panel'
+const iconButtonClass = 'grid h-8 w-8 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-muted transition hover:border-ui-primary hover:text-ui-text'
 
 export default function WorkspaceSearchPanel({
     tree,
@@ -162,23 +162,23 @@ export default function WorkspaceSearchPanel({
     }
 
     return (
-        <section className='flex h-full w-[min(22rem,calc(100vw-5rem))] flex-col overflow-hidden rounded-xl border border-bright/10 bg-background/82 shadow-2xl shadow-black/30 backdrop-blur-md md:min-w-[310px] md:max-w-[420px]'>
-            <header className='flex items-center justify-between border-b border-bright/10 px-3 py-3'>
+        <section className='flex h-full w-[min(22rem,calc(100vw-5rem))] flex-col overflow-hidden rounded-xl border border-ui-border bg-ui-panel shadow-2xl backdrop-blur-md md:min-w-[310px] md:max-w-[420px]'>
+            <header className='flex items-center justify-between border-b border-ui-border px-3 py-3'>
                 <div>
-                    <p className='text-[11px] font-semibold uppercase tracking-[0.22em] text-bright/45'>Search</p>
-                    <h2 className='text-sm font-semibold text-bright/90'>Workspace search</h2>
+                    <p className='text-[11px] font-semibold uppercase tracking-[0.22em] text-ui-muted'>Search</p>
+                    <h2 className='text-sm font-semibold text-ui-text'>Workspace search</h2>
                 </div>
                 <div className='flex items-center gap-1'>
-                    <Sparkles className='h-4 w-4 text-[#f07d33]' />
-                    <span className='rounded-full border border-bright/10 px-2 py-1 text-[11px] text-bright/55'>
+                    <Sparkles className='h-4 w-4 text-ui-primary' />
+                    <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-1 text-[11px] text-ui-muted'>
                         {files.length} files
                     </span>
                 </div>
             </header>
 
-            <div className='space-y-2 border-b border-bright/10 p-3'>
+            <div className='space-y-2 border-b border-ui-border p-3'>
                 <div className='relative'>
-                    <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bright/35' />
+                    <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-muted' />
                     <input
                         aria-label='Search files'
                         value={query}
@@ -188,7 +188,7 @@ export default function WorkspaceSearchPanel({
                     />
                 </div>
                 <div className='relative'>
-                    <Replace className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bright/35' />
+                    <Replace className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-muted' />
                     <input
                         aria-label='Replace text'
                         value={replacement}
@@ -211,7 +211,7 @@ export default function WorkspaceSearchPanel({
                         type='button'
                         disabled={!resultCount || replacing}
                         onClick={replaceAll}
-                        className='inline-flex items-center gap-2 rounded-lg border border-[#f07d33]/35 bg-[#f07d33]/10 px-3 py-2 text-xs font-semibold text-[#ffd3bd] transition hover:bg-[#f07d33]/20 disabled:cursor-not-allowed disabled:opacity-40'
+                        className='inline-flex items-center gap-2 rounded-lg border border-ui-primary bg-ui-primary/10 px-3 py-2 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-40'
                     >
                         {replacing ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Replace className='h-3.5 w-3.5' />}
                         Replace all
@@ -219,11 +219,11 @@ export default function WorkspaceSearchPanel({
                 </div>
             </div>
 
-            <div className='flex items-center justify-between border-b border-bright/10 px-3 py-2 text-xs text-bright/55'>
+            <div className='flex items-center justify-between border-b border-ui-border px-3 py-2 text-xs text-ui-muted'>
                 <span>
                     {loading ? 'Indexing workspace...' : `${resultCount} results in ${results.length} files`}
                 </span>
-                {loading ? <Loader2 className='h-4 w-4 animate-spin text-[#f07d33]' /> : <Files className='h-4 w-4' />}
+                {loading ? <Loader2 className='h-4 w-4 animate-spin text-ui-primary' /> : <Files className='h-4 w-4' />}
             </div>
 
             <div className='min-h-0 flex-1 overflow-auto p-2'>
@@ -236,30 +236,30 @@ export default function WorkspaceSearchPanel({
                 {results.map(group => {
                     const isOpen = expanded.has(group.file.id)
                     return (
-                        <article key={group.file.id} className='mb-2 overflow-hidden rounded-xl border border-bright/10 bg-bright/[0.025]'>
-                            <button type='button' onClick={() => toggleExpanded(group.file.id)} className='flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-bright/4'>
-                                {isOpen ? <ChevronDown className='h-4 w-4 text-bright/45' /> : <ChevronRight className='h-4 w-4 text-bright/45' />}
+                        <article key={group.file.id} className='mb-2 overflow-hidden rounded-xl border border-ui-border bg-ui-raised'>
+                            <button type='button' onClick={() => toggleExpanded(group.file.id)} className='flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-ui-panel'>
+                                {isOpen ? <ChevronDown className='h-4 w-4 text-ui-muted' /> : <ChevronRight className='h-4 w-4 text-ui-muted' />}
                                 <div className='min-w-0 flex-1'>
-                                    <p className='truncate text-sm font-medium text-bright/85'>{group.file.name}</p>
-                                    <p className='truncate text-[11px] text-bright/40'>{group.file.path}</p>
+                                    <p className='truncate text-sm font-medium text-ui-text'>{group.file.name}</p>
+                                    <p className='truncate text-[11px] text-ui-muted'>{group.file.path}</p>
                                 </div>
-                                <span className='rounded-full bg-bright/10 px-2 py-0.5 text-[11px] text-bright/65'>{group.matches.length}</span>
+                                <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-[11px] text-ui-muted'>{group.matches.length}</span>
                             </button>
                             {isOpen ? (
-                                <div className='border-t border-bright/10 py-1'>
+                                <div className='border-t border-ui-border py-1'>
                                     {group.matches.slice(0, 80).map(match => (
                                         <Link
                                             key={match.id}
                                             prefetch={false}
                                             href={`/s/${match.file.id}?line=${match.line}&q=${encodeURIComponent(query)}`}
-                                            className='group flex gap-2 px-3 py-2 text-xs transition hover:bg-[#f07d33]/10'
+                                            className='group flex gap-2 px-3 py-2 text-xs transition hover:bg-ui-primary/10'
                                         >
-                                            <span className='w-8 shrink-0 text-right font-mono text-bright/35'>{match.line}</span>
+                                            <span className='w-8 shrink-0 text-right font-mono text-ui-muted'>{match.line}</span>
                                             <span className='min-w-0 flex-1'>
-                                                {match.functionName ? <span className='mb-1 block text-[10px] uppercase tracking-[0.16em] text-[#f07d33]/75'>{match.functionName}</span> : null}
+                                                {match.functionName ? <span className='mb-1 block text-[10px] uppercase tracking-[0.16em] text-ui-primary'>{match.functionName}</span> : null}
                                                 <HighlightedPreview preview={match.preview} query={query} caseSensitive={caseSensitive} />
                                             </span>
-                                            <ArrowRight className='mt-0.5 h-3.5 w-3.5 shrink-0 text-bright/25 transition group-hover:text-[#f07d33]' />
+                                            <ArrowRight className='mt-0.5 h-3.5 w-3.5 shrink-0 text-ui-muted transition group-hover:text-ui-primary' />
                                         </Link>
                                     ))}
                                 </div>
@@ -278,7 +278,7 @@ function Toggle({ active, onClick, label, title }: { active: boolean; onClick: (
             type='button'
             title={title}
             onClick={onClick}
-            className={`${iconButtonClass} ${active ? 'border-[#f07d33]/60 bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
+            className={`${iconButtonClass} ${active ? 'border-ui-primary bg-ui-primary/15 text-ui-primary' : ''}`}
         >
             <span className='text-xs font-bold'>{label}</span>
         </button>
@@ -287,10 +287,10 @@ function Toggle({ active, onClick, label, title }: { active: boolean; onClick: (
 
 function EmptyState({ title, body }: { title: string; body: string }) {
     return (
-        <div className='grid min-h-48 place-items-center rounded-xl border border-dashed border-bright/10 bg-bright/2 p-6 text-center'>
+        <div className='grid min-h-48 place-items-center rounded-xl border border-dashed border-ui-border bg-ui-raised p-6 text-center'>
             <div>
-                <p className='text-sm font-semibold text-bright/80'>{title}</p>
-                <p className='mt-2 text-xs leading-5 text-bright/45'>{body}</p>
+                <p className='text-sm font-semibold text-ui-text'>{title}</p>
+                <p className='mt-2 text-xs leading-5 text-ui-muted'>{body}</p>
             </div>
         </div>
     )
@@ -302,13 +302,13 @@ function HighlightedPreview({ preview, query, caseSensitive }: { preview: string
         : preview.toLowerCase().indexOf(query.toLowerCase())
 
     if (index < 0 || !query) {
-        return <span className='truncate text-bright/65'>{preview}</span>
+        return <span className='truncate text-ui-muted'>{preview}</span>
     }
 
     return (
-        <span className='block truncate font-mono text-bright/65'>
+        <span className='block truncate font-mono text-ui-muted'>
             {preview.slice(0, index)}
-            <mark className='rounded bg-[#f07d33]/35 px-0.5 text-[#fff1e8]'>{preview.slice(index, index + query.length)}</mark>
+            <mark className='rounded bg-ui-primary/20 px-0.5 text-ui-text'>{preview.slice(index, index + query.length)}</mark>
             {preview.slice(index + query.length)}
         </span>
     )

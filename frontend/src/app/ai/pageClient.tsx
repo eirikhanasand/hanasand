@@ -64,12 +64,12 @@ export default function AIPageClient({
     }
 
     return (
-        <div className={`${compact ? 'h-screen' : 'h-full'} enterprise-console relative w-full overflow-hidden bg-[#f7f8fb] text-[#171a21]`}>
+        <div className={`${compact ? 'h-screen' : 'h-full'} enterprise-console relative w-full overflow-hidden bg-ui-canvas text-ui-text`}>
             <div className='flex h-full min-h-0 flex-col'>
                 {showHeader ? (
-                    <div className='flex h-14 items-center justify-between border-b border-[#e0e5ed] bg-white px-5'>
+                    <div className='flex h-14 items-center justify-between border-b border-ui-border bg-ui-panel px-5'>
                         <div className='min-w-0'>
-                            <p className='truncate text-sm font-semibold text-[#171a21]'>
+                            <p className='truncate text-sm font-semibold text-ui-text'>
                                 {conversationTitle(ai.activeConversation?.title)}
                             </p>
                         </div>
@@ -78,11 +78,11 @@ export default function AIPageClient({
                                 type='button'
                                 onClick={() => setDetailsOpen((prev) => !prev)}
                                 aria-label={detailsOpen ? 'Hide workspace details' : 'Show workspace details'}
-                                className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${detailsOpen ? 'bg-[#eef3ff] text-[#3056d3]' : 'text-[#667085] hover:bg-[#f8fafc] hover:text-[#171a21]'}`}
+                                className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${detailsOpen ? 'bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}
                             >
                                 <PanelRight className='h-4 w-4' />
                             </button>
-                            <Link href={ai.activeConversation?.workspaceId ? `/s/${ai.activeConversation.workspaceId}` : '/s'} className='inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[#596170] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
+                            <Link href={ai.activeConversation?.workspaceId ? `/s/${ai.activeConversation.workspaceId}` : '/s'} className='inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-ui-muted transition-colors hover:bg-ui-raised hover:text-ui-text'>
                                 Context
                                 <SquareArrowOutUpRight className='h-4 w-4' />
                             </Link>
@@ -168,19 +168,19 @@ export default function AIPageClient({
                 {ai.statusNotice || ai.resumeNotice || (!ai.statusNotice && (ai.runtimeState.lastFailure || ai.runtimeState.lastToolRun)) ? (
                     <div className='pointer-events-none absolute right-4 top-20 z-20 grid w-[min(32rem,calc(100%-2rem))] gap-3'>
                         {ai.statusNotice ? (
-                            <div className='pointer-events-auto rounded-2xl border border-[#4a4030] bg-[#27231d]/95 px-4 py-3 text-sm text-[#e6d6b7] shadow-[0_18px_60px_rgba(0,0,0,0.26)] backdrop-blur-xl'>
+                            <div className='pointer-events-auto rounded-lg border border-ui-warning/30 bg-ui-panel/95 px-4 py-3 text-sm text-ui-warning shadow-md backdrop-blur-xl'>
                                 {ai.statusNotice}
                             </div>
                         ) : null}
 
                         {ai.resumeNotice ? (
-                            <div className='pointer-events-auto flex items-start justify-between gap-3 rounded-2xl border border-[#3b4537] bg-[#20251f]/95 px-4 py-3 text-sm text-[#d9e3d4] shadow-[0_18px_60px_rgba(0,0,0,0.26)] backdrop-blur-xl'>
+                            <div className='pointer-events-auto flex items-start justify-between gap-3 rounded-lg border border-ui-success/30 bg-ui-panel/95 px-4 py-3 text-sm text-ui-text shadow-md backdrop-blur-xl'>
                                 <div className='flex min-w-0 items-start gap-3'>
-                                    <RotateCcw className='mt-0.5 h-4 w-4 shrink-0 text-[#a9b8a0]' />
+                                    <RotateCcw className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' />
                                     <div className='min-w-0'>
                                         <p>{ai.resumeNotice.message}</p>
                                         {ai.resumeNotice.workspaceId ? (
-                                            <Link href={`/s/${ai.resumeNotice.workspaceId}`} className='mt-2 inline-flex items-center gap-2 text-xs text-[#d9e3d4] underline-offset-4 hover:underline'>
+                                            <Link href={`/s/${ai.resumeNotice.workspaceId}`} className='mt-2 inline-flex items-center gap-2 text-xs font-semibold text-ui-primary underline-offset-4 hover:underline'>
                                                 Open recovered workspace
                                                 <SquareArrowOutUpRight className='h-3.5 w-3.5' />
                                             </Link>
@@ -190,7 +190,7 @@ export default function AIPageClient({
                                 <button
                                     type='button'
                                     onClick={() => ai.setResumeNotice(null)}
-                                    className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#d9e3d4]/80 transition-colors hover:bg-[#30382d] hover:text-[#f1f3ee]'
+                                    className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ui-muted transition-colors hover:bg-ui-raised hover:text-ui-text'
                                     aria-label='Dismiss resume notice'
                                 >
                                     <X className='h-4 w-4' />
@@ -199,7 +199,7 @@ export default function AIPageClient({
                         ) : null}
 
                         {!ai.statusNotice && (ai.runtimeState.lastFailure || ai.runtimeState.lastToolRun) ? (
-                            <div className={`pointer-events-auto rounded-2xl border px-4 py-3 text-sm shadow-[0_18px_60px_rgba(0,0,0,0.26)] backdrop-blur-xl ${ai.runtimeState.lastFailure ? 'border-[#5d3835] bg-[#2a1d1c]/95 text-[#e6c1bd]' : 'border-[#2d2d2b] bg-[#202020]/95 text-[#b7b7b2]'}`}>
+                            <div className={`pointer-events-auto rounded-lg border px-4 py-3 text-sm shadow-md backdrop-blur-xl ${ai.runtimeState.lastFailure ? 'border-ui-danger/30 bg-ui-panel/95 text-ui-danger' : 'border-ui-border bg-ui-panel/95 text-ui-muted'}`}>
                                 {ai.runtimeState.lastFailure?.message || ai.runtimeState.lastToolRun?.detail || runtimeStateSummary(ai.runtimeState)}
                             </div>
                         ) : null}

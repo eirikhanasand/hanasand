@@ -16,9 +16,10 @@ type LoginPageProps = {
     serverExpired: boolean
 }
 
-const authInputClass = 'h-10 rounded-lg border border-[#d8dee9] bg-white px-3.5 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
-const authPrimaryButtonClass = 'group inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:border disabled:border-[#d8dee9] disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]'
-const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-[#596170] transition hover:bg-[#f8fafc] hover:text-[#171a21] disabled:cursor-not-allowed disabled:text-[#98a2b3]'
+const authInputClass = 'h-10 rounded-lg border border-ui-border bg-ui-panel px-3.5 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
+const authPrimaryButtonClass = 'group inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
+const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:cursor-not-allowed disabled:text-ui-muted/60'
+const passwordRequirementMessage = 'Password must be at least 16 characters and include 2 lowercase letters, 2 uppercase letters, 2 numbers, and 2 symbols.'
 
 export default function LoginPage({ path, serverInternal, serverExpired }: LoginPageProps) {
     const router = useRouter()
@@ -48,7 +49,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         setError(null)
         if (!signupPasswordIsValid) {
             e.preventDefault()
-            return setError('Choose a stronger password.')
+            return setError(passwordRequirementMessage)
         }
         if (reservedUsername) {
             e.preventDefault()
@@ -183,14 +184,14 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     }, [redirectPath, router, serverExpired, serverInternal])
 
     return (
-        <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-[#f7f8fb] px-4 py-10 text-[#171a21] md:px-10'>
+        <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
             <div className='grid w-full max-w-[392px] gap-4'>
                 <div className='grid justify-items-center gap-2 pb-3 text-center'>
-                    <h1 className='text-[42px] font-semibold leading-none tracking-normal text-[#171a21]'>Hanasand</h1>
-                    <p className='text-sm leading-6 text-[#596170]'>Sign in to the console.</p>
+                    <h1 className='text-[42px] font-semibold leading-none tracking-normal text-ui-primary'>Hanasand</h1>
+                    <p className='text-sm leading-6 text-ui-muted'>Sign in to the console.</p>
                 </div>
 
-                <div className='grid w-full gap-3 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-[0_20px_70px_rgba(26,35,55,0.10)]'>
+                <div className='grid w-full gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-lg'>
                     {(expired && path) && <ErrorNotice variant='info' message={`Token expired. You will be redirected back to ${path} after reauthenticating.`} />}
                     {(internal && path) && <ErrorNotice variant='info' message={`Sign in to continue to ${path}.`} />}
 
@@ -205,19 +206,19 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                             >
                                 <input type='hidden' name='redirectPath' value={redirectPath} />
                                 <label className='grid gap-1.5' htmlFor='login-username'>
-                                    <span className='text-xs font-semibold text-[#596170]'>Username</span>
+                                    <span className='text-xs font-semibold text-ui-muted'>Username</span>
                                     <input
                                         id='login-username'
                                         type='text'
                                         name='username'
-                                        placeholder='dave'
+                                        placeholder='Username'
                                         className={authInputClass}
                                         autoComplete='username'
                                         required
                                     />
                                 </label>
                                 <label className='grid gap-1.5' htmlFor='login-password'>
-                                    <span className='text-xs font-semibold text-[#596170]'>Password</span>
+                                    <span className='text-xs font-semibold text-ui-muted'>Password</span>
                                     <input
                                         id='login-password'
                                         type='password'
@@ -249,9 +250,9 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                         type='button'
                                         disabled={!hydrated}
                                         onClick={() => changeMode('request-reset')}
-                                        className='ml-auto h-9 rounded-lg px-2 text-sm font-semibold text-[#667085] transition hover:bg-[#f8fafc] hover:text-[#171a21] disabled:cursor-not-allowed disabled:text-[#98a2b3]'
+                                        className='ml-auto h-9 rounded-lg px-2 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:cursor-not-allowed disabled:text-ui-muted/60'
                                     >
-                                        Forgot?
+                                        Reset password
                                     </button>
                                 </div>
                             </form>
@@ -285,36 +286,36 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                         >
                             <input type='hidden' name='redirectPath' value={redirectPath} />
                             <label className='grid gap-1.5' htmlFor='login-signup-username'>
-                                <span className='text-xs font-semibold text-[#596170]'>Username</span>
+                                <span className='text-xs font-semibold text-ui-muted'>Username</span>
                                 <input
                                     id='login-signup-username'
                                     type='text'
                                     name='username'
                                     value={signupUsername}
                                     onChange={(e) => setSignupUsername(e.target.value)}
-                                    placeholder='dave'
+                                    placeholder='Username'
                                     className={authInputClass}
                                     autoComplete='username'
                                     required
                                 />
                             </label>
-                            {reservedUsername && <p className='px-1 text-xs font-semibold text-[#8a5a00]'>Reserved username.</p>}
+                            {reservedUsername && <p className='px-1 text-xs font-semibold text-ui-warning'>Reserved username.</p>}
                             <label className='grid gap-1.5' htmlFor='login-signup-name'>
-                                <span className='text-xs font-semibold text-[#596170]'>Name</span>
+                                <span className='text-xs font-semibold text-ui-muted'>Name</span>
                                 <input
                                     id='login-signup-name'
                                     type='text'
                                     name='name'
                                     value={signupName}
                                     onChange={(e) => setSignupName(e.target.value)}
-                                    placeholder='Dave'
+                                    placeholder='Full name'
                                     className={authInputClass}
                                     autoComplete='name'
                                     required
                                 />
                             </label>
                             <label className='grid gap-1.5' htmlFor='login-signup-password'>
-                                <span className='text-xs font-semibold text-[#596170]'>Password</span>
+                                <span className='text-xs font-semibold text-ui-muted'>Password</span>
                                 <input
                                     id='login-signup-password'
                                     type='password'
@@ -328,8 +329,8 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 />
                             </label>
                             {signupPassword && !signupPasswordIsValid && (
-                                <p className='px-1 text-xs leading-5 text-[#667085]'>
-                                    16 chars, 2 lowercase, 2 uppercase, 2 numbers, 2 symbols.
+                                <p className='px-1 text-xs leading-5 text-ui-muted'>
+                                    At least 16 characters, 2 lowercase, 2 uppercase, 2 numbers, 2 symbols.
                                 </p>
                             )}
                             <div className='mt-1 flex items-center gap-3'>
@@ -355,12 +356,12 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                     {mode === 'request-reset' && (
                         <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetRequest} method='post'>
                             <label className='grid gap-1.5' htmlFor='login-reset-username'>
-                                <span className='text-xs font-semibold text-[#596170]'>Username</span>
+                                <span className='text-xs font-semibold text-ui-muted'>Username</span>
                                 <input
                                     id='login-reset-username'
                                     type='text'
                                     name='resetUserId'
-                                    placeholder='dave'
+                                    placeholder='Username'
                                     className={authInputClass}
                                     autoComplete='username'
                                     required
@@ -392,9 +393,9 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                             />
                             <div className='mt-1 flex items-center gap-3'>
                                 <button type='button' onClick={() => changeMode('request-reset')} className={authGhostButtonClass}>
-                                    Again
+                                    Send again
                                 </button>
-                                <p className='ml-auto text-xs font-medium text-[#667085]'>
+                                <p className='ml-auto text-xs font-medium text-ui-muted'>
                                     {busy ? 'Verifying...' : 'Verifies automatically'}
                                 </p>
                             </div>
@@ -481,7 +482,7 @@ function ResetCodeInput({
                                 inputsRef.current[index + 1]?.focus()
                             }
                         }}
-                        className='h-11 rounded-lg border border-[#d8dee9] bg-white text-center text-base font-semibold text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff] disabled:cursor-not-allowed disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]'
+                        className='h-11 rounded-lg border border-ui-border bg-ui-panel text-center text-base font-semibold text-ui-text outline-none transition focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20 disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted'
                     />
                 ))}
             </div>

@@ -145,12 +145,12 @@ export default function RenderSite({
                 className='absolute top-0 right-0 h-full w-2 cursor-col-resize z-20 pl-2 pr-8 group grid place-items-center'
                 style={{ right: width - (renderSite ? 22 : 18) }}
             >
-                <div style={{ left: renderSite ? 14 : 18 }} className='absolute w-2 l-100 h-full right-5 group-hover:bg-light' />
-                <div className='absolute h-10 w-1 right-5 bg-extralight group-hover:bg-white/30 rounded-full' />
+                <div style={{ left: renderSite ? 14 : 18 }} className='l-100 absolute right-5 h-full w-2 group-hover:bg-ui-raised' />
+                <div className='absolute right-5 h-10 w-1 rounded-full bg-ui-border group-hover:bg-ui-primary/30' />
             </div>
 
             {renderSite && width > 0 && !capability.canPreview && (
-                <h1 className='w-full h-full grid place-items-center px-6 text-center border-none text-sm text-bright/45 mt-13'>{capability.reason}</h1>
+                <h1 className='mt-13 grid h-full w-full place-items-center border-none px-6 text-center text-sm text-ui-muted'>{capability.reason}</h1>
             )}
 
             {renderSite && width > 0 && capability.canPreview && share?.alias && (
@@ -168,9 +168,9 @@ export default function RenderSite({
                 className='
                     group fixed bottom-15 right-3 z-100 inline-flex max-w-[calc(100vw-1.5rem)]
                     cursor-pointer select-none items-center justify-center gap-2 rounded-full
-                    border border-bright/10 bg-black/55 px-3.5 py-2 text-sm text-bright/78
+                    border border-ui-border bg-ui-panel/90 px-3.5 py-2 text-sm text-ui-text
                     shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-md transition
-                    hover:border-bright/22 hover:bg-bright/8 hover:text-bright
+                    hover:border-ui-primary/35 hover:bg-ui-raised
                 '
             >
                 <Monitor className='h-4 w-4 shrink-0' />

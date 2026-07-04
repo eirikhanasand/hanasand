@@ -9,11 +9,9 @@ export default function Page() {
             <DashboardHeader
                 eyebrow='Code sharing'
                 title='Code shares and projects'
-                description='Manage paste-style code files, shared snippets, and full project workspaces.'
+                description='Shared code rows, workspace links, access state, and recent movement.'
             />
-            <div className='max-w-3xl'>
-                <Shares />
-            </div>
+            <Shares />
         </DashboardPage>
     )
 }

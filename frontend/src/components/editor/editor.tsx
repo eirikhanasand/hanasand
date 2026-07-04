@@ -160,13 +160,13 @@ export function EditorWithoutLogic({
             onClick={() => textareaRef?.current?.focus()}
         >
             <div>
-                {displayEditor && <div className='grid grid-cols-2 bg-dark rounded-lg p-2 mb-2'>
-                    <h1 className='text-lg font-semibold text-almostbright'>Markdown</h1>
-                    <h1 className='text-lg font-semibold pl-2 text-almostbright'>Preview</h1>
+                {displayEditor && <div className='mb-2 grid grid-cols-2 rounded-lg border border-ui-border bg-ui-panel p-2'>
+                    <h1 className='text-lg font-semibold text-ui-text'>Markdown</h1>
+                    <h1 className='pl-2 text-lg font-semibold text-ui-text'>Preview</h1>
                 </div>}
                 <div className={`markdown-editor space-x-2 h-full ${displayEditor && 'grid grid-cols-2'}`}>
                     {(displayEditor || !markdown.length) && <textarea
-                        className={`z-10 w-full h-full rounded-sm text-foreground bg-transparent focus:outline-hidden resize-none overflow-hidden outline-hidden caret-blue-500 pr-2 ${placeholderClassName}`}
+                        className={`z-10 h-full w-full resize-none overflow-hidden rounded-sm bg-transparent pr-2 text-foreground caret-ui-primary outline-hidden focus:outline-hidden ${placeholderClassName}`}
                         value={markdown}
                         onChange={handleMarkdownChange}
                         placeholder={placeholder || 'Write your markdown here...'}
@@ -181,7 +181,7 @@ export function EditorWithoutLogic({
             </div>
             {edited && !hideSave && !hideSaveButton && <div className='mt-2'>
                 <button
-                    className='text-md bg-blue-500 glow-blue-small px-8 rounded-xl h-[4vh]'
+                    className='text-md h-[4vh] rounded-lg bg-ui-primary px-8 font-semibold text-ui-canvas shadow-sm'
                     onClick={handleSave}
                 >
                     Save
@@ -199,7 +199,7 @@ export function Markdown({
 }: MarkdownProps) {
     return (
         <div
-            className={`markdown-preview ${displayEditor && 'pl-2 border-l-2 border-blue-500'} text-foreground h-full break-words ${className}`}
+            className={`markdown-preview ${displayEditor && 'border-l-2 border-ui-primary pl-2'} h-full break-words text-foreground ${className}`}
             onClick={handleDisplayEditor}
             dangerouslySetInnerHTML={{ __html: renderMarkdown(markdown) }}
         />

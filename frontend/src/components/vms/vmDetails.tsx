@@ -17,7 +17,7 @@ export default function VMDetails({ boxStyle, boxTitleStyle, vm, details }: VMDe
         <div className={boxStyle}>
             <h1 className={boxTitleStyle}>Details</h1>
             {details ? <div>
-                <Field title='Status' value={vm.status} />
+                <Field title='Status' value={operationalStateLabel(vm.status)} />
                 {uniquePowerState && <Field title='Last power state' value={details.volatile_last_state_power} />}
                 <Field title='Operating System (OS)' value={`${details.config_image_os} ${details.config_image_version}`} />
                 <Field title='Config Image Release' value={details.config_image_release} />
@@ -37,9 +37,16 @@ export default function VMDetails({ boxStyle, boxTitleStyle, vm, details }: VMDe
                 compact
                 variant='info'
                 className='mt-3'
-                title='Details unavailable'
-                message='Refresh the VM to try loading image, power state, and architecture details again.'
+                title='Machine details reconnecting'
+                message='Refresh the VM to reload image, power state, and architecture details.'
             />}
         </div>
     )
+}
+
+function operationalStateLabel(value: string) {
+    if (value === 'blocked') return 'syncing'
+    if (value === 'needs_action') return 'reviewing'
+    if (value === 'action_required') return 'reviewing'
+    return value.replaceAll('_', ' ')
 }

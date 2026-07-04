@@ -11,9 +11,9 @@ export default function Field({ title, value, underline = true }: FieldProps) {
 
     return (
         <div className='w-full py-1'>
-            <h1 className='text-xs text-[#f07d33]'>{title}</h1>
-            <h1 className='text-sm text-bright/80'>{displayValue}</h1>
-            {underline && <div className='w-full h-px bg-dark rounded-lg' />}
+            <h1 className='text-xs text-ui-primary'>{title}</h1>
+            <h1 className='text-sm text-ui-text'>{displayValue}</h1>
+            {underline && <div className='h-px w-full rounded-lg bg-ui-border' />}
         </div>
     )
 }

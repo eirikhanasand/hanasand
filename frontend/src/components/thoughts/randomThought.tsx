@@ -7,8 +7,8 @@ export default async function RandomThought() {
     }
 
     return (
-        <div className='absolute top-20 self-center grid outline-1 outline-dark p-4 rounded-lg px-10 md:px-15'>
-            <h1 className='text-sm text-almostbright'>Did you ever think about...</h1>
+        <div className='absolute top-20 grid self-center rounded-lg border border-ui-border bg-ui-panel p-4 px-10 text-ui-text shadow-sm md:px-15'>
+            <h1 className='text-sm text-ui-muted'>Did you ever think about...</h1>
             <h1>{thought.title}</h1>
         </div>
     )

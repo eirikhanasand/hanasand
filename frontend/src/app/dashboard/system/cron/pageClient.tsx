@@ -103,7 +103,7 @@ export default function CronJobsClient() {
                         {runnableJobs[0] ? (
                             <div className='grid gap-2'>
                                 <p className='text-sm text-ui-muted'>{runnableJobs[0].name} can be run manually without changing the schedule.</p>
-                                <button onClick={() => void save(runnableJobs[0], { action: 'run_now' })} disabled={busy === runnableJobs[0].id} className='inline-flex h-9 w-fit items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-white hover:bg-ui-primary/90 disabled:cursor-not-allowed disabled:opacity-50'>
+                                <button onClick={() => void save(runnableJobs[0], { action: 'run_now' })} disabled={busy === runnableJobs[0].id} className='inline-flex h-9 w-fit items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'>
                                     <PlayCircle className='h-4 w-4' />
                                     {busy === runnableJobs[0].id ? 'Starting' : 'Run selected job'}
                                 </button>

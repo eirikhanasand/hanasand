@@ -15,13 +15,13 @@ export default function Notify({ message, color, fullWidth, className, glow, bac
         return
     }
 
-    const variant = color?.includes('blue') ? 'info' : color?.includes('green') ? 'success' : 'error'
+    const variant = color === 'info' || color?.includes('blue') ? 'info' : color === 'success' || color?.includes('green') ? 'success' : 'error'
     const content = (
         <ErrorNotice
             compact
             message={message}
             variant={variant}
-            className={`${fullWidth ? 'w-full' : 'max-w-xs'} ${className || ''} ${background || ''} ${glow ? 'glow-blue-small' : ''}`}
+            className={`${fullWidth ? 'w-full' : 'max-w-xs'} ${className || ''} ${background || ''} ${glow ? 'shadow-lg shadow-ui-primary/10' : ''}`}
         />
     )
 

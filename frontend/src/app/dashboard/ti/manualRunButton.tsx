@@ -75,13 +75,13 @@ export default function ManualRunButton({ sourceId = 'all_sources', label = 'Sta
                 type='button'
                 onClick={queueRun}
                 disabled={state === 'running'}
-                className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'
+                className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-wait disabled:opacity-70'
             >
                 {state === 'running' || state === 'queued' ? <RefreshCcw className='h-4 w-4' /> : <PlayCircle className='h-4 w-4' />}
                 {state === 'running' ? 'Starting run' : state === 'queued' ? 'Run queued' : label}
             </button>
             {queuedAt ? (
-                <span className='text-xs text-[#667085]'>
+                <span className='text-xs text-ui-muted'>
                     {message || `Queued at ${new Date(queuedAt).toLocaleTimeString()}.`}
                 </span>
             ) : null}

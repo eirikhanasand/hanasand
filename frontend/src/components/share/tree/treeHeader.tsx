@@ -15,7 +15,7 @@ type TreeHeaderProps = {
 
 export default function TreeHeader({ share, tree, refreshing, onRefresh, setIsCreatingNewFile, filter, setFilter }: TreeHeaderProps) {
     const { setOpenFolders } = useFolderState()
-    const buttonStyle = 'grid h-6 w-6 cursor-pointer place-items-center rounded-md text-bright/56 transition hover:bg-bright/8 hover:text-bright'
+    const buttonStyle = 'grid h-6 w-6 cursor-pointer place-items-center rounded-md text-ui-muted transition hover:bg-ui-raised hover:text-ui-text disabled:cursor-not-allowed disabled:opacity-50'
     const counts = countTreeItems(tree)
     const canFoldTree = counts.folders > 0
 
@@ -35,8 +35,8 @@ export default function TreeHeader({ share, tree, refreshing, onRefresh, setIsCr
         <div className='rounded-md p-1 px-2'>
             <div className='flex w-full items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <h1 className='truncate text-sm text-bright/80'>{share.alias}</h1>
-                    <p className='text-[10px] leading-4 text-bright/42'>
+                    <h1 className='truncate text-sm font-semibold text-ui-text'>{share.alias}</h1>
+                    <p className='text-[10px] leading-4 text-ui-muted'>
                         {counts.files} files · {counts.folders} folders
                     </p>
                 </div>
@@ -68,7 +68,7 @@ export default function TreeHeader({ share, tree, refreshing, onRefresh, setIsCr
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
                 placeholder='Filter files...'
-                className='mt-2 w-full rounded-md border border-bright/8 bg-black/18 px-2 py-1.5 text-xs text-bright/76 outline-none placeholder:text-bright/34 focus:border-[#f07d33]/40'
+                className='mt-2 w-full rounded-md border border-ui-border bg-ui-raised px-2 py-1.5 text-xs text-ui-text outline-none placeholder:text-ui-muted focus:border-ui-primary/40'
             />
         </div>
     )

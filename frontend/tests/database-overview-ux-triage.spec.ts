@@ -13,6 +13,8 @@ test('database overview focuses operator triage without removing telemetry actio
     expect(page).toContain('Review long-running queries now')
     expect(page).toContain('href={primaryHref}')
     expect(page).toContain('data-db-primary-action')
+    expect(page).toContain('data-db-long-running-state')
+    expect(page).toContain('Long-running query state: no long-running queries right now.')
 
     expect(page).toContain('data-db-telemetry-disclosure')
     expect(page).toContain('data-db-operation-lanes')

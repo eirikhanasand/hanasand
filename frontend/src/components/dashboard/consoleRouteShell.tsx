@@ -21,15 +21,15 @@ export default async function ConsoleRouteShell({ children }: { children: ReactN
     const canManageContent = isAdmin || hasRole('content_admin')
 
     return (
-        <div className='h-full min-h-0 overflow-hidden bg-[#f7f8fb] px-2 pb-2 text-[#171a21]'>
-            <div className='grid h-full min-h-0 gap-2 overflow-hidden lg:grid-cols-[auto_minmax(0,1fr)]'>
+        <div className='min-h-dvh bg-ui-canvas px-2 pb-2 text-ui-text'>
+            <div className='grid min-h-dvh gap-2 lg:grid-cols-[auto_minmax(0,1fr)]'>
                 <DashboardSidebar
                     id={id}
                     isAdmin={isAdmin}
                     canManageSystem={canManageSystem}
                     canManageContent={canManageContent}
                 />
-                <div className='min-h-0 min-w-0 overflow-auto overscroll-contain'>
+                <div className='min-w-0'>
                     {children}
                 </div>
             </div>

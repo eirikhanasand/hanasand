@@ -21,15 +21,15 @@ export default function Tag({ icon, text, date, color, map }: TagProps) {
     const Icon = getIcon(iconValue)
 
     return (
-        <div className={`flex w-fit gap-1 items-center px-1.5 py-px rounded-sm m-px text-xs ${colorClass}`}>
+        <div className={`m-px flex w-fit items-center gap-1 rounded-sm px-1.5 py-px text-xs ${colorClass}`}>
             {iconValue && <span>{Icon}</span>}
-            <span className='text-bright/70'>{output}</span>
+            <span>{output}</span>
         </div>
     )
 }
 
 function getIcon(icon: string | undefined) {
-    const smallIconClass = 'w-3 h-3 stroke-bright/70'
+    const smallIconClass = 'h-3 w-3 stroke-current'
 
     switch (icon) {
         case 'ram': return <MemoryStick className={smallIconClass} />
@@ -64,12 +64,12 @@ function colorMap(value?: string, map?: Map) {
 
 function Color(input: string | undefined) {
     switch (input) {
-        case 'red':         return 'outline outline-red-500/40    bg-red-500/20'
-        case 'green':       return 'outline outline-green-500/40  bg-green-500/20'
-        case 'yellow':      return 'outline outline-yellow-500/40 bg-yellow-500/20'
-        case 'orange':      return 'outline outline-orange-500/40 bg-orange-500/20'
-        case 'lightgreen':  return 'outline outline-green-400/40  bg-green-400/20'
-        case 'blue':        return 'outline outline-blue-400/40   bg-blue-400/20'
-        default:            return 'outline outline-blue-400/40   bg-blue-400/20'
+        case 'red':         return 'border border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+        case 'green':       return 'border border-ui-success/30 bg-ui-success/10 text-ui-success'
+        case 'yellow':      return 'border border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+        case 'orange':      return 'border border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+        case 'lightgreen':  return 'border border-ui-success/30 bg-ui-success/10 text-ui-success'
+        case 'blue':        return 'border border-ui-primary/30 bg-ui-primary/10 text-ui-primary'
+        default:            return 'border border-ui-primary/30 bg-ui-primary/10 text-ui-primary'
     }
 }

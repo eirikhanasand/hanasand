@@ -148,7 +148,7 @@ export default function Editor({
     }, [codeRef, editingContent, searchParams])
 
     return (
-        <main aria-label='Code editor' className='w-full h-full relative overflow-hidden outline outline-dark rounded-lg'>
+        <main aria-label='Code editor' className='relative h-full w-full overflow-hidden rounded-lg border border-ui-border'>
             {editingContent.trim().length <= 0 && (
                 <EmptyEditorState
                     displayLineNumbers={displayLineNumbers}
@@ -161,7 +161,7 @@ export default function Editor({
                         // @ts-expect-error Not fully compatible because ref is
                         // element specific, but its close enough (<div> vs <pre>)
                         ref={lineNumberRef}
-                        className={`sync-scroll min-w-fit select-none overflow-auto pl-2 pr-3 pt-2 text-right font-mono text-sm leading-5 text-bright/34 noscroll ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
+                        className={`sync-scroll min-w-fit select-none overflow-auto pl-2 pr-3 pt-2 text-right font-mono text-sm leading-5 text-ui-muted noscroll ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
                         onScroll={handleScrollDiv}
                     >
                         {lines.map((_, i) => (
@@ -191,7 +191,7 @@ export default function Editor({
                         handleScroll(e)
                     }
                 }}
-                className={`sync-scroll absolute left-0 top-0 z-10 min-h-full min-w-full resize-none overflow-auto rounded-lg bg-transparent pt-2 font-mono text-sm leading-5 text-transparent caret-gray-200 outline-none ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
+                className={`sync-scroll absolute left-0 top-0 z-10 min-h-full min-w-full resize-none overflow-auto rounded-lg bg-transparent pt-2 font-mono text-sm leading-5 text-transparent caret-ui-primary outline-none ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
                 autoCapitalize='off'
                 autoComplete='off'
                 autoCorrect='off'
@@ -226,18 +226,18 @@ function EmptyEditorState({
 
     return (
         <div className={`pointer-events-none absolute inset-0 z-20 flex items-start ${insetForLeftRail} pr-3 pt-3`}>
-            <div className='pointer-events-auto w-full max-w-2xl rounded-xl border border-bright/10 bg-background/72 p-3 shadow-2xl shadow-black/20 backdrop-blur-md'>
+            <div className='pointer-events-auto w-full max-w-2xl rounded-lg border border-ui-border bg-ui-panel/90 p-3 shadow-lg shadow-ui-canvas/10 backdrop-blur-md'>
                 <div className='flex items-start justify-between gap-3'>
                     <div className='min-w-0'>
-                        <h2 className='text-sm font-medium text-bright/82'>Start a workspace note</h2>
-                        <p className='mt-1 text-xs leading-5 text-bright/42'>Create a file, keep the change small, then run checks before release.</p>
+                        <h2 className='text-sm font-medium text-ui-text'>Start a workspace note</h2>
+                        <p className='mt-1 text-xs leading-5 text-ui-muted'>Create a file, keep the change small, then run checks before release.</p>
                     </div>
-                    <FileCode2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                    <FileCode2 className='h-4 w-4 shrink-0 text-ui-primary' />
                 </div>
-                <div className='mt-3 grid gap-1.5 rounded-lg border border-bright/8 bg-bright/2.5 p-2.5 text-xs text-bright/46 sm:grid-cols-3'>
+                <div className='mt-3 grid gap-1.5 rounded-lg border border-ui-border bg-ui-raised p-2.5 text-xs text-ui-muted sm:grid-cols-3'>
                     {firstRunSteps.map((step) => (
                         <div key={step} className='flex min-w-0 items-center gap-1.5'>
-                            <CheckCircle2 className='h-3.5 w-3.5 shrink-0 text-[#f07d33]/80' />
+                            <CheckCircle2 className='h-3.5 w-3.5 shrink-0 text-ui-primary' />
                             <span className='min-w-0 truncate'>{step}</span>
                         </div>
                     ))}
@@ -251,12 +251,12 @@ function EmptyEditorState({
                                 key={template.label}
                                 type='button'
                                 onClick={() => onInsertTemplate?.(template.content)}
-                                className='group flex min-h-16 items-center gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-3 py-2 text-left transition hover:border-[#f07d33]/32 hover:bg-[#f07d33]/8'
+                                className='group flex min-h-16 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-left transition hover:border-ui-primary/35 hover:bg-ui-primary/10'
                             >
-                                <Icon className='h-4 w-4 shrink-0 text-bright/42 transition group-hover:text-[#f07d33]' />
+                                <Icon className='h-4 w-4 shrink-0 text-ui-muted transition group-hover:text-ui-primary' />
                                 <span className='min-w-0'>
-                                    <span className='block truncate text-xs font-medium text-bright/72 group-hover:text-bright/88'>{template.label}</span>
-                                    <span className='mt-1 block truncate text-[11px] text-bright/38'>{template.description}</span>
+                                    <span className='block truncate text-xs font-medium text-ui-text'>{template.label}</span>
+                                    <span className='mt-1 block truncate text-[11px] text-ui-muted'>{template.description}</span>
                                 </span>
                             </button>
                         )

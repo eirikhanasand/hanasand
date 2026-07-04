@@ -21,8 +21,8 @@ export default function Deploy({ setTerminalOpen, terminalOpen, capability }: De
             ? `Detected ${capability.evidence.slice(0, 2).join(', ')}${capability.evidence.length > 2 ? '...' : ''}.`
             : 'Hanasand will open the launch path with logs and recovery notes.'
     const stateClass = disabled
-        ? 'cursor-not-allowed border-bright/8 bg-black/50 text-bright/34'
-        : 'cursor-pointer border-[#f07d33]/25 bg-[#0f1110]/92 text-[#ffb77c] hover:border-[#f07d33]/45 hover:bg-[#151715]/96 hover:text-[#ffd5b4]'
+        ? 'cursor-not-allowed border-ui-border bg-ui-panel/80 text-ui-muted'
+        : 'cursor-pointer border-ui-primary/35 bg-ui-panel/90 text-ui-primary hover:border-ui-primary/50 hover:bg-ui-raised'
 
     return (
         <button
@@ -45,20 +45,20 @@ export default function Deploy({ setTerminalOpen, terminalOpen, capability }: De
             <span className='flex min-w-0 items-center justify-between gap-3'>
                 <span className='min-w-0'>
                     <span className='block truncate text-sm font-semibold'>{label}</span>
-                    <span className='mt-0.5 block truncate text-[11px] text-bright/45'>{detail}</span>
+                    <span className='mt-0.5 block truncate text-[11px] text-ui-muted'>{detail}</span>
                 </span>
                 <ExternalLink className='h-4 w-4 shrink-0 opacity-70' />
             </span>
-            <span className='grid grid-cols-3 gap-1 text-[10px] text-bright/50'>
-                <span className='inline-flex min-w-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 px-2 py-1'>
+            <span className='grid grid-cols-3 gap-1 text-[10px] text-ui-muted'>
+                <span className='inline-flex min-w-0 items-center gap-1 rounded-full border border-ui-border bg-ui-raised px-2 py-1'>
                     <ShieldCheck className='h-3 w-3 shrink-0' />
                     <span className='truncate'>Health</span>
                 </span>
-                <span className='inline-flex min-w-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 px-2 py-1'>
+                <span className='inline-flex min-w-0 items-center gap-1 rounded-full border border-ui-border bg-ui-raised px-2 py-1'>
                     <ScrollText className='h-3 w-3 shrink-0' />
                     <span className='truncate'>Logs</span>
                 </span>
-                <span className='inline-flex min-w-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 px-2 py-1'>
+                <span className='inline-flex min-w-0 items-center gap-1 rounded-full border border-ui-border bg-ui-raised px-2 py-1'>
                     <RotateCcw className='h-3 w-3 shrink-0' />
                     <span className='truncate'>Rollback</span>
                 </span>

@@ -26,10 +26,10 @@ export default function VMMetrics({ boxStyle, boxTitleStyle, vm, metrics }: VMMe
                     <Field title='Updated' value={new Date(latest.created_at).toLocaleString()} underline={false} />
                 </div>
             ) : (
-                <div className='rounded-xl border border-white/10 bg-white/[0.035] p-3'>
-                    <p className='text-sm font-medium text-bright/78'>No live metrics yet</p>
-                    <p className='mt-1 text-xs leading-5 text-bright/48'>
-                        {vm.name} is visible, but no telemetry sample has been reported for this machine.
+                <div className='rounded-xl border border-ui-border/10 bg-ui-panel/[0.035] p-3'>
+                    <p className='text-sm font-medium text-ui-text/78'>Telemetry lane attaching</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-text/48'>
+                        {vm.name} is registered. CPU, memory, disk, network, and uptime samples stream here when the metrics collector reports.
                     </p>
                 </div>
             )}
@@ -48,7 +48,7 @@ function formatMb(value: number) {
 }
 
 function formatDuration(seconds: number) {
-    if (!Number.isFinite(seconds) || seconds <= 0) return 'Not running'
+    if (!Number.isFinite(seconds) || seconds <= 0) return 'collector metering'
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
     if (hours) return `${hours}h ${minutes}m`

@@ -2,6 +2,7 @@ import config from '#constants'
 import fp from 'fastify-plugin'
 import getStats from './queries/stats.ts'
 import getDocker from './queries/docker.ts'
+import { runTrackedBackgroundJob } from '../backgroundJobRuntime.ts'
 
 export default fp(async (fastify) => {
     async function refreshQueries() {
@@ -19,6 +20,6 @@ export default fp(async (fastify) => {
         }
     }
 
-    void refreshQueries()
-    setInterval(refreshQueries, config.CACHE_TTL_HOT)
+    void runTrackedBackgroundJob('api-hot-cache-refresh', refreshQueries)
+    setInterval(() => void runTrackedBackgroundJob('api-hot-cache-refresh', refreshQueries), config.CACHE_TTL_HOT)
 })

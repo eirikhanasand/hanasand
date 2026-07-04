@@ -61,21 +61,21 @@ export default function WorkspaceStatus({
         : 'Add a preview target to review the result'
 
     return (
-        <section className='space-y-2 rounded-lg border border-bright/8 bg-black/16 p-3 text-bright/72'>
-            <div className='rounded-lg border border-[#f07d33]/12 bg-[#f07d33]/6 p-2.5'>
+        <section className='space-y-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-ui-muted'>
+            <div className='rounded-lg border border-ui-primary/25 bg-ui-primary/10 p-2.5'>
                 <div className='flex items-start gap-2'>
-                    <ShieldCheck className='mt-0.5 h-4 w-4 shrink-0 text-[#f07d33]' />
+                    <ShieldCheck className='mt-0.5 h-4 w-4 shrink-0 text-ui-primary' />
                     <div className='min-w-0'>
-                        <div className='text-[10px] font-semibold uppercase tracking-[0.18em] text-[#ffc49b]/62'>Build workspace</div>
-                        <div className='mt-1 text-sm font-semibold text-bright/86'>Review, ship, recover</div>
-                        <div className='mt-0.5 text-[11px] leading-4 text-bright/48'>{verificationDetail}</div>
+                        <div className='text-[10px] font-semibold uppercase tracking-normal text-ui-primary'>Build workspace</div>
+                        <div className='mt-1 text-sm font-semibold text-ui-text'>Review, ship, recover</div>
+                        <div className='mt-0.5 text-[11px] leading-4 text-ui-muted'>{verificationDetail}</div>
                     </div>
                 </div>
-                <div className='mt-2 grid grid-cols-2 gap-1.5 text-[10px] text-bright/54'>
-                    <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Reviewable changes</span>
-                    <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Review checks</span>
-                    <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Release logs</span>
-                    <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Rollback path</span>
+                <div className='mt-2 grid grid-cols-2 gap-1.5 text-[10px] text-ui-muted'>
+                    <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-1'>Reviewable changes</span>
+                    <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-1'>Review checks</span>
+                    <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-1'>Release logs</span>
+                    <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-1'>Rollback path</span>
                 </div>
             </div>
             <StatusRow
@@ -102,19 +102,19 @@ export default function WorkspaceStatus({
                 value='Changes stay reviewable'
                 detail='Use saved history, Git sync, and release rollback notes to recover safely'
             />
-            <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-2.5'>
+            <div className='rounded-lg border border-ui-border bg-ui-raised p-2.5'>
                 <div className='flex items-start gap-2'>
-                    <TerminalSquare className='mt-0.5 h-4 w-4 shrink-0 text-bright/55' />
+                    <TerminalSquare className='mt-0.5 h-4 w-4 shrink-0 text-ui-muted' />
                     <div className='min-w-0 flex-1'>
-                        <div className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Terminal</div>
-                        <div className='mt-1 text-sm font-semibold text-bright/82'>{terminalStatus || 'Terminal status unknown'}</div>
+                        <div className='text-[10px] font-semibold uppercase tracking-normal text-ui-muted'>Terminal</div>
+                        <div className='mt-1 text-sm font-semibold text-ui-text'>{terminalStatus || 'Terminal status unknown'}</div>
                     </div>
                 </div>
                 <button
                     type='button'
                     aria-label='Open terminal panel'
                     onClick={() => setTriggerTerminalChange(true)}
-                    className='mt-3 inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg bg-bright/8 px-2 text-[11px] font-semibold text-bright/78 transition hover:bg-bright/12 hover:text-bright'
+                    className='mt-3 inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised'
                 >
                     <MonitorUp className='h-3.5 w-3.5' />
                     Open terminal
@@ -126,12 +126,12 @@ export default function WorkspaceStatus({
 
 function StatusRow({ icon, label, value, detail }: { icon: ReactNode, label: string, value: string, detail: string }) {
     return (
-        <div className='flex items-start gap-2 rounded-lg border border-bright/8 bg-bright/[0.025] p-2.5'>
-            <span className='mt-0.5 shrink-0 text-bright/55'>{icon}</span>
+        <div className='flex items-start gap-2 rounded-lg border border-ui-border bg-ui-raised p-2.5'>
+            <span className='mt-0.5 shrink-0 text-ui-muted'>{icon}</span>
             <div className='min-w-0'>
-                <div className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>{label}</div>
-                <div className='mt-1 truncate text-sm font-semibold text-bright/82'>{value}</div>
-                <div className='mt-0.5 truncate text-[11px] leading-4 text-bright/45'>{detail}</div>
+                <div className='text-[10px] font-semibold uppercase tracking-normal text-ui-muted'>{label}</div>
+                <div className='mt-1 truncate text-sm font-semibold text-ui-text'>{value}</div>
+                <div className='mt-0.5 truncate text-[11px] leading-4 text-ui-muted'>{detail}</div>
             </div>
         </div>
     )

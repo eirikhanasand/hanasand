@@ -1,22 +1,27 @@
-import config from '#constants'
+import { isRuntimeLogSourceAvailable, listRuntimeContainersWithStats } from '#utils/docker/engine.ts'
 
 export default async function getDocker() {
     try {
-        const response = await fetch(`${config.internal_api}/docker`, {
-            headers: {
-                'Content-Type': 'application/json',
-                'User-Agent': 'hanasand_internal'
-            }
-        })
-
-        if (!response.ok) {
-            return { error: 'Failed to get data from internal API.'}
+        const containers = await listRuntimeContainersWithStats()
+        return {
+            status: 200,
+            data: {
+                containers,
+                source: 'docker_engine',
+                docker_socket_available: true,
+                generated_at: new Date().toISOString(),
+            },
         }
-
-        const data = await response.json()
-        return { status: 200, data }
     } catch (error) {
-        console.error(`Error fetching docker: ${error}`)
-        return { status: 500, data: { error: 'Failed to fetch docker.' } }
+        return {
+            status: 200,
+            data: {
+                containers: [],
+                source: 'unavailable',
+                docker_socket_available: isRuntimeLogSourceAvailable(),
+                unavailable_reason: error instanceof Error ? error.message : 'Docker telemetry is unavailable.',
+                generated_at: new Date().toISOString(),
+            },
+        }
     }
 }

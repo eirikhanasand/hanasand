@@ -275,7 +275,7 @@ function normalizePresenceUser(user: unknown): SharePresenceUser | null {
         clientId: entry.clientId,
         userId: entry.userId || 'guest',
         displayName: entry.displayName || entry.userId || 'Guest',
-        color: entry.color || '#f07d33',
+        color: entry.color || 'var(--ui-primary)',
         cursorLine: typeof entry.cursorLine === 'number' ? entry.cursorLine : null,
         cursorColumn: typeof entry.cursorColumn === 'number' ? entry.cursorColumn : null,
         selectionLength: typeof entry.selectionLength === 'number' ? entry.selectionLength : 0,

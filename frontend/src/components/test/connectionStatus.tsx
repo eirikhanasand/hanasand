@@ -6,6 +6,6 @@ type ConnectionStatusProps = {
 
 export default function ConnectionStatus({ isConnected }: ConnectionStatusProps) {
     return (
-        <ErrorNotice compact variant='info' message={!isConnected ? 'Live updates are disconnected. The saved run data is still available.' : null} />
+        <ErrorNotice compact variant='info' message={!isConnected ? 'Live updates are reconnecting. Saved run data remains available.' : null} />
     )
 }

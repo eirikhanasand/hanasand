@@ -123,26 +123,26 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
     const total = queue.page?.total ?? queue.counts?.total ?? items.length
 
     return (
-        <div className='landing-surface-border overflow-hidden rounded-lg border bg-ui-panel shadow-sm' data-exposure-queue-source='live-api' data-home-exposure-panel='true'>
-            <div className='landing-surface-divider flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3' data-home-exposure-panel-header='true'>
+        <div className='landing-surface-border overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm' data-exposure-queue-source='live-api' data-home-exposure-panel='true'>
+            <div className='landing-surface-divider flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-4 py-3' data-home-exposure-panel-header='true'>
                 <div className='min-w-0'>
                     <h3 className='text-sm font-semibold text-ui-text'>Latest activity</h3>
                     <p className='truncate text-xs text-ui-muted'>{subtitle}</p>
                 </div>
                 <div className='flex items-center gap-2'>
-                    <span className='landing-surface-border rounded-full border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{items.length}/{total}</span>
+                    <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{items.length}/{total}</span>
                     <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${exposureQueueTone(queue.status)}`}>{exposureQueueLabel(queue.status)}</span>
                 </div>
             </div>
-            <div className='landing-surface-divider flex flex-wrap items-center justify-between gap-2 border-b bg-ui-raised px-4 py-2 text-xs text-ui-muted' data-home-exposure-panel-toolbar='true'>
+            <div className='landing-surface-divider flex flex-wrap items-center justify-between gap-2 border-b border-ui-border bg-ui-raised px-4 py-2 text-xs text-ui-muted' data-home-exposure-panel-toolbar='true'>
                 <span>{formatRefreshCadence(queue.scheduler?.cadenceSeconds)}</span>
-                <button type='button' onClick={() => void refresh()} disabled={refreshing} className='landing-surface-border rounded-md border bg-ui-panel px-2.5 py-1 font-semibold text-ui-primary transition hover:border-ui-primary disabled:cursor-wait disabled:opacity-60'>
+                <button type='button' onClick={() => void refresh()} disabled={refreshing} className='landing-surface-border rounded-md border border-ui-border bg-ui-panel px-2.5 py-1 font-semibold text-ui-primary transition hover:border-ui-primary disabled:cursor-wait disabled:opacity-60'>
                     {refreshing ? 'Checking...' : 'Check now'}
                 </button>
             </div>
             <div className='max-h-[34rem] min-w-0 overflow-auto'>
                 <div className='min-w-[48rem]'>
-                    <div className='landing-surface-divider sticky top-0 z-10 grid grid-cols-[7rem_minmax(12rem,1fr)_10rem_11rem_5rem] gap-3 border-b bg-ui-panel px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted' data-home-exposure-panel-table-header='true'>
+                    <div className='landing-surface-divider sticky top-0 z-10 grid grid-cols-[7rem_minmax(12rem,1fr)_10rem_11rem_5rem] gap-3 border-b border-ui-border bg-ui-panel px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted' data-home-exposure-panel-table-header='true'>
                         <span>Actor</span>
                         <span>Company</span>
                         <span>Data mentioned</span>
@@ -156,7 +156,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                                 <span className='truncate text-ui-text'>{company}</span>
                                 <span className='truncate whitespace-nowrap text-ui-muted'>{claimedData}</span>
                                 <time dateTime={claimTime || collectedAt || queue.generatedAt} className='truncate whitespace-nowrap font-mono text-xs text-ui-muted'>{formatClaimTime(claimTime || collectedAt)}</time>
-                                <span className='landing-surface-border justify-self-end whitespace-nowrap rounded-full border bg-ui-raised px-2 py-1 text-xs font-medium text-ui-muted'>{formatReviewStatus(status)}</span>
+                                <span className='landing-surface-border justify-self-end whitespace-nowrap rounded-full border border-ui-border bg-ui-raised px-2 py-1 text-xs font-medium text-ui-muted'>{formatReviewStatus(status)}</span>
                             </div>
                         )) : (
                             <div className='grid min-w-0 gap-2 px-4 py-8 text-sm'>

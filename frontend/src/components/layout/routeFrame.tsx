@@ -3,7 +3,6 @@
 import { ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import Footer from '@/components/footer/footer'
-import BackgroundSketches from '@/components/background/backgroundSketches'
 import isSharePath from '@/utils/routes/isSharePath'
 import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 
@@ -26,7 +25,6 @@ export default function RouteFrame({ children, serverPath, token }: { children: 
 
     return (
         <div className={`enterprise-theme relative z-10 ${frameSizing} w-full overflow-auto`}>
-            {isAppSurface || isPublicProduct ? null : <BackgroundSketches />}
             <main className={`w-full ${isAppSurface ? 'h-full' : isPublicProduct ? 'min-h-full' : 'min-h-[90.5vh] pt-3 md:pt-0'}`}>
                 {children}
             </main>

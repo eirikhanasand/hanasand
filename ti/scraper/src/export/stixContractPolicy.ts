@@ -7,7 +7,7 @@ export const STIX_MARKINGS = [
 
 export const STIX_EXTERNAL_REFERENCES = [
   "MITRE ATT&CK external_id on attack-pattern objects",
-  "source URL, capture id, source id, and content hash for evidence-backed objects and relationships",
+  "source URL, capture id, source id, and content hash for exported objects and relationships",
   "CVE identifiers remain vulnerability names and can be mirrored as external ids by downstream enrichers"
 ];
 

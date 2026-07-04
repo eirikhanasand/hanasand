@@ -145,7 +145,7 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                         <Input label='Network' name='network' defaultValue={network} placeholder='tor, i2p, clear web' />
                         <Input label='Review type' name='legalTriage' defaultValue={legalTriage} placeholder='approved, review' />
                         <Input label='Status' name='reviewState' defaultValue={reviewState} placeholder='ready, watching' />
-                        <button className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-white transition hover:opacity-90 dark:text-ui-canvas'>
+                        <button className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
                             <Filter className='h-4 w-4' />
                             Find
                         </button>

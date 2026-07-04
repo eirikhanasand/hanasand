@@ -152,7 +152,7 @@ export function evaluateDashboardText(text) {
         }
     }
 
-    if (!/No long-running queries right now|Long-running/i.test(fullText)) {
+    if (!/Long-running query state|No long-running queries right now|Long-running|Longest running query/i.test(fullText)) {
         return {
             ok: false,
             reason: 'db_dashboard_missing_query_state',
@@ -407,6 +407,22 @@ function runSelfTest() {
     `)
     assert.equal(shell.ok, false)
     assert.equal(shell.reason, 'db_dashboard_missing_clusters')
+
+    const previousUiCopy = evaluateDashboardText(`
+        Operations
+        Database
+        Clusters
+        1
+        Databases
+        2
+        Storage
+        108.00 MB
+        Active queries
+        0
+        Longest running query
+        No active query details available.
+    `)
+    assert.equal(previousUiCopy.ok, true)
 
     console.log('Database dashboard monitor self-test passed.')
 }

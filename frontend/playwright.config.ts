@@ -15,6 +15,7 @@ const sharedEnv = {
     DB_PORT: process.env.PLAYWRIGHT_DB_PORT || '8503',
     SKIP_MAIL_PROVISIONING: '1',
     SKIP_REPOSITORY_SYNC: '1',
+    VULNERABILITY_SCAN_STATE_PATH: process.env.VULNERABILITY_SCAN_STATE_PATH || '/tmp/hanasand-vulnerability-scan-playwright.json',
     NEXT_PUBLIC_API: apiBaseUrl,
     FRONTEND_INTERNAL_API: apiBaseUrl,
     MAIL_JMAP_INTERNAL_URL: process.env.MAIL_JMAP_INTERNAL_URL || 'http://127.0.0.1:8081',

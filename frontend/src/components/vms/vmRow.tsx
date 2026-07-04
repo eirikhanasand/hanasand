@@ -10,7 +10,7 @@ export default function VmRow({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) 
     const status = vm.status ? upperCaseFirstLetter(vm.status) : 'Status pending'
     const accessUserCount = Array.isArray(vm.access_users) ? vm.access_users.length : 0
     const owner = vm.owner || vm.created_by || 'Unassigned'
-    const ipAddress = vm.device_eth0_ipv4_address || 'No IPv4'
+    const ipAddress = vm.device_eth0_ipv4_address || 'IP checking'
     const lastChecked = vm.last_checked ? smallDate(vm.last_checked) : 'Not checked yet'
 
     return (
@@ -18,7 +18,7 @@ export default function VmRow({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) 
             href={`/dashboard/vms/${vm.name}`}
             className={`
                 group grid min-w-[74rem] items-center gap-2 rounded-md p-2
-                text-bright/80 transition hover:bg-bright/3
+                text-ui-text/80 transition hover:bg-ui-panel/3
                 lg:grid-cols-[minmax(14rem,1.3fr)_minmax(10rem,1fr)_7rem_10rem_minmax(9rem,0.95fr)_minmax(9rem,0.95fr)_7rem_minmax(16rem,1.4fr)_6.5rem]
             `}
         >

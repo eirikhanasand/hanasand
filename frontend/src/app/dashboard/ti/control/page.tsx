@@ -10,19 +10,19 @@ export default function TiScraperControlPage() {
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Threat intelligence'
-                title='Source operations'
-                description='Review collection runs, source health, queued work, evidence quality, and alert readiness.'
+                title='Collection'
+                description='Watch live sources, collection pressure, coverage, and alert rebuilds.'
                 actions={(
                     <div className='flex flex-wrap gap-2'>
-                        <Link href='/dashboard/ti' className='inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                        <Link href='/dashboard/ti' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-raised'>
                             <ArrowLeft className='h-4 w-4' />
                             Intelligence
                         </Link>
-                        <Link href='/dashboard/ti/workbench' className='inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                        <Link href='/dashboard/ti/workbench' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-raised'>
                             <Activity className='h-4 w-4' />
-                            Analyst workbench
+                            Recent attacks
                         </Link>
-                        <Link href='/dashboard/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                        <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-panel'>
                             <DatabaseZap className='h-4 w-4' />
                             Sources
                             <ExternalLink className='h-4 w-4' />

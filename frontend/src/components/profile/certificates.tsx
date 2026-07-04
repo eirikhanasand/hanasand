@@ -87,12 +87,12 @@ export default function Certificates({ certificates: serverCertificates }: { cer
         <DashboardPanel className='h-fit p-4'>
             <div className='flex items-center justify-between gap-3'>
                 <div>
-                    <h2 className='text-base font-semibold text-[#171a21]'>Certificates</h2>
-                    <p className='mt-1 text-sm text-[#596170]'>{certificates?.length || 0} configured</p>
+                    <h2 className='text-base font-semibold text-ui-text'>Certificates</h2>
+                    <p className='mt-1 text-sm text-ui-muted'>{certificates?.length || 0} configured</p>
                 </div>
                 <button
                     onClick={() => setDisplayNewCertificateDialog(true)}
-                    className='flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#364152] hover:bg-[#f2f5f9]'
+                    className='flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:text-ui-primary'
                 >
                     <Plus className='h-4 w-4' />
                     Add
@@ -101,22 +101,22 @@ export default function Certificates({ certificates: serverCertificates }: { cer
             <div className='mt-4 grid gap-2'>
                 {certificates?.length
                     ? (certificates as Certificate[]).map((certificate) => <Certificate update={update} key={certificate.id} certificate={certificate} />)
-                    : <div className='rounded-lg border border-dashed border-[#d8dee9] p-4 text-sm text-[#596170]'>No certificates.</div>
+                    : <div className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-4 text-sm text-ui-muted'>Certificate inventory is ready. Add a certificate to start the account trust stream.</div>
                 }
             </div>
             {displayNewCertificateDialog && (
                 <div
                     onClick={close}
-                    className='fixed inset-0 z-50 grid cursor-pointer place-items-center bg-black/45 px-4 backdrop-blur-sm'
+                    className='fixed inset-0 z-50 grid cursor-pointer place-items-center bg-ui-canvas/75 px-4 backdrop-blur-sm'
                 >
                     <div
                         onClick={e => e.stopPropagation()}
-                        className='w-full max-w-xl cursor-default rounded-xl border border-[#dde3ec] bg-white p-4 shadow-2xl'
+                        className='w-full max-w-xl cursor-default rounded-xl border border-ui-border bg-ui-panel p-4 shadow-2xl'
                     >
                         <div className='mb-4 flex items-center justify-between'>
-                            <h1 className='text-lg font-semibold text-[#171a21]'>Add certificate</h1>
+                            <h1 className='text-lg font-semibold text-ui-text'>Add certificate</h1>
                             <button
-                                className='grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-[#d8dee9] text-[#364152] hover:bg-[#f2f5f9]'
+                                className='grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:border-ui-primary hover:bg-ui-raised hover:text-ui-text'
                                 onClick={close}
                             >
                                 <X className='w-4 h-4 cursor-pointer' />
@@ -147,18 +147,18 @@ export default function Certificates({ certificates: serverCertificates }: { cer
                                 placeholder='-----BEGIN PUBLIC KEY----- ...'
                                 textarea
                             />
-                            <Notify background='bg-white' fullWidth message={message} />
+                            <Notify background='bg-ui-panel' fullWidth message={message} />
                             <div className='mt-2 flex justify-end gap-2'>
                                 <button
                                     type='button'
                                     onClick={close}
-                                    className='h-9 cursor-pointer rounded-lg px-3 text-sm font-semibold text-[#596170] hover:bg-[#f2f5f9]'
+                                    className='h-9 cursor-pointer rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type='submit'
-                                    className='h-9 cursor-pointer rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white hover:bg-[#2b303b]'
+                                    className='h-9 cursor-pointer rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'
                                 >
                                     Create
                                 </button>
@@ -190,7 +190,7 @@ function CertificateInputField({
 }) {
     return (
         <div className='flex flex-col gap-1'>
-            <label htmlFor={name} className='text-sm font-semibold text-[#364152]'>
+            <label htmlFor={name} className='text-sm font-semibold text-ui-text'>
                 {label}
             </label>
             {textarea ? (
@@ -201,7 +201,7 @@ function CertificateInputField({
                     onChange={onChange}
                     placeholder={placeholder}
                     required={required}
-                    className='h-24 resize-none rounded-lg border border-[#d8dee9] bg-white p-2 text-[#171a21] placeholder:text-[#8b95a7] focus:outline-none focus:ring-2 focus:ring-[#b8c7ff]'
+                    className='h-24 resize-none rounded-lg border border-ui-border bg-ui-raised p-2 text-ui-text placeholder:text-ui-muted focus:outline-none focus:ring-2 focus:ring-ui-primary/40'
                 />
             ) : (
                 <input
@@ -211,7 +211,7 @@ function CertificateInputField({
                     onChange={onChange}
                     placeholder={placeholder}
                     required={required}
-                    className='rounded-lg border border-[#d8dee9] bg-white p-2 text-[#171a21] placeholder:text-[#8b95a7] focus:outline-none focus:ring-2 focus:ring-[#b8c7ff]'
+                    className='rounded-lg border border-ui-border bg-ui-raised p-2 text-ui-text placeholder:text-ui-muted focus:outline-none focus:ring-2 focus:ring-ui-primary/40'
                 />
             )}
         </div>

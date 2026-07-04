@@ -22,9 +22,29 @@ const tasks: TestTask[] = [
         command: [bun, 'scripts/check-article-fallback.mjs'],
     },
     {
+        id: 'customer-operational-copy',
+        title: 'Customer operational copy guard',
+        command: [bun, 'scripts/check-customer-operational-copy.mjs'],
+    },
+    {
         id: 'upload-limit',
         title: 'Upload proxy limit contract',
         command: [bun, 'scripts/check-upload-proxy-limit.mjs'],
+    },
+    {
+        id: 'database-dashboard-render',
+        title: 'Database dashboard render contract',
+        command: [bun, 'scripts/check-database-dashboard-render.ts'],
+    },
+    {
+        id: 'pwned-proxy-route',
+        title: 'Pwned proxy route contract',
+        command: [bun, 'scripts/check-pwned-proxy-route.ts'],
+    },
+    {
+        id: 'pwned-result-presentation',
+        title: 'Pwned result presentation contract',
+        command: [bun, 'scripts/check-pwned-result-presentation.ts'],
     },
     {
         id: 'ai-hooks',
@@ -32,9 +52,34 @@ const tasks: TestTask[] = [
         command: [bun, 'scripts/check-ai-hooks.mjs'],
     },
     {
+        id: 'backup-operations',
+        title: 'Backup operations page contract',
+        command: [bun, 'scripts/check-backup-operations.ts'],
+    },
+    {
+        id: 'vulnerability-dashboard',
+        title: 'Vulnerability dashboard contract',
+        command: [bun, 'scripts/check-vulnerability-dashboard.ts'],
+    },
+    {
+        id: 'service-check-ti-landing',
+        title: 'Service check and TI landing UX contract',
+        command: [bun, 'scripts/check-service-check-ti-landing.mjs'],
+    },
+    {
         id: 'ti-actor-intelligence',
         title: 'TI actor intelligence shaping',
         command: [bun, 'scripts/check-ti-actor-intelligence.ts'],
+    },
+    {
+        id: 'dwm-public-evidence-boundary',
+        title: 'DWM public evidence boundary',
+        command: [bun, 'scripts/check-dwm-public-evidence-boundary.mjs'],
+    },
+    {
+        id: 'dwm-analyst-brief',
+        title: 'DWM analyst brief',
+        command: [bun, 'scripts/check-dwm-analyst-brief.mjs'],
     },
     {
         id: 'public-archive',

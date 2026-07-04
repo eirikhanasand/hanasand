@@ -45,9 +45,9 @@ type MetadataProps = {
 
 type MetadataPanel = 'workspace' | 'info' | 'terminal' | 'symbols' | 'git' | 'phone' | 'box' | 'chat' | null
 
-const sharedStyles = 'absolute bg-background/80 hover:bg-bright/8 grid place-items-center rounded-lg cursor-move z-100 select-none p-5 border border-bright/10 backdrop-blur-md'
-const baseButtonStyle = 'grid h-10 w-10 place-items-center rounded-lg text-bright/55 transition hover:bg-bright/10 hover:text-bright'
-const activeButtonStyle = 'text-[#f07d33] hover:bg-bright/8 hover:text-[#f07d33]'
+const sharedStyles = 'absolute grid place-items-center rounded-lg cursor-move z-100 select-none border border-ui-border bg-ui-panel/85 p-5 text-ui-muted backdrop-blur-md transition hover:bg-ui-raised hover:text-ui-text'
+const baseButtonStyle = 'grid h-10 w-10 place-items-center rounded-lg text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'
+const activeButtonStyle = 'bg-ui-primary/10 text-ui-primary hover:bg-ui-primary/15 hover:text-ui-primary'
 
 export default function Metadata({
     shareRouteId,
@@ -101,7 +101,7 @@ export default function Metadata({
     }
 
     if (!metadataOpen) {
-        const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'
+        const color = isConnected ? 'text-ui-success/45 group-hover:text-ui-success' : 'text-ui-muted'
         const compactStyle = isCompactViewport ? { right: 16, bottom: 88 } : { top: position.y, left: position.x }
         return (
             <button
@@ -116,14 +116,14 @@ export default function Metadata({
                     setLocalOpen(true)
                     setShowMetadata(true)
                 }}
-                className={`group ${isCompactViewport ? 'fixed right-4 bottom-22 grid place-items-center rounded-lg border border-bright/10 bg-(--panel-surface) p-3 shadow-2xl shadow-black/30 backdrop-blur-md' : sharedStyles}`}
+                className={`group ${isCompactViewport ? 'fixed right-4 bottom-22 grid place-items-center rounded-lg border border-ui-border bg-ui-panel/90 p-3 text-ui-muted shadow-2xl backdrop-blur-md hover:bg-ui-raised hover:text-ui-text' : sharedStyles}`}
                 style={compactStyle}
             >
                 <h1>
-                    <InfoIcon className={!isConnected ? color : 'stroke-light/50 group-hover:stroke-bright'} />
+                    <InfoIcon className={!isConnected ? color : 'text-ui-muted group-hover:text-ui-text'} />
                 </h1>
                 {isConnected && (
-                    <h1 className='flex gap-2 text-light/50 group-hover:text-bright'>
+                    <h1 className='flex gap-2 text-ui-muted group-hover:text-ui-text'>
                         {participants}
                         <Eye className={color} />
                     </h1>
@@ -141,7 +141,7 @@ export default function Metadata({
 
     return (
         <div className='flex h-full min-w-fit flex-row-reverse gap-2'>
-            <nav className='relative z-50 flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-visible rounded-xl border border-bright/10 bg-(--panel-surface) p-2 shadow-2xl shadow-black/30 backdrop-blur-md md:bg-background/82 md:shadow-black/20'>
+            <nav className='relative z-50 flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-visible rounded-xl border border-ui-border bg-ui-panel/90 p-2 shadow-2xl backdrop-blur-md'>
                 <SidebarTooltip label='Close' side='left'>
                     <button type='button' aria-label='Close metadata' onClick={closeMetadata} className={baseButtonStyle}>
                         <X className='h-5 w-5' />
@@ -194,7 +194,7 @@ export default function Metadata({
                 </SidebarTooltip>
                 <SidebarTooltip label='Copy file' side='left'>
                     <button type='button' aria-label='Copy current file contents' onClick={() => copy({ text: editingContent, setDidCopy })} className={baseButtonStyle}>
-                        <Copy height={20} width={20} className={didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-bright' : 'stroke-red-500'} />
+                        <Copy height={20} width={20} className={didCopy === true ? 'text-ui-success' : didCopy === false ? 'text-ui-text' : 'text-ui-danger'} />
                     </button>
                 </SidebarTooltip>
                 <SidebarTooltip label={share?.locked ? 'Unlock' : 'Lock'} side='left'>
@@ -212,7 +212,7 @@ export default function Metadata({
                         onClick={() => setSyntaxHighlighting(prev => !prev)}
                         className={baseButtonStyle}
                     >
-                        <Highlighter className={!syntaxHighlighting ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
+                        <Highlighter className={!syntaxHighlighting ? 'text-ui-primary' : 'text-ui-text'} height={20} width={20} />
                     </button>
                 </SidebarTooltip>
                 <SidebarTooltip label='Tool box' side='left'>
@@ -268,10 +268,10 @@ export default function Metadata({
                             ? 'w-[min(30rem,calc(100vw-5.5rem))]'
                             : 'w-[min(24rem,calc(100vw-5.5rem))] lg:w-[min(24rem,21vw)]'
                 }`}>
-                    <div className='h-full w-full max-w-full space-y-2 overflow-y-auto overflow-x-hidden rounded-xl border border-bright/10 bg-(--panel-surface) p-2 shadow-2xl shadow-black/30 backdrop-blur-md md:bg-background/82 md:shadow-black/20'>
-                        <header className='flex items-center justify-between rounded-lg border border-bright/8 bg-black/14 px-3 py-2 text-bright/80'>
-                            <span className='text-[11px] font-semibold uppercase tracking-[0.22em] text-bright/45'>{panelTitle}</span>
-                            <button type='button' aria-label='Hide metadata panel' onClick={() => setActivePanel(null)} className='grid h-8 w-8 place-items-center rounded-lg text-bright/45 transition hover:bg-bright/8 hover:text-bright'>
+                    <div className='h-full w-full max-w-full space-y-2 overflow-y-auto overflow-x-hidden rounded-xl border border-ui-border bg-ui-panel/90 p-2 shadow-2xl backdrop-blur-md'>
+                        <header className='flex items-center justify-between rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-ui-text'>
+                            <span className='text-[11px] font-semibold uppercase tracking-[0.22em] text-ui-muted'>{panelTitle}</span>
+                            <button type='button' aria-label='Hide metadata panel' onClick={() => setActivePanel(null)} className='grid h-8 w-8 place-items-center rounded-lg text-ui-muted transition hover:bg-ui-panel hover:text-ui-text'>
                                 <X className='h-4 w-4' />
                             </button>
                         </header>
@@ -359,25 +359,25 @@ function TerminalAccess({
     setDidCopy: Dispatch<SetStateAction<boolean | string | null>>
 }) {
     return (
-        <section className='space-y-3 text-bright/72'>
-            <div className='rounded-lg border border-[#9de18f]/16 bg-[#9de18f]/6 p-3'>
+        <section className='space-y-3 text-ui-muted'>
+            <div className='rounded-lg border border-ui-success/30 bg-ui-success/10 p-3'>
                 <div className='mb-2 flex items-center justify-between gap-2'>
-                    <div className='flex items-center gap-2 text-sm font-semibold text-bright/86'>
-                        <TerminalSquare className='h-4 w-4 text-[#9de18f]' />
+                    <div className='flex items-center gap-2 text-sm font-semibold text-ui-text'>
+                        <TerminalSquare className='h-4 w-4 text-ui-success' />
                         Browser terminal
                     </div>
-                    <span className='rounded-full border border-[#9de18f]/24 bg-[#9de18f]/10 px-2 py-0.5 text-[11px] font-medium text-[#b7f0aa]'>
+                    <span className='rounded-full border border-ui-success/35 bg-ui-success/15 px-2 py-0.5 text-[11px] font-medium text-ui-success'>
                         Interactive
                     </span>
                 </div>
-                <div className='flex items-start gap-2 rounded-lg bg-black/16 px-2.5 py-2 text-xs leading-4 text-bright/62'>
-                    <span className='mt-1 h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#9de18f]' />
+                <div className='flex items-start gap-2 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-2 text-xs leading-4 text-ui-muted'>
+                    <span className='mt-1 h-2 w-2 shrink-0 animate-pulse rounded-full bg-ui-success' />
                     <span>{status || 'Waiting for terminal status...'}</span>
                 </div>
             </div>
 
-            <div className='rounded-lg border border-bright/8 bg-black/16 p-3'>
-                <div className='mb-3 flex items-center gap-2 text-sm font-semibold text-bright/86'>
+            <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
+                <div className='mb-3 flex items-center gap-2 text-sm font-semibold text-ui-text'>
                     <KeyRound className='h-4 w-4' />
                     SSH access
                 </div>
@@ -387,13 +387,13 @@ function TerminalAccess({
                         <button
                             type='button'
                             onClick={() => copy({ text: credentials.sshCommand, setDidCopy })}
-                            className='flex w-full items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/5 px-3 py-2 text-left transition-colors hover:bg-bright/9'
+                            className='flex w-full items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-left transition-colors hover:border-ui-primary hover:bg-ui-raised'
                         >
                             <span className='min-w-0'>
-                                <span className='block text-[10px] uppercase tracking-[0.18em] text-bright/36'>Copy SSH command</span>
-                                <span className='block truncate font-mono text-[11px] leading-4 text-bright/78'>{credentials.sshCommand}</span>
+                                <span className='block text-[10px] uppercase tracking-[0.18em] text-ui-muted'>Copy SSH command</span>
+                                <span className='block truncate font-mono text-[11px] leading-4 text-ui-text'>{credentials.sshCommand}</span>
                             </span>
-                            <Copy className='h-4 w-4 shrink-0 text-bright/48' />
+                            <Copy className='h-4 w-4 shrink-0 text-ui-muted' />
                         </button>
                         <CredentialRow label='User' value={credentials.username} setDidCopy={setDidCopy} />
                         <CredentialRow label='Password' value={credentials.password} sensitive setDidCopy={setDidCopy} />
@@ -404,15 +404,15 @@ function TerminalAccess({
                         <button
                             type='button'
                             disabled
-                            className='flex w-full cursor-not-allowed items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/4 px-3 py-2 text-left opacity-55'
+                            className='flex w-full cursor-not-allowed items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-left opacity-55'
                         >
                             <span className='min-w-0'>
-                                <span className='block text-[10px] uppercase tracking-[0.18em] text-bright/36'>Copy SSH command</span>
-                                <span className='block truncate font-mono text-[11px] leading-4 text-bright/48'>Waiting for SSH details</span>
+                                <span className='block text-[10px] uppercase tracking-[0.18em] text-ui-muted'>Copy SSH command</span>
+                                <span className='block truncate font-mono text-[11px] leading-4 text-ui-muted'>Waiting for SSH details</span>
                             </span>
-                            <Copy className='h-4 w-4 shrink-0 text-bright/36' />
+                            <Copy className='h-4 w-4 shrink-0 text-ui-muted' />
                         </button>
-                        <div className='rounded-lg border border-bright/8 bg-black/18 px-2.5 py-2 text-xs leading-5 text-bright/48'>
+                        <div className='rounded-lg border border-ui-border bg-ui-panel px-2.5 py-2 text-xs leading-5 text-ui-muted'>
                             SSH details appear here when the VM is reachable.
                         </div>
                     </div>
@@ -437,13 +437,13 @@ function CredentialRow({
         <button
             type='button'
             onClick={() => copy({ text: value, setDidCopy })}
-            className='group grid w-full gap-1 rounded-lg bg-bright/4 px-2.5 py-2 text-left outline outline-bright/6 transition-colors hover:bg-bright/8'
+            className='group grid w-full gap-1 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-2 text-left transition-colors hover:border-ui-primary hover:bg-ui-raised'
         >
-            <span className='flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-bright/36'>
+            <span className='flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-ui-muted'>
                 {sensitive ? <KeyRound className='h-3 w-3' /> : <Copy className='h-3 w-3' />}
                 {label}
             </span>
-            <span className='break-all font-mono text-[11px] leading-4 text-bright/74 group-hover:text-bright'>
+            <span className='break-all font-mono text-[11px] leading-4 text-ui-text'>
                 {sensitive ? '************' : value}
             </span>
         </button>

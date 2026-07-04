@@ -13,7 +13,7 @@ export default function Menu() {
     const [open, setOpen] = useState(false)
     const [token, setToken] = useState<boolean>(false)
     const path = usePathname()
-    const baseStyles = 'group rounded-lg h-12 w-12 grid place-items-center cursor-pointer transition-colors hover:bg-bright/8'
+    const baseStyles = 'group grid h-12 w-12 cursor-pointer place-items-center rounded-lg text-ui-muted transition-colors hover:bg-ui-raised hover:text-ui-text'
     const isShare = isSharePath(path)
     const isStatus = path.includes('/status')
     const isAI = path.includes('/ai')
@@ -29,7 +29,7 @@ export default function Menu() {
 
     if (!open) {
         return (
-            <div onClick={() => setOpen(prev => !prev)} className='grid md:hidden group h-11 w-11 cursor-pointer place-items-center rounded-lg transition-colors hover:bg-bright/8'>
+            <div onClick={() => setOpen(prev => !prev)} className='group grid h-11 w-11 cursor-pointer place-items-center rounded-lg text-ui-muted transition-colors hover:bg-ui-raised hover:text-ui-text md:hidden'>
                 <MenuIcon />
             </div>
         )
@@ -38,24 +38,24 @@ export default function Menu() {
     return (
         <div className='group z-105 grid h-11 w-11 place-items-center rounded-lg md:hidden'>
             <X onClick={toggleOpen} />
-            <div onClick={(e) => e.preventDefault()} className='absolute right-3 top-16 z-105 h-fit w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-bright/10 bg-(--panel-surface) p-1.5 text-bright shadow-[0_24px_90px_var(--soft-shadow)] outline outline-dark/60 backdrop-blur-xl sm:right-5 sm:top-18'>
-                <Link href='/s' onClick={toggleOpen} className='flex rounded-xl pl-2 pr-5 transition-colors hover:bg-bright/8'>
+            <div onClick={(e) => e.preventDefault()} className='absolute right-3 top-16 z-105 h-fit w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-1.5 text-ui-text shadow-[0_24px_90px_var(--soft-shadow)] backdrop-blur-xl sm:right-5 sm:top-18'>
+                <Link href='/s' onClick={toggleOpen} className='flex rounded-lg pl-2 pr-5 transition-colors hover:bg-ui-raised'>
                     <ShareIcon baseStyles={baseStyles} isShare={isShare} />
                     <h1 className='self-center font-semibold'>Workspace</h1>
                 </Link>
-                <Link href='/ai' onClick={toggleOpen} className='flex rounded-xl pl-2 pr-5 transition-colors hover:bg-bright/8'>
+                <Link href='/ai' onClick={toggleOpen} className='flex rounded-lg pl-2 pr-5 transition-colors hover:bg-ui-raised'>
                     <div className={baseStyles}>
-                        <Sparkles className={`group-hover:stroke-orange-300 ${isAI && 'stroke-orange-300'}`} />
+                        <Sparkles className={`group-hover:stroke-ui-warning ${isAI && 'stroke-ui-warning'}`} />
                     </div>
                     <h1 className='self-center font-semibold'>Workspace assistant</h1>
                 </Link>
-                <Link href='/status' onClick={toggleOpen} className='flex rounded-xl pl-2 pr-5 transition-colors hover:bg-bright/8'>
+                <Link href='/status' onClick={toggleOpen} className='flex rounded-lg pl-2 pr-5 transition-colors hover:bg-ui-raised'>
                     <div className={baseStyles}>
-                        <ActivityIcon className={`group-hover:stroke-[#41b819] ${isStatus && 'stroke-[#41b819]'}`} />
+                        <ActivityIcon className={`group-hover:stroke-ui-success ${isStatus && 'stroke-ui-success'}`} />
                     </div>
                     <h1 className='self-center font-semibold'>Status</h1>
                 </Link>
-                <Link href='/dashboard' onClick={toggleOpen} className='flex rounded-xl pl-2 pr-5 transition-colors hover:bg-bright/8'>
+                <Link href='/dashboard' onClick={toggleOpen} className='flex rounded-lg pl-2 pr-5 transition-colors hover:bg-ui-raised'>
                     <Dashboard serverToken={token} />
                     {token && <h1 className='self-center font-semibold'>Dashboard</h1>}
                 </Link>

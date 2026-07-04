@@ -89,34 +89,34 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
         <div className='grid gap-4'>
             <section className={`${dashboardPanelClass} grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center`} data-restore-primary-flow>
                 <div className='min-w-0'>
-                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-[#8fa0ba]'>
-                        <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>Recommended next</span>
-                        <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{groupedBackups.length} restore points</span>
-                        {activeFilterCount > 0 && <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{activeFilterCount} active filters</span>}
+                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>Recommended next</span>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{groupedBackups.length} restore points</span>
+                        {activeFilterCount > 0 && <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{activeFilterCount} active filters</span>}
                     </div>
-                    <h2 className='mt-3 text-lg font-semibold text-[#edf4ff]'>{primaryTitle}</h2>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>{primaryDetail}</p>
+                    <h2 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h2>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
                 </div>
                 <a
                     href={primaryHref}
-                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-[#7aa5ff] px-4 text-sm font-semibold text-[#08111f] shadow-sm transition hover:bg-[#9db8ff] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]/40 sm:w-auto'
+                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
                     data-restore-primary-action
                 >
                     {primaryActionLabel}
                 </a>
             </section>
 
-            <details className='overflow-hidden rounded-lg border border-[#26344d] bg-[#0f172a]' open={activeFilterCount > 0} id='restore-filters' data-restore-filters-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#101827] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' open={activeFilterCount > 0} id='restore-filters' data-restore-filters-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                     <span className='inline-flex items-center gap-2'>
-                        <Search className='h-4 w-4 text-[#7aa5ff]' />
+                        <Search className='h-4 w-4 text-ui-primary' />
                         Filter restore points
                     </span>
-                    <span className='text-xs font-medium text-[#8fa0ba]'>{activeFilterCount ? `${activeFilterCount} active` : 'All indexed files'}</span>
+                    <span className='text-xs font-medium text-ui-muted'>{activeFilterCount ? `${activeFilterCount} active` : 'All indexed files'}</span>
                 </summary>
-                <div className='grid gap-3 border-t border-[#26344d] p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end'>
+                <div className='grid gap-3 border-t border-ui-border p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end'>
                     <label className='grid gap-1.5 text-sm'>
-                        <span className='text-xs font-semibold uppercase text-[#8fa0ba]'>Service</span>
+                        <span className='text-xs font-semibold uppercase text-ui-muted'>Service</span>
                         <input
                             value={serviceFilter}
                             onChange={(event) => {
@@ -125,12 +125,12 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                                 updateParam('service', value)
                             }}
                             placeholder='Filter by service'
-                            className='min-h-10 min-w-0 rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2 text-sm text-[#edf4ff] outline-none focus:border-[#7aa5ff]'
+                            className='min-h-10 min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none focus:border-ui-primary'
                             data-restore-service-filter
                         />
                     </label>
                     <label className='grid gap-1.5 text-sm'>
-                        <span className='text-xs font-semibold uppercase text-[#8fa0ba]'>Date</span>
+                        <span className='text-xs font-semibold uppercase text-ui-muted'>Date</span>
                         <input
                             type='date'
                             value={dateFilter}
@@ -139,7 +139,7 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                                 setDateFilter(value)
                                 updateParam('date', value)
                             }}
-                            className='min-h-10 rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2 text-sm text-[#edf4ff] outline-none focus:border-[#7aa5ff]'
+                            className='min-h-10 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none focus:border-ui-primary'
                             data-restore-date-filter
                         />
                     </label>
@@ -147,7 +147,7 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                         type='button'
                         onClick={clearFilters}
                         disabled={!activeFilterCount}
-                        className='inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2 text-sm font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#122449] disabled:cursor-not-allowed disabled:opacity-50'
+                        className='inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 disabled:cursor-not-allowed disabled:opacity-50'
                         data-restore-clear-filters
                     >
                         <X className='h-4 w-4' />
@@ -156,7 +156,7 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                 </div>
             </details>
 
-            {message && <p className='rounded-lg border border-[#26344d] bg-[#101827] px-4 py-3 text-sm text-[#aab7cc]'>{message}</p>}
+            {message && <p className='rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm text-ui-muted'>{message}</p>}
 
             <div className='grid gap-4' id='restore-points' data-restore-points>
                 {groupedBackups.map((backup) => {
@@ -165,38 +165,38 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                         <article key={key} className={`${dashboardPanelClass} p-5`}>
                             <div className='flex flex-wrap items-start justify-between gap-3'>
                                 <div>
-                                    <h2 className='text-lg font-semibold text-[#edf4ff]'>{backup.service}</h2>
-                                    <p className='mt-1 text-sm text-[#aab7cc]'>{backup.file}</p>
+                                    <h2 className='text-lg font-semibold text-ui-text'>{backup.service}</h2>
+                                    <p className='mt-1 text-sm text-ui-muted'>{backup.file}</p>
                                 </div>
                                 <button
                                     type='button'
                                     onClick={() => handleRestore(backup)}
                                     disabled={isPending}
-                                    className='inline-flex items-center gap-2 rounded-lg border border-[#5f86ff] bg-[#122449] px-3 py-2 text-sm font-semibold text-[#9db8ff] transition hover:bg-[#18305f] disabled:opacity-60'
+                                    className='inline-flex items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-primary/15 disabled:opacity-60'
                                 >
                                     <RotateCcw className='h-4 w-4' />
                                     {restoring === key ? 'Restoring…' : 'Restore'}
                                 </button>
                             </div>
-                            <div className='mt-4 grid gap-3 text-sm text-[#aab7cc] md:grid-cols-3'>
-                                <div className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
-                                    <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Locations</p>
-                                    <p className='mt-2 font-medium text-[#edf4ff]'>{backup.locations.join(', ') || 'Storage location syncing'}</p>
+                            <div className='mt-4 grid gap-3 text-sm text-ui-muted md:grid-cols-3'>
+                                <div className='rounded-lg border border-ui-border bg-ui-canvas p-3'>
+                                    <p className='text-xs font-semibold uppercase text-ui-muted'>Locations</p>
+                                    <p className='mt-2 font-medium text-ui-text'>{backup.locations.join(', ') || 'Storage location syncing'}</p>
                                 </div>
-                                <div className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
-                                    <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Modified</p>
-                                    <p className='mt-2 font-medium text-[#edf4ff]'>{formatDate(backup.mtime)}</p>
+                                <div className='rounded-lg border border-ui-border bg-ui-canvas p-3'>
+                                    <p className='text-xs font-semibold uppercase text-ui-muted'>Modified</p>
+                                    <p className='mt-2 font-medium text-ui-text'>{formatDate(backup.mtime)}</p>
                                 </div>
-                                <div className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
-                                    <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Size</p>
-                                    <p className='mt-2 font-medium text-[#edf4ff]'>{backup.size || 'Measuring size'}</p>
+                                <div className='rounded-lg border border-ui-border bg-ui-canvas p-3'>
+                                    <p className='text-xs font-semibold uppercase text-ui-muted'>Size</p>
+                                    <p className='mt-2 font-medium text-ui-text'>{backup.size || 'Measuring size'}</p>
                                 </div>
                             </div>
                         </article>
                     )
                 })}
                 {!groupedBackups.length && (
-                    <article className={`${dashboardPanelClass} p-5 text-sm text-[#aab7cc]`}>
+                    <article className={`${dashboardPanelClass} p-5 text-sm text-ui-muted`}>
                         Restore file stream is clear for the current filters.
                     </article>
                 )}

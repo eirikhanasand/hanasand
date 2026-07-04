@@ -35,10 +35,10 @@ export default function NewFile({
     const treeHasFile = tree.some((entry) => entry.name === newFileName)
 
     const outline = treeHasFile
-        ? `outline outline-red-500 rounded-md ${blink && 'bg-red-500/20'}`
+        ? `rounded-md border border-ui-danger ${blink && 'bg-ui-danger/10'}`
         : lowercaseTreeHasFile
-            ? 'outline outline-yellow-500 rounded-md'
-            : 'outline-none'
+            ? 'rounded-md border border-ui-warning'
+            : 'border border-transparent'
 
     async function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
         const id = getCookie('id')
@@ -74,17 +74,17 @@ export default function NewFile({
     }
 
     return (
-        <div className={`flex items-center gap-2 px-2 py-1 hover:bg-light/70 ${outline} rounded-md cursor-pointer relative`}>
+        <div className={`relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 hover:bg-ui-raised ${outline}`}>
             {isCreatingNewFile === 'folder'
-                ? <Folder size={14} className='text-bright/80' />
-                : <File size={14} className='text-bright/80' />
+                ? <Folder size={14} className='text-ui-muted' />
+                : <File size={14} className='text-ui-muted' />
             }
             <input
                 autoFocus
                 aria-label={isCreatingNewFile === 'folder' ? 'New folder name' : 'New file name'}
                 value={newFileName}
                 onChange={(e) => setNewFileName(e.target.value)}
-                className='text-sm text-bright/80 outline-none'
+                className='text-sm text-ui-text outline-none'
                 onKeyDown={handleKeyDown}
                 onBlur={() => setIsCreatingNewFile(null)}
             />

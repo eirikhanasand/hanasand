@@ -70,6 +70,35 @@ const readinessRows = {
     },
 }
 
+const renderedRouteIds = [
+    'dashboard',
+    'dashboard_ti_control',
+    'public_ti',
+    'public_ti_apt29',
+    'ti_workbench',
+    'cron_jobs',
+    'vulnerabilities',
+    'readiness',
+    'traffic',
+    'system',
+    'database',
+    'logs',
+    'automations',
+    'subscription',
+    'notes',
+    'ti_activity',
+    'ti_audit',
+    'ti_enrichment',
+    'ti_sources',
+    'ti_runs',
+]
+
+const renderedScreenshots = renderedRouteIds.flatMap(routeId =>
+    ['dark', 'light'].flatMap(colorScheme =>
+        ['desktop', 'mobile'].map(viewport => `/tmp/hanasand-${routeId}-${viewport}-${colorScheme}.png`)
+    )
+)
+
 for (const id of Object.keys(readinessRows)) {
     assert.ok(modelSource.includes(`'${id}'`), `Missing model row id ${id}`)
     assert.ok(checkerSource.includes(`'${id}'`), `Missing checker row id ${id}`)
@@ -115,12 +144,12 @@ for (const attr of [
     'data-readiness-state',
     'data-readiness-blocker-count',
     'data-readiness-deep-link-target',
-    'data-readiness-proof-timestamp',
+    'data-readiness-checked-at',
     'data-readiness-unavailable-reason',
     'data-readiness-stale-after-seconds',
     'data-readiness-expected-dashboard-row-id',
     'data-readiness-integration-probe-hint',
-    'data-readiness-backend-proof-contract-version',
+    'data-readiness-backend-contract-version',
     'data-readiness-owner-lane',
     'data-readiness-operator-action',
     'data-readiness-priority',
@@ -128,17 +157,20 @@ for (const attr of [
     'data-readiness-detail-state',
     'data-readiness-detail-owner',
     'data-readiness-detail-action',
-    'data-readiness-detail-proof',
+    'data-readiness-detail-contract',
     'data-readiness-detail-blocker',
     'data-readiness-detail-href',
+    'data-readiness-source-reference',
+    'data-readiness-detail-source-reference',
     'data-readiness-scorecard-link',
 ]) {
     assert.ok(workbenchSource.includes(attr), `Missing DOM proof attribute ${attr}`)
 }
 
 for (const requiredClass of [
-    'dark:border-[#2d3a52]',
-    'dark:hover:border-[#3b4b68]',
+    'border-[#27364f]',
+    'bg-[#0f1726]',
+    'hover:bg-[#162033]',
     'wrap-break-word text-xs font-semibold',
     'wrap-break-word text-[11px]',
     'wrap-break-word text-[10px]',
@@ -165,7 +197,7 @@ for (const bannedUiCopy of ['APT29', 'LockBit', 'dashboard slop', 'how this feed
     assert.equal(sourceOpsSource.includes(bannedUiCopy) || pageSource.includes(bannedUiCopy) || modelSource.includes(bannedUiCopy), false, `Dashboard visible source includes prompt/example copy: ${bannedUiCopy}`)
 }
 
-for (const sourceOpsGuard of ['min-w-32', 'min-w-44', 'sm:whitespace-nowrap', 'dark:border-[#2a3d5c]', 'dark:bg-[#111827]', 'dark:bg-[#0f172a]', 'grid gap-2 sm:grid-cols-2', 'Organization-scoped source actions require explicit membership']) {
+for (const sourceOpsGuard of ['source-ops-workbench grid gap-2', 'border-[#2a3d5c]', 'bg-[#111827]', 'bg-[#0f172a]', 'grid gap-2 sm:grid-cols-2', 'min-h-9 min-w-0 px-2.5 py-1.5', 'whitespace-normal sm:whitespace-nowrap']) {
     assert.ok(sourceOpsSource.includes(sourceOpsGuard), `Source operations action guard missing: ${sourceOpsGuard}`)
 }
 
@@ -176,16 +208,49 @@ for (const field of ['ownerLane', 'unavailableReason', 'staleAfterSeconds', 'pro
 for (const requiredToken of [
     'hanasand.dashboard.render-proof.v1',
     '/dashboard/ti/control',
+    '/ti/apt29',
+    '/dashboard/ti/workbench',
+    '/dashboard/system/cron',
+    '/dashboard/vulnerabilities',
+    '/readiness',
+    '/dashboard/traffic',
+    '/dashboard/system',
+    '/dashboard/db',
+    '/dashboard/logs',
+    '/dashboard/automations',
+    '/dashboard/subscription',
+    '/dashboard/notes',
+    '/dashboard/ti/activity',
+    '/dashboard/ti/audit',
+    '/dashboard/ti/enrichment',
+    '/dashboard/ti/sources',
+    '/dashboard/ti/runs',
     'screenshotPath',
     'selectorCounts',
     'overlapCount',
     'bannedCopyList',
+    'colorSchemes',
+    'contrastIssues',
+    'low contrast',
+    'deadEndCopyPatterns',
+    'visible dead-end state copy',
     'narrowActionCount',
     'highContrastTokenHits',
     'local-dashboard-render-proof',
     'x-hanasand-render-proof-auth',
+    'name: \'theme\'',
+    'document.documentElement.classList.toggle(\'dark\'',
+    'window.localStorage.setItem(\'theme\', scheme)',
+    'gotoWithRetry',
+    'ERR_EMPTY_RESPONSE|ERR_CONNECTION_REFUSED|ECONNREFUSED',
     'rendered login screen; dashboard auth fixture was not accepted',
     '--base-url=',
+    '--page=',
+    'Unknown page ids',
+    '[render-proof]',
+    'waitUntil: \'domcontentloaded\'',
+    'waitFor({ state: \'attached\'',
+    '[role="listbox"][aria-label="Analyst case list"]',
     'readiness detail missing',
     'data-readiness-scorecard-link="/readiness"',
 ]) {
@@ -197,8 +262,11 @@ for (const [id, spec] of Object.entries(readinessRows)) {
     assert.ok(renderDomSource.includes(spec.href), `Rendered proof command missing href ${spec.href}`)
 }
 
-for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked', 'worker 3', 'ti control room', 'how this feeds', '/ti/<query>', 'dashboard slop', 'signal', 'dashboard handoff', 'backed handoff']) {
+for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked', 'worker 3', 'ti control room', 'how this feeds', '/ti/<query>', 'dashboard slop', 'dashboard handoff', 'backed handoff']) {
     assert.ok(renderDomSource.includes(bannedCopy), `Rendered proof command missing banned copy check: ${bannedCopy}`)
+}
+for (const deadEndCopy of ['blocked', 'needs action', 'action required', 'needs work', 'needs proof', 'will appear here after', 'ai parser output', 'source provenance', 'evidence-backed', 'source-backed']) {
+    assert.ok(renderDomSource.includes(deadEndCopy), `Rendered proof command missing dead-end state copy check: ${deadEndCopy}`)
 }
 for (const consoleWarningGuard of ['consolewarnings', 'same key', 'encountered two children']) {
     assert.ok(renderDomSource.toLowerCase().includes(consoleWarningGuard), `Rendered proof command missing console warning guard: ${consoleWarningGuard}`)
@@ -209,12 +277,8 @@ const worker3Matrix = {
         { name: 'desktop', width: 1440, height: 1000 },
         { name: 'mobile', width: 390, height: 844 },
     ],
-    screenshots: [
-        '/tmp/hanasand-dashboard-desktop.png',
-        '/tmp/hanasand-dashboard-mobile.png',
-        '/tmp/hanasand-dashboard_ti_control-desktop.png',
-        '/tmp/hanasand-dashboard_ti_control-mobile.png',
-    ],
+    colorSchemes: ['dark', 'light'],
+    screenshots: renderedScreenshots,
     command: 'node scripts/check-dashboard-render-dom.mjs --base-url=http://127.0.0.1:3010 --out-dir=/tmp',
     artifact: '/tmp/hanasand-dashboard-render-proof.json',
     schema: 'hanasand.dashboard.render-proof.v1',
@@ -229,6 +293,7 @@ const worker3Matrix = {
         'ready row with nonzero blocker count',
         'non-ready row without unavailable reason',
         'visible prompt/coordinator wording',
+        'computed text/background contrast below WCAG AA on visible controls, chips, tags, or status rows',
         'white translucent dark-mode borders',
         'missing screenshot or acceptance JSON artifact',
         'overlapping readiness rows or source operation actions',

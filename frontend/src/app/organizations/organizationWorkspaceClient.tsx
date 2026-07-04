@@ -1275,9 +1275,11 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
     const parsedEmails = parseInviteEmails(emails)
     const invalidEmails = invalidInviteEmails(emails)
     const canSendInvite = canManage && parsedEmails.length > 0 && invalidEmails.length === 0 && !busy
+    const busyLabel = inviteBusyLabel(busy)
     return (
         <section id='invites' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <SectionTitle icon={<UserPlus className='h-4 w-4' />} title='Invite queue' detail={canManage ? 'Send, resend, revoke, copy.' : 'Owner or admin required.'} />
+            {busyLabel && <InlineBusy label={busyLabel} testId='org-invite-busy' />}
             <div className='mt-4 grid gap-3'>
                 <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                     Emails
@@ -1335,6 +1337,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
 
 function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onRoleChange, onRemove }: { members: OrganizationMember[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onRoleChange: (member: OrganizationMember, role: OrganizationRole) => void, onRemove: (member: OrganizationMember) => void }) {
     const [pendingRoles, setPendingRoles] = useState<Record<string, OrganizationRole>>({})
+    const busyLabel = memberBusyLabel(busy)
     return (
         <details id='members' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-members-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
@@ -1344,6 +1347,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                 </span>
             </summary>
             <div className='overflow-x-auto border-t border-ui-border p-4 dark:border-ui-border'>
+                {busyLabel && <InlineBusy label={busyLabel} testId='org-member-busy' />}
                 {members.length === 0 && <EmptyLine text='Active members appear here after invites are accepted or the backend returns the current team.' />}
                 {members.length > 0 && (
                     <table className='min-w-full border-separate border-spacing-0 text-left text-sm'>

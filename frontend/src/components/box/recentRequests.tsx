@@ -18,7 +18,7 @@ export default function RecentRequests({
 }: RecentRequestsProps) {
     if (!recentRequests.length) {
         return (
-            <div className='min-w-0 flex-1 truncate px-1 text-xs text-bright/38'>
+            <div className='min-w-0 flex-1 truncate px-1 text-xs text-ui-muted'>
                 No saved requests
             </div>
         )

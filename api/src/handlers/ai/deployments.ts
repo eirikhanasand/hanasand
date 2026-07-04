@@ -174,7 +174,7 @@ export async function postAiDeployment(req: FastifyRequest, res: FastifyReply) {
     const events: AIDeploymentEvent[] = [
         deploymentEvent('planned', 'Deployment orchestrator accepted the repository-backed workspace and VM target.', now),
         deploymentEvent('sync_access', 'Using the privileged VM deploy bridge, so SSH key sync is not required for this path.', now),
-        deploymentEvent('planned', detectedStack.stackType === 'unknown' ? 'Stack not confidently recognized. This deployment will stay blocked until the repository matches a supported contract.' : `Detected supported stack: ${detectedStack.stackType}.`, now),
+        deploymentEvent('planned', detectedStack.stackType === 'unknown' ? 'Stack not confidently recognized. This deployment will wait until the repository matches a supported contract.' : `Detected supported stack: ${detectedStack.stackType}.`, now),
         deploymentEvent('planned', ownedProfile.summary, now),
         ...ownedProfile.checklist.map((item) => deploymentEvent('planned', item, now)),
     ]

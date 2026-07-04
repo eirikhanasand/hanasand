@@ -189,7 +189,7 @@ export default function LogsPageClient({
 
                 <div className='flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4'>
                     <div className='text-sm text-ui-muted'>
-                        Showing <span className='font-semibold text-ui-text'>{activeServiceLabel}</span> across live, stored, and error streams.
+                        Showing <span className='font-semibold text-ui-primary'>{activeServiceLabel}</span> across live, stored, and error streams.
                     </div>
                     <label htmlFor='logs-service-filter' className='flex min-w-0 flex-col gap-1.5 text-sm sm:w-72'>
                         <span className='text-xs font-semibold text-ui-muted'>Service filter</span>

@@ -6,10 +6,10 @@ type MetricProps = {
 
 export default function Metric({ metric, label, size = 'md' }: MetricProps) {
     const tone = metric < 50
-        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : metric < 75
-            ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-400'
-            : 'border-red-500/20 bg-red-500/10 text-red-400'
+            ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+            : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
     const textSize = size === 'lg' ? 'text-2xl' : 'text-sm'
 
     return (

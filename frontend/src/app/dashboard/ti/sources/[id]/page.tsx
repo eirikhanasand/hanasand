@@ -22,13 +22,14 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
     const completedRuns = runs.filter(run => run.status === 'completed').length
     const failedRuns = runs.filter(run => run.status === 'failed').length
     const successRate = runs.length ? Math.round((completedRuns / runs.length) * 100) : 0
-    const runDuration = latestRun ? runDurationLabel(latestRun.startedAt, latestRun.finishedAt) : 'none'
+    const runDuration = latestRun ? runDurationLabel(latestRun.startedAt, latestRun.finishedAt) : 'checking'
     const freshness = sourceFreshness(source)
     const actionItems = sourceActionItems(source, runs, captures, health, freshness)
     const captureDomains = captureDomainCounts(captures)
     const activeDays = Math.max(1, ageDays(source.monitoredSince))
     const dailyRows = Math.round(source.usefulRows / activeDays)
     const dailyCaptures = Math.round((captures.length / activeDays) * 10) / 10
+    const operation = sourceOperation(source, latestRun, captures.length, freshness)
 
     return (
         <DashboardPage>
@@ -40,85 +41,109 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
             />
 
             <div className='flex'>
-                <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] hover:bg-[#f2f5f9]'>
+                <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>
                     <ArrowLeft className='h-4 w-4' />
                     Sources
                 </Link>
             </div>
 
-            <DashboardPanel className='overflow-hidden p-0'>
-                <div className='grid gap-4 border-b border-[#e8edf5] bg-[#171a21] p-4 text-white xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center'>
+            <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+                <div className='grid gap-4 border-b border-ui-border bg-ui-panel p-4 text-ui-text xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center'>
                     <div>
                         <div className='flex flex-wrap items-center gap-2'>
                             <HealthBadge state={health.state} label={health.label} />
-                            <span className='rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold capitalize'>{source.status}</span>
-                            <span className='rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold'>{source.family.replaceAll('_', ' ')}</span>
-                            <span className='rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold'>{source.risk}</span>
+                            <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold capitalize text-ui-text'>{operationalStateLabel(source.status)}</span>
+                            <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-text'>{source.family.replaceAll('_', ' ')}</span>
+                            <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-text'>{source.risk}</span>
                         </div>
                         <div className='mt-4 grid gap-3 md:grid-cols-3'>
                             <DarkStat icon={<RadioTower className='h-4 w-4' />} label='State' value={freshness.stateLabel} detail={freshness.detail} tone={freshness.tone} />
                             <DarkStat icon={<Gauge className='h-4 w-4' />} label='Success' value={`${successRate}%`} detail={`${completedRuns}/${runs.length || 0} completed · ${failedRuns} failed`} tone={failedRuns ? 'warn' : 'ok'} />
-                            <DarkStat icon={<TimerReset className='h-4 w-4' />} label='Last run' value={runDuration} detail={latestRun?.message || 'No run recorded'} tone='neutral' />
+                            <DarkStat icon={<TimerReset className='h-4 w-4' />} label='Last run' value={runDuration} detail={latestRun?.message || 'Checking this source'} tone='neutral' />
                         </div>
                     </div>
                     <div className='grid grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[42rem]'>
-                        <TopStat label='Last update' value={relativeAge(source.lastRunAt)} />
-                        <TopStat label='Next run' value={relativeUntil(source.nextRunAt)} />
-                        <TopStat label='Cadence' value={cadenceLabel(source.cadenceMinutes)} />
-                        <TopStat label='Typical' value={`${avgRows} rows/run`} />
+                        <TopStat label='Last seen' value={relativeAge(source.lastRunAt)} />
+                        <TopStat label='Lease due' value={relativeUntil(source.nextRunAt)} />
+                        <TopStat label='Interval' value={cadenceLabel(source.cadenceMinutes)} />
+                        <TopStat label='Yield' value={`${avgRows} rows/run`} />
                     </div>
                 </div>
 
                 <div className='grid gap-0 xl:grid-cols-[minmax(0,1fr)_360px]'>
                     <main className='grid gap-4 p-5'>
+                        <section className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 xl:grid-cols-[1fr_1fr_1fr]'>
+                            <OperationCard
+                                icon={<RadioTower className='h-4 w-4' />}
+                                label='Current operation'
+                                value={operation.label}
+                                detail={operation.detail}
+                                tone={operation.tone}
+                            />
+                            <OperationCard
+                                icon={<Activity className='h-4 w-4' />}
+                                label='Worker output'
+                                value={latestRun ? `${latestRun.rows} rows` : 'Lease pending'}
+                                detail={latestRun ? `${latestRun.captures} captures · ${latestRun.screenshots} screenshots · ${runDurationLabel(latestRun.startedAt, latestRun.finishedAt)}` : 'Worker output streams into this source view.'}
+                                tone={latestRun?.status === 'failed' ? 'bad' : latestRun ? 'ok' : 'warn'}
+                            />
+                            <OperationCard
+                                icon={<Camera className='h-4 w-4' />}
+                                label='Evidence stream'
+                                value={captures.length ? `${captures.length} captures` : 'Checking'}
+                                detail={captures[0] ? `${captures[0].actor} · ${captures[0].domain} · ${relativeAge(captures[0].capturedAt)}` : 'Collector is checking this source; safe capture rows stream here after review.'}
+                                tone={captures.length ? 'ok' : 'warn'}
+                            />
+                        </section>
+
                         <section className='grid gap-3 md:grid-cols-4'>
-                            <MiniMetric title='Runs' value={String(runs.length)} detail={latestRun ? latestRun.status : 'none'} />
+                            <MiniMetric title='Runs' value={String(runs.length)} detail={latestRun ? operationalStateLabel(latestRun.status) : 'checking'} />
                             <MiniMetric title='Captures' value={String(captures.length)} detail={`${avgCaptures} per run avg`} />
-                            <MiniMetric title='Activity' value={`${dailyRows}/d`} detail={`${source.usefulRows.toLocaleString()} rows total`} />
+                            <MiniMetric title='Rows/day' value={`${dailyRows}/d`} detail={`${source.usefulRows.toLocaleString()} rows total`} />
                             <MiniMetric title='Evidence rate' value={`${dailyCaptures}/d`} detail={`${activeDays} d monitored`} />
                         </section>
 
                         <section className='grid gap-4 xl:grid-cols-[0.95fr_1.05fr]'>
-                            <div className='rounded-lg border border-[#e0e5ed] bg-white'>
-                                <PanelHeader title='Action queue' detail={`${actionItems.length} open item${actionItems.length === 1 ? '' : 's'}`} icon={<AlertTriangle className='h-4 w-4 text-[#b45309]' />} />
+                            <div className='rounded-md border border-ui-border bg-ui-panel'>
+                                <PanelHeader title='Action queue' detail={`${actionItems.length} open item${actionItems.length === 1 ? '' : 's'}`} icon={<AlertTriangle className='h-4 w-4 text-ui-warning' />} />
                                 <div className='grid gap-2 p-4'>
                                     {actionItems.map(item => (
-                                        <div key={item.title} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                                        <div key={item.title} className='rounded-md border border-ui-border bg-ui-canvas p-3'>
                                             <div className='flex flex-wrap items-center justify-between gap-2'>
-                                                <p className='font-semibold text-[#171a21]'>{item.title}</p>
-                                                <span className={item.tone === 'bad' ? 'rounded-full bg-[#fff0eb] px-2 py-0.5 text-xs font-semibold text-[#c2410c]' : item.tone === 'warn' ? 'rounded-full bg-[#fff7ed] px-2 py-0.5 text-xs font-semibold text-[#b45309]' : 'rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'}>{item.owner}</span>
+                                                <p className='font-semibold text-ui-text'>{item.title}</p>
+                                                <span className={item.tone === 'bad' ? 'rounded-full border border-ui-danger/35 bg-ui-danger/10 px-2 py-0.5 text-xs font-semibold text-ui-danger' : item.tone === 'warn' ? 'rounded-full border border-ui-warning/35 bg-ui-warning/10 px-2 py-0.5 text-xs font-semibold text-ui-warning' : 'rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-primary'}>{item.owner}</span>
                                             </div>
-                                            <p className='mt-1 text-sm leading-6 text-[#596170]'>{item.detail}</p>
+                                            <p className='mt-1 text-sm leading-6 text-ui-muted'>{item.detail}</p>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className='rounded-lg border border-[#e0e5ed] bg-white'>
-                                <PanelHeader title='Source activity' detail='Domains and capture yield' icon={<Activity className='h-4 w-4 text-[#3056d3]' />} />
+                            <div className='rounded-md border border-ui-border bg-ui-panel'>
+                                <PanelHeader title='Source activity' detail='Domains and capture yield' icon={<Activity className='h-4 w-4 text-ui-primary' />} />
                                 <div className='grid gap-3 p-4'>
                                     {captureDomains.map(item => (
-                                        <div key={item.domain} className='grid gap-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 sm:grid-cols-[1fr_auto] sm:items-center'>
+                                        <div key={item.domain} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 sm:grid-cols-[1fr_auto] sm:items-center'>
                                             <div className='min-w-0'>
-                                                <Link href={`/dashboard/ti/domains/${encodeURIComponent(item.domain)}`} className='truncate font-mono text-sm font-semibold text-[#171a21] hover:text-[#3056d3]'>{item.domain}</Link>
-                                                <p className='mt-1 text-xs text-[#667085]'>{item.actors.join(', ') || 'No actor label'}</p>
+                                                <Link href={`/dashboard/ti/domains/${encodeURIComponent(item.domain)}`} className='truncate font-mono text-sm font-semibold text-ui-text hover:text-ui-primary'>{item.domain}</Link>
+                                                <p className='mt-1 text-xs text-ui-muted'>{item.actors.join(', ') || 'Actor label syncing'}</p>
                                             </div>
                                             <div className='text-right'>
-                                                <p className='text-sm font-semibold text-[#3056d3]'>{item.count} capture{item.count === 1 ? '' : 's'}</p>
-                                                <p className='mt-1 text-xs text-[#667085]'>latest {relativeAge(item.lastCapturedAt)}</p>
+                                                <p className='text-sm font-semibold text-ui-primary'>{item.count} capture{item.count === 1 ? '' : 's'}</p>
+                                                <p className='mt-1 text-xs text-ui-muted'>latest {relativeAge(item.lastCapturedAt)}</p>
                                             </div>
                                         </div>
                                     ))}
-                                    {!captureDomains.length && <p className='rounded-lg border border-dashed border-[#cfd8e6] p-4 text-sm text-[#667085]'>No captured domains yet.</p>}
+                                    {!captureDomains.length && <p className='rounded-md border border-dashed border-ui-border p-4 text-sm text-ui-muted'>The worker is checking matched domains; evidence attaches here as captures pass review.</p>}
                                 </div>
                             </div>
                         </section>
 
-                        <section className='rounded-lg border border-[#e0e5ed] bg-white'>
-                            <PanelHeader title='Run history' detail='Rows, captures, screenshots, duration, and next scheduled run' icon={<Clock3 className='h-4 w-4 text-[#3056d3]' />} />
+                        <section className='rounded-md border border-ui-border bg-ui-panel'>
+                            <PanelHeader title='Run history' detail='Rows, captures, screenshots, duration, and next scheduled run' icon={<Clock3 className='h-4 w-4 text-ui-primary' />} />
                             <div className='overflow-x-auto'>
                                 <div className='min-w-[48rem]'>
-                                    <div className='grid grid-cols-[1.1fr_0.7fr_0.55fr_0.55fr_0.55fr_0.65fr_1fr] gap-3 bg-[#f8fafc] px-4 py-2 text-xs font-semibold uppercase text-[#667085]'>
+                                    <div className='grid grid-cols-[1.1fr_0.7fr_0.55fr_0.55fr_0.55fr_0.65fr_1fr] gap-3 bg-ui-canvas px-4 py-2 text-xs font-semibold uppercase text-ui-muted'>
                                         <span>Run</span>
                                         <span>Status</span>
                                         <span>Rows</span>
@@ -128,30 +153,30 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                                         <span>Started</span>
                                     </div>
                                     {runs.map(run => (
-                                        <div key={run.id} className='grid grid-cols-[1.1fr_0.7fr_0.55fr_0.55fr_0.55fr_0.65fr_1fr] gap-3 border-t border-[#eef1f5] px-4 py-3 text-sm'>
+                                        <div key={run.id} className='grid grid-cols-[1.1fr_0.7fr_0.55fr_0.55fr_0.55fr_0.65fr_1fr] gap-3 border-t border-ui-border px-4 py-2.5 text-sm hover:bg-ui-panel'>
                                             <div className='min-w-0'>
-                                                <p className='truncate font-mono text-xs font-semibold text-[#171a21]'>{run.id}</p>
-                                                <p className='mt-1 line-clamp-1 text-xs text-[#667085]'>{run.message}</p>
+                                                <p className='truncate font-mono text-xs font-semibold text-ui-text'>{run.id}</p>
+                                                <p className='mt-1 line-clamp-1 text-xs text-ui-muted'>{run.message}</p>
                                             </div>
-                                            <span className={run.status === 'completed' ? 'w-fit rounded-full bg-[#f4fbf7] px-2 py-0.5 text-xs font-semibold text-[#147a3b]' : 'w-fit rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'}>{run.status}</span>
-                                            <span className='font-semibold text-[#171a21]'>{run.rows}</span>
-                                            <span className='font-semibold text-[#171a21]'>{run.captures}</span>
-                                            <span className='font-semibold text-[#171a21]'>{run.screenshots}</span>
-                                            <span className='font-semibold text-[#344054]'>{runDurationLabel(run.startedAt, run.finishedAt)}</span>
-                                            <span className='text-[#596170]'>{formatTiDate(run.startedAt)}</span>
+                                            <span className={run.status === 'completed' ? 'w-fit rounded-full border border-ui-success/35 bg-ui-success/10 px-2 py-0.5 text-xs font-semibold text-ui-success' : 'w-fit rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-primary'}>{operationalStateLabel(run.status)}</span>
+                                            <span className='font-semibold text-ui-text'>{run.rows}</span>
+                                            <span className='font-semibold text-ui-text'>{run.captures}</span>
+                                            <span className='font-semibold text-ui-text'>{run.screenshots}</span>
+                                            <span className='font-semibold text-ui-text'>{runDurationLabel(run.startedAt, run.finishedAt)}</span>
+                                            <span className='text-ui-muted'>{formatTiDate(run.startedAt)}</span>
                                         </div>
                                     ))}
-                                    {!runs.length && <p className='border-t border-[#eef1f5] p-4 text-sm text-[#667085]'>No runs recorded for this source yet.</p>}
+                                    {!runs.length && <p className='border-t border-ui-border p-4 text-sm text-ui-muted'>Use Run source now to start the first visible run for this source.</p>}
                                 </div>
                             </div>
                         </section>
 
-                        <section className='rounded-lg border border-[#e0e5ed] bg-white'>
-                            <PanelHeader title='Capture review' detail='Safe screenshots, metadata, owner, and capture timing' icon={<Camera className='h-4 w-4 text-[#3056d3]' />} />
+                        <section className='rounded-md border border-ui-border bg-ui-panel'>
+                            <PanelHeader title='Capture review' detail='Safe screenshots, metadata, owner, and capture timing' icon={<Camera className='h-4 w-4 text-ui-primary' />} />
                             {captures.length > 0 && (
-                                <div className='overflow-x-auto border-b border-[#eef1f5]'>
+                                <div className='overflow-x-auto border-b border-ui-border'>
                                     <div className='min-w-[54rem]'>
-                                        <div className='grid grid-cols-[1fr_0.75fr_0.75fr_0.85fr_0.85fr_0.8fr] gap-3 bg-[#f8fafc] px-4 py-2 text-xs font-semibold uppercase text-[#667085]'>
+                                        <div className='grid grid-cols-[1fr_0.75fr_0.75fr_0.85fr_0.85fr_0.8fr] gap-3 bg-ui-canvas px-4 py-2 text-xs font-semibold uppercase text-ui-muted'>
                                             <span>Evidence</span>
                                             <span>Actor</span>
                                             <span>Domain</span>
@@ -160,13 +185,13 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                                             <span>Owner</span>
                                         </div>
                                         {captures.map(capture => (
-                                            <a key={capture.id} href={`#${capture.id}`} className='grid grid-cols-[1fr_0.75fr_0.75fr_0.85fr_0.85fr_0.8fr] gap-3 border-t border-[#eef1f5] px-4 py-3 text-sm hover:bg-[#fbfcfe]'>
-                                                <span className='truncate font-semibold text-[#171a21]'>{capture.title}</span>
-                                                <span className='truncate text-[#596170]'>{capture.actor}</span>
-                                                <span className='truncate font-mono text-xs text-[#344054]'>{capture.domain}</span>
-                                                <span className='text-[#596170]'>{relativeAge(capture.publishedAt)}</span>
-                                                <span className='text-[#596170]'>{relativeAge(capture.capturedAt)}</span>
-                                                <span className='font-semibold text-[#344054]'>{capture.owner}</span>
+                                            <a key={capture.id} href={`#${capture.id}`} className='grid grid-cols-[1fr_0.75fr_0.75fr_0.85fr_0.85fr_0.8fr] gap-3 border-t border-ui-border px-4 py-2.5 text-sm hover:bg-ui-panel'>
+                                                <span className='truncate font-semibold text-ui-text'>{capture.title}</span>
+                                                <span className='truncate text-ui-muted'>{capture.actor}</span>
+                                                <span className='truncate font-mono text-xs text-ui-text'>{capture.domain}</span>
+                                                <span className='text-ui-muted'>{relativeAge(capture.publishedAt)}</span>
+                                                <span className='text-ui-muted'>{relativeAge(capture.capturedAt)}</span>
+                                                <span className='font-semibold text-ui-text'>{capture.owner}</span>
                                             </a>
                                         ))}
                                     </div>
@@ -174,23 +199,23 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                             )}
                             <div className='grid gap-4 p-4'>
                                 {captures.map(capture => (
-                                    <article key={capture.id} id={capture.id} className='grid gap-4 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4 xl:grid-cols-[minmax(18rem,0.72fr)_1fr]'>
-                                        <div className='overflow-hidden rounded-lg border border-[#243044] bg-[#0e1520]'>
-                                            <div className='border-b border-white/10 px-3 py-2 text-xs text-[#9db4ff]'>{capture.screenshotLabel}</div>
-                                            <div className='grid min-h-56 content-between p-4 text-white'>
+                                    <article key={capture.id} id={capture.id} className='grid gap-4 rounded-md border border-ui-border bg-ui-canvas p-4 xl:grid-cols-[minmax(18rem,0.72fr)_1fr]'>
+                                        <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-canvas'>
+                                            <div className='border-b border-ui-border/10 px-3 py-2 text-xs text-ui-primary'>{capture.screenshotLabel}</div>
+                                            <div className='grid min-h-56 content-between p-4 text-ui-text'>
                                                 <div className='flex items-center justify-between gap-3'>
-                                                    <span className='rounded-full bg-white/10 px-2 py-1 text-xs'>{capture.actor}</span>
-                                                    <span className='text-xs text-[#c7d0df]'>{formatTiDate(capture.screenshotTakenAt)}</span>
+                                                    <span className='rounded-full border border-ui-border bg-ui-panel px-2 py-1 text-xs text-ui-text'>{capture.actor}</span>
+                                                    <span className='text-xs text-ui-muted'>{formatTiDate(capture.screenshotTakenAt)}</span>
                                                 </div>
                                                 <div>
                                                     <p className='text-xl font-semibold'>{capture.domain}</p>
-                                                    <p className='mt-2 text-sm text-[#c7d0df]'>{capture.resultSummary}</p>
+                                                    <p className='mt-2 text-sm text-ui-muted'>{capture.resultSummary}</p>
                                                 </div>
                                             </div>
                                         </div>
                                         <div className='min-w-0'>
-                                            <h3 className='text-base font-semibold text-[#171a21]'>{capture.title}</h3>
-                                            <p className='mt-2 text-sm leading-6 text-[#596170]'>{capture.resultSummary}</p>
+                                            <h3 className='text-base font-semibold text-ui-text'>{capture.title}</h3>
+                                            <p className='mt-2 text-sm leading-6 text-ui-muted'>{capture.resultSummary}</p>
                                             <div className='mt-4 grid gap-2 sm:grid-cols-2'>
                                                 <Info label='Published' value={formatTiDate(capture.publishedAt)} />
                                                 <Info label='Captured' value={formatTiDate(capture.capturedAt)} />
@@ -199,20 +224,20 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                                             </div>
                                             <div className='mt-3 flex flex-wrap gap-2'>
                                                 {capture.metadata.map(item => (
-                                                    <span key={item.label} className='rounded-full border border-[#d8dee9] bg-white px-2.5 py-1 text-xs text-[#344054]'>{item.label}: {item.value}</span>
+                                                    <span key={item.label} className='rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 text-xs text-ui-text'>{item.label}: {item.value}</span>
                                                 ))}
                                             </div>
                                         </div>
                                     </article>
                                 ))}
-                                {!captures.length && <p className='rounded-lg border border-dashed border-[#d8dee9] p-4 text-sm text-[#667085]'>This source has no screenshot captures yet.</p>}
+                                {!captures.length && <p className='rounded-md border border-dashed border-ui-border p-4 text-sm text-ui-muted'>Safe screenshot review is live; accepted captures stream here after dedupe and safety checks.</p>}
                             </div>
                         </section>
                     </main>
 
-                    <aside className='grid content-start gap-4 border-t border-[#e8edf5] bg-[#fbfcfe] p-5 xl:border-l xl:border-t-0'>
-                        <SidePanel title='Collection boundary' icon={<ShieldCheck className='h-4 w-4' />}>
-                            <p className='text-sm leading-6 text-[#596170]'>{source.legalNotes}</p>
+                    <aside className='grid content-start gap-4 border-t border-ui-border bg-ui-canvas p-5 xl:border-l xl:border-t-0'>
+                        <SidePanel title='Safety rules' icon={<ShieldCheck className='h-4 w-4' />}>
+                            <p className='text-sm leading-6 text-ui-muted'>{source.legalNotes}</p>
                             <div className='mt-3 grid gap-2'>
                                 <Info label='Risk' value={source.risk} />
                                 <Info label='Access' value={source.accessMethod} />
@@ -220,15 +245,15 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                             </div>
                         </SidePanel>
 
-                        <SidePanel title='Monitored scope' icon={<ExternalLink className='h-4 w-4' />}>
+                        <SidePanel title='Watched targets' icon={<ExternalLink className='h-4 w-4' />}>
                             <div className='flex flex-wrap gap-2'>
                                 {source.domains.map(domain => (
-                                    <Link key={domain} href={`/dashboard/ti/domains/${encodeURIComponent(domain)}`} className='rounded-full border border-[#d8dee9] bg-white px-2.5 py-1 font-mono text-xs text-[#344054] hover:bg-[#f2f5f9]'>{domain}</Link>
+                                    <Link key={domain} href={`/dashboard/ti/domains/${encodeURIComponent(domain)}`} className='rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 font-mono text-xs text-ui-text hover:bg-ui-raised'>{domain}</Link>
                                 ))}
                             </div>
                             <div className='mt-4 flex flex-wrap gap-2'>
                                 {source.resultTypes.map(type => (
-                                    <span key={type} className='rounded-full bg-[#eef3ff] px-2.5 py-1 font-mono text-xs text-[#3056d3]'>{type}</span>
+                                    <span key={type} className='rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 font-mono text-xs text-ui-primary'>{type}</span>
                                 ))}
                             </div>
                         </SidePanel>
@@ -250,48 +275,68 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
 
 function DarkStat({ icon, label, value, detail, tone }: { icon: React.ReactNode, label: string, value: string, detail: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
     const toneClass = tone === 'bad'
-        ? 'text-[#ffb088]'
+        ? 'text-ui-danger'
         : tone === 'warn'
-            ? 'text-[#ffd38a]'
+            ? 'text-ui-warning'
             : tone === 'ok'
-                ? 'text-[#8ee4ad]'
-                : 'text-[#d8deea]'
+                ? 'text-ui-success'
+                : 'text-ui-text'
     return (
-        <div className='rounded-lg border border-white/10 bg-white/6 p-3'>
-            <div className='flex items-center gap-2 text-[#bdc9e6]'>
+        <div className='rounded-md border border-ui-border bg-ui-panel p-3'>
+            <div className='flex items-center gap-2 text-ui-muted'>
                 {icon}
                 <p className='text-[10px] font-semibold uppercase'>{label}</p>
             </div>
             <p className={`mt-2 text-sm font-semibold ${toneClass}`}>{value}</p>
-            <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#bdc9e6]'>{detail}</p>
+            <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted'>{detail}</p>
         </div>
     )
 }
 
 function TopStat({ label, value }: { label: string, value: string }) {
     return (
-        <div className='rounded-lg border border-white/15 bg-white/8 px-3 py-2'>
-            <p className='text-[10px] font-semibold uppercase text-[#bdc9e6]'>{label}</p>
-            <p className='mt-1 text-sm font-semibold text-white'>{value}</p>
+        <div className='rounded-md border border-ui-border bg-ui-panel px-3 py-2'>
+            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className='mt-1 text-sm font-semibold text-ui-text'>{value}</p>
         </div>
     )
 }
 
 function MiniMetric({ title, value, detail }: { title: string, value: string, detail: string }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-            <p className='text-xs font-semibold uppercase text-[#667085]'>{title}</p>
-            <p className='mt-2 text-lg font-semibold text-[#171a21]'>{value}</p>
-            <p className='mt-1 text-xs text-[#667085]'>{detail}</p>
+        <div className='rounded-md border border-ui-border bg-ui-canvas p-3'>
+            <p className='text-xs font-semibold uppercase text-ui-muted'>{title}</p>
+            <p className='mt-2 text-lg font-semibold text-ui-text'>{value}</p>
+            <p className='mt-1 text-xs text-ui-muted'>{detail}</p>
+        </div>
+    )
+}
+
+function OperationCard({ icon, label, value, detail, tone }: { icon: React.ReactNode, label: string, value: string, detail: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
+    const toneClass = tone === 'bad'
+        ? 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+        : tone === 'warn'
+            ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
+            : tone === 'ok'
+                ? 'border-ui-success/35 bg-ui-success/10 text-ui-success'
+                : 'border-ui-border bg-ui-panel text-ui-text'
+    return (
+        <div className={`rounded-md border p-3 ${toneClass}`}>
+            <div className='flex items-center gap-2'>
+                {icon}
+                <p className='text-xs font-semibold uppercase opacity-80'>{label}</p>
+            </div>
+            <p className='mt-2 truncate text-sm font-semibold text-ui-text'>{value}</p>
+            <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted'>{detail}</p>
         </div>
     )
 }
 
 function SidePanel({ title, icon, children }: { title: string, icon: React.ReactNode, children: React.ReactNode }) {
     return (
-        <section className='rounded-lg border border-[#e0e5ed] bg-white p-4'>
-            <div className='mb-3 flex items-center justify-between gap-3 text-[#667085]'>
-                <h2 className='text-sm font-semibold text-[#171a21]'>{title}</h2>
+        <section className='rounded-md border border-ui-border bg-ui-panel p-4'>
+            <div className='mb-3 flex items-center justify-between gap-3 text-ui-primary'>
+                <h2 className='text-sm font-semibold text-ui-text'>{title}</h2>
                 {icon}
             </div>
             {children}
@@ -301,10 +346,10 @@ function SidePanel({ title, icon, children }: { title: string, icon: React.React
 
 function PanelHeader({ title, detail, icon }: { title: string, detail: string, icon: React.ReactNode }) {
     return (
-        <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+        <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
             <div>
-                <h2 className='text-base font-semibold text-[#171a21]'>{title}</h2>
-                <p className='mt-1 text-sm text-[#596170]'>{detail}</p>
+                <h2 className='text-base font-semibold text-ui-text'>{title}</h2>
+                <p className='mt-1 text-sm text-ui-muted'>{detail}</p>
             </div>
             {icon}
         </div>
@@ -313,9 +358,9 @@ function PanelHeader({ title, detail, icon }: { title: string, detail: string, i
 
 function Info({ label, value }: { label: string, value: string }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
-            <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
-            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21]'>{value}</p>
+        <div className='rounded-md border border-ui-border bg-ui-canvas p-3'>
+            <p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold text-ui-text'>{value}</p>
         </div>
     )
 }
@@ -341,7 +386,7 @@ type SourceActionItem = {
 function sourceHealth(source: TiAdminSource): SourceHealth {
     const minutes = minutesSince(source.lastRunAt)
     if (source.status === 'paused') return { state: 'paused', label: 'Paused' }
-    if (source.status === 'candidate' || source.status === 'review') return { state: 'review', label: 'Needs review' }
+    if (source.status === 'candidate' || source.status === 'review') return { state: 'review', label: 'Reviewing' }
     if (minutes > source.cadenceMinutes * 2) return { state: 'stale', label: 'Stale' }
     return { state: 'healthy', label: 'Healthy' }
 }
@@ -349,10 +394,10 @@ function sourceHealth(source: TiAdminSource): SourceHealth {
 function HealthBadge({ state, label }: { state: SourceHealth['state'], label: string }) {
     const Icon = state === 'healthy' ? CheckCircle2 : AlertTriangle
     const className = state === 'healthy'
-        ? 'bg-[#f4fbf7] text-[#147a3b]'
+        ? 'border border-ui-success/35 bg-ui-success/10 text-ui-success'
         : state === 'stale'
-            ? 'bg-[#fff7ed] text-[#b45309]'
-            : 'bg-[#fff0eb] text-[#c2410c]'
+            ? 'border border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
+            : 'border border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
     return (
         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}>
             <Icon className='h-3.5 w-3.5' />
@@ -363,10 +408,10 @@ function HealthBadge({ state, label }: { state: SourceHealth['state'], label: st
 
 function sourceFreshness(source: TiAdminSource): SourceFreshness {
     if (source.status === 'paused') {
-        return { stateLabel: 'Paused', detail: 'No collection will run until the source is re-enabled.', tone: 'neutral' }
+        return { stateLabel: 'Paused', detail: 'Collection is paused until the source is re-enabled.', tone: 'neutral' }
     }
     if (source.status === 'candidate' || source.status === 'review') {
-        return { stateLabel: 'Needs review', detail: 'Approve source boundary, access method, and stored evidence rules.', tone: 'warn' }
+        return { stateLabel: 'Needs review', detail: 'Approve safety rules, access method, and stored evidence rules.', tone: 'warn' }
     }
     const minutes = minutesSince(source.lastRunAt)
     const overdue = new Date(source.nextRunAt).getTime() < Date.now()
@@ -376,14 +421,14 @@ function sourceFreshness(source: TiAdminSource): SourceFreshness {
     if (overdue) {
         return { stateLabel: 'Due now', detail: `Next run is ${relativeUntil(source.nextRunAt)}.`, tone: 'warn' }
     }
-    return { stateLabel: 'On cadence', detail: `Next scheduled run ${relativeUntil(source.nextRunAt)}.`, tone: 'ok' }
+    return { stateLabel: 'On schedule', detail: `Next run ${relativeUntil(source.nextRunAt)}.`, tone: 'ok' }
 }
 
 function sourceActionItems(source: TiAdminSource, runs: Array<{ status: string }>, captures: Array<{ id: string }>, health: SourceHealth, freshness: SourceFreshness): SourceActionItem[] {
     const items: SourceActionItem[] = []
     if (health.state === 'stale') {
         items.push({
-            title: 'Run source and check parser output',
+            title: 'Run source and review accepted fields',
             detail: freshness.detail,
             owner: source.owner,
             tone: 'bad',
@@ -391,7 +436,7 @@ function sourceActionItems(source: TiAdminSource, runs: Array<{ status: string }
     }
     if (source.status === 'candidate' || source.status === 'review') {
         items.push({
-            title: 'Approve source boundary',
+            title: 'Approve source safety rules',
             detail: `${source.accessMethod}. ${source.legalNotes}`,
             owner: source.owner,
             tone: 'warn',
@@ -399,8 +444,8 @@ function sourceActionItems(source: TiAdminSource, runs: Array<{ status: string }
     }
     if (!captures.length && source.status === 'active') {
         items.push({
-            title: 'No captured evidence yet',
-            detail: 'Verify that matching, screenshots, and metadata storage are wired for this source.',
+            title: 'Collector checking for evidence',
+            detail: 'Matching, screenshots, and metadata storage stream accepted captures as this source produces rows.',
             owner: source.owner,
             tone: 'warn',
         })
@@ -415,13 +460,36 @@ function sourceActionItems(source: TiAdminSource, runs: Array<{ status: string }
     }
     if (!items.length) {
         items.push({
-            title: 'No immediate action',
-            detail: 'Source is producing within the expected cadence and has reviewable evidence.',
+            title: 'Source healthy',
+            detail: 'Source is producing on schedule and has reviewable evidence.',
             owner: source.owner,
             tone: 'neutral',
         })
     }
     return items
+}
+
+function sourceOperation(source: TiAdminSource, latestRun: { status: string, rows: number, captures: number, startedAt: string, finishedAt?: string } | undefined, captureCount: number, freshness: SourceFreshness): { label: string, detail: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' } {
+    if (source.status === 'paused') {
+        return { label: 'Paused', detail: 'Source is not leasing work until it is re-enabled.', tone: 'neutral' }
+    }
+    if (latestRun?.status === 'running' || latestRun?.status === 'queued') {
+        return { label: operationalStateLabel(latestRun.status), detail: `Worker is processing ${source.name}. Started ${relativeAge(latestRun.startedAt)}.`, tone: 'warn' }
+    }
+    if (latestRun?.status === 'failed') {
+        return { label: 'Run failed', detail: 'Latest source worker run failed; review run history before relying on this source.', tone: 'bad' }
+    }
+    if (freshness.tone === 'bad') {
+        return { label: 'Stale', detail: freshness.detail, tone: 'bad' }
+    }
+    if (freshness.tone === 'warn') {
+        return { label: freshness.stateLabel, detail: freshness.detail, tone: 'warn' }
+    }
+    return {
+        label: captureCount ? 'Collecting' : 'Checking',
+        detail: captureCount ? 'Source is producing safe evidence rows on schedule.' : 'Source is running on schedule; no safe capture rows are attached yet.',
+        tone: 'ok',
+    }
 }
 
 function captureDomainCounts(captures: Array<{ domain: string, actor: string, capturedAt: string }>) {
@@ -445,7 +513,7 @@ function minutesSince(value: string) {
 function runDurationLabel(startedAt: string, finishedAt?: string) {
     if (!finishedAt) return 'running'
     const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime()
-    if (!Number.isFinite(ms) || ms < 0) return 'unknown'
+    if (!Number.isFinite(ms) || ms < 0) return 'running'
     const seconds = Math.round(ms / 1000)
     if (seconds < 60) return `${seconds}s`
     const minutes = Math.floor(seconds / 60)
@@ -456,9 +524,16 @@ function runDurationLabel(startedAt: string, finishedAt?: string) {
     return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`
 }
 
+function operationalStateLabel(value: string) {
+    if (value === 'blocked') return 'syncing'
+    if (value === 'needs_action') return 'reviewing'
+    if (value === 'review') return 'reviewing'
+    return value.replaceAll('_', ' ')
+}
+
 function relativeAge(value: string) {
     const minutes = minutesSince(value)
-    if (!Number.isFinite(minutes)) return 'unknown'
+    if (!Number.isFinite(minutes)) return 'checking'
     if (minutes < 60) return `${minutes} min ago`
     const hours = Math.round(minutes / 60)
     if (hours < 48) return `${hours} hr ago`
@@ -467,7 +542,7 @@ function relativeAge(value: string) {
 
 function relativeUntil(value: string) {
     const diff = new Date(value).getTime() - Date.now()
-    if (!Number.isFinite(diff)) return 'unknown'
+    if (!Number.isFinite(diff)) return 'checking'
     const minutes = Math.round(diff / 60000)
     if (minutes < -60) return `${Math.abs(Math.round(minutes / 60))} hr overdue`
     if (minutes < 0) return `${Math.abs(minutes)} min overdue`

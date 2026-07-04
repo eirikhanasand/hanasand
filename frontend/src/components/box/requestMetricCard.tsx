@@ -12,14 +12,14 @@ export default function RequestMetricCard({
     icon?: ReactNode
 }) {
     const toneClass = tone === 'good'
-        ? 'text-emerald-300'
+        ? 'text-ui-success'
         : tone === 'bad'
-            ? 'text-red-300'
-            : 'text-bright'
+            ? 'text-ui-danger'
+            : 'text-ui-text'
 
     return (
-        <div className='min-w-0 rounded-lg border border-bright/8 bg-black/12 px-2.5 py-2'>
-            <div className='mb-0.5 flex items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] text-bright/35'>
+        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-2'>
+            <div className='mb-0.5 flex items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] text-ui-muted'>
                 {icon}
                 {label}
             </div>

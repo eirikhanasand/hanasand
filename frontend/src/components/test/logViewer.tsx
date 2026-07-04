@@ -31,7 +31,7 @@ export default function LogViewer({ text, isDone }: { text: string[], isDone?: b
     return (
         <pre
             ref={containerRef}
-            className={`h-full max-h-full min-h-[10rem] min-w-0 overflow-auto rounded-md border border-[#dfe5ee] bg-[#0f172a] p-3 font-mono text-xs leading-5 text-[#e2e8f0] whitespace-pre-wrap wrap-break-word shadow-inner dark:border-[#30415f] dark:bg-[#08111f] dark:text-[#d8e0ed] ${isDone ? 'pb-8' : ''}`}
+            className={`h-full max-h-full min-h-[10rem] min-w-0 overflow-auto rounded-md border border-ui-border bg-ui-canvas p-3 font-mono text-xs leading-5 text-ui-text whitespace-pre-wrap wrap-break-word shadow-inner ${isDone ? 'pb-8' : ''}`}
         >
             {processed.join('\n')}
         </pre>

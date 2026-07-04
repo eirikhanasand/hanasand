@@ -38,7 +38,7 @@ export default function UserRoleHandler({ displayRoles, roles, user }: UserRoleH
     }
 
     return (
-        <div className='bg-dark absolute right-2 top-10 rounded-lg w-fit h-fit overflow-auto p-2 z-10 select-none'>
+        <div className='absolute right-2 top-10 z-10 h-fit w-fit select-none overflow-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-lg shadow-ui-canvas/10'>
             {roles.map((role) => <Role key={role.id} role={role} user={user} userRoles={userRoles} />)}
         </div>
     )
@@ -73,10 +73,10 @@ function Role({ role, user, userRoles }: { role: Role, user: UserWithRole, userR
     }
 
     return (
-        <div className='flex justify-between h-8 max-h-8 gap-2'>
-            <div className='flex justify-between w-full self-center gap-2'>
+        <div className='flex h-8 max-h-8 justify-between gap-2'>
+            <div className='flex w-full justify-between gap-2 self-center text-ui-text'>
                 <h1>{role.name}</h1>
-                {role.priority === 0 ? <Crown className='self-center stroke-amber-300 h-5 w-5' /> : <h1>{role.priority}</h1>}
+                {role.priority === 0 ? <Crown className='h-5 w-5 self-center stroke-ui-warning' /> : <h1>{role.priority}</h1>}
             </div>
             <input
                 aria-label={`${active ? 'Remove' : 'Assign'} ${role.id} for ${user.id}`}
@@ -88,15 +88,15 @@ function Role({ role, user, userRoles }: { role: Role, user: UserWithRole, userR
                     self-center
                     appearance-none
                     rounded-md
-                    border border-white/30
-                    bg-white/10
+                    border border-ui-border
+                    bg-ui-raised
                     backdrop-blur-md
                     shadow-[0_4px_20px_rgba(0,0,0,0.25)]
                     cursor-pointer
                     transition-all
-                    checked:bg-white/30
-                    checked:border-white/60
-                    checked:shadow-[0_0_12px_rgba(255,255,255,0.6)]
+                    checked:border-ui-primary
+                    checked:bg-ui-primary/30
+                    checked:shadow-[0_0_12px_var(--ui-primary)]
                 '
             />
         </div>

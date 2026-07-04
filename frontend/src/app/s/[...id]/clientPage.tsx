@@ -194,19 +194,19 @@ export default function ClientPage({
                     panelRequest={explorerPanelRequest}
                 />
             </div>
-            <div className={`flex-1 flex flex-col min-h-full min-w-0 w-full gap-2 overflow-hidden text-foreground ${maxWidth}`}>
-                <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-bright/10 bg-(--panel-surface) px-2 py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/72 md:shadow-black/10'>
+            <div className={`flex-1 flex flex-col min-h-full min-w-0 w-full gap-2 overflow-hidden text-ui-text ${maxWidth}`}>
+                <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-ui-border bg-ui-panel px-2 py-1.5 shadow-lg backdrop-blur-md'>
                     <div className='min-w-0 flex flex-1 items-center gap-2'>
                         {chatOpen ? (
-                            <div className='flex min-w-0 items-center gap-2 px-2 text-sm font-semibold text-bright/82'>
-                                <MessageSquare className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                            <div className='flex min-w-0 items-center gap-2 px-2 text-sm font-semibold text-ui-text'>
+                                <MessageSquare className='h-4 w-4 shrink-0 text-ui-primary' />
                                 <span className='truncate'>Workspace assistant</span>
                             </div>
                         ) : openFiles.length ? (
                             <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />
                         ) : (
-                            <div className='flex min-w-0 items-center gap-2 px-2 text-sm text-bright/62'>
-                                <FileCode2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                            <div className='flex min-w-0 items-center gap-2 px-2 text-sm text-ui-muted'>
+                                <FileCode2 className='h-4 w-4 shrink-0 text-ui-primary' />
                                 <span className='truncate'>{activeLabel}</span>
                             </div>
                         )}
@@ -235,7 +235,7 @@ export default function ClientPage({
                         aria-label={hydrated ? chatOpen ? 'Back to workspace editor' : 'Open workspace assistant' : 'Setting up workspace assistant'}
                         disabled={!hydrated}
                         onClick={() => setChatOpen(prev => !prev)}
-                        className='inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-bright/10 bg-bright/[0.045] px-3 text-xs font-semibold text-bright/72 transition hover:border-[#f07d33]/35 hover:bg-[#f07d33]/12 hover:text-bright disabled:cursor-not-allowed disabled:opacity-45'
+                        className='inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-muted transition hover:border-ui-primary/35 hover:bg-ui-primary/10 hover:text-ui-text disabled:cursor-not-allowed disabled:opacity-45'
                     >
                         {chatOpen ? <Code2 className='h-4 w-4' /> : <MessageSquare className='h-4 w-4' />}
                         {chatOpen ? 'Back to editor' : 'Assistant'}
@@ -265,7 +265,7 @@ export default function ClientPage({
                     />
                 )}
                 {chatOpen ? (
-                    <div className='min-h-0 flex-1 rounded-xl border border-bright/10 bg-(--panel-surface) p-2 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/48'>
+                    <div className='min-h-0 flex-1 rounded-xl border border-ui-border bg-ui-panel p-2 shadow-lg backdrop-blur-md'>
                         <ShareChat
                             share={share}
                             setShare={setShare}
@@ -388,7 +388,7 @@ function CollaborationStatus({
     }
 
     return (
-        <div className='flex flex-wrap items-center justify-between gap-2 rounded-xl border border-bright/10 bg-(--panel-surface) px-3 py-2 text-xs text-bright/62 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/50 md:shadow-black/10'>
+        <div className='flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ui-border bg-ui-panel px-3 py-2 text-xs text-ui-muted shadow-lg backdrop-blur-md'>
             <div className='flex min-w-0 flex-wrap items-center gap-2'>
                 {otherUsers.length ? (
                     <div className='flex items-center gap-1.5'>
@@ -397,34 +397,34 @@ function CollaborationStatus({
                                 <span
                                     key={user.clientId}
                                     title={user.displayName}
-                                    className='grid h-6 w-6 place-items-center rounded-full border border-background text-[10px] font-bold text-black'
+                                    className='grid h-6 w-6 place-items-center rounded-full border border-ui-canvas text-[10px] font-bold text-ui-canvas'
                                     style={{ backgroundColor: user.color }}
                                 >
                                     {initialsFor(user.displayName)}
                                 </span>
                             ))}
                         </div>
-                        <span className='text-[11px] text-bright/48'>{otherUsers.length === 1 ? '1 other user' : `${otherUsers.length} other users`}</span>
+                        <span className='text-[11px] text-ui-muted'>{otherUsers.length === 1 ? '1 other user' : `${otherUsers.length} other users`}</span>
                     </div>
                 ) : users.length ? (
-                    <span className='rounded-lg border border-bright/10 bg-bright/[0.035] px-2 py-1 text-[11px] text-bright/45'>Only you here</span>
+                    <span className='rounded-lg border border-ui-border bg-ui-raised px-2 py-1 text-[11px] text-ui-muted'>Only you here</span>
                 ) : null}
                 {editors.length ? (
-                    <span className='rounded-lg border border-[#f07d33]/18 bg-[#f07d33]/8 px-2 py-1 text-[11px] font-semibold text-[#ffd0b5]'>
+                    <span className='rounded-lg border border-ui-primary/25 bg-ui-primary/10 px-2 py-1 text-[11px] font-semibold text-ui-primary'>
                         {formatEditors(editors)} editing{formatCursor(editors[0])}
                     </span>
                 ) : null}
                 {notice && !conflict ? (
-                    <button type='button' onClick={onDismissNotice} className='rounded-lg border border-bright/10 bg-bright/[0.035] px-2 py-1 text-[11px] text-bright/58 transition hover:bg-bright/8 hover:text-bright'>
+                    <button type='button' onClick={onDismissNotice} className='rounded-lg border border-ui-border bg-ui-raised px-2 py-1 text-[11px] text-ui-muted transition hover:bg-ui-primary/10 hover:text-ui-text'>
                         {notice}
                     </button>
                 ) : null}
             </div>
             {conflict ? (
-                <div className='flex flex-wrap items-center gap-2 rounded-lg border border-amber-300/18 bg-amber-300/8 px-2 py-1.5 text-[11px] text-amber-100/82'>
+                <div className='flex flex-wrap items-center gap-2 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-2 py-1.5 text-[11px] text-ui-warning'>
                     <span>{conflict.author?.displayName || 'Someone'} edited this while your change was unsaved.</span>
-                    <button type='button' onClick={onUseRemote} className='rounded-md bg-amber-100/14 px-2 py-1 font-semibold hover:bg-amber-100/22'>Use theirs</button>
-                    <button type='button' onClick={onKeepMine} className='rounded-md bg-bright/10 px-2 py-1 font-semibold hover:bg-bright/16'>Keep mine</button>
+                    <button type='button' onClick={onUseRemote} className='rounded-md bg-ui-warning/15 px-2 py-1 font-semibold hover:bg-ui-warning/25'>Use theirs</button>
+                    <button type='button' onClick={onKeepMine} className='rounded-md bg-ui-raised px-2 py-1 font-semibold hover:bg-ui-primary/10'>Keep mine</button>
                 </div>
             ) : null}
         </div>
@@ -457,10 +457,10 @@ function StatusPill({
     tone: 'good' | 'warn' | 'neutral'
 }) {
     const toneClass = tone === 'good'
-        ? 'border-emerald-400/18 bg-emerald-400/8 text-emerald-200/82'
+        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : tone === 'warn'
-            ? 'border-amber-300/18 bg-amber-300/8 text-amber-100/82'
-            : 'border-bright/10 bg-bright/[0.045] text-bright/62'
+            ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+            : 'border-ui-border bg-ui-raised text-ui-muted'
 
     return (
         <span className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-semibold ${toneClass}`}>

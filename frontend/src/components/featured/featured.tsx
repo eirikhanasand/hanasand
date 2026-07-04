@@ -28,8 +28,8 @@ export default function Featured() {
 
     return (
         <div className='p-4 md:p-16'>
-            <h1 className='text-foreground text-2xl'>Featured Projects</h1>
-            <div className='grid md:grid-rows-2 md:grid-cols-2 gap-8 place-items-center mt-4'>
+            <h1 className='text-2xl font-semibold text-ui-text'>Featured Projects</h1>
+            <div className='mt-4 grid place-items-center gap-4 md:grid-cols-2 md:grid-rows-2'>
                 {images.map((image) => <Project
                     key={image.title}
                     title={image.title}
@@ -43,11 +43,11 @@ export default function Featured() {
 
 function Project({ title, description, meta }: ArticleProps) {
     return (
-        <article className='h-full w-full rounded-2xl border border-white/10 bg-white/[0.035] p-5 text-foreground transition-colors hover:bg-white/[0.055]'>
+        <article className='h-full w-full rounded-lg border border-ui-border bg-ui-panel p-5 text-ui-text shadow-sm transition-colors hover:bg-ui-raised'>
             <div className='grid gap-3'>
-                <p className='w-fit rounded-full border border-white/10 bg-white/4 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-bright/45'>{meta}</p>
-                <h2 className='text-lg font-semibold text-bright/90'>{title}</h2>
-                <p className='text-sm leading-6 text-bright/58'>{description}</p>
+                <p className='w-fit rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-[11px] font-medium uppercase tracking-normal text-ui-muted'>{meta}</p>
+                <h2 className='text-lg font-semibold text-ui-text'>{title}</h2>
+                <p className='text-sm leading-6 text-ui-muted'>{description}</p>
             </div>
         </article>
     )

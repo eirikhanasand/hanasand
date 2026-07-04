@@ -31,22 +31,22 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
     const readText = `${share.estimatedMinutes} ${share.estimatedMinutes === 1 ? 'minute' : 'minutes'}`
     const lineCount = share.content.split(/\r?\n/).length
     const lineText = `${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`
-    const copyColorLink = didCopy === 'link' ? 'stroke-green-600' : didCopy === null ? '' : didCopy === 'error-link' ? 'stroke-red-500' : ''
-    const copyColorAlias = didCopy === 'alias' ? 'stroke-green-600' : didCopy === null ? '' : didCopy === 'error-alias' ? 'stroke-red-500' : ''
+    const copyColorLink = didCopy === 'link' ? 'text-ui-success' : didCopy === null ? '' : didCopy === 'error-link' ? 'text-ui-danger' : ''
+    const copyColorAlias = didCopy === 'alias' ? 'text-ui-success' : didCopy === null ? '' : didCopy === 'error-alias' ? 'text-ui-danger' : ''
 
     return (
-        <div className='p-2 flex justify-between items-center rounded-lg'>
+        <div className='flex items-center justify-between rounded-lg p-2'>
             <div className='grid w-full gap-4'>
                 <div className='flex gap-2'>
-                    <Eye className='text-bright/80' height={18} width={18} />
-                    <span className={`text-sm ${isConnected ? 'text-green-400' : 'text-bright/80'}`}>
+                    <Eye className='text-ui-muted' height={18} width={18} />
+                    <span className={`text-sm ${isConnected ? 'text-ui-success' : 'text-ui-muted'}`}>
                         {participants}
                     </span>
-                    <span className={`text-sm ${isConnected ? 'text-green-400' : 'text-bright/80'}`}>
+                    <span className={`text-sm ${isConnected ? 'text-ui-success' : 'text-ui-muted'}`}>
                         {isConnected ? 'Connected' : 'Offline'}
                     </span>
                 </div>
-                <span className='gap-2 text-sm text-bright/80 flex'>
+                <span className='flex gap-2 text-sm text-ui-muted'>
                     <Pencil height={18} width={18} />
                     <h1>{prettyDate(share.timestamp)}</h1>
                 </span>
@@ -54,7 +54,7 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                     type='button'
                     aria-label='Copy current share link'
                     onClick={() => copy({ type: 'link', text: window.location.href, setDidCopy })}
-                    className='flex w-full cursor-pointer gap-2 overflow-hidden text-left text-sm text-bright/80'
+                    className='flex w-full cursor-pointer gap-2 overflow-hidden text-left text-sm text-ui-muted hover:text-ui-text'
                 >
                     <Link
                         className={copyColorLink}
@@ -70,7 +70,7 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                         type='button'
                         aria-label='Copy share alias link'
                         onClick={() => copy({ type: 'alias', text: `https://${share.alias}.hanasand.com`, setDidCopy })}
-                        className='flex w-full cursor-pointer gap-2 overflow-hidden text-left text-sm text-bright/80'
+                        className='flex w-full cursor-pointer gap-2 overflow-hidden text-left text-sm text-ui-muted hover:text-ui-text'
                     >
                         <MessageCircleHeart
                             className={copyColorAlias}
@@ -82,15 +82,15 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                         </div>
                     </button>
                 )}
-                <span className='gap-2 text-sm text-bright/80 flex'>
+                <span className='flex gap-2 text-sm text-ui-muted'>
                     <BookText height={18} width={18} />
                     <h1>{wordText}</h1>
                 </span>
-                <span className='gap-2 text-sm text-bright/80 flex'>
+                <span className='flex gap-2 text-sm text-ui-muted'>
                     <ListOrdered height={18} width={18} />
                     <h1>{lineText}</h1>
                 </span>
-                <span className='gap-2 text-sm text-bright/80 flex'>
+                <span className='flex gap-2 text-sm text-ui-muted'>
                     <Timer height={18} width={18} />
                     <h1>{readText}</h1>
                 </span>

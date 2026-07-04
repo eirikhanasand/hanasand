@@ -27,8 +27,8 @@ export default function VMNetwork({ boxStyle, boxTitleStyle, vm, details }: VMDe
                 compact
                 variant='info'
                 className='mt-3'
-                title='Network details unavailable'
-                message='Refresh the VM to try loading IP, interface, and profile details again.'
+                title='Network telemetry reconnecting'
+                message='Refresh the VM to reload IP, interface, and profile details.'
             />}
         </div>
     )

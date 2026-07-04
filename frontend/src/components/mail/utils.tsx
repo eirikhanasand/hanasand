@@ -46,9 +46,9 @@ export const emptyComposer: ComposerState = {
     attachments: [],
 }
 
-export const toolbarButton = 'inline-flex h-8 items-center gap-1.5 rounded-xl border border-white/10 bg-white/3 px-2.5 text-[11px] font-medium text-bright/78 transition hover:border-white/18 hover:bg-white/6 disabled:cursor-not-allowed disabled:opacity-45'
-export const iconButton = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/3 text-bright/72 transition hover:border-white/18 hover:bg-white/6 disabled:cursor-not-allowed disabled:opacity-45'
-export const subtleInput = 'h-8 rounded-xl border border-white/10 bg-white/3 px-3 text-xs text-bright outline-none transition placeholder:text-bright/28 focus:border-orange-300/45 focus:bg-white/5'
+export const toolbarButton = 'inline-flex h-8 items-center gap-1.5 rounded-xl border border-ui-border bg-ui-raised px-2.5 text-[11px] font-medium text-ui-text transition hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-45'
+export const iconButton = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-ui-border bg-ui-raised text-ui-muted transition hover:border-ui-primary hover:bg-ui-panel hover:text-ui-text disabled:cursor-not-allowed disabled:opacity-45'
+export const subtleInput = 'h-8 rounded-xl border border-ui-border bg-ui-raised px-3 text-xs text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:bg-ui-panel'
 
 export function composeFromReply(mode: ComposerMode, message: MailMessage, ownAddress?: string): ComposerState {
     const subject = mode === 'forward'
@@ -115,11 +115,11 @@ export async function runAction(
 }
 
 export function iconForMailbox(role?: string) {
-    if (role === 'inbox') return <Inbox className='h-3.5 w-3.5 text-orange-300' />
-    if (role === 'archive') return <Archive className='h-3.5 w-3.5 text-emerald-300' />
-    if (role === 'junk') return <ShieldAlert className='h-3.5 w-3.5 text-red-300' />
-    if (role === 'trash') return <Trash2 className='h-3.5 w-3.5 text-red-200' />
-    return <Mail className='h-3.5 w-3.5 text-bright/40' />
+    if (role === 'inbox') return <Inbox className='h-3.5 w-3.5 text-ui-primary' />
+    if (role === 'archive') return <Archive className='h-3.5 w-3.5 text-ui-success' />
+    if (role === 'junk') return <ShieldAlert className='h-3.5 w-3.5 text-ui-danger' />
+    if (role === 'trash') return <Trash2 className='h-3.5 w-3.5 text-ui-danger' />
+    return <Mail className='h-3.5 w-3.5 text-ui-muted' />
 }
 
 export function formatDate(value: string, verbose = false) {
@@ -165,12 +165,12 @@ export function buildMailFrameHtml(html: string) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { color-scheme: dark; }
+    :root { color-scheme: light dark; }
     html, body {
       margin: 0;
       padding: 0;
-      background: #0d100d;
-      color: #edf2e7;
+      background: Canvas;
+      color: CanvasText;
       font-family: Manrope, Aptos, sans-serif;
     }
     body {
@@ -182,7 +182,7 @@ export function buildMailFrameHtml(html: string) {
       height: auto;
       border-radius: 14px;
     }
-    a { color: #f07d33; }
+    a { color: LinkText; }
     table { max-width: 100%; }
     pre, code {
       white-space: pre-wrap;
@@ -208,18 +208,18 @@ export function AttachmentPreview({ attachment, mailboxUser }: { attachment: Mai
     const url = mailBlobUrl(mailboxUser, attachment.blobId, attachment.name)
     if (attachment.type.startsWith('image/')) {
         return (
-            <a href={url} target='_blank' rel='noopener noreferrer' className='rounded-2xl border border-white/10 bg-white/3 p-2.5 transition hover:bg-white/5'>
+            <a href={url} target='_blank' rel='noopener noreferrer' className='rounded-2xl border border-ui-border bg-ui-raised p-2.5 transition hover:bg-ui-panel'>
                 <Image src={url} alt={attachment.name} className='h-36 w-full rounded-xl object-cover' />
-                <p className='mt-2 truncate text-[11px] font-medium text-bright'>{attachment.name}</p>
+                <p className='mt-2 truncate text-[11px] font-medium text-ui-text'>{attachment.name}</p>
             </a>
         )
     }
 
     if (attachment.type === 'application/pdf') {
         return (
-            <div className='rounded-2xl border border-white/10 bg-white/3 p-2.5'>
-                <iframe title={attachment.name} src={url} className='h-48 w-full rounded-xl bg-[#0d100d]' />
-                <a href={url} target='_blank' rel='noopener noreferrer' className='mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-bright'>
+            <div className='rounded-2xl border border-ui-border bg-ui-raised p-2.5'>
+                <iframe title={attachment.name} src={url} className='h-48 w-full rounded-xl bg-ui-canvas' />
+                <a href={url} target='_blank' rel='noopener noreferrer' className='mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-ui-text'>
                     {attachment.name}
                     <Forward className='h-3.5 w-3.5' />
                 </a>
@@ -228,9 +228,9 @@ export function AttachmentPreview({ attachment, mailboxUser }: { attachment: Mai
     }
 
     return (
-        <a href={url} target='_blank' rel='noopener noreferrer' className='rounded-2xl border border-white/10 bg-white/3 p-2.5 text-[11px] text-bright/62 transition hover:bg-white/5'>
-            <p className='truncate font-medium text-bright'>{attachment.name}</p>
-            <p className='mt-1 text-[10px] text-bright/36'>{attachment.type} • {prettyBytes(attachment.size)}</p>
+        <a href={url} target='_blank' rel='noopener noreferrer' className='rounded-2xl border border-ui-border bg-ui-raised p-2.5 text-[11px] text-ui-muted transition hover:bg-ui-panel'>
+            <p className='truncate font-medium text-ui-text'>{attachment.name}</p>
+            <p className='mt-1 text-[10px] text-ui-muted'>{attachment.type} • {prettyBytes(attachment.size)}</p>
         </a>
     )
 }
@@ -268,7 +268,7 @@ export function arrayBufferToBase64(buffer: ArrayBuffer) {
 
 export function MailSketch() {
     return (
-        <svg className='pointer-events-none absolute -right-6 bottom-2 h-auto w-44 rotate-[1.5deg] text-bright/8' viewBox='0 0 430 190' aria-hidden='true'>
+        <svg className='pointer-events-none absolute -right-6 bottom-2 h-auto w-44 rotate-[1.5deg] text-ui-muted/20' viewBox='0 0 430 190' aria-hidden='true'>
             <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M31 154 L31 90 L112 63 L197 93 L197 154' />
             <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M31 90 L112 44 L197 93' />
             <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M112 44 L112 154' />

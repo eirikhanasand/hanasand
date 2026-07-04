@@ -252,6 +252,8 @@ services:
 volumes:
   api_state:
   postgres_data:
+    external: true
+    name: hanasand_postgres_data
   ti_scraper_evidence:
 
 networks:

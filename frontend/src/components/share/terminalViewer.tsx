@@ -76,6 +76,8 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
             return
         }
 
+        const styles = getComputedStyle(document.documentElement)
+        const colorValue = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback
         const term = new Terminal({
             cursorBlink: true,
             convertEol: false,
@@ -83,9 +85,9 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
             fontSize: 14,
             lineHeight: 1.35,
             theme: {
-                background: '#11130f',
-                foreground: '#edf1e9',
-                cursor: '#9de18f',
+                background: colorValue('--ui-canvas', 'rgb(8 17 31)'),
+                foreground: colorValue('--ui-text', 'rgb(245 247 251)'),
+                cursor: colorValue('--ui-success', 'rgb(125 224 162)'),
                 selectionBackground: 'rgba(157, 225, 143, 0.24)'
             }
         })
@@ -183,11 +185,11 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
     }, [open, scheduleFit])
 
     return (
-        <div className='relative h-full min-w-0 w-full overflow-hidden rounded-md bg-[#11130f]'>
+        <div className='relative h-full min-w-0 w-full overflow-hidden rounded-md bg-ui-canvas'>
             {chunks.length === 0 && status && (
-                <div className='pointer-events-none absolute inset-0 z-10 flex items-start px-3 py-3 text-sm font-medium text-bright/58'>
-                    <span className='inline-flex items-center gap-2 rounded-lg border border-bright/8 bg-black/20 px-3 py-2'>
-                        <span className='h-2 w-2 animate-pulse rounded-full bg-[#9de18f]' />
+                <div className='pointer-events-none absolute inset-0 z-10 flex items-start px-3 py-3 text-sm font-medium text-ui-muted'>
+                    <span className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-panel/80 px-3 py-2'>
+                        <span className='h-2 w-2 animate-pulse rounded-full bg-ui-success' />
                         {status}
                     </span>
                 </div>
@@ -195,7 +197,7 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
             <div
                 ref={containerRef}
                 onClick={() => terminalRef.current?.focus()}
-                className='h-full min-w-0 w-full overflow-hidden rounded-md bg-[#11130f]'
+                className='h-full min-w-0 w-full overflow-hidden rounded-md bg-ui-canvas'
                 data-share-terminal={share.alias}
                 data-testid='share-terminal-xterm'
             />

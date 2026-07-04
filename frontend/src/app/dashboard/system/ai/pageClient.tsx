@@ -195,13 +195,13 @@ export default function GPT_Page() {
                 <div className='mx-auto flex w-full max-w-330 flex-col gap-4 px-4 pb-4 pt-6 sm:px-6 md:px-8 md:pt-8'>
                     <div className='flex items-center justify-between gap-4'>
                         <div>
-                            <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>Model operations</p>
-                            <h1 className='mt-1 text-2xl font-semibold text-bright/90'>AI worker console</h1>
-                            <p className='mt-1 text-sm text-bright/48'>Live sessions, GPU lanes, verification jobs, and spend pressure.</p>
+                            <p className='text-xs uppercase tracking-[0.22em] text-ui-muted'>Model operations</p>
+                            <h1 className='mt-1 text-2xl font-semibold text-ui-text'>AI worker console</h1>
+                            <p className='mt-1 text-sm text-ui-muted'>Live sessions, GPU lanes, verification jobs, and spend pressure.</p>
                         </div>
                         <Link
                             href='/dashboard/system'
-                            className='flex items-center gap-2 rounded-md bg-bright/3 px-4 py-2 text-sm text-bright/80 outline outline-dark transition-colors hover:bg-bright/5'
+                            className='flex items-center gap-2 rounded-md bg-ui-raised px-4 py-2 text-sm text-ui-text border border-ui-border transition-colors hover:bg-ui-panel'
                         >
                             <ArrowLeft className='h-4 w-4' />
                             Back to system
@@ -232,15 +232,15 @@ export default function GPT_Page() {
 function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, error: string | null }) {
     if (error) {
         return (
-            <section className='rounded-xl bg-dark/35 p-4 outline outline-dark'>
-                <p className='text-sm text-red-200/80'>{error}</p>
+            <section className='rounded-xl bg-ui-panel p-4 border border-ui-border'>
+                <p className='text-sm text-ui-danger'>{error}</p>
             </section>
         )
     }
     if (!economics) {
         return (
-            <section className='rounded-xl bg-dark/35 p-4 outline outline-dark'>
-                <p className='text-sm text-bright/50'>Connecting AI worker telemetry...</p>
+            <section className='rounded-xl bg-ui-panel p-4 border border-ui-border'>
+                <p className='text-sm text-ui-muted'>Connecting AI worker telemetry...</p>
             </section>
         )
     }
@@ -276,45 +276,45 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
             : 'Open clients'
 
     return (
-        <section className='space-y-4 rounded-xl bg-dark/35 p-4 outline outline-dark'>
+        <section className='space-y-4 rounded-xl bg-ui-panel p-4 border border-ui-border'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
                 <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Worker output</p>
-                    <h2 className='mt-1 text-xl font-semibold text-bright/90'>Verified work, live capacity, and spend</h2>
-                    <p className='mt-2 max-w-3xl text-sm leading-6 text-bright/52'>
+                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Worker output</p>
+                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Verified work, live capacity, and spend</h2>
+                    <p className='mt-2 max-w-3xl text-sm leading-6 text-ui-muted'>
                         Primary signal: {operationsCopy(economics.keyMetric)}. Failed platform runs stay visible for operators without being counted as user value.
                     </p>
                 </div>
-                <span className='w-fit rounded-full bg-[#f07d33]/12 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-[#f07d33] outline outline-[#f07d33]/20'>
+                <span className='w-fit rounded-full bg-ui-primary/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-ui-primary outline outline-ui-primary/20'>
                     {economics.windowDays} day window
                 </span>
             </div>
 
-            <div className='grid gap-3 rounded-lg border border-bright/8 bg-black/18 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-ai-primary-triage>
+            <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-ai-primary-triage>
                 <div className='min-w-0'>
-                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-bright/42'>
-                        <span className='rounded-md border border-bright/8 bg-bright/[0.035] px-2 py-1'>Recommended next</span>
-                        <span className='rounded-md border border-bright/8 bg-bright/[0.035] px-2 py-1'>{economics.reliability.capacity.totalAvailableSessions} open sessions</span>
-                        <span className='rounded-md border border-bright/8 bg-bright/[0.035] px-2 py-1'>{economics.reliability.capacity.totalQueued} queued</span>
+                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>Recommended next</span>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{economics.reliability.capacity.totalAvailableSessions} open sessions</span>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{economics.reliability.capacity.totalQueued} queued</span>
                     </div>
-                    <h3 className='mt-3 text-lg font-semibold text-bright/90'>{primaryTitle}</h3>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-bright/52'>{primaryDetail}</p>
+                    <h3 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h3>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
                 </div>
                 <a
                     href={primaryHref}
-                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-[#f07d33] px-4 text-sm font-semibold text-black shadow-sm transition hover:bg-[#ff9857] focus:outline-none focus:ring-2 focus:ring-[#f07d33]/40 sm:w-auto'
+                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/20 sm:w-auto'
                     data-ai-primary-action
                 >
                     {primaryActionLabel}
                 </a>
             </div>
 
-            <details className='overflow-hidden rounded-lg border border-bright/8 bg-black/18' data-ai-economics-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-bright/84 transition hover:bg-bright/[0.035] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-raised' data-ai-economics-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                     <span>Spend and output counters</span>
-                    <span className='text-xs font-medium text-bright/35'>{formatNok(summary.estimatedCostNok)} NOK, {formatCompact(summary.verifiedUnits)} verified units, {cacheRate}% cached</span>
+                    <span className='text-xs font-medium text-ui-muted'>{formatNok(summary.estimatedCostNok)} NOK, {formatCompact(summary.verifiedUnits)} verified units, {cacheRate}% cached</span>
                 </summary>
-                <div className='grid gap-3 border-t border-bright/8 p-3 md:grid-cols-2 xl:grid-cols-4' data-ai-economics-metrics>
+                <div className='grid gap-3 border-t border-ui-border p-3 md:grid-cols-2 xl:grid-cols-4' data-ai-economics-metrics>
                     <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Spend' value={`${formatNok(summary.estimatedCostNok)} NOK`} detail={`${formatCompact(summary.billableUnits)} billable work units`} />
                     <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified output' value={formatMetric(summary.verifiedProgressPerMinutePerNok)} detail={`${formatCompact(summary.verifiedUnits)} verified units over ${formatDuration(summary.productiveMinutes * 60_000)} productive time`} />
                     <EconomicsStat icon={<LineChart className='h-4 w-4' />} label='Token flow' value={formatCompact(summary.tokenUnits)} detail={`${formatCompact(summary.platformErrorUnits)} platform-error units excluded from value`} />
@@ -325,30 +325,30 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
             <ReliabilityPanel reliability={economics.reliability} />
             <OperationsPanel readiness={economics.commercialReadiness} />
 
-            <details className='overflow-hidden rounded-lg border border-bright/8 bg-black/18' data-ai-history-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-bright/84 transition hover:bg-bright/[0.035] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-raised' data-ai-history-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                     <span>Trends, lane configuration, and recent runs</span>
-                    <span className='text-xs font-medium text-bright/35'>{economics.trend.length} trend buckets, {economics.modes.length} modes, {economics.recentRuns.length} recent runs</span>
+                    <span className='text-xs font-medium text-ui-muted'>{economics.trend.length} trend buckets, {economics.modes.length} modes, {economics.recentRuns.length} recent runs</span>
                 </summary>
-                <div className='grid gap-4 border-t border-bright/8 p-3' data-ai-history-panels>
+                <div className='grid gap-4 border-t border-ui-border p-3' data-ai-history-panels>
                     <div className='grid gap-4 xl:grid-cols-[1.35fr_0.9fr]'>
-                        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
+                        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
                             <div className='mb-3 flex items-center justify-between'>
-                                <h3 className='text-sm font-semibold text-bright/84'>Worker output over time</h3>
-                                <span className='text-xs text-bright/35'>tokens · spend · verified outcomes</span>
+                                <h3 className='text-sm font-semibold text-ui-text'>Worker output over time</h3>
+                                <span className='text-xs text-ui-muted'>tokens · spend · verified outcomes</span>
                             </div>
                             <UsageTrendChart trend={economics.trend} />
                         </div>
-                        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
-                            <h3 className='text-sm font-semibold text-bright/84'>Lane controls</h3>
+                        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
+                            <h3 className='text-sm font-semibold text-ui-text'>Lane controls</h3>
                             <div className='mt-3 grid gap-2'>
                                 {economics.modes.map((mode) => (
-                                    <div key={mode.id} className='rounded-lg border border-bright/8 bg-bright/[0.035] p-3'>
+                                    <div key={mode.id} className='rounded-lg border border-ui-border bg-ui-panel p-3'>
                                         <div className='flex items-center justify-between gap-3'>
-                                            <span className='text-sm font-medium text-bright/82'>{mode.label}</span>
-                                            <span className='text-xs text-bright/42'>{mode.concurrency} concurrent</span>
+                                            <span className='text-sm font-medium text-ui-text'>{mode.label}</span>
+                                            <span className='text-xs text-ui-muted'>{mode.concurrency} concurrent</span>
                                         </div>
-                                        <p className='mt-1 text-xs leading-5 text-bright/48'>{mode.verification}</p>
+                                        <p className='mt-1 text-xs leading-5 text-ui-muted'>{mode.verification}</p>
                                     </div>
                                 ))}
                             </div>
@@ -356,21 +356,21 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
                     </div>
 
                     <div className='grid gap-4 xl:grid-cols-2'>
-                        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
-                            <h3 className='text-sm font-semibold text-bright/84'>Customer lanes</h3>
+                        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
+                            <h3 className='text-sm font-semibold text-ui-text'>Customer lanes</h3>
                             <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5'>
                                 {economics.subscriptionTiers.map((tier) => (
-                                    <article key={tier.id} className='rounded-lg border border-bright/8 bg-bright/[0.035] p-3'>
-                                        <div className='flex items-center gap-2 text-bright/84'>
-                                            <ShieldCheck className='h-4 w-4 text-[#f07d33]' />
+                                    <article key={tier.id} className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+                                        <div className='flex items-center gap-2 text-ui-text'>
+                                            <ShieldCheck className='h-4 w-4 text-ui-primary' />
                                             <h4 className='text-sm font-semibold'>{tier.label}</h4>
                                         </div>
-                                        {tier.fit ? <p className='mt-2 text-xs font-medium text-bright/62'>{tier.fit}</p> : null}
-                                        <p className='mt-1 text-xs leading-5 text-bright/48'>{tier.outcomeAllowance} verified outcomes, {tier.queuePriority} queue, {tier.concurrency} concurrent job{tier.concurrency === 1 ? '' : 's'}.</p>
+                                        {tier.fit ? <p className='mt-2 text-xs font-medium text-ui-muted'>{tier.fit}</p> : null}
+                                        <p className='mt-1 text-xs leading-5 text-ui-muted'>{tier.outcomeAllowance} verified outcomes, {tier.queuePriority} queue, {tier.concurrency} concurrent job{tier.concurrency === 1 ? '' : 's'}.</p>
                                         {tier.features?.length ? (
                                             <div className='mt-2 flex flex-wrap gap-1'>
                                                 {tier.features.map((feature) => (
-                                                    <span key={feature} className='rounded-full border border-bright/8 px-2 py-0.5 text-[10px] text-bright/48'>
+                                                    <span key={feature} className='rounded-full border border-ui-border px-2 py-0.5 text-[10px] text-ui-muted'>
                                                         {feature}
                                                     </span>
                                                 ))}
@@ -380,21 +380,21 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
                                 ))}
                             </div>
                         </div>
-                        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
-                            <h3 className='text-sm font-semibold text-bright/84'>Recent worker runs</h3>
+                        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
+                            <h3 className='text-sm font-semibold text-ui-text'>Recent worker runs</h3>
                             <div className='mt-3 max-h-64 space-y-2 overflow-auto'>
                                 {economics.recentRuns.length ? economics.recentRuns.map((run) => (
-                                    <div key={run.id} className='grid gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] p-3 text-xs text-bright/52 sm:grid-cols-[1fr_auto]'>
+                                    <div key={run.id} className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted sm:grid-cols-[1fr_auto]'>
                                         <div>
-                                            <p className='font-medium text-bright/78'>{formatKind(run.kind)} · {run.outcome}</p>
+                                            <p className='font-medium text-ui-text'>{formatKind(run.kind)} · {run.outcome}</p>
                                             <p className='mt-1'>{formatDate(run.createdAt)} · {formatCompact(run.units)} tokens · {formatCompact(run.billableUnits)} billable</p>
                                         </div>
-                                        <div className='flex items-center gap-2 text-bright/70 sm:justify-end'>
-                                            <Clock3 className='h-3.5 w-3.5 text-[#f07d33]' />
+                                        <div className='flex items-center gap-2 text-ui-text sm:justify-end'>
+                                            <Clock3 className='h-3.5 w-3.5 text-ui-primary' />
                                             {formatNok(run.estimatedCostNok)} NOK
                                         </div>
                                     </div>
-                                )) : <p className='text-sm text-bright/45'>Worker telemetry updates as verified jobs finish.</p>}
+                                )) : <p className='text-sm text-ui-muted'>Worker telemetry updates as verified jobs finish.</p>}
                             </div>
                         </div>
                     </div>
@@ -411,11 +411,11 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
     const deployRate = reliability.buildDeploy.find((row) => row.kind === 'deploy')
 
     return (
-        <div className='rounded-lg border border-bright/8 bg-black/18 p-4' id='ai-reliability' data-ai-reliability>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-4' id='ai-reliability' data-ai-reliability>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
                 <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Reliability and observability</p>
-                    <h3 className='mt-1 text-lg font-semibold text-bright/90'>Can users get work done right now?</h3>
+                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Reliability and observability</p>
+                    <h3 className='mt-1 text-lg font-semibold text-ui-text'>Can users get work done right now?</h3>
                 </div>
                 <div className={`rounded-lg px-3 py-2 outline ${incidentTone}`}>
                     <div className='flex items-center gap-2 text-sm font-semibold'>
@@ -435,83 +435,83 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
 
             <div className='mt-4 grid gap-4 xl:grid-cols-[1fr_1.1fr]'>
                 <div className='grid gap-4'>
-                    <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
+                    <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
                         <div className='flex items-center justify-between gap-3'>
-                            <h4 className='text-sm font-semibold text-bright/84'>Verification latency</h4>
-                            <span className='text-xs text-bright/35'>p50 / p95</span>
+                            <h4 className='text-sm font-semibold text-ui-text'>Verification latency</h4>
+                            <span className='text-xs text-ui-muted'>p50 / p95</span>
                         </div>
                         <div className='mt-3 grid gap-2'>
                             {reliability.verificationLatency.length ? reliability.verificationLatency.map((row) => (
-                                <div key={row.kind} className='flex items-center justify-between gap-3 rounded-md border border-bright/8 bg-black/18 px-3 py-2 text-sm'>
-                                    <span className='capitalize text-bright/76'>{row.kind}</span>
-                                    <span className='text-bright/48'>{formatDuration(row.p50Ms)} / {formatDuration(row.p95Ms)} · {row.sampleCount}</span>
+                                <div key={row.kind} className='flex items-center justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-sm'>
+                                    <span className='capitalize text-ui-text'>{row.kind}</span>
+                                    <span className='text-ui-muted'>{formatDuration(row.p50Ms)} / {formatDuration(row.p95Ms)} · {row.sampleCount}</span>
                                 </div>
-                            )) : <p className='text-sm text-bright/45'>Verification jobs are metering; p50/p95 rows update from completed runs.</p>}
+                            )) : <p className='text-sm text-ui-muted'>Verification jobs are metering; p50/p95 rows update from completed runs.</p>}
                         </div>
                     </div>
 
-                    <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
-                        <h4 className='text-sm font-semibold text-bright/84'>Build and deploy success</h4>
+                    <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
+                        <h4 className='text-sm font-semibold text-ui-text'>Build and deploy success</h4>
                         <div className='mt-3 grid gap-3'>
                             <SuccessRate row={buildRate} fallback='build' />
                             <SuccessRate row={deployRate} fallback='deploy' />
                         </div>
                     </div>
 
-                    <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
-                        <h4 className='text-sm font-semibold text-bright/84'>Failed verification categories</h4>
+                    <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
+                        <h4 className='text-sm font-semibold text-ui-text'>Failed verification categories</h4>
                         <div className='mt-3 flex flex-wrap gap-2'>
                             {reliability.failedProofCategories.length ? reliability.failedProofCategories.map((row) => (
-                                <span key={`${row.kind}-${row.category}`} className='rounded-full border border-red-300/15 bg-red-400/8 px-2.5 py-1 text-xs text-red-100/72'>
+                                <span key={`${row.kind}-${row.category}`} className='rounded-full border border-ui-danger/30 bg-ui-danger/10 px-2.5 py-1 text-xs text-ui-danger'>
                                     {formatKind(row.category)} · {row.kind} · {row.count}
                                 </span>
-                            )) : <span className='rounded-full border border-emerald-300/15 bg-emerald-400/8 px-2.5 py-1 text-xs text-emerald-100/72'>No verification failures in this window</span>}
+                            )) : <span className='rounded-full border border-ui-success/30 bg-ui-success/10 px-2.5 py-1 text-xs text-ui-success'>No verification failures in this window</span>}
                         </div>
                     </div>
                 </div>
 
                 <div className='grid gap-4'>
-                    <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
+                    <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
                         <div className='flex items-center justify-between gap-3'>
-                            <h4 className='text-sm font-semibold text-bright/84'>Queue depth by worker/model</h4>
-                            <span className='text-xs text-bright/35'>{queuedRows.length} active buckets</span>
+                            <h4 className='text-sm font-semibold text-ui-text'>Queue depth by worker/model</h4>
+                            <span className='text-xs text-ui-muted'>{queuedRows.length} active buckets</span>
                         </div>
                         <div className='mt-3 max-h-52 space-y-2 overflow-auto'>
                             {queuedRows.length ? queuedRows.map((row) => (
-                                <div key={`${row.lane}-${row.kind}-${row.status}`} className='grid grid-cols-[1fr_auto] gap-3 rounded-md border border-bright/8 bg-black/18 px-3 py-2 text-xs'>
+                                <div key={`${row.lane}-${row.kind}-${row.status}`} className='grid grid-cols-[1fr_auto] gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs'>
                                     <div>
-                                        <p className='font-medium text-bright/78'>{row.lane} · {row.model}</p>
-                                        <p className='mt-1 text-bright/42'>{row.kind} · {row.status}</p>
+                                        <p className='font-medium text-ui-text'>{row.lane} · {row.model}</p>
+                                        <p className='mt-1 text-ui-muted'>{row.kind} · {row.status}</p>
                                     </div>
-                                    <span className='self-center text-sm font-semibold text-bright/82'>{row.count}</span>
+                                    <span className='self-center text-sm font-semibold text-ui-text'>{row.count}</span>
                                 </div>
-                            )) : <p className='text-sm text-bright/45'>Verification queue is clear; active and queued runs stream here.</p>}
+                            )) : <p className='text-sm text-ui-muted'>Verification queue is clear; active and queued runs stream here.</p>}
                         </div>
                     </div>
 
-                    <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
+                    <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
                         <div className='flex items-center justify-between gap-3'>
-                            <h4 className='text-sm font-semibold text-bright/84'>GPU worker health</h4>
-                            <span className='text-xs text-bright/35'>{reliability.gpuLanes.length} workers</span>
+                            <h4 className='text-sm font-semibold text-ui-text'>GPU worker health</h4>
+                            <span className='text-xs text-ui-muted'>{reliability.gpuLanes.length} workers</span>
                         </div>
                         <div className='mt-3 grid gap-2 md:grid-cols-2'>
                             {reliability.gpuLanes.length ? reliability.gpuLanes.map((lane) => (
-                                <article key={`${lane.clientName}-${lane.lane}`} className='rounded-lg border border-bright/8 bg-black/18 p-3'>
+                                <article key={`${lane.clientName}-${lane.lane}`} className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                                     <div className='flex items-start justify-between gap-2'>
                                         <div>
-                                            <p className='text-sm font-semibold text-bright/84'>{lane.lane}</p>
-                                            <p className='mt-1 text-xs text-bright/42'>{lane.model} · {lane.tier}</p>
+                                            <p className='text-sm font-semibold text-ui-text'>{lane.lane}</p>
+                                            <p className='mt-1 text-xs text-ui-muted'>{lane.model} · {lane.tier}</p>
                                         </div>
-                                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-bright/48'>{lane.status}</span>
+                                        <span className='rounded-full border border-ui-border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-ui-muted'>{lane.status}</span>
                                     </div>
-                                    <div className='mt-3 grid grid-cols-2 gap-2 text-xs text-bright/52'>
+                                    <div className='mt-3 grid grid-cols-2 gap-2 text-xs text-ui-muted'>
                                         <LaneMetric icon={<Server className='h-3.5 w-3.5' />} value={`${lane.availableSessions}/${lane.maxSessions}`} label='available' />
                                         <LaneMetric icon={<Activity className='h-3.5 w-3.5' />} value={`${Math.round(lane.gpuLoad)}%`} label='load' />
                                         <LaneMetric icon={<Zap className='h-3.5 w-3.5' />} value={`${Math.round(lane.powerWatts)} W`} label='power' />
                                         <LaneMetric icon={<Timer className='h-3.5 w-3.5' />} value={formatCompact(lane.contextMaxTokens)} label='context' />
                                     </div>
                                 </article>
-                            )) : <p className='text-sm text-bright/45'>GPU telemetry updates with load, power, and session capacity for connected model workers.</p>}
+                            )) : <p className='text-sm text-ui-muted'>GPU telemetry updates with load, power, and session capacity for connected model workers.</p>}
                         </div>
                     </div>
                 </div>
@@ -522,18 +522,18 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
 
 function OperationsPanel({ readiness }: { readiness: AIEconomics['commercialReadiness'] }) {
     const tone = readiness.overallState === 'commercially_ready'
-        ? 'bg-emerald-400/8 text-emerald-100/80 outline-emerald-300/15'
+        ? 'bg-ui-success/10 text-ui-success outline-ui-success/25'
         : readiness.overallState === 'evidence_gaps'
-            ? 'bg-sky-400/8 text-sky-100/80 outline-sky-300/15'
-            : 'bg-amber-400/8 text-amber-100/80 outline-amber-300/15'
+            ? 'bg-ui-primary/10 text-ui-primary outline-ui-primary/25'
+            : 'bg-ui-warning/10 text-ui-warning outline-ui-warning/25'
 
     return (
-        <div className='rounded-lg border border-bright/8 bg-black/18 p-4' id='ai-operations' data-ai-operations>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-4' id='ai-operations' data-ai-operations>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
                 <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Worker operations</p>
-                    <h3 className='mt-1 text-lg font-semibold text-bright/90'>Autonomous job lanes</h3>
-                    <p className='mt-2 max-w-3xl text-sm leading-6 text-bright/52'>{operationsConclusion(readiness.conclusion)}</p>
+                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Worker operations</p>
+                    <h3 className='mt-1 text-lg font-semibold text-ui-text'>Autonomous job lanes</h3>
+                    <p className='mt-2 max-w-3xl text-sm leading-6 text-ui-muted'>{operationsConclusion(readiness.conclusion)}</p>
                 </div>
                 <div className={`rounded-lg px-3 py-2 text-sm font-semibold outline ${tone}`}>
                     {operationsStateLabel(readiness.overallState)}
@@ -545,35 +545,35 @@ function OperationsPanel({ readiness }: { readiness: AIEconomics['commercialRead
 
             <div className='mt-4 grid gap-3 xl:grid-cols-2'>
                 {readiness.items.map((item) => (
-                    <article key={item.id} className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
+                    <article key={item.id} className='rounded-lg border border-ui-border bg-ui-raised p-4'>
                         <div className='flex items-start justify-between gap-3'>
                             <div>
-                                <p className='text-xs font-medium uppercase tracking-[0.16em] text-bright/35'>Lane {item.priority}</p>
-                                <h4 className='mt-1 text-sm font-semibold text-bright/86'>{item.label}</h4>
+                                <p className='text-xs font-medium uppercase tracking-[0.16em] text-ui-muted'>Lane {item.priority}</p>
+                                <h4 className='mt-1 text-sm font-semibold text-ui-text'>{item.label}</h4>
                             </div>
                             <ReadinessBadge status={item.status} measurable={item.measurable} />
                         </div>
                         <div className='mt-3 space-y-1.5'>
                             {item.evidence.slice(0, 3).map((line) => (
-                                <p key={line} className='text-xs leading-5 text-bright/48'>{operationsCopy(line)}</p>
+                                <p key={line} className='text-xs leading-5 text-ui-muted'>{operationsCopy(line)}</p>
                             ))}
                         </div>
-                        <div className='mt-3 grid gap-2 rounded-md border border-bright/8 bg-black/18 px-3 py-2 text-xs leading-5'>
+                        <div className='mt-3 grid gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs leading-5'>
                             <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
-                                <span className='font-medium uppercase tracking-[0.12em] text-bright/36'>Owner</span>
-                                <span className='text-bright/62'>{item.owner}</span>
+                                <span className='font-medium uppercase tracking-[0.12em] text-ui-muted'>Owner</span>
+                                <span className='text-ui-muted'>{item.owner}</span>
                             </div>
                             <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
-                                <span className='font-medium uppercase tracking-[0.12em] text-bright/36'>Runner</span>
-                                <span className='text-bright/62'>{operationsCopy(item.control)}</span>
+                                <span className='font-medium uppercase tracking-[0.12em] text-ui-muted'>Runner</span>
+                                <span className='text-ui-muted'>{operationsCopy(item.control)}</span>
                             </div>
                             <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
-                                <span className='font-medium uppercase tracking-[0.12em] text-bright/36'>Last run</span>
-                                <span className='text-bright/48'>{item.lastAttempt}</span>
+                                <span className='font-medium uppercase tracking-[0.12em] text-ui-muted'>Last run</span>
+                                <span className='text-ui-muted'>{item.lastAttempt}</span>
                             </div>
                             <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
-                                <span className='font-medium uppercase tracking-[0.12em] text-bright/36'>Now</span>
-                                <span className='text-bright/48'>{operationsCopy(item.action)}</span>
+                                <span className='font-medium uppercase tracking-[0.12em] text-ui-muted'>Now</span>
+                                <span className='text-ui-muted'>{operationsCopy(item.action)}</span>
                             </div>
                         </div>
                     </article>
@@ -586,14 +586,14 @@ function OperationsPanel({ readiness }: { readiness: AIEconomics['commercialRead
 function ReadinessBadge({ status, measurable }: { status: AIEconomics['commercialReadiness']['items'][number]['status'], measurable: boolean }) {
     const label = status === 'operational' ? 'Live' : status === 'evidence_gap' ? 'Warming up' : 'Action queued'
     const tone = status === 'operational'
-        ? 'border-emerald-300/15 bg-emerald-400/8 text-emerald-100/76'
+        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : status === 'evidence_gap'
-            ? 'border-sky-300/15 bg-sky-400/8 text-sky-100/76'
-            : 'border-amber-300/15 bg-amber-400/8 text-amber-100/76'
+            ? 'border-ui-primary/30 bg-ui-primary/10 text-ui-primary'
+            : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
     return (
         <div className='flex flex-col items-end gap-1'>
             <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${tone}`}>{label}</span>
-            <span className='text-[10px] uppercase tracking-[0.12em] text-bright/32'>{measurable ? 'tracked' : 'connecting'}</span>
+            <span className='text-[10px] uppercase tracking-[0.12em] text-ui-muted'>{measurable ? 'tracked' : 'connecting'}</span>
         </div>
     )
 }
@@ -624,12 +624,12 @@ function SuccessRate({ row, fallback }: { row?: AIEconomics['reliability']['buil
     const rate = row ? Math.round(row.successRate * 100) : 0
     return (
         <div>
-            <div className='mb-1 flex items-center justify-between text-xs text-bright/48'>
+            <div className='mb-1 flex items-center justify-between text-xs text-ui-muted'>
                 <span className='capitalize'>{row?.kind || fallback}</span>
                 <span>{row ? `${rate}% · ${row.completed}/${row.total}` : 'no samples'}</span>
             </div>
-            <div className='h-2 overflow-hidden rounded-full bg-bright/8'>
-                <div className='h-full rounded-full bg-[#f07d33]' style={{ width: `${row ? Math.max(4, rate) : 0}%` }} />
+            <div className='h-2 overflow-hidden rounded-full bg-ui-border'>
+                <div className='h-full rounded-full bg-ui-primary' style={{ width: `${row ? Math.max(4, rate) : 0}%` }} />
             </div>
         </div>
     )
@@ -637,25 +637,25 @@ function SuccessRate({ row, fallback }: { row?: AIEconomics['reliability']['buil
 
 function LaneMetric({ icon, value, label }: { icon: ReactNode, value: string, label: string }) {
     return (
-        <div className='rounded-md border border-bright/8 bg-bright/[0.025] p-2'>
-            <div className='flex items-center gap-1.5 text-bright/72'>
-                <span className='text-[#f07d33]'>{icon}</span>
+        <div className='rounded-md border border-ui-border bg-ui-raised p-2'>
+            <div className='flex items-center gap-1.5 text-ui-text'>
+                <span className='text-ui-primary'>{icon}</span>
                 <span className='font-medium'>{value}</span>
             </div>
-            <p className='mt-1 text-[10px] uppercase tracking-[0.12em] text-bright/32'>{label}</p>
+            <p className='mt-1 text-[10px] uppercase tracking-[0.12em] text-ui-muted'>{label}</p>
         </div>
     )
 }
 
 function EconomicsStat({ icon, label, value, detail }: { icon: ReactNode, label: string, value: string, detail: string }) {
     return (
-        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
-            <div className='flex items-center justify-between text-bright/35'>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
+            <div className='flex items-center justify-between text-ui-muted'>
                 <span className='text-xs font-medium uppercase tracking-[0.16em]'>{label}</span>
-                <span className='text-[#f07d33]'>{icon}</span>
+                <span className='text-ui-primary'>{icon}</span>
             </div>
-            <div className='mt-3 text-2xl font-semibold text-bright/90'>{value}</div>
-            <p className='mt-1 text-xs leading-5 text-bright/45'>{detail}</p>
+            <div className='mt-3 text-2xl font-semibold text-ui-text'>{value}</div>
+            <p className='mt-1 text-xs leading-5 text-ui-muted'>{detail}</p>
         </div>
     )
 }
@@ -667,9 +667,9 @@ function UsageTrendChart({ trend }: { trend: AIEconomics['trend'] }) {
     const maxVerified = Math.max(1, ...rows.map(row => row.verifiedUnits))
     return (
         <div className='space-y-3'>
-            <Sparkline rows={rows} max={maxTokens} field='tokenUnits' color='#f07d33' label='Token units' />
-            <Sparkline rows={rows} max={maxCost} field='estimatedCostNok' color='#86efac' label='Cost NOK' />
-            <Sparkline rows={rows} max={maxVerified} field='verifiedUnits' color='#93c5fd' label='Verified outcomes' />
+            <Sparkline rows={rows} max={maxTokens} field='tokenUnits' color='var(--color-ui-primary)' label='Token units' />
+            <Sparkline rows={rows} max={maxCost} field='estimatedCostNok' color='var(--color-ui-success)' label='Cost NOK' />
+            <Sparkline rows={rows} max={maxVerified} field='verifiedUnits' color='var(--color-ui-primary)' label='Verified outcomes' />
         </div>
     )
 }
@@ -689,11 +689,11 @@ function Sparkline({ rows, field, max, color, label }: { rows: AIEconomics['tren
     }).join(' ')
     return (
         <div>
-            <div className='mb-1 flex items-center justify-between text-xs text-bright/42'>
+            <div className='mb-1 flex items-center justify-between text-xs text-ui-muted'>
                 <span>{label}</span>
                 <span>{formatCompact(numericRows[numericRows.length - 1]?.value || 0)}</span>
             </div>
-            <svg viewBox={`0 0 ${width} ${height}`} className='h-16 w-full overflow-visible rounded-md bg-bright/[0.025]' role='img' aria-label={`${label} over time`}>
+            <svg viewBox={`0 0 ${width} ${height}`} className='h-16 w-full overflow-visible rounded-md bg-ui-raised' role='img' aria-label={`${label} over time`}>
                 <polyline fill='none' stroke={color} strokeWidth='3' strokeLinecap='round' strokeLinejoin='round' points={points} />
                 {numericRows.map((row) => {
                     const x = numericRows.length === 1 ? 0 : (row.index / (numericRows.length - 1)) * width
@@ -739,8 +739,8 @@ function formatDuration(value: number) {
 }
 
 function incidentToneClass(state: string) {
-    if (state === 'operational') return 'bg-emerald-400/8 text-emerald-100/80 outline-emerald-300/15'
-    if (state === 'busy') return 'bg-amber-400/8 text-amber-100/80 outline-amber-300/15'
-    if (state === 'watching') return 'bg-sky-400/8 text-sky-100/80 outline-sky-300/15'
-    return 'bg-red-400/8 text-red-100/80 outline-red-300/15'
+    if (state === 'operational') return 'bg-ui-success/10 text-ui-success outline-ui-success/25'
+    if (state === 'busy') return 'bg-ui-warning/10 text-ui-warning outline-ui-warning/25'
+    if (state === 'watching') return 'bg-ui-primary/10 text-ui-primary outline-ui-primary/25'
+    return 'bg-ui-danger/10 text-ui-danger outline-ui-danger/25'
 }
