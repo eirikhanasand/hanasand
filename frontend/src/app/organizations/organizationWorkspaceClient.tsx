@@ -2762,7 +2762,7 @@ function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, 
                     primary: item.title || item.id,
                     secondary: `${item.status || 'status'}${item.assignedOwner ? ` · ${item.assignedOwner}` : ''}`,
                 }))} empty='Cases appear after an alert is opened from the DWM workspace.' />
-                <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibilityRows(alertCaseVisibility)} empty='Visibility decisions appear after alerts are reviewed or routed into cases.' />
+                <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibilityRows(alertCaseVisibility)} empty='Visibility decisions appear after alerts are reviewed or opened as cases.' />
                 <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={webhooks.map(destination => ({
                     id: destination.id,
                     primary: destination.name || destination.id,
