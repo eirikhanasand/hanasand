@@ -39,8 +39,8 @@ test('public buyer navigation keeps password utility out of the primary monitori
 
     expect(header).not.toContain('Password Exposure Utility')
     expect(header).not.toContain('Password exposure utility')
-    expect(header).not.toContain("href: '/pwned'")
+    expect(header).not.toContain('href: \'/pwned\'')
     expect(footer).not.toContain('Password Utility')
-    expect(footer).not.toContain("href: '/pwned'")
-    expect(sitemap).not.toContain("'/pwned'")
+    expect(footer).not.toContain('href: \'/pwned\'')
+    expect(sitemap).not.toContain('\'/pwned\'')
 })
