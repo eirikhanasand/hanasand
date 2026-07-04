@@ -1949,7 +1949,7 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                     {retryCount > 0 && <StatusPill status={`${retryCount} retry`} />}
                     <a href={selectedHref} className={secondaryButtonClass}>
                         <ExternalLink className='h-4 w-4' />
-                        Open API
+                        Open delivery log
                     </a>
                 </div>
             </div>

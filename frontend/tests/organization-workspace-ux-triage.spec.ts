@@ -63,6 +63,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).not.toContain('Invite API')
     expect(page).not.toContain('Member API')
     expect(page).not.toContain('Cases API')
+    expect(page).toContain('Open delivery log')
+    expect(page).not.toContain('Open API')
     expect(page).not.toContain('/api/organizations/${organizationId}/watchlists/alert-terms?watchlistId=${watchlistId}')
     expect(page).not.toContain('/api/dwm/webhooks/deliveries?organizationId=${organizationId}&destinationId=${destinationId}')
 
