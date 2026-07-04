@@ -603,7 +603,7 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
         ? `/organizations${queryString({ organizationId, caseId, alertId, focus: alertId ? 'cases' : 'watchlists' })}`
         : '/organizations'
     const exportHref = `/api/cases/${encodeURIComponent(caseId)}/export${queryString({ tenantId, organizationId, alertId, shape: 'full' })}`
-    const alertHref = alertId ? `/api/dwm/alerts/${encodeURIComponent(alertId)}${queryString({ tenantId, organizationId })}` : undefined
+    const alertHref = alertId ? `/dashboard/dwm${queryString({ tenantId, organizationId, alert: alertId })}` : undefined
     const lastDelivery = latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTime(latestDelivery.attemptedAt)}` : 'not sent'
 
     return (
@@ -621,7 +621,7 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
                 <div className='flex flex-wrap gap-2'>
                     <CommandLink href={`/dashboard/dwm${dashboardScope}`}>Queue</CommandLink>
                     <CommandLink href={organizationHref}>Organization</CommandLink>
-                    {alertHref ? <CommandLink href={alertHref}>Alert record</CommandLink> : null}
+                    {alertHref ? <CommandLink href={alertHref}>Selected alert</CommandLink> : null}
                     <CommandLink href={exportHref}>{exportReady ? 'Export packet' : 'Check export'}</CommandLink>
                     {readOnly ? <span className='inline-flex h-9 items-center rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 text-xs font-semibold text-ui-warning'>Read only</span> : null}
                     <CommandLink href={currentCaseHref}>Current case</CommandLink>
