@@ -50,6 +50,7 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(page).toContain('nextParams.set(\'alert\', input.alertId)')
     expect(page).toContain('function updateQueueFilter(filter: QueueFilter)')
     expect(page).toContain('function updateQueueQuery(query: string)')
+    expect(page).toContain('function clearQueueView()')
     expect(page).toContain('function normalizeQueueFilter(value: string | null): QueueFilter')
     expect(page).toContain('function dwmQueueHref(input: { params: URLSearchParams, tenantId: string, organizationId?: string, alertId?: string, filter: QueueFilter, query: string })')
     expect(page).toContain('searchParams.get(\'filter\')')
@@ -60,6 +61,8 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(page).toContain('onClick={() => selectAlert(alert)}')
     expect(page).toContain('onClick={() => updateQueueFilter(filter.id)}')
     expect(page).toContain('onChange={event => updateQueueQuery(event.target.value)}')
+    expect(page).toContain('Clear queue view')
+    expect(page).toContain('onClick={clearQueueView}')
 })
 
 test('dwm next operator action prioritizes the workflow step an analyst can take now', () => {

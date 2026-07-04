@@ -336,6 +336,19 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
         }), { scroll: false })
     }
 
+    function clearQueueView() {
+        setQueueFilter('active')
+        setQueueQuery('')
+        router.replace(dwmQueueHref({
+            params: searchParams,
+            tenantId,
+            organizationId: selectedOrganizationId,
+            alertId: selectedAlert?.id,
+            filter: 'active',
+            query: '',
+        }), { scroll: false })
+    }
+
     return (
         <div className='grid gap-4'>
             <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
@@ -405,6 +418,15 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                                         </button>
                                     ))}
                                 </div>
+                                {(queueQuery.trim() || queueFilter !== 'active') && (
+                                    <button
+                                        type='button'
+                                        onClick={clearQueueView}
+                                        className='inline-flex h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-muted transition hover:bg-ui-canvas hover:text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
+                                    >
+                                        Clear queue view
+                                    </button>
+                                )}
                             </div>
                         </div>
                         <div className='max-h-[610px] overflow-auto p-2'>
