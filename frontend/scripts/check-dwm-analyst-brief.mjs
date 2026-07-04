@@ -26,6 +26,8 @@ for (const token of [
     '<section id=\'dwm-workflow-actions\' className=\'scroll-mt-24\'>',
     'dwm-workflow-actions',
     'data-dwm-workflow-snapshot',
+    'data-dwm-available-actions',
+    'const availableActions:',
     'Workflow',
     'Watchlist to source, alert, case, and delivery.',
     'Run workflow',

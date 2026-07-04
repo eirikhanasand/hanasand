@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
@@ -1731,12 +1731,9 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const suppressReady = actionReady(alert, 'suppress')
     const closeReady = actionReady(alert, 'close')
     const reopenReady = actionReady(alert, 'reopen')
-    const transitionReason = actionUnavailableReason(alert, 'transition')
     const replayReason = actionUnavailableReason(alert, 'replay')
     const deliveryReason = hasDeliveryRoute ? actionUnavailableReason(alert, 'deliver') : 'Configure a webhook destination before testing or sending.'
-    const suppressReason = actionUnavailableReason(alert, 'suppress')
     const closeReason = actionUnavailableReason(alert, 'close')
-    const reopenReason = actionUnavailableReason(alert, 'reopen')
     const caseId = alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
     const caseHref = caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert), 'alert_queue') : undefined
     const caseReady = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
@@ -1761,6 +1758,17 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
         { id: 'delivery', label: 'Delivery', ready: deliverReady, reason: deliveryReason },
         { id: 'close', label: 'Close', ready: closeReady, reason: closeReason },
     ].filter(item => !item.ready && item.reason)
+    const availableActions: Array<{ id: string, element: ReactNode }> = []
+    if (transitionReady) availableActions.push({ id: 'review', element: <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton> })
+    if (transitionReady) availableActions.push({ id: 'escalate', element: <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton> })
+    if (caseHref) availableActions.push({ id: 'open-case', element: <CaseLink href={caseHref}>Open case</CaseLink> })
+    else if (caseReady) availableActions.push({ id: 'create-case', element: <CaseButton busy={busyAction === `case:${alert.id}`} icon='case' onClick={onOpenCase}>Open case</CaseButton> })
+    if (replayReady) availableActions.push({ id: 'replay', element: <CaseButton busy={busyAction === `replay:${alert.id}`} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton> })
+    if (deliverReady) availableActions.push({ id: 'test', element: <CaseButton busy={busyAction === `test:${alert.id}`} icon='send' onClick={() => onTest(alert.id)}>Test</CaseButton> })
+    if (deliverReady) availableActions.push({ id: 'send', element: <CaseButton busy={busyAction === `send:${alert.id}`} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton> })
+    if (suppressReady) availableActions.push({ id: 'suppress', element: <CaseButton busy={busyAction === `update:${alert.id}`} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)}>Suppress</CaseButton> })
+    if (closeReady) availableActions.push({ id: 'close', element: <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)}>Close</CaseButton> })
+    if (reopenReady) availableActions.push({ id: 'reopen', element: <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton> })
     const nextActionBusy = nextOperatorActionBusy(nextAction.kind, alert.id) === busyAction
     const onNextAction = () => {
         switch (nextAction.kind) {
@@ -1825,16 +1833,8 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                         ))}
                     </div>
                 ) : null}
-                <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap'>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} disabledReason={transitionReason} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} disabledReason={transitionReason} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
-                    {caseHref ? <CaseLink href={caseHref}>Open case</CaseLink> : <CaseButton busy={busyAction === `case:${alert.id}`} disabled={!caseReady} disabledReason={caseReason} icon='case' onClick={onOpenCase}>Open case</CaseButton>}
-                    <CaseButton busy={busyAction === `replay:${alert.id}`} disabled={!replayReady} disabledReason={replayReason} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
-                    <CaseButton busy={busyAction === `test:${alert.id}`} disabled={!deliverReady} disabledReason={deliveryReason} icon='send' onClick={() => onTest(alert.id)}>Test</CaseButton>
-                    <CaseButton busy={busyAction === `send:${alert.id}`} disabled={!deliverReady} disabledReason={deliveryReason} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!suppressReady} disabledReason={suppressReason} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)}>Suppress</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!closeReady} disabledReason={closeReason} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)}>Close</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!reopenReady} disabledReason={reopenReason} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
+                <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap' data-dwm-available-actions='true'>
+                    {availableActions.map(action => <Fragment key={action.id}>{action.element}</Fragment>)}
                 </div>
                 {actionMessage && (
                     <p className={`justify-self-start rounded-lg border px-3 py-2 text-xs font-semibold xl:justify-self-end ${actionMessage.ok ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'}`}>
