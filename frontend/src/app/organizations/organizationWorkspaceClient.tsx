@@ -816,7 +816,7 @@ export default function OrganizationWorkspaceClient() {
                             <Building2 className='h-4 w-4' />
                             Organizations
                         </div>
-                        <h1 className='text-3xl font-semibold tracking-normal text-ui-text dark:text-white sm:text-4xl'>Organization settings</h1>
+                        <h1 className='text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text sm:text-4xl'>Organization settings</h1>
                         <p className='mt-3 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>Team access, shared watchlists, destinations, and routed alerts.</p>
                     </div>
                     <button
@@ -841,7 +841,7 @@ export default function OrganizationWorkspaceClient() {
                 <div className='grid gap-5 lg:grid-cols-[21rem_minmax(0,1fr)]'>
                     <aside className='flex min-w-0 flex-col gap-4'>
                         <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                            <h2 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-white'>
+                            <h2 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
                                 <Building2 className='h-4 w-4 text-ui-primary' />
                                 Create organization
                             </h2>
@@ -870,7 +870,7 @@ export default function OrganizationWorkspaceClient() {
                         </section>
 
                         <section className='rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                            <h2 className='px-2 py-2 text-sm font-semibold text-ui-text dark:text-white'>Workspaces</h2>
+                            <h2 className='px-2 py-2 text-sm font-semibold text-ui-text dark:text-ui-text'>Workspaces</h2>
                             <div className='grid gap-1'>
                                 {loading && <SkeletonRows count={3} />}
                                 {!loading && organizations.length === 0 && (
@@ -1028,7 +1028,7 @@ function EmptyWorkspacePreview() {
                                 <Building2 className='h-5 w-5' />
                             </div>
                             <div className='min-w-0'>
-                                <h2 className='text-xl font-semibold text-ui-text dark:text-white'>Create the first organization</h2>
+                                <h2 className='text-xl font-semibold text-ui-text dark:text-ui-text'>Create the first organization</h2>
                                 <p className='mt-1 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
                                     Start with the workspace. Team access, shared watchlists, destinations, cases, and activity appear after the organization exists.
                                 </p>
@@ -1049,7 +1049,7 @@ function EmptyWorkspacePreview() {
                 {setupRails.map(item => (
                     <div key={item.id} id={item.id} className='min-w-0 rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
                         <div className='flex items-center justify-between gap-3'>
-                            <span className='inline-flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-white'>
+                            <span className='inline-flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
                                 <span className='grid h-8 w-8 place-items-center rounded-lg bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{item.icon}</span>
                                 {item.title}
                             </span>
@@ -1203,7 +1203,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
         <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-setup-progress='true'>
             <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]'>
                 <div className='min-w-0'>
-                    <h2 className='flex items-center gap-2 text-base font-semibold text-ui-text dark:text-white'>
+                    <h2 className='flex items-center gap-2 text-base font-semibold text-ui-text dark:text-ui-text'>
                         <ShieldCheck className='h-4 w-4 text-ui-primary' />
                         Notification setup
                     </h2>
@@ -1213,7 +1213,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                 </div>
                 <div className='rounded-lg border border-ui-primary/35 bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
                     <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary dark:text-ui-primary'>Next action</p>
-                    <p className='mt-1 truncate text-sm font-semibold text-ui-text dark:text-white'>{nextAction.title}</p>
+                    <p className='mt-1 truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{nextAction.title}</p>
                     <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{nextAction.body}</p>
                     <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1'>
                         <ActionAnchor href={nextAction.href} icon={<ExternalLink className='h-4 w-4' />} label={nextAction.action} disabled={nextAction.blocked} />
@@ -1231,7 +1231,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                     >
                         {row.ready ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-ui-warning' />}
                         <span className='min-w-0'>
-                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-white'>{row.title}</span>
+                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.title}</span>
                             <span className='block truncate text-xs text-ui-muted dark:text-ui-muted'>{row.body}</span>
                             <span className='mt-2 block text-xs font-semibold text-ui-primary dark:text-ui-primary'>{row.blocked ? 'Owner or admin required' : row.action}</span>
                         </span>
@@ -1319,7 +1319,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
                             >
                                 <span className='grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
                                     <span className='min-w-0'>
-                                        <span className='block truncate text-sm font-semibold text-ui-text dark:text-white'>{invite.email}</span>
+                                        <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{invite.email}</span>
                                         <span className='mt-1 flex flex-wrap gap-2'>
                                             <RoleBadge role={invite.role} />
                                             <StatusPill status={invite.status} />
@@ -1373,7 +1373,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                 return (
                                     <tr key={member.userId} className={`cursor-pointer align-middle transition ${selectedSubject.type === 'member' && selectedSubject.id === member.userId ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`} onClick={() => onSelectSubject({ type: 'member', id: member.userId })}>
                                         <td className='max-w-44 border-b border-ui-border py-2 pr-3 dark:border-ui-border'>
-                                            <p className='truncate font-semibold text-ui-text dark:text-white'>{sanitizeOrganizationDisplayCopy(member.name || member.userId)}</p>
+                                            <p className='truncate font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(member.name || member.userId)}</p>
                                             <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(member.userId)}</p>
                                         </td>
                                         <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
@@ -1487,7 +1487,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                         >
                             <span className='flex min-w-0 items-start justify-between gap-2'>
                                 <span className='min-w-0'>
-                                    <span className='block truncate text-sm font-semibold text-ui-text dark:text-white'>{sanitizeOrganizationDisplayCopy(destination.name || destination.id)}</span>
+                                    <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(destination.name || destination.id)}</span>
                                     <span className='mt-1 block truncate font-mono text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(destination.endpointHint || destination.endpointHash || 'redacted_destination')}</span>
                                 </span>
                                 <StatusPill status={destinationStatus} />
@@ -1617,7 +1617,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
             <div className='mt-5 grid gap-3'>
                 {watchlists.length === 0 && (
                     <div className='rounded-lg border border-dashed border-ui-primary/35 bg-ui-panel p-4 text-sm leading-6 text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>
-                        <p className='font-semibold text-ui-text dark:text-white'>No watchlist terms yet.</p>
+                        <p className='font-semibold text-ui-text dark:text-ui-text'>No watchlist terms yet.</p>
                         <p className='mt-1'>Start with a scope template, enter a real customer-owned term, then save it to generate org-scoped alert terms and delivery context.</p>
                     </div>
                 )}
@@ -1657,7 +1657,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                                 <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{item.kind}</span>
                                                 <StatusPill status={item.status} />
                                             </div>
-                                            <p className='mt-2 wrap-break-word text-base font-semibold text-ui-text dark:text-white'>{item.value}</p>
+                                            <p className='mt-2 wrap-break-word text-base font-semibold text-ui-text dark:text-ui-text'>{item.value}</p>
                                             <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{item.notes || 'No notes.'}</p>
                                             <div className='mt-2 grid gap-1 text-xs text-ui-muted dark:text-ui-muted sm:grid-cols-2'>
                                                 <span className='truncate'>Org: {sanitizeOrganizationDisplayCopy(item.organizationId || organization.id)}</span>
@@ -1964,7 +1964,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
             <div className='mt-4 grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
-                        <p className='truncate text-sm font-semibold text-ui-text dark:text-white'>{sanitizeOrganizationDisplayCopy(selectedSubjectLabel(selectedSubject, organization, bundle))}</p>
+                        <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(selectedSubjectLabel(selectedSubject, organization, bundle))}</p>
                         <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{selectedSubject.type}</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
@@ -1996,7 +1996,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                             {item.ok ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-ui-danger' />}
                             <div className='min-w-0 flex-1'>
                                 <div className='flex flex-wrap items-center gap-2'>
-                                    <p className='truncate text-sm font-semibold text-ui-text dark:text-white'>{sanitizeOrganizationDisplayCopy(item.title) || item.title}</p>
+                                    <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(item.title) || item.title}</p>
                                     {item.subjectType && <span className='rounded-md bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>{item.subjectType}</span>}
                                 </div>
                                 <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(item.detail) || item.detail}</p>
@@ -2028,7 +2028,7 @@ function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, tit
     return (
         <div className='rounded-lg border border-ui-border p-3 dark:border-ui-border'>
             <div className='flex items-center justify-between gap-3'>
-                <h3 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-white'>{icon}{title}</h3>
+                <h3 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>{icon}{title}</h3>
                 <div className='flex items-center gap-1'>
                     <button type='button' className={iconButtonClass} aria-label={`Copy ${title} route`} onClick={() => void copyRoute()} data-org-scope-copy='true'>
                         <Copy className='h-4 w-4' />
@@ -2057,7 +2057,7 @@ function SectionTitle({ icon, title, detail }: { icon: ReactNode, title: string,
     return (
         <div className='flex items-start justify-between gap-4'>
             <div>
-                <h2 className='flex items-center gap-2 text-base font-semibold text-ui-text dark:text-white'>{icon}{title}</h2>
+                <h2 className='flex items-center gap-2 text-base font-semibold text-ui-text dark:text-ui-text'>{icon}{title}</h2>
                 <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>{detail}</p>
             </div>
         </div>
@@ -2068,7 +2068,7 @@ function Metric({ icon, label, value, detail }: { icon: ReactNode, label: string
     return (
         <div className='min-w-0 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas'>
             <p className='flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{icon}{label}</p>
-            <p className='mt-2 truncate text-2xl font-semibold text-ui-text dark:text-white'>{value}</p>
+            <p className='mt-2 truncate text-2xl font-semibold text-ui-text dark:text-ui-text'>{value}</p>
             <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{detail}</p>
         </div>
     )
@@ -2762,7 +2762,7 @@ function deliveryTime(delivery: DeliveryRow) {
 
 const inputClass = 'h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/15 disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text dark:placeholder:text-ui-muted dark:focus:border-ui-primary/35 dark:disabled:bg-ui-raised'
 const compactSelectClass = 'h-9 rounded-lg border border-ui-border bg-ui-panel px-2 text-sm font-semibold text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/15 disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text'
-const primaryButtonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-white transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55 dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-panel'
+const primaryButtonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55 dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-panel'
 const secondaryButtonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
 const iconButtonClass = 'grid h-10 w-10 place-items-center rounded-lg border border-ui-border bg-ui-panel text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
 const iconDangerButtonClass = 'grid h-10 w-10 place-items-center rounded-lg border border-ui-danger/35 bg-ui-danger/10 text-ui-danger transition hover:bg-ui-danger/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-danger/35 dark:bg-ui-danger/10 dark:text-ui-danger dark:hover:bg-ui-danger/10'
