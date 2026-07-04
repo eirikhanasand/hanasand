@@ -42,10 +42,12 @@ export default function LoadTestingOperations() {
     const [targetUrl, setTargetUrl] = useState('')
     const [scenarioId, setScenarioId] = useState(scenarioPresets[0].id)
     const [historyView, setHistoryView] = useState<'mine' | 'global'>('mine')
+    const [permissionConfirmed, setPermissionConfirmed] = useState(false)
     const [isStarting, setIsStarting] = useState(false)
     const [error, setError] = useState('')
     const selectedScenario = scenarioPresets.find((scenario) => scenario.id === scenarioId) ?? scenarioPresets[0]
-    const canStart = isValidServiceUrl(targetUrl)
+    const validTarget = isValidServiceUrl(targetUrl)
+    const canStart = validTarget && permissionConfirmed
 
     useEffect(() => {
         let active = true
@@ -101,7 +103,7 @@ export default function LoadTestingOperations() {
                                 <ShieldCheck className='h-3.5 w-3.5' />
                                 Permission-gated
                             </p>
-                            <h2 className='mt-3 text-2xl font-semibold tracking-normal text-ui-text md:text-3xl'>Run a service check with evidence you can act on</h2>
+                            <h2 className='mt-3 text-2xl font-semibold tracking-normal text-ui-text md:text-3xl'>Check an endpoint you control</h2>
                             <p className='mt-2 text-sm leading-6 text-ui-muted'>Run a permitted HTTP check, then open the result for latency, failures, logs, and response evidence.</p>
                         </div>
                         <form onSubmit={startCheck} className='grid gap-3'>
@@ -125,6 +127,18 @@ export default function LoadTestingOperations() {
                                     {isStarting ? 'Starting' : 'Start check'}
                                 </button>
                             </div>
+                            <label className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm transition ${permissionConfirmed ? 'border-ui-success/35 bg-ui-success/10 text-ui-text' : 'border-ui-border bg-ui-raised text-ui-muted'}`} data-load-test-permission-gate>
+                                <input
+                                    type='checkbox'
+                                    checked={permissionConfirmed}
+                                    onChange={(event) => setPermissionConfirmed(event.target.checked)}
+                                    className='mt-1 h-4 w-4 rounded border-ui-border text-ui-primary focus:ring-ui-primary/30'
+                                />
+                                <span className='grid gap-1'>
+                                    <span className='font-semibold text-ui-text'>I own this endpoint or have written permission to test it.</span>
+                                    <span className='text-xs leading-5 text-ui-muted'>{validTarget ? 'Ready for a baseline-safe check.' : 'Enter a valid HTTP/S endpoint before starting.'}</span>
+                                </span>
+                            </label>
                             <div className='flex flex-wrap items-center gap-2 text-xs text-ui-subtle'>
                                 <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5 font-medium text-ui-text'>{selectedScenario.label}: {selectedScenario.detail}</span>
                                 <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5'>{Math.round(selectedScenario.timeout / 1000)}s timeout</span>
