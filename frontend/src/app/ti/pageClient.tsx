@@ -6041,9 +6041,7 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
                         </div>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(item.nextAction)}</p>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                            {item.alertIds.length ? `Alerts ${item.alertIds.slice(0, 2).join(', ')}` : 'Alert ID pending'}
-                            {item.casePaths.length ? ` · cases ${item.casePaths.slice(0, 2).join(', ')}` : ''}
-                            {item.captureIds.length ? ` · captures ${item.captureIds.slice(0, 2).join(', ')}` : ''}
+                            {caseReviewReferenceSummary(item)}
                         </p>
                         {item.blockers.length ? (
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(item.blockers.slice(0, 3))}</p>
@@ -6055,7 +6053,7 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
                 <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                     {plan.replayRows.slice(0, 3).map(row => (
                         <span key={row.id} className={sourceHealthChipClass(row.ready ? 'ready' : 'blocked')}>
-                            {row.caseId ? `case ${row.caseId}` : row.blockerCodes.slice(0, 2).join(', ') || 'case link pending'}
+                            {row.caseId ? 'case linked' : row.blockerCodes.slice(0, 2).join(', ') || 'case link pending'}
                         </span>
                     ))}
                 </div>
@@ -6067,6 +6065,15 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
             )}
         </div>
     )
+}
+
+function caseReviewReferenceSummary(item: SelectedCaseOwnershipPlan['caseReviewItems'][number]) {
+    const parts = [
+        item.alertIds.length ? `${item.alertIds.length} alert${item.alertIds.length === 1 ? '' : 's'} linked` : 'alert link pending',
+        item.casePaths.length ? `${item.casePaths.length} case route${item.casePaths.length === 1 ? '' : 's'} linked` : '',
+        item.captureIds.length ? `${item.captureIds.length} capture${item.captureIds.length === 1 ? '' : 's'} linked` : '',
+    ].filter(Boolean)
+    return parts.join(' · ')
 }
 
 function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCreateRequest }) {
@@ -6137,7 +6144,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                     </span>
                     {request.watchlistBasis.intersections.slice(0, 2).map(item => (
                         <span key={item.intersectionId} className={sourceHealthChipClass(item.state === 'ready' ? 'ready' : item.state === 'blocked' ? 'blocked' : 'review')}>
-                            {item.watchlistItemId ? `watchlist ${item.watchlistItemId}` : item.value}
+                            {item.watchlistItemId ? 'watchlist linked' : item.value}
                         </span>
                     ))}
                 </div>
@@ -6151,18 +6158,18 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                         <div key={`${row.sourceId ?? row.sourceName}:${row.provenance}:${row.captureId ?? 'pending'}`} className='rounded-md border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-panel'>
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
-                                    <p className='wrap-break-word text-[11px] font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}{row.sourceId ? ` · source ${row.sourceId}` : ''}</p>
+                                    <p className='wrap-break-word text-[11px] font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}{row.sourceId ? ' · source linked' : ''}</p>
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.provenance)}</p>
                                 </div>
-                                <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? `capture ${row.captureId}` : 'capture needed'}</span>
+                                <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'capture linked' : 'capture needed'}</span>
                             </div>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                 {row.reportDate ? formatDate(row.reportDate) : 'report date pending'}{typeof row.confidence === 'number' ? ` · ${sourceBasisLabel(row.confidence)}` : ''}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
                             </p>
                             <div data-ti-selected-case-provenance-fingerprints='true' className='mt-1 flex min-w-0 flex-wrap gap-1.5'>
                                 <span className={sourceHealthChipClass('review')}>{row.provenanceRefs.length} source ref{row.provenanceRefs.length === 1 ? '' : 's'}</span>
-                                <span className='max-w-full break-all rounded-md border border-ui-border bg-ui-panel px-2 py-1 font-mono text-[10px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                    {row.provenanceFingerprint}
+                                <span className={sourceHealthChipClass(row.provenanceFingerprint ? 'ready' : 'blocked')}>
+                                    {row.provenanceFingerprint ? 'fingerprint linked' : 'fingerprint pending'}
                                 </span>
                             </div>
                         </div>
@@ -6170,7 +6177,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                 </div>
             ) : null}
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
-                {request.refs.alertIds.slice(0, 3).map(id => <span key={id} className={sourceHealthChipClass('ready')}>alert {id}</span>)}
+                {request.refs.alertIds.slice(0, 3).map(id => <span key={id} className={sourceHealthChipClass('ready')}>alert linked</span>)}
                 {request.refs.casePaths.slice(0, 2).map(path => <span key={path} className={sourceHealthChipClass('ready')}>{displayRequirementText(path)}</span>)}
                 {request.consumerStage?.request ? <span className={sourceHealthChipClass(request.ready ? 'ready' : 'blocked')}>{request.consumerStage.request}</span> : null}
             </div>
@@ -6193,10 +6200,10 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                 {row.casePaths.slice(0, 2).map(path => <span key={path} className={sourceHealthChipClass('ready')}>{displayRequirementText(path)}</span>)}
                                 {row.replay.exportRoute ? <span className={sourceHealthChipClass('ready')}>{sourceRequestRouteLabel(row.replay.exportRoute)}</span> : null}
-                                {row.sourceIds.slice(0, 3).map(sourceId => <span key={sourceId} className={sourceHealthChipClass('review')}>source {sourceId}</span>)}
+                                {row.sourceIds.slice(0, 3).map(sourceId => <span key={sourceId} className={sourceHealthChipClass('review')}>source linked</span>)}
                                 {row.provenanceFingerprints.slice(0, 2).map(fingerprint => (
-                                    <span key={fingerprint} className='max-w-full break-all rounded-md border border-ui-border bg-ui-panel px-2 py-1 font-mono text-[10px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                        {fingerprint}
+                                    <span key={fingerprint} className={sourceHealthChipClass('ready')}>
+                                        fingerprint linked
                                     </span>
                                 ))}
                             </div>
