@@ -116,6 +116,31 @@ function stats(events: AdminAuditEvent[]) {
     }
 }
 
+function selectedAuditEvent(events: AdminAuditEvent[], params: AuditSearchParams) {
+    const request = param(params, 'request').trim()
+    const entity = param(params, 'entity').trim()
+    const action = param(params, 'action').trim()
+    const target = param(params, 'target').trim()
+
+    return events.find(event => (
+        (request && event.request_id === request)
+        || (entity && event.entity_id === entity)
+        || (action && event.action_type === action)
+        || (target && (event.target_id === target || event.target_name === target))
+    )) || events[0]
+}
+
+function auditDetailRows(event: AdminAuditEvent) {
+    return [
+        ['Actor', event.actor_name || event.actor_id],
+        ['Target', event.target_name || event.target_id || event.target_type],
+        ['Organization', event.organization_name || event.organization_id],
+        ['Request', event.request_id],
+        ['Entity', event.entity_id],
+        ['Source', `${event.source}/${event.service}`],
+    ].filter(([, value]) => value)
+}
+
 function auditSnapshotHeadline(eventCount: number, eventStats: ReturnType<typeof stats>) {
     if (!eventCount) return 'No matching support events'
     if (eventStats.critical) return `${eventStats.critical} critical event${eventStats.critical === 1 ? '' : 's'} need review`
@@ -147,7 +172,7 @@ export default async function ImpersonationAuditPage({
     }).catch(() => null)
     const payload = response?.ok ? await response.json().catch(() => null) : null
     const events = Array.isArray(payload?.events) ? payload.events as AdminAuditEvent[] : []
-    const selectedEvent = events[0]
+    const selectedEvent = selectedAuditEvent(events, params)
     const eventStats = stats(events)
     const filterEntries = activeFilterEntries(params)
     const primarySearch = param(params, 'q')
@@ -237,7 +262,7 @@ export default async function ImpersonationAuditPage({
                                     <h2 className='text-sm font-semibold text-ui-text'>Audit timeline</h2>
                                     <span className='rounded-md bg-ui-raised px-2 py-1 text-xs font-medium text-ui-muted'>{events.length} events</span>
                                 </div>
-                                <p className='mt-1 text-xs text-ui-muted'>{events.length ? 'Newest matching event is selected for detail.' : 'Search or open filters to find support activity.'}</p>
+                                <p className='mt-1 text-xs text-ui-muted'>{events.length ? 'Use Focus to inspect a specific event without opening every control.' : 'Search or open filters to find support activity.'}</p>
                             </div>
                             <div className='border-t border-ui-border bg-ui-raised px-4 py-3 md:border-l md:border-t-0'>
                                 <div className='text-[10px] font-semibold uppercase tracking-[0.16em] text-ui-muted'>Selected detail</div>
@@ -261,34 +286,38 @@ export default async function ImpersonationAuditPage({
                                         ))}
                                     </div>
                                 </div>
-                            ) : events.map((event) => (
-                                <article key={event.id} className='grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_11rem] md:items-start'>
-                                    <div className='min-w-0'>
-                                        <div className='flex flex-wrap items-center gap-2 text-sm text-ui-text'>
-                                            <strong className='min-w-0 truncate'>{event.action_type}</strong>
-                                            <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${severityClass(event.severity)}`}>{event.severity}</span>
-                                            <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass(event.outcome)}`}>{event.outcome}</span>
-                                            <span className='rounded-md bg-ui-raised px-2 py-1 text-xs text-ui-muted'>{event.source}/{event.service}</span>
+                            ) : events.map((event) => {
+                                const focused = selectedEvent?.id === event.id
+                                return (
+                                    <article key={event.id} className={`grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_11rem] md:items-start ${focused ? 'bg-ui-primary/5 ring-1 ring-inset ring-ui-primary/25' : ''}`} data-helpdesk-focused-event={focused ? 'true' : undefined}>
+                                        <div className='min-w-0'>
+                                            <div className='flex flex-wrap items-center gap-2 text-sm text-ui-text'>
+                                                <strong className='min-w-0 truncate'>{event.action_type}</strong>
+                                                {focused ? <span className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-[11px] font-semibold uppercase text-ui-primary'>Focused</span> : null}
+                                                <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${severityClass(event.severity)}`}>{event.severity}</span>
+                                                <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass(event.outcome)}`}>{event.outcome}</span>
+                                                <span className='rounded-md bg-ui-raised px-2 py-1 text-xs text-ui-muted'>{event.source}/{event.service}</span>
+                                            </div>
+                                            <div className='mt-2 flex flex-wrap gap-2 text-xs text-ui-muted'>
+                                                <span className='rounded-md bg-ui-raised px-2 py-1'>actor {event.actor_name || event.actor_id}</span>
+                                                {event.target_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>{event.target_type || 'target'} {event.target_name || event.target_id}</span> : null}
+                                                {event.organization_id ? <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-ui-primary'>{event.organization_name || event.organization_id}</span> : null}
+                                                {event.entity_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>entity {event.entity_id}</span> : null}
+                                                {event.request_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>request {event.request_id}</span> : null}
+                                            </div>
+                                            {event.reason ? <p className='mt-2 text-sm text-ui-muted'>{event.reason}</p> : null}
+                                            {contextText(event.context) ? <p className='mt-1 text-xs text-ui-muted'>{contextText(event.context)}</p> : null}
                                         </div>
-                                        <div className='mt-2 flex flex-wrap gap-2 text-xs text-ui-muted'>
-                                            <span className='rounded-md bg-ui-raised px-2 py-1'>actor {event.actor_name || event.actor_id}</span>
-                                            {event.target_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>{event.target_type || 'target'} {event.target_name || event.target_id}</span> : null}
-                                            {event.organization_id ? <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-ui-primary'>{event.organization_name || event.organization_id}</span> : null}
-                                            {event.entity_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>entity {event.entity_id}</span> : null}
-                                            {event.request_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>request {event.request_id}</span> : null}
+                                        <div className='text-left text-xs text-ui-muted md:text-right'>
+                                            <div>{formatTime(event.created_at)}</div>
+                                            <div className='mt-1 max-w-xl truncate'>{event.ip}</div>
+                                            <Link className='mt-2 inline-flex rounded-md border border-ui-border px-2 py-1 font-semibold text-ui-text hover:bg-ui-raised' href={`/dashboard/system/impersonation?request=${encodeURIComponent(event.request_id || '')}&entity=${encodeURIComponent(event.entity_id || '')}&source=${encodeURIComponent(event.source)}&service=${encodeURIComponent(event.service)}`}>
+                                                Focus
+                                            </Link>
                                         </div>
-                                        {event.reason ? <p className='mt-2 text-sm text-ui-muted'>{event.reason}</p> : null}
-                                        {contextText(event.context) ? <p className='mt-1 text-xs text-ui-muted'>{contextText(event.context)}</p> : null}
-                                    </div>
-                                    <div className='text-left text-xs text-ui-muted md:text-right'>
-                                        <div>{formatTime(event.created_at)}</div>
-                                        <div className='mt-1 max-w-xl truncate'>{event.ip}</div>
-                                        <Link className='mt-2 inline-flex rounded-md border border-ui-border px-2 py-1 font-semibold text-ui-text hover:bg-ui-raised' href={`/dashboard/system/impersonation?request=${encodeURIComponent(event.request_id || '')}&entity=${encodeURIComponent(event.entity_id || '')}&source=${encodeURIComponent(event.source)}&service=${encodeURIComponent(event.service)}`}>
-                                            Focus
-                                        </Link>
-                                    </div>
-                                </article>
-                            ))}
+                                    </article>
+                                )
+                            })}
                         </div>
                     </DashboardPanel>
                 </div>
@@ -303,6 +332,27 @@ export default async function ImpersonationAuditPage({
                             <SnapshotFact label='Sessions' value={String(eventStats.impersonation)} />
                         </div>
                     </DashboardPanel>
+                    {selectedEvent ? (
+                        <DashboardPanel className='p-4' data-helpdesk-selected-detail>
+                            <div className='flex flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-ui-muted'>Selected event</p>
+                                    <h2 className='mt-1 truncate text-sm font-semibold text-ui-text'>{selectedEvent.action_type}</h2>
+                                </div>
+                                <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass(selectedEvent.outcome)}`}>{selectedEvent.outcome}</span>
+                            </div>
+                            <dl className='mt-3 grid gap-2 text-xs text-ui-muted'>
+                                {auditDetailRows(selectedEvent).map(([label, value]) => (
+                                    <div className='grid gap-1 rounded-md border border-ui-border bg-ui-raised px-3 py-2' key={label}>
+                                        <dt className='font-semibold uppercase text-ui-muted'>{label}</dt>
+                                        <dd className='truncate font-medium text-ui-text'>{value}</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                            {selectedEvent.reason ? <p className='mt-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-sm leading-6 text-ui-muted'>{selectedEvent.reason}</p> : null}
+                            {contextText(selectedEvent.context) ? <p className='mt-2 text-xs leading-5 text-ui-muted'>{contextText(selectedEvent.context)}</p> : null}
+                        </DashboardPanel>
+                    ) : null}
                     <DashboardPanel className='p-0' id='support-actions'>
                         <div className='border-b border-ui-border px-4 py-3'>
                             <h2 className='text-sm font-semibold text-ui-text'>Support actions</h2>
