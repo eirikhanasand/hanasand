@@ -1823,7 +1823,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizedAuthenticatedRoute(route: string | undefined) {
     if (!route) return '/dashboard/dwm'
-    if (route.startsWith('/v1/cases')) return '/dashboard/ti/workbench'
+    if (route.startsWith('/v1/cases')) return '/dashboard'
     if (route.startsWith('/v1/dwm')) return '/dashboard/dwm'
     if (route.startsWith('/dashboard')) return route
     return '/dashboard/dwm'
