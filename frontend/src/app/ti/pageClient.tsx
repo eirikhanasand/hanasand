@@ -4181,7 +4181,7 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Related alerts/cases</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {records.length} linked record{records.length === 1 ? '' : 's'} · {actionability.caseReplayReadiness.summary.ready} replay-ready · {actionability.webhookDeliveryHandoff.ready ? 'delivery ready' : 'delivery syncing'}
+                        {records.length} linked record{records.length === 1 ? '' : 's'} · {actionability.caseReplayReadiness.summary.ready} ready to replay · {actionability.webhookDeliveryHandoff.ready ? 'delivery ready' : 'delivery syncing'}
                     </p>
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -4219,7 +4219,7 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                         <div className='min-w-0'>
                             <p className='text-xs font-semibold uppercase text-ui-warning'>Case review intake</p>
                             <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-warning'>
-                                {caseIntake.summary.total} candidate{caseIntake.summary.total === 1 ? '' : 's'} for {query} · {actionability.caseReplayReadiness.summary.ready} replay-ready · {caseIntake.summary.captures} capture{caseIntake.summary.captures === 1 ? '' : 's'}
+                                {caseIntake.summary.total} candidate{caseIntake.summary.total === 1 ? '' : 's'} for {query} · {actionability.caseReplayReadiness.summary.ready} ready to replay · {caseIntake.summary.captures} capture{caseIntake.summary.captures === 1 ? '' : 's'}
                             </p>
                         </div>
                         <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -5845,7 +5845,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                         {request.watchlistBasis.relevanceRows.filter(row => row.alertable).length} ready for review
                     </span>
                     <span className={sourceHealthChipClass(request.actionReplay.ready ? 'ready' : 'blocked')}>
-                        {request.actionReplay.rows.filter(row => row.ready).length}/{request.actionReplay.rows.length} replay-ready
+                        {request.actionReplay.rows.filter(row => row.ready).length}/{request.actionReplay.rows.length} ready to replay
                     </span>
                     {request.watchlistBasis.intersections.slice(0, 2).map(item => (
                         <span key={item.intersectionId} className={sourceHealthChipClass(item.state === 'ready' ? 'ready' : item.state === 'blocked' ? 'blocked' : 'review')}>
@@ -7827,7 +7827,7 @@ function selectedCaseOwnershipFor(
         state,
         route,
         nextAction: ready
-            ? 'Open the authenticated case workflow with this selected evidence and replay-ready references.'
+            ? 'Open the authenticated case workflow with this selected evidence and replayable references.'
             : blockerDetails.length ? `Resolve ${displayRequirementList(blockerDetails.slice(0, 2))} before assigning this evidence to a case.` : 'Review the selected case candidate and choose the authenticated owner.',
         owner: {
             lane: firstOwnerLane,
