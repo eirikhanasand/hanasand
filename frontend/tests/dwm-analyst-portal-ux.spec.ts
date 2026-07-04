@@ -1,19 +1,22 @@
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { dwmNextOperatorAction, type DwmNextOperatorActionInput } from '@/utils/dwm/nextOperatorAction'
 
 const root = process.cwd()
 
 test('dwm analyst portal keeps alert triage primary while disclosing route setup', async () => {
     const page = await readFile(path.join(root, 'src/app/dashboard/dwm/dwm-analyst-portal.tsx'), 'utf8')
+    const actionContract = await readFile(path.join(root, 'src/utils/dwm/nextOperatorAction.ts'), 'utf8')
 
     expect(page).toContain('Recent attacks')
     expect(page).toContain('Search company, actor, term, or status')
     expect(page).toContain('SelectedActionBar')
     expect(page).toContain('data-dwm-next-action=\'true\'')
-    expect(page).toContain('nextOperatorAction({')
-    expect(page).toContain('Send customer delivery')
-    expect(page).toContain('Waiting for source context')
+    expect(page).toContain('dwmNextOperatorAction({')
+    expect(page).toContain('nextOperatorActionBusy')
+    expect(actionContract).toContain('Send customer delivery')
+    expect(actionContract).toContain('Waiting for source context')
     expect(page).toContain('Customer delivery')
     expect(page).toContain('caseDetailHref')
     expect(page).toContain('&focus=destinations')
@@ -36,4 +39,50 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(page).toContain('onReplay={replayAlert}')
     expect(page).toContain('onTest={testDelivery}')
     expect(page).toContain('onSend={sendAlert}')
+})
+
+test('dwm next operator action prioritizes the workflow step an analyst can take now', () => {
+    const base: DwmNextOperatorActionInput = {
+        reviewState: 'reviewing',
+        deliveryState: 'pending_review',
+        caseReady: false,
+        transitionReady: true,
+        replayReady: false,
+        deliverReady: false,
+        closeReady: false,
+        reopenReady: false,
+        suppressReady: false,
+    }
+
+    expect(dwmNextOperatorAction({ ...base, caseHref: '/dashboard/cases/case-1', latestDeliveryStatus: 'delivered', latestDeliverySummary: 'delivered from 2m ago' })).toMatchObject({
+        kind: 'open_case_link',
+        href: '/dashboard/cases/case-1',
+        label: 'Review case and delivery trail',
+    })
+
+    expect(dwmNextOperatorAction({ ...base, caseReady: true })).toMatchObject({
+        kind: 'open_case',
+        cta: 'Open case',
+    })
+
+    expect(dwmNextOperatorAction({ ...base, deliverReady: true, latestDeliveryStatus: 'dry_run' })).toMatchObject({
+        kind: 'send',
+        cta: 'Send',
+    })
+
+    expect(dwmNextOperatorAction({ ...base, deliverReady: true })).toMatchObject({
+        kind: 'test',
+        cta: 'Test',
+    })
+
+    expect(dwmNextOperatorAction({ ...base, transitionReady: false, replayReady: true })).toMatchObject({
+        kind: 'replay',
+        cta: 'Replay',
+    })
+
+    expect(dwmNextOperatorAction({ ...base, transitionReady: false })).toMatchObject({
+        kind: 'wait',
+        disabled: true,
+        cta: 'Unavailable',
+    })
 })

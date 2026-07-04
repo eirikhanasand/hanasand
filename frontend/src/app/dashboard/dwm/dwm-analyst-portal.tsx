@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
 import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
+import { dwmNextOperatorAction, type DwmNextOperatorActionKind } from '@/utils/dwm/nextOperatorAction'
 import { DwmWorkflowActions } from './dwm-workflow-actions'
 
 type PortalAlert = DwmAlert & {
@@ -1498,9 +1499,11 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const caseId = alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
     const caseHref = caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert), 'alert_queue') : undefined
     const caseReady = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
-    const nextAction = nextOperatorAction({
-        alert,
-        latestDelivery,
+    const nextAction = dwmNextOperatorAction({
+        reviewState: alert.reviewState,
+        deliveryState: alert.deliveryState,
+        latestDeliveryStatus: latestDelivery?.status,
+        latestDeliverySummary: latestDelivery ? `${stateLabel(latestDelivery.status)} from ${relativeTimeLabel(latestDelivery.attemptedAt)}` : undefined,
         caseHref,
         caseReady,
         transitionReady,
@@ -1509,14 +1512,30 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
         closeReady,
         reopenReady,
         suppressReady,
-        busyAction,
-        onUpdate,
-        onOpenCase,
-        onReplay,
-        onTest,
-        onSend,
-        persistedOwner,
     })
+    const nextActionBusy = nextOperatorActionBusy(nextAction.kind, alert.id) === busyAction
+    const onNextAction = () => {
+        switch (nextAction.kind) {
+            case 'reopen':
+                return onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)
+            case 'open_case':
+                return onOpenCase()
+            case 'review':
+                return onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)
+            case 'send':
+                return onSend(alert.id)
+            case 'test':
+                return onTest(alert.id)
+            case 'replay':
+                return onReplay(alert.id)
+            case 'close':
+                return onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)
+            case 'suppress':
+                return onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)
+            default:
+                return undefined
+        }
+    }
     return (
         <section className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-raised p-3'>
             <div className='grid gap-3 rounded-lg border border-ui-primary/35 bg-ui-panel p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center' data-dwm-next-action='true'>
@@ -1530,8 +1549,8 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                         {nextAction.cta}
                     </a>
                 ) : (
-                    <button type='button' onClick={nextAction.onClick} disabled={nextAction.disabled || nextAction.busy} className='inline-flex min-h-10 items-center justify-center rounded-lg border border-ui-text bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border-ui-border disabled:bg-ui-panel disabled:text-ui-muted focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
-                        {nextAction.busy ? 'Working' : nextAction.cta}
+                    <button type='button' onClick={onNextAction} disabled={nextAction.disabled || nextActionBusy} className='inline-flex min-h-10 items-center justify-center rounded-lg border border-ui-text bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border-ui-border disabled:bg-ui-panel disabled:text-ui-muted focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                        {nextActionBusy ? 'Working' : nextAction.cta}
                     </button>
                 )}
             </div>
@@ -1569,118 +1588,13 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     )
 }
 
-type NextOperatorActionInput = {
-    alert: PortalAlert
-    latestDelivery?: DeliveryItem
-    caseHref?: string
-    caseReady: boolean
-    transitionReady: boolean
-    replayReady: boolean
-    deliverReady: boolean
-    closeReady: boolean
-    reopenReady: boolean
-    suppressReady: boolean
-    busyAction: string | null
-    persistedOwner?: string
-    onUpdate: (alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) => Promise<void>
-    onOpenCase: () => Promise<void>
-    onReplay: (alertId: string) => Promise<void>
-    onTest: (alertId: string) => Promise<void>
-    onSend: (alertId: string) => Promise<void>
-}
-
-function nextOperatorAction(input: NextOperatorActionInput) {
-    const { alert, latestDelivery, caseHref, caseReady, transitionReady, replayReady, deliverReady, closeReady, reopenReady, suppressReady, busyAction, persistedOwner, onUpdate, onOpenCase, onReplay, onTest, onSend } = input
-    if (alert.reviewState === 'resolved' || alert.deliveryState === 'muted' || alert.reviewState === 'false_positive') {
-        return {
-            label: 'Reopen if this still needs work',
-            detail: 'This alert is no longer active. Reopen it only if new evidence or a customer request requires review.',
-            cta: 'Reopen',
-            busy: busyAction === `update:${alert.id}`,
-            disabled: !reopenReady,
-            onClick: () => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner),
-        }
-    }
-    if (caseHref) {
-        return {
-            label: latestDelivery ? 'Review case and delivery trail' : 'Continue in the linked case',
-            detail: latestDelivery ? `Latest delivery is ${stateLabel(latestDelivery.status)} from ${relativeTimeLabel(latestDelivery.attemptedAt)}.` : 'The case is linked. Continue investigation, ownership, and customer notes in the case trail.',
-            cta: 'Open case',
-            href: caseHref,
-            busy: false,
-            disabled: false,
-        }
-    }
-    if (caseReady) {
-        return {
-            label: 'Open the case',
-            detail: 'Evidence is present. Open a case before delivery so analyst notes, owner, and replay context are preserved.',
-            cta: 'Open case',
-            busy: busyAction === `case:${alert.id}`,
-            disabled: false,
-            onClick: onOpenCase,
-        }
-    }
-    if (transitionReady && alert.reviewState !== 'reviewing') {
-        return {
-            label: 'Start analyst review',
-            detail: 'Mark the alert as under review before suppressing, escalating, or sending customer delivery.',
-            cta: 'Review',
-            busy: busyAction === `update:${alert.id}`,
-            disabled: false,
-            onClick: () => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner),
-        }
-    }
-    if (deliverReady && latestDelivery?.status === 'dry_run') {
-        return {
-            label: 'Send customer delivery',
-            detail: 'A dry-run delivery exists. Send only after the case and customer-safe evidence are ready.',
-            cta: 'Send',
-            busy: busyAction === `send:${alert.id}`,
-            disabled: false,
-            onClick: () => onSend(alert.id),
-        }
-    }
-    if (deliverReady) {
-        return {
-            label: 'Test delivery route',
-            detail: 'Run a dry delivery first to validate the configured destination and record the attempt.',
-            cta: 'Test',
-            busy: busyAction === `test:${alert.id}`,
-            disabled: false,
-            onClick: () => onTest(alert.id),
-        }
-    }
-    if (replayReady) {
-        return {
-            label: 'Replay evidence',
-            detail: 'Replay the source match to refresh evidence context before case or delivery actions.',
-            cta: 'Replay',
-            busy: busyAction === `replay:${alert.id}`,
-            disabled: false,
-            onClick: () => onReplay(alert.id),
-        }
-    }
-    if (closeReady || suppressReady) {
-        return {
-            label: 'Close or suppress after review',
-            detail: 'No delivery route is ready. Close the alert if it is resolved, or suppress it if the match is not relevant.',
-            cta: closeReady ? 'Close' : 'Suppress',
-            busy: busyAction === `update:${alert.id}`,
-            disabled: !(closeReady || suppressReady),
-            onClick: () => closeReady
-                ? onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)
-                : onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner),
-        }
-    }
-    return {
-        label: 'Waiting for source context',
-        detail: 'The alert needs source evidence or route state before case, replay, or delivery actions can run.',
-        cta: 'Unavailable',
-        busy: false,
-        disabled: true,
-        onClick: () => undefined,
-    }
+function nextOperatorActionBusy(kind: DwmNextOperatorActionKind, alertId: string) {
+    if (kind === 'open_case') return `case:${alertId}`
+    if (kind === 'replay') return `replay:${alertId}`
+    if (kind === 'test') return `test:${alertId}`
+    if (kind === 'send') return `send:${alertId}`
+    if (kind === 'reopen' || kind === 'review' || kind === 'close' || kind === 'suppress') return `update:${alertId}`
+    return undefined
 }
 
 function ActionAvailability({ label, ready }: { label: string, ready: boolean }) {
