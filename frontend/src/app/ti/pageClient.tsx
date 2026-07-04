@@ -314,9 +314,6 @@ function Results({ result }: { result: TiSearchResponse }) {
     return (
         <div className='grid gap-6'>
             <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                <div className='border-b border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>
-                    <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
-                </div>
                 {mobileEvidenceWorkbar ? <div className='border-b border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
                 {selected ? (
                     <div className='border-b border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>
@@ -344,9 +341,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                             </div>
                         </div>
                         <div className='grid min-w-0 content-start gap-3'>
-                            <div className='hidden lg:block'>
-                                <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
-                            </div>
                             {selected ? (
                                 <div className='hidden min-w-0 lg:grid lg:content-start lg:gap-3'>
                                     <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
@@ -357,6 +351,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     Select a finding to inspect evidence, source context, and case handoff.
                                 </div>
                             )}
+                            <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                         </div>
                         <div className='min-w-0 xl:col-span-2'>
                             <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />

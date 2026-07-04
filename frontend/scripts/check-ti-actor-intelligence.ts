@@ -679,7 +679,7 @@ assert(pageClientSource.includes('TopEvidenceQueuePreview'), 'Public TI desktop 
 assert(pageClientSource.includes('filteredWorkItems.slice(0, 4)'), 'Public TI default queue should stay capped to four rows before expansion.')
 assert(pageClientSource.includes('items.slice(0, 3)'), 'Public TI hero evidence preview should stay capped to three rows.')
 assert(pageClientSource.includes('text-white transition hover:bg-ui-raised'), 'Public TI search submit should render visible text on the dark button.')
-assert(pageClientSource.indexOf('<ThreatActorMap actor={actorIntel}') < pageClientSource.lastIndexOf('TopSelectedEvidencePanel selected={selected}'), 'Public TI desktop hero should put actor geography before selected evidence.')
+assert(pageClientSource.indexOf('TopSelectedEvidencePanel selected={selected}') < pageClientSource.indexOf('<ThreatActorMap actor={actorIntel}'), 'Public TI desktop hero should put selected evidence before actor geography.')
 assert(pageClientSource.includes('data-ti-selected-evidence-command-strip'), 'Selected evidence should use a compact command strip instead of stacking summary cards.')
 assert(pageClientSource.includes('CompactEvidenceFact'), 'Selected evidence command strip should render dense source/date/basis/case facts.')
 assert(pageClientSource.includes('Actions below'), 'Selected evidence command strip should avoid adding redundant action controls above the existing action rail.')
