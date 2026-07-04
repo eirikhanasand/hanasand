@@ -296,7 +296,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
             setMessage({ ok: true, text })
             router.refresh()
         } catch (error) {
-            setMessage({ ok: false, text: error instanceof Error ? error.message : String(error) })
+            setMessage({ ok: false, text: safeActionMessage(error) })
         } finally {
             setBusyAction(null)
         }
@@ -2534,6 +2534,11 @@ function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[], context?:
 
 function safeTimelineDetail(value: string) {
     return safeEvidenceExcerpt(value)
+}
+
+function safeActionMessage(value: unknown) {
+    const raw = value instanceof Error ? value.message : typeof value === 'string' ? value : String(value || '')
+    return safeTimelineDetail(raw) || 'Action could not be completed.'
 }
 
 function actionReady(alert: PortalAlert, action: DwmAlertAnalystAction) {
