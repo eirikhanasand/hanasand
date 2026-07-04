@@ -339,6 +339,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
                                 ))}
                             </div>
+                            <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
                         </div>
                         <div className='grid min-w-0 content-start gap-3'>
                             {selected ? (
@@ -351,10 +352,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     Select a finding to inspect evidence, source context, and case handoff.
                                 </div>
                             )}
-                            <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
-                        </div>
-                        <div className='min-w-0 xl:col-span-2'>
-                            <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
                         </div>
                     </div>
                 </div>
@@ -509,6 +506,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                             <TiCommandBar links={commandLinks} />
                                             <SectionOverviewRail items={sectionOverview} />
                                         </div>
+                                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                                         <ActorIntelligenceDossier
                                             actor={actorIntel}
                                             actionability={actionability}
@@ -9570,9 +9568,9 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
         <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex items-center justify-between gap-3 border-b border-ui-border px-4 py-3 dark:border-ui-border'>
                 <div>
-                    <h2 className='text-sm font-semibold text-ui-text dark:text-ui-text'>{hasPoints ? 'Actor country map' : 'Geography coverage'}</h2>
+                    <h2 className='text-sm font-semibold text-ui-text dark:text-ui-text'>Actor country map</h2>
                     <p className='mt-0.5 text-xs text-ui-muted dark:text-ui-muted'>
-                        {hasPoints ? 'Reported operator origin and victim or target countries from linked sources.' : hasRegionalAreas ? 'Regional operating areas from cited actor reporting.' : 'Country-level source coverage for this actor profile.'}
+                        {hasPoints || hasRegionalAreas ? 'Reported operator origin and victim or target countries from linked sources.' : 'Country-level source coverage for this actor profile.'}
                     </p>
                 </div>
                 <span className='rounded-lg bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-primary dark:bg-ui-raised dark:text-ui-primary'>{hasPoints ? `${geo.points.length} countries` : hasRegionalAreas ? `${regionalAreas.length} region${regionalAreas.length === 1 ? '' : 's'}` : 'Source coverage'}</span>
