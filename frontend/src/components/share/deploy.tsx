@@ -37,8 +37,8 @@ export default function Deploy({ setTerminalOpen, terminalOpen, capability }: De
             }}
             className={`
                 fixed bottom-3 right-3 z-100 grid w-[min(23rem,calc(100vw-1.5rem))] select-none
-                gap-2 rounded-2xl border p-3 text-left
-                shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-md transition
+                gap-2 rounded-lg border p-3 text-left
+                shadow-lg backdrop-blur-md transition
                 ${stateClass}
             `}
         >

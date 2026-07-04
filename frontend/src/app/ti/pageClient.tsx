@@ -340,15 +340,18 @@ function Results({ result }: { result: TiSearchResponse }) {
                             </div>
                             <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
                         </div>
-                        {selected ? (
-                            <div className='hidden min-w-0 lg:block'>
-                                <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
-                            </div>
-                        ) : (
-                            <div className='hidden min-w-0 rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted lg:block'>
-                                Select a finding to inspect evidence, source context, and case handoff.
-                            </div>
-                        )}
+                        <div className='grid min-w-0 content-start gap-3'>
+                            <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
+                            {selected ? (
+                                <div className='hidden min-w-0 lg:block'>
+                                    <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
+                                </div>
+                            ) : (
+                                <div className='hidden min-w-0 rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted lg:block'>
+                                    Select a finding to inspect evidence, source context, and case handoff.
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
                 <ActorActionStrip
@@ -502,7 +505,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                                             <TiCommandBar links={commandLinks} />
                                             <SectionOverviewRail items={sectionOverview} />
                                         </div>
-                                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                                         <ActorIntelligenceDossier
                                             actor={actorIntel}
                                             actionability={actionability}
