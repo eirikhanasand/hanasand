@@ -9,7 +9,7 @@ test('organization workspace keeps launch workflow primary and admin controls di
 
     expect(page).toContain('data-org-setup-progress')
     expect(page).toContain('data-org-watchlist-starter')
-    expect(page).toContain('Workspace launch path')
+    expect(page).toContain('Notification setup')
     expect(page).toContain('Shared watchlists')
     expect(page).toContain('Test destination')
     expect(page).toContain('/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists')

@@ -14,9 +14,11 @@ test('organization workspace scopes alert workflow by selected tenant and role',
     assert.match(source, /selectedOrganization\?\.id === organization\.id/)
 
     assert.match(source, /selectedOrganization\?\.role === 'owner' \|\| selectedOrganization\?\.role === 'admin'/)
-    assert.match(source, /disabled=\{!canManage \|\| !draft\.value\.trim\(\) \|\| Boolean\(busy\)\}/)
+    assert.match(source, /disabled=\{!canManage \|\| !draft\.value\.trim\(\) \|\| draftDuplicate \|\| Boolean\(busy\)\}/)
     assert.match(source, /disabled=\{!canManage \|\| Boolean\(busy\)\}/)
-    assert.match(source, /disabled=\{!canManage \|\| member\.role === 'owner' \|\| Boolean\(busy\)\}/)
+    assert.match(source, /const canMutateMember = canManage && memberCanMutate\(member\)/)
+    assert.match(source, /disabled=\{!canMutateMember \|\| Boolean\(busy\)\}/)
+    assert.match(source, /return member\.role !== 'owner' && status !== 'removed' && status !== 'revoked' && status !== 'inactive'/)
     assert.match(source, /watchlistMutationMessage\(payload\.dwmAlertBridge/)
     assert.match(source, /generated/)
     assert.match(source, /No matching captures found/)
