@@ -3519,7 +3519,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
 
 function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
     return (
-        <Panel title='Evidence' description='Customer-facing alert ingredients derived from the selected finding and actor profile data. Delivery stays in the authenticated console.' icon={<BellRing className='h-4 w-4' />}>
+        <Panel title='Evidence' description='Alert and case context from the selected finding. Delivery stays in the authenticated console.' icon={<BellRing className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 <div>
                     <p className='text-sm font-semibold text-ui-text'>{packet.title}</p>
@@ -5094,7 +5094,7 @@ function SelectedWorkflowSummaryPanel({
     const sourceCount = sourceDrilldown?.rows.length ?? 0
     const owner = caseOwnership?.owner.label ?? 'unassigned'
     return (
-        <Panel title='Selected workflow' description='Compact action state for the selected finding.' icon={<ShieldAlert className='h-4 w-4' />}>
+        <Panel title='Selected workflow' description='Source, alert, and case state for the selected finding.' icon={<ShieldAlert className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 <div className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
                     <p className='wrap-break-word text-sm font-semibold text-ui-text dark:text-ui-text'>{selected ? displayRequirementText(selected.title) : 'Select a finding'}</p>
@@ -5890,7 +5890,7 @@ function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; o
         items,
     }
     return (
-        <Panel title='Saved Drafts' description='Selected reviews, sources, and case drafts saved in this browser session. Nothing is submitted until opened in the authenticated console.' icon={<ClipboardList className='h-4 w-4' />}>
+        <Panel title='Saved drafts' description='Session-local review drafts. Open the authenticated console before submitting ownership or case changes.' icon={<ClipboardList className='h-4 w-4' />}>
             <div data-ti-staged-handoff-queue='true' className='grid gap-3'>
                 <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
@@ -6152,6 +6152,8 @@ function EvidenceMetric({ label, value }: { label: string; value: string }) {
 function TopSelectedEvidencePanel({ selected, drilldown, caseReady }: { selected: AnalystWorkItem; drilldown: SelectedSourceDrilldown | null; caseReady: boolean }) {
     const sourceRows = drilldown?.rows.length ?? 0
     const captureRows = drilldown?.rows.filter(row => row.captureId).length ?? 0
+    const sourceFamilies = unique((drilldown?.rows ?? []).map(row => row.sourceName).filter(Boolean)).slice(0, 3)
+    const casePath = caseReady ? 'Case draft ready' : sourceRows ? 'Add capture IDs' : 'Add source rows'
     return (
         <section data-ti-top-selected-evidence='true' className='rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-raised'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-3'>
@@ -6162,18 +6164,30 @@ function TopSelectedEvidencePanel({ selected, drilldown, caseReady }: { selected
                 </div>
                 <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
             </div>
-            <div className='mt-3 grid gap-2 sm:grid-cols-4'>
-                <EvidenceMetric label='Source' value={selected.source} />
-                <EvidenceMetric label='First seen' value={selected.timestamp} />
-                <EvidenceMetric label='Basis' value={sourceBasisLabel(selected.confidence)} />
-                <EvidenceMetric label='Case path' value={caseReady ? 'Ready' : sourceRows ? 'Needs IDs' : 'Needs source'} />
-            </div>
-            <div className='mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-ui-border pt-3 dark:border-ui-border'>
-                <p className='wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                    {sourceRows ? `${sourceRows} source row${sourceRows === 1 ? '' : 's'} linked · ${captureRows} capture-ready` : 'Attach source rows before alert or case handoff.'}
-                </p>
+            <div data-ti-selected-evidence-command-strip='true' className='mt-3 grid gap-2 rounded-lg border border-[#e0e5ed] bg-white p-2 text-xs dark:border-[#273244] dark:bg-[#0f1621]'>
+                <div className='grid gap-2 sm:grid-cols-[minmax(0,1.2fr)_7rem_7rem_minmax(0,0.9fr)]'>
+                    <CompactEvidenceFact label='Source' value={selected.source} />
+                    <CompactEvidenceFact label='First seen' value={selected.timestamp} />
+                    <CompactEvidenceFact label='Basis' value={sourceBasisLabel(selected.confidence)} />
+                    <CompactEvidenceFact label='Case path' value={casePath} />
+                </div>
+                <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-[#eef1f5] pt-2 dark:border-[#273244]'>
+                    <p className='wrap-break-word text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>
+                        {sourceRows ? `${sourceRows} source row${sourceRows === 1 ? '' : 's'} linked · ${captureRows} capture-ready${sourceFamilies.length ? ` · ${sourceFamilies.join(', ')}` : ''}` : 'Attach source rows before alert or case handoff.'}
+                    </p>
+                    <span className='shrink-0 text-[11px] font-semibold text-[#3056d3] dark:text-[#9ab3ff]'>Actions below</span>
+                </div>
             </div>
         </section>
+    )
+}
+
+function CompactEvidenceFact({ label, value }: { label: string; value: string }) {
+    return (
+        <div className='min-w-0'>
+            <p className='text-[10px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{label}</p>
+            <p className='mt-0.5 wrap-break-word text-xs font-semibold leading-5 text-[#171a21] dark:text-[#eef4ff]'>{value || 'Not stated'}</p>
+        </div>
     )
 }
 
