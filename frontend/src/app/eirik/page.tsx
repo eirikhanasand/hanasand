@@ -20,13 +20,13 @@ export const metadata: Metadata = buildRouteMetadata({
     title: 'Eirik Hanasand',
     description: 'Personal notebook, articles, apps, experiments, and Hanasand project notes by Eirik Hanasand.',
     path: '/eirik',
-    keywords: ['eirik hanasand', 'personal notebook', 'articles', 'event app', 'password check', 'upload media'],
+    keywords: ['eirik hanasand', 'personal notebook', 'articles', 'event app', 'hash exposure lookup', 'upload media'],
 })
 
 const personalProjects = [
     {
-        title: 'Password exposure check',
-        description: 'Exact-match password exposure checks from the personal Hanasand utility set.',
+        title: 'Bloom hash exposure lookup',
+        description: 'Exact-match exposure checks from a SHA-1 hash in the personal Hanasand utility set.',
         href: '/pwned',
         icon: ShieldCheck,
         tag: 'security',

@@ -3,8 +3,8 @@ type PwnedRangeResponse = {
     error?: string
 }
 
-export default async function postPwned(password: string): Promise<Breach> {
-    const hash = await sha1(password)
+export default async function postPwned(hashInput: string): Promise<Breach> {
+    const hash = normalizeSha1Hash(hashInput)
     const prefix = hash.slice(0, 5)
     const suffix = hash.slice(5)
     const controller = new AbortController()
@@ -19,7 +19,7 @@ export default async function postPwned(password: string): Promise<Breach> {
         })
         const data = await response.json().catch(() => ({})) as PwnedRangeResponse
         if (!response.ok || data.error) {
-            throw new Error(data.error || 'Unable to check the password exposure dataset right now.')
+            throw new Error(data.error || 'Unable to check the Bloom exposure dataset right now.')
         }
 
         const count = parsePwnedRangeCount(data.range || '', suffix)
@@ -28,7 +28,7 @@ export default async function postPwned(password: string): Promise<Breach> {
             count,
             message: count === 0
                 ? 'No exact match was found in the indexed breach data.'
-                : `This exact password appears ${count} ${count === 1 ? 'time' : 'times'} in known breach data.`,
+                : `This exact hash appears ${count} ${count === 1 ? 'time' : 'times'} in known breach data.`,
             source: 'hibp-range',
             checkedPrefix: prefix,
         }
@@ -37,13 +37,13 @@ export default async function postPwned(password: string): Promise<Breach> {
     }
 }
 
-async function sha1(value: string) {
-    const bytes = new TextEncoder().encode(value)
-    const digest = await window.crypto.subtle.digest('SHA-1', bytes)
-    return Array.from(new Uint8Array(digest))
-        .map(byte => byte.toString(16).padStart(2, '0'))
-        .join('')
-        .toUpperCase()
+export function normalizeSha1Hash(value: string) {
+    const normalized = value.replace(/\s+/g, '').toUpperCase()
+    if (!/^[A-F0-9]{40}$/.test(normalized)) {
+        throw new Error('Enter a complete 40-character SHA-1 hash.')
+    }
+
+    return normalized
 }
 
 export function parsePwnedRangeCount(range: string, suffix: string) {

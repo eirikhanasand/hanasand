@@ -5,20 +5,22 @@ import path from 'node:path'
 const root = process.cwd()
 
 test('public workflow reliability contracts are not demo-only', async () => {
-    const pwnedClient = await readFile(path.join(root, 'src/utils/pwned/checkPassword.ts'), 'utf8')
+    const pwnedClient = await readFile(path.join(root, 'src/utils/pwned/checkHash.ts'), 'utf8')
     const pwnedRoute = await readFile(path.join(root, 'src/app/api/pwned/route.ts'), 'utf8')
     const pwnedPage = await readFile(path.join(root, 'src/app/pwned/pageClient.tsx'), 'utf8')
     const contact = await readFile(path.join(root, 'src/components/contact/contact.tsx'), 'utf8')
     const contactRoute = await readFile(path.join(root, 'src/app/api/contact/route.ts'), 'utf8')
     const dwmPage = await readFile(path.join(root, 'src/app/solutions/dwm/pageClient.tsx'), 'utf8')
 
-    expect(pwnedClient).toContain('window.crypto.subtle.digest(\'SHA-1\'')
+    expect(pwnedClient).toContain('normalizeSha1Hash')
     expect(pwnedClient).toContain('body: JSON.stringify({ prefix })')
     expect(pwnedClient).not.toContain('body: JSON.stringify({ password })')
+    expect(pwnedClient).not.toContain('window.crypto.subtle.digest')
     expect(pwnedRoute).toContain('A valid SHA-1 hash prefix is required.')
     expect(pwnedRoute).not.toContain('password =')
-    expect(pwnedPage).toContain('setPassword(\'\')')
-    expect(pwnedPage).toContain('without sending the password or full hash')
+    expect(pwnedPage).toContain('setHashInput(\'\')')
+    expect(pwnedPage).toContain('data-bloom-hash-safety-boundary')
+    expect(pwnedPage).toContain('This page does not ask for the underlying secret.')
 
     expect(contact).toContain('fetch(\'/api/contact\'')
     expect(contact).toContain('Ticket <span')

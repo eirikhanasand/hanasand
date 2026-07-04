@@ -21,17 +21,17 @@ export async function POST(request: NextRequest) {
         response = await fetch(`${PWNED_RANGE_API}/${prefix}`, {
             headers: {
                 'Add-Padding': 'true',
-                'User-Agent': 'hanasand-password-exposure-check',
+                'User-Agent': 'hanasand-bloom-hash-lookup',
             },
             cache: 'no-store',
             signal: AbortSignal.timeout(PWNED_PROXY_TIMEOUT_MS),
         })
     } catch {
-        return NextResponse.json({ error: 'Unable to check the password exposure dataset right now.' }, { status: 503 })
+        return NextResponse.json({ error: 'Unable to check the Bloom exposure dataset right now.' }, { status: 503 })
     }
 
     if (!response.ok) {
-        return NextResponse.json({ error: 'Unable to check the password exposure dataset right now.' }, { status: response.status })
+        return NextResponse.json({ error: 'Unable to check the Bloom exposure dataset right now.' }, { status: response.status })
     }
 
     const range = await response.text().catch(() => '')
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
         schemaVersion: 'pwned.range_proxy.v1',
         prefix,
         range,
-        privacy: 'Only the first five SHA-1 characters were sent to the range service. The password and full hash stay in the browser.',
+        privacy: 'Only the first five SHA-1 characters were sent to the range service. The full hash and underlying secret stay outside the request.',
     }, {
         headers: { 'cache-control': 'no-store' },
     })

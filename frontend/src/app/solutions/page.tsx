@@ -51,12 +51,12 @@ const primarySolutions = [
 
 const utilitySolutions = [
     {
-        title: 'Password Exposure Checks',
+        title: 'Bloom Hash Exposure Lookup',
         eyebrow: 'Separate utility',
-        detail: 'Check password exposure through the standalone utility. This stays separate from company exposure monitoring.',
+        detail: 'Check exposure from a SHA-1 hash through the standalone prefix lookup. This stays separate from company exposure monitoring.',
         href: '/pwned',
         icon: LockKeyhole,
-        points: ['Dedicated utility flow', 'Exact-match result', 'Not part of the monitoring buyer path'],
+        points: ['Hash-only utility flow', 'Exact-match result', 'Prefix-only range request'],
         price: 'Utility',
     },
     {
