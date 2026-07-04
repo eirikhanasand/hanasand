@@ -2,25 +2,6 @@ import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { Buffer } from 'node:buffer'
 
-type CopyProofTarget = {
-    label: string
-    html: string
-    status?: number
-}
-
-type CopyProofResult = {
-    url: string
-    chars: number
-    status?: number
-    whatReturned: number
-    returned: number
-    returnedProfile: number
-    returnedObservations: number
-    returnedAsEvidence: number
-    returnedAttack: number
-    leakedContexts: string[]
-}
-
 const defaultUrl = 'https://hanasand.com/ti/apt29'
 const fixtureHtml = process.env.PUBLIC_TI_COPY_PROOF_HTML
 const reportOnly = process.env.PUBLIC_TI_COPY_PROOF_REPORT_ONLY === '1'
@@ -48,13 +29,13 @@ if (failed.length && !reportOnly) {
     throw new Error(`Public TI hosted copy proof failed for ${failed.map(result => result.url).join(', ')}.`)
 }
 
-async function fetchTarget(url: string): Promise<CopyProofTarget> {
+async function fetchTarget(url) {
     const response = await fetchHtml(url)
     if (response.status < 200 || response.status >= 300) throw new Error(`Public TI copy proof could not fetch ${url}: HTTP ${response.status}.`)
     return { label: url, html: response.html, status: response.status }
 }
 
-function proofFor(target: CopyProofTarget): CopyProofResult {
+function proofFor(target) {
     const leakedContexts = contextsFor(target.html, /\breturned\b|What returned|returned profile|returned observations|Returned as evidence|returned ATT&CK/gi)
 
     return {
@@ -71,12 +52,12 @@ function proofFor(target: CopyProofTarget): CopyProofResult {
     }
 }
 
-function count(value: string, pattern: RegExp) {
+function count(value, pattern) {
     return Array.from(value.matchAll(pattern)).length
 }
 
-function contextsFor(value: string, pattern: RegExp) {
-    const contexts: string[] = []
+function contextsFor(value, pattern) {
+    const contexts = []
     for (const match of value.matchAll(pattern)) {
         const index = match.index ?? 0
         const start = Math.max(0, index - 90)
@@ -87,7 +68,7 @@ function contextsFor(value: string, pattern: RegExp) {
     return contexts
 }
 
-function fetchHtml(rawUrl: string, redirects = 3): Promise<{ html: string, status: number }> {
+function fetchHtml(rawUrl, redirects = 3) {
     return new Promise((resolve, reject) => {
         const url = new URL(rawUrl)
         const client = url.protocol === 'http:' ? httpRequest : httpsRequest
@@ -106,7 +87,7 @@ function fetchHtml(rawUrl: string, redirects = 3): Promise<{ html: string, statu
                 return
             }
 
-            const chunks: Buffer[] = []
+            const chunks = []
             response.on('data', chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
             response.on('end', () => resolve({ html: Buffer.concat(chunks).toString('utf8'), status }))
         })
