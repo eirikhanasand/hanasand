@@ -694,6 +694,7 @@ assert(!pageClientSource.includes('TopEvidenceQueuePreview'), 'Public TI hero sh
 assert(pageClientSource.includes('text-white transition hover:bg-ui-raised'), 'Public TI search submit should render visible text on the dark button.')
 assert(pageClientSource.includes('data-ti-actor-workspace-rail'), 'Public TI should render the selected evidence/action rail in the first viewport.')
 assert(pageClientSource.includes('data-ti-selected-action-rail'), 'Public TI should keep selected evidence actions primary in the first viewport.')
+assert(pageClientSource.includes('ContinuityRow'), 'Public TI selected action rail should render compact continuity rows instead of nested metric cards.')
 assert(pageClientSource.includes('data-ti-geo-subordinate'), 'Public TI should keep geography subordinate to selected evidence and actions.')
 assert(pageClientSource.indexOf('<SelectedEvidenceRail') < pageClientSource.indexOf('data-ti-geo-subordinate'), 'Public TI should keep selected actions before geography.')
 assert(pageClientSource.includes('sourceRows = compact ? []'), 'Compact geography fallback should not stack source cards in the first viewport.')
