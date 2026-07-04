@@ -101,7 +101,7 @@ const operatorPaths = [
     {
         label: 'Route notifications',
         state: 'Delivery',
-        value: 'Send reviewed alerts to configured webhooks, APIs, and analyst workflows.',
+        value: 'Send reviewed alerts to configured webhooks, APIs, and the analyst console.',
         href: '/dashboard/automations?setup=dwm',
     },
 ]
@@ -217,7 +217,7 @@ export default async function Page({
                             </button>
                         </form>
 
-                        <div className='grid w-full max-w-5xl gap-2 sm:grid-cols-2 lg:grid-cols-4' aria-label='Workflow shortcuts'>
+                        <div className='grid w-full max-w-5xl gap-2 sm:grid-cols-2 lg:grid-cols-4' aria-label='Operator shortcuts'>
                             {workflowShortcuts.map(item => (
                                 <Link
                                     key={item.href}
@@ -239,7 +239,7 @@ export default async function Page({
                     <div className='landing-surface-border grid overflow-hidden rounded-xl border border-ui-border bg-ui-panel shadow-sm' id='sample-alert' data-home-workflow-panel='true'>
                         <div className='landing-surface-divider grid gap-3 border-b p-5 md:grid-cols-[0.8fr_1.2fr] md:items-end' data-home-workflow-panel-header='true'>
                             <div>
-                                <p className='text-sm font-semibold uppercase text-ui-primary'>Plain-English workflow</p>
+                                <p className='text-sm font-semibold uppercase text-ui-primary'>Plain-English alert path</p>
                                 <h2 className='mt-2 text-2xl font-semibold text-ui-text'>From watchlist to decision packet.</h2>
                             </div>
                             <p className='text-sm leading-6 text-ui-muted'>
@@ -380,7 +380,7 @@ function HomeOperatorPaths() {
             <div className='landing-surface-divider grid gap-2 border-b px-4 py-4 md:grid-cols-[1fr_auto] md:items-end' data-home-operator-paths-header='true'>
                 <div>
                     <p className='text-xs font-semibold uppercase text-ui-primary'>Operator paths</p>
-                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Core DWM workflows in the console</h2>
+                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Core DWM actions in the console</h2>
                 </div>
                 <Link
                     href='/dashboard'

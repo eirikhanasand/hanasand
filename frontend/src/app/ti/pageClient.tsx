@@ -4736,7 +4736,7 @@ function actionPayloadSummaryLines(
     }
     if (payload.kind === 'analyst_handoff_bundle') {
         return [
-            `${actionability.consumerReadiness.stages.length} workflow stage${actionability.consumerReadiness.stages.length === 1 ? '' : 's'}`,
+            `${actionability.consumerReadiness.stages.length} console stage${actionability.consumerReadiness.stages.length === 1 ? '' : 's'}`,
             `${actionability.alertGenerationReadiness.candidateCount} alert candidate${actionability.alertGenerationReadiness.candidateCount === 1 ? '' : 's'}`,
             actionability.alertGenerationReadiness.generationEvidenceWindowReady ? 'evidence window ready' : 'evidence window pending',
             `${actionability.readiness.backedIds.alertIds.length} alert${actionability.readiness.backedIds.alertIds.length === 1 ? '' : 's'}`,
@@ -4800,7 +4800,7 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
                     ))}
                 </div>
             ) : !actionability.readiness.blockers.length ? (
-                <p className='mt-3 text-xs leading-5 text-ui-success'>No workflow follow-ups are open.</p>
+                <p className='mt-3 text-xs leading-5 text-ui-success'>No action follow-ups are open.</p>
             ) : null}
         </div>
     )
@@ -4813,13 +4813,13 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
         <div data-ti-consumer-readiness='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
             <div className='flex flex-wrap items-center justify-between gap-2 text-xs'>
                 <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
-                    Console workflow · {readyStages}/{actionability.consumerReadiness.stages.length} stages ready
+                    Console actions · {readyStages}/{actionability.consumerReadiness.stages.length} stages ready
                 </p>
                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
                     <button type='button' onClick={() => setShowStageDetails(value => !value)} className='inline-flex min-h-7 items-center justify-center border-l border-ui-border pl-2 text-[11px] font-semibold text-ui-text transition hover:text-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:text-ui-text'>
                         {showStageDetails ? 'Hide stages' : 'Show stages'}
                     </button>
-                    <CopyPayloadButton label='Console workflow' payload={actionability.consumerReadiness.bundlePreview} />
+                    <CopyPayloadButton label='Console actions' payload={actionability.consumerReadiness.bundlePreview} />
                 </div>
             </div>
             {showStageDetails ? (
@@ -4977,7 +4977,7 @@ function sourceHealthFieldLabel(value: string) {
     if (/webhookDestination/i.test(value)) return 'webhook destination'
     if (/organizationId|tenantId/i.test(value)) return 'organization scope'
     if (/watchlistItem|watchlistId/i.test(value)) return 'watchlist item'
-    if (/endpoint|route/i.test(value)) return 'workflow route'
+    if (/endpoint|route/i.test(value)) return 'console path'
     return formatLabel(value.replace(/\[\]/g, '').replace(/\./g, ' '))
 }
 
@@ -5029,7 +5029,7 @@ function displayRequirementText(value: string) {
         .replace(/\/v1\/dwm\/alerts\/rebuild/gi, 'alert rebuild')
         .replace(/\/v1\/dwm\/watchlists/gi, 'watchlist update')
         .replace(/\/v1\/dwm\/webhooks\/deliver/gi, 'webhook delivery')
-        .replace(/\/v1\/cases/gi, 'case workflow')
+        .replace(/\/v1\/cases/gi, 'case actions')
         .replace(/generatedAlertReferences/gi, 'generated alert references')
         .replace(/TiSearchResponse\.actorIntelligence\.malwareTools\/campaigns/gi, 'actor tooling and campaign fields')
         .replace(/actorIntelligence\.structuredProvenance\[\]\.reportDate/gi, 'source report date')
@@ -5048,7 +5048,7 @@ function displayRequirementText(value: string) {
         .replace(/relatedAlerts\[\]/gi, 'related alerts')
         .replace(/\bproof\b/gi, 'evidence')
         .replace(/\breadiness\b/gi, 'status')
-        .replace(/\bactionability\b/gi, 'workflow status')
+        .replace(/\bactionability\b/gi, 'action status')
         .replace(/\breceipt\b/gi, 'record')
         .replace(new RegExp('\\bcon' + 'tract\\b', 'gi'), 'schema')
         .replace(/\bnamed\s+examples\b/gi, 'reported activity')
@@ -5814,7 +5814,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                 </div>
                 {workflowDetailCount ? (
                     <button type='button' onClick={() => setShowWorkflowDetails(value => !value)} className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
-                        {showWorkflowDetails ? 'Hide workflow detail' : `Show workflow detail (${workflowDetailCount})`}
+                        {showWorkflowDetails ? 'Hide action detail' : `Show action detail (${workflowDetailCount})`}
                     </button>
                 ) : null}
                 {showWorkflowDetails ? (
@@ -6092,7 +6092,7 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
         <div data-ti-selected-watchlist-plan='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
                 <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
-                    Watchlist workflow · {plan.terms.length} terms · {plan.relevanceRows.filter(item => item.fit === 'matched').length} matches · {plan.sourceRefs.alertIds.length} alerts · {plan.sourceRefs.captureIds.length} captures
+                    Watchlist actions · {plan.terms.length} terms · {plan.relevanceRows.filter(item => item.fit === 'matched').length} matches · {plan.sourceRefs.alertIds.length} alerts · {plan.sourceRefs.captureIds.length} captures
                 </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(status)}>{decisionStepStatusLabel(status)}</span>
@@ -6180,7 +6180,7 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
         <div data-ti-selected-enrichment-triage='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
                 <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
-                    Source workflow · {triage.summary.sourceRows} sources · {triage.summary.intakeItems} intake · {triage.summary.sourceRequests} requests · {triage.summary.captures} captures
+                    Source actions · {triage.summary.sourceRows} sources · {triage.summary.intakeItems} intake · {triage.summary.sourceRequests} requests · {triage.summary.captures} captures
                 </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(triage.state)}>{decisionStepStatusLabel(triage.state)}</span>
@@ -6218,7 +6218,7 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
                                 ))}
                             </div>
                         ) : (
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>Map this source to a customer workflow.</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>Map this source to a customer action path.</p>
                         )}
                         {row.requestedFields.length ? (
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>Needs {row.requestedFields.map(sourceHealthFieldLabel).slice(0, 3).join(', ')}.</p>
@@ -7174,7 +7174,7 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
     return {
         title: isCustomerAlert ? `Candidate customer alert: ${displayRequirementText(selected.title)}` : `Actor context packet: ${displayRequirementText(selected.title)}`,
         customerValue: isCustomerAlert
-            ? 'This finding has enough structure to enter the alert review workflow: named object, evidence basis, timestamp, source reference, and routing guidance.'
+            ? 'This finding has enough structure to enter alert review: named object, evidence basis, timestamp, source reference, and routing guidance.'
             : 'This finding strengthens watchlist and detection context, but should not become a customer alert until it matches a watched organization, domain, vendor, or portfolio term.',
         watchTerms: watchlist.terms.slice(0, 8),
         evidenceBasis,
@@ -7182,7 +7182,7 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
             ? 'Route to detection/hunting enrichment before customer notification.'
             : selected.kind === 'victim' && !isCustomerAlert
                 ? 'Route to actor-profile enrichment and watchlist expansion.'
-                : 'Route to alert review, source verification, and customer delivery only after the console workflow persists it.',
+                : 'Route to alert review, source verification, and customer delivery only after the console saves it.',
         blockedUntil,
     }
 }
@@ -7706,8 +7706,8 @@ function selectedCaseCreateRequestFor(
         state,
         route,
         nextAction: ready
-            ? 'Open the authenticated case workflow with the selected evidence and source details attached.'
-            : blockers.length ? `Resolve ${displayRequirementList(blockers.slice(0, 2))} before case creation review.` : 'Review the selected evidence before opening the authenticated case workflow.',
+            ? 'Open the authenticated case action with the selected evidence and source details attached.'
+            : blockers.length ? `Resolve ${displayRequirementList(blockers.slice(0, 2))} before case creation review.` : 'Review the selected evidence before opening the authenticated case action.',
         request: {
             method: 'POST',
             path: caseStage?.request?.path ?? actionability.caseHandoff.endpoint,
@@ -7945,7 +7945,7 @@ function selectedCaseOwnershipFor(
         state,
         route,
         nextAction: ready
-            ? 'Open the authenticated case workflow with this selected evidence and replayable references.'
+            ? 'Open the authenticated case action with this selected evidence and replayable references.'
             : blockerDetails.length ? `Resolve ${displayRequirementList(blockerDetails.slice(0, 2))} before assigning this evidence to a case.` : 'Review the selected case candidate and choose the authenticated owner.',
         owner: {
             lane: firstOwnerLane,
@@ -8165,7 +8165,7 @@ function selectedWatchlistPlanFor(
         ready,
         route: actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route,
         nextAction: ready
-            ? 'Open the authenticated watchlist workflow with the selected evidence and persisted item refs.'
+            ? 'Open the authenticated watchlist action with the selected evidence and persisted item refs.'
             : blockers.length ? `Resolve ${displayRequirementList(blockers.slice(0, 2))} before monitoring this evidence.` : 'Review the candidate term and persist it to an organization watchlist.',
         terms: selectedTerms.map(term => ({
             kind: term.kind,
@@ -8282,7 +8282,7 @@ function selectedAlertActionPlanFor(
         sourceRoute: actionability.alertGenerationReadiness.sourceRoute,
         nextAction: missing.length
             ? `Resolve ${displayRequirementList(missing.slice(0, 2))} before alert rebuild.`
-            : 'Open the authenticated alert workflow with the selected evidence and watchlist context.',
+            : 'Open the authenticated alert action with the selected evidence and watchlist context.',
         readiness: {
             schemaVersion: actionability.alertGenerationReadiness.schemaVersion,
             readyForCustomerDelivery: actionability.alertGenerationReadiness.readyForCustomerDelivery,
@@ -8446,7 +8446,7 @@ function selectedDeliveryReadinessPlanFor(
         state,
         route,
         nextAction: ready
-            ? 'Open the authenticated delivery workflow with this alert, capture, destination, and case route context.'
+            ? 'Open the authenticated delivery action with this alert, capture, destination, and case route context.'
             : blockers.length ? `Resolve ${displayRequirementList(blockers.slice(0, 2))} before delivery review.` : 'Review the selected alert and choose an authenticated destination.',
         summary: {
             alerts: alertRows.length,
@@ -8823,7 +8823,7 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
         {
             title: 'Persist alert review decision',
             status: 'needs_api',
-            detail: 'Scratch notes are session-local. Persisted review needs selected finding ID, review state, owner, rationale, and delivery hold/release state in the authenticated case workflow.',
+            detail: 'Scratch notes are session-local. Persisted review needs selected finding ID, review state, owner, rationale, and delivery hold/release state in the authenticated case action.',
         },
         {
             title: 'Attach source capture provenance',
