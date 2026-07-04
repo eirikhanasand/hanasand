@@ -480,7 +480,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     Show top findings only
                                 </button>
                             ) : null}
-                            {!filteredWorkItems.length ? <p className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{workItems.length ? 'No results match the current filters.' : 'No recent activity yet.'}</p> : null}
+                            {!filteredWorkItems.length ? <p className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{workItems.length ? 'Adjust filters to recover findings.' : 'Start a search to build activity.'}</p> : null}
                         </div>
                     </aside>
 
@@ -2995,7 +2995,7 @@ function DossierList({ title, description, values, artifactKind, artifactByLooku
                             {value}
                         </button>
                     )
-                }) : <span className='text-xs text-ui-muted dark:text-ui-muted'>No values in this profile</span>}
+                }) : <span className='text-xs text-ui-muted dark:text-ui-muted'>Add observed values to compare.</span>}
             </div>
         </div>
     )
@@ -3355,7 +3355,7 @@ function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWork
                     <div className='mt-2 flex flex-wrap gap-1.5'>
                         {ids.length ? ids.map(id => (
                             <span key={id} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-raised dark:text-ui-text'>{id}</span>
-                        )) : <span className='text-xs text-ui-muted dark:text-ui-muted'>No backed IDs attached.</span>}
+                        )) : <span className='text-xs text-ui-muted dark:text-ui-muted'>Link backed records before handoff.</span>}
                     </div>
                     {priority.blockers.length ? (
                         <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-ui-warning dark:text-ui-warning'>
@@ -3914,7 +3914,7 @@ function WatchlistBlock({ title, values }: { title: string; values: string[] }) 
             <div className='mt-2 flex flex-wrap gap-1.5'>
                 {visible.length ? visible.map(value => (
                     <span key={value} className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary'>{value}</span>
-                )) : <span className='text-xs text-ui-muted dark:text-ui-muted'>No matching values in this result</span>}
+                )) : <span className='text-xs text-ui-muted dark:text-ui-muted'>Add matching values to route this result.</span>}
             </div>
         </div>
     )
