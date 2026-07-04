@@ -683,6 +683,8 @@ assert(pageClientSource.includes('data-ti-consumer-readiness'), 'Public TI page 
 assert(pageClientSource.includes('data-ti-consumer-field-readiness'), 'Public TI consumer readiness should expose required field readiness chips.')
 assert(pageClientSource.includes('consumerRequestActionLabel(stage.request.method, stage.request.path)'), 'Public TI consumer readiness should show backed request method and an analyst-safe route label.')
 assert(!pageClientSource.includes('font-mono text-[11px] font-semibold text-ui-text'), 'Public TI consumer readiness should not render request routes as debug-style chips.')
+assert(pageClientSource.includes('const visibleLabel = feedback || (showLabel ? label : \'\')'), 'Public TI copy payload actions should stay icon-only unless explicitly promoted.')
+assert(!pageClientSource.includes('showLabel ? label : \'Copy\''), 'Public TI copy payload actions should not render visible Copy text on every row.')
 assert(pageClientSource.includes('org alert state'), 'Public TI consumer route labels should avoid raw internal endpoint wording.')
 assert(pageClientSource.includes('{stage.payload.provenance.length} source reference'), 'Public TI consumer readiness should show stage source-reference counts.')
 assert(pageClientSource.includes('idempotencyKey'), 'Public TI webhook readiness should show delivery idempotency readiness.')
@@ -1064,7 +1066,7 @@ assert(pageClientSource.includes('grid-cols-[minmax(0,1fr)]'), 'Public TI select
 assert(pageClientSource.includes('flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'), 'Public TI action clusters should wrap complete controls on narrow widths.')
 assert(!pageClientSource.includes('truncate font-semibold'), 'Public TI profile stats should wrap values instead of clipping mobile status text.')
 assert(pageClientSource.includes('document.body.dataset.publicTiRoute'), 'Public TI route should mark the body for route-scoped render guardrails.')
-assert(pageClientSource.includes('min-h-8 min-w-16 max-w-full'), 'Public TI copy/export actions should keep a stable mobile tap target width.')
+assert(pageClientSource.includes('min-w-8 px-2'), 'Public TI compact copy/export actions should keep a stable icon tap target width.')
 assert(globalStylesSource.includes('body[data-public-ti-route="true"] nextjs-portal'), 'Public TI should hide dev overlays that can cover mobile evidence during render checks.')
 assert(globalStylesSource.includes('body[data-public-ti-route="true"] [data-testid="theme-switch"]'), 'Public TI should keep the header theme switch wider than narrow action thresholds.')
 
