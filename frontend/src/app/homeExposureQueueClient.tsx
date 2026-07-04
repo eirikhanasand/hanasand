@@ -155,7 +155,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                                 <span className='truncate font-semibold text-ui-text'>{actor}</span>
                                 <span className='truncate text-ui-text'>{company}</span>
                                 <span className='truncate whitespace-nowrap text-ui-muted'>{claimedData}</span>
-                                <time dateTime={claimTime || collectedAt || queue.generatedAt} className='truncate whitespace-nowrap font-mono text-xs text-ui-muted'>{formatClaimTime(claimTime || collectedAt)}</time>
+                                <time dateTime={claimTime || collectedAt || queue.generatedAt} className='truncate whitespace-nowrap text-xs font-semibold text-ui-muted'>{formatClaimTime(claimTime || collectedAt)}</time>
                                 <span className='landing-surface-border justify-self-end whitespace-nowrap rounded-full border border-ui-border bg-ui-raised px-2 py-1 text-xs font-medium text-ui-muted'>{formatReviewStatus(status)}</span>
                             </div>
                         )) : (
