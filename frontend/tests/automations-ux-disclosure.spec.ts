@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 
 test('automations keeps the primary alert route workflow calm and wired', async ({ context, page, baseURL }) => {
     const origin = baseURL || 'http://127.0.0.1:3000'
@@ -17,6 +19,7 @@ test('automations keeps the primary alert route workflow calm and wired', async 
 
     const runRequests: string[] = []
     const saveRequests: unknown[] = []
+    const createRequests: unknown[] = []
 
     await page.route('**/api/backend/automations**', async route => {
         const request = route.request()
@@ -42,6 +45,12 @@ test('automations keeps the primary alert route workflow calm and wired', async 
         if (request.method() === 'PUT' && path.endsWith('/api/backend/automations/failing-route')) {
             saveRequests.push(await request.postDataJSON())
             await route.fulfill({ json: { automation: fixtureAutomations[0] } })
+            return
+        }
+
+        if (request.method() === 'POST' && path.endsWith('/api/backend/automations')) {
+            createRequests.push(await request.postDataJSON())
+            await route.fulfill({ status: 201, json: { automation: { ...fixtureAutomations[1], id: 'created-route', name: 'Mail path health alert' } } })
             return
         }
 
@@ -79,6 +88,39 @@ test('automations keeps the primary alert route workflow calm and wired', async 
     await expect(page.getByRole('button', { name: 'Delete' })).toBeHidden()
     await page.getByText('More route actions').click()
     await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible()
+
+    await page.getByText('Templates').click()
+    await page.getByRole('button', { name: 'Mail health' }).click()
+    await expect(page.getByRole('heading', { name: 'New alert' })).toBeVisible()
+    await expect(page.getByText('Route is paused; reactivate to resume checks.')).toBeVisible()
+    await page.getByText('Schedule and notification policy').click()
+    await page.getByLabel('Status').selectOption('active')
+    await expect(page.getByText('Add a Discord webhook-file destination before activating this alert.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Create alert' })).toBeDisabled()
+
+    await page.getByLabel('Destination').fill('discord-webhook-file:/secure/ops/discord-alerts.url')
+    await expect(page.getByRole('button', { name: 'Create alert' })).toBeEnabled()
+    await page.getByRole('button', { name: 'Create alert' }).click()
+    await expect.poll(() => createRequests.length).toBe(1)
+    expect(createRequests[0]).toMatchObject({
+        actionType: 'mail_health_check',
+        status: 'active',
+        modelName: 'discord-webhook-file:/secure/ops/discord-alerts.url',
+    })
+})
+
+test('automation delivery templates do not ship developer-local destinations', async () => {
+    const root = process.cwd()
+    const pageClient = await readFile(path.join(root, 'src/app/dashboard/automations/pageClient.tsx'), 'utf8')
+    const automationUtils = await readFile(path.join(root, '../api/src/utils/automations.ts'), 'utf8')
+
+    expect(pageClient).not.toContain('/Users/eirikhanasand/Desktop/webhooktoday.txt')
+    expect(pageClient).not.toContain('const discordWebhookFileDestination')
+    expect(pageClient).toContain('status: \'paused\'')
+    expect(pageClient).toContain('activeRouteSaveBlocker(draft)')
+    expect(pageClient).toContain('Add a delivery destination or keep the route paused before saving.')
+    expect(automationUtils).toContain('status === \'active\' && actionType === \'system_alert\' && !modelName')
+    expect(automationUtils).toContain('status === \'active\' && actionType === \'mail_health_check\' && notifyOn !== \'never\' && !modelName')
 })
 
 const fixtureAutomations = [
@@ -92,7 +134,7 @@ const fixtureAutomations = [
         status: 'active',
         actionType: 'mail_health_check',
         timezone: 'Europe/Oslo',
-        modelName: 'discord-webhook-file:/Users/eirikhanasand/Desktop/webhooktoday.txt',
+        modelName: 'discord-webhook-file:/secure/ops/discord-alerts.url',
         notifyOn: 'failure',
         nextRunAt: '2026-07-03T18:15:00.000Z',
         lastRunAt: '2026-07-03T18:10:00.000Z',
@@ -116,7 +158,7 @@ const fixtureAutomations = [
         status: 'active',
         actionType: 'system_alert',
         timezone: 'Europe/Oslo',
-        modelName: 'discord-webhook-file:/Users/eirikhanasand/Desktop/webhooktoday.txt',
+        modelName: 'discord-webhook-file:/secure/ops/discord-alerts.url',
         notifyOn: 'always',
         nextRunAt: '2026-07-03T19:00:00.000Z',
         lastRunAt: '2026-07-03T17:00:00.000Z',

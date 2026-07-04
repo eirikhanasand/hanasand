@@ -147,6 +147,14 @@ export function normalizeAutomationInput(input: AutomationInput, existing?: Auto
         throw new Error('Prompt is required.')
     }
 
+    if (status === 'active' && actionType === 'system_alert' && !modelName) {
+        throw new Error('System alerts need a delivery destination before activation.')
+    }
+
+    if (status === 'active' && actionType === 'mail_health_check' && notifyOn !== 'never' && !modelName) {
+        throw new Error('Mail health alerts need a delivery destination before activation.')
+    }
+
     return { name, prompt, scheduleKind, intervalMinutes, runAt, status, actionType, timezone, modelName, notifyOn, nextRunAt }
 }
 

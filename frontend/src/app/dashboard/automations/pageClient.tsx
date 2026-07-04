@@ -20,7 +20,6 @@ const defaultTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone |
 const maxActiveAutomations = 10
 const dwmWebhookDraftKey = 'hanasand:dwm-webhook-subscription'
 const draftSelectionId = '__new_alert_draft__'
-const discordWebhookFileDestination = 'discord-webhook-file:/Users/eirikhanasand/Desktop/webhooktoday.txt'
 const inputClass = 'rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
 const disclosureClass = 'rounded-lg border border-ui-border bg-ui-raised'
 const disclosureSummaryClass = 'flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'
@@ -46,7 +45,8 @@ const newMailAlertDraft = (): AutomationPayload => ({
     name: 'Mail path health alert',
     actionType: 'mail_health_check',
     intervalMinutes: 5,
-    modelName: discordWebhookFileDestination,
+    status: 'paused',
+    modelName: null,
     notifyOn: 'failure',
 })
 
@@ -57,7 +57,8 @@ const newSystemDiscordDraft = (): AutomationPayload => ({
     scheduleKind: 'once',
     intervalMinutes: null,
     runAt: defaultRunAt(),
-    modelName: discordWebhookFileDestination,
+    status: 'paused',
+    modelName: null,
     notifyOn: 'always',
 })
 
@@ -85,6 +86,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
     const activeAutomationCount = useMemo(() => automations.filter(item => item.status === 'active').length, [automations])
     const failingAutomationCount = useMemo(() => automations.filter(item => item.consecutiveFailures || item.lastStatus === 'failed').length, [automations])
     const selectedHealth = selected ? routeHealthFor(selected) : routeHealthForDraft(draft)
+    const saveBlocker = activeRouteSaveBlocker(draft)
 
     useEffect(() => {
         const nextWebhookDraft = readWebhookDraft()
@@ -142,6 +144,11 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
     }
 
     async function saveAutomation() {
+        const blocker = activeRouteSaveBlocker(draft)
+        if (blocker) {
+            setStatus(blocker)
+            return
+        }
         setBusy('save')
         try {
             const payloadToSave = {
@@ -393,7 +400,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                             </label>
                             <label className='grid gap-1.5'>
                                 <span className='text-xs font-medium text-ui-muted'>Destination</span>
-                                <input className={inputClass} value={draft.modelName || ''} placeholder='discord-webhook-file:/absolute/path, webhook, email, or analyst review' onChange={event => setDraft({ ...draft, modelName: event.target.value.trim() || null })} />
+                                <input className={inputClass} value={draft.modelName || ''} placeholder='discord-webhook-file:/secure/path/to/webhook-url' onChange={event => setDraft({ ...draft, modelName: event.target.value.trim() || null })} />
                             </label>
                         </div>
                     </section>
@@ -468,7 +475,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     )}
 
                     <div className='flex flex-wrap items-center gap-2'>
-                        <button type='button' className='inline-flex items-center gap-2 rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:opacity-50' onClick={() => void saveAutomation()} disabled={busy === 'save'}>
+                        <button type='button' className='inline-flex items-center gap-2 rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted' onClick={() => void saveAutomation()} disabled={busy === 'save' || Boolean(saveBlocker)} title={saveBlocker || undefined}>
                             <WandSparkles className='h-4 w-4' />
                             {selected ? 'Save alert' : 'Create alert'}
                         </button>
@@ -600,9 +607,17 @@ function routeHealthFor(automation: AgentAutomation): { label: string, detail: s
 function routeHealthForDraft(draft: AutomationPayload): { label: string, detail: string, tone: 'ok' | 'bad' | 'neutral' } {
     if (draft.status === 'paused') return { label: 'Paused', detail: 'Route is paused; reactivate to resume checks.', tone: 'neutral' }
     if ((draft.actionType === 'mail_health_check' || draft.actionType === 'system_alert') && !draft.modelName) {
-        return { label: 'Needs destination', detail: 'Add a Discord webhook-file, webhook, email, or analyst review destination.', tone: 'bad' }
+        return { label: 'Needs destination', detail: 'Add a Discord webhook-file destination before activating this alert.', tone: 'bad' }
     }
     return { label: 'Configured', detail: 'Route has a destination and active schedule.', tone: 'ok' }
+}
+
+function activeRouteSaveBlocker(draft: AutomationPayload) {
+    if (draft.status !== 'active') return ''
+    if ((draft.actionType === 'mail_health_check' || draft.actionType === 'system_alert') && !draft.modelName) {
+        return 'Add a delivery destination or keep the route paused before saving.'
+    }
+    return ''
 }
 
 function deliveryTargetLabel(modelName: string | null | undefined, actionType: AgentAutomation['actionType']) {
