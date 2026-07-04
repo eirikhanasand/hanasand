@@ -6172,48 +6172,6 @@ function EvidenceMetric({ label, value }: { label: string; value: string }) {
     )
 }
 
-function TopSelectedEvidencePanel({ selected, drilldown, caseReady }: { selected: AnalystWorkItem; drilldown: SelectedSourceDrilldown | null; caseReady: boolean }) {
-    const sourceRows = drilldown?.rows.length ?? 0
-    const captureRows = drilldown?.rows.filter(row => row.captureId).length ?? 0
-    const sourceFamilies = unique((drilldown?.rows ?? []).map(row => row.sourceName).filter(Boolean)).slice(0, 3)
-    const casePath = caseReady ? 'Case draft ready' : sourceRows ? 'Add capture IDs' : 'Add source rows'
-    return (
-        <section data-ti-top-selected-evidence='true' className='rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-raised'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-3'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Selected evidence</p>
-                    <h2 className='mt-1 wrap-break-word text-base font-semibold leading-6 text-ui-text dark:text-ui-text'>{displayRequirementText(selected.title)}</h2>
-                    <p className='mt-1 line-clamp-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selected.detail)}</p>
-                </div>
-                <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
-            </div>
-            <div data-ti-selected-evidence-command-strip='true' className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 text-xs dark:border-ui-border dark:bg-ui-panel'>
-                <div className='grid gap-2 sm:grid-cols-[minmax(0,1.2fr)_7rem_7rem_minmax(0,0.9fr)]'>
-                    <CompactEvidenceFact label='Source' value={selected.source} />
-                    <CompactEvidenceFact label='First seen' value={selected.timestamp} />
-                    <CompactEvidenceFact label='Basis' value={sourceBasisLabel(selected.confidence)} />
-                    <CompactEvidenceFact label='Case path' value={casePath} />
-                </div>
-                <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-ui-border pt-2 dark:border-ui-border'>
-                    <p className='wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {sourceRows ? `${sourceRows} source row${sourceRows === 1 ? '' : 's'} linked · ${captureRows} capture-ready${sourceFamilies.length ? ` · ${sourceFamilies.join(', ')}` : ''}` : 'Attach source rows before alert or case handoff.'}
-                    </p>
-                    <span className='shrink-0 text-[11px] font-semibold text-ui-primary dark:text-ui-primary'>Review actions</span>
-                </div>
-            </div>
-        </section>
-    )
-}
-
-function CompactEvidenceFact({ label, value }: { label: string; value: string }) {
-    return (
-        <div className='min-w-0'>
-            <p className='text-[10px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>{label}</p>
-            <p className='mt-0.5 wrap-break-word text-xs font-semibold leading-5 text-ui-text dark:text-ui-text'>{value || 'Not stated'}</p>
-        </div>
-    )
-}
-
 function QueueMetric({ label, value }: { label: string; value: number }) {
     return (
         <div className='rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-panel'>
