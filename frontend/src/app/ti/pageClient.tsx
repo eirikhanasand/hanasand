@@ -9439,10 +9439,10 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
         const active = Boolean(point && selectedPoint?.code === point.code)
         const fillClass = point
             ? point.role === 'operator'
-                ? active ? 'fill-[#6d28d9]' : 'fill-[#8b5cf6]'
-                : active ? 'fill-[#b42318]' : 'fill-[#f04438]'
-            : 'fill-[#e9eff7]'
-        const strokeClass = point ? 'stroke-white stroke-[0.9]' : 'stroke-[#c9d5e6] stroke-[0.55]'
+                ? 'fill-ui-primary'
+                : 'fill-ui-danger'
+            : 'fill-ui-raised'
+        const strokeClass = point ? 'stroke-ui-panel stroke-[0.9]' : 'stroke-ui-border stroke-[0.55]'
 
         function drawRing(ring: number[][]) {
             return ring.reduce((path, point, pointIndex) => {
@@ -9476,7 +9476,7 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                     event.preventDefault()
                     focusCountry(point.code)
                 } : undefined}
-                className={`${fillClass} ${strokeClass} transition-colors ${point ? 'cursor-pointer hover:brightness-105 focus:outline-none' : 'hover:fill-[#dce7f5]'}`}
+                className={`${fillClass} ${strokeClass} transition-colors ${point ? 'cursor-pointer hover:brightness-105 focus:outline-none' : 'hover:fill-ui-panel'}`}
                 opacity={point ? active ? '0.92' : '0.68' : '1'}
             />
         )
@@ -9542,7 +9542,7 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                                 setViewBox((current) => zoomViewBox(current, event.deltaY > 0 ? 1.12 : 0.88, px, py))
                             }}
                         >
-                            <rect x='0' y='0' width={MAP_WIDTH} height={MAP_HEIGHT} className='fill-white dark:fill-[#0b111a]' />
+                            <rect x='0' y='0' width={MAP_WIDTH} height={MAP_HEIGHT} className='fill-ui-panel dark:fill-ui-canvas' />
                             <g className='opacity-95'>{mapPaths}</g>
                             {geo.flows.map(flow => {
                                 const from = countryCentroids[flow.from.code]
@@ -9560,7 +9560,7 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                                         key={`${flow.from.code}-${flow.to.code}`}
                                         d={`M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`}
                                         fill='none'
-                                        stroke='#d92d20'
+                                        className='stroke-ui-danger'
                                         strokeDasharray='5 5'
                                         strokeWidth='1.8'
                                         opacity='0.45'
@@ -9572,14 +9572,14 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                                 if (!coords) return null
                                 const [x, y] = project(coords)
                                 const active = selectedPoint?.code === point.code
-                                const color = point.role === 'operator' ? '#7c3aed' : '#d92d20'
+                                const color = point.role === 'operator' ? 'var(--ui-primary)' : 'var(--ui-danger)'
                                 const radius = point.role === 'operator' ? 5 : 4 + Math.min(5, point.count * 1.5)
                                 return (
                                     <g key={`${point.role}-${point.code}`} onClick={() => focusCountry(point.code)} className='cursor-pointer'>
                                         <circle cx={x} cy={y} r={radius + 9} fill={color} opacity={active ? '0.16' : '0.08'} />
-                                        <circle cx={x} cy={y} r={radius} fill={color} opacity='0.92' stroke='#ffffff' strokeWidth='1.5' />
-                                        <circle cx={x} cy={y} r='2' fill='#ffffff' />
-                                        <text x={x} y={y - radius - 7} textAnchor='middle' className='fill-[#171a21] text-[10px] font-bold dark:fill-[#eef4ff]' stroke='#ffffff' strokeWidth='3' paintOrder='stroke'>{point.code}</text>
+                                        <circle cx={x} cy={y} r={radius} fill={color} opacity='0.92' stroke='var(--ui-panel)' strokeWidth='1.5' />
+                                        <circle cx={x} cy={y} r='2' fill='var(--ui-panel)' />
+                                        <text x={x} y={y - radius - 7} textAnchor='middle' className='fill-ui-text text-[10px] font-bold' stroke='var(--ui-panel)' strokeWidth='3' paintOrder='stroke'>{point.code}</text>
                                     </g>
                                 )
                             })}

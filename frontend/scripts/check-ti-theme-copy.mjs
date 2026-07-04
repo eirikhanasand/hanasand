@@ -20,6 +20,21 @@ for (const token of requiredSemanticChipTokens) {
 assert.equal(tiPage.includes('divide-[#eef1f5]'), false, 'Public TI should use shared divider tokens instead of bespoke light dividers')
 assert.equal(tiPage.includes('dark:divide-[#273244]'), false, 'Public TI should use shared divider tokens instead of bespoke dark dividers')
 
+for (const token of [
+    'fill-[#6d28d9]',
+    'fill-[#8b5cf6]',
+    'fill-[#b42318]',
+    'fill-[#f04438]',
+    'fill-[#e9eff7]',
+    'stroke-white',
+    'stroke-[#c9d5e6]',
+    'stroke=\'#d92d20\'',
+    'fill=\'#ffffff\'',
+    'dark:fill-[#0b111a]',
+]) {
+    assert.equal(tiPage.includes(token), false, `Public TI actor map should use semantic SVG tokens instead of ${token}`)
+}
+
 const riskyLightChipPatterns = [
     /className=['"`][^'"`]*bg-\[#eef3ff\][^'"`]*text-\[#3056d3\](?![^'"`]*dark:bg)(?![^'"`]*dark:text)/g,
     /className=['"`][^'"`]*bg-\[#f2f4f7\][^'"`]*text-\[#475467\](?![^'"`]*dark:bg)(?![^'"`]*dark:text)/g,
