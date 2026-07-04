@@ -2579,7 +2579,7 @@ function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorInt
         <div data-ti-freshness-gate='true' className='mt-4 min-w-0 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Freshness gate</p>
+                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Evidence status</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
                         {displayRequirementText(summary)}
                     </p>
@@ -2621,7 +2621,7 @@ function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorInt
                 </div>
             </div>
             <p className='mt-3 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                {nextOwner ? `Next owner: ${readinessOwnerLabel(nextOwner)}.` : 'No owner is assigned.'}
+                {nextOwner ? `Next action: ${readinessOwnerLabel(nextOwner)}.` : 'No follow-up is assigned.'}
             </p>
         </div>
     )
@@ -4768,7 +4768,7 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Review status</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>Linked records, follow-up fields, and next owner for this result.</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>Linked records, follow-up fields, and next action for this result.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
                     <span className={actionability.readiness.state === 'ready' ? decisionStepStatusClass('ready') : actionability.readiness.state === 'blocked' ? decisionStepStatusClass('blocked') : decisionStepStatusClass('review')}>
