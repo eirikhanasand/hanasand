@@ -1434,7 +1434,7 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
                             <p><span className='font-semibold text-ui-muted'>Source:</span> {selectedEvidence.provenance?.sourceId ?? selectedEvidence.sourceName}</p>
                             <p><span className='font-semibold text-ui-muted'>State:</span> {stateLabel(selectedEvidence.redactionState)}</p>
                             <p className='flex flex-wrap items-center gap-2'>
-                                <span><span className='font-semibold text-ui-muted'>Hash:</span> <span className='font-mono'>{selectedEvidence.contentHash}</span></span>
+                                <span><span className='font-semibold text-ui-muted'>Hash:</span> {evidenceHashState(selectedEvidence.contentHash, copiedHash)}</span>
                                 <button type='button' onClick={() => onCopyHash(selectedEvidence.contentHash)} className='inline-flex h-8 items-center gap-1 rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition hover:bg-ui-canvas'>
                                     <Copy className='h-3.5 w-3.5' />
                                     {copiedHash === selectedEvidence.contentHash ? 'Copied' : 'Copy'}
@@ -1468,7 +1468,7 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
                                         <span className='rounded-full bg-ui-primary/10 px-2 py-0.5 font-semibold text-ui-primary'>{stateLabel(item.redactionState)}</span>
                                     </td>
                                     <td className='px-3 py-2 text-ui-muted'><p className='line-clamp-2 max-w-[280px]'>{safeEvidenceExcerpt(item.excerpt)}</p></td>
-                                    <td className='px-3 py-2 font-mono text-[11px] text-ui-muted'>{item.contentHash}</td>
+                                    <td className='px-3 py-2 text-[11px] font-semibold text-ui-muted'>{evidenceHashState(item.contentHash, copiedHash)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -1525,7 +1525,7 @@ function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, se
                                 <tr key={item.id} onClick={() => onSelectEvidence(item.id)} className={`cursor-pointer align-top transition hover:bg-ui-raised ${selectedEvidence?.id === item.id ? 'bg-ui-raised' : 'bg-ui-panel'}`}>
                                     <td className='px-3 py-3'>
                                         <p className='line-clamp-2 max-w-80 text-sm leading-5 text-ui-text'>{safeEvidenceExcerpt(item.excerpt)}</p>
-                                        <p className='mt-1 font-mono text-[11px] text-ui-muted'>{item.contentHash}</p>
+                                        <p className='mt-1 text-[11px] font-semibold text-ui-muted'>{evidenceHashState(item.contentHash, copiedHash)}</p>
                                     </td>
                                     <td className='px-3 py-3'>
                                         <p className='max-w-[180px] truncate font-semibold text-ui-text' title={item.sourceName}>{item.sourceName}</p>
@@ -1633,7 +1633,7 @@ function SelectedContextBar({ alert, selectedEvidence, selectedEntity, sourceFil
             </div>
             <div className='grid gap-2 text-[11px] sm:grid-cols-3'>
                 <ActionStatus label='Entity' value={selectedEntity ? stateLabel(selectedEntity.kind) : stateLabel(alert.matchedTerm.kind)} />
-                <ActionStatus label='Evidence' value={selectedEvidence?.contentHash || `${alert.evidence.length} rows`} />
+                <ActionStatus label='Evidence' value={selectedEvidence?.contentHash ? evidenceHashState(selectedEvidence.contentHash, copiedHash) : `${alert.evidence.length} rows`} />
                 <ActionStatus label='Action' value={workflowContext.caseId || stateLabel(alert.webhookDelivery.recommendedRoute)} />
             </div>
             <div className='flex flex-wrap gap-2 lg:justify-end'>
@@ -2483,7 +2483,7 @@ function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[], context?:
             id: `${alert.id}:evidence:${context.selectedEvidence.id}`,
             at: context.selectedEvidence.observedAt || context.selectedEvidence.firstSeenAt || alert.firstSeenAt,
             title: 'Evidence selected',
-            detail: `${context.selectedEvidence.sourceName} · ${context.selectedEvidence.contentHash}`,
+            detail: `${context.selectedEvidence.sourceName} · evidence hash available`,
         } : undefined,
         context?.sourceFilter && context.sourceFilter !== 'all' ? {
             id: `${alert.id}:source-filter:${context.sourceFilter}`,
@@ -2577,6 +2577,11 @@ function deliveryDestinationState(row: Pick<DeliveryItem, 'endpointHint' | 'endp
     if (row.endpointHint || row.endpointHash) return 'configured destination'
     if (row.webhookDestinationId || row.destinationId) return 'saved destination'
     return 'redacted destination'
+}
+
+function evidenceHashState(value?: string | null, copiedValue?: string) {
+    if (!value) return 'hash pending'
+    return copiedValue === value ? 'hash copied' : 'hash available'
 }
 
 function deliverySummaryLabel(rows: DeliveryItem[]) {
