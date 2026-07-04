@@ -28,9 +28,9 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(page).not.toContain('&focus=webhooks')
 
     expect(page).toContain('data-dwm-workflow-snapshot')
-    expect(page).toContain('Workflow route')
-    expect(page).toContain('Use this path when a source match needs to become a customer case and delivery')
-    expect(page).toContain('Run path')
+    expect(page).toContain('Watchlist to source, alert, case, and delivery.')
+    expect(page).toContain('Use this workflow when a source match needs to become a customer case and delivery.')
+    expect(page).toContain('Run workflow')
     expect(page).toContain('data-dwm-selected-workflow-actions')
 
     expect(page.indexOf('<WorkflowRouteStrip')).toBeLessThan(page.indexOf('Recent attacks'))
