@@ -2537,7 +2537,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
     const destinationUrl = draft.url.trim()
     const destinationUrlInvalid = Boolean(destinationUrl) && !validDestinationUrl(destinationUrl)
     return (
-        <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' onClick={event => {
+        <div className='grid min-w-0 gap-3 overflow-hidden rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' onClick={event => {
             event.stopPropagation()
             onSelect()
         }} onKeyDown={stopRowSelectionKeys}>
@@ -2561,14 +2561,14 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                     </a>
                 </div>
             </div>
-            <div className='grid gap-2 xl:grid-cols-[8rem_minmax(16rem,1fr)_auto]'>
+            <div className='grid min-w-0 gap-2 lg:grid-cols-[8rem_minmax(0,1fr)] 2xl:grid-cols-[8rem_minmax(0,1fr)_auto]'>
                 <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={!canManage || Boolean(busy)} onChange={value => onDraftChange({ ...draft, kind: value as DestinationDraft['kind'] })} />
-                <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                <label className='grid min-w-0 gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                     URL
                     <input value={draft.url} disabled={!canManage || Boolean(busy)} onChange={event => onDraftChange({ ...draft, url: event.target.value })} className={inputClass} placeholder='https://discord.com/api/webhooks/...' />
                     {destinationUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
                 </label>
-                <label className='grid content-end'>
+                <label className='grid content-end lg:col-span-2 2xl:col-span-1'>
                     <span className='sr-only'>Test destination</span>
                     <button type='button' className={`${primaryButtonClass} whitespace-nowrap`} disabled={!canManage || !destinationUrl || destinationUrlInvalid || Boolean(busy)} onClick={() => onTest('save')}>
                         <CheckCircle2 className='h-4 w-4' />

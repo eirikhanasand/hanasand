@@ -340,7 +340,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(page.locator('[data-org-watchlist-filter-count="true"]')).toContainText('1/3 shown')
     await expect(retiredVendorRow).toBeVisible()
     await expect(oktaRow).toBeHidden()
-    await retiredVendorRow.click()
+    await retiredVendorRow.getByText('RetiredVendor').click()
     await expect(page.locator('#audit')).toContainText('RetiredVendor')
     await expect(page.locator('#audit')).toContainText('watch_acme_retired')
 
