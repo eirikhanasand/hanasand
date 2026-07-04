@@ -32,7 +32,7 @@ assertIncludes(loadTestingPage, 'title=\'Load testing and endpoint evidence\'', 
 assertIncludes(loadTestingPage, '<LoadTestingOperations />', 'dashboard service check route must render the operations command center before secondary tables')
 assertOrder(loadTestingPage, '<LoadTestingOperations />', '<DashboardPanel className=\'overflow-hidden p-0\'>', 'dashboard operations command center must appear before allowance lanes')
 
-assertIncludes(loadTestingClient, 'Run a service check with evidence you can act on', 'dashboard command center must lead with the service-check workflow')
+assertIncludes(loadTestingClient, 'Check an endpoint you control', 'dashboard command center must lead with the service-check workflow')
 assertIncludes(loadTestingClient, 'fetchRecentTests', 'dashboard command center must read actual recent check history')
 assertIncludes(loadTestingClient, 'latestP95(latest)', 'dashboard command center must derive latency evidence from recent run data')
 assertIncludes(loadTestingClient, 'failedScans.length ? String(failedScans.length) : \'Clear\'', 'dashboard command center must derive failure state from recent run data')
