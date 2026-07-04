@@ -6194,24 +6194,15 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
 
 function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentTriage }) {
     return (
-        <div data-ti-selected-enrichment-triage='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source review triage</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        Selected evidence mapped to source health, intake items, and capture/source-request follow-up.
-                    </p>
-                </div>
+        <div data-ti-selected-enrichment-triage='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
+                <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
+                    Source workflow · {triage.summary.sourceRows} sources · {triage.summary.intakeItems} intake · {triage.summary.sourceRequests} requests · {triage.summary.captures} captures
+                </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(triage.state)}>{decisionStepStatusLabel(triage.state)}</span>
                     <CopyPayloadButton label='Review packet' payload={triage} />
                 </div>
-            </div>
-            <div className='mt-3 grid grid-cols-2 gap-2'>
-                <EvidenceMetric label='Sources' value={`${triage.summary.sourceRows}`} />
-                <EvidenceMetric label='Intake' value={`${triage.summary.intakeItems}`} />
-                <EvidenceMetric label='Requests' value={`${triage.summary.sourceRequests}`} />
-                <EvidenceMetric label='Captures' value={`${triage.summary.captures}`} />
             </div>
             <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(triage.route)}</p>
             <div className='mt-2 grid gap-2'>
