@@ -389,6 +389,25 @@ function inviteSearchText(invite: OrganizationInvite) {
     ].filter(value => value !== undefined && value !== null).join(' ').toLowerCase()
 }
 
+function destinationSearchText(destination: WebhookDestination, latestDelivery?: DeliveryRow | null) {
+    return [
+        destination.id,
+        destination.name,
+        destination.kind,
+        destination.type,
+        destination.status,
+        destination.endpointHint,
+        destination.endpointHash,
+        destination.deliveryReady ? 'ready configured' : undefined,
+        latestDelivery?.status,
+        latestDelivery?.deliveryKind,
+        latestDelivery?.alertId,
+        latestDelivery?.caseId,
+        latestDelivery?.watchlistId,
+        latestDelivery?.requestId,
+    ].filter(value => value !== undefined && value !== null).join(' ').toLowerCase()
+}
+
 function normalizeOrganizationName(value: string) {
     return value.trim().replace(/\s+/g, ' ')
 }
@@ -1909,16 +1928,32 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
 }
 
 function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessages, selectedSubject, createDraft, setCreateDraft, editing, setEditing, onSelectSubject, onCreate, onTest, onUpdate, onDelete }: { destinations: WebhookDestination[], deliveries: DeliveryRow[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, createDraft: DestinationCreateDraft, setCreateDraft: (next: DestinationCreateDraft) => void, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onCreate: () => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onDelete: (destination: WebhookDestination) => void }) {
+    const [destinationQuery, setDestinationQuery] = useState('')
+    const [destinationStatusFilter, setDestinationStatusFilter] = useState('all')
+    const [destinationKindFilter, setDestinationKindFilter] = useState('all')
     const createUrl = createDraft.url.trim()
     const createUrlInvalid = Boolean(createUrl) && !validDestinationUrl(createUrl)
     const createNameDuplicate = destinationNameInUse(destinations, normalizeDestinationName(createDraft.name) || defaultDestinationName(createDraft.kind))
     const busyLabel = destinationBusyLabel(busy)
+    const normalizedDestinationQuery = destinationQuery.trim().toLowerCase()
+    const visibleDestinations = destinations.filter(destination => {
+        const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
+        const latestDelivery = latestDeliveryForDestination(destination, deliveries)
+        const statusMatches = destinationStatusFilter === 'all' || destinationStatus === destinationStatusFilter
+        if (!statusMatches) return false
+        const destinationKind = destination.kind || destination.type || 'webhook'
+        const kindMatches = destinationKindFilter === 'all' || destinationKind === destinationKindFilter
+        if (!kindMatches) return false
+        if (!normalizedDestinationQuery) return true
+        return destinationSearchText(destination, latestDelivery).includes(normalizedDestinationQuery)
+    })
+    const destinationFiltersActive = Boolean(destinationQuery.trim()) || destinationStatusFilter !== 'all' || destinationKindFilter !== 'all'
     return (
         <details id='destinations' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-destinations-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                 <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Saved destinations' detail='Inventory, tests, and removal stay available after a route is attached.' />
                 <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
-                    {destinations.length} route{destinations.length === 1 ? '' : 's'}
+                    {visibleDestinations.length}/{destinations.length} route{destinations.length === 1 ? '' : 's'}
                 </span>
             </summary>
             <div className='grid gap-2 border-t border-ui-border p-4 dark:border-ui-border'>
@@ -1948,7 +1983,53 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                     </div>
                 )}
                 {destinations.length === 0 && <EmptyLine text={canManage ? 'No saved destinations yet.' : 'No saved destinations available.'} />}
-                {destinations.map(destination => {
+                {destinations.length > 0 && (
+                    <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[minmax(0,1fr)_8rem_8rem_auto]' data-org-destination-filter-strip='true'>
+                        <label className='grid min-w-0 gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                            Find destination
+                            <input
+                                value={destinationQuery}
+                                disabled={Boolean(busy)}
+                                onChange={event => setDestinationQuery(event.target.value)}
+                                className={inputClass}
+                                placeholder='Name, route, hash, delivery'
+                            />
+                        </label>
+                        <SelectField
+                            label='Status'
+                            value={destinationStatusFilter}
+                            options={['all', 'active', 'paused', 'configured']}
+                            disabled={Boolean(busy)}
+                            onChange={setDestinationStatusFilter}
+                        />
+                        <SelectField
+                            label='Type'
+                            value={destinationKindFilter}
+                            options={['all', ...destinationKinds]}
+                            disabled={Boolean(busy)}
+                            onChange={setDestinationKindFilter}
+                        />
+                        <div className='grid content-end gap-1'>
+                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-2 text-center text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted' data-org-destination-filter-count='true'>
+                                {visibleDestinations.length}/{destinations.length} shown
+                            </span>
+                            <button
+                                type='button'
+                                className={secondaryButtonClass}
+                                disabled={!destinationFiltersActive || Boolean(busy)}
+                                onClick={() => {
+                                    setDestinationQuery('')
+                                    setDestinationStatusFilter('all')
+                                    setDestinationKindFilter('all')
+                                }}
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {destinations.length > 0 && visibleDestinations.length === 0 && <EmptyLine text='No destinations match this view.' />}
+                {visibleDestinations.map(destination => {
                     const draft = editing[destination.id]
                     const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
                     const latestDelivery = latestDeliveryForDestination(destination, deliveries)

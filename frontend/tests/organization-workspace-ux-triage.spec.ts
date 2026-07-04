@@ -77,6 +77,15 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('No members match this view.')
     expect(page).toContain('data-org-destinations-disclosure')
     expect(page).toContain('Saved destinations')
+    expect(page).toContain('data-org-destination-filter-strip')
+    expect(page).toContain('data-org-destination-filter-count')
+    expect(page).toContain('const [destinationQuery, setDestinationQuery] = useState(\'\')')
+    expect(page).toContain('const [destinationStatusFilter, setDestinationStatusFilter] = useState(\'all\')')
+    expect(page).toContain('const [destinationKindFilter, setDestinationKindFilter] = useState(\'all\')')
+    expect(page).toContain('const visibleDestinations = destinations.filter')
+    expect(page).toContain('destinationSearchText(destination, latestDelivery).includes(normalizedDestinationQuery)')
+    expect(page).toContain('function destinationSearchText')
+    expect(page).toContain('No destinations match this view.')
 
     expect(page.indexOf('<WatchlistPanel')).toBeLessThan(page.indexOf('<SettingsPanel'))
     expect(page.indexOf('data-org-settings-disclosure')).toBeLessThan(page.indexOf('Save settings'))
@@ -233,6 +242,21 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.locator('[data-org-invite-filter-strip="true"]').getByLabel('Status').selectOption('pending')
     await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('1/2 shown')
     await expect(page.locator('#invites')).toContainText('admin@acme.test')
+    await page.locator('[data-org-destinations-disclosure] summary').click()
+    await expect(page.locator('[data-org-destination-filter-strip="true"]')).toBeVisible()
+    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('2/2 shown')
+    await page.locator('[data-org-destination-filter-strip="true"]').getByLabel('Find destination').fill('req_acme_1')
+    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('1/2 shown')
+    await expect(page.locator('#destinations')).toContainText('SOC Discord')
+    await expect(page.locator('#destinations')).not.toContainText('Backup Webhook')
+    await page.locator('[data-org-destination-filter-strip="true"]').getByLabel('Status').selectOption('paused')
+    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('0/2 shown')
+    await expect(page.locator('#destinations')).toContainText('No destinations match this view.')
+    await page.locator('[data-org-destination-filter-strip="true"]').getByRole('button', { name: 'Clear' }).click()
+    await page.locator('[data-org-destination-filter-strip="true"]').getByLabel('Type').selectOption('webhook')
+    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('1/2 shown')
+    await expect(page.locator('#destinations')).toContainText('Backup Webhook')
+    await expect(page.locator('#destinations')).not.toContainText('SOC Discord')
     await page.locator('[data-org-members-disclosure] summary').click()
     await expect(page.locator('[data-org-member-filter-strip="true"]')).toBeVisible()
     await expect(page.locator('[data-org-member-filter-count="true"]')).toContainText('3/3 shown')
@@ -268,6 +292,22 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await retiredVendorRow.click()
     await expect(page.locator('#audit')).toContainText('RetiredVendor')
     await expect(page.locator('#audit')).toContainText('watch_acme_retired')
+
+    await page.locator('[data-org-destinations-disclosure] summary').click()
+    await expect(page.locator('[data-org-destination-filter-strip="true"]')).toBeVisible()
+    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('2/2 shown')
+    await page.getByLabel('Find destination').fill('backup')
+    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('1/2 shown')
+    await expect(page.locator('[data-org-destinations-disclosure]')).toContainText('Backup Webhook')
+    await expect(page.locator('[data-org-destinations-disclosure]')).not.toContainText('SOC Discord')
+    await page.locator('[data-org-destination-filter-strip="true"]').getByLabel('Status').selectOption('active')
+    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('0/2 shown')
+    await expect(page.locator('[data-org-destinations-disclosure]')).toContainText('No destinations match this view.')
+    await page.locator('[data-org-destination-filter-strip="true"]').getByRole('button', { name: 'Clear' }).click()
+    await page.locator('[data-org-destination-filter-strip="true"]').getByLabel('Type').selectOption('webhook')
+    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('1/2 shown')
+    await expect(page.locator('[data-org-destinations-disclosure]')).toContainText('Backup Webhook')
+    await expect(page.locator('[data-org-destinations-disclosure]')).not.toContainText('SOC Discord')
 
     await testInfo.attach('organizations-watchlist-filter-desktop', {
         body: await page.screenshot({ path: '/tmp/organizations-watchlist-filter-desktop.png', fullPage: true }),
@@ -323,6 +363,7 @@ const fixtureWatchlists = [
 
 const fixtureDestinations = [
     { id: 'dest_acme_discord', name: 'SOC Discord', kind: 'discord', status: 'active', endpointHint: 'discord...acme', endpointHash: 'wh_hash_acme', deliveryReady: true, createdAt: '2026-07-03T12:00:00.000Z', updatedAt: '2026-07-03T12:10:00.000Z' },
+    { id: 'dest_acme_backup', name: 'Backup Webhook', kind: 'webhook', status: 'paused', endpointHint: 'webhook...backup', endpointHash: 'wh_hash_backup', deliveryReady: false, createdAt: '2026-07-03T11:00:00.000Z', updatedAt: '2026-07-03T11:10:00.000Z' },
 ]
 
 const fixtureAlerts = [
