@@ -6351,24 +6351,15 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
 
 function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadinessPlan }) {
     return (
-        <div data-ti-selected-delivery-readiness='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Delivery status</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        Selected evidence mapped to alert, capture, destination, and case route status.
-                    </p>
-                </div>
+        <div data-ti-selected-delivery-readiness='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
+                <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
+                    Delivery workflow · {plan.summary.alerts} alerts · {plan.summary.captures} captures · {plan.summary.destinations} destinations · {plan.summary.caseRoutes} case routes
+                </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(plan.state)}>{decisionStepStatusLabel(plan.state)}</span>
                     <CopyPayloadButton label='Delivery status' payload={plan} />
                 </div>
-            </div>
-            <div className='mt-3 grid grid-cols-2 gap-2'>
-                <EvidenceMetric label='Alerts' value={`${plan.summary.alerts}`} />
-                <EvidenceMetric label='Captures' value={`${plan.summary.captures}`} />
-                <EvidenceMetric label='Destinations' value={`${plan.summary.destinations}`} />
-                <EvidenceMetric label='Case routes' value={`${plan.summary.caseRoutes}`} />
             </div>
             <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.handoff.route || plan.route)}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.nextAction)}</p>
