@@ -2820,6 +2820,25 @@ function DeliveryReference({ delivery, organizationId }: { delivery: DeliveryRow
 
 function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, organizationId }: { alertTerms: AlertTerm[], alerts: ScopedAlert[], cases: ScopedCase[], webhooks: WebhookDestination[], alertCaseVisibility: Record<string, unknown> | null, organizationId: string }) {
     const route = `/api/organizations/${encodeURIComponent(organizationId)}`
+    const visibility = visibilityRows(alertCaseVisibility)
+    const hasScopeRows = Boolean(alertTerms.length || alerts.length || cases.length || webhooks.length || visibility.length)
+    if (!hasScopeRows) {
+        return (
+            <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-scope-empty='true'>
+                <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Monitoring scope' detail='Shared watchlists create the alert, case, and delivery context shown here.' />
+                <div className='mt-4 grid gap-3 rounded-lg border border-dashed border-ui-border bg-ui-raised p-4 dark:border-ui-border dark:bg-ui-canvas sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
+                    <div className='min-w-0'>
+                        <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>No scoped monitoring records yet</p>
+                        <p className='mt-1 text-sm leading-6 text-ui-muted dark:text-ui-muted'>Add a shared watchlist term first. Matching alerts, cases, and saved delivery destinations will appear after the first routed event.</p>
+                    </div>
+                    <div className='flex flex-wrap gap-2'>
+                        <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Add watchlist' />
+                        <ActionAnchor href='#destinations' icon={<Webhook className='h-4 w-4' />} label='Prepare delivery' />
+                    </div>
+                </div>
+            </section>
+        )
+    }
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination scope' detail='Org-scoped watchlist, case, and delivery records used by monitoring flows.' />
@@ -2839,7 +2858,7 @@ function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, 
                     primary: item.title || item.id,
                     secondary: `${item.status || 'status'}${item.assignedOwner ? ` · ${item.assignedOwner}` : ''}`,
                 }))} empty='Cases appear after an alert is opened from the DWM workspace.' />
-                <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibilityRows(alertCaseVisibility)} empty='Visibility decisions appear after alerts are reviewed or opened as cases.' />
+                <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibility} empty='Visibility decisions appear after alerts are reviewed or opened as cases.' />
                 <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={webhooks.map(destination => ({
                     id: destination.id,
                     primary: destination.name || destination.id,
