@@ -5955,24 +5955,15 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
 
 function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCreateRequest }) {
     return (
-        <div data-ti-selected-case-create-request='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Case create request</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        Selected evidence shaped for authenticated case creation with source details and blockers attached.
-                    </p>
-                </div>
+        <div data-ti-selected-case-create-request='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
+                <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
+                    Case request · {request.refs.alertIds.length} alerts · {request.refs.captureIds.length} captures · {request.sourceRows.length} sources · {request.refs.watchTerms.length} terms
+                </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(request.state)}>{decisionStepStatusLabel(request.state)}</span>
                     <CopyPayloadButton label='Case create request' payload={request} />
                 </div>
-            </div>
-            <div className='mt-3 grid grid-cols-2 gap-2'>
-                <EvidenceMetric label='Alerts' value={`${request.refs.alertIds.length}`} />
-                <EvidenceMetric label='Captures' value={`${request.refs.captureIds.length}`} />
-                <EvidenceMetric label='Sources' value={`${request.sourceRows.length}`} />
-                <EvidenceMetric label='Terms' value={`${request.refs.watchTerms.length}`} />
             </div>
             <p className='mt-2 break-all font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{request.request.method} {consumerRequestPathLabel(request.request.path)}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(request.nextAction)}</p>
