@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BellRing, CheckCircle2, CreditCard, Gauge, Radio, Zap } from 'lucide-react'
+import { BellRing, CheckCircle2, CreditCard, FileCheck2, Gauge, Radio, ShieldCheck, Zap } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import type { ReactNode } from 'react'
 
@@ -49,13 +49,20 @@ const gates = [
     { label: 'Billing', value: 'Trial', detail: 'Upgrade or talk to sales.', href: '/contact?intent=subscription', icon: <CreditCard className='h-4 w-4' />, tone: 'trial' as const },
 ]
 
+const enterpriseReviewItems = [
+    { label: 'Security review', value: 'Trust artifacts', href: '/trust' },
+    { label: 'Commercial path', value: 'Talk to sales', href: '/contact?intent=enterprise-procurement' },
+    { label: 'Admin controls', value: 'Organizations', href: '/organizations' },
+    { label: 'Delivery proof', value: 'Webhook history', href: '/dashboard/automations' },
+]
+
 export default function SubscriptionPage() {
     return (
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Subscription'
-                title='Choose monitoring coverage'
-                description='Pick the amount of watchlist coverage, alert delivery, review support, and API access your workspace needs.'
+                title='Enable product access'
+                description='Review current workspace capabilities, choose the next coverage tier, and open the enterprise review path when procurement needs evidence.'
             />
 
             <div className='grid gap-3'>
@@ -77,6 +84,28 @@ export default function SubscriptionPage() {
                             <AccessMetric label='Delivery' value='Live' />
                             <AccessMetric label='API' value='Scoped' />
                             <AccessMetric label='Checks' value='5' />
+                        </div>
+                    </div>
+                </DashboardPanel>
+
+                <DashboardPanel className='border-ui-primary/35 bg-ui-panel p-4' data-subscription-primary-flow>
+                    <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
+                        <div className='min-w-0'>
+                            <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
+                                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>Recommended next</span>
+                                <span className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-ui-primary'>Response</span>
+                            </div>
+                            <h2 className='mt-3 text-lg font-semibold text-ui-text'>Move from trial checks to routed response</h2>
+                            <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>Response adds case routing, delivery history, and priority review before expanding into broad API-driven operations. Use Operator when scoped tokens and actor enrichment are part of the workflow.</p>
+                        </div>
+                        <div className='flex flex-wrap gap-2'>
+                            <Link href='/contact?intent=subscribe-response' className='inline-flex h-10 items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90' data-subscription-primary-action>
+                                Choose Response
+                            </Link>
+                            <Link href='/trust' className='inline-flex h-10 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                                <ShieldCheck className='h-4 w-4' />
+                                Trust review
+                            </Link>
                         </div>
                     </div>
                 </DashboardPanel>
@@ -138,6 +167,26 @@ export default function SubscriptionPage() {
                         </div>
                     </DashboardPanel>
                 </div>
+
+                <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+                    <details data-subscription-enterprise-review>
+                        <summary className='flex cursor-pointer list-none flex-col gap-1 border-b border-ui-border bg-ui-raised px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                            <span className='inline-flex items-center gap-2'>
+                                <FileCheck2 className='h-4 w-4 text-ui-primary' />
+                                Enterprise review packet
+                            </span>
+                            <span className='text-xs font-medium text-ui-muted'>Security, procurement, admin, and delivery evidence</span>
+                        </summary>
+                        <div className='grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4' data-subscription-enterprise-review-items>
+                            {enterpriseReviewItems.map(item => (
+                                <Link key={item.label} href={item.href} className='rounded-md border border-ui-border bg-ui-raised p-3 transition hover:border-ui-primary hover:bg-ui-panel'>
+                                    <span className='block text-xs font-semibold uppercase text-ui-muted'>{item.label}</span>
+                                    <span className='mt-1 block text-sm font-semibold text-ui-text'>{item.value}</span>
+                                </Link>
+                            ))}
+                        </div>
+                    </details>
+                </DashboardPanel>
             </div>
         </DashboardPage>
     )
