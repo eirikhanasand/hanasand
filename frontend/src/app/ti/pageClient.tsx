@@ -6422,22 +6422,15 @@ function CaseActionTrailPanel({ trail }: { trail: CaseActionTrailPayload }) {
 
 function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
     return (
-        <div data-ti-selected-case-draft='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Case draft</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        Session-local draft for authenticated case review.
-                    </p>
-                </div>
+        <div data-ti-selected-case-draft='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
+                <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
+                    Case draft · {formatLabel(draft.caseIntent)} · {draft.sourceRows.length} source row{draft.sourceRows.length === 1 ? '' : 's'}
+                </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={draft.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{draft.ready ? 'ready' : 'syncing'}</span>
                     <CopyPayloadButton label='Case draft' payload={draft} />
                 </div>
-            </div>
-            <div className='mt-3 grid grid-cols-2 gap-2'>
-                <EvidenceMetric label='Intent' value={formatLabel(draft.caseIntent)} />
-                <EvidenceMetric label='Sources' value={`${draft.sourceRows.length} row${draft.sourceRows.length === 1 ? '' : 's'}`} />
             </div>
             <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(draft.route || draft.endpoint)}</p>
             {draft.sourceRows.length ? (
