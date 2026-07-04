@@ -606,14 +606,14 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
                         Run path
                     </a>
                 </div>
-                <div className='grid grid-cols-2 gap-2 lg:grid-cols-3 2xl:grid-cols-6'>
+                <div className='grid grid-cols-2 gap-x-3 gap-y-2 lg:grid-cols-3 2xl:grid-cols-6'>
                     {cells.map(cell => (
-                        <div key={cell.label} className='min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>
+                        <div key={cell.label} className='min-w-0 border-l border-ui-border py-1 pl-2'>
                             <div className='flex items-center justify-between gap-2'>
                                 <p className='truncate text-[10px] font-semibold uppercase text-ui-muted'>{cell.label}</p>
                                 <span className={`h-2 w-2 shrink-0 rounded-full ${cell.tone === 'ready' ? 'bg-ui-success' : cell.tone === 'blocked' ? 'bg-ui-warning' : 'bg-ui-primary'}`} />
                             </div>
-                            <div className='mt-2 flex min-w-0 items-end justify-between gap-2'>
+                            <div className='mt-1 flex min-w-0 items-end justify-between gap-2'>
                                 <p className='truncate text-lg font-semibold text-ui-text' title={cell.value}>{cell.value}</p>
                                 <p className='truncate pb-0.5 text-xs text-ui-muted' title={cell.detail}>{cell.detail}</p>
                             </div>
@@ -1098,9 +1098,9 @@ function AnalystBriefPanel({ brief }: { brief: ReturnType<typeof buildAnalystBri
 
 function BriefStep({ label, value }: { label: string, value: string }) {
     return (
-        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-panel p-3'>
+        <div className='min-w-0 border-l border-ui-border py-1 pl-3'>
             <p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p>
-            <p className='mt-2 line-clamp-4 text-sm leading-6 text-ui-text'>{value}</p>
+            <p className='mt-1 line-clamp-4 text-sm leading-6 text-ui-text'>{value}</p>
         </div>
     )
 }
@@ -1853,9 +1853,9 @@ function ActionAvailability({ label, ready }: { label: string, ready: boolean })
 
 function ActionStatus({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'warn' }) {
     return (
-        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>
+        <div className='min-w-0 border-l border-ui-border py-1 pl-2'>
             <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
-            <p className={`mt-1 truncate text-xs font-semibold ${tone === 'warn' ? 'text-ui-warning' : 'text-ui-text'}`} title={value}>{value}</p>
+            <p className={`mt-0.5 truncate text-xs font-semibold ${tone === 'warn' ? 'text-ui-warning' : 'text-ui-text'}`} title={value}>{value}</p>
         </div>
     )
 }
@@ -2138,9 +2138,9 @@ function ActorPanel({ snapshot }: { snapshot: DwmProductSnapshot }) {
 }
 
 function StatusPill({ label, value, tone, className = '' }: { label: string, value: string, tone: 'good' | 'warn' | 'neutral', className?: string }) {
-    const toneClass = tone === 'good' ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : tone === 'warn' ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning' : 'border-ui-border bg-ui-raised text-ui-text'
+    const toneClass = tone === 'good' ? 'border-ui-success text-ui-success' : tone === 'warn' ? 'border-ui-warning text-ui-warning' : 'border-ui-border text-ui-text'
     return (
-        <div className={`shrink-0 rounded-lg border px-3 py-2 ${toneClass} ${className}`}>
+        <div className={`shrink-0 border-l py-1 pl-2 ${toneClass} ${className}`}>
             <p className='text-[10px] font-semibold uppercase opacity-75'>{label}</p>
             <p className='mt-0.5 text-sm font-semibold'>{value}</p>
         </div>
@@ -2164,7 +2164,7 @@ function CaseMetric({ label, value, detail, tone = 'neutral' }: { label: string,
 
 function QueueCell({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'bad' }) {
     return (
-        <div className='rounded-lg border border-ui-border bg-ui-panel px-2 py-1.5'>
+        <div className='border-l border-ui-border py-1 pl-2'>
             <p className='text-[9px] font-semibold uppercase text-ui-muted'>{label}</p>
             <p className={`mt-0.5 truncate font-semibold ${tone === 'bad' ? 'text-ui-danger' : 'text-ui-muted'}`} title={value}>{value}</p>
         </div>
@@ -2180,12 +2180,12 @@ function ContextChip({ label, value, href }: { label: string, value: string, hre
     )
     if (href) {
         return (
-            <a href={href} className='min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 transition hover:bg-ui-canvas focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
+            <a href={href} className='min-w-0 border-l border-ui-border py-1 pl-2 transition hover:border-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
                 {content}
             </a>
         )
     }
-    return <div className='min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>{content}</div>
+    return <div className='min-w-0 border-l border-ui-border py-1 pl-2'>{content}</div>
 }
 
 function buildExposureEntities(
