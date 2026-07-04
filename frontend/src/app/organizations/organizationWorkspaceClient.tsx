@@ -2016,13 +2016,27 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
 }
 
 function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, title: string, route: string, rows: Array<{ id: string, primary: string, secondary: string }>, empty: string }) {
+    const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
+    const copyRoute = async () => {
+        try {
+            await navigator.clipboard.writeText(route)
+            setCopyStatus({ ok: true, text: 'Route copied.' })
+        } catch {
+            setCopyStatus({ ok: false, text: 'Copy failed.' })
+        }
+    }
     return (
         <div className='rounded-lg border border-ui-border p-3 dark:border-ui-border'>
             <div className='flex items-center justify-between gap-3'>
                 <h3 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-white'>{icon}{title}</h3>
-                <a href={route} className='text-ui-primary transition hover:text-ui-primary dark:text-ui-primary' aria-label={`Open ${title} records`}>
-                    <ExternalLink className='h-4 w-4' />
-                </a>
+                <div className='flex items-center gap-1'>
+                    <button type='button' className={iconButtonClass} aria-label={`Copy ${title} route`} onClick={() => void copyRoute()} data-org-scope-copy='true'>
+                        <Copy className='h-4 w-4' />
+                    </button>
+                    <a href={route} className={iconButtonClass} aria-label={`Open ${title} records`}>
+                        <ExternalLink className='h-4 w-4' />
+                    </a>
+                </div>
             </div>
             <div className='mt-3 grid gap-2'>
                 {rows.length === 0 && <EmptyLine text={empty} />}
@@ -2033,6 +2047,7 @@ function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, tit
                     </div>
                 ))}
             </div>
+            <div className='mt-3'><RowStatus message={copyStatus} /></div>
             <p className='mt-3 truncate font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(route) || route}</p>
         </div>
     )
