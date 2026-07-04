@@ -28,7 +28,7 @@ import {
     messageAction,
     sendMail,
 } from '@/utils/mail/client'
-import type { MailOverview } from '@/utils/mail/types'
+import type { MailMessageSummary, MailOverview } from '@/utils/mail/types'
 import { DashboardHeader, DashboardPage, DashboardPanel, dashboardPanelClass } from '@/components/dashboard/ui'
 import ErrorNotice from '@/components/error/errorNotice'
 import { Composer, MessageRow } from './mailWorkspaceParts'
@@ -55,6 +55,8 @@ type Props = {
     mailboxUser?: string | null
 }
 
+type MailListFilter = 'all' | 'unread' | 'starred' | 'attachments' | 'needsFiling'
+
 const POLL_INTERVAL_MS = 10_000
 const STALE_AFTER_MS = 5 * 60_000
 
@@ -77,6 +79,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const [lastSuccessAt, setLastSuccessAt] = useState<number | null>(null)
     const [now, setNow] = useState(() => Date.now())
     const [activeMailboxUser, setActiveMailboxUser] = useState<string | null>(mailboxUser || null)
+    const [mailFilter, setMailFilter] = useState<MailListFilter>('all')
 
     const load = useCallback(async (params: {
         mailboxId?: string | null
@@ -157,11 +160,15 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
     const filteredMessages = useMemo(() => {
         const needle = query.trim().toLowerCase()
-        if (!needle) {
-            return overview?.messages || []
-        }
+        const messages = overview?.messages || []
 
-        return (overview?.messages || []).filter(message => {
+        return messages.filter(message => {
+            if (!messageMatchesMailFilter(message, mailFilter)) {
+                return false
+            }
+            if (!needle) {
+                return true
+            }
             const haystack = [
                 message.subject,
                 message.preview,
@@ -169,7 +176,9 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             ].join(' ').toLowerCase()
             return haystack.includes(needle)
         })
-    }, [overview?.messages, query])
+    }, [overview?.messages, query, mailFilter])
+
+    const mailboxFilterOptions = useMemo(() => buildMailListFilters(overview?.messages || []), [overview?.messages])
 
     const selectedMessage = useMemo(() => {
         if (!overview) {
@@ -500,6 +509,25 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         <span>{filteredMessages.length}</span>
                     </div>
 
+                    <div className='mb-2 flex gap-1.5 overflow-x-auto pb-1' data-mail-filter-strip='true'>
+                        {mailboxFilterOptions.map(option => (
+                            <button
+                                key={option.id}
+                                type='button'
+                                className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold transition ${
+                                    mailFilter === option.id
+                                        ? 'border-ui-primary bg-ui-primary/10 text-ui-primary'
+                                        : 'border-ui-border bg-ui-raised text-ui-muted hover:border-ui-primary/35 hover:text-ui-text'
+                                }`}
+                                aria-pressed={mailFilter === option.id}
+                                onClick={() => setMailFilter(option.id)}
+                            >
+                                <span>{option.label}</span>
+                                <span className='rounded bg-ui-panel px-1.5 py-0.5 font-mono text-[10px]'>{option.count}</span>
+                            </button>
+                        ))}
+                    </div>
+
                     <div className='grid gap-1.5'>
                         {filteredMessages.map(message => (
                             <MessageRow
@@ -514,7 +542,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         ))}
                         {!filteredMessages.length && !loading && (
                             <div className='rounded-lg border border-dashed border-ui-border px-3 py-4 text-xs text-ui-muted'>
-                                {query ? 'Nothing in this mailbox matches the current search.' : 'Mailbox stream is live; no recent messages.'}
+                                {query || mailFilter !== 'all' ? 'No messages match the current view.' : 'Mailbox stream is live; no recent messages.'}
                             </div>
                         )}
                     </div>
@@ -766,4 +794,22 @@ function MailPrimaryFlow({ overview, visibleCount, selectedMessage, stale, onCom
             </div>
         </section>
     )
+}
+
+function buildMailListFilters(messages: MailMessageSummary[]): Array<{ id: MailListFilter, label: string, count: number }> {
+    return [
+        { id: 'all', label: 'All', count: messages.length },
+        { id: 'unread', label: 'Unread', count: messages.filter(message => !message.isRead).length },
+        { id: 'starred', label: 'Starred', count: messages.filter(message => message.isFlagged).length },
+        { id: 'attachments', label: 'Attachments', count: messages.filter(message => message.hasAttachment).length },
+        { id: 'needsFiling', label: 'Needs filing', count: messages.filter(message => !message.isRead || message.isFlagged || message.hasAttachment).length },
+    ]
+}
+
+function messageMatchesMailFilter(message: MailMessageSummary, filter: MailListFilter) {
+    if (filter === 'unread') return !message.isRead
+    if (filter === 'starred') return message.isFlagged
+    if (filter === 'attachments') return message.hasAttachment
+    if (filter === 'needsFiling') return !message.isRead || message.isFlagged || message.hasAttachment
+    return true
 }
