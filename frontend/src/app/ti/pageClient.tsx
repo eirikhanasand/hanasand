@@ -3892,7 +3892,7 @@ function WatchlistRelevanceWorkbench({
                                 <th className='px-3 py-2 font-semibold'>Results</th>
                                 <th className='px-3 py-2 font-semibold'>Newest</th>
                                 <th className='px-3 py-2 font-semibold'>Basis</th>
-                                <th className='px-3 py-2 font-semibold'>Route</th>
+                                <th className='px-3 py-2 font-semibold'>Review link</th>
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
