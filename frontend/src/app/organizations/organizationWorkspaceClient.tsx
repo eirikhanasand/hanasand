@@ -382,8 +382,10 @@ function inviteSearchText(invite: OrganizationInvite) {
         invite.email,
         invite.role,
         invite.status,
-        invite.invitedBy,
+        invite.createdAt,
         invite.expiresAt,
+        invite.acceptancePath,
+        invite.acceptanceUrl,
     ].filter(value => value !== undefined && value !== null).join(' ').toLowerCase()
 }
 
