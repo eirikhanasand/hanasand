@@ -947,19 +947,19 @@ function selectedContinuityRefs(input: {
     return [
         {
             label: 'Captures',
-            value: input.captureCount ? `${input.captureCount}/${input.sourceCount || input.captureCount}` : 'attach',
+            value: input.captureCount ? `${input.captureCount}/${input.sourceCount || input.captureCount} linked` : input.sourceCount ? 'capture needed' : 'source needed',
             state: input.captureCount ? 'ready' : 'blocked',
             href: sourceRoute,
         },
         {
             label: 'Alerts',
-            value: alertRefs.length ? `${alertRefs.length} linked` : input.alertPlan?.readiness.candidateCount ? `${input.alertPlan.readiness.candidateCount} review` : 'none',
+            value: alertRefs.length ? `${alertRefs.length} linked` : input.alertPlan?.readiness.candidateCount ? `${input.alertPlan.readiness.candidateCount} review` : 'watchlist needed',
             state: alertRefs.length ? 'ready' : input.alertPlan?.readiness.candidateCount ? 'review' : 'blocked',
             href: input.alertPlan?.route,
         },
         {
             label: 'Cases',
-            value: caseRoutes.length ? `${caseRoutes.length} route${caseRoutes.length === 1 ? '' : 's'}` : input.caseOwnership?.summary.caseCandidates ? `${input.caseOwnership.summary.caseCandidates} review` : 'none',
+            value: caseRoutes.length ? `${caseRoutes.length} route${caseRoutes.length === 1 ? '' : 's'}` : input.caseOwnership?.summary.caseCandidates ? `${input.caseOwnership.summary.caseCandidates} review` : 'case source needed',
             state: caseRoutes.length ? 'ready' : input.caseOwnership?.summary.caseCandidates ? 'review' : 'blocked',
             href: input.caseOwnership?.route,
         },
@@ -1232,8 +1232,8 @@ type SelectedTriageBrief = {
     whatHappened: string
     whyItMatters: string
     nextAction: string
-    proofStatus: string
-    proofTone: 'ready' | 'review' | 'blocked'
+    evidenceStatus: string
+    evidenceTone: 'ready' | 'review' | 'blocked'
     safetyBoundary: string
     labels: Array<{ label: string; value: string }>
 }
@@ -6743,8 +6743,8 @@ function SelectedTriageBriefPanel({ brief }: { brief: SelectedTriageBrief }) {
                     <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Analyst brief</p>
                     <h3 className='mt-1 text-base font-semibold text-ui-text dark:text-ui-text'>What happened, why it matters, and what to do next</h3>
                 </div>
-                <span className={brief.proofTone === 'ready' ? sourceHealthChipClass('ready') : brief.proofTone === 'blocked' ? sourceHealthChipClass('blocked') : sourceHealthChipClass('review')}>
-                    {brief.proofTone === 'ready' ? 'source ready' : brief.proofTone === 'blocked' ? 'source needed' : 'verify source'}
+                <span className={brief.evidenceTone === 'ready' ? sourceHealthChipClass('ready') : brief.evidenceTone === 'blocked' ? sourceHealthChipClass('blocked') : sourceHealthChipClass('review')}>
+                    {brief.evidenceTone === 'ready' ? 'source ready' : brief.evidenceTone === 'blocked' ? 'source needed' : 'verify source'}
                 </span>
             </div>
             <div className='mt-4 grid gap-3 lg:grid-cols-3'>
@@ -6755,7 +6755,7 @@ function SelectedTriageBriefPanel({ brief }: { brief: SelectedTriageBrief }) {
             <div className='mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
                 <div className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source status</p>
-                    <p className='mt-1 wrap-break-word text-sm leading-6 text-ui-muted dark:text-ui-muted'>{brief.proofStatus}</p>
+                    <p className='mt-1 wrap-break-word text-sm leading-6 text-ui-muted dark:text-ui-muted'>{brief.evidenceStatus}</p>
                 </div>
                 <div className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Safety boundary</p>
@@ -9270,9 +9270,9 @@ function selectedTriageBriefFor(
     const hasSourceReference = Boolean(selected.href || selected.provenance || selected.priority?.sourceIds.length || caseDraft?.sourceRows.length)
     const sourceRows = caseDraft?.sourceRows.length ?? 0
     const prioritySourceRows = selected.priority?.sourceIds.length ?? 0
-    const proofRowCount = sourceRows || prioritySourceRows || 1
+    const evidenceRowCount = sourceRows || prioritySourceRows || 1
     const hasCapture = Boolean(selected.priority?.captureIds.length || caseDraft?.sourceRows.some(row => row.captureId))
-    const proofTone: SelectedTriageBrief['proofTone'] = hasCapture ? 'ready' : hasSourceReference ? 'review' : 'blocked'
+    const evidenceTone: SelectedTriageBrief['evidenceTone'] = hasCapture ? 'ready' : hasSourceReference ? 'review' : 'blocked'
     const blocker = actionability.readiness.blockers.find(item => item.ownerLane === 'source' || item.ownerLane === 'public-ti')
     const firstAction = selected.nextActions.map(displayRequirementText).find(Boolean)
     const alertValue = alertPacket?.customerValue ? displayRequirementText(alertPacket.customerValue) : ''
@@ -9295,12 +9295,12 @@ function selectedTriageBriefFor(
         whatHappened,
         whyItMatters,
         nextAction,
-        proofStatus: hasCapture
-            ? `Backed by ${proofRowCount} source result${proofRowCount === 1 ? '' : 's'} with capture or reference IDs attached.`
+        evidenceStatus: hasCapture
+            ? `Backed by ${evidenceRowCount} source result${evidenceRowCount === 1 ? '' : 's'} with capture or reference IDs attached.`
             : hasSourceReference
                 ? 'Source reference is present, but the public result does not yet include a capture ID. Verify before customer-facing escalation.'
                 : 'Verify source evidence before customer-facing escalation.',
-        proofTone,
+        evidenceTone,
         safetyBoundary: 'Public TI results are metadata-only. This view does not expose source files, credential values, or webhook secrets.',
         labels: [
             { label: 'Severity', value: formatLabel(selected.severity) },
