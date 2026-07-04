@@ -325,7 +325,7 @@ export default function TrafficDashboard({
                 >
                     <div
                         onClick={e => e.stopPropagation()}
-                        className='w-96 rounded-md border border-ui-border bg-ui-panel p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)]'
+                        className='w-96 rounded-md border border-ui-border bg-ui-panel p-5 shadow-lg'
                     >
                         <div className='mb-4 flex items-center justify-between gap-3'>
                             <h2 className='text-base font-semibold text-ui-text'>{editingBlock ? 'Edit access control' : 'Add access control'}</h2>

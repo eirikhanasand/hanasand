@@ -107,7 +107,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                             }
                             if (isChart) {
                                 return (
-                                    <div className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]' key={title as string}>
+                                    <div className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' key={title as string}>
                                         <h3 className='mb-4 text-lg font-semibold text-ui-text'>{title as string}</h3>
                                         <RequestsOverTimeChart data={data as TrafficMetric[]} />
                                     </div>
@@ -115,7 +115,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                             }
                             const set = data as Array<TrafficMetric | TrafficSlowMetric>
                             return (
-                                <div className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]' key={title as string}>
+                                <div className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' key={title as string}>
                                     <h3 className='mb-4 text-lg font-semibold text-ui-text'>{title as string}</h3>
                                     <div className='space-y-2'>
                                         {set.map((entry) => (
@@ -135,7 +135,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
             )}
 
             {recs && recs.length > 0 &&
-                <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-[0_24px_80px_rgba(0,0,0,0.22)]'>
+                <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
                     <div className='border-b border-ui-border p-4'>
                         <h3 className='text-lg font-semibold text-ui-text'>Recent Traffic</h3>
                     </div>
@@ -189,7 +189,7 @@ function StatCard({ title, value, accent = 'slate', icon, outline }: StatCardPro
     } as const
 
     return (
-        <div className='flex items-center justify-between rounded-lg border border-ui-border bg-ui-panel p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]'>
+        <div className='flex items-center justify-between rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
             <div>
                 <p className='text-sm text-ui-muted'>{title}</p>
                 <p className='mt-1 text-2xl font-bold text-ui-text'>{value}</p>

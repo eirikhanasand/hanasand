@@ -11,7 +11,10 @@ test('traffic dashboard summary lanes use shared theme tokens', async () => {
     const speedometer = await readFile(path.join(root, 'src/components/traffic/speedometer.tsx'), 'utf8')
     const trafficMap = await readFile(path.join(root, 'src/components/monitoring/traffic/trafficMap.tsx'), 'utf8')
     const liveMapPrimitives = await readFile(path.join(root, 'src/components/monitoring/traffic/liveMapPrimitives.tsx'), 'utf8')
+    const operationsTraffic = await readFile(path.join(root, 'src/components/monitoring/traffic/traffic.tsx'), 'utf8')
+    const combinedMetrics = await readFile(path.join(root, 'src/components/monitoring/traffic/combinedMetrics.tsx'), 'utf8')
     const trafficMapSources = `${trafficMap}\n${liveMapPrimitives}`
+    const trafficOperationsSources = `${operationsTraffic}\n${combinedMetrics}`
 
     expect(page).toContain('DashboardPage')
     expect(page).toContain('DashboardHeader')
@@ -50,4 +53,10 @@ test('traffic dashboard summary lanes use shared theme tokens', async () => {
     expect(trafficMapSources).toContain('border-ui-border')
     expect(trafficMapSources).toContain('bg-ui-panel')
     expect(trafficMapSources).not.toMatch(/rounded-(?:xl|2xl|3xl)/)
+
+    expect(trafficOperationsSources).toContain('Recent Traffic')
+    expect(trafficOperationsSources).toContain('border-ui-border bg-ui-panel')
+    expect(trafficOperationsSources).toContain('shadow-sm')
+    expect(trafficOperationsSources).not.toMatch(/\bshadow-\[/)
+    expect(client).not.toMatch(/\bshadow-\[/)
 })

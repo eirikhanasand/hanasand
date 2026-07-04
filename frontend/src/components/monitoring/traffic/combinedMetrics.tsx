@@ -14,7 +14,7 @@ export default function CombinedMetrics({ title, data, total }: {
     const buttonText = `Switch to ${title[1 - index]}`
 
     return (
-        <div className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]'>
+        <div className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
             <div className='flex justify-between items-center mb-4'>
                 <h3 className='text-lg font-semibold text-ui-text'>{currentTitle}</h3>
                 <button
