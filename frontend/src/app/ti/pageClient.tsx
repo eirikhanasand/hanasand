@@ -4827,19 +4827,16 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
     const [showStageDetails, setShowStageDetails] = useState(false)
     const readyStages = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     return (
-        <div data-ti-consumer-readiness='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
-            <div className='flex flex-wrap items-center justify-between gap-2'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Review status</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {readyStages} of {actionability.consumerReadiness.stages.length} stages ready for console work.
-                    </p>
-                </div>
+        <div data-ti-consumer-readiness='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
+            <div className='flex flex-wrap items-center justify-between gap-2 text-xs'>
+                <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
+                    Console workflow · {readyStages}/{actionability.consumerReadiness.stages.length} stages ready
+                </p>
                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
-                    <button type='button' onClick={() => setShowStageDetails(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
+                    <button type='button' onClick={() => setShowStageDetails(value => !value)} className='inline-flex min-h-7 items-center justify-center border-l border-ui-border pl-2 text-[11px] font-semibold text-ui-text transition hover:text-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:text-ui-text'>
                         {showStageDetails ? 'Hide stages' : 'Show stages'}
                     </button>
-                    <CopyPayloadButton label='Review status' payload={actionability.consumerReadiness.bundlePreview} />
+                    <CopyPayloadButton label='Console workflow' payload={actionability.consumerReadiness.bundlePreview} />
                 </div>
             </div>
             {showStageDetails ? (
