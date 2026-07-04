@@ -1597,7 +1597,8 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
         },
     ]
 
-    const completed = rows.filter(row => row.ready).length
+    const visibleRows = rows.filter(row => row.ready || !row.blocked)
+    const completed = visibleRows.filter(row => row.ready).length
     const nextAction = rows.find(row => !row.ready && !row.blocked) || rows.find(row => row.ready) || rows[0]
     const openAlertHref = alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}` : ''
     return (
@@ -1610,11 +1611,11 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                             <span className='truncate'>Notification setup</span>
                         </h2>
                         <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' data-org-setup-progress-count='true'>
-                            {completed}/{rows.length}
+                            {completed}/{visibleRows.length}
                         </span>
                     </div>
                     <div className='grid overflow-hidden rounded-lg border border-ui-border dark:border-ui-border sm:grid-cols-2 xl:grid-cols-4'>
-                        {rows.map(row => {
+                        {visibleRows.map(row => {
                             const rowClass = `grid min-h-14 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-b border-ui-border px-3 py-2 text-left transition last:border-b-0 xl:border-b-0 xl:border-r xl:last:border-r-0 dark:border-ui-border ${row.ready ? 'bg-ui-panel dark:bg-ui-panel' : row.blocked ? 'bg-ui-raised opacity-75 dark:bg-ui-canvas' : 'bg-ui-primary/10 hover:bg-ui-primary/15 dark:bg-ui-primary/10 dark:hover:bg-ui-primary/15'}`
                             const icon = row.ready ? <CheckCircle2 className='h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='h-4 w-4 shrink-0 text-ui-warning' />
                             const content = (
@@ -1626,9 +1627,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                                     </span>
                                 </>
                             )
-                            return row.blocked
-                                ? <span key={row.id} className={rowClass} aria-disabled='true' data-org-setup-step={row.id}>{content}</span>
-                                : <a key={row.id} href={row.href} className={rowClass} data-org-setup-step={row.id}>{content}</a>
+                            return <a key={row.id} href={row.href} className={rowClass} data-org-setup-step={row.id}>{content}</a>
                         })}
                     </div>
                 </div>
