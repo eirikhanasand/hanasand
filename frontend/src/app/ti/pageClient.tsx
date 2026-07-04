@@ -14,7 +14,7 @@ import { useRouter } from 'next/navigation'
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
 
-const TI_WORKBENCH_PREVIEW_ROWS = 3
+const TI_WORKBENCH_PREVIEW_ROWS = 2
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const router = useRouter()
