@@ -1599,21 +1599,21 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
     const nextAction = rows.find(row => !row.ready && !row.blocked) || rows.find(row => row.ready) || rows[0]
     const openAlertHref = alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}` : ''
     return (
-        <section className='rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-setup-progress='true'>
+        <section className='border-t border-ui-border pt-3 dark:border-ui-border' data-org-setup-progress='true'>
             <div className='grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center'>
                 <div className='min-w-0' data-org-setup-rail='true'>
                     <div className='mb-2 flex min-w-0 items-center justify-between gap-3'>
                         <h2 className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
                             <ShieldCheck className='h-4 w-4 shrink-0 text-ui-primary' />
-                            <span className='truncate'>Notification setup</span>
+                            <span className='truncate'>Organization setup</span>
                         </h2>
-                        <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' data-org-setup-progress-count='true'>
+                        <span className='shrink-0 border-l border-ui-border pl-2 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-setup-progress-count='true'>
                             {completed}/{visibleRows.length}
                         </span>
                     </div>
-                    <div className='grid overflow-hidden rounded-lg border border-ui-border dark:border-ui-border sm:grid-cols-2 xl:grid-cols-4'>
+                    <div className='grid border-t border-ui-border dark:border-ui-border sm:grid-cols-2 xl:grid-cols-4'>
                         {visibleRows.map(row => {
-                            const rowClass = `grid min-h-14 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-b border-ui-border px-3 py-2 text-left transition last:border-b-0 xl:border-b-0 xl:border-r xl:last:border-r-0 dark:border-ui-border ${row.ready ? 'bg-ui-panel dark:bg-ui-panel' : row.blocked ? 'bg-ui-raised opacity-75 dark:bg-ui-canvas' : 'bg-ui-primary/10 hover:bg-ui-primary/15 dark:bg-ui-primary/10 dark:hover:bg-ui-primary/15'}`
+                            const rowClass = `grid min-h-14 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-b border-ui-border py-2 pr-3 text-left transition xl:border-b xl:border-r xl:last:border-r-0 dark:border-ui-border ${row.ready ? '' : row.blocked ? 'opacity-75' : 'hover:text-ui-primary'}`
                             const icon = row.ready ? <CheckCircle2 className='h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='h-4 w-4 shrink-0 text-ui-warning' />
                             const content = (
                                 <>
@@ -1629,7 +1629,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                     </div>
                 </div>
                 <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:min-w-72 xl:grid-cols-1' data-org-setup-next='true'>
-                    <span className='min-w-0 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 py-2 text-sm dark:border-ui-primary/35 dark:bg-ui-primary/10'>
+                    <span className='min-w-0 border-l border-ui-primary/35 pl-3 text-sm dark:border-ui-primary/35'>
                         <span className='block truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary dark:text-ui-primary'>Next</span>
                         <span className='mt-0.5 block truncate font-semibold text-ui-text dark:text-ui-text'>{nextAction.action}</span>
                     </span>
