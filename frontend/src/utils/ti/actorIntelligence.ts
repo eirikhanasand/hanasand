@@ -164,6 +164,45 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
             ],
         }
     }
+    if (isLockBit(result)) {
+        const activityTitles = result.recentActivity.map(item => item.title).filter((value): value is string => Boolean(value))
+        const sourceLabels = result.sources.map(source => source.name || source.url || source.provenance).filter((value): value is string => Boolean(value))
+        return {
+            actorClass: 'Ransomware and extortion actor',
+            attribution: 'LockBit-branded ransomware and extortion activity from sourced actor intelligence and source rows',
+            firstSeen: result.recentActivity.map(item => item.firstReportedAt || item.date).filter(Boolean).sort()[0] || 'Public ransomware reporting period',
+            lastSeen: result.lastSeen || result.generatedAt,
+            motivation: ['Financial extortion', 'Data theft pressure', 'Affiliate-driven intrusion operations', 'Victim publication leverage'],
+            malwareTools: unique([...result.aliases.filter(alias => /lockbit/i.test(alias)), 'LockBit ransomware']).slice(0, 8),
+            campaigns: activityTitles.length ? activityTitles.slice(0, 8) : ['LockBit actor profile activity'],
+            infrastructure: unique([
+                ...result.recentActivity.filter(item => item.claimType === 'infrastructure_activity').map(item => item.title),
+                ...sourceLabels.filter(label => /leak|blog|onion|infrastructure|source|profile/i.test(label)),
+                'Leak-site publication workflow',
+            ]).slice(0, 8),
+            indicators: unique([
+                ...result.sources.map(source => domainFromUrl(source.url || source.provenance)).filter((value): value is string => Boolean(value)),
+                ...result.aliases.filter(alias => /lockbit/i.test(alias)),
+            ]).slice(0, 8),
+            targetSectors: unique([
+                ...result.targets.map(target => target.sector),
+                ...result.recentActivity.flatMap(item => item.affectedSectors ?? []),
+                ...victimObservations.map(item => item.sector),
+            ]).filter(item => !/not stated/i.test(item)).slice(0, 8),
+            geographies: unique([
+                ...result.targets.flatMap(target => target.regions),
+                ...result.recentActivity.flatMap(item => item.countries ?? []),
+                ...victimObservations.map(item => item.country),
+            ]).filter(item => !/not stated|global|multiple|various|unknown/i.test(item)).slice(0, 8),
+            confidence: Math.max(result.confidence || 0, result.sources.length ? 0.66 : 0.52),
+            confidenceReasoning: [
+                result.sources.length ? `${result.sources.length} source records support this actor profile.` : 'Source records are still needed before customer routing.',
+                result.recentActivity.length ? `${result.recentActivity.length} activity rows are available for analyst review.` : 'Recent activity rows are still needed.',
+                result.aliases.length ? 'Aliases include LockBit-branded operator labels.' : 'Alias coverage is still sparse.',
+            ],
+            sourceProvenance: sourceLabels.slice(0, 8),
+        }
+    }
 
     return {
         actorClass: result.aliases.length ? 'Named threat actor or activity cluster' : 'Threat intelligence query',
@@ -381,6 +420,10 @@ function domainFromUrl(value?: string) {
 
 function isApt29(result: TiSearchResponse) {
     return /apt29|cozy bear|midnight blizzard|nobelium|the dukes/i.test(`${result.query} ${result.aliases.join(' ')}`)
+}
+
+function isLockBit(result: TiSearchResponse) {
+    return /lockbit/i.test(`${result.query} ${result.aliases.join(' ')} ${result.recentActivity.map(item => item.title).join(' ')}`)
 }
 
 function unique(values: string[]) {

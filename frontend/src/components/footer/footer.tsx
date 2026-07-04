@@ -3,7 +3,7 @@
 import config from '@/config'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, ArrowUpRight, BellRing, BookOpen, Code2, FileText, Gauge, Globe, LockKeyhole, Network, Radar, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
+import { Activity, ArrowUpRight, BellRing, BookOpen, Code2, FileText, Gauge, Globe, Network, Radar, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
 import isSharePath from '@/utils/routes/isSharePath'
 import BrandLogo from '@/components/brand/brandLogo'
 
@@ -32,7 +32,6 @@ const footerGroups = [
             { label: 'Support', href: '/support', icon: ArrowUpRight },
             { label: 'Status', href: '/status', icon: Activity, status: true },
             { label: 'Service Checks', href: '/test', icon: Gauge },
-            { label: 'Password Utility', href: '/pwned', icon: LockKeyhole },
         ],
     },
     {
