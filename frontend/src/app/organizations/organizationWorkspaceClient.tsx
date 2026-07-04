@@ -2586,20 +2586,23 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
 }
 
 function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canManage, busy, rowMessages, onReplay }: { organization: OrganizationSummary, deliveries: DeliveryRow[], selectedSubject: ActivitySubject, canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, onReplay: (delivery: DeliveryRow) => void }) {
-    const scopedDeliveries = deliveries
+    const matchingDeliveries = deliveries
         .filter(delivery => deliveryMatchesSubject(delivery, selectedSubject))
         .sort((left, right) => deliveryTime(right) - deliveryTime(left))
+    const scopedDeliveries = matchingDeliveries
         .slice(0, 8)
     const allHref = `/api/dwm/webhooks/deliveries?organizationId=${encodeURIComponent(organization.id)}`
     const selectedHref = deliveryHistoryHref(allHref, selectedSubject)
-    const totalFailures = scopedDeliveries.filter(delivery => delivery.status === 'failed' || delivery.error).length
-    const retryCount = scopedDeliveries.filter(delivery => Boolean(delivery.nextRetryAt)).length
+    const totalFailures = matchingDeliveries.filter(delivery => delivery.status === 'failed' || delivery.error).length
+    const retryCount = matchingDeliveries.filter(delivery => Boolean(delivery.nextRetryAt)).length
+    const hiddenDeliveryCount = Math.max(0, matchingDeliveries.length - scopedDeliveries.length)
     return (
         <section id='delivery-history' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-delivery-history='true'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
                 <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Delivery history' detail='Recent tests, replays, failures, and retry state for the selected organization scope.' />
                 <div className='flex flex-wrap gap-2'>
-                    <StatusPill status={`${scopedDeliveries.length} shown`} />
+                    <StatusPill status={`${matchingDeliveries.length} total`} />
+                    {hiddenDeliveryCount > 0 && <StatusPill status={`${hiddenDeliveryCount} older`} />}
                     {totalFailures > 0 && <StatusPill status={`${totalFailures} failed`} />}
                     {retryCount > 0 && <StatusPill status={`${retryCount} retry`} />}
                     <a href={selectedHref} className={secondaryButtonClass}>
