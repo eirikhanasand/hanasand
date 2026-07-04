@@ -56,6 +56,7 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('selectedSubjectActions(selectedSubject, organization)')
     expect(page).toContain('Audit trail')
     expect(page).toContain('Delivery activity')
+    expect(page).toContain('href: \'#delivery-history\'')
     expect(page).toContain('/dashboard/ti/workbench?organizationId=${organizationId}&watchlistId=${watchlistId}')
     expect(page).toContain('/dashboard/dwm/cases/${caseId}?organizationId=${organizationId}')
     expect(page).not.toContain('Org API')
