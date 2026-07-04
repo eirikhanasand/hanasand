@@ -635,7 +635,7 @@ assert(pageClientSource.includes('Review evidence'), 'Public TI page should labe
 assert(pageClientSource.includes('data-ti-source-activation'), 'Public TI page should expose source activation review actions when available.')
 assert(pageClientSource.includes('Source Activation'), 'Public TI page should label source activation review in analyst language.')
 assert(pageClientSource.includes('Action exports'), 'Public TI page should expose validated action exports.')
-assert(pageClientSource.includes('Validated request bodies for authenticated review'), 'Public TI page should explain copy-only action exports professionally.')
+assert(pageClientSource.includes('Action packages for authenticated review'), 'Public TI page should explain copy-only action exports professionally.')
 assert(pageClientSource.includes('data-ti-action-export-summary'), 'Public TI action exports should expose compact operational summaries.')
 assert(pageClientSource.includes('actionability.alertGenerationReadiness.candidateCount'), 'Public TI action exports should summarize alert-generation readiness.')
 assert(pageClientSource.includes('evidence window pending'), 'Public TI action exports should show evidence-window readiness without internal wording.')

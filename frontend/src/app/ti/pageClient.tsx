@@ -2709,7 +2709,7 @@ function SectionOverviewRail({ items }: { items: SectionOverviewItem[] }) {
 
 function TiCommandBar({ links }: { links: Array<{ href: string; label: string; value: string; icon: typeof Inbox }> }) {
     return (
-        <nav data-ti-command-bar='true' className='grid min-w-0 gap-1.5 sm:grid-cols-2 lg:col-span-2 xl:grid-cols-5' aria-label='Threat intelligence workflow'>
+        <nav data-ti-command-bar='true' className='grid min-w-0 gap-1.5 sm:grid-cols-2 lg:col-span-2 xl:grid-cols-5' aria-label='Threat intelligence actions'>
             {links.map(({ href, label, value, icon: Icon }) => (
                 <Link
                     key={`${label}-${href}`}
@@ -4648,7 +4648,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Action exports</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>Validated request bodies for authenticated review. Copying does not change customer state.</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>Action packages for authenticated review. Copying does not change customer state.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
                     <span className={readyPayloadCount === payloads.length ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>
