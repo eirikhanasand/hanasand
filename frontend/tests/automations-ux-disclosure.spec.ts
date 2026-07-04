@@ -89,12 +89,14 @@ test('automations keeps the primary alert route workflow calm and wired', async 
     await page.getByText('More route actions').click()
     await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible()
 
-    await page.getByText('Templates').click()
+    if (!await page.getByRole('button', { name: 'Mail health' }).isVisible()) {
+        await page.getByText('Templates').click()
+    }
     await page.getByRole('button', { name: 'Mail health' }).click()
     await expect(page.getByRole('heading', { name: 'New alert' })).toBeVisible()
     await expect(page.getByText('Route is paused; reactivate to resume checks.')).toBeVisible()
     await page.getByText('Schedule and notification policy').click()
-    await page.getByLabel('Status').selectOption('active')
+    await page.getByTestId('automation-schedule-settings').getByLabel('Status').selectOption('active')
     await expect(page.getByText('Add a Discord webhook-file destination before activating this alert.')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Create alert' })).toBeDisabled()
 
