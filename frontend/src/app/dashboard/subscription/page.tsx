@@ -96,7 +96,7 @@ export default function SubscriptionPage() {
                                 <span className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-ui-primary'>Response</span>
                             </div>
                             <h2 className='mt-3 text-lg font-semibold text-ui-text'>Move from trial checks to routed response</h2>
-                            <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>Response adds case routing, delivery history, and priority review before expanding into broad API-driven operations. Use Operator when scoped tokens and actor enrichment are part of the workflow.</p>
+                            <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>Response adds case routing, delivery history, and priority review before expanding into connected response operations. Use Operator when scoped tokens and threat context are part of the workflow.</p>
                         </div>
                         <div className='flex flex-wrap gap-2'>
                             <Link href='/contact?intent=subscribe-response' className='inline-flex h-10 items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90' data-subscription-primary-action>
