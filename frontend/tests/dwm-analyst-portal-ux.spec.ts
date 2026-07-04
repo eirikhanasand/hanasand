@@ -43,6 +43,13 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(page).toContain('onReplay={replayAlert}')
     expect(page).toContain('onTest={testDelivery}')
     expect(page).toContain('onSend={sendAlert}')
+    expect(page).toContain('useSearchParams')
+    expect(page).toContain('function selectAlert(alert: PortalAlert)')
+    expect(page).toContain('nextParams.set(\'tenantId\', tenantId)')
+    expect(page).toContain('nextParams.set(\'organizationId\', alertOrgId)')
+    expect(page).toContain('nextParams.set(\'alert\', alert.id)')
+    expect(page).toContain('router.replace(`/dashboard/dwm?${nextParams.toString()}`, { scroll: false })')
+    expect(page).toContain('onClick={() => selectAlert(alert)}')
 })
 
 test('dwm next operator action prioritizes the workflow step an analyst can take now', () => {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
 import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
@@ -137,6 +137,7 @@ type EvidenceDispositionState = 'reviewed' | 'escalated' | 'suppressed' | 'false
 
 export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operations, alerts, deliveries, dataHealth, initialAlertId }: PortalProps) {
     const router = useRouter()
+    const searchParams = useSearchParams()
     const [selectedId, setSelectedId] = useState(initialAlertId && alerts.some(alert => alert.id === initialAlertId) ? initialAlertId : alerts[0]?.id ?? '')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
@@ -299,6 +300,20 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
         }
     }
 
+    function selectAlert(alert: PortalAlert) {
+        setSelectedId(alert.id)
+        const nextParams = new URLSearchParams(searchParams.toString())
+        nextParams.set('tenantId', tenantId)
+        const alertOrgId = alertOrganizationId(alert, organizationId)
+        if (alertOrgId) {
+            nextParams.set('organizationId', alertOrgId)
+        } else {
+            nextParams.delete('organizationId')
+        }
+        nextParams.set('alert', alert.id)
+        router.replace(`/dashboard/dwm?${nextParams.toString()}`, { scroll: false })
+    }
+
     return (
         <div className='grid gap-4'>
             <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
@@ -375,7 +390,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                                 <button
                                     key={alert.id}
                                     type='button'
-                                    onClick={() => setSelectedId(alert.id)}
+                                    onClick={() => selectAlert(alert)}
                                     className={`w-full rounded-lg border p-3 text-left transition ${selectedAlert?.id === alert.id ? 'border-ui-primary bg-ui-panel shadow-sm' : 'border-transparent hover:border-ui-border hover:bg-ui-panel'}`}
                                 >
                                     <div className='flex items-center justify-between gap-2'>
