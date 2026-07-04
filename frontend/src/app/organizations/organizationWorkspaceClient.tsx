@@ -1191,6 +1191,12 @@ export default function OrganizationWorkspaceClient() {
                                     hasWatchlists={bundle.watchlists.length > 0}
                                     hasDestination={hasConfiguredDestination}
                                 />
+                                <PermissionStrip
+                                    role={selectedOrganization.role || 'member'}
+                                    canManage={canManage}
+                                    hasWatchlists={bundle.watchlists.length > 0}
+                                    hasDestination={hasConfiguredDestination}
+                                />
                                 <OrgSetupProgress
                                     canManage={canManage}
                                     memberCount={bundle.members.length}
@@ -1542,23 +1548,57 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
 function OrgActionStrip({ alertId, canManage, hasWatchlists, hasDestination }: { alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
     return (
         <nav className='flex flex-wrap items-center gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' aria-label='Organization actions'>
-            <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Create watchlist' disabled={!canManage} />
-            <ActionAnchor href='#invites' icon={<UserPlus className='h-4 w-4' />} label='Invite member' disabled={!canManage} />
-            <ActionAnchor href='#destinations' icon={<Webhook className='h-4 w-4' />} label='Test destination' disabled={!hasWatchlists} />
-            <ActionAnchor href={`/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}`} icon={<CircleAlert className='h-4 w-4' />} label='Open DWM alert' disabled={!alertId} />
-            <ActionAnchor href='#audit' icon={<CheckCircle2 className='h-4 w-4' />} label='Audit' disabled={!hasDestination && !hasWatchlists} />
+            <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Create watchlist' disabled={!canManage} disabledReason='Admin access is required to create shared watchlists.' />
+            <ActionAnchor href='#invites' icon={<UserPlus className='h-4 w-4' />} label='Invite member' disabled={!canManage} disabledReason='Admin access is required to invite team members.' />
+            <ActionAnchor href='#destinations' icon={<Webhook className='h-4 w-4' />} label='Test destination' disabled={!hasWatchlists} disabledReason='Add a watchlist term before testing delivery.' />
+            <ActionAnchor href={`/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}`} icon={<CircleAlert className='h-4 w-4' />} label='Open DWM alert' disabled={!alertId} disabledReason='No DWM alert is selected for this organization.' />
+            <ActionAnchor href='#audit' icon={<CheckCircle2 className='h-4 w-4' />} label='Audit' disabled={!hasDestination && !hasWatchlists} disabledReason='Create a watchlist or delivery destination before reviewing audit context.' />
         </nav>
     )
 }
 
-function ActionAnchor({ href, icon, label, disabled }: { href: string, icon: ReactNode, label: string, disabled?: boolean }) {
+function ActionAnchor({ href, icon, label, disabled, disabledReason }: { href: string, icon: ReactNode, label: string, disabled?: boolean, disabledReason?: string }) {
     const classes = disabled
         ? 'pointer-events-none inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'
         : 'inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:bg-ui-raised dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
     if (disabled) {
-        return <span className={classes} aria-disabled='true'>{icon}{label}</span>
+        return <span className={classes} aria-disabled='true' aria-label={disabledReason ? `${label}: ${disabledReason}` : label} title={disabledReason}>{icon}{label}</span>
     }
     return <a className={classes} href={href}>{icon}{label}</a>
+}
+
+function PermissionStrip({ role, canManage, hasWatchlists, hasDestination }: { role: OrganizationRole, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
+    const rows = [
+        { id: 'team', label: 'Team', value: canManage ? 'Manage' : 'View', ready: canManage, reason: canManage ? 'Invite and update roles' : 'Owner or admin required' },
+        { id: 'watchlists', label: 'Watchlists', value: canManage ? 'Manage' : 'View', ready: canManage, reason: canManage ? 'Create, edit, archive' : 'Owner or admin required' },
+        { id: 'destinations', label: 'Destinations', value: canManage && hasWatchlists ? 'Test' : hasDestination ? 'View' : 'Add watchlist', ready: canManage && hasWatchlists, reason: hasWatchlists ? (canManage ? 'Save and replay routes' : 'Owner or admin required') : 'Add watchlist first' },
+        { id: 'alerts', label: 'Alerts and cases', value: hasWatchlists ? 'Scoped' : 'Waiting', ready: hasWatchlists, reason: hasWatchlists ? 'Org watchlist context available' : 'Add watchlist first' },
+    ] as const
+    return (
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-permission-strip='true' aria-label='Organization permission summary'>
+            <div className='grid gap-2 lg:grid-cols-[minmax(9rem,0.45fr)_minmax(0,1fr)] lg:items-center'>
+                <div className='flex min-w-0 items-center gap-2'>
+                    <ShieldCheck className='h-4 w-4 shrink-0 text-ui-primary' />
+                    <span className='min-w-0'>
+                        <span className='block truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>Current role</span>
+                        <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{role}</span>
+                    </span>
+                </div>
+                <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
+                    {rows.map(row => (
+                        <div key={row.id} className='grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas' data-org-permission-row={row.id}>
+                            <span className='min-w-0'>
+                                <span className='block truncate text-xs font-semibold text-ui-muted dark:text-ui-muted'>{row.label}</span>
+                                <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
+                                <span className='block truncate text-[11px] text-ui-muted dark:text-ui-muted'>{row.reason}</span>
+                            </span>
+                            <StatusPill status={row.ready ? 'ready' : 'review'} />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </section>
+    )
 }
 
 function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount, destinationCount, alertCount, caseCount, alertId }: {
@@ -1650,8 +1690,8 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                         <span className='mt-0.5 block truncate font-semibold text-ui-text dark:text-ui-text'>{nextAction.action}</span>
                     </span>
                     <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-1'>
-                        <ActionAnchor href={nextAction.href} icon={<ExternalLink className='h-4 w-4' />} label={nextAction.action} disabled={nextAction.blocked} />
-                        {openAlertHref && <ActionAnchor href={openAlertHref} icon={<CircleAlert className='h-4 w-4' />} label='Validate alert' disabled={!watchlistCount} />}
+                        <ActionAnchor href={nextAction.href} icon={<ExternalLink className='h-4 w-4' />} label={nextAction.action} disabled={nextAction.blocked} disabledReason={nextAction.body} />
+                        {openAlertHref && <ActionAnchor href={openAlertHref} icon={<CircleAlert className='h-4 w-4' />} label='Validate alert' disabled={!watchlistCount} disabledReason='Add a watchlist term before validating DWM alert context.' />}
                     </div>
                 </div>
             </div>
