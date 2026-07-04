@@ -612,7 +612,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             id: 'capture',
             label: 'Live capture',
             state: captureCount ? `${captureCount} captures` : latestRunStatus || 'not collected',
-            detail: 'Run bounded public collection and push safe excerpts into the exposure queue.',
+            detail: 'Run bounded public collection and add safe excerpts to the review lane.',
             tone: captureCount ? 'ok' : activeSourceCount ? 'warn' : 'neutral',
             command: 'Run collection',
             busy: busyAction === 'collection',
@@ -709,8 +709,8 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         <tbody className='divide-y divide-ui-border'>
                             <RouteStepRow stage='1. Watchlist' state={termCount ? `${termCount} terms saved or staged` : 'Customer terms needed'} next='Company, domain, supplier, brand, and product terms define alert scope.' command={termCount ? 'Save and rebuild alerts' : 'Prepare starter list'} tone={termCount ? 'ok' : 'warn'} />
                             <RouteStepRow stage='2. Sources' state={sourceCount ? `${activeSourceCount}/${sourceCount} active` : 'No source inventory loaded'} next='Enable public Telegram, public advisory, and metadata-only source packs before relying on matches.' command='Expand Telegram / Approve metadata' tone={activeSourceCount ? 'ok' : 'warn'} />
-                            <RouteStepRow stage='3. Captures' state={captureCount ? `${captureCount} safe captures` : 'No accepted captures'} next='Run collection to pull safe excerpts and metadata into the exposure queue.' command='Run Telegram collection' tone={captureCount ? 'ok' : 'neutral'} />
-                            <RouteStepRow stage='4. Alert and case' state={alertCount ? `${alertCount} alerts in queue` : 'No active alert'} next='Rebuild after source changes, then open the alert as a case with provenance.' command='Run to case / Open case' tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
+                            <RouteStepRow stage='3. Captures' state={captureCount ? `${captureCount} safe captures` : 'No accepted captures'} next='Run collection to pull safe excerpts and metadata into review.' command='Run Telegram collection' tone={captureCount ? 'ok' : 'neutral'} />
+                            <RouteStepRow stage='4. Alert and case' state={alertCount ? `${alertCount} alerts ready` : 'No active alert'} next='Rebuild after source changes, then open the alert as a case with source context.' command='Run to case / Open case' tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
                             <RouteStepRow stage='5. Delivery' state={deliveryCount ? `${deliveryCount} delivery attempts` : webhookConfigured ? 'Webhook URL staged' : 'No delivery tested'} next='Use dry-run before sending customer notifications.' command='Test webhook / Send webhooks' tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
                         </tbody>
                     </table>

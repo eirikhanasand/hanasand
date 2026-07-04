@@ -9495,7 +9495,7 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                 <div>
                     <h2 className='text-sm font-semibold text-ui-text dark:text-ui-text'>{hasPoints ? 'Actor country map' : 'Geography coverage'}</h2>
                     <p className='mt-0.5 text-xs text-ui-muted dark:text-ui-muted'>
-                        {hasPoints ? 'Reported operator origin and victim or target countries from linked sources.' : hasRegionalAreas ? 'Regional operating areas from the source-backed actor profile.' : 'Country-level source coverage for this actor profile.'}
+                        {hasPoints ? 'Reported operator origin and victim or target countries from linked sources.' : hasRegionalAreas ? 'Regional operating areas from cited actor reporting.' : 'Country-level source coverage for this actor profile.'}
                     </p>
                 </div>
                 <span className='rounded-lg bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-primary dark:bg-ui-raised dark:text-ui-primary'>{hasPoints ? `${geo.points.length} countries` : hasRegionalAreas ? `${regionalAreas.length} region${regionalAreas.length === 1 ? '' : 's'}` : 'Source coverage'}</span>

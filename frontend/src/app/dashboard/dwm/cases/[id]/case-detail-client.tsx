@@ -524,7 +524,7 @@ function RouteHandoffStrip({ routeRun, detail, exportPayload, latestDelivery }: 
         : routeRun === 'source_pack'
             ? 'Source pack route'
             : routeRun === 'alert_queue'
-                ? 'Alert queue'
+                ? 'Alert review'
                 : 'Route handoff'
     const nextAction = deliveryCount ? 'Record decision' : latestDelivery ? 'Review delivery' : 'Test webhook'
     const cells = [

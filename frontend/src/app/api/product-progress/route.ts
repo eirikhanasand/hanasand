@@ -1200,7 +1200,7 @@ function helpdeskAuditReadiness(input: {
             'GET /api/backend/admin/support/access-recovery must return recovery queue state.',
             'GET /api/backend/admin/audit-events?limit=50 must return detail.exportProof.schemaVersion=support.audit.export_proof.v1.',
             replayQuery ? `Replay query: ${replayQuery}.` : '',
-            workerRoute ? `Worker proof route: ${workerRoute}.` : '',
+            workerRoute ? `Worker route: ${workerRoute}.` : '',
         ].filter(Boolean).join(' '),
         backendProofContractVersion: auditExportProof?.schemaVersion || 'support.audit.readiness.v1',
         detail: blockers.length ? blockers.join('; ') : `${auditedActions} audited support action${auditedActions === 1 ? '' : 's'} and ${supportQueueDepth} recovery record${supportQueueDepth === 1 ? '' : 's'} loaded with a redacted export event.`,

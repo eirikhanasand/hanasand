@@ -167,7 +167,7 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
 
     return {
         actorClass: result.aliases.length ? 'Named threat actor or activity cluster' : 'Threat intelligence query',
-        attribution: result.notes.find(note => /attribut/i.test(note)) || 'Attribution needs a source-backed statement',
+        attribution: result.notes.find(note => /attribut/i.test(note)) || 'Attribution needs a cited source statement',
         firstSeen: result.recentActivity.map(item => item.firstReportedAt || item.date).filter(Boolean).sort()[0] || 'No dated activity yet',
         lastSeen: result.lastSeen || result.generatedAt,
         motivation: result.targets.map(target => target.rationale).slice(0, 4),

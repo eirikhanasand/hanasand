@@ -4005,7 +4005,7 @@ function webhookDeliveryResultMessage(payload: Awaited<ReturnType<typeof readJso
 function alertReplayResultMessage(payload: Awaited<ReturnType<typeof readJson>>, item: WorkbenchCase) {
     const blockerCodes = [...(payload.workflowExecutionReadiness?.blockerCodes || []), ...(payload.downstreamHandoff?.blockerCodes || [])]
         .filter((code, index, source) => Boolean(code) && source.indexOf(code) === index)
-    if (payload.workflowExecutionReadiness?.ready === false || blockerCodes.length) return `Replay blocked by ${blockerCodes.join(', ') || 'workflow lane'}.`
+    if (payload.workflowExecutionReadiness?.ready === false || blockerCodes.length) return `Replay is waiting on ${blockerCodes.join(', ') || 'workflow lane'}.`
     const alertId = stringValue(payload.alert?.id) || item.id
     const replayCount = numberValue(payload.alert?.replayCount)
     const replayedAt = stringValue(payload.alert?.lastReplayedAt || payload.alert?.updatedAt)

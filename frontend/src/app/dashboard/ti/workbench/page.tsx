@@ -214,7 +214,7 @@ function dwmCaseToWorkbenchCase(row: WorkbenchDwmCaseListItem): WorkbenchCase {
     return {
         id: rowId,
         kind: 'dwm_alert',
-        queue: 'Case queue',
+        queue: 'Case review',
         title: row.title || caseId,
         subtitle: row.summary || `${caseId} is ${row.status || 'open'} with ${webhookDeliveryIds.length} webhook delivery ${pluralize('row', webhookDeliveryIds.length)}.`,
         severity,
