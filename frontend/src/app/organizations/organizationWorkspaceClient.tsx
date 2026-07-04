@@ -1438,12 +1438,12 @@ function EmptyWorkspacePreview() {
                 </div>
                 <div className='min-w-0'>
                     <h2 className='text-xl font-semibold text-ui-text dark:text-ui-text'>Create an organization to start monitoring</h2>
-                    <div className='mt-3 flex flex-wrap gap-2 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
-                        {['Create organization', 'Add shared term', 'Invite members', 'Test destination'].map(label => (
-                            <span key={label} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>{label}</span>
-                        ))}
-                    </div>
-                    <a href='#org-create-primary' className='sr-only'>Create organization form</a>
+                    <p className='mt-2 max-w-xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
+                        Start with a workspace name and one shared watchlist term. Members, destinations, and alert handling unlock from the same console after creation.
+                    </p>
+                    <a href='#org-create-primary' className='mt-3 inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text'>
+                        Open create form
+                    </a>
                 </div>
             </div>
         </section>
