@@ -1279,7 +1279,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
     return (
         <section id='invites' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <SectionTitle icon={<UserPlus className='h-4 w-4' />} title='Invite queue' detail={canManage ? 'Send, resend, revoke, copy.' : 'Owner or admin required.'} />
-            {busyLabel && <InlineBusy label={busyLabel} testId='org-invite-busy' />}
+            {busyLabel && <InlineBusy label={busyLabel} marker='data-org-invite-busy' />}
             <div className='mt-4 grid gap-3'>
                 <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                     Emails
@@ -1347,7 +1347,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                 </span>
             </summary>
             <div className='overflow-x-auto border-t border-ui-border p-4 dark:border-ui-border'>
-                {busyLabel && <InlineBusy label={busyLabel} testId='org-member-busy' />}
+                {busyLabel && <InlineBusy label={busyLabel} marker='data-org-member-busy' />}
                 {members.length === 0 && <EmptyLine text='Active members appear here after invites are accepted or the backend returns the current team.' />}
                 {members.length > 0 && (
                     <table className='min-w-full border-separate border-spacing-0 text-left text-sm'>
@@ -1431,12 +1431,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                 </span>
             </summary>
             <div className='grid gap-2 border-t border-ui-border p-4 dark:border-ui-border'>
-                {busyLabel && (
-                    <div className='inline-flex w-fit items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' data-org-destination-busy='true'>
-                        <Loader2 className='h-3.5 w-3.5 animate-spin' />
-                        {busyLabel}
-                    </div>
-                )}
+                {busyLabel && <InlineBusy label={busyLabel} marker='data-org-destination-busy' />}
                 {canManage && (
                     <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' data-org-destination-create='true'>
                         <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem]'>
@@ -1559,6 +1554,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
 
 function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const archivedCount = watchlists.filter(item => item.status === 'archived').length
+    const busyLabel = watchlistBusyLabel(busy)
     return (
         <section id='watchlists' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
@@ -1568,6 +1564,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                     Cleanup archived
                 </button>
             </div>
+            {busyLabel && <InlineBusy label={busyLabel} marker='data-org-watchlist-busy' />}
             <div className='mt-2'><RowStatus message={rowMessages['watchlists-cleanup']} /></div>
             <div className='mt-4 rounded-lg border border-ui-primary/35 bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel' data-org-watchlist-starter='true'>
                 <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
@@ -2068,6 +2065,15 @@ function RowStatus({ message }: { message?: RowMessage }) {
     return <span className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[11px] font-semibold ${tone}`}>{sanitizeOrganizationDisplayCopy(message.text) || message.text}</span>
 }
 
+function InlineBusy({ label, marker }: { label: string, marker: string }) {
+    return (
+        <div className='mt-2 inline-flex w-fit items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' {...{ [marker]: 'true' }}>
+            <Loader2 className='h-3.5 w-3.5 animate-spin' />
+            {label}
+        </div>
+    )
+}
+
 function ConfirmActionButton({ ariaLabel, disabled, onConfirm, icon }: { ariaLabel: string, disabled?: boolean, onConfirm: () => void, icon: ReactNode }) {
     const [confirming, setConfirming] = useState(false)
     return (
@@ -2163,6 +2169,34 @@ function sentenceCase(value: string) {
 
 function actionLabel(value: string) {
     return value.split('-').map(sentenceCase).join(' ')
+}
+
+function inviteBusyLabel(value: string) {
+    if (value === 'send-invite') return 'Sending invites'
+    if (value === 'resend-invite') return 'Resending invite'
+    if (value === 'revoke-invite') return 'Revoking invite'
+    if (value === 'copy-invite') return 'Copying invite'
+    return ''
+}
+
+function memberBusyLabel(value: string) {
+    if (value === 'change-role') return 'Updating member role'
+    if (value === 'remove-member') return 'Removing member'
+    return ''
+}
+
+function watchlistBusyLabel(value: string) {
+    if (value === 'create-watchlist') return 'Adding watchlist term'
+    if (value === 'save-watchlist') return 'Saving watchlist term'
+    if (value === 'pause-watchlist') return 'Pausing watchlist term'
+    if (value === 'resume-watchlist') return 'Resuming watchlist term'
+    if (value === 'archive-watchlist') return 'Archiving watchlist term'
+    if (value === 'restore-watchlist') return 'Restoring watchlist term'
+    if (value === 'delete-watchlist') return 'Archiving watchlist term'
+    if (value === 'cleanup-watchlists') return 'Cleaning archived watchlists'
+    if (value === 'save-destination') return 'Testing watchlist destination'
+    if (value === 'replay-destination') return 'Replaying saved destination'
+    return ''
 }
 
 function destinationBusyLabel(value: string) {
