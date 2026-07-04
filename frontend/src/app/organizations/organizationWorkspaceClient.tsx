@@ -1576,7 +1576,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
         },
         {
             id: 'destinations',
-            title: 'Delivery route',
+            title: 'Delivery destination',
             body: destinationCount ? 'Destination saved' : watchlistCount ? 'Test and save a destination' : 'Create a watchlist first',
             href: '#watchlists',
             ready: destinationCount > 0,

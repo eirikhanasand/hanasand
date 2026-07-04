@@ -1799,7 +1799,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
             <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4'>
                 <ActionStatus label='Owner' value={assignee} />
                 <ActionStatus label='Work state' value={stateLabel(alert.reviewState)} />
-                <ActionStatus label='Delivery' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'delivery route ready' : 'destination needed'} tone={latestDelivery?.status === 'failed' || !hasDeliveryRoute ? 'warn' : 'neutral'} />
+                <ActionStatus label='Delivery' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'delivery destination ready' : 'destination needed'} tone={latestDelivery?.status === 'failed' || !hasDeliveryRoute ? 'warn' : 'neutral'} />
                 <ActionStatus label='Case' value={alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || 'case is being prepared'} />
             </div>
             <div className='grid gap-2'>
@@ -2220,7 +2220,7 @@ function buildExposureEntities(
             sourceFamilies,
             newestAt,
             confidence: alert.confidence,
-            nextAction: workflowContext.hasWebhookRoute ? 'test delivery' : 'review route',
+            nextAction: workflowContext.hasWebhookRoute ? 'test delivery' : 'review destination',
         })
     }
     return rows
@@ -2259,7 +2259,7 @@ function fallbackRoutingContext(alert: PortalAlert): NonNullable<PortalAlert['ro
         queue,
         urgency,
         customerVisibleEvidence: alert.sourceFamily === 'darkweb_metadata' ? 'metadata_only' : 'redacted_excerpt',
-        reason: `${stateLabel(alert.artifactType)} routes to ${stateLabel(queue)} based on source family, severity, and watched term.`,
+        reason: `${stateLabel(alert.artifactType)} is queued for ${stateLabel(queue)} based on source family, severity, and watched term.`,
     }
 }
 
@@ -2293,7 +2293,7 @@ function buildAnalystBrief(
         sourceRecords: `${evidenceSummary.evidenceCount} record${evidenceSummary.evidenceCount === 1 ? '' : 's'} across ${sourceFamilies || stateLabel(alert.sourceFamily)}, newest ${freshness}.`,
         workflowReadiness: workflowContext.hasWebhookRoute
             ? `${stateLabel(routingContext.queue)} is available; ${workflowContext.lastDelivery ? `last delivery ${stateLabel(workflowContext.lastDelivery.status)} ${relativeTimeLabel(workflowContext.lastDelivery.attemptedAt)}` : 'test delivery before sending'}.`
-            : 'Keep in analyst review until a delivery route is configured.',
+            : 'Keep in analyst review until a delivery destination is configured.',
     }
 }
 
