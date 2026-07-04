@@ -476,7 +476,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                     <div className='grid gap-2'>
                                         {timeline.length ? timeline.map((row, index) => (
                                             <TimelineItem key={row.id || index} row={row} compact />
-                                        )) : <EmptyLine text='No workflow events have been recorded yet.' />}
+                                        )) : <EmptyLine text='No case events have been recorded yet.' />}
                                     </div>
                                 </div>
                             </CollapsiblePanel>
@@ -613,7 +613,7 @@ function DecisionBrief({ detail, exportPayload, latestDelivery, actionDockHref, 
     const deliveryFailed = latestDelivery?.status === 'failed'
     const deliverySent = latestDelivery?.status === 'delivered' || detail.deliveryContext?.delivered
     const recommended = blockers.length
-        ? 'Clear workflow blocker'
+        ? 'Clear action blocker'
         : !evidenceCount
             ? 'Attach evidence'
             : deliveryFailed
@@ -852,7 +852,7 @@ function TimelineItem({ row, compact = false }: { row: TimelineRow, compact?: bo
                     <p className='font-semibold text-ui-text'>{stateLabel(row.action || row.eventType)}</p>
                     <p className='shrink-0 text-ui-muted'>{relativeTime(when)}</p>
                 </div>
-                <p className='mt-1 wrap-break-word leading-5 text-ui-muted'>{row.rationale || row.note || row.source || 'Workflow event recorded.'}</p>
+                <p className='mt-1 wrap-break-word leading-5 text-ui-muted'>{row.rationale || row.note || row.source || 'Case event recorded.'}</p>
                 <p className='mt-2 font-mono text-[11px] text-ui-muted'>{row.actor || 'system'}{row.workflow?.toStatus ? ` · ${stateLabel(row.workflow.toStatus)}` : ''}</p>
             </div>
         )
@@ -863,7 +863,7 @@ function TimelineItem({ row, compact = false }: { row: TimelineRow, compact?: bo
             <div className='text-ui-muted'>{relativeTime(when)}</div>
             <div className='min-w-0'>
                 <p className='font-semibold text-ui-text'>{stateLabel(row.action || row.eventType)}</p>
-                <p className='mt-1 wrap-break-word leading-5 text-ui-muted'>{row.rationale || row.note || row.source || 'Workflow event recorded.'}</p>
+                <p className='mt-1 wrap-break-word leading-5 text-ui-muted'>{row.rationale || row.note || row.source || 'Case event recorded.'}</p>
             </div>
             <div className='font-mono text-[11px] text-ui-muted'>{row.actor || 'system'}{row.workflow?.toStatus ? <p>{stateLabel(row.workflow.toStatus)}</p> : null}</div>
         </div>

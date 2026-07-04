@@ -140,7 +140,7 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
                         <details className='rounded-lg border border-ui-border bg-ui-raised' data-dwm-alert-evidence-disclosure>
                             <summary className='flex cursor-pointer list-none flex-col gap-1 px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                                 <span>Evidence and history</span>
-                                <span className='font-medium text-ui-muted'>{alert.evidence.length} evidence rows, {eventCount} workflow events</span>
+                                <span className='font-medium text-ui-muted'>{alert.evidence.length} evidence rows, {eventCount} case events</span>
                             </summary>
                             <div className='grid gap-2 border-t border-ui-border p-3 md:grid-cols-2'>
                                 {evidencePreview.map(item => (
