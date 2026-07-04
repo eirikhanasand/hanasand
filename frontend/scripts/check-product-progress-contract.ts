@@ -591,7 +591,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         staleAfterSeconds: 3600,
         proofTimestamp: generatedAt,
         expectedDashboardRowId: 'helpdesk_audit',
-        integrationProbeHint: 'GET /api/backend/admin/support/access-recovery must return recovery queue state. GET /api/backend/admin/audit-events?limit=50 must return detail.exportProof.schemaVersion=support.audit.export_proof.v1. Replay query: ?limit=50. Worker proof route: /api/admin/audit-events.',
+        integrationProbeHint: 'GET /api/backend/admin/support/access-recovery must return recovery queue state. GET /api/backend/admin/audit-events?limit=50 must return detail.exportProof.schemaVersion=support.audit.export_proof.v1. Replay query: ?limit=50. Audit export route: /api/admin/audit-events.',
         backendProofContractVersion: 'support.audit.export_proof.v1',
     },
     dwmProduct: {
@@ -886,8 +886,8 @@ for (const attribute of [
 }
 
 for (const className of [
-    'dark:border-[#2d3a52]',
-    'dark:hover:border-[#3b4b68]',
+    'dark:border-ui-border',
+    'dark:hover:border-ui-border',
     'wrap-break-word text-xs font-semibold',
     'wrap-break-word text-[11px]',
     'shrink-0',
@@ -923,7 +923,7 @@ for (const scopedProgressToken of [
     'support.audit.export_proof.v1',
     'detail.exportProof.schemaVersion=support.audit.export_proof.v1',
     'Replay query:',
-    'Worker proof route:',
+    'Audit export route:',
     'dwmProductReadiness',
     '/api/dwm/watchlists',
     '/api/dwm/product?demo=false',
@@ -991,7 +991,7 @@ assert.ok(workbenchSource.includes('/dashboard/ti/sources/${encodeURIComponent(s
 assert.ok(workbenchSource.includes('replay_alert'), 'Operator action rail should expose backed DWM alert replay.')
 assert.ok(workbenchSource.includes('/api/dwm/alerts/${encodeURIComponent(selected.id)}/replay'), 'Replay action should call the selected alert replay endpoint.')
 assert.ok(workbenchSource.includes('alertReplayResultMessage'), 'Replay actions should report backed alert replay workflow results.')
-assert.ok(workbenchSource.includes('Replay blocked by'), 'Replay result handling should surface backend workflow blockers.')
+assert.ok(workbenchSource.includes('Replay is waiting on'), 'Replay result handling should surface workflow blockers with customer-safe copy.')
 assert.ok(workbenchSource.includes('payload.alert?.replayCount'), 'Replay result handling should report backend replay count when returned.')
 assert.ok(workbenchSource.includes('payload.alert?.lastReplayedAt'), 'Replay result handling should report backend replay timestamp when returned.')
 assert.ok(workbenchSource.includes('send_alert'), 'Operator action rail should expose backed webhook delivery send.')
@@ -1052,10 +1052,10 @@ assert.ok(workbenchSource.includes('\'dashboard_evidence\', \'analyst_workflow\'
 assert.ok(workbenchSource.includes('item.caseDetailTimelineCount'), 'Analyst workflow readiness rail should surface backed case timeline proof.')
 assert.ok(workbenchSource.includes('caseReplayExportState(item, caseDetail)'), 'Selected case continuity should derive backed action replay export state from case detail.')
 assert.ok(workbenchSource.includes('data-case-replay-export-state'), 'Selected case continuity should expose replay export state for DOM proof.')
-assert.ok(workbenchSource.includes('Open replay export'), 'Selected case continuity should deep-link to the backed /api/cases/:id/export route.')
+assert.ok(workbenchSource.includes('Open case package'), 'Selected case continuity should deep-link to the backed /api/cases/:id/export route.')
 assert.ok(workbenchSource.includes('missing_replay_timeline'), 'Replay export state should block when case detail has no replay timeline or workflow events.')
 assert.ok(workbenchSource.includes('missing_next_action_payloads'), 'Replay export state should show partial readiness when next-action payloads are not returned.')
-assert.ok(workbenchSource.includes('GET ${caseExportHref(backedCaseHref)} returns case evidence, timeline, delivery rows, and next-action payloads for audit replay.'), 'Operator action rail should describe the backed case export payload shape.')
+assert.ok(workbenchSource.includes('Open ${caseExportHref(backedCaseHref)} for evidence, timeline, delivery rows, and next actions.'), 'Operator action rail should describe the backed case export payload shape.')
 assert.ok(workbenchSource.includes('data-selected-workflow-handoff'), 'Selected detail should render an operator handoff strip, not only readiness rows.')
 assert.ok(workbenchSource.includes('selectedWorkflowHandoffSteps(item, caseDetail, alertDetail, actionDeliveries, orgContext)'), 'Selected workflow handoff should derive state from loaded alert, case, delivery, and org context.')
 assert.ok(workbenchSource.includes('data-selected-workflow-step={step.id}'), 'Selected workflow handoff should expose per-step DOM state for render proof.')
@@ -1173,7 +1173,7 @@ assert.ok(workbenchSource.includes('evidenceFreshness'), 'Selected alert inspect
 assert.ok(workbenchSource.includes('provenanceFreshness'), 'Selected alert inspection should show backed provenance freshness.')
 assert.ok(workbenchSource.includes('recordCustomerNotification'), 'Selected backed cases should record customer notification receipts from the dashboard.')
 assert.ok(workbenchSource.includes('caseCustomerNotificationHref'), 'Customer notification receipts should use the scoped /api/cases/:id/customer-notification proxy.')
-assert.ok(workbenchSource.includes('Customer notification receipt requires decision rationale.'), 'Customer notification receipts should require analyst rationale before mutation.')
+assert.ok(workbenchSource.includes('Customer notification needs decision rationale.'), 'Customer notification receipts should require analyst rationale before mutation.')
 assert.ok(workbenchSource.includes('customerNotificationContext'), 'Case continuity should expose backed customer notification receipt state.')
 assert.ok(workbenchSource.includes('record_customer_notification'), 'Operator action rail should expose backed customer notification receipt recording.')
 assert.ok(workbenchSource.includes('customerNotification: true'), 'Customer notification rail action should use the dedicated receipt mutation handler.')
@@ -1184,7 +1184,7 @@ assert.ok(workbenchSource.includes('deliveryLedgerHref(orgContext, item, notific
 assert.ok(workbenchSource.includes('Open delivery history'), 'Customer notification receipt should expose a readable backed delivery ledger action.')
 assert.ok(caseCustomerNotificationProxySource.includes('/v1/cases/${encodeURIComponent(id)}/customer-notification'), 'Dashboard case notification proxy should forward to the TI case notification contract.')
 assert.ok(workbenchSource.includes('caseExportHref'), 'Selected backed cases should expose the audit-safe case export route.')
-assert.ok(workbenchSource.includes('Case export'), 'Selected backed case inspection should deep-link to the export payload.')
+assert.ok(workbenchSource.includes('Case package'), 'Selected backed case inspection should deep-link to the export payload.')
 assert.ok(workbenchSource.includes('export_case_evidence'), 'Selected backed cases should expose evidence export in the operator action rail.')
 assert.ok(workbenchSource.includes('CaseWatchlistRows'), 'Selected backed cases should render matched watchlist scope from the case API.')
 assert.ok(workbenchSource.includes('watchlistLedgerHref(orgContext)'), 'Case watchlist scope should deep-link to scoped DWM watchlists.')
