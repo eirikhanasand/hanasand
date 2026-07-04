@@ -2882,6 +2882,7 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         const watchlistId = encodeURIComponent(subject.id)
         return [
             { label: 'Watchlist', href: '#watchlists' },
+            { label: 'Delivery activity', href: '#delivery-history' },
             { label: 'Open alert scope', href: `/dashboard/ti/workbench?organizationId=${organizationId}&watchlistId=${watchlistId}` },
         ]
     }
@@ -2895,6 +2896,7 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         const alertId = encodeURIComponent(subject.id)
         return [
             { label: 'Alert', href: `/dashboard/ti/workbench?alertId=${alertId}&organizationId=${organizationId}` },
+            { label: 'Delivery activity', href: '#delivery-history' },
             { label: 'Organization activity', href: '#audit' },
         ]
     }
@@ -2902,6 +2904,7 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         const caseId = encodeURIComponent(subject.id)
         return [
             { label: 'Case', href: `/dashboard/dwm/cases/${caseId}?organizationId=${organizationId}` },
+            { label: 'Delivery activity', href: '#delivery-history' },
             { label: 'Organization activity', href: '#audit' },
         ]
     }
