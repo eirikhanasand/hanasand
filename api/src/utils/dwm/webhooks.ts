@@ -8344,7 +8344,7 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
     ])
 
     const delivery = result.rows[0] as DwmWebhookDeliveryRow
-    await recordDwmWebhookAudit({
+    const auditEventId = await recordDwmWebhookAudit({
         ownerId,
         actorId: ownerId,
         orgId: delivery.org_id,
@@ -8373,7 +8373,12 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
         },
     })
 
-    return toDwmWebhookDelivery(delivery)
+    return {
+        ...toDwmWebhookDelivery(delivery),
+        auditEventId,
+        auditAction: 'delivery.skipped',
+        auditActorId: ownerId,
+    }
 }
 
 async function recordSkippedSelectionDwmWebhookDelivery({
@@ -8450,7 +8455,7 @@ async function recordSkippedSelectionDwmWebhookDelivery({
     ])
 
     const delivery = result.rows[0] as DwmWebhookDeliveryRow
-    await recordDwmWebhookAudit({
+    const auditEventId = await recordDwmWebhookAudit({
         ownerId,
         actorId: ownerId,
         orgId: delivery.org_id,
@@ -8477,7 +8482,12 @@ async function recordSkippedSelectionDwmWebhookDelivery({
         },
     })
 
-    return toDwmWebhookDelivery(delivery)
+    return {
+        ...toDwmWebhookDelivery(delivery),
+        auditEventId,
+        auditAction: 'delivery.skipped',
+        auditActorId: ownerId,
+    }
 }
 
 async function recordMissingDestinationDwmWebhookDelivery({
