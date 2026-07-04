@@ -1389,15 +1389,20 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
                         const canCopy = Boolean(inviteLink(invite)) && inviteActionAllowed(invite, 'copy') && !busy
                         const canResend = canManage && inviteActionAllowed(invite, 'resend') && !busy
                         const canRevoke = canManage && inviteActionAllowed(invite, 'revoke') && !busy
+                        const selected = selectedSubject.type === 'invite' && selectedSubject.id === invite.id
                         return (
                             <div
                                 role='button'
                                 tabIndex={0}
+                                aria-pressed={selected}
                                 key={invite.id}
-                                className={`grid min-w-0 gap-3 rounded-lg border border-ui-border p-3 text-left transition dark:border-ui-border ${selectedSubject.type === 'invite' && selectedSubject.id === invite.id ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
+                                className={`grid min-w-0 gap-3 rounded-lg border border-ui-border p-3 text-left transition dark:border-ui-border ${selected ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
                                 onClick={() => onSelectSubject({ type: 'invite', id: invite.id })}
                                 onKeyDown={event => {
-                                    if (event.key === 'Enter' || event.key === ' ') onSelectSubject({ type: 'invite', id: invite.id })
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault()
+                                        onSelectSubject({ type: 'invite', id: invite.id })
+                                    }
                                 }}
                             >
                                 <span className='grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
@@ -1453,8 +1458,22 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                 const selectedRole = pendingRoles[member.userId] || member.role
                                 const roleChanged = selectedRole !== member.role
                                 const canMutateMember = canManage && memberCanMutate(member)
+                                const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                 return (
-                                    <tr key={member.userId} className={`cursor-pointer align-middle transition ${selectedSubject.type === 'member' && selectedSubject.id === member.userId ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`} onClick={() => onSelectSubject({ type: 'member', id: member.userId })}>
+                                    <tr
+                                        key={member.userId}
+                                        role='button'
+                                        tabIndex={0}
+                                        aria-pressed={selected}
+                                        className={`cursor-pointer align-middle transition ${selected ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
+                                        onClick={() => onSelectSubject({ type: 'member', id: member.userId })}
+                                        onKeyDown={event => {
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault()
+                                                onSelectSubject({ type: 'member', id: member.userId })
+                                            }
+                                        }}
+                                    >
                                         <td className='max-w-44 border-b border-ui-border py-2 pr-3 dark:border-ui-border'>
                                             <p className='truncate font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(member.name || member.userId)}</p>
                                             <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(member.userId)}</p>
@@ -1554,10 +1573,12 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                     const draftUrlInvalid = Boolean(draftUrl) && !validDestinationUrl(draftUrl)
                     const draftNameDuplicate = draft ? destinationNameInUse(destinations, normalizeDestinationName(draft.name) || destination.name || destination.id, destination.id) : false
                     const draftChanged = draft ? destinationEditChanged(destination, draft) : false
+                    const selected = selectedSubject.type === 'destination' && selectedSubject.id === destination.id
                     return (
                         <div
                             role='button'
                             tabIndex={0}
+                            aria-pressed={selected}
                             key={destination.id}
                             onClick={() => onSelectSubject({ type: 'destination', id: destination.id })}
                             onKeyDown={event => {
@@ -1566,7 +1587,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                     onSelectSubject({ type: 'destination', id: destination.id })
                                 }
                             }}
-                            className={`grid min-w-0 gap-3 rounded-lg border p-3 text-left transition ${selectedSubject.type === 'destination' && selectedSubject.id === destination.id ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-panel' : 'border-ui-border hover:bg-ui-raised dark:border-ui-border dark:hover:bg-ui-panel'}`}
+                            className={`grid min-w-0 gap-3 rounded-lg border p-3 text-left transition ${selected ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-panel' : 'border-ui-border hover:bg-ui-raised dark:border-ui-border dark:hover:bg-ui-panel'}`}
                         >
                             <span className='flex min-w-0 items-start justify-between gap-2'>
                                 <span className='min-w-0'>
@@ -1708,8 +1729,22 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                     const edit = editing[item.id]
                     const editDuplicate = edit ? isDuplicateWatchlistTerm(watchlists, edit.kind, edit.value, item.id) : false
                     const editChanged = edit ? watchlistDraftChanged(item, edit) : false
+                    const selected = selectedSubject.type === 'watchlist' && selectedSubject.id === item.id
                     return (
-                        <div key={item.id} className={`rounded-lg border p-3 transition ${selectedSubject.type === 'watchlist' && selectedSubject.id === item.id ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-panel' : 'border-ui-border dark:border-ui-border'}`} onClick={() => onSelectSubject({ type: 'watchlist', id: item.id })}>
+                        <div
+                            key={item.id}
+                            role='button'
+                            tabIndex={0}
+                            aria-pressed={selected}
+                            className={`rounded-lg border p-3 transition ${selected ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-panel' : 'border-ui-border dark:border-ui-border'}`}
+                            onClick={() => onSelectSubject({ type: 'watchlist', id: item.id })}
+                            onKeyDown={event => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault()
+                                    onSelectSubject({ type: 'watchlist', id: item.id })
+                                }
+                            }}
+                        >
                             {edit ? (
                                 <div className='grid gap-3 md:grid-cols-[9rem_1fr]'>
                                     <SelectField label='Type' value={edit.kind} options={watchlistKinds} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [item.id]: { ...edit, kind: value as WatchlistKind } }))} />

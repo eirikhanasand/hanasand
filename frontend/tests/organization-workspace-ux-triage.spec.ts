@@ -41,6 +41,11 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('aria-pressed={confirming}')
     expect(page).toContain('data-org-confirm-action={confirming ? \'confirming\' : \'idle\'}')
     expect(page).toContain('if (event.key === \'Escape\')')
+    expect(page).toContain('aria-pressed={selected}')
+    expect(page).toContain('role=\'button\'')
+    expect(page).toContain('tabIndex={0}')
+    expect(page).toContain('event.preventDefault()')
+    expect(page).toContain('onSelectSubject({ type: \'watchlist\', id: item.id })')
 
     expect(page).toContain('bg-ui-text px-4 text-sm font-semibold text-ui-canvas')
     expect(page).not.toContain('dark:text-white')
