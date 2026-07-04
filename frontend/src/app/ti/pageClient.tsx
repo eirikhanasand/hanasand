@@ -802,6 +802,7 @@ function SelectedEvidenceRail({
     const continuityRefs = selectedContinuityRefs({
         sourceCount,
         captureCount,
+        sourceDrilldown,
         watchlistPlan,
         alertPlan,
         caseOwnership,
@@ -883,10 +884,7 @@ function SelectedEvidenceRail({
                     </div>
                     <div data-ti-auth-continuity-refs='true' className='flex min-w-0 flex-wrap gap-1'>
                         {continuityRefs.map(ref => (
-                            <span key={ref.label} className='inline-flex max-w-full items-center gap-1 rounded-md bg-ui-raised px-1.5 py-1 text-[10px] leading-4 text-ui-muted dark:bg-ui-panel dark:text-ui-muted'>
-                                <span className='shrink-0 font-semibold uppercase'>{ref.label}</span>
-                                <span className={`min-w-0 wrap-break-word font-semibold ${ref.state === 'ready' ? 'text-ui-success' : ref.state === 'blocked' ? 'text-ui-warning' : 'text-ui-text dark:text-ui-text'}`}>{ref.value}</span>
-                            </span>
+                            <ContinuityRefChip key={ref.label} refItem={ref} />
                         ))}
                     </div>
                     {continuityGaps.length ? (
@@ -924,6 +922,7 @@ function SelectedEvidenceRail({
 function selectedContinuityRefs(input: {
     sourceCount: number
     captureCount: number
+    sourceDrilldown: ReturnType<typeof selectedSourceDrilldownFor> | null
     watchlistPlan: SelectedWatchlistPlan | null
     alertPlan: SelectedAlertActionPlan | null
     caseOwnership: SelectedCaseOwnershipPlan | null
@@ -938,6 +937,7 @@ function selectedContinuityRefs(input: {
         ...(input.caseOwnership?.sourceRefs.casePaths ?? []),
         ...(input.deliveryPlan?.sourceRefs.casePaths ?? []),
     ])
+    const sourceRoute = input.sourceDrilldown?.rows.find(row => row.route)?.route
     const destinationIds = input.deliveryPlan?.sourceRefs.destinationIds ?? []
     const watchRefs = unique([
         ...(input.watchlistPlan?.intersections.map(item => item.watchlistItemId).filter((value): value is string => Boolean(value)) ?? []),
@@ -949,28 +949,45 @@ function selectedContinuityRefs(input: {
             label: 'Captures',
             value: input.captureCount ? `${input.captureCount}/${input.sourceCount || input.captureCount}` : 'attach',
             state: input.captureCount ? 'ready' : 'blocked',
+            href: sourceRoute,
         },
         {
             label: 'Alerts',
             value: alertRefs.length ? `${alertRefs.length} linked` : input.alertPlan?.readiness.candidateCount ? `${input.alertPlan.readiness.candidateCount} review` : 'none',
             state: alertRefs.length ? 'ready' : input.alertPlan?.readiness.candidateCount ? 'review' : 'blocked',
+            href: input.alertPlan?.route,
         },
         {
             label: 'Cases',
             value: caseRoutes.length ? `${caseRoutes.length} route${caseRoutes.length === 1 ? '' : 's'}` : input.caseOwnership?.summary.caseCandidates ? `${input.caseOwnership.summary.caseCandidates} review` : 'none',
             state: caseRoutes.length ? 'ready' : input.caseOwnership?.summary.caseCandidates ? 'review' : 'blocked',
+            href: input.caseOwnership?.route,
         },
         {
             label: 'Watch',
             value: watchRefs.length ? `${watchRefs.length} ref${watchRefs.length === 1 ? '' : 's'}` : 'term needed',
             state: input.watchlistPlan?.ready || watchRefs.length ? 'ready' : 'review',
+            href: input.watchlistPlan?.route,
         },
         {
             label: 'Destinations',
             value: destinationIds.length ? `${destinationIds.length} ready` : 'choose',
             state: destinationIds.length ? 'ready' : 'blocked',
+            href: input.deliveryPlan?.route,
         },
     ] as const
+}
+
+function ContinuityRefChip({ refItem }: { refItem: ReturnType<typeof selectedContinuityRefs>[number] }) {
+    const className = 'inline-flex max-w-full items-center gap-1 rounded-md bg-ui-raised px-1.5 py-1 text-[10px] leading-4 text-ui-muted transition hover:bg-ui-panel focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:bg-ui-panel dark:text-ui-muted dark:hover:bg-ui-raised'
+    const content = (
+        <>
+            <span className='shrink-0 font-semibold uppercase'>{refItem.label}</span>
+            <span className={`min-w-0 wrap-break-word font-semibold ${refItem.state === 'ready' ? 'text-ui-success' : refItem.state === 'blocked' ? 'text-ui-warning' : 'text-ui-text dark:text-ui-text'}`}>{refItem.value}</span>
+        </>
+    )
+    if (refItem.href) return <a href={refItem.href} className={className}>{content}</a>
+    return <span className={className}>{content}</span>
 }
 
 function selectedContinuityGaps(input: {

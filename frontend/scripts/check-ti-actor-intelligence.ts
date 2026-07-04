@@ -700,6 +700,8 @@ assert(pageClientSource.includes('data-ti-selected-action-rail'), 'Public TI sho
 assert(pageClientSource.includes('ContinuityRow'), 'Public TI selected action rail should render compact continuity rows instead of nested metric cards.')
 assert(pageClientSource.includes('data-ti-auth-continuity-refs'), 'Public TI selected action rail should expose authenticated continuity refs for captures, alerts, cases, watchlist, and destinations.')
 assert(pageClientSource.includes('selectedContinuityRefs'), 'Public TI selected action rail should derive authenticated continuity refs from selected watchlist/alert/case/delivery plans.')
+assert(pageClientSource.includes('ContinuityRefChip'), 'Public TI selected action rail should make backed continuity refs directly actionable.')
+assert(pageClientSource.includes('if (refItem.href) return <a href={refItem.href}'), 'Public TI continuity refs should link to authenticated routes when backed routes exist.')
 assert(pageClientSource.includes('captureCount === 0'), 'Public TI selected action rail should surface missing capture evidence instead of only candidate counters.')
 assert(pageClientSource.includes('data-ti-continuity-gaps=\'true\''), 'Public TI selected action rail should expose compact handoff gaps in the first viewport.')
 assert(pageClientSource.includes('selectedContinuityGaps'), 'Public TI selected action rail should derive handoff gaps from selected source/watchlist/alert/case/delivery state.')
