@@ -6827,9 +6827,9 @@ function EvidenceMetric({ label, value }: { label: string; value: string }) {
 
 function QueueMetric({ label, value }: { label: string; value: number }) {
     return (
-        <div className='rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-panel'>
-            <p className='text-base font-semibold text-ui-text dark:text-ui-text'>{value}</p>
-            <p className='text-[11px] text-ui-muted dark:text-ui-muted'>{label}</p>
+        <div className='border-l border-ui-border py-1 pl-2 text-left dark:border-ui-border'>
+            <p className='text-base font-semibold leading-5 text-ui-text dark:text-ui-text'>{value}</p>
+            <p className='text-[11px] leading-4 text-ui-muted dark:text-ui-muted'>{label}</p>
         </div>
     )
 }
