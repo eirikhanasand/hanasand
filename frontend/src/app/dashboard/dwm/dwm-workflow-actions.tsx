@@ -319,7 +319,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
 
             setTerms(nextTerms)
             setLastRoute({
-                label: 'Full route',
+                label: 'Full workflow',
                 at: new Date().toISOString(),
                 watchTerms: countTerms(nextTerms),
                 sourceCount: telegramCount + darkwebCount + advisoryCount,

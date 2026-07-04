@@ -454,7 +454,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                                     </div>
                                     <p className='mt-1 truncate font-mono text-xs text-ui-muted'>{alert.matchedTerm.value}</p>
                                     <div className='mt-3 grid grid-cols-2 gap-2 text-[11px]'>
-                                        <QueueCell label='path' value={stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)} />
+                                        <QueueCell label='queue' value={stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)} />
                                         <QueueCell label='urgency' value={stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))} tone={alert.routingContext?.urgency === 'immediate' || alert.severity === 'critical' ? 'bad' : 'neutral'} />
                                         <QueueCell label='evidence' value={`${alert.evidenceSummary?.evidenceCount ?? alert.evidence.length}`} />
                                         <QueueCell label='last seen' value={relativeTimeLabel(alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt)} />
@@ -876,7 +876,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
 
             <section className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
                 <div className='grid gap-0 md:grid-cols-4'>
-                    <CaseMetric label='Recommended path' value={stateLabel(routingContext.queue)} detail={stateLabel(routingContext.urgency)} tone={routingContext.urgency === 'immediate' ? 'bad' : routingContext.urgency === 'same_day' ? 'warn' : 'neutral'} />
+                    <CaseMetric label='Recommended queue' value={stateLabel(routingContext.queue)} detail={stateLabel(routingContext.urgency)} tone={routingContext.urgency === 'immediate' ? 'bad' : routingContext.urgency === 'same_day' ? 'warn' : 'neutral'} />
                     <CaseMetric label='Evidence' value={`${evidenceSummary.evidenceCount}`} detail={`${evidenceSummary.publicSafeCount} redacted · ${evidenceSummary.metadataOnlyCount} metadata`} />
                     <CaseMetric label='First seen' value={shortTime(evidenceSummary.firstObservedAt)} detail={relativeTimeLabel(evidenceSummary.firstObservedAt)} />
                     <CaseMetric label='Last seen' value={shortTime(evidenceSummary.lastObservedAt)} detail={relativeTimeLabel(evidenceSummary.lastObservedAt)} />
@@ -942,7 +942,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                 <CaseBrief label='What happened' value={safeAlertSummary(alert)} />
                 <CaseBrief label='Next action' value={alert.recommendedAction} />
                 {alert.workflowNote && <CaseBrief label='Latest note' value={alert.workflowNote} />}
-                <CaseBrief label='Delivery path' value={`${stateLabel(alert.webhookDelivery.recommendedRoute)} · ${alert.webhookDelivery.dedupeKey}`} />
+                <CaseBrief label='Delivery destination' value={`${stateLabel(alert.webhookDelivery.recommendedRoute)} · ${alert.webhookDelivery.dedupeKey}`} />
             </section>
 
             <InvestigationTabs active={investigationTab} onChange={setInvestigationTab} />
@@ -1492,18 +1492,18 @@ function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, se
     onCopyHash: (value: string) => void
     onDisposition: (evidenceId: string, state: EvidenceDispositionState) => void
 }) {
-    const route = stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)
+    const workflowQueue = stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)
     const watchlist = workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} watchlists` : stateLabel(alert.matchedTerm.kind)
     return (
         <section className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
             <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
                 <div>
                     <h3 className='text-sm font-semibold text-ui-text'>Evidence decisions</h3>
-                    <p className='mt-0.5 text-xs text-ui-muted'>{visibleEvidence.length} row{visibleEvidence.length === 1 ? '' : 's'} · {route} · {watchlist}</p>
+                    <p className='mt-0.5 text-xs text-ui-muted'>{visibleEvidence.length} row{visibleEvidence.length === 1 ? '' : 's'} · {workflowQueue} · {watchlist}</p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     <ImpactChip label='Entity' value={selectedEntity?.name || alert.matchedTerm.value} />
-                    <ImpactChip label='Path' value={route} />
+                    <ImpactChip label='Queue' value={workflowQueue} />
                     <ImpactChip label='Case' value={workflowContext.caseId || 'candidate'} />
                 </div>
             </div>
@@ -1584,7 +1584,7 @@ function RouteWatchlistImpactRail({ alert, selectedEvidence, selectedEntity, wor
                 <ActionStatus label='Term kind' value={stateLabel(alert.matchedTerm.kind)} />
                 <ActionStatus label='Current entity' value={selectedEntity?.name || alert.company} />
                 <ActionStatus label='Evidence status' value={selectedDisposition ? stateLabel(selectedDisposition.state) : 'unworked'} tone={selectedDisposition?.state === 'false_positive' || selectedDisposition?.state === 'suppressed' ? 'warn' : 'neutral'} />
-                <ActionStatus label='Recommended path' value={stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)} />
+                <ActionStatus label='Recommended action' value={stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)} />
                 <ActionStatus label='Urgency' value={stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))} tone={alert.severity === 'critical' ? 'warn' : 'neutral'} />
                 <ActionStatus label='Watchlists' value={workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} scoped` : 'default scope'} />
                 <ActionStatus label='Destination' value={workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} configured` : workflowContext.hasWebhookRoute ? 'delivery available' : 'checking delivery'} tone={workflowContext.hasWebhookRoute ? 'neutral' : 'warn'} />
@@ -1634,7 +1634,7 @@ function SelectedContextBar({ alert, selectedEvidence, selectedEntity, sourceFil
             <div className='grid gap-2 text-[11px] sm:grid-cols-3'>
                 <ActionStatus label='Entity' value={selectedEntity ? stateLabel(selectedEntity.kind) : stateLabel(alert.matchedTerm.kind)} />
                 <ActionStatus label='Evidence' value={selectedEvidence?.contentHash || `${alert.evidence.length} rows`} />
-                <ActionStatus label='Path' value={workflowContext.caseId || stateLabel(alert.webhookDelivery.recommendedRoute)} />
+                <ActionStatus label='Action' value={workflowContext.caseId || stateLabel(alert.webhookDelivery.recommendedRoute)} />
             </div>
             <div className='flex flex-wrap gap-2 lg:justify-end'>
                 {selectedEvidence?.contentHash && (
