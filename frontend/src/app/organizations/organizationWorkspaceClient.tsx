@@ -2233,7 +2233,16 @@ function ConfirmActionButton({ ariaLabel, disabled, onConfirm, icon }: { ariaLab
             className={confirming ? dangerConfirmButtonClass : iconDangerButtonClass}
             disabled={disabled}
             aria-label={confirming ? `Confirm ${ariaLabel.toLowerCase()}` : ariaLabel}
+            aria-pressed={confirming}
+            title={confirming ? 'Press again to confirm, or Escape to cancel.' : ariaLabel}
+            data-org-confirm-action={confirming ? 'confirming' : 'idle'}
             onBlur={() => setConfirming(false)}
+            onKeyDown={event => {
+                if (event.key === 'Escape') {
+                    event.stopPropagation()
+                    setConfirming(false)
+                }
+            }}
             onClick={event => {
                 event.stopPropagation()
                 if (confirming) {

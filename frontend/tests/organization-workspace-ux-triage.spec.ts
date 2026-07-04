@@ -38,6 +38,9 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('role={tone === \'error\' ? \'alert\' : \'status\'}')
     expect(page).toContain('role={message.ok ? \'status\' : \'alert\'}')
     expect(page).toContain('role=\'status\' aria-live=\'polite\'')
+    expect(page).toContain('aria-pressed={confirming}')
+    expect(page).toContain('data-org-confirm-action={confirming ? \'confirming\' : \'idle\'}')
+    expect(page).toContain('if (event.key === \'Escape\')')
 
     expect(page).toContain('bg-ui-text px-4 text-sm font-semibold text-ui-canvas')
     expect(page).not.toContain('dark:text-white')
