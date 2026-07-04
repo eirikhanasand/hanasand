@@ -1891,7 +1891,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions }: { latestCaptures: 
         },
         {
             stage: 'Delivery',
-            state: 'Customer send blocked',
+            state: 'Customer send needs setup',
             action: 'Test webhook',
             detail: 'Dry-run delivery before sending customer notifications.',
         },
@@ -2557,7 +2557,7 @@ function actionUnavailableReason(alert: PortalAlert, action: DwmAlertAnalystActi
     const row = actionState.actions?.find(item => item.action === action)
     const blocker = row?.blockerCodes?.length ? `${row.blockerCodes.map(stateLabel).slice(0, 2).join(', ')}.` : ''
     if (blocker) return blocker
-    if (actionState.blockedActions?.includes(action)) return 'This action is blocked by the current alert workflow state.'
+    if (actionState.blockedActions?.includes(action)) return 'This action needs the current alert workflow to move forward.'
     return undefined
 }
 
