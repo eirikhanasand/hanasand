@@ -102,7 +102,7 @@ export default function TrustPage() {
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8 md:py-20 lg:grid-cols-[minmax(0,0.92fr)_minmax(24rem,0.58fr)] lg:items-center'>
                     <div className='grid gap-5'>
                         <p className='text-sm font-semibold uppercase text-ui-primary'>Trust center</p>
-                        <h1 className='max-w-4xl text-4xl font-semibold tracking-normal md:text-6xl'>Enterprise review without fake badges.</h1>
+                        <h1 className='max-w-4xl text-4xl font-semibold tracking-normal md:text-6xl'>Enterprise review, stated plainly.</h1>
                         <p className='max-w-3xl text-lg leading-8 text-ui-muted'>
                             Security buyers should be able to see what is real today, what is available by contract, and what is not certified yet. This page collects Hanasand security, procurement, data-handling, SLA, and onboarding facts in one place.
                         </p>
@@ -181,7 +181,7 @@ export default function TrustPage() {
                 <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8 lg:grid-cols-[0.72fr_1.28fr]'>
                     <div className='grid content-start gap-3'>
                         <p className='text-sm font-semibold uppercase text-ui-primary'>Enterprise controls</p>
-                        <h2 className='text-3xl font-semibold'>No mystery roadmap language.</h2>
+                        <h2 className='text-3xl font-semibold'>Current controls, clear boundaries.</h2>
                         <p className='text-sm leading-6 text-ui-muted'>
                             These rows are intentionally plain. If a procurement team needs a control that is not available now, it should be visible before a pilot starts.
                         </p>
@@ -211,7 +211,7 @@ export default function TrustPage() {
                         <p className='text-sm font-semibold uppercase text-ui-primary'>Buyer evaluation path</p>
                         <h2 className='text-3xl font-semibold'>A faster way to decide whether Hanasand fits.</h2>
                         <p className='text-sm leading-6 text-ui-muted'>
-                            Larger dark-web platforms can show more certifications, references, and coverage claims. Hanasand should win only when the buyer wants a direct watchlist-to-alert workflow and can verify the live product quickly.
+                            Established dark-web platforms may offer more certifications, references, and coverage claims. Hanasand is a fit when the buyer wants a direct watchlist-to-alert workflow and can verify the live product quickly.
                         </p>
                     </div>
                     <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>

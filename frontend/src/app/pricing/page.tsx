@@ -118,7 +118,7 @@ export default function PricingPage() {
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8 md:py-20'>
                     <div className='mx-auto grid max-w-3xl justify-items-center gap-4 text-center'>
                         <p className='text-sm font-semibold uppercase text-ui-primary'>Pricing</p>
-                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Threat monitoring priced for useful alerts, not scraped volume.</h1>
+                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Threat monitoring priced around review-ready alerts.</h1>
                         <p className='text-lg leading-8 text-ui-muted'>
                             Pick the watchlist size that matches how your team works. Every tier is built around recent company exposure alerts and review-ready alert data.
                         </p>
@@ -176,7 +176,7 @@ export default function PricingPage() {
                         <p className='text-sm font-semibold uppercase text-ui-primary'>Competitive fit</p>
                         <h2 className='text-3xl font-semibold'>Use Hanasand when direct, reviewable alerts matter more than a heavyweight CTI suite.</h2>
                         <p className='text-sm leading-6 text-ui-muted'>
-                            The positioning is intentionally narrower than the largest dark-web platforms. Hanasand should win when a team needs a fast watchlist, clear source context, and delivery into an existing workflow.
+                            The positioning is intentionally narrower than the largest dark-web platforms. Hanasand fits teams that need a fast watchlist, clear source context, and delivery into an existing workflow.
                         </p>
                         <Link href='/solutions/dwm#sample-alert' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
                             Inspect alert shape
