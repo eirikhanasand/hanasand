@@ -22,9 +22,16 @@ test('public workflow reliability contracts are not demo-only', async () => {
 
     expect(contact).toContain('fetch(\'/api/contact\'')
     expect(contact).toContain('Ticket <span')
+    expect(contact).toContain('data-contact-intake-routing')
+    expect(contact).toContain('data-contact-security-review')
+    expect(contact).toContain('deliveryPreference: values.deliveryPreference')
+    expect(contact).toContain('securityReview: values.securityReview')
     expect(contact).not.toContain('window.location.href = mailtoLink')
     expect(contactRoute).toContain('ticketId')
     expect(contactRoute).toContain('CONTACT_FORWARD_URL')
+    expect(contactRoute).toContain('deliveryPreference')
+    expect(contactRoute).toContain('securityReview')
+    expect(contactRoute).toContain('security review material')
 
     expect(dwmPage).toContain('fetch(\'/api/dwm/webhook-sink\'')
     expect(dwmPage).toContain('Test sample delivery')

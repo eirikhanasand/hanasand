@@ -9,6 +9,9 @@ type ContactPayload = {
     message?: unknown
     intent?: unknown
     plan?: unknown
+    deliveryPreference?: unknown
+    replyWindow?: unknown
+    securityReview?: unknown
 }
 
 const CONTACT_FORWARD_URL = process.env.CONTACT_FORWARD_URL || process.env.CONTACT_WEBHOOK_URL || ''
@@ -23,6 +26,9 @@ export async function POST(request: NextRequest) {
     const message = text(payload?.message)
     const intent = text(payload?.intent)
     const plan = text(payload?.plan)
+    const deliveryPreference = text(payload?.deliveryPreference)
+    const replyWindow = text(payload?.replyWindow)
+    const securityReview = bool(payload?.securityReview)
 
     if (!name || !email || !subject || !message) {
         return NextResponse.json({ error: 'Name, email, subject, and message are required.' }, { status: 400 })
@@ -49,6 +55,11 @@ export async function POST(request: NextRequest) {
         message,
         intent: intent || null,
         plan: plan || null,
+        intake: {
+            deliveryPreference: deliveryPreference || null,
+            replyWindow: replyWindow || null,
+            securityReview,
+        },
         source: request.headers.get('referer') || '/contact',
     }
 
@@ -73,6 +84,9 @@ export async function POST(request: NextRequest) {
             subject,
             intent: intent || undefined,
             plan: plan || undefined,
+            deliveryPreference: deliveryPreference || undefined,
+            replyWindow: replyWindow || undefined,
+            securityReview,
         })
     }
 
@@ -81,7 +95,9 @@ export async function POST(request: NextRequest) {
         ticketId,
         delivery,
         receivedAt,
-        nextStep: 'We received the request. Expect a reply by email with coverage fit, setup steps, or support follow-up.',
+        nextStep: securityReview
+            ? 'We received the request. Expect a reply by email with coverage fit, setup steps, and security review material.'
+            : 'We received the request. Expect a reply by email with coverage fit, setup steps, or support follow-up.',
     }, {
         status: 202,
         headers: { 'cache-control': 'no-store' },
@@ -90,4 +106,8 @@ export async function POST(request: NextRequest) {
 
 function text(value: unknown) {
     return typeof value === 'string' ? value.trim() : ''
+}
+
+function bool(value: unknown) {
+    return value === true || value === 'true' || value === 'on'
 }

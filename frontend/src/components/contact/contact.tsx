@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Building2, CheckCircle2, LoaderCircle, Mail, MessageSquareText, Send, ShieldCheck, UserRound } from 'lucide-react'
+import { Building2, CheckCircle2, Clock3, FileCheck2, LoaderCircle, Mail, MessageSquareText, Route, Send, ShieldCheck, UserRound } from 'lucide-react'
 import { useFormik } from 'formik'
 import * as Yup from 'yup'
 import ErrorNotice from '@/components/error/errorNotice'
@@ -21,6 +21,21 @@ type ContactResult = {
     ticketId: string
     nextStep: string
 }
+
+const deliveryOptions = [
+    ['email', 'Email'],
+    ['webhook', 'Webhook'],
+    ['api', 'API'],
+    ['review-link', 'Review link'],
+    ['not-sure', 'Not sure yet'],
+]
+
+const replyWindowOptions = [
+    ['same-day', 'Same day'],
+    ['two-business-days', 'Two business days'],
+    ['this-week', 'This week'],
+    ['planning', 'Planning ahead'],
+]
 
 const intakeSteps = [
     ['Coverage fit', 'Confirm whether the names, domains, suppliers, or actors are sensible to monitor now.'],
@@ -54,6 +69,9 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
             company: '',
             type: contactIntent.subject,
             message: contactIntent.message,
+            deliveryPreference: 'email',
+            replyWindow: normalizedContactReplyWindow(intent),
+            securityReview: normalizedSecurityIntent(intent),
         },
         enableReinitialize: true,
         validationSchema,
@@ -73,6 +91,9 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                         message: values.message,
                         intent,
                         plan,
+                        deliveryPreference: values.deliveryPreference,
+                        replyWindow: values.replyWindow,
+                        securityReview: values.securityReview,
                     }),
                 })
                 const payload = await response.json().catch(() => ({})) as { error?: string, ticketId?: string, nextStep?: string }
@@ -154,6 +175,7 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                                 Request received
                             </div>
                             <p className='mt-2'>Ticket <span className='font-mono font-semibold'>{result.ticketId}</span>. {result.nextStep}</p>
+                            <p className='mt-1 text-xs font-semibold uppercase tracking-normal'>Route: {deliveryLabel(formik.values.deliveryPreference)} · Reply: {replyWindowLabel(formik.values.replyWindow)}</p>
                         </div>
                     ) : null}
 
@@ -198,6 +220,47 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                             autoComplete='organization'
                         />
                     </Field>
+
+                    <div className='grid gap-4 md:grid-cols-2' data-contact-intake-routing='true'>
+                        <Field
+                            icon={<Route className='h-4 w-4 text-ui-muted' />}
+                            label='Preferred delivery'
+                            error={formik.touched.deliveryPreference ? formik.errors.deliveryPreference : undefined}
+                        >
+                            <select
+                                className={fieldClassName}
+                                {...formik.getFieldProps('deliveryPreference')}
+                            >
+                                {deliveryOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                            </select>
+                        </Field>
+
+                        <Field
+                            icon={<Clock3 className='h-4 w-4 text-ui-muted' />}
+                            label='Reply window'
+                            error={formik.touched.replyWindow ? formik.errors.replyWindow : undefined}
+                        >
+                            <select
+                                className={fieldClassName}
+                                {...formik.getFieldProps('replyWindow')}
+                            >
+                                {replyWindowOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                            </select>
+                        </Field>
+                    </div>
+
+                    <label className='flex items-start gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-3 text-sm leading-6 text-ui-text' data-contact-security-review='true'>
+                        <input
+                            type='checkbox'
+                            className='mt-1 h-4 w-4 rounded border-ui-border text-ui-primary focus:ring-ui-primary/20'
+                            checked={formik.values.securityReview}
+                            onChange={event => formik.setFieldValue('securityReview', event.target.checked)}
+                        />
+                        <span className='grid gap-1'>
+                            <span className='flex items-center gap-2 font-semibold'><FileCheck2 className='h-4 w-4 text-ui-muted' /> Include security review material</span>
+                            <span className='text-xs leading-5 text-ui-muted'>DPA notes, subprocessors, SLA expectations, identity requirements, and current certification limits.</span>
+                        </span>
+                    </label>
 
                     <Field
                         icon={<MessageSquareText className='h-4 w-4 text-ui-muted' />}
@@ -276,6 +339,26 @@ function Field({
             {error && <ErrorNotice compact message={error} />}
         </label>
     )
+}
+
+function normalizedContactReplyWindow(intent: string) {
+    const normalizedIntent = intent.trim().toLowerCase()
+    if (normalizedIntent === 'support') return 'same-day'
+    if (normalizedIntent === 'procurement' || normalizedIntent === 'enterprise' || normalizedIntent === 'security') return 'this-week'
+    return 'two-business-days'
+}
+
+function normalizedSecurityIntent(intent: string) {
+    const normalizedIntent = intent.trim().toLowerCase()
+    return normalizedIntent === 'procurement' || normalizedIntent === 'enterprise' || normalizedIntent === 'security'
+}
+
+function deliveryLabel(value: string) {
+    return deliveryOptions.find(([option]) => option === value)?.[1] || 'Email'
+}
+
+function replyWindowLabel(value: string) {
+    return replyWindowOptions.find(([option]) => option === value)?.[1] || 'Two business days'
 }
 
 function getContactIntent(plan: string, intent: string): ContactIntent {
