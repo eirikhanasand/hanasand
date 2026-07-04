@@ -75,8 +75,8 @@ const stats = [
 const workflowShortcuts = [
     { label: 'Search actor intel', href: '/ti/apt29', detail: 'Evidence, sources, and action rows' },
     { label: 'Inspect DWM queue', href: '/dashboard/dwm', detail: 'Alerts, cases, delivery, and source context' },
-    { label: 'Compare fit', href: '/pricing#competitive-fit', detail: 'Where Hanasand should and should not win' },
-    { label: 'Start pilot', href: '/contact?plan=pilot', detail: 'Watchlist, delivery, and security review' },
+    { label: 'Configure watchlists', href: '/organizations', detail: 'Org terms, members, and destinations' },
+    { label: 'Route alerts', href: '/dashboard/automations?setup=dwm', detail: 'Delivery, replay, and webhook actions' },
 ]
 
 const operatorPaths = [
