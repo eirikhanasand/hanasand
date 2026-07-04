@@ -1755,6 +1755,12 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
         reopenReady,
         suppressReady,
     })
+    const blockedActions = [
+        { id: 'case', label: 'Case', ready: Boolean(caseHref) || caseReady, reason: caseHref ? undefined : caseReason },
+        { id: 'replay', label: 'Replay', ready: replayReady, reason: replayReason },
+        { id: 'delivery', label: 'Delivery', ready: deliverReady, reason: deliveryReason },
+        { id: 'close', label: 'Close', ready: closeReady, reason: closeReason },
+    ].filter(item => !item.ready && item.reason)
     const nextActionBusy = nextOperatorActionBusy(nextAction.kind, alert.id) === busyAction
     const onNextAction = () => {
         switch (nextAction.kind) {
@@ -1809,6 +1815,16 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                     <ActionAvailability label='Delivery' ready={deliverReady} />
                     <ActionAvailability label='Close' ready={closeReady} />
                 </div>
+                {blockedActions.length ? (
+                    <div className='grid gap-2 rounded-lg border border-ui-warning/30 bg-ui-warning/10 p-2 text-xs text-ui-text' data-dwm-action-blockers='true'>
+                        {blockedActions.map(item => (
+                            <p key={item.id} className='grid min-w-0 gap-1 sm:grid-cols-[6rem_minmax(0,1fr)]'>
+                                <span className='font-semibold text-ui-warning'>{item.label}</span>
+                                <span className='wrap-break-word text-ui-muted'>{item.reason}</span>
+                            </p>
+                        ))}
+                    </div>
+                ) : null}
                 <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap'>
                     <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} disabledReason={transitionReason} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
                     <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} disabledReason={transitionReason} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
