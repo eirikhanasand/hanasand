@@ -19,7 +19,11 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(actionContract).toContain('Waiting for source context')
     expect(page).toContain('Customer delivery')
     expect(page).toContain('caseDetailHref')
-    expect(page).toContain('&focus=destinations')
+    expect(page).toContain('organizationDeliveryWorkspaceHref({ organizationId: orgId, alertId: alert?.id, caseId, delivery })')
+    expect(page).toContain('params.set(\'focus\', \'destinations\')')
+    expect(page).toContain('params.set(\'destinationId\', input.delivery.webhookDestinationId || input.delivery.destinationId || \'\')')
+    expect(page).toContain('params.set(\'deliveryId\', input.delivery.id)')
+    expect(page).toContain('params.set(\'watchlistId\', input.delivery.watchlistId)')
     expect(page).toContain('Manage destination')
     expect(page).not.toContain('&focus=webhooks')
 

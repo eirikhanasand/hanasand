@@ -1777,7 +1777,8 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
     const orgId = alert ? alertOrganizationId(alert) : undefined
     const caseId = alert?.caseId || alert?.caseIdCandidate || alert?.workflowContext?.caseIdCandidate || alert?.webhookContext?.caseIdCandidate
     const caseHref = alert && caseId ? caseDetailHref(caseId, alert.id, orgId, 'delivery_history') : undefined
-    const orgHref = orgId ? `/organizations?organizationId=${encodeURIComponent(orgId)}${caseId ? `&caseId=${encodeURIComponent(caseId)}` : ''}${alert?.id ? `&alertId=${encodeURIComponent(alert.id)}` : ''}&focus=destinations` : '/organizations?focus=destinations'
+    const latestDelivery = visible[0]
+    const orgHref = organizationDeliveryWorkspaceHref({ organizationId: orgId, alertId: alert?.id, caseId, delivery: latestDelivery })
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel'>
             <div className='flex items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
@@ -1805,32 +1806,35 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
                         </div>
                     )}
                 </div>
-                {visible.slice(0, 6).map(delivery => (
-                    <div key={delivery.id} className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3'>
-                        <div className='flex flex-wrap items-center justify-between gap-2'>
-                            <span className={deliveryClass(delivery.status)}>{stateLabel(delivery.status)}</span>
-                            <div className='flex flex-wrap items-center justify-end gap-1.5 text-[11px] font-semibold text-ui-muted'>
-                                <span>{relativeTimeLabel(delivery.attemptedAt)}</span>
-                                <span className='rounded-full border border-ui-border px-1.5 py-0.5'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'send'}</span>
+                {visible.slice(0, 6).map(delivery => {
+                    const deliveryOrgHref = organizationDeliveryWorkspaceHref({ organizationId: orgId, alertId: alert?.id, caseId, delivery })
+                    return (
+                        <div key={delivery.id} className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3'>
+                            <div className='flex flex-wrap items-center justify-between gap-2'>
+                                <span className={deliveryClass(delivery.status)}>{stateLabel(delivery.status)}</span>
+                                <div className='flex flex-wrap items-center justify-end gap-1.5 text-[11px] font-semibold text-ui-muted'>
+                                    <span>{relativeTimeLabel(delivery.attemptedAt)}</span>
+                                    <span className='rounded-full border border-ui-border px-1.5 py-0.5'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'send'}</span>
+                                </div>
                             </div>
+                            <div className='grid grid-cols-2 gap-2 text-[11px] text-ui-muted'>
+                                <p><span className='font-semibold text-ui-muted'>HTTP:</span> {delivery.httpStatus ?? (delivery.dryRun ? 'dry run' : 'pending')}</p>
+                                <p><span className='font-semibold text-ui-muted'>Attempt:</span> {delivery.attemptCount ?? 1}</p>
+                                <p className='col-span-2 break-all'><span className='font-semibold text-ui-muted'>Destination:</span> {delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || delivery.destinationId || 'redacted destination'}</p>
+                                <p className='break-all'><span className='font-semibold text-ui-muted'>Request:</span> {delivery.requestId || delivery.auditEventId || 'not linked'}</p>
+                                <p className='break-all'><span className='font-semibold text-ui-muted'>Alert key:</span> {delivery.dedupeKey}</p>
+                                <p className='break-all'><span className='font-semibold text-ui-muted'>Payload:</span> {delivery.payloadHash}</p>
+                                <p><span className='font-semibold text-ui-muted'>Retry:</span> {delivery.nextRetryAt ? relativeTimeLabel(delivery.nextRetryAt) : retryStateLabel(delivery)}</p>
+                                <p><span className='font-semibold text-ui-muted'>Audit:</span> {delivery.auditEventId || 'pending'}</p>
+                            </div>
+                            <div className='flex flex-wrap gap-2 text-[11px] font-semibold'>
+                                <a href={deliveryOrgHref} className='inline-flex h-7 items-center rounded-lg border border-ui-border bg-ui-panel px-2 text-ui-text transition hover:bg-ui-canvas'>Manage destination</a>
+                                {caseHref ? <a href={caseHref} className='inline-flex h-7 items-center rounded-lg border border-ui-border bg-ui-panel px-2 text-ui-text transition hover:bg-ui-canvas'>Open case trail</a> : null}
+                            </div>
+                            {(delivery.error || delivery.errorClass) && <p className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 px-2 py-1.5 text-xs text-ui-danger'>{delivery.error || stateLabel(delivery.errorClass || 'delivery failed')}</p>}
                         </div>
-                        <div className='grid grid-cols-2 gap-2 text-[11px] text-ui-muted'>
-                            <p><span className='font-semibold text-ui-muted'>HTTP:</span> {delivery.httpStatus ?? (delivery.dryRun ? 'dry run' : 'pending')}</p>
-                            <p><span className='font-semibold text-ui-muted'>Attempt:</span> {delivery.attemptCount ?? 1}</p>
-                            <p className='col-span-2 break-all'><span className='font-semibold text-ui-muted'>Destination:</span> {delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || delivery.destinationId || 'redacted destination'}</p>
-                            <p className='break-all'><span className='font-semibold text-ui-muted'>Request:</span> {delivery.requestId || delivery.auditEventId || 'not linked'}</p>
-                            <p className='break-all'><span className='font-semibold text-ui-muted'>Alert key:</span> {delivery.dedupeKey}</p>
-                            <p className='break-all'><span className='font-semibold text-ui-muted'>Payload:</span> {delivery.payloadHash}</p>
-                            <p><span className='font-semibold text-ui-muted'>Retry:</span> {delivery.nextRetryAt ? relativeTimeLabel(delivery.nextRetryAt) : retryStateLabel(delivery)}</p>
-                            <p><span className='font-semibold text-ui-muted'>Audit:</span> {delivery.auditEventId || 'pending'}</p>
-                        </div>
-                        <div className='flex flex-wrap gap-2 text-[11px] font-semibold'>
-                            <a href={orgHref} className='inline-flex h-7 items-center rounded-lg border border-ui-border bg-ui-panel px-2 text-ui-text transition hover:bg-ui-canvas'>Manage destination</a>
-                            {caseHref ? <a href={caseHref} className='inline-flex h-7 items-center rounded-lg border border-ui-border bg-ui-panel px-2 text-ui-text transition hover:bg-ui-canvas'>Open case trail</a> : null}
-                        </div>
-                        {(delivery.error || delivery.errorClass) && <p className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 px-2 py-1.5 text-xs text-ui-danger'>{delivery.error || stateLabel(delivery.errorClass || 'delivery failed')}</p>}
-                    </div>
-                ))}
+                    )
+                })}
                 {!visible.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>No delivery attempt is attached to this alert yet. Use Test or Send on the selected alert, then inspect the redacted destination, request id, retry state, and case trail here.</p>}
             </div>
         </section>
@@ -2342,6 +2346,20 @@ function retryStateLabel(delivery: DeliveryItem) {
     if (delivery.status === 'skipped') return 'not eligible'
     if (delivery.status === 'dry_run') return 'test only'
     return 'none'
+}
+
+function organizationDeliveryWorkspaceHref(input: { organizationId?: string, alertId?: string, caseId?: string, delivery?: DeliveryItem }) {
+    const params = new URLSearchParams()
+    if (input.organizationId) params.set('organizationId', input.organizationId)
+    params.set('focus', 'destinations')
+    if (input.alertId) params.set('alertId', input.alertId)
+    if (input.caseId) params.set('caseId', input.caseId)
+    if (input.delivery?.webhookDestinationId || input.delivery?.destinationId) {
+        params.set('destinationId', input.delivery.webhookDestinationId || input.delivery.destinationId || '')
+    }
+    if (input.delivery?.id) params.set('deliveryId', input.delivery.id)
+    if (input.delivery?.watchlistId) params.set('watchlistId', input.delivery.watchlistId)
+    return `/organizations?${params.toString()}`
 }
 
 function caseDetailHref(caseId: string, alertId?: string, organizationId?: string, route?: string) {
