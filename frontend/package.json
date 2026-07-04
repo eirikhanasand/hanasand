@@ -17,6 +17,7 @@
     "check:visible-state-labels": "node scripts/check-visible-state-labels.mjs",
     "check:palette-migration": "node scripts/check-palette-migration.mjs",
     "check:product-north-star": "bun scripts/check-product-north-star.ts && bun scripts/check-product-readiness-route.ts",
+    "check:public-ti-hosted-copy": "bun scripts/check-public-ti-hosted-copy.ts",
     "check:upload-limit": "node scripts/check-upload-proxy-limit.mjs",
     "lint:guardrails": "node scripts/lint-guardrails.mjs",
     "lint:eslint": "eslint ./src ./tests ./scripts",
