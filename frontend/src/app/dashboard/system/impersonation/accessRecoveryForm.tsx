@@ -369,17 +369,41 @@ export default function AccessRecoveryForm() {
 
     return (
         <div className='grid gap-4'>
-            <div className='grid gap-2 sm:grid-cols-2' role='group' aria-label='Support operation'>
-                {operationTabs.map(tab => (
-                    <OperationTab
-                        key={tab.id}
-                        active={operation === tab.id}
-                        label={tab.label}
-                        detail={tab.detail}
-                        onClick={() => setOperation(tab.id)}
-                    />
-                ))}
+            <div data-testid='support-primary-operation' className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3'>
+                <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+                    <div>
+                        <h3 className='text-sm font-semibold text-ui-text'>Inspect first</h3>
+                        <p className='mt-1 text-xs leading-5 text-ui-muted'>Load the customer, user, roles, invites, and recent audit before using higher-risk controls.</p>
+                    </div>
+                    <button
+                        type='button'
+                        aria-pressed={operation === 'inspect'}
+                        className={operation === 'inspect' ? primaryButton : secondaryButton}
+                        onClick={() => setOperation('inspect')}
+                    >
+                        Inspect access
+                    </button>
+                </div>
             </div>
+
+            <details data-testid='support-secondary-operations' className='group rounded-md border border-ui-border bg-ui-canvas'>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
+                    <span>Privileged support actions</span>
+                    <span className='text-xs font-medium text-ui-muted group-open:hidden'>Session, recovery, review</span>
+                    <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide actions</span>
+                </summary>
+                <div className='grid gap-2 border-t border-ui-border p-3 sm:grid-cols-2' role='group' aria-label='Support operation'>
+                    {operationTabs.filter(tab => tab.id !== 'inspect').map(tab => (
+                        <OperationTab
+                            key={tab.id}
+                            active={operation === tab.id}
+                            label={tab.label}
+                            detail={tab.detail}
+                            onClick={() => setOperation(tab.id)}
+                        />
+                    ))}
+                </div>
+            </details>
 
             {operation === 'inspect' && <section className='grid gap-3'>
                 <div>

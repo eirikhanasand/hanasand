@@ -25,6 +25,11 @@ test('helpdesk audit keeps advanced controls behind explicit disclosures', async
 
     expect(supportForm).toContain('type SupportOperation = \'inspect\' | \'impersonation\' | \'recovery\' | \'decision\' | \'queue\'')
     expect(supportForm).toContain('const [operation, setOperation] = useState<SupportOperation>(\'inspect\')')
+    expect(supportForm).toContain('data-testid=\'support-primary-operation\'')
+    expect(supportForm).toContain('Inspect first')
+    expect(supportForm).toContain('data-testid=\'support-secondary-operations\'')
+    expect(supportForm).toContain('Privileged support actions')
+    expect(supportForm).toContain('operationTabs.filter(tab => tab.id !== \'inspect\')')
     expect(supportForm).toContain('role=\'group\' aria-label=\'Support operation\'')
     expect(supportForm).toContain('operation === \'inspect\'')
     expect(supportForm).toContain('operation === \'impersonation\'')
@@ -45,8 +50,9 @@ test('helpdesk keeps search primary and collapses filters and support actions by
     expect(page).toContain('group-open:inline\'>Hide controls</span>')
     expect(page).not.toContain('support.organization.access_recovery</Link>')
 
-    expect(supportForm.indexOf('operation === \'inspect\'')).toBeLessThan(supportForm.indexOf('operation === \'impersonation\''))
-    expect(supportForm.indexOf('operation === \'impersonation\'')).toBeLessThan(supportForm.indexOf('operation === \'recovery\''))
+    expect(supportForm.indexOf('data-testid=\'support-primary-operation\'')).toBeLessThan(supportForm.indexOf('data-testid=\'support-secondary-operations\''))
+    expect(supportForm.indexOf('data-testid=\'support-primary-operation\'')).toBeLessThan(supportForm.indexOf('operation === \'inspect\''))
+    expect(supportForm.indexOf('data-testid=\'support-secondary-operations\'')).toBeLessThan(supportForm.indexOf('operation === \'impersonation\''))
     expect(supportForm).toContain('aria-pressed={active}')
     expect(supportForm).toContain('onClick={() => setOperation(tab.id)}')
 })
@@ -88,7 +94,13 @@ test('helpdesk renders search first with filters and support actions collapsed',
     await expect(page.getByPlaceholder('Actor')).toBeVisible()
 
     await page.getByText('Start or manage support action').click()
-    await expect(page.getByRole('group', { name: 'Support operation' })).toBeVisible()
+    await expect(page.getByTestId('support-primary-operation')).toBeVisible()
     await expect(page.getByText('Support inspection')).toBeVisible()
+    await expect(page.getByText('Privileged support actions')).toBeVisible()
+    await expect(page.getByRole('group', { name: 'Support operation' })).toBeHidden()
+    await expect(page.getByRole('button', { name: /Session/ })).toBeHidden()
+
+    await page.getByText('Privileged support actions').click()
+    await expect(page.getByRole('group', { name: 'Support operation' })).toBeVisible()
     await expect(page.getByRole('button', { name: /Session/ })).toBeVisible()
 })
