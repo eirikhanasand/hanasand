@@ -728,14 +728,40 @@ export default function OrganizationWorkspaceClient() {
         return delivery?.status ? `Destination test ${delivery.status}.` : 'Destination test sent.'
     }, `destination-${destination.id}`)
 
+    const replayDelivery = (delivery: DeliveryRow) => selectedOrganization && runAction('replay-delivery', async () => {
+        if (!canReplayDelivery(delivery)) throw new Error('Delivery replay needs a destination and alert, case, or watchlist reference.')
+        const result = await requestJson<DeliveryResult>('/api/dwm/webhooks/deliver', {
+            method: 'POST',
+            body: JSON.stringify({
+                organizationId: selectedOrganization.id,
+                orgId: selectedOrganization.id,
+                tenantId: delivery.tenantId || selectedOrganization.tenantId || 'default',
+                destinationId: delivery.webhookDestinationId,
+                alertId: delivery.alertId,
+                caseId: delivery.caseId,
+                actionId: delivery.actionId,
+                watchlistId: delivery.watchlistId,
+                watchlistItemId: delivery.watchlistItemId,
+                dryRun: true,
+                replay: true,
+                idempotencyKey: delivery.dedupeKey,
+                requestId: `org-ui-replay-${Date.now()}`,
+            }),
+        })
+        const nextDelivery = firstDelivery(result)
+        return nextDelivery?.status ? `Delivery replay ${nextDelivery.status}.` : 'Delivery replay requested.'
+    }, `delivery-${delivery.id}`)
+
     const createSavedDestination = () => selectedOrganization && runAction('create-destination', async () => {
         const url = destinationCreateDraft.url.trim()
         if (!validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
         const kind = destinationCreateDraft.kind
+        const name = normalizeDestinationName(destinationCreateDraft.name) || defaultDestinationName(kind)
+        if (destinationNameInUse(bundle.webhooks, name)) throw new Error('Destination name already exists.')
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks`, {
             method: 'POST',
             body: JSON.stringify({
-                name: destinationCreateDraft.name.trim() || `${kind === 'discord' ? 'Discord' : 'Webhook'} destination`,
+                name,
                 kind,
                 endpointUrl: url,
                 webhookUrl: url,
@@ -751,8 +777,10 @@ export default function OrganizationWorkspaceClient() {
         const url = draft.url.trim()
         if (url && !validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
         if (!destinationEditChanged(destination, draft)) return 'No destination changes.'
+        const name = normalizeDestinationName(draft.name) || destination.name || destination.id
+        if (destinationNameInUse(bundle.webhooks, name, destination.id)) throw new Error('Destination name already exists.')
         const body: Record<string, unknown> = {
-            name: draft.name.trim() || destination.name || destination.id,
+            name,
             kind: draft.kind,
             status: draft.status,
             requestId: `org-ui-${Date.now()}`,
@@ -941,6 +969,10 @@ export default function OrganizationWorkspaceClient() {
                                             organization={selectedOrganization}
                                             deliveries={bundle.deliveries}
                                             selectedSubject={selectedActivitySubject}
+                                            canManage={canManage}
+                                            busy={busy}
+                                            rowMessages={rowMessages}
+                                            onReplay={delivery => void replayDelivery(delivery)}
                                         />
                                         <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
                                     </div>
@@ -1384,6 +1416,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
 function DestinationPanel({ destinations, canManage, busy, rowMessages, selectedSubject, createDraft, setCreateDraft, editing, setEditing, onSelectSubject, onCreate, onTest, onUpdate, onDelete }: { destinations: WebhookDestination[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, createDraft: DestinationCreateDraft, setCreateDraft: (next: DestinationCreateDraft) => void, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onCreate: () => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onDelete: (destination: WebhookDestination) => void }) {
     const createUrl = createDraft.url.trim()
     const createUrlInvalid = Boolean(createUrl) && !validDestinationUrl(createUrl)
+    const createNameDuplicate = destinationNameInUse(destinations, normalizeDestinationName(createDraft.name) || defaultDestinationName(createDraft.kind))
     return (
         <details id='destinations' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-destinations-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
@@ -1399,6 +1432,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                             <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                                 Name
                                 <input value={createDraft.name} disabled={Boolean(busy)} onChange={event => setCreateDraft({ ...createDraft, name: event.target.value })} className={inputClass} placeholder='Security alerts' />
+                                {createNameDuplicate && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Name already in use.</span>}
                             </label>
                             <SelectField label='Type' value={createDraft.kind} options={destinationKinds} disabled={Boolean(busy)} onChange={value => setCreateDraft({ ...createDraft, kind: value as DestinationCreateDraft['kind'] })} />
                         </div>
@@ -1408,7 +1442,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                                 <input value={createDraft.url} disabled={Boolean(busy)} onChange={event => setCreateDraft({ ...createDraft, url: event.target.value })} className={inputClass} placeholder='https://discord.com/api/webhooks/...' />
                                 {createUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
                             </label>
-                            <button type='button' className={primaryButtonClass} disabled={!createUrl || createUrlInvalid || Boolean(busy)} onClick={onCreate}>
+                            <button type='button' className={primaryButtonClass} disabled={!createUrl || createUrlInvalid || createNameDuplicate || Boolean(busy)} onClick={onCreate}>
                                 <CheckCircle2 className='h-4 w-4' />
                                 Add destination
                             </button>
@@ -1422,6 +1456,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                     const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
                     const draftUrl = draft?.url.trim() || ''
                     const draftUrlInvalid = Boolean(draftUrl) && !validDestinationUrl(draftUrl)
+                    const draftNameDuplicate = draft ? destinationNameInUse(destinations, normalizeDestinationName(draft.name) || destination.name || destination.id, destination.id) : false
                     const draftChanged = draft ? destinationEditChanged(destination, draft) : false
                     return (
                         <div
@@ -1449,6 +1484,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                                     <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                                         Name
                                         <input value={draft.name} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, name: event.target.value } }))} className={inputClass} />
+                                        {draftNameDuplicate && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Name already in use.</span>}
                                     </label>
                                     <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, kind: value as DestinationEditDraft['kind'] } }))} />
                                     <SelectField label='Status' value={draft.status} options={['active', 'paused']} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, status: value } }))} />
@@ -1457,9 +1493,9 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                                         <input value={draft.url} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, url: event.target.value } }))} className={inputClass} placeholder='Leave blank to keep the stored redacted endpoint' />
                                         {draftUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
                                     </label>
-                                    {!draftUrlInvalid && !draftChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-3'>No changes to save.</p>}
+                                    {!draftUrlInvalid && !draftNameDuplicate && !draftChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-3'>No changes to save.</p>}
                                     <div className='flex flex-wrap gap-2 md:col-span-3' onClick={event => event.stopPropagation()}>
-                                        <button type='button' className={primaryButtonClass} disabled={draftUrlInvalid || !draftChanged || Boolean(busy)} onClick={() => onUpdate(destination, draft)}>
+                                        <button type='button' className={primaryButtonClass} disabled={draftUrlInvalid || draftNameDuplicate || !draftChanged || Boolean(busy)} onClick={() => onUpdate(destination, draft)}>
                                             <CheckCircle2 className='h-4 w-4' />
                                             Save
                                         </button>
@@ -1727,7 +1763,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
     )
 }
 
-function DeliveryHistoryPanel({ organization, deliveries, selectedSubject }: { organization: OrganizationSummary, deliveries: DeliveryRow[], selectedSubject: ActivitySubject }) {
+function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canManage, busy, rowMessages, onReplay }: { organization: OrganizationSummary, deliveries: DeliveryRow[], selectedSubject: ActivitySubject, canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, onReplay: (delivery: DeliveryRow) => void }) {
     const scopedDeliveries = deliveries
         .filter(delivery => deliveryMatchesSubject(delivery, selectedSubject))
         .sort((left, right) => deliveryTime(right) - deliveryTime(left))
@@ -1762,40 +1798,55 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject }: { o
                                 <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Alert / case</th>
                                 <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Retry</th>
                                 <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>When</th>
+                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {scopedDeliveries.map(delivery => (
-                                <tr key={delivery.id} className='align-top hover:bg-ui-raised dark:hover:bg-ui-panel'>
-                                    <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                        <div className='grid gap-1'>
-                                            <StatusPill status={delivery.status || 'attempt'} />
-                                            <span className='text-xs text-ui-muted dark:text-ui-muted'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'webhook'}</span>
-                                            {delivery.httpStatus !== undefined && <span className='text-xs text-ui-muted dark:text-ui-muted'>HTTP {delivery.httpStatus}</span>}
-                                        </div>
-                                    </td>
-                                    <td className='max-w-56 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                        <p className='truncate font-mono text-xs text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || 'redacted destination')}</p>
-                                        <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{delivery.webhookDestinationId || delivery.requestId || delivery.id}</p>
-                                        <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
-                                    </td>
-                                    <td className='max-w-64 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                        <DeliveryReference delivery={delivery} organizationId={organization.id} />
-                                        {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
-                                        {!delivery.error && delivery.responseSummary && <p className='mt-1 line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
-                                    </td>
-                                    <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                        <div className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
-                                            <span>{delivery.errorClass ? sanitizeOrganizationDisplayCopy(delivery.errorClass) : delivery.nextRetryAt ? 'scheduled' : 'none'}</span>
-                                            <span>{delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
-                                            {delivery.dedupeKey && <span className='max-w-40 truncate font-mono'>{delivery.dedupeKey}</span>}
-                                        </div>
-                                    </td>
-                                    <td className='border-b border-ui-border px-3 py-2 text-xs text-ui-muted dark:border-ui-border dark:text-ui-muted'>
-                                        {formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}
-                                    </td>
-                                </tr>
-                            ))}
+                            {scopedDeliveries.map(delivery => {
+                                const replayable = canReplayDelivery(delivery)
+                                const replayLabel = delivery.status === 'failed' || delivery.nextRetryAt ? 'Retry' : 'Replay'
+                                return (
+                                    <tr key={delivery.id} className='align-top hover:bg-ui-raised dark:hover:bg-ui-panel'>
+                                        <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                            <div className='grid gap-1'>
+                                                <StatusPill status={delivery.status || 'attempt'} />
+                                                <span className='text-xs text-ui-muted dark:text-ui-muted'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'webhook'}</span>
+                                                {delivery.httpStatus !== undefined && <span className='text-xs text-ui-muted dark:text-ui-muted'>HTTP {delivery.httpStatus}</span>}
+                                            </div>
+                                        </td>
+                                        <td className='max-w-56 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                            <p className='truncate font-mono text-xs text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || 'redacted destination')}</p>
+                                            <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{delivery.webhookDestinationId || delivery.requestId || delivery.id}</p>
+                                            <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
+                                        </td>
+                                        <td className='max-w-64 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                            <DeliveryReference delivery={delivery} organizationId={organization.id} />
+                                            {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
+                                            {!delivery.error && delivery.responseSummary && <p className='mt-1 line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
+                                        </td>
+                                        <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                            <div className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
+                                                <span>{delivery.errorClass ? sanitizeOrganizationDisplayCopy(delivery.errorClass) : delivery.nextRetryAt ? 'scheduled' : 'none'}</span>
+                                                <span>{delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
+                                                {delivery.dedupeKey && <span className='max-w-40 truncate font-mono'>{delivery.dedupeKey}</span>}
+                                            </div>
+                                        </td>
+                                        <td className='border-b border-ui-border px-3 py-2 text-xs text-ui-muted dark:border-ui-border dark:text-ui-muted'>
+                                            {formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}
+                                        </td>
+                                        <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                            <div className='grid gap-2'>
+                                                <button type='button' className={secondaryButtonClass} disabled={!canManage || !replayable || Boolean(busy)} onClick={() => onReplay(delivery)}>
+                                                    <RefreshCw className='h-4 w-4' />
+                                                    {replayLabel}
+                                                </button>
+                                                {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>Needs destination and alert context</span>}
+                                                <RowStatus message={rowMessages[`delivery-${delivery.id}`]} />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
                         </tbody>
                     </table>
                 )}
@@ -2427,10 +2478,24 @@ function validDestinationUrl(value: string) {
     }
 }
 
+function defaultDestinationName(kind: DestinationCreateDraft['kind']) {
+    return kind === 'discord' ? 'Discord destination' : 'Webhook destination'
+}
+
+function normalizeDestinationName(value: string) {
+    return value.trim().replace(/\s+/g, ' ').slice(0, 80)
+}
+
+function destinationNameInUse(destinations: WebhookDestination[], name: string, excludeId = '') {
+    const normalized = normalizeDestinationName(name).toLowerCase()
+    if (!normalized) return false
+    return destinations.some(destination => destination.id !== excludeId && normalizeDestinationName(destination.name || destination.id).toLowerCase() === normalized)
+}
+
 function destinationEditChanged(destination: WebhookDestination, draft: DestinationEditDraft) {
     const currentKind = (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook'
     const currentStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
-    return (draft.name.trim() || destination.name || destination.id) !== (destination.name || destination.id)
+    return (normalizeDestinationName(draft.name) || destination.name || destination.id) !== (destination.name || destination.id)
         || draft.kind !== currentKind
         || draft.status !== currentStatus
         || Boolean(draft.url.trim())
@@ -2507,6 +2572,13 @@ function deliveryHistoryHref(baseHref: string, subject: ActivitySubject) {
 function deliveryTraceLabel(delivery: DeliveryRow) {
     const trace = delivery.auditEventId || delivery.requestId || delivery.id
     return `Trace: ${sanitizeOrganizationDisplayCopy(trace) || trace}`
+}
+
+function canReplayDelivery(delivery: DeliveryRow) {
+    return Boolean(
+        delivery.webhookDestinationId
+        && (delivery.alertId || delivery.caseId || delivery.watchlistId || delivery.watchlistItemId || delivery.actionId)
+    )
 }
 
 function firstDelivery(result: DeliveryResult) {
