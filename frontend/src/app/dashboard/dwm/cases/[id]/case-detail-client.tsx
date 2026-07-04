@@ -435,29 +435,38 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
                         <section className='grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]'>
                             <CollapsiblePanel title='Evidence rows' action={`${evidence.length} rows`} defaultOpen={false}>
-                                <div className='overflow-x-auto rounded-lg border border-ui-border'>
-                                    <table className='w-full min-w-[760px] text-left text-xs'>
-                                        <thead className='bg-ui-canvas text-ui-muted'>
-                                            <tr>
-                                                <th className='px-3 py-2 font-semibold'>Source</th>
-                                                <th className='px-3 py-2 font-semibold'>Observed</th>
-                                                <th className='px-3 py-2 font-semibold'>Excerpt</th>
-                                                <th className='px-3 py-2 font-semibold'>Provenance</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className='divide-y divide-ui-border bg-ui-panel'>
-                                            {evidence.length ? evidence.map((row, index) => (
-                                                <tr key={row.id || index} className='hover:bg-ui-raised'>
-                                                    <td className='px-3 py-2 align-top font-semibold text-ui-text'>{row.sourceName || row.provenance?.sourceId || 'source pending'}<p className='text-[11px] font-normal text-ui-muted'>{stateLabel(row.sourceFamily)}</p></td>
-                                                    <td className='px-3 py-2 align-top text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</td>
-                                                    <td className='max-w-xl px-3 py-2 align-top text-ui-text'>{row.safeExcerpt || row.excerpt || 'No safe excerpt available.'}</td>
-                                                    <td className='px-3 py-2 align-top font-mono text-[11px] text-ui-muted'>{row.provenance?.captureId || row.id || 'capture pending'}<p>{row.contentHash || row.provenance?.contentHash || 'hash pending'}</p></td>
-                                                </tr>
-                                            )) : (
-                                                <tr><td colSpan={4} className='px-3 py-8 text-center text-ui-muted'>No evidence rows are attached to this case.</td></tr>
-                                            )}
-                                        </tbody>
-                                    </table>
+                                <div className='rounded-lg border border-ui-border'>
+                                    {evidence.length ? (
+                                        <>
+                                            <div className='grid gap-2 p-2 md:hidden' data-dwm-case-evidence-mobile-list='true'>
+                                                {evidence.map((row, index) => <EvidenceMobileRow key={row.id || index} row={row} />)}
+                                            </div>
+                                            <div className='hidden overflow-x-auto md:block'>
+                                                <table className='w-full min-w-[760px] text-left text-xs' data-dwm-case-evidence-desktop-table='true'>
+                                                    <thead className='bg-ui-canvas text-ui-muted'>
+                                                        <tr>
+                                                            <th className='px-3 py-2 font-semibold'>Source</th>
+                                                            <th className='px-3 py-2 font-semibold'>Observed</th>
+                                                            <th className='px-3 py-2 font-semibold'>Excerpt</th>
+                                                            <th className='px-3 py-2 font-semibold'>Provenance</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className='divide-y divide-ui-border bg-ui-panel'>
+                                                        {evidence.map((row, index) => (
+                                                            <tr key={row.id || index} className='hover:bg-ui-raised'>
+                                                                <td className='px-3 py-2 align-top font-semibold text-ui-text'>{row.sourceName || row.provenance?.sourceId || 'source pending'}<p className='text-[11px] font-normal text-ui-muted'>{stateLabel(row.sourceFamily)}</p></td>
+                                                                <td className='px-3 py-2 align-top text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</td>
+                                                                <td className='max-w-xl px-3 py-2 align-top text-ui-text'>{row.safeExcerpt || row.excerpt || 'No safe excerpt available.'}</td>
+                                                                <td className='px-3 py-2 align-top font-mono text-[11px] text-ui-muted'>{row.provenance?.captureId || row.id || 'capture pending'}<p>{row.contentHash || row.provenance?.contentHash || 'hash pending'}</p></td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <EmptyLine text='No evidence rows are attached to this case.' />
+                                    )}
                                 </div>
                             </CollapsiblePanel>
 
@@ -805,6 +814,27 @@ function Metric({ label, value, detail }: { label: string, value: string, detail
             <p className='mt-1 text-xl font-semibold text-ui-text'>{value}</p>
             <p className='mt-1 truncate text-xs text-ui-muted' title={detail}>{detail}</p>
         </div>
+    )
+}
+
+function EvidenceMobileRow({ row }: { row: EvidenceRow }) {
+    const captureId = row.provenance?.captureId || row.id || 'capture pending'
+    const contentHash = row.contentHash || row.provenance?.contentHash || 'hash pending'
+    return (
+        <article className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 text-xs' data-dwm-case-evidence-mobile-row='true'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='truncate text-sm font-semibold text-ui-text'>{row.sourceName || row.provenance?.sourceId || 'source pending'}</p>
+                    <p className='mt-1 truncate text-ui-muted'>{stateLabel(row.sourceFamily)}</p>
+                </div>
+                <span className='shrink-0 rounded-md border border-ui-border bg-ui-canvas px-2 py-1 font-semibold text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</span>
+            </div>
+            <p className='wrap-break-word rounded-md bg-ui-canvas px-3 py-2 leading-5 text-ui-text'>{row.safeExcerpt || row.excerpt || 'No safe excerpt available.'}</p>
+            <div className='grid gap-1 font-mono text-[11px] text-ui-muted'>
+                <span className='truncate'>Capture: {captureId}</span>
+                <span className='truncate'>Hash: {contentHash}</span>
+            </div>
+        </article>
     )
 }
 

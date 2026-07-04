@@ -8,6 +8,10 @@ test('DWM case detail keeps row-heavy evidence behind disclosures', async () => 
     const source = await readFile(path.join(root, 'src/app/dashboard/dwm/cases/[id]/case-detail-client.tsx'), 'utf8')
 
     expect(source).toContain('<CollapsiblePanel title=\'Evidence rows\'')
+    expect(source).toContain('data-dwm-case-evidence-mobile-list')
+    expect(source).toContain('data-dwm-case-evidence-mobile-row')
+    expect(source).toContain('data-dwm-case-evidence-desktop-table')
+    expect(source).toContain('function EvidenceMobileRow')
     expect(source).toContain('<CollapsiblePanel title=\'Audit timeline\'')
     expect(source).toContain('function CollapsiblePanel')
     expect(source).toContain('CaseCommandBar')

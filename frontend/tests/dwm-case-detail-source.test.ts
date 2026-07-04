@@ -7,6 +7,10 @@ const pageSource = readFileSync(new URL('../src/app/dashboard/dwm/cases/[id]/pag
 
 test('DWM case detail exposes webhook delivery traceability', () => {
     assert.match(source, /<CollapsiblePanel title='Evidence rows' action=\{`\$\{evidence\.length\} rows`\}/)
+    assert.match(source, /data-dwm-case-evidence-mobile-list='true'/)
+    assert.match(source, /data-dwm-case-evidence-mobile-row='true'/)
+    assert.match(source, /data-dwm-case-evidence-desktop-table='true'/)
+    assert.match(source, /function EvidenceMobileRow/)
     assert.match(source, /<CollapsiblePanel title='Audit timeline' action=\{`\$\{timeline\.length\} events`\}/)
     assert.match(source, /function CollapsiblePanel/)
     assert.match(source, /sendWebhook/)
