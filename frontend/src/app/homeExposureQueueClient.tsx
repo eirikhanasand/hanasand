@@ -48,7 +48,7 @@ type Props = {
     initialQueue: ExposureQueue
 }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 const REFRESH_MS = 30_000
 
 export default function HomeExposureQueueClient({ initialQueue }: Props) {

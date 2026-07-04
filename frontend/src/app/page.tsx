@@ -428,7 +428,7 @@ async function loadExposureQueue(requestHeaders: Headers): Promise<ExposureQueue
     if (!host) return null
     const proto = requestHeaders.get('x-forwarded-proto') || 'http'
     const target = new URL('/api/dwm/exposure-queue', `${proto}://${host}`)
-    target.searchParams.set('limit', '20')
+    target.searchParams.set('limit', '10')
     target.searchParams.set('offset', '0')
 
     try {
@@ -502,7 +502,7 @@ function emptyExposureQueue(generatedAt: string): ExposureQueue {
         freshness: { latestClaimAt: null, ageMinutes: null, maxLiveAgeMinutes: 60 },
         scheduler: { state: 'due', cadenceSeconds: 300 },
         counts: { visible: 0, needsReview: 0, metadataOnly: 0 },
-        page: { limit: 20, offset: 0, total: 0, nextOffset: null, hasMore: false },
+        page: { limit: 10, offset: 0, total: 0, nextOffset: null, hasMore: false },
         items: [],
     }
 }
