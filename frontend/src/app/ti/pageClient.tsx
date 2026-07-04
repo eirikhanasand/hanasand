@@ -333,7 +333,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                 {renderMobileWorkbar && mobileEvidenceWorkbar ? <div className='border-b border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
                 <div className='grid gap-4 border-b border-ui-border bg-ui-panel p-4 dark:border-ui-border dark:bg-ui-panel'>
                     <div data-ti-desktop-action-first-grid='true' className='grid min-w-0 gap-3 xl:grid-cols-[minmax(260px,0.52fr)_minmax(680px,1.48fr)] xl:items-start 2xl:grid-cols-[minmax(260px,0.5fr)_minmax(680px,1.25fr)_minmax(220px,0.35fr)]'>
-                        <div className='grid min-w-0 content-start gap-4'>
+                        <div className='order-1 grid min-w-0 content-start gap-4 xl:order-none'>
                             <div className='min-w-0'>
                                 <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center'>
                                     <h1 className='min-w-0 max-w-full wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{humanizeSlug(result.query)}</h1>
@@ -351,7 +351,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 ))}
                             </div>
                         </div>
-                        <div className='grid min-w-0 content-start gap-3' data-ti-actor-workspace-rail='true'>
+                        <div className='order-0 grid min-w-0 content-start gap-3 xl:order-none' data-ti-actor-workspace-rail='true'>
                             {selected ? (
                                 <SelectedEvidenceRail
                                     selected={selected}
@@ -373,7 +373,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 />
                             ) : null}
                         </div>
-                        <section data-ti-geo-subordinate='true' className='rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-panel xl:col-start-2 2xl:col-start-auto'>
+                        <section data-ti-geo-subordinate='true' className='order-2 rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-panel xl:order-none xl:col-start-2 2xl:col-start-auto'>
                             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 px-3 py-2'>
                                 <div className='min-w-0'>
                                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Geography</p>
@@ -852,7 +852,7 @@ function SelectedEvidenceRail({
     return (
         <section id='ti-selected-evidence' data-ti-actor-evidence-spotlight='true' className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel'>
             <div className='grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_15rem]'>
-                <div className='min-w-0'>
+                <div className='order-1 min-w-0 lg:order-none'>
                     <div className='flex flex-wrap items-center gap-2'>
                         <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Selected evidence</p>
                         <span className={`rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
@@ -869,7 +869,7 @@ function SelectedEvidenceRail({
                         <EvidenceMetric label='Source rows' value={sourceCount ? String(sourceCount) : 'source needed'} />
                     </div>
                 </div>
-                <div data-ti-selected-action-rail='true' className='grid min-w-0 content-start gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised'>
+                <div data-ti-selected-action-rail='true' className='order-0 grid min-w-0 content-start gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised lg:order-none'>
                     <div className='flex min-w-0 items-center justify-between gap-2 border-b border-ui-border pb-2 dark:border-ui-border'>
                         <div className='min-w-0'>
                             <p className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Action rail</p>
@@ -7075,7 +7075,7 @@ function MobileEvidenceWorkbar({
                         key={item.value}
                         type='button'
                         onClick={() => onKindChange(item.value)}
-                        className={`inline-flex min-h-8 shrink-0 items-center rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${kind === item.value ? 'border-ui-primary bg-ui-primary/10 text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'}`}
+                        className={`inline-flex min-h-8 min-w-11 shrink-0 items-center justify-center rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${kind === item.value ? 'border-ui-primary bg-ui-primary/10 text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'}`}
                     >
                         {item.label}
                     </button>
