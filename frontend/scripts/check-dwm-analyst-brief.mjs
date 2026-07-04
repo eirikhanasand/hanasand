@@ -69,9 +69,9 @@ assert.ok(tabsIndex > briefIndex, 'DWM analyst brief should appear before dense 
 for (const token of [
     'data-dwm-workflow-runbook',
     'data-dwm-workflow-result',
-    'DWM operator workflow',
+    'Monitoring route',
     'Watchlist to case route',
-    'Tune the org watchlist, collect approved sources, rebuild alerts, open a case, and test customer delivery from one path.',
+    'Update the watchlist, run collection, rebuild alerts, open a case, and test delivery from one path.',
     'Org watchlists',
     'Operator command',
     'Save and rebuild alerts',

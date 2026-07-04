@@ -589,7 +589,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             id: 'full_route',
             label: 'Run full route',
             state: !termCount ? 'watchlist needed' : alertCount ? `${alertCount} alerts ready` : captureCount ? `${captureCount} captures ready` : 'source pack ready',
-            detail: 'Enable source packs, collect captures, rebuild alerts, open a case, and dry-run delivery when a webhook is staged.',
+            detail: 'Enable sources, collect captures, rebuild alerts, open a case, and dry-run delivery when a webhook is staged.',
             tone: alertCount ? 'ok' : captureCount ? 'warn' : 'neutral',
             command: 'Run to case',
             busy: busyAction === 'source-case',
@@ -636,9 +636,9 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         <div data-dwm-workflow-runbook className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 text-ui-text'>
             <section className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-primary'>DWM operator workflow</p>
+                    <p className='text-xs font-semibold uppercase text-ui-primary'>Monitoring route</p>
                     <h2 className='mt-1 text-lg font-semibold tracking-normal text-ui-text'>Watchlist to case route</h2>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>Tune the org watchlist, collect approved sources, rebuild alerts, open a case, and test customer delivery from one path.</p>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>Update the watchlist, run collection, rebuild alerts, open a case, and test delivery from one path.</p>
                 </div>
                 {result ? (
                     <p data-dwm-workflow-result className={`max-w-xl rounded-lg border px-3 py-2 text-sm ${result.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>
@@ -651,7 +651,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div className='min-w-0'>
                         <h3 className='text-sm font-semibold text-ui-text'>Next actions</h3>
-                        <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Run one backed step, or use Run to case after watchlist and source context are ready.</p>
+                        <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Run a backed step, or use Run to case after watchlist and source context are ready.</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         {organizationId ? (

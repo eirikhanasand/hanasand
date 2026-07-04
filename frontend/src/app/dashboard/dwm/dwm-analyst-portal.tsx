@@ -311,7 +311,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                             <StatusPill label='Fresh' value={String(freshCount)} tone={freshCount ? 'good' : 'neutral'} className='hidden sm:block' />
                             <StatusPill label='80%+' value={String(highConfidenceCount)} tone={highConfidenceCount ? 'good' : 'neutral'} className='hidden sm:block' />
                             <StatusPill label='Watchlist' value={`${watchTermCount} terms`} tone={watchTermCount ? 'good' : 'warn'} />
-                            <StatusPill label='Webhook' value={webhookState} tone={webhookState === 'Tested' ? 'good' : 'warn'} />
+                            <StatusPill label='Webhook' value={webhookState} tone={webhookReady(webhookState) ? 'good' : 'warn'} />
                             <StatusPill label='Latest run' value={latestRunLabel} tone={operations?.latestRun?.status === 'completed' ? 'good' : 'neutral'} />
                             <StatusPill label='API' value={apiProblemCount ? `${apiProblemCount} issue${apiProblemCount === 1 ? '' : 's'}` : 'Live'} tone={apiProblemCount ? 'warn' : 'good'} className='hidden sm:block' />
                         </div>
@@ -439,15 +439,15 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
             </section>
 
             {selectedAlert ? (
-                <details id='dwm-workflow-actions' className='scroll-mt-24 overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-dwm-selected-workflow-actions-disclosure>
-                    <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                        <span>Workflow setup and route controls</span>
-                        <span className='text-xs font-medium text-ui-muted'>Watchlist, sources, rebuilds, and delivery tests</span>
-                    </summary>
-                    <div className='border-t border-ui-border p-3'>
+                <section id='dwm-workflow-actions' className='scroll-mt-24 overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-dwm-selected-workflow-actions>
+                    <div className='flex flex-col gap-1 border-b border-ui-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
+                        <h2 className='text-sm font-semibold text-ui-text'>Route controls</h2>
+                        <p className='text-xs font-medium text-ui-muted'>Watchlist, source pack, case, and webhook actions</p>
+                    </div>
+                    <div className='p-3'>
                         {workflowActions}
                     </div>
-                </details>
+                </section>
             ) : null}
         </div>
     )
@@ -479,12 +479,12 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
         { label: 'Captures', value: `${captureCount}`, detail: latestRunLabel, tone: captureCount ? 'ready' : 'waiting' },
         { label: 'Matches', value: `${watchlistMatchCount}`, detail: alertCount ? `${alertCount} alerts` : 'watching', tone: alertCount ? 'ready' : 'waiting' },
         { label: 'Cases', value: `${caseCount}`, detail: caseCount ? 'linked' : 'open from alert', tone: caseCount ? 'ready' : alertCount ? 'waiting' : 'blocked' },
-        { label: 'Delivery', value: deliveryCount ? `${deliveryCount}` : webhookState, detail: deliveryCount ? 'attempts' : 'test route', tone: deliveryCount || webhookState === 'Tested' ? 'ready' : 'waiting' },
+        { label: 'Delivery', value: deliveryCount ? `${deliveryCount}` : webhookState, detail: deliveryCount ? 'attempts' : 'test route', tone: deliveryCount || webhookReady(webhookState) ? 'ready' : 'waiting' },
     ] as const
 
     return (
-        <details data-dwm-workflow-snapshot className='border-b border-ui-border bg-ui-raised'>
-            <summary className='flex cursor-pointer list-none flex-col gap-2 px-4 py-3 outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/25 sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+        <section data-dwm-workflow-snapshot className='border-b border-ui-border bg-ui-raised'>
+            <div className='flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
                 <div>
                     <p className='text-[10px] font-semibold uppercase text-ui-primary'>Workflow route</p>
                     <p className='mt-1 text-sm font-semibold text-ui-text'>Watchlist to source, alert, case, and delivery.</p>
@@ -492,10 +492,10 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
                 <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-ui-muted'>
                     {alertCount} alerts · {caseCount} cases · {deliveryCount ? `${deliveryCount} deliveries` : webhookState}
                 </span>
-            </summary>
+            </div>
             <div className='border-t border-ui-border px-4 py-3'>
                 <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
-                    <p className='text-xs leading-5 text-ui-muted'>Open this when diagnosing the full monitoring path. The queue and selected alert remain the primary work surface.</p>
+                    <p className='text-xs leading-5 text-ui-muted'>Use this path when a source match needs to become a customer case and delivery.</p>
                     <a href='#dwm-workflow-actions' className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                         Run path
                     </a>
@@ -515,7 +515,7 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
                     ))}
                 </div>
             </div>
-        </details>
+        </section>
     )
 }
 
@@ -2260,6 +2260,11 @@ function deliverySummaryLabel(rows: DeliveryItem[]) {
         return `${rows.filter(row => row.status === 'failed').length} failed`
     }
     return `${rows.length} attempted`
+}
+
+function webhookReady(label: string) {
+    const normalized = label.toLowerCase()
+    return normalized.includes('delivered') || normalized.includes('tested') || normalized.includes('attempted')
 }
 
 function retryStateLabel(delivery: DeliveryItem) {
