@@ -697,7 +697,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         {webhookConfigured ? 'Delivery actions use the staged endpoint for dry-runs and queued alert sends.' : 'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.'}
                     </p>
                 </div>
-                {lastRoute ? <RouteRunSummary route={lastRoute} /> : null}
+                {lastRoute ? <RouteRunSummary route={lastRoute} organizationId={organizationId} /> : null}
             </section>
 
             <div className='grid gap-4 xl:grid-cols-2 2xl:grid-cols-[1.05fr_0.95fr_0.95fr]'>
@@ -902,7 +902,8 @@ function RouteQueueCard({ action }: { action: RouteQueueAction }) {
     )
 }
 
-function RouteRunSummary({ route }: { route: WorkflowRouteSummary }) {
+function RouteRunSummary({ route, organizationId }: { route: WorkflowRouteSummary, organizationId?: string }) {
+    const destinationHref = organizationId ? organizationDestinationPath(organizationId, route.alertId, route.caseId) : undefined
     const cells = [
         { label: 'Watch terms', value: String(route.watchTerms) },
         { label: 'Sources', value: route.sourceCount === undefined ? 'unchanged' : String(route.sourceCount) },
@@ -924,6 +925,11 @@ function RouteRunSummary({ route }: { route: WorkflowRouteSummary }) {
                             Open case
                         </Link>
                     ) : null}
+                    {destinationHref ? (
+                        <Link href={destinationHref} className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                            Open destinations
+                        </Link>
+                    ) : null}
                     {route.alertId ? <span className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 font-mono text-[11px] text-ui-muted'>{route.alertId}</span> : null}
                 </div>
             </div>
@@ -938,6 +944,13 @@ function RouteRunSummary({ route }: { route: WorkflowRouteSummary }) {
             {route.deliveryState ? <p className='mt-2 text-xs leading-5 text-ui-subtle'>{route.deliveryState}</p> : null}
         </section>
     )
+}
+
+function organizationDestinationPath(organizationId: string, alertId?: string, caseId?: string) {
+    const params = new URLSearchParams({ organizationId, focus: 'destinations' })
+    if (alertId) params.set('alertId', alertId)
+    if (caseId) params.set('caseId', caseId)
+    return `/organizations?${params.toString()}`
 }
 
 function RouteStateCard({ label, value, detail, tone }: { label: string, value: string, detail: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
