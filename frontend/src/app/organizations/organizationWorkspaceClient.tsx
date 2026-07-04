@@ -2741,10 +2741,9 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         ]
     }
     if (subject.type === 'destination') {
-        const destinationId = encodeURIComponent(subject.id)
         return [
             { label: 'Destinations', href: '#destinations' },
-            { label: 'Delivery activity', href: `#destination-${destinationId}` },
+            { label: 'Delivery activity', href: '#delivery-history' },
         ]
     }
     if (subject.type === 'alert') {
