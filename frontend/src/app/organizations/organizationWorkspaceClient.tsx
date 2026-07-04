@@ -1063,7 +1063,7 @@ export default function OrganizationWorkspaceClient() {
             </div>
         </details>
     ) : (
-        <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-create-primary='true'>
+        <section id='org-create-primary' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-create-primary='true'>
             <h2 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
                 <Building2 className='h-4 w-4 text-ui-primary' />
                 Create organization
@@ -1423,27 +1423,6 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
 }
 
 function EmptyWorkspacePreview() {
-    const setupRails = [
-        {
-            id: 'watchlists',
-            icon: <BellRing className='h-4 w-4' />,
-            title: 'Shared watchlists',
-            detail: 'Add the company, domain, supplier, actor, or keyword terms that should create scoped DWM alerts.',
-        },
-        {
-            id: 'destinations',
-            icon: <Webhook className='h-4 w-4' />,
-            title: 'Webhook destinations',
-            detail: 'Save a redacted Discord or webhook route, dry-test it, then replay customer notifications from alert history.',
-        },
-        {
-            id: 'audit',
-            icon: <CheckCircle2 className='h-4 w-4' />,
-            title: 'Activity',
-            detail: 'Track invites, role changes, watchlist edits, delivery tests, and case handoffs in one activity rail.',
-        },
-    ]
-
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-empty-focused-create='true'>
             <div className='flex min-w-0 items-start gap-3'>
@@ -1451,27 +1430,11 @@ function EmptyWorkspacePreview() {
                     <Building2 className='h-5 w-5' />
                 </div>
                 <div className='min-w-0'>
-                    <h2 className='text-xl font-semibold text-ui-text dark:text-ui-text'>Set up customer monitoring</h2>
+                    <h2 className='text-xl font-semibold text-ui-text dark:text-ui-text'>Create an organization to start monitoring</h2>
                     <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-                        Create an organization, seed the first watchlist term, then attach delivery and review activity from the same workspace.
+                        Use the form on the left to create the workspace and seed the first shared watchlist term. The member, destination, alert, and activity controls appear after the organization exists.
                     </p>
-                    <ol className='mt-4 grid gap-2 text-sm text-ui-muted dark:text-ui-muted'>
-                        {setupRails.map((step, index) => (
-                            <li key={step.id} className='grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas'>
-                                <span className='flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ui-primary/10 text-xs font-bold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{index + 1}</span>
-                                <span className='min-w-0'>
-                                    <span className='flex items-center gap-2 font-semibold text-ui-text dark:text-ui-text'>{step.icon}{step.title}</span>
-                                    <span className='mt-0.5 block text-xs leading-5'>{step.detail}</span>
-                                </span>
-                            </li>
-                        ))}
-                    </ol>
-                    <div className='mt-4 flex flex-wrap gap-2 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Org</span>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Members</span>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Watchlists</span>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Destinations</span>
-                    </div>
+                    <a href='#org-create-primary' className='sr-only'>Create organization form</a>
                 </div>
             </div>
         </section>
