@@ -82,7 +82,7 @@ export default async function TiAdminPage() {
             </div>
 
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-                <div className='border-b border-ui-border bg-ui-raised p-4 text-white'>
+                <div className='border-b border-ui-border bg-ui-raised p-4 text-ui-text'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <div>
                             <h2 className='text-base font-semibold'>Next actions</h2>
@@ -96,7 +96,7 @@ export default async function TiAdminPage() {
                     </div>
                 </div>
                 <div className='overflow-x-auto'>
-                    <table className='min-w-full divide-y divide-[#1f314a] text-sm'>
+                    <table className='min-w-full divide-y divide-ui-border text-sm'>
                         <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
                             <tr>
                                 <th className='px-4 py-3'>Priority</th>
@@ -106,7 +106,7 @@ export default async function TiAdminPage() {
                                 <th className='px-4 py-3 text-right'>Open</th>
                             </tr>
                         </thead>
-                        <tbody className='divide-y divide-[#1f314a] bg-ui-panel'>
+                        <tbody className='divide-y divide-ui-border bg-ui-panel'>
                             {actionItems.map(item => (
                                 <tr key={`${item.kind}-${item.title}`} className='hover:bg-ui-panel'>
                                     <td className='px-4 py-4'><StatusPill label={item.priority} tone={item.tone} /></td>
@@ -135,7 +135,7 @@ export default async function TiAdminPage() {
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                     <PanelTitle title='Sources being checked' actionHref='/dashboard/ti/sources' actionLabel='Sources' />
                     <div className='overflow-x-auto'>
-                        <table className='min-w-full divide-y divide-[#1f314a] text-sm'>
+                        <table className='min-w-full divide-y divide-ui-border text-sm'>
                             <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
                                 <tr>
                                     <th className='px-4 py-3'>Source</th>
@@ -146,7 +146,7 @@ export default async function TiAdminPage() {
                                     <th className='px-4 py-3'>Matches</th>
                                 </tr>
                             </thead>
-                            <tbody className='divide-y divide-[#1f314a] bg-ui-panel'>
+                            <tbody className='divide-y divide-ui-border bg-ui-panel'>
                                 {[...sources].sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime()).map(source => {
                                     const stale = staleSources.includes(source)
                                     const sourceRuns = runs.filter(run => run.sourceId === source.id)
@@ -185,7 +185,7 @@ export default async function TiAdminPage() {
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                     <PanelTitle title='Monitored entities' actionHref='/dashboard/ti/domains' actionLabel='Entities' />
                     <div className='overflow-x-auto'>
-                        <table className='min-w-full divide-y divide-[#1f314a] text-sm'>
+                        <table className='min-w-full divide-y divide-ui-border text-sm'>
                             <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
                                 <tr>
                                     <th className='px-4 py-3'>Entity</th>
@@ -195,7 +195,7 @@ export default async function TiAdminPage() {
                                     <th className='px-4 py-3'>Sources</th>
                                 </tr>
                             </thead>
-                            <tbody className='divide-y divide-[#1f314a] bg-ui-panel'>
+                            <tbody className='divide-y divide-ui-border bg-ui-panel'>
                                 {domains.map(domain => (
                                     <tr key={domain.domain} className='hover:bg-ui-panel'>
                                         <td className='px-4 py-4'>
@@ -216,7 +216,7 @@ export default async function TiAdminPage() {
                 <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                     <PanelTitle title='Recent evidence' actionHref='/dashboard/ti/sources' actionLabel='Evidence' />
                     <div className='overflow-x-auto'>
-                        <table className='min-w-full divide-y divide-[#1f314a] text-sm'>
+                        <table className='min-w-full divide-y divide-ui-border text-sm'>
                             <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
                                 <tr>
                                     <th className='px-4 py-3'>Capture</th>
@@ -225,7 +225,7 @@ export default async function TiAdminPage() {
                                     <th className='px-4 py-3'>Captured</th>
                                 </tr>
                             </thead>
-                            <tbody className='divide-y divide-[#1f314a] bg-ui-panel'>
+                            <tbody className='divide-y divide-ui-border bg-ui-panel'>
                                 {captures.map(capture => (
                                     <tr key={capture.id} className='hover:bg-ui-panel'>
                                         <td className='px-4 py-4'>
@@ -251,7 +251,7 @@ export default async function TiAdminPage() {
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <PanelTitle title='Actors being enriched' actionHref='/dashboard/ti/enrichment' actionLabel='Enrichment' />
                 <div className='overflow-x-auto'>
-                    <table className='min-w-full divide-y divide-[#1f314a] text-sm'>
+                    <table className='min-w-full divide-y divide-ui-border text-sm'>
                         <thead className='bg-ui-canvas text-left text-xs font-semibold uppercase text-ui-muted'>
                             <tr>
                                 <th className='px-4 py-3'>Actor</th>
@@ -262,7 +262,7 @@ export default async function TiAdminPage() {
                                 <th className='px-4 py-3'>Next refresh</th>
                             </tr>
                         </thead>
-                        <tbody className='divide-y divide-[#1f314a] bg-ui-panel'>
+                        <tbody className='divide-y divide-ui-border bg-ui-panel'>
                             {[...enrichment.updatedActors, ...enrichment.queuedActors].slice(0, 8).map(actor => (
                                 <tr key={`${actor.id}-${actor.status}`} className='hover:bg-ui-panel'>
                                     <td className='px-4 py-4'>
