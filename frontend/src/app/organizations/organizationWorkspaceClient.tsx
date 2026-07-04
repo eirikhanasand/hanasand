@@ -1233,29 +1233,27 @@ export default function OrganizationWorkspaceClient() {
                                         />
                                         <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
                                     </div>
-                                    <div className='grid min-w-0 content-start gap-5'>
+                                    <div className='grid min-w-0 content-start gap-5' data-org-operator-rail='true'>
+                                        <div className='xl:sticky xl:top-24 xl:z-10' data-org-activity-sticky='true'>
+                                            <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} />
+                                        </div>
                                         <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
                                         <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
                                         <DestinationPanel destinations={bundle.webhooks} deliveries={bundle.deliveries} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={selectActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} />
                                     </div>
                                 </section>
 
-                                <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
-                                    <div className='grid min-w-0 gap-5'>
-                                        <DeliveryHistoryPanel
-                                            organization={selectedOrganization}
-                                            deliveries={bundle.deliveries}
-                                            selectedSubject={selectedActivitySubject}
-                                            canManage={canManage}
-                                            busy={busy}
-                                            rowMessages={rowMessages}
-                                            onReplay={delivery => void replayDelivery(delivery)}
-                                        />
-                                        <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
-                                    </div>
-                                    <div className='min-w-0'>
-                                        <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={selectActivitySubject} />
-                                    </div>
+                                <section className='grid min-w-0 gap-5'>
+                                    <DeliveryHistoryPanel
+                                        organization={selectedOrganization}
+                                        deliveries={bundle.deliveries}
+                                        selectedSubject={selectedActivitySubject}
+                                        canManage={canManage}
+                                        busy={busy}
+                                        rowMessages={rowMessages}
+                                        onReplay={delivery => void replayDelivery(delivery)}
+                                    />
+                                    <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
                                 </section>
                             </div>
                         ) : (
