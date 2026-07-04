@@ -4616,7 +4616,7 @@ function actionPayloadSummaryLines(
         return [
             `${actionability.watchlistRelevance.terms.length} watchlist term${actionability.watchlistRelevance.terms.length === 1 ? '' : 's'}`,
             `${actionability.watchlistRelevance.matches.length} org match${actionability.watchlistRelevance.matches.length === 1 ? '' : 'es'}`,
-            `${payload.blockedBy.length} blocker${payload.blockedBy.length === 1 ? '' : 's'}`,
+            `${payload.blockedBy.length} follow-up${payload.blockedBy.length === 1 ? '' : 's'}`,
         ]
     }
     if (payload.kind === 'case_handoff') {
@@ -4624,14 +4624,14 @@ function actionPayloadSummaryLines(
             `${actionability.caseReviewIntake.summary.total} case candidate${actionability.caseReviewIntake.summary.total === 1 ? '' : 's'}`,
             `${actionability.caseReviewIntake.summary.alerts} alert${actionability.caseReviewIntake.summary.alerts === 1 ? '' : 's'}`,
             `${actionability.caseReviewIntake.summary.captures} capture${actionability.caseReviewIntake.summary.captures === 1 ? '' : 's'}`,
-            `${payload.blockedBy.length} blocker${payload.blockedBy.length === 1 ? '' : 's'}`,
+            `${payload.blockedBy.length} follow-up${payload.blockedBy.length === 1 ? '' : 's'}`,
         ]
     }
     if (payload.kind === 'webhook_delivery') {
         return [
             `${actionability.readiness.backedIds.webhookDestinationIds.length} destination${actionability.readiness.backedIds.webhookDestinationIds.length === 1 ? '' : 's'}`,
             `${actionability.readiness.backedIds.captureIds.length} capture${actionability.readiness.backedIds.captureIds.length === 1 ? '' : 's'}`,
-            `${payload.blockedBy.length} blocker${payload.blockedBy.length === 1 ? '' : 's'}`,
+            `${payload.blockedBy.length} follow-up${payload.blockedBy.length === 1 ? '' : 's'}`,
         ]
     }
     if (payload.kind === 'analyst_handoff_bundle') {
@@ -4640,14 +4640,14 @@ function actionPayloadSummaryLines(
             `${actionability.alertGenerationReadiness.candidateCount} alert candidate${actionability.alertGenerationReadiness.candidateCount === 1 ? '' : 's'}`,
             actionability.alertGenerationReadiness.generationEvidenceWindowReady ? 'evidence window ready' : 'evidence window pending',
             `${actionability.readiness.backedIds.alertIds.length} alert${actionability.readiness.backedIds.alertIds.length === 1 ? '' : 's'}`,
-            `${payload.blockedBy.length} blocker${payload.blockedBy.length === 1 ? '' : 's'}`,
+            `${payload.blockedBy.length} follow-up${payload.blockedBy.length === 1 ? '' : 's'}`,
         ]
     }
     return [
         `${actionability.sourceEnrichmentIntake.summary.total} intake item${actionability.sourceEnrichmentIntake.summary.total === 1 ? '' : 's'}`,
         `${actionability.sourceEnrichmentIntake.summary.sourceRequests} source request${actionability.sourceEnrichmentIntake.summary.sourceRequests === 1 ? '' : 's'}`,
         `${actionability.sourceEnrichmentIntake.summary.captures} capture${actionability.sourceEnrichmentIntake.summary.captures === 1 ? '' : 's'}`,
-        `${payload.blockedBy.length} blocker${payload.blockedBy.length === 1 ? '' : 's'}`,
+        `${payload.blockedBy.length} follow-up${payload.blockedBy.length === 1 ? '' : 's'}`,
     ]
 }
 
@@ -4693,7 +4693,7 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
                     ))}
                 </div>
             ) : (
-                <p className='mt-3 text-xs leading-5 text-ui-success'>No blocking workflow issues are open.</p>
+                <p className='mt-3 text-xs leading-5 text-ui-success'>No workflow follow-ups are open.</p>
             )}
         </div>
     )
