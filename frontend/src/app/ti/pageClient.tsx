@@ -14,7 +14,7 @@ import { useRouter } from 'next/navigation'
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
 
-const TI_WORKBENCH_PREVIEW_ROWS = 5
+const TI_WORKBENCH_PREVIEW_ROWS = 3
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const router = useRouter()
@@ -6417,7 +6417,7 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
             <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(draft.route || draft.endpoint)}</p>
             {draft.sourceRows.length ? (
                 <div data-ti-selected-case-sources='true' className='mt-2 grid min-w-0 gap-2'>
-                    {draft.sourceRows.slice(0, 3).map(row => (
+                    {draft.sourceRows.slice(0, 2).map(row => (
                         <div key={`${row.sourceId ?? row.sourceName}:${row.provenance}:${row.captureId ?? 'missing'}`} className='rounded-md border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-panel'>
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
@@ -6436,7 +6436,7 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                 </div>
             ) : null}
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
-                {draft.watchTerms.slice(0, 4).map(term => (
+                {draft.watchTerms.slice(0, 3).map(term => (
                     <span key={term} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>{term}</span>
                 ))}
                 {!draft.watchTerms.length ? <span className='text-[11px] text-ui-muted dark:text-ui-muted'>Add watch term.</span> : null}
@@ -6484,7 +6484,7 @@ function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; o
                 </div>
                 {items.length ? (
                     <div className='grid gap-2'>
-                        {items.slice(0, 4).map(item => (
+                        {items.slice(0, 2).map(item => (
                             <div key={item.id} className='rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-panel'>
                                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                     <div className='min-w-0'>
