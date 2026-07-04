@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, X, Pencil } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { Activity, Gauge, Plus, ShieldAlert, X, Pencil } from 'lucide-react'
 import ErrorNotice from '@/components/error/errorNotice'
 import config from '@/config'
 import getBlocklist from '@/utils/traffic/getBlocklist'
@@ -103,75 +103,139 @@ export default function TrafficDashboard({
     }
 
     const domainsSortedByTps = [...domains].sort((a, b) => b.tps - a.tps)
+    const hottestDomain = domainsSortedByTps[0]
+    const hottestRoute = metrics[0]
+    const busiestIp = IPs[0]
+    const busiestUa = UAs[0]
+    const latestLog = logs[0]
+    const needsBlocklistReview = blocklist.length === 0 && (busiestIp || busiestUa)
+    const primaryTitle = needsBlocklistReview
+        ? 'Review access controls'
+        : hottestRoute
+            ? `Watch ${hottestRoute.value}`
+            : 'Traffic stream is listening'
+    const primaryDetail = needsBlocklistReview
+        ? 'No access-control rules are active. Review the busiest IP and user-agent before adding a block rule.'
+        : hottestRoute
+            ? `${hottestRoute.hits_today} hits today, ${hottestRoute.hits_last_week} over the last week.`
+            : 'Route, IP, user-agent, and request evidence appears here as production ingress arrives.'
 
     return (
         <div className='grid h-full gap-4'>
             <ErrorNotice compact variant='info' message={message as string | null} />
 
-            {/* Metrics */}
-            <div className='grid gap-3 overflow-hidden sm:grid-cols-2 md:max-h-60 xl:grid-cols-5'>
-                {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
-                    key={id}
-                    name={domain.name}
-                    tps={domain.tps} />
-                )}
-            </div>
-
-            <SectionTitle title='Most requested routes' />
-            <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
-                {metrics.map((m, i) => (
-                    <MetricCard key={i} title={m.value} rows={[
-                        ['Today', m.hits_today],
-                        ['Last week', m.hits_last_week],
-                        ['Total', m.hits_total],
-                    ]} />
-                ))}
-                {!metrics.length && <EmptyState text='Route metrics update as requests hit the selected domain.' />}
-            </div>
-
-            <SectionTitle title='Top IPs' />
-            <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
-                {IPs.map((ipMetric, i) => (
-                    <div key={i} className='flex max-h-[62vh] flex-col gap-2 overflow-y-auto rounded-md border border-ui-border bg-ui-panel p-4 text-sm shadow-sm'>
-                        <h2 className='break-all text-sm font-semibold text-ui-text'>{ipMetric.ip}</h2>
-                        <span className='text-xs leading-5 text-ui-muted'>Most common user agent: {ipMetric.most_common_user_agent ?? 'metering'}</span>
-                        <div className='mt-2'>
-                            <h3 className='text-xs font-semibold text-ui-muted'>Requested paths</h3>
-                            <ul className='mt-1 grid gap-1 text-xs text-ui-muted'>
-                                {(Array.isArray(ipMetric.top_paths) ? ipMetric.top_paths : []).map((path, idx) => (
-                                    <li key={idx} className='flex min-w-0 justify-between gap-2'>
-                                        <span className='min-w-0 truncate'>{path.path}</span>
-                                        <span className='shrink-0 text-ui-muted'>{path.hits}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
+            <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_auto]' data-traffic-primary-flow>
+                <div className='min-w-0'>
+                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>Recommended next</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{blocklist.length} access rules</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{logs.length} recent rows</span>
                     </div>
-                ))}
-                {!IPs.length && <EmptyState text='IP activity streams here as edge requests arrive.' />}
-            </div>
+                    <h2 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h2>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
+                </div>
+                <button
+                    type='button'
+                    className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
+                    onClick={() => setShowBlockModal(true)}
+                    data-traffic-primary-action
+                >
+                    <ShieldAlert className='h-4 w-4' />
+                    Add block rule
+                </button>
+            </section>
 
-            <SectionTitle title='Top user agents' />
-            <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
-                {UAs.map((ua, i) => (
-                    <div key={i} className='flex max-h-[62vh] flex-col gap-2 overflow-y-auto rounded-md border border-ui-border bg-ui-panel p-4 text-sm shadow-sm'>
-                        <h2 className='break-all text-xs font-semibold leading-5 text-ui-text'>{ua.user_agent}</h2>
-                        <span className='text-xs text-ui-muted'>Most common IP: {ua.most_common_ip ?? 'metering'}</span>
-                        <div className='mt-2'>
-                            <h3 className='text-xs font-semibold text-ui-muted'>Requested paths</h3>
-                            <ul className='mt-1 grid gap-1 text-xs text-ui-muted'>
-                                {(Array.isArray(ua.top_paths) ? ua.top_paths : []).map((path, idx) => (
-                                    <li key={idx} className='flex min-w-0 justify-between gap-2'>
-                                        <span className='min-w-0 truncate'>{path.path}</span>
-                                        <span className='shrink-0 text-ui-muted'>{path.hits}</span>
-                                    </li>
-                                ))}
-                            </ul>
+            <section className='grid gap-3 md:grid-cols-3' data-traffic-triage-strip>
+                <TriageCard icon={<Gauge className='h-4 w-4' />} label='Fastest signal' value={hottestDomain ? `${hottestDomain.name} · ${hottestDomain.tps} TPS` : 'TPS metering'} detail='Open live throughput only when the ingress rate needs inspection.' />
+                <TriageCard icon={<Activity className='h-4 w-4' />} label='Noisiest route' value={hottestRoute?.value || 'Routes metering'} detail={hottestRoute ? `${hottestRoute.hits_total} total hits` : 'Route demand updates as traffic arrives.'} />
+                <TriageCard icon={<ShieldAlert className='h-4 w-4' />} label='Access-control lead' value={busiestIp?.ip || busiestUa?.most_common_ip || 'No lead yet'} detail={latestLog ? `${latestLog.metric}: ${latestLog.value}` : 'Recent request evidence will identify the next rule candidate.'} />
+            </section>
+
+            <details className='rounded-lg border border-ui-border bg-ui-panel shadow-sm' data-traffic-throughput-disclosure>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
+                    <span>Live throughput</span>
+                    <span className='text-xs font-medium text-ui-muted'>{domainsSortedByTps.length ? `${domainsSortedByTps.length} domains` : 'Waiting for TPS'}</span>
+                </summary>
+                <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-5'>
+                    {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
+                        key={id}
+                        name={domain.name}
+                        tps={domain.tps} />
+                    )}
+                    {!domainsSortedByTps.length && <EmptyState text='Throughput meters appear as domains report traffic.' />}
+                </div>
+            </details>
+
+            <details className='rounded-lg border border-ui-border bg-ui-panel shadow-sm' data-traffic-route-disclosure open>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
+                    <span>Most requested routes</span>
+                    <span className='text-xs font-medium text-ui-muted'>{metrics.length ? `${metrics.length} route metrics` : 'No route metrics yet'}</span>
+                </summary>
+                <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-5'>
+                    {metrics.map((m, i) => (
+                        <MetricCard key={i} title={m.value} rows={[
+                            ['Today', m.hits_today],
+                            ['Last week', m.hits_last_week],
+                            ['Total', m.hits_total],
+                        ]} />
+                    ))}
+                    {!metrics.length && <EmptyState text='Route metrics update as requests hit the selected domain.' />}
+                </div>
+            </details>
+
+            <details className='rounded-lg border border-ui-border bg-ui-panel shadow-sm' data-traffic-ip-disclosure>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
+                    <span>Top IPs</span>
+                    <span className='text-xs font-medium text-ui-muted'>{IPs.length ? `${IPs.length} sources` : 'No IP activity yet'}</span>
+                </summary>
+                <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-5'>
+                    {IPs.map((ipMetric, i) => (
+                        <div key={i} className='flex max-h-[62vh] flex-col gap-2 overflow-y-auto rounded-md border border-ui-border bg-ui-panel p-4 text-sm shadow-sm'>
+                            <h2 className='break-all text-sm font-semibold text-ui-text'>{ipMetric.ip}</h2>
+                            <span className='text-xs leading-5 text-ui-muted'>Most common user agent: {ipMetric.most_common_user_agent ?? 'metering'}</span>
+                            <div className='mt-2'>
+                                <h3 className='text-xs font-semibold text-ui-muted'>Requested paths</h3>
+                                <ul className='mt-1 grid gap-1 text-xs text-ui-muted'>
+                                    {(Array.isArray(ipMetric.top_paths) ? ipMetric.top_paths : []).map((path, idx) => (
+                                        <li key={idx} className='flex min-w-0 justify-between gap-2'>
+                                            <span className='min-w-0 truncate'>{path.path}</span>
+                                            <span className='shrink-0 text-ui-muted'>{path.hits}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                         </div>
-                    </div>
-                ))}
-                {!UAs.length && <EmptyState text='User-agent activity streams here as edge requests arrive.' />}
-            </div>
+                    ))}
+                    {!IPs.length && <EmptyState text='IP activity streams here as edge requests arrive.' />}
+                </div>
+            </details>
+
+            <details className='rounded-lg border border-ui-border bg-ui-panel shadow-sm' data-traffic-user-agent-disclosure>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
+                    <span>Top user agents</span>
+                    <span className='text-xs font-medium text-ui-muted'>{UAs.length ? `${UAs.length} signatures` : 'No user-agent activity yet'}</span>
+                </summary>
+                <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-5'>
+                    {UAs.map((ua, i) => (
+                        <div key={i} className='flex max-h-[62vh] flex-col gap-2 overflow-y-auto rounded-md border border-ui-border bg-ui-panel p-4 text-sm shadow-sm'>
+                            <h2 className='break-all text-xs font-semibold leading-5 text-ui-text'>{ua.user_agent}</h2>
+                            <span className='text-xs text-ui-muted'>Most common IP: {ua.most_common_ip ?? 'metering'}</span>
+                            <div className='mt-2'>
+                                <h3 className='text-xs font-semibold text-ui-muted'>Requested paths</h3>
+                                <ul className='mt-1 grid gap-1 text-xs text-ui-muted'>
+                                    {(Array.isArray(ua.top_paths) ? ua.top_paths : []).map((path, idx) => (
+                                        <li key={idx} className='flex min-w-0 justify-between gap-2'>
+                                            <span className='min-w-0 truncate'>{path.path}</span>
+                                            <span className='shrink-0 text-ui-muted'>{path.hits}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    ))}
+                    {!UAs.length && <EmptyState text='User-agent activity streams here as edge requests arrive.' />}
+                </div>
+            </details>
 
             <SectionTitle title='Blocklist and recent activity' />
             <div className='grid h-full gap-4 xl:grid-cols-2'>
@@ -220,9 +284,12 @@ export default function TrafficDashboard({
                 </div>
 
                 {/* Recent Activity */}
-                <div className={commonListStyle}>
-                    <h1 className='text-sm font-semibold text-ui-text'>Recent requests</h1>
-                    <div className='overflow-x-auto'>
+                <details className={`${commonListStyle} p-0`} data-traffic-request-log-disclosure>
+                    <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
+                        <span>Recent requests</span>
+                        <span className='text-xs font-medium text-ui-muted'>{logs.length ? `${logs.length} rows` : 'Waiting for requests'}</span>
+                    </summary>
+                    <div className='overflow-x-auto border-t border-ui-border p-4'>
                         <table className='w-full min-w-[42rem] overflow-hidden text-left text-sm'>
                             <thead className='w-full'>
                                 <tr className='border-b border-ui-border text-xs font-semibold text-ui-muted'>
@@ -247,7 +314,7 @@ export default function TrafficDashboard({
                             </tbody>
                         </table>
                     </div>
-                </div>
+                </details>
             </div>
 
             {/* Blocklist Modal */}
@@ -311,6 +378,19 @@ function MetricCard({ title, rows }: { title: string, rows: Array<[string, numbe
             {rows.map(([label, value]) => (
                 <span key={label} className='text-xs text-ui-muted'>{label}: {value}</span>
             ))}
+        </div>
+    )
+}
+
+function TriageCard({ icon, label, value, detail }: { icon: ReactNode, label: string, value: string, detail: string }) {
+    return (
+        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm'>
+            <div className='flex items-center gap-2 text-ui-primary'>
+                {icon}
+                <p className='text-[10px] font-semibold uppercase'>{label}</p>
+            </div>
+            <p className='mt-2 truncate text-sm font-semibold text-ui-text'>{value}</p>
+            <p className='mt-1 line-clamp-2 min-h-10 text-xs leading-5 text-ui-muted'>{detail}</p>
         </div>
     )
 }
