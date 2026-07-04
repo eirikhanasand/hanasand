@@ -413,7 +413,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                         <WorkflowStrip detail={state.detail} exportPayload={state.exportPayload} />
 
                         <section className='grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]'>
-                            <Panel title='Evidence' action={`${evidence.length} rows`}>
+                            <CollapsiblePanel title='Evidence rows' action={`${evidence.length} rows`} defaultOpen={false}>
                                 <div className='overflow-x-auto rounded-lg border border-ui-border'>
                                     <table className='w-full min-w-[760px] text-left text-xs'>
                                         <thead className='bg-ui-canvas text-ui-muted'>
@@ -438,9 +438,9 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                         </tbody>
                                     </table>
                                 </div>
-                            </Panel>
+                            </CollapsiblePanel>
 
-                            <Panel title='Audit timeline' action={`${timeline.length} events`}>
+                            <CollapsiblePanel title='Audit timeline' action={`${timeline.length} events`} defaultOpen={false}>
                                 <div className='max-h-[420px] overflow-y-auto pr-1'>
                                     <div className='grid gap-2'>
                                         {timeline.length ? timeline.map((row, index) => (
@@ -448,7 +448,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                         )) : <EmptyLine text='No workflow events have been recorded yet.' />}
                                     </div>
                                 </div>
-                            </Panel>
+                            </CollapsiblePanel>
                         </section>
                     </section>
 
@@ -667,6 +667,26 @@ function Panel({ title, action, children }: { title: string, action?: string, ch
             </div>
             {children}
         </section>
+    )
+}
+
+function CollapsiblePanel({ title, action, children, defaultOpen = false }: { title: string, action?: string, children: ReactNode, defaultOpen?: boolean }) {
+    return (
+        <details className='group rounded-lg border border-ui-border bg-ui-panel' open={defaultOpen}>
+            <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 marker:hidden'>
+                <div className='min-w-0'>
+                    <h2 className='text-sm font-semibold text-ui-text'>{title}</h2>
+                    <p className='mt-1 text-xs text-ui-muted group-open:hidden'>Expand to inspect the attached rows.</p>
+                </div>
+                <div className='flex shrink-0 items-center gap-2'>
+                    {action ? <span className='rounded-full border border-ui-border bg-ui-canvas px-2 py-0.5 text-[10px] font-semibold uppercase text-ui-primary'>{action}</span> : null}
+                    <span className='grid h-7 w-7 place-items-center rounded-lg border border-ui-border bg-ui-canvas text-xs font-semibold text-ui-muted group-open:rotate-45'>+</span>
+                </div>
+            </summary>
+            <div className='border-t border-ui-border p-3'>
+                {children}
+            </div>
+        </details>
     )
 }
 
