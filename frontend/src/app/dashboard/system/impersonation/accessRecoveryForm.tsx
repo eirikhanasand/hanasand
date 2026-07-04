@@ -85,10 +85,10 @@ type InspectionUserMember = NonNullable<InspectionPayload['members']>[number]
 type InspectionOrganizationMembership = NonNullable<InspectionPayload['memberships']>[number]
 type InspectionMember = InspectionUserMember | InspectionOrganizationMembership
 
-const inputClass = 'h-9 min-w-0 rounded-md border border-[#27364f] bg-[#101827] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#7b8494] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
-const textAreaClass = 'min-h-20 rounded-md border border-[#27364f] bg-[#101827] px-3 py-2 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#7b8494] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
-const primaryButton = 'h-9 rounded-md bg-[#315bd8] px-3 text-sm font-semibold text-white transition hover:bg-[#244bbf] disabled:cursor-not-allowed disabled:opacity-55'
-const secondaryButton = 'h-9 rounded-md border border-[#31466b] bg-[#111827] px-3 text-sm font-semibold text-[#dbe7ff] transition hover:bg-[#172033] disabled:cursor-not-allowed disabled:opacity-55'
+const inputClass = 'h-9 min-w-0 rounded-md border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+const textAreaClass = 'min-h-20 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+const primaryButton = 'h-9 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55'
+const secondaryButton = 'h-9 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55'
 const operationTabs: Array<{ id: SupportOperation, label: string, detail: string }> = [
     { id: 'inspect', label: 'Inspect', detail: 'Members, invites, audit' },
     { id: 'impersonation', label: 'Session', detail: 'Start or end scoped access' },
@@ -100,16 +100,16 @@ const operationTabs: Array<{ id: SupportOperation, label: string, detail: string
 function Message({ value, tone = 'neutral' }: { value: string, tone?: 'neutral' | 'error' | 'success' }) {
     if (!value) return null
     const toneClass = tone === 'error'
-        ? 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
+        ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
         : tone === 'success'
-            ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'
-            : 'border-[#27364f] bg-[#0b121e] text-[#aab7cc]'
+            ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
+            : 'border-ui-border bg-ui-canvas text-ui-muted'
     return <p className={`rounded-md border px-3 py-2 text-sm ${toneClass}`}>{value}</p>
 }
 
 function CopyBlock({ value }: { value?: string }) {
     if (!value) return null
-    return <pre className='max-h-36 overflow-auto rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-xs leading-5 text-[#dbe7ff]'>{value}</pre>
+    return <pre className='max-h-36 overflow-auto rounded-md border border-ui-border bg-ui-canvas p-3 text-xs leading-5 text-ui-text'>{value}</pre>
 }
 
 function isOrganizationMembership(member: InspectionMember): member is InspectionOrganizationMembership {
@@ -141,11 +141,11 @@ function OperationTab({
         <button
             type='button'
             aria-pressed={active}
-            className={`rounded-md border px-3 py-2 text-left transition ${active ? 'border-[#b8c5ff] bg-[#122449] text-[#9db8ff]' : 'border-[#26344d] bg-[#0b121e] text-[#aab7cc] hover:bg-[#162033]'}`}
+            className={`rounded-md border px-3 py-2 text-left transition ${active ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-canvas text-ui-muted hover:bg-ui-raised'}`}
             onClick={onClick}
         >
             <span className='block text-sm font-semibold'>{label}</span>
-            <span className='mt-0.5 block text-xs text-[#8fa0ba]'>{detail}</span>
+            <span className='mt-0.5 block text-xs text-ui-muted'>{detail}</span>
         </button>
     )
 }
@@ -383,8 +383,8 @@ export default function AccessRecoveryForm() {
 
             {operation === 'inspect' && <section className='grid gap-3'>
                 <div>
-                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Support inspection</h3>
-                    <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>Load organization or user state before recovery, role changes, or impersonation.</p>
+                    <h3 className='text-sm font-semibold text-ui-text'>Support inspection</h3>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>Load organization or user state before recovery, role changes, or impersonation.</p>
                 </div>
                 <form className='grid gap-2' onSubmit={submitInspection}>
                     <div className='grid gap-2 sm:grid-cols-[8rem_minmax(0,1fr)]'>
@@ -400,22 +400,22 @@ export default function AccessRecoveryForm() {
                 </form>
                 <Message value={inspectionMessage} tone={inspectionResult?.error ? 'error' : inspectionMessage ? 'success' : 'neutral'} />
                 {inspectionResult && !inspectionResult.error ? (
-                    <div className='grid gap-3 rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-sm text-[#aab7cc]'>
+                    <div className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 text-sm text-ui-muted'>
                         <div className='flex flex-wrap items-center gap-2'>
-                            <span className='font-semibold text-[#edf4ff]'>{inspectionResult.organization?.name || inspectionResult.user?.name || inspectionResult.organization?.id || inspectionResult.user?.id || 'Inspection'}</span>
-                            {inspectionResult.accessStatus?.overall ? <span className='rounded-md bg-[#122449] px-2 py-1 text-xs text-[#9db8ff]'>{inspectionResult.accessStatus.overall}</span> : null}
+                            <span className='font-semibold text-ui-text'>{inspectionResult.organization?.name || inspectionResult.user?.name || inspectionResult.organization?.id || inspectionResult.user?.id || 'Inspection'}</span>
+                            {inspectionResult.accessStatus?.overall ? <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-xs text-ui-primary'>{inspectionResult.accessStatus.overall}</span> : null}
                         </div>
                         <div className='grid grid-cols-2 gap-2 text-xs sm:grid-cols-4'>
-                            <span className='rounded-md bg-[#101827] px-2 py-1'>members {(inspectionResult.members || inspectionResult.memberships || []).length}</span>
-                            <span className='rounded-md bg-[#101827] px-2 py-1'>invites {(inspectionResult.invites || inspectionResult.pendingInvites || []).length}</span>
-                            <span className='rounded-md bg-[#101827] px-2 py-1'>watchlists {(inspectionResult.watchlistItems || []).length}</span>
-                            <span className='rounded-md bg-[#101827] px-2 py-1'>webhooks {(inspectionResult.webhookDestinations || []).length}</span>
+                            <span className='rounded-md bg-ui-panel px-2 py-1'>members {(inspectionResult.members || inspectionResult.memberships || []).length}</span>
+                            <span className='rounded-md bg-ui-panel px-2 py-1'>invites {(inspectionResult.invites || inspectionResult.pendingInvites || []).length}</span>
+                            <span className='rounded-md bg-ui-panel px-2 py-1'>watchlists {(inspectionResult.watchlistItems || []).length}</span>
+                            <span className='rounded-md bg-ui-panel px-2 py-1'>webhooks {(inspectionResult.webhookDestinations || []).length}</span>
                         </div>
                         {(inspectionResult.members || inspectionResult.memberships || []).length ? (
                             <div className='grid gap-1'>
-                                <div className='text-xs font-semibold uppercase tracking-[0.14em] text-[#8fa0ba]'>Roles</div>
+                                <div className='text-xs font-semibold uppercase tracking-[0.14em] text-ui-muted'>Roles</div>
                                 {(inspectionResult.members || inspectionResult.memberships || []).slice(0, 6).map((member, index) => (
-                                    <div className='grid gap-1 rounded-md bg-[#101827] px-2 py-1 text-xs sm:grid-cols-[minmax(0,1fr)_5rem_5rem]' key={inspectionMemberId(member, index)}>
+                                    <div className='grid gap-1 rounded-md bg-ui-panel px-2 py-1 text-xs sm:grid-cols-[minmax(0,1fr)_5rem_5rem]' key={inspectionMemberId(member, index)}>
                                         <span className='truncate'>{inspectionMemberName(member)}</span>
                                         <span>{member.role || 'role'}</span>
                                         <span>{member.status || 'status'}</span>
@@ -425,9 +425,9 @@ export default function AccessRecoveryForm() {
                         ) : null}
                         {(inspectionResult.invites || inspectionResult.pendingInvites || []).length ? (
                             <div className='grid gap-1'>
-                                <div className='text-xs font-semibold uppercase tracking-[0.14em] text-[#8fa0ba]'>Invites</div>
+                                <div className='text-xs font-semibold uppercase tracking-[0.14em] text-ui-muted'>Invites</div>
                                 {(inspectionResult.invites || inspectionResult.pendingInvites || []).slice(0, 6).map((invite, index) => (
-                                    <div className='grid gap-1 rounded-md bg-[#101827] px-2 py-1 text-xs sm:grid-cols-[minmax(0,1fr)_5rem_6rem]' key={`${invite.id || invite.email || index}`}>
+                                    <div className='grid gap-1 rounded-md bg-ui-panel px-2 py-1 text-xs sm:grid-cols-[minmax(0,1fr)_5rem_6rem]' key={`${invite.id || invite.email || index}`}>
                                         <span className='truncate'>{invite.email || invite.id}</span>
                                         <span>{invite.role || 'role'}</span>
                                         <span>{invite.status || 'status'}</span>
@@ -437,11 +437,11 @@ export default function AccessRecoveryForm() {
                         ) : null}
                         {(inspectionResult.recentAuditEvents || []).length ? (
                             <div className='grid gap-1'>
-                                <div className='text-xs font-semibold uppercase tracking-[0.14em] text-[#8fa0ba]'>Recent audit</div>
+                                <div className='text-xs font-semibold uppercase tracking-[0.14em] text-ui-muted'>Recent audit</div>
                                 {(inspectionResult.recentAuditEvents || []).slice(0, 4).map((event, index) => (
-                                    <a className='grid gap-1 rounded-md bg-[#101827] px-2 py-1 text-xs text-[#dbe7ff] hover:bg-[#162033]' href={event.id ? `/dashboard/system/impersonation?entity=${encodeURIComponent(String(event.id))}` : '/dashboard/system/impersonation'} key={`${event.id || index}`}>
+                                    <a className='grid gap-1 rounded-md bg-ui-panel px-2 py-1 text-xs text-ui-text hover:bg-ui-raised' href={event.id ? `/dashboard/system/impersonation?entity=${encodeURIComponent(String(event.id))}` : '/dashboard/system/impersonation'} key={`${event.id || index}`}>
                                         <span>{event.actionType || event.action_type || 'audit event'} · {event.outcome || 'outcome'}</span>
-                                        {event.reason ? <span className='truncate text-[#8fa0ba]'>{event.reason}</span> : null}
+                                        {event.reason ? <span className='truncate text-ui-muted'>{event.reason}</span> : null}
                                     </a>
                                 ))}
                             </div>
@@ -452,8 +452,8 @@ export default function AccessRecoveryForm() {
 
             {operation === 'impersonation' && <section className='grid gap-3'>
                 <div>
-                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Scoped impersonation</h3>
-                    <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>Start or end a support session with a reason, target, duration, scope, and audit trail.</p>
+                    <h3 className='text-sm font-semibold text-ui-text'>Scoped impersonation</h3>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>Start or end a support session with a reason, target, duration, scope, and audit trail.</p>
                 </div>
                 <form className='grid gap-2' onSubmit={submitImpersonation}>
                     <div className='grid gap-2 sm:grid-cols-2'>
@@ -468,14 +468,14 @@ export default function AccessRecoveryForm() {
                             <option value='240'>240 minutes</option>
                         </select>
                     </div>
-                    <div className='flex flex-wrap gap-2 rounded-md border border-[#27364f] bg-[#0b121e] p-2 text-xs text-[#aab7cc]'>
+                    <div className='flex flex-wrap gap-2 rounded-md border border-ui-border bg-ui-canvas p-2 text-xs text-ui-muted'>
                         {[
                             ['read_profile', 'Profile'],
                             ['read_org', 'Organization'],
                             ['support_debug', 'Debug'],
                         ].map(([value, label]) => (
-                            <label className='inline-flex items-center gap-2 rounded-md bg-[#101827] px-2 py-1' key={value}>
-                                <input className='accent-[#7aa5ff]' defaultChecked={value !== 'support_debug'} name='scope' type='checkbox' value={value} />
+                            <label className='inline-flex items-center gap-2 rounded-md bg-ui-panel px-2 py-1' key={value}>
+                                <input className='accent-ui-primary' defaultChecked={value !== 'support_debug'} name='scope' type='checkbox' value={value} />
                                 {label}
                             </label>
                         ))}
@@ -483,9 +483,9 @@ export default function AccessRecoveryForm() {
                     <textarea className={textAreaClass} name='reason' placeholder='Reason' required />
                     <button className={primaryButton} disabled={submitting === 'impersonation'} type='submit'>{submitting === 'impersonation' ? 'Starting...' : 'Start scoped session'}</button>
                 </form>
-                <details className='rounded-md border border-[#26344d] bg-[#0b121e]'>
-                    <summary className='cursor-pointer list-none px-3 py-2 text-sm font-semibold text-[#dbe7ff] outline-none transition hover:bg-[#162033] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'>End current session</summary>
-                    <form className='grid gap-2 border-t border-[#26344d] p-3' onSubmit={stopImpersonation}>
+                <details className='rounded-md border border-ui-border bg-ui-canvas'>
+                    <summary className='cursor-pointer list-none px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/20'>End current session</summary>
+                    <form className='grid gap-2 border-t border-ui-border p-3' onSubmit={stopImpersonation}>
                         <input className={inputClass} name='context' placeholder='Stop context' />
                         <textarea className={textAreaClass} name='reason' placeholder='Stop reason' required />
                         <button className={secondaryButton} disabled={submitting === 'stop'} type='submit'>{submitting === 'stop' ? 'Ending...' : 'End current session'}</button>
@@ -493,8 +493,8 @@ export default function AccessRecoveryForm() {
                 </details>
                 <Message value={impersonationMessage} tone={impersonationMessage.includes('failed') || impersonationResult?.error ? 'error' : 'success'} />
                 {impersonationResult?.session ? (
-                    <div className='rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-xs leading-5 text-[#aab7cc]'>
-                        <div className='font-semibold text-[#edf4ff]'>{impersonationResult.session.target?.name || impersonationResult.session.target?.id}</div>
+                    <div className='rounded-md border border-ui-border bg-ui-canvas p-3 text-xs leading-5 text-ui-muted'>
+                        <div className='font-semibold text-ui-text'>{impersonationResult.session.target?.name || impersonationResult.session.target?.id}</div>
                         <div>expires {impersonationResult.session.expires_at || 'active session'} · scope {(impersonationResult.session.scope || []).join(', ') || 'default'}</div>
                     </div>
                 ) : null}
@@ -502,8 +502,8 @@ export default function AccessRecoveryForm() {
 
             {operation === 'recovery' && <section className='grid gap-3'>
                 <div>
-                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Access recovery</h3>
-                    <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>Generate a controlled recovery invite, then review its audit trail.</p>
+                    <h3 className='text-sm font-semibold text-ui-text'>Access recovery</h3>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>Generate a controlled recovery invite, then review its audit trail.</p>
                 </div>
                 <form className='grid gap-2' onSubmit={submitRecovery}>
                     <div className='grid gap-2 sm:grid-cols-2'>
@@ -518,29 +518,29 @@ export default function AccessRecoveryForm() {
                     <input className={inputClass} name='caseId' placeholder='Case id' />
                     <input className={inputClass} name='context' placeholder='Context' />
                     <textarea className={textAreaClass} name='reason' placeholder='Reason' required />
-                    <label className='flex items-center gap-2 text-sm text-[#aab7cc]'>
-                        <input className='h-4 w-4 accent-[#7aa5ff]' name='approvalRequired' type='checkbox' />
+                    <label className='flex items-center gap-2 text-sm text-ui-muted'>
+                        <input className='h-4 w-4 accent-ui-primary' name='approvalRequired' type='checkbox' />
                         Require second review
                     </label>
                     <button className={primaryButton} disabled={submitting === 'recovery'} type='submit'>{submitting === 'recovery' ? 'Generating...' : 'Generate recovery invite'}</button>
                 </form>
                 <Message value={recoveryMessage} tone={recoveryResult?.error ? 'error' : recoveryMessage ? 'success' : 'neutral'} />
                 {recoveryResult?.recovery ? (
-                    <div className='grid gap-2 rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-sm text-[#aab7cc]'>
-                        <div className='flex flex-wrap gap-2 font-medium text-[#edf4ff]'>
+                    <div className='grid gap-2 rounded-md border border-ui-border bg-ui-canvas p-3 text-sm text-ui-muted'>
+                        <div className='flex flex-wrap gap-2 font-medium text-ui-text'>
                             <span>Request {recoveryResult.recovery.requestId}</span>
                             <span>{recoveryResult.recovery.invite.email}</span>
                             <span>{recoveryResult.recovery.approvalStatus}</span>
                         </div>
                         <div>{recoveryResult.recovery.invite.role} until {recoveryResult.recovery.invite.expiresAt}</div>
                         <CopyBlock value={recoveryResult.recovery.copyText} />
-                        <a className='text-sm font-semibold text-[#9db8ff] hover:text-[#2848b5]' href={auditHref(recoveryResult.recovery.requestId, recoveryResult.recovery.audit.actionType)}>Open audit trail</a>
+                        <a className='text-sm font-semibold text-ui-primary hover:opacity-80' href={auditHref(recoveryResult.recovery.requestId, recoveryResult.recovery.audit.actionType)}>Open audit trail</a>
                     </div>
                 ) : null}
             </section>}
 
             {operation === 'decision' && <section className='grid gap-3'>
-                <h3 className='text-sm font-semibold text-[#edf4ff]'>Recovery decision</h3>
+                <h3 className='text-sm font-semibold text-ui-text'>Recovery decision</h3>
                 <form className='grid gap-2' onSubmit={submitDecision}>
                     <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]'>
                         <input className={inputClass} name='requestId' placeholder='Recovery request id' required />
@@ -555,20 +555,20 @@ export default function AccessRecoveryForm() {
                 </form>
                 <Message value={decisionMessage} tone={decisionResult?.error ? 'error' : decisionMessage ? 'success' : 'neutral'} />
                 {decisionResult?.decision ? (
-                    <div className='grid gap-2 rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-sm text-[#aab7cc]'>
-                        <div className='flex flex-wrap gap-2 font-medium text-[#edf4ff]'>
+                    <div className='grid gap-2 rounded-md border border-ui-border bg-ui-canvas p-3 text-sm text-ui-muted'>
+                        <div className='flex flex-wrap gap-2 font-medium text-ui-text'>
                             <span>{decisionResult.decision.status}</span>
                             <span>{decisionResult.decision.invite.email}</span>
                             <span>{decisionResult.decision.invite.status}</span>
                         </div>
                         <CopyBlock value={decisionResult.decision.copyText} />
-                        <a className='text-sm font-semibold text-[#9db8ff] hover:text-[#2848b5]' href={auditHref(decisionResult.decision.requestId)}>Open decision audit</a>
+                        <a className='text-sm font-semibold text-ui-primary hover:opacity-80' href={auditHref(decisionResult.decision.requestId)}>Open decision audit</a>
                     </div>
                 ) : null}
             </section>}
 
             {operation === 'queue' && <section className='grid gap-3'>
-                <h3 className='text-sm font-semibold text-[#edf4ff]'>Recovery queue</h3>
+                <h3 className='text-sm font-semibold text-ui-text'>Recovery queue</h3>
                 <form className='grid gap-2' onSubmit={submitSearch}>
                     <div className='grid gap-2 sm:grid-cols-2'>
                         <input className={inputClass} name='request' placeholder='Request id' />
@@ -595,19 +595,19 @@ export default function AccessRecoveryForm() {
                 {searchResult?.approvals?.length ? (
                     <div className='grid gap-2'>
                         {searchResult.approvals.map(approval => (
-                            <div className='grid gap-2 rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-sm text-[#aab7cc]' key={approval.requestId}>
-                                <div className='flex flex-wrap gap-2 font-medium text-[#edf4ff]'>
+                            <div className='grid gap-2 rounded-md border border-ui-border bg-ui-canvas p-3 text-sm text-ui-muted' key={approval.requestId}>
+                                <div className='flex flex-wrap gap-2 font-medium text-ui-text'>
                                     <span>{approval.status}</span>
                                     <span>{approval.outcome}</span>
                                     <span>{approval.invite.email}</span>
                                 </div>
                                 <div className='text-xs'>request {approval.requestId} · audit {approval.auditEventIds?.join(', ') || 'pending'}</div>
-                                <a className='text-sm font-semibold text-[#9db8ff] hover:text-[#2848b5]' href={auditHref(approval.requestId)}>Open request audit</a>
+                                <a className='text-sm font-semibold text-ui-primary hover:opacity-80' href={auditHref(approval.requestId)}>Open request audit</a>
                             </div>
                         ))}
                     </div>
                 ) : searchResult ? (
-                    <p className='rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-sm text-[#8fa0ba]'>Recovery request filters are clear.</p>
+                    <p className='rounded-md border border-ui-border bg-ui-canvas p-3 text-sm text-ui-muted'>Recovery request filters are clear.</p>
                 ) : null}
             </section>}
         </div>

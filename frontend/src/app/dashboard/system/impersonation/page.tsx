@@ -45,18 +45,18 @@ type AuditSearchParams = {
     limit?: string | string[]
 }
 
-const fieldClass = 'h-9 min-w-0 rounded-md border border-[#27364f] bg-[#101827] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#7b8494] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+const fieldClass = 'h-9 min-w-0 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
 const selectClass = `${fieldClass} appearance-none`
-const quietButtonClass = 'grid h-9 place-items-center rounded-md border border-[#31466b] bg-[#111827] px-3 text-sm font-semibold text-[#dbe7ff] transition hover:bg-[#172033]'
+const quietButtonClass = 'grid h-9 place-items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel'
 const severities = ['', 'info', 'notice', 'warning', 'critical']
 const outcomes = ['', 'success', 'denied', 'failed']
 const limits = ['50', '100', '200', '500']
 const supportActions = [
-    'support.organization.access_recovery',
-    'support.organization.invite',
-    'support.organization.member_role_recovery',
-    'impersonation.start',
-    'impersonation.stop',
+    { action: 'support.organization.access_recovery', label: 'Access recovery' },
+    { action: 'support.organization.invite', label: 'Organization invite' },
+    { action: 'support.organization.member_role_recovery', label: 'Role recovery' },
+    { action: 'impersonation.start', label: 'Session started' },
+    { action: 'impersonation.stop', label: 'Session ended' },
 ]
 
 function formatTime(value: string) {
@@ -89,16 +89,16 @@ function contextText(value: Record<string, unknown> | null | undefined) {
 }
 
 function severityClass(severity: AdminAuditEvent['severity']) {
-    if (severity === 'critical') return 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
-    if (severity === 'warning') return 'border-[#7a5618] bg-[#2a1c0e] text-[#ffd58a]'
-    if (severity === 'notice') return 'border-[#31466b] bg-[#122449] text-[#9db8ff]'
-    return 'border-[#31466b] bg-[#101827] text-[#aab7cc]'
+    if (severity === 'critical') return 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+    if (severity === 'warning') return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
+    if (severity === 'notice') return 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary'
+    return 'border-ui-border bg-ui-raised text-ui-muted'
 }
 
 function outcomeClass(outcome: AdminAuditEvent['outcome']) {
-    if (outcome === 'success') return 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'
-    if (outcome === 'denied') return 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
-    return 'border-[#7a5618] bg-[#2a1c0e] text-[#ffd58a]'
+    if (outcome === 'success') return 'border-ui-success/35 bg-ui-success/10 text-ui-success'
+    if (outcome === 'denied') return 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+    return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
 }
 
 function activeFilterEntries(params: AuditSearchParams) {
@@ -167,7 +167,7 @@ export default async function ImpersonationAuditPage({
                 actions={(
                     <div className='flex flex-wrap gap-2'>
                         <Link className={quietButtonClass} href='/dashboard'>Dashboard</Link>
-                        <a className='grid h-9 place-items-center rounded-md bg-[#315bd8] px-3 text-sm font-semibold text-white transition hover:bg-[#244bbf]' href='#support-actions'>Start session</a>
+                        <a className='grid h-9 place-items-center rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90' href='#support-actions'>Start session</a>
                     </div>
                 )}
             />
@@ -178,16 +178,16 @@ export default async function ImpersonationAuditPage({
                             <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center'>
                                 <label className='sr-only' htmlFor='audit-search'>Search audit events</label>
                                 <input id='audit-search' className={fieldClass} name='q' defaultValue={primarySearch} placeholder='Search audit events' />
-                                <button className='h-9 rounded-md bg-[#315bd8] px-4 text-sm font-semibold text-white transition hover:bg-[#244bbf]' type='submit'>Search</button>
+                                <button className='h-9 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90' type='submit'>Search</button>
                                 <Link className={quietButtonClass} href='/dashboard/system/impersonation'>Clear</Link>
                             </div>
-                            <details className='group rounded-md border border-[#26344d] bg-[#0b121e]'>
-                                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-[#dbe7ff] outline-none transition hover:bg-[#162033] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'>
+                            <details className='group rounded-lg border border-ui-border bg-ui-raised'>
+                                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
                                     <span>Filters{advancedFilterCount ? ` (${advancedFilterCount})` : ''}</span>
-                                    <span className='text-xs font-medium text-[#8fa0ba] group-open:hidden'>Show advanced</span>
-                                    <span className='hidden text-xs font-medium text-[#8fa0ba] group-open:inline'>Hide advanced</span>
+                                    <span className='text-xs font-medium text-ui-muted group-open:hidden'>Show advanced</span>
+                                    <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide advanced</span>
                                 </summary>
-                                <div className='grid gap-3 border-t border-[#26344d] p-3'>
+                                <div className='grid gap-3 border-t border-ui-border p-3'>
                                     <div className='grid gap-2 lg:grid-cols-4'>
                                         <input className={fieldClass} name='org' defaultValue={param(params, 'org')} placeholder='Organization' />
                                         <input className={fieldClass} name='actor' defaultValue={param(params, 'actor')} placeholder='Actor' />
@@ -212,78 +212,78 @@ export default async function ImpersonationAuditPage({
                                         <select className={selectClass} name='limit' defaultValue={param(params, 'limit') || '200'} aria-label='Result limit'>
                                             {limits.map(limit => <option key={limit} value={limit}>{limit}</option>)}
                                         </select>
-                                        <button className='h-9 rounded-md border border-[#31466b] px-4 text-sm font-semibold text-[#dbe7ff] transition hover:bg-[#162033]' type='submit'>Apply filters</button>
+                                        <button className='h-9 rounded-md border border-ui-border px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel' type='submit'>Apply filters</button>
                                     </div>
                                 </div>
                             </details>
                             {filterEntries.length ? (
-                                <div className='flex flex-wrap gap-2 border-t border-[#26344d] pt-3' aria-label='Active audit filters'>
+                                <div className='flex flex-wrap gap-2 border-t border-ui-border pt-3' aria-label='Active audit filters'>
                                     {filterEntries.map(([key, value]) => (
-                                        <span className='rounded-md border border-[#27364f] bg-[#0b121e] px-2 py-1 text-xs text-[#aab7cc]' key={key}>{key}: {value}</span>
+                                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs text-ui-muted' key={key}>{key}: {value}</span>
                                     ))}
                                 </div>
                             ) : null}
                         </form>
                     </DashboardPanel>
                     {responseError ? (
-                        <DashboardPanel className='border-[#7a5618] bg-[#2a1c0e] p-4 text-sm text-[#ffd58a]'>
+                        <DashboardPanel className='border-ui-warning/35 bg-ui-warning/10 p-4 text-sm text-ui-warning'>
                             {responseError} Check API availability or narrow the query.
                         </DashboardPanel>
                     ) : null}
                     <DashboardPanel className='overflow-hidden'>
-                        <div className='grid border-b border-[#26344d] md:grid-cols-[minmax(0,1fr)_minmax(260px,0.48fr)]'>
+                        <div className='grid border-b border-ui-border md:grid-cols-[minmax(0,1fr)_minmax(260px,0.48fr)]'>
                             <div className='min-w-0 px-4 py-3'>
                                 <div className='flex flex-wrap items-center gap-2'>
-                                    <h2 className='text-sm font-semibold text-[#edf4ff]'>Audit timeline</h2>
-                                    <span className='rounded-md bg-[#101827] px-2 py-1 text-xs font-medium text-[#8fa0ba]'>{events.length} events</span>
+                                    <h2 className='text-sm font-semibold text-ui-text'>Audit timeline</h2>
+                                    <span className='rounded-md bg-ui-raised px-2 py-1 text-xs font-medium text-ui-muted'>{events.length} events</span>
                                 </div>
-                                <p className='mt-1 text-xs text-[#8fa0ba]'>{events.length ? 'Newest matching event is selected for detail.' : 'Search or open filters to find support activity.'}</p>
+                                <p className='mt-1 text-xs text-ui-muted'>{events.length ? 'Newest matching event is selected for detail.' : 'Search or open filters to find support activity.'}</p>
                             </div>
-                            <div className='border-t border-[#26344d] bg-[#0b121e] px-4 py-3 md:border-l md:border-t-0'>
-                                <div className='text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8fa0ba]'>Selected detail</div>
+                            <div className='border-t border-ui-border bg-ui-raised px-4 py-3 md:border-l md:border-t-0'>
+                                <div className='text-[10px] font-semibold uppercase tracking-[0.16em] text-ui-muted'>Selected detail</div>
                                 {selectedEvent ? (
-                                    <div className='mt-2 min-w-0 text-sm text-[#dbe7ff]'>
-                                        <div className='truncate font-semibold text-[#edf4ff]'>{selectedEvent.action_type}</div>
+                                    <div className='mt-2 min-w-0 text-sm text-ui-text'>
+                                        <div className='truncate font-semibold text-ui-text'>{selectedEvent.action_type}</div>
                                         <div className='mt-1 truncate text-xs'>request {selectedEvent.request_id || 'checking'} · entity {selectedEvent.entity_id || 'checking'}</div>
                                     </div>
                                 ) : (
-                                    <p className='mt-2 text-sm text-[#8fa0ba]'>Select an audit row to inspect request and entity detail.</p>
+                                    <p className='mt-2 text-sm text-ui-muted'>Select an audit row to inspect request and entity detail.</p>
                                 )}
                             </div>
                         </div>
-                        <div className='grid max-h-[72vh] gap-0 divide-y divide-[#26344d] overflow-auto'>
+                        <div className='grid max-h-[72vh] gap-0 divide-y divide-ui-border overflow-auto'>
                             {!events.length ? (
-                                <div className='grid gap-3 p-5 text-sm text-[#8fa0ba]'>
-                                    <p className='font-medium text-[#dbe7ff]'>Audit stream is clear for the current filters.</p>
+                                <div className='grid gap-3 p-5 text-sm text-ui-muted'>
+                                    <p className='font-medium text-ui-text'>Audit stream is clear for the current filters.</p>
                                     <div className='flex flex-wrap gap-2'>
-                                        {supportActions.map(action => (
-                                            <Link className='rounded-md border border-[#27364f] px-2 py-1 text-xs font-semibold text-[#dbe7ff] hover:bg-[#162033]' href={`/dashboard/system/impersonation?action=${encodeURIComponent(action)}&source=admin&service=hanasand-api`} key={action}>{action}</Link>
+                                        {supportActions.map(({ action, label }) => (
+                                            <Link className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text hover:bg-ui-raised' href={`/dashboard/system/impersonation?action=${encodeURIComponent(action)}&source=admin&service=hanasand-api`} key={action}>{label}</Link>
                                         ))}
                                     </div>
                                 </div>
                             ) : events.map((event) => (
                                 <article key={event.id} className='grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_11rem] md:items-start'>
                                     <div className='min-w-0'>
-                                        <div className='flex flex-wrap items-center gap-2 text-sm text-[#edf4ff]'>
+                                        <div className='flex flex-wrap items-center gap-2 text-sm text-ui-text'>
                                             <strong className='min-w-0 truncate'>{event.action_type}</strong>
                                             <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${severityClass(event.severity)}`}>{event.severity}</span>
                                             <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase ${outcomeClass(event.outcome)}`}>{event.outcome}</span>
-                                            <span className='rounded-md bg-[#101827] px-2 py-1 text-xs text-[#aab7cc]'>{event.source}/{event.service}</span>
+                                            <span className='rounded-md bg-ui-raised px-2 py-1 text-xs text-ui-muted'>{event.source}/{event.service}</span>
                                         </div>
-                                        <div className='mt-2 flex flex-wrap gap-2 text-xs text-[#8fa0ba]'>
-                                            <span className='rounded-md bg-[#0b121e] px-2 py-1'>actor {event.actor_name || event.actor_id}</span>
-                                            {event.target_id ? <span className='rounded-md bg-[#0b121e] px-2 py-1'>{event.target_type || 'target'} {event.target_name || event.target_id}</span> : null}
-                                            {event.organization_id ? <span className='rounded-md bg-[#122449] px-2 py-1 text-[#9db8ff]'>{event.organization_name || event.organization_id}</span> : null}
-                                            {event.entity_id ? <span className='rounded-md bg-[#0b121e] px-2 py-1 font-mono'>entity {event.entity_id}</span> : null}
-                                            {event.request_id ? <span className='rounded-md bg-[#0b121e] px-2 py-1 font-mono'>request {event.request_id}</span> : null}
+                                        <div className='mt-2 flex flex-wrap gap-2 text-xs text-ui-muted'>
+                                            <span className='rounded-md bg-ui-raised px-2 py-1'>actor {event.actor_name || event.actor_id}</span>
+                                            {event.target_id ? <span className='rounded-md bg-ui-raised px-2 py-1'>{event.target_type || 'target'} {event.target_name || event.target_id}</span> : null}
+                                            {event.organization_id ? <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-ui-primary'>{event.organization_name || event.organization_id}</span> : null}
+                                            {event.entity_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>entity {event.entity_id}</span> : null}
+                                            {event.request_id ? <span className='rounded-md bg-ui-raised px-2 py-1 font-mono'>request {event.request_id}</span> : null}
                                         </div>
-                                        {event.reason ? <p className='mt-2 text-sm text-[#aab7cc]'>{event.reason}</p> : null}
-                                        {contextText(event.context) ? <p className='mt-1 text-xs text-[#8fa0ba]'>{contextText(event.context)}</p> : null}
+                                        {event.reason ? <p className='mt-2 text-sm text-ui-muted'>{event.reason}</p> : null}
+                                        {contextText(event.context) ? <p className='mt-1 text-xs text-ui-muted'>{contextText(event.context)}</p> : null}
                                     </div>
-                                    <div className='text-left text-xs text-[#8fa0ba] md:text-right'>
+                                    <div className='text-left text-xs text-ui-muted md:text-right'>
                                         <div>{formatTime(event.created_at)}</div>
                                         <div className='mt-1 max-w-xl truncate'>{event.ip}</div>
-                                        <Link className='mt-2 inline-flex rounded-md border border-[#27364f] px-2 py-1 font-semibold text-[#dbe7ff] hover:bg-[#162033]' href={`/dashboard/system/impersonation?request=${encodeURIComponent(event.request_id || '')}&entity=${encodeURIComponent(event.entity_id || '')}&source=${encodeURIComponent(event.source)}&service=${encodeURIComponent(event.service)}`}>
+                                        <Link className='mt-2 inline-flex rounded-md border border-ui-border px-2 py-1 font-semibold text-ui-text hover:bg-ui-raised' href={`/dashboard/system/impersonation?request=${encodeURIComponent(event.request_id || '')}&entity=${encodeURIComponent(event.entity_id || '')}&source=${encodeURIComponent(event.source)}&service=${encodeURIComponent(event.service)}`}>
                                             Focus
                                         </Link>
                                     </div>
@@ -294,9 +294,9 @@ export default async function ImpersonationAuditPage({
                 </div>
                 <aside className='grid content-start gap-3'>
                     <DashboardPanel className='p-4'>
-                        <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8fa0ba]'>Audit snapshot</p>
-                        <h2 className='mt-1 text-base font-semibold text-[#edf4ff]'>{auditSnapshotHeadline(events.length, eventStats)}</h2>
-                        <div className='mt-3 grid grid-cols-2 gap-2 text-xs text-[#aab7cc]'>
+                        <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-ui-muted'>Audit snapshot</p>
+                        <h2 className='mt-1 text-base font-semibold text-ui-text'>{auditSnapshotHeadline(events.length, eventStats)}</h2>
+                        <div className='mt-3 grid grid-cols-2 gap-2 text-xs text-ui-muted'>
                             <SnapshotFact label='Events' value={String(events.length)} />
                             <SnapshotFact label='Denied' value={String(eventStats.denied)} tone={eventStats.denied ? 'warn' : 'quiet'} />
                             <SnapshotFact label='Recovery' value={String(eventStats.recovery)} />
@@ -304,17 +304,17 @@ export default async function ImpersonationAuditPage({
                         </div>
                     </DashboardPanel>
                     <DashboardPanel className='p-0' id='support-actions'>
-                        <div className='border-b border-[#26344d] px-4 py-3'>
-                            <h2 className='text-sm font-semibold text-[#edf4ff]'>Support actions</h2>
-                            <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>Choose one task, complete the required audit fields, then return to the timeline.</p>
+                        <div className='border-b border-ui-border px-4 py-3'>
+                            <h2 className='text-sm font-semibold text-ui-text'>Support actions</h2>
+                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Choose one task, complete the required audit fields, then return to the timeline.</p>
                         </div>
                         <details className='group'>
-                            <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-[#dbe7ff] outline-none transition hover:bg-[#162033] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'>
+                            <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
                                 <span>Start or manage support action</span>
-                                <span className='text-xs font-medium text-[#8fa0ba] group-open:hidden'>Show controls</span>
-                                <span className='hidden text-xs font-medium text-[#8fa0ba] group-open:inline'>Hide controls</span>
+                                <span className='text-xs font-medium text-ui-muted group-open:hidden'>Show controls</span>
+                                <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide controls</span>
                             </summary>
-                            <div className='border-t border-[#26344d] p-4'>
+                            <div className='border-t border-ui-border p-4'>
                                 <AccessRecoveryForm />
                             </div>
                         </details>
@@ -327,9 +327,9 @@ export default async function ImpersonationAuditPage({
 
 function SnapshotFact({ label, value, tone = 'quiet' }: { label: string, value: string, tone?: 'quiet' | 'warn' }) {
     return (
-        <div className='rounded-md border border-[#27364f] bg-[#0b121e] px-3 py-2'>
-            <div className='font-semibold uppercase text-[#8fa0ba]'>{label}</div>
-            <div className={`mt-0.5 text-sm font-semibold ${tone === 'warn' ? 'text-[#ffd58a]' : 'text-[#edf4ff]'}`}>{value}</div>
+        <div className='rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
+            <div className='font-semibold uppercase text-ui-muted'>{label}</div>
+            <div className={`mt-0.5 text-sm font-semibold ${tone === 'warn' ? 'text-ui-warning' : 'text-ui-text'}`}>{value}</div>
         </div>
     )
 }

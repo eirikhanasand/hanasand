@@ -9,7 +9,7 @@ export default function ImpersonationBanner({ id, name }: { id: string, name?: s
     const label = name || id
 
     return (
-        <div className='mb-2 rounded-xl border border-[#f07d33]/22 bg-[#f07d33]/12 px-3 py-2 text-sm text-bright shadow-[0_10px_30px_rgba(0,0,0,0.18)]'>
+        <div className='mb-2 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-sm text-ui-text shadow-sm'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='flex min-w-0 items-center gap-2 font-semibold'>
                     <UserRoundCheck className='h-4 w-4 shrink-0' />
@@ -21,7 +21,7 @@ export default function ImpersonationBanner({ id, name }: { id: string, name?: s
                         stopImpersonating()
                         router.refresh()
                     }}
-                    className='rounded-lg border border-[#f07d33]/26 bg-black/16 px-3 py-1.5 text-xs font-bold text-[#f07d33] transition hover:bg-black/28'
+                    className='rounded-lg border border-ui-warning/35 bg-ui-panel px-3 py-1.5 text-xs font-bold text-ui-warning transition hover:bg-ui-raised'
                 >
                     Return to own view
                 </button>
