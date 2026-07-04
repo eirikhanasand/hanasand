@@ -580,7 +580,7 @@ export function buildProductProgressExternalState(input: ProductProgressReadines
     staleAfterMinutes?: number
 }): ProductReadinessExternalState {
     const routes = input?.routes
-    const route = routes?.productProgress || 'Missing /api/product-progress contract'
+    const route = routes?.productProgress || 'Operations status unavailable'
     if (!input) {
         return {
             publicTiProvenance: unavailablePublicTi(route, options.checkedAt),
@@ -830,7 +830,7 @@ function normalizeDashboardEvidenceReadiness(input: DashboardAlertEvidenceReadin
     checkedAt: string
     sourceGrowthReady: boolean
 }): DashboardAlertEvidenceReadiness {
-    if (!input) return unavailableDashboardEvidence('/api/product-progress dashboardEvidence', context.checkedAt)
+    if (!input) return unavailableDashboardEvidence('Dashboard alert evidence unavailable', context.checkedAt)
     const blockers = [
         input.visibleInDashboard ? '' : 'Visible dashboard alert is syncing.',
         input.deliveryEvidenceMatched ? '' : 'Matching delivery evidence is syncing.',
