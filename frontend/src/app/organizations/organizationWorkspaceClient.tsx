@@ -2641,6 +2641,16 @@ function latestDeliveryForWatchlist(item: WatchlistItem, deliveries: DeliveryRow
         .sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
 }
 
+function latestDeliveryForDestination(destination: WebhookDestination, deliveries: DeliveryRow[]) {
+    return deliveries
+        .filter(delivery => {
+            if (delivery.webhookDestinationId === destination.id) return true
+            if (destination.endpointHash && delivery.endpointHash === destination.endpointHash) return true
+            return false
+        })
+        .sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
+}
+
 function deliveryMatchesSubject(delivery: DeliveryRow, subject: ActivitySubject) {
     if (subject.type === 'organization') return true
     if (subject.type === 'destination') {
