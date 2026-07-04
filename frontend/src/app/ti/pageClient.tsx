@@ -6286,24 +6286,15 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
 function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan }) {
     const status = plan.ready ? 'ready' : plan.state === 'review' ? 'review' : 'blocked'
     return (
-        <div data-ti-selected-alert-action-plan='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Alert action plan</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        Selected evidence mapped to watchlist terms, source refs, and alert rebuild state.
-                    </p>
-                </div>
+        <div data-ti-selected-alert-action-plan='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
+                <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
+                    Alert workflow · {plan.readiness.matchedCandidateCount}/{plan.readiness.candidateCount} matches · {plan.sourceRefs.captureIds.length} captures · {plan.readiness.generationEvidenceWindowReady ? 'evidence current' : 'evidence pending'}
+                </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(status)}>{decisionStepStatusLabel(status)}</span>
                     <CopyPayloadButton label='Alert action plan' payload={plan} />
                 </div>
-            </div>
-            <div className='mt-3 grid grid-cols-2 gap-2'>
-                <EvidenceMetric label='Candidates' value={`${plan.readiness.candidateCount}`} />
-                <EvidenceMetric label='Matches' value={`${plan.readiness.matchedCandidateCount}`} />
-                <EvidenceMetric label='Captures' value={`${plan.sourceRefs.captureIds.length}`} />
-                <EvidenceMetric label='Evidence window' value={plan.readiness.generationEvidenceWindowReady ? 'Ready' : 'Pending'} />
             </div>
             <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.handoff.route || plan.route)}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.nextAction)}</p>
