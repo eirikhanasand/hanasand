@@ -466,7 +466,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                                 </button>
                             )) : (
                                 <div className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm leading-6 text-ui-muted'>
-                                    {alerts.length ? 'No attacks match the current filters.' : 'No recent attacks. Monitoring stays live while watchlist terms listen for new captures.'}
+                                    {alerts.length ? 'No attacks match the current filters.' : 'No alert is waiting for review. Monitoring stays live while watchlist terms listen for new captures.'}
                                 </div>
                             )}
                             {queue.length > visibleQueue.length && (
@@ -1175,7 +1175,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
             id: 'delivery',
             label: 'Webhook',
             value: latestDelivery ? stateLabel(latestDelivery.status) : workflowContext.hasWebhookRoute ? 'ready to test' : 'not configured',
-            detail: latestDelivery ? `${relativeTimeLabel(latestDelivery.attemptedAt)} · ${latestDelivery.endpointHash}` : workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : 'Add or test a destination before sending.',
+            detail: latestDelivery ? `${relativeTimeLabel(latestDelivery.attemptedAt)} · ${latestDelivery.endpointHash}` : workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : 'Customer send blocked: add or test a destination before sending.',
             state: latestDelivery?.status === 'delivered' || latestDelivery?.status === 'dry_run' ? 'ready' : workflowContext.hasWebhookRoute ? 'action' : 'blocked',
         },
         {
@@ -2302,7 +2302,7 @@ function buildAnalystBrief(
         whyItMatters: routingContext.reason,
         nextAction: alert.recommendedAction,
         readyForCustomer,
-        evidenceBoundary: `Show ${visibleCounts}; keep source files and secrets out of the customer update.`,
+        evidenceBoundary: `Show ${visibleCounts}; keep raw leaked files and secrets out of the customer update.`,
         sourceRecords: `${evidenceSummary.evidenceCount} record${evidenceSummary.evidenceCount === 1 ? '' : 's'} across ${sourceFamilies || stateLabel(alert.sourceFamily)}, newest ${freshness}.`,
         workflowReadiness: workflowContext.hasWebhookRoute
             ? `${stateLabel(routingContext.queue)} is available; ${workflowContext.lastDelivery ? `last delivery ${stateLabel(workflowContext.lastDelivery.status)} ${relativeTimeLabel(workflowContext.lastDelivery.attemptedAt)}` : 'test delivery before sending'}.`

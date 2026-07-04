@@ -3299,7 +3299,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                     </div>
                                 </div>
                             )) : (
-                                <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Create source request before customer handoff.</p>
+                                <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Create a source request before customer review.</p>
                             )}
                         </div>
                         {bridge.missing.length ? (
@@ -3436,7 +3436,7 @@ function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWork
                     <div className='mt-2 flex flex-wrap gap-1.5'>
                         {ids.length ? ids.map(id => (
                             <span key={id} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-raised dark:text-ui-text'>{id}</span>
-                        )) : <span className='text-xs text-ui-muted dark:text-ui-muted'>Link backed records before handoff.</span>}
+                        )) : <span className='text-xs text-ui-muted dark:text-ui-muted'>Link backed records before continuing.</span>}
                     </div>
                     {priority.blockers.length ? (
                         <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-ui-warning dark:text-ui-warning'>
@@ -4527,7 +4527,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                             </div>
                         </div>
                     )) : (
-                        <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>Add source coverage before customer handoff.</p>
+                        <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>Add source coverage before customer review.</p>
                     )}
                 </div>
             </div>
@@ -6416,7 +6416,7 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
                     </div>
                 ))}
                 {!plan.alerts.length ? (
-                    <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-[11px] leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Generate an alert before opening a case handoff.</p>
+                    <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-[11px] leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Generate an alert before opening a case packet.</p>
                 ) : null}
             </div>
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
