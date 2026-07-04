@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { Activity, AlertTriangle, Clock3, ExternalLink, Filter, Inbox, MessageSquareText, Search, ShieldCheck, UserRound } from 'lucide-react'
+import { safeEvidenceExcerpt } from '@/utils/dwm/display'
 
 export type WorkbenchEvidence = {
     id: string
@@ -33,6 +34,10 @@ function sanitizeWorkbenchCopy(value: string | undefined) {
         .replace(/readiness/gi, 'status')
         .replace(/receipt delivery/gi, 'delivery history')
         .replace(/receipt/gi, 'delivery')
+}
+
+function safeWorkbenchDetail(value: string | undefined) {
+    return safeEvidenceExcerpt(value || 'Safe excerpt is being prepared from this evidence.')
 }
 
 export type WorkbenchTimelineItem = {
@@ -2524,7 +2529,7 @@ function DeliveryEvidenceRows({ deliveries, selected, orgContext }: { deliveries
                                 {'httpStatus' in delivery && delivery.httpStatus !== undefined && <p><span className='font-semibold text-ui-muted'>HTTP:</span> {delivery.httpStatus}</p>}
                             </div>
                             <p className='mt-2 break-all font-mono text-[11px] text-ui-muted'>{delivery.endpointHash} · {delivery.payloadHash}</p>
-                            {delivery.error && <p className='mt-2 text-xs font-semibold text-ui-danger'>{delivery.error}</p>}
+                            {delivery.error && <p className='mt-2 text-xs font-semibold text-ui-danger'>{safeWorkbenchDetail(delivery.error)}</p>}
                         </div>
                     )
                 })}
@@ -2673,7 +2678,7 @@ function AlertEvidenceRows({ evidence }: { evidence: NonNullable<NonNullable<Ale
                                     </Link>
                                 ) : null}
                             </div>
-                            <p className='mt-2 text-xs leading-5 text-ui-muted'>{item.excerpt || 'Safe excerpt is being prepared from this evidence.'}</p>
+                            <p className='mt-2 text-xs leading-5 text-ui-muted'>{safeWorkbenchDetail(item.excerpt)}</p>
                             <div className='mt-2 grid gap-1 text-xs text-ui-muted'>
                                 <p><span className='font-semibold text-ui-muted'>Observed:</span> {item.observedAt || item.firstSeenAt ? relativeTime(item.observedAt || item.firstSeenAt || '') : 'checking'}</p>
                                 <p className='break-all'><span className='font-semibold text-ui-muted'>Source details:</span> {customerOperationalText(provenance || 'syncing')}</p>
@@ -2698,7 +2703,7 @@ function CaseEvidenceRows({ evidence }: { evidence: CaseEvidence[] }) {
                             <span className='text-sm font-semibold text-ui-text'>{item.sourceName || item.id}</span>
                             {item.redactionState && <span className='rounded-full bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
                         </div>
-                        <p className='mt-2 text-xs leading-5 text-ui-muted'>{item.excerpt || 'Safe excerpt is being prepared from this evidence.'}</p>
+                        <p className='mt-2 text-xs leading-5 text-ui-muted'>{safeWorkbenchDetail(item.excerpt)}</p>
                         <p className='mt-2 break-all font-mono text-[11px] text-ui-muted'>{item.contentHash || item.id}</p>
                     </div>
                 ))}
