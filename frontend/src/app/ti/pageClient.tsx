@@ -4254,7 +4254,7 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                             </div>
                         ))}
                     </div>
-                    <p className='mt-2 wrap-break-word text-xs leading-5 text-ui-warning'>No alert or case ID is attached yet; rebuild alerts after saving a matching watchlist term or attach capture evidence before case creation.</p>
+                    <p className='mt-2 wrap-break-word text-xs leading-5 text-ui-warning'>Rebuild alerts after saving a matching watchlist term or attaching capture evidence.</p>
                 </div>
             )}
         </div>
@@ -4497,7 +4497,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                         </div>
                     </div>
                 )) : (
-                    <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>No watchlist term with a linked source is attached yet.</p>
+                    <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10'>Link a sourced watchlist term to route this actor.</p>
                 )}
             </div>
             {relevance.handoffRows.length ? (
@@ -5456,7 +5456,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                         </div>
                     </div>
                 )) : (
-                    <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>No source health status is attached yet. Add source context before sending this actor to a customer path.</p>
+                    <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Add source context before sending this actor to a customer path.</p>
                 )}
             </div>
         </Panel>
@@ -6086,7 +6086,7 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
                                 ))}
                             </div>
                         ) : (
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>No consumer status is attached to this source yet.</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>Map this source to a customer workflow.</p>
                         )}
                         {row.requestedFields.length ? (
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>Needs {row.requestedFields.map(sourceHealthFieldLabel).slice(0, 3).join(', ')}.</p>
@@ -6126,7 +6126,7 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                 {plan.watchlist.terms.slice(0, 4).map(term => (
                     <span key={term} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>{term}</span>
                 ))}
-                {!plan.watchlist.terms.length ? <span className='text-[11px] text-ui-muted dark:text-ui-muted'>No watch terms attached.</span> : null}
+                {!plan.watchlist.terms.length ? <span className='text-[11px] text-ui-muted dark:text-ui-muted'>Add watch term.</span> : null}
             </div>
             {plan.evidenceRows.length ? (
                 <div data-ti-selected-alert-evidence='true' className='mt-2 grid gap-2'>
@@ -6324,7 +6324,7 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                 {draft.watchTerms.slice(0, 4).map(term => (
                     <span key={term} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>{term}</span>
                 ))}
-                {!draft.watchTerms.length ? <span className='text-[11px] text-ui-muted dark:text-ui-muted'>No watch terms attached.</span> : null}
+                {!draft.watchTerms.length ? <span className='text-[11px] text-ui-muted dark:text-ui-muted'>Add watch term.</span> : null}
             </div>
             {draft.missing.length ? (
                 <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(draft.missing.slice(0, 3))}</p>
