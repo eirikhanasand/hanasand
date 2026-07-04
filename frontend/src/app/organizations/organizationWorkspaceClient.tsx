@@ -1392,24 +1392,25 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
                     </h2>
                     <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayName(organization)} · {canManage ? 'admin controls enabled' : 'read-only access'}</p>
                 </div>
-                <a href='#audit' className={secondaryButtonClass}>
+                <a href='#audit' className={secondaryButtonClass} data-org-health-activity='true'>
                     <ExternalLink className='h-4 w-4' />
                     Activity
                 </a>
             </div>
-            <div className='mt-3 grid gap-2 md:grid-cols-4'>
+            <div className='mt-3 overflow-hidden rounded-lg border border-ui-border dark:border-ui-border' data-org-health-compact='true'>
                 {rows.map(row => (
                     <a
                         key={row.id}
                         href={row.href}
-                        className={`min-w-0 rounded-lg border px-3 py-2 transition hover:border-ui-primary/35 ${row.tone === 'ready' ? 'border-ui-success/35 bg-ui-success/10 dark:border-ui-success/35 dark:bg-ui-success/10' : row.tone === 'warning' ? 'border-ui-warning/35 bg-ui-warning/10 dark:border-ui-warning/35 dark:bg-ui-warning/10' : row.tone === 'blocked' ? 'border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-canvas' : 'border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-panel'}`}
+                        className={`grid min-h-12 min-w-0 grid-cols-[minmax(6rem,0.75fr)_minmax(0,1fr)_auto] items-center gap-3 border-b border-ui-border px-3 py-2 text-sm transition last:border-b-0 hover:bg-ui-raised dark:border-ui-border dark:hover:bg-ui-raised ${row.tone === 'warning' ? 'bg-ui-warning/10 dark:bg-ui-warning/10' : row.tone === 'blocked' ? 'bg-ui-raised dark:bg-ui-canvas' : 'bg-ui-panel dark:bg-ui-panel'}`}
+                        data-org-health-row={row.id}
                     >
-                        <span className='flex items-center justify-between gap-2'>
-                            <span className='truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
-                            <StatusPill status={row.tone === 'ready' ? 'ready' : row.tone === 'warning' || row.tone === 'blocked' ? 'review' : 'waiting'} />
+                        <span className='min-w-0'>
+                            <span className='block truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
+                            <span className='mt-0.5 block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
                         </span>
-                        <span className='mt-2 block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
-                        <span className='mt-1 block truncate text-xs text-ui-muted dark:text-ui-muted'>{row.detail}</span>
+                        <span className='min-w-0 truncate text-xs text-ui-muted dark:text-ui-muted'>{row.detail}</span>
+                        <StatusPill status={row.tone === 'ready' ? 'ready' : row.tone === 'warning' || row.tone === 'blocked' ? 'review' : 'waiting'} />
                     </a>
                 ))}
             </div>
