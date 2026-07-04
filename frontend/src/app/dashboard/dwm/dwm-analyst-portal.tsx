@@ -889,6 +889,13 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
     const caseCandidate = alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
     const casePath = actualCaseId ? caseDetailHref(actualCaseId, alert.id, workflowContext.organizationId, 'alert_queue') : alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness?.actions?.find(action => action.action === 'case_link' && action.casePath)?.casePath
     const canOpenCase = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
+    const routeControlLabel = actualCaseId
+        ? latestDelivery
+            ? 'Route controls'
+            : 'Test delivery'
+        : canOpenCase
+            ? 'Open case'
+            : 'Run route'
     const steps: WorkflowStepModel[] = [
         {
             id: 'watchlist',
@@ -949,7 +956,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
                     <h3 className='mt-0.5 text-base font-semibold text-ui-text'>Watchlist match to customer handoff</h3>
                 </div>
                 <a href='#dwm-workflow-actions' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
-                    Run first setup
+                    {routeControlLabel}
                 </a>
             </div>
             <div className='grid gap-2 p-3 md:grid-cols-2 xl:grid-cols-6'>
