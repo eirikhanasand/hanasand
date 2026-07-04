@@ -35,6 +35,21 @@ type SandboxNetworkEvent = {
     failure?: string
     at: string
 }
+type SandboxDeobfuscationTask = {
+    scriptId?: string
+    source?: string
+    sample?: string
+    decodedPreview?: string
+    summary?: string
+}
+type WebCrackLoadResult = {
+    loaded: boolean
+    scriptId?: string
+    source?: string
+    sampleBytes?: number
+    action?: string
+    reason?: string
+}
 
 const DEFAULT_TARGET = 'http://sample-intel-source.onion'
 const DEFAULT_WIDTH = 1280
@@ -250,14 +265,20 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }, durationMs)
 
         await navigate(target)
-        await captureProfileTools(context, message.profileTools || [], target)
+        const primaryEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
+        await captureProfileTools(context, message.profileTools || [], target, primaryEvidence?.deobfuscationTasks || [])
         frameTimer = setInterval(() => {
             void sendFrame(false)
         }, FRAME_INTERVAL_MS)
         send({ type: 'ready', sessionId, target, network, torProxyConfigured: Boolean(proxy) })
     }
 
-    async function captureProfileTools(context: BrowserContext, tools: Array<{ id?: string; name?: string; url?: string }>, target: string) {
+    async function captureProfileTools(
+        context: BrowserContext,
+        tools: Array<{ id?: string; name?: string; url?: string }>,
+        target: string,
+        deobfuscationTasks: SandboxDeobfuscationTask[] = [],
+    ) {
         for (const tool of tools.slice(0, 6)) {
             if (!tool.url) continue
             const toolPage = await context.newPage().catch(() => null)
@@ -267,9 +288,15 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             try {
                 await toolPage.goto(toolUrl, { waitUntil: 'domcontentloaded', timeout: 25_000 })
                 await toolPage.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined)
+                const webcrackLoad = isWebCrackTool(tool, toolUrl)
+                    ? await loadWebCrackSample(toolPage, deobfuscationTasks)
+                    : undefined
+                if (webcrackLoad?.loaded) {
+                    await toolPage.waitForTimeout(1200).catch(() => undefined)
+                }
                 const buffer = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
                 const evidence = await collectPageEvidence(toolPage)
-                const toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence)
+                const toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
                 send({
                     type: 'tool_capture',
                     sessionId,
@@ -281,6 +308,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     image: buffer ? buffer.toString('base64') : null,
                     evidence,
                     toolAnalysis,
+                    webcrackLoad,
                     target,
                 })
             } catch (error) {
@@ -488,6 +516,78 @@ function domainFromUrl(value: string) {
     }
 }
 
+function isWebCrackTool(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string) {
+    return /web\s*crack|webcrack/i.test(`${tool.id || ''} ${tool.name || ''} ${tool.url || ''} ${resolvedUrl}`)
+}
+
+async function loadWebCrackSample(page: Page, tasks: SandboxDeobfuscationTask[]): Promise<WebCrackLoadResult> {
+    const task = tasks.find(item => item.sample || item.decodedPreview)
+    const sample = (task?.sample || task?.decodedPreview || '').slice(0, 12000)
+    if (!task || !sample) {
+        return { loaded: false, reason: 'no obfuscated script sample extracted from target page' }
+    }
+
+    const textArea = page.locator('textarea').first()
+    if (await textArea.count().catch(() => 0)) {
+        await textArea.fill(sample, { timeout: 2500 })
+        await triggerWebCrackRun(page)
+        return {
+            loaded: true,
+            scriptId: task.scriptId,
+            source: task.source,
+            sampleBytes: Buffer.byteLength(sample),
+            action: 'filled_textarea',
+        }
+    }
+
+    const editable = page.locator('[contenteditable="true"]').first()
+    if (await editable.count().catch(() => 0)) {
+        await editable.evaluate((element, value) => {
+            element.textContent = value
+            element.dispatchEvent(new InputEvent('input', { bubbles: true, data: value, inputType: 'insertText' }))
+        }, sample)
+        await triggerWebCrackRun(page)
+        return {
+            loaded: true,
+            scriptId: task.scriptId,
+            source: task.source,
+            sampleBytes: Buffer.byteLength(sample),
+            action: 'filled_contenteditable',
+        }
+    }
+
+    const monaco = page.locator('.monaco-editor textarea, .cm-content, [role="textbox"]').first()
+    if (await monaco.count().catch(() => 0)) {
+        await monaco.click({ timeout: 2500 }).catch(() => undefined)
+        await page.keyboard.insertText(sample).catch(() => undefined)
+        await triggerWebCrackRun(page)
+        return {
+            loaded: true,
+            scriptId: task.scriptId,
+            source: task.source,
+            sampleBytes: Buffer.byteLength(sample),
+            action: 'inserted_editor_text',
+        }
+    }
+
+    return {
+        loaded: false,
+        scriptId: task.scriptId,
+        source: task.source,
+        sampleBytes: Buffer.byteLength(sample),
+        reason: 'WebCrack input editor was not found',
+    }
+}
+
+async function triggerWebCrackRun(page: Page) {
+    const runButton = page.getByRole('button', { name: /deobfuscate|unpack|analy[sz]e|run|crack/i }).first()
+    if (await runButton.count().catch(() => 0)) {
+        await runButton.click({ timeout: 2500 }).catch(() => undefined)
+        return
+    }
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter').catch(() => undefined)
+}
+
 async function collectPageEvidence(page: Page) {
     const snapshot = await page.evaluate(() => {
         const text = document.body?.innerText || ''
@@ -576,7 +676,7 @@ async function collectPageEvidence(page: Page) {
     }
 }
 
-function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<typeof collectPageEvidence>>) {
+function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<typeof collectPageEvidence>>, webcrackLoad?: WebCrackLoadResult) {
     const tool = toolName.toLowerCase()
     const text = [
         evidence.url || '',
@@ -612,7 +712,12 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
             isVirusTotal && Number.isFinite(flagged) ? `${flagged}/${total || '?'} vendors flagged` : '',
             isUrlQuery && Number.isFinite(alertCount) ? `${alertCount} urlquery alert${alertCount === 1 ? '' : 's'}` : '',
             communityCommentCount ? `${communityCommentCount} community comment${communityCommentCount === 1 ? '' : 's'}` : '',
+            webcrackLoad?.loaded ? `WebCrack loaded ${webcrackLoad.scriptId || 'script sample'}` : '',
         ].filter(Boolean),
+        webcrackLoaded: webcrackLoad?.loaded,
+        webcrackScriptId: webcrackLoad?.scriptId,
+        webcrackSampleBytes: webcrackLoad?.sampleBytes,
+        webcrackLoadReason: webcrackLoad?.reason,
     }
 }
 

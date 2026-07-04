@@ -29,6 +29,15 @@ type Capture = {
     evidence?: SandboxEvidence
     toolAnalysis?: SandboxToolAnalysis
     networkSummary?: SandboxNetworkSummary
+    webcrackLoad?: SandboxWebCrackLoad
+}
+type SandboxWebCrackLoad = {
+    loaded?: boolean
+    scriptId?: string
+    source?: string
+    sampleBytes?: number
+    action?: string
+    reason?: string
 }
 type SandboxNetworkSummary = {
     requestCount?: number
@@ -50,6 +59,10 @@ type SandboxToolAnalysis = {
     communitySummary?: string
     verdict?: string
     extractedSignals?: string[]
+    webcrackLoaded?: boolean
+    webcrackScriptId?: string
+    webcrackSampleBytes?: number
+    webcrackLoadReason?: string
 }
 type SandboxEvidence = {
     url?: string
@@ -228,6 +241,7 @@ export default function BrowserSandboxPageClient() {
                     error: stringValue(payload.error),
                     evidence: evidenceValue(payload.evidence),
                     toolAnalysis: toolAnalysisValue(payload.toolAnalysis),
+                    webcrackLoad: webcrackLoadValue(payload.webcrackLoad),
                 }))
                 pushEvent(`${stringValue(payload.name) || 'Profile tool'} captured.`)
                 return
@@ -454,8 +468,8 @@ function AnalystSummary({ summary }: { summary: ReturnType<typeof buildAnalystSu
             ) : null}
             {summary.deobfuscationTasks.length ? (
                 <div className='mt-3 rounded-md border border-ui-warning/30 bg-ui-warning/10 p-3'>
-                    <p className='text-xs font-semibold uppercase text-ui-warning'>WebCrack queue</p>
-                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{summary.deobfuscationTasks.length} script sample{summary.deobfuscationTasks.length === 1 ? '' : 's'} ready for deobfuscation review. {summary.deobfuscationSummary}</p>
+                    <p className='text-xs font-semibold uppercase text-ui-warning'>WebCrack analysis</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{summary.deobfuscationTasks.length} script sample{summary.deobfuscationTasks.length === 1 ? '' : 's'} extracted. {summary.webcrackLoaded ? `WebCrack loaded ${summary.webcrackLoaded} sample${summary.webcrackLoaded === 1 ? '' : 's'} for deobfuscation.` : 'WebCrack did not accept an extracted sample yet.'} {summary.deobfuscationSummary}</p>
                 </div>
             ) : null}
         </section>
@@ -485,6 +499,13 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
                             <div className='grid gap-1 rounded-md border border-ui-border bg-ui-panel p-2 text-[11px] text-ui-muted'>
                                 <p>{capture.networkSummary.requestCount || 0} requests · {capture.networkSummary.uniqueDomainCount || 0} domains · {capture.networkSummary.failedCount || 0} blocked/failed</p>
                                 {capture.networkSummary.domains?.length ? <p className='truncate font-mono'>{capture.networkSummary.domains.slice(0, 4).join('  ')}</p> : null}
+                            </div>
+                        ) : null}
+                        {capture.webcrackLoad ? (
+                            <div className='grid gap-1 rounded-md border border-ui-warning/30 bg-ui-warning/10 p-2 text-[11px] text-ui-muted'>
+                                <p>{capture.webcrackLoad.loaded ? 'WebCrack sample loaded' : 'WebCrack sample not loaded'}{capture.webcrackLoad.scriptId ? ` · ${capture.webcrackLoad.scriptId}` : ''}</p>
+                                {capture.webcrackLoad.sampleBytes ? <p>{capture.webcrackLoad.sampleBytes} bytes inserted for deobfuscation.</p> : null}
+                                {capture.webcrackLoad.reason ? <p>{capture.webcrackLoad.reason}</p> : null}
                             </div>
                         ) : null}
                         {capture.evidence?.reasons?.length ? (
@@ -530,6 +551,8 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     const suspiciousCaptures = captures.filter(capture => capture.evidence?.verdict === 'suspicious')
     const obfuscatedScripts = captures.flatMap(capture => capture.evidence?.obfuscatedScripts || [])
     const deobfuscationTasks = captures.flatMap(capture => capture.evidence?.deobfuscationTasks || [])
+    const webcrackLoads = captures.flatMap(capture => capture.webcrackLoad ? [capture.webcrackLoad] : [])
+    const webcrackLoaded = webcrackLoads.filter(load => load.loaded).length
     const comments = captures.flatMap(capture => capture.evidence?.comments || []).slice(0, 4)
     const confidence = Math.max(0, ...captures.map(capture => capture.evidence?.confidence || 0))
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
@@ -551,6 +574,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         indicators: allIndicators,
         deobfuscationTasks,
         deobfuscationSummary,
+        webcrackLoaded,
         rows: [
             { label: 'Page captures', value: String(pageCaptures.length) },
             { label: 'Profile tools', value: `${toolCaptures.length}/${profile.tools.length}` },
@@ -563,6 +587,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
             { label: 'Blocked/failed requests', value: String(failedRequests) },
             { label: 'Suspicious captures', value: String(suspiciousCaptures.length) },
             { label: 'Obfuscated scripts', value: String(obfuscatedScripts.length) },
+            { label: 'WebCrack loaded', value: String(webcrackLoaded) },
             { label: 'Highest confidence', value: confidence ? `${confidence}%` : 'unknown' },
             { label: 'Copyable indicators', value: String(allIndicators.length) },
         ],
@@ -600,6 +625,11 @@ function toolAnalysisValue(value: unknown): SandboxToolAnalysis | undefined {
 function networkSummaryValue(value: unknown): SandboxNetworkSummary | undefined {
     if (!value || typeof value !== 'object') return undefined
     return value as SandboxNetworkSummary
+}
+
+function webcrackLoadValue(value: unknown): SandboxWebCrackLoad | undefined {
+    if (!value || typeof value !== 'object') return undefined
+    return value as SandboxWebCrackLoad
 }
 
 function mergeProfiles(input: SandboxProfile[]) {
