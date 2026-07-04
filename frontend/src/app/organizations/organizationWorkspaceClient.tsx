@@ -1223,7 +1223,10 @@ function ActionAnchor({ href, icon, label, disabled }: { href: string, icon: Rea
     const classes = disabled
         ? 'pointer-events-none inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'
         : 'inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:bg-ui-raised dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
-    return <a className={classes} href={href} aria-disabled={disabled}>{icon}{label}</a>
+    if (disabled) {
+        return <span className={classes} aria-disabled='true'>{icon}{label}</span>
+    }
+    return <a className={classes} href={href}>{icon}{label}</a>
 }
 
 function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount, destinationCount, alertCount, caseCount, alertId }: {
@@ -1301,21 +1304,22 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                 </div>
             </div>
             <div className='mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
-                {rows.map(row => (
-                    <a
-                        key={row.id}
-                        href={row.href}
-                        aria-disabled={row.blocked}
-                        className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg border px-3 py-3 transition ${row.ready ? 'border-ui-success/35 bg-ui-success/10 dark:border-ui-success/35 dark:bg-ui-success/10' : row.blocked ? 'pointer-events-none border-ui-border bg-ui-raised opacity-70 dark:border-ui-border dark:bg-ui-canvas' : 'border-ui-primary/35 bg-ui-panel hover:border-ui-primary/35 dark:border-ui-border dark:bg-ui-panel'}`}
-                    >
-                        {row.ready ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-ui-warning' />}
-                        <span className='min-w-0'>
-                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.title}</span>
-                            <span className='block truncate text-xs text-ui-muted dark:text-ui-muted'>{row.body}</span>
-                            <span className='mt-2 block text-xs font-semibold text-ui-primary dark:text-ui-primary'>{row.blocked ? 'Owner or admin required' : row.action}</span>
-                        </span>
-                    </a>
-                ))}
+                {rows.map(row => {
+                    const rowClass = `grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg border px-3 py-3 transition ${row.ready ? 'border-ui-success/35 bg-ui-success/10 dark:border-ui-success/35 dark:bg-ui-success/10' : row.blocked ? 'border-ui-border bg-ui-raised opacity-70 dark:border-ui-border dark:bg-ui-canvas' : 'border-ui-primary/35 bg-ui-panel hover:border-ui-primary/35 dark:border-ui-border dark:bg-ui-panel'}`
+                    const content = (
+                        <>
+                            {row.ready ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-ui-warning' />}
+                            <span className='min-w-0'>
+                                <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.title}</span>
+                                <span className='block truncate text-xs text-ui-muted dark:text-ui-muted'>{row.body}</span>
+                                <span className='mt-2 block text-xs font-semibold text-ui-primary dark:text-ui-primary'>{row.blocked ? 'Owner or admin required' : row.action}</span>
+                            </span>
+                        </>
+                    )
+                    return row.blocked
+                        ? <span key={row.id} className={rowClass} aria-disabled='true'>{content}</span>
+                        : <a key={row.id} href={row.href} className={rowClass}>{content}</a>
+                })}
             </div>
         </section>
     )

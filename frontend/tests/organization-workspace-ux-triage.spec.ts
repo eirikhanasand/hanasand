@@ -33,6 +33,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('onDelete={destination => void deleteSavedDestination(destination)}')
     expect(page).toContain('admin controls enabled')
     expect(page).toContain('read-only access')
+    expect(page).toContain('return <span className={classes} aria-disabled=\'true\'>{icon}{label}</span>')
+    expect(page).toContain('? <span key={row.id} className={rowClass} aria-disabled=\'true\'>{content}</span>')
 
     expect(page).toContain('bg-ui-text px-4 text-sm font-semibold text-ui-canvas')
     expect(page).not.toContain('dark:text-white')
