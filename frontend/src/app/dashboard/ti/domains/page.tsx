@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Globe2, Radar } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Clock3, Globe2, Radar } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { domainCaptures, formatTiDate, getTiAdminOverview, sourceById } from '@/utils/tiAdmin/ops'
 
@@ -27,13 +27,25 @@ export default function TiDomainsPage() {
                 description='Triage companies, domains, vendors, and brands surfaced by monitored sources.'
             />
 
-            <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
-                <Metric title='Needs review' value={String(reviewCount)} detail='operator triage' tone={reviewCount ? 'warn' : 'ok'} />
-                <Metric title='Watching' value={String(watchingCount)} detail='active monitored entities' tone='ok' />
-                <Metric title='Low noise' value={String(quietCount)} detail='no current action' tone='hold' />
-                <Metric title='Results' value={String(resultCount)} detail='surfaced records' tone='hold' />
-                <Metric title='Newest' value={newest ? relativeAge(newest.lastSeenAt) : 'Checking'} detail={newest?.domain || 'entity stream'} tone='hold' />
-            </div>
+            <details data-ti-domains-summary-disclosure className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+                <summary className='flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 [&::-webkit-details-marker]:hidden'>
+                    <span className='inline-flex items-center gap-2'>
+                        <Globe2 className='h-4 w-4 text-ui-primary' />
+                        Entity totals
+                    </span>
+                    <span className='inline-flex items-center gap-2 text-xs font-semibold text-ui-muted'>
+                        {reviewCount} review · {watchingCount} watching · {resultCount} results
+                        <ChevronDown className='h-4 w-4 transition-transform group-open:rotate-180' />
+                    </span>
+                </summary>
+                <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-5' data-ti-domains-summary-metrics>
+                    <Metric title='Needs review' value={String(reviewCount)} detail='operator triage' tone={reviewCount ? 'warn' : 'ok'} />
+                    <Metric title='Watching' value={String(watchingCount)} detail='active monitored entities' tone='ok' />
+                    <Metric title='Low noise' value={String(quietCount)} detail='no current action' tone='hold' />
+                    <Metric title='Results' value={String(resultCount)} detail='surfaced records' tone='hold' />
+                    <Metric title='Newest' value={newest ? relativeAge(newest.lastSeenAt) : 'Checking'} detail={newest?.domain || 'entity stream'} tone='hold' />
+                </div>
+            </details>
 
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-4 py-3'>
@@ -110,15 +122,21 @@ export default function TiDomainsPage() {
                     </div>
                 </DashboardPanel>
 
-                <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
-                    <div className='flex items-center justify-between gap-3'>
-                        <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Source coverage</h2>
-                            <p className='mt-1 text-sm text-ui-muted'>Evidence-producing sources per monitored entity.</p>
-                        </div>
-                        <Radar className='h-4 w-4 text-ui-primary' />
-                    </div>
-                    <div className='mt-4 grid gap-3'>
+                <details data-ti-domains-source-coverage-disclosure className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+                    <summary className='flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 [&::-webkit-details-marker]:hidden'>
+                        <span>
+                            <span className='flex items-center gap-2 text-base font-semibold text-ui-text'>
+                                <Radar className='h-4 w-4 text-ui-primary' />
+                                Source coverage
+                            </span>
+                            <span className='mt-1 block text-sm text-ui-muted'>Evidence-producing sources per monitored entity.</span>
+                        </span>
+                        <span className='inline-flex items-center gap-2 text-xs font-semibold text-ui-muted'>
+                            {rows.reduce((sum, row) => sum + row.sources.length, 0)} source links
+                            <ChevronDown className='h-4 w-4 transition-transform group-open:rotate-180' />
+                        </span>
+                    </summary>
+                    <div className='grid gap-3 border-t border-ui-border p-4' data-ti-domains-source-coverage>
                         {rows.map(row => (
                             <div key={row.domain.domain} className='rounded-md border border-ui-border bg-ui-raised p-3'>
                                 <div className='flex items-center justify-between gap-3'>
@@ -131,7 +149,7 @@ export default function TiDomainsPage() {
                             </div>
                         ))}
                     </div>
-                </DashboardPanel>
+                </details>
             </div>
         </DashboardPage>
     )
