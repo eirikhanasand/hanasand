@@ -512,7 +512,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
             {selectedAlert ? (
                 <section id='dwm-workflow-actions' className='scroll-mt-24 overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-dwm-selected-workflow-actions>
                     <div className='flex flex-col gap-1 border-b border-ui-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
-                        <h2 className='text-sm font-semibold text-ui-text'>Route controls</h2>
+                        <h2 className='text-sm font-semibold text-ui-text'>Action controls</h2>
                         <p className='text-xs font-medium text-ui-muted'>Watchlist, source pack, case, and webhook actions</p>
                     </div>
                     <div className='p-3'>
@@ -581,7 +581,7 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
         { label: 'Captures', value: `${captureCount}`, detail: latestRunLabel, tone: captureCount ? 'ready' : 'waiting' },
         { label: 'Matches', value: `${watchlistMatchCount}`, detail: alertCount ? `${alertCount} alerts` : 'watching', tone: alertCount ? 'ready' : 'waiting' },
         { label: 'Cases', value: `${caseCount}`, detail: caseCount ? 'linked' : 'open from alert', tone: caseCount ? 'ready' : alertCount ? 'waiting' : 'blocked' },
-        { label: 'Delivery', value: deliveryCount ? `${deliveryCount}` : webhookState, detail: deliveryCount ? 'attempts' : 'test route', tone: deliveryCount || webhookReady(webhookState) ? 'ready' : 'waiting' },
+        { label: 'Delivery', value: deliveryCount ? `${deliveryCount}` : webhookState, detail: deliveryCount ? 'attempts' : 'test delivery', tone: deliveryCount || webhookReady(webhookState) ? 'ready' : 'waiting' },
     ] as const
 
     return (
@@ -1127,11 +1127,11 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
     const canOpenCase = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
     const routeControlLabel = actualCaseId
         ? latestDelivery
-            ? 'Route controls'
+            ? 'Action controls'
             : 'Test delivery'
         : canOpenCase
             ? 'Open case'
-            : 'Run route'
+            : 'Review action'
     const steps: WorkflowStepModel[] = [
         {
             id: 'watchlist',
