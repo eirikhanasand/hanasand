@@ -188,6 +188,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const [queueSort, setQueueSort] = useState<'priority' | 'confidence' | 'freshness'>('priority')
     const [showMoreAnalysis, setShowMoreAnalysis] = useState(false)
     const [showFullQueue, setShowFullQueue] = useState(false)
+    const [showGeoCoverage, setShowGeoCoverage] = useState(false)
     const largeViewport = useMediaQuery('(min-width: 1024px)')
     const renderDesktopActions = largeViewport !== false
     const renderMobileWorkbar = largeViewport !== true
@@ -328,7 +329,7 @@ function Results({ result }: { result: TiSearchResponse }) {
             <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel'>
                 {renderMobileWorkbar && mobileEvidenceWorkbar ? <div className='border-b border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
                 <div className='grid gap-4 border-b border-ui-border bg-ui-panel p-4 dark:border-ui-border dark:bg-ui-panel'>
-                    <div className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] xl:items-stretch'>
+                    <div className='grid min-w-0 gap-4 xl:grid-cols-[minmax(320px,0.78fr)_minmax(520px,1.22fr)] xl:items-start'>
                         <div className='grid min-w-0 content-start gap-4'>
                             <div className='min-w-0'>
                                 <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center'>
@@ -341,40 +342,52 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 </div>
                                 <p className='mt-3 max-w-3xl text-base leading-7 text-ui-muted dark:text-ui-muted'>{displayRequirementText(result.summary)}</p>
                             </div>
-                            <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-3'>
+                            <div className='flex min-w-0 flex-wrap gap-2'>
                                 {profileStats.map(item => (
                                     <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
                                 ))}
                             </div>
-                            <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
                         </div>
-                        <div className='grid min-w-0 content-start gap-3' data-ti-actor-visual='true'>
+                        <div className='grid min-w-0 content-start gap-3' data-ti-actor-workspace-rail='true'>
                             {selected ? (
-                                <section id='ti-selected-evidence' data-ti-actor-evidence-spotlight='true' className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel'>
-                                    <div className='flex flex-wrap items-start justify-between gap-3'>
-                                        <div className='min-w-0'>
-                                            <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Selected evidence</p>
-                                            <h2 className='mt-1 wrap-break-word text-base font-semibold leading-6 text-ui-text dark:text-ui-text'>{displayRequirementText(selected.title)}</h2>
-                                            <p className='mt-1 line-clamp-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selected.detail)}</p>
-                                        </div>
-                                        <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
-                                    </div>
-                                    <div className='grid gap-2 sm:grid-cols-3'>
-                                        <EvidenceMetric label='Source' value={selected.source} />
-                                        <EvidenceMetric label='Strength' value={sourceBasisLabel(selected.confidence)} />
-                                        <EvidenceMetric label='First seen' value={selected.timestamp} />
-                                    </div>
-                                    <div className='flex flex-wrap gap-2'>
-                                        <a href='#ti-evidence-drilldown' className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'>
-                                            Source context
-                                        </a>
-                                        <a href='#ti-actions' className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-text bg-ui-text px-3 text-xs font-semibold text-ui-canvas transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-text dark:bg-ui-text dark:text-ui-canvas'>
-                                            Review actions
-                                        </a>
-                                    </div>
-                                </section>
+                                <SelectedEvidenceRail
+                                    selected={selected}
+                                    reviewHandoff={reviewHandoff}
+                                    caseDraft={selectedCaseDraft}
+                                    caseOwnership={selectedCaseOwnership}
+                                    alertPlan={selectedAlertPlan}
+                                    deliveryPlan={selectedDeliveryPlan}
+                                    sourceDrilldown={selectedSourceDrilldown}
+                                    watchlistPlan={selectedWatchlistPlan}
+                                    caseHref={selectedConsoleLinks?.case}
+                                    watchlistHref={selectedConsoleLinks?.watchlist}
+                                    alertHref={selectedConsoleLinks?.alert}
+                                    onOpenDetails={() => setShowMoreAnalysis(true)}
+                                    onStage={stageSelectedHandoff}
+                                    onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
+                                    onEscalate={() => applyDecision('escalated')}
+                                    onReview={() => applyDecision('reviewing')}
+                                />
                             ) : null}
-                            <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
+                            <section data-ti-geo-subordinate='true' className='rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-panel'>
+                                <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 px-3 py-2'>
+                                    <div className='min-w-0'>
+                                        <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Geography</p>
+                                        <p className='mt-0.5 wrap-break-word text-xs text-ui-muted dark:text-ui-muted'>
+                                            {actorIntel.geographies.length ? `${actorIntel.geographies.slice(0, 3).join(', ')}${actorIntel.geographies.length > 3 ? ` +${actorIntel.geographies.length - 3}` : ''}` : 'Country coverage needs source detail.'}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type='button'
+                                        onClick={() => setShowGeoCoverage(value => !value)}
+                                        aria-expanded={showGeoCoverage}
+                                        className='inline-flex min-h-8 shrink-0 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'
+                                    >
+                                        {showGeoCoverage ? 'Hide map' : 'Open map'}
+                                    </button>
+                                </div>
+                                {showGeoCoverage ? <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact /> : null}
+                            </section>
                         </div>
                     </div>
                 </div>
@@ -547,6 +560,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <div id='ti-secondary-analysis' className='grid gap-3'>
                                             <TiCommandBar links={commandLinks} />
                                             <SectionOverviewRail items={sectionOverview} />
+                                            <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
                                         </div>
                                         <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                                         <ActorIntelligenceDossier
@@ -623,18 +637,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
                                     onStage={stageSelectedHandoff}
                                 />
-                            ) : (
-                                <SelectedWorkflowSummaryPanel
-                                    selected={selected}
-                                    reviewHandoff={reviewHandoff}
-                                    caseDraft={selectedCaseDraft}
-                                    caseOwnership={selectedCaseOwnership}
-                                    alertPlan={selectedAlertPlan}
-                                    deliveryPlan={selectedDeliveryPlan}
-                                    sourceDrilldown={selectedSourceDrilldown}
-                                    onOpenDetails={() => setShowMoreAnalysis(true)}
-                                />
-                            )}
+                            ) : null}
                         </div>
                         <StagedHandoffQueuePanel
                             items={Object.values(stagedHandoffs)}
@@ -726,6 +729,107 @@ function useMediaQuery(query: string) {
     }, [query])
 
     return matches
+}
+
+function SelectedEvidenceRail({
+    selected,
+    reviewHandoff,
+    caseDraft,
+    caseOwnership,
+    alertPlan,
+    deliveryPlan,
+    sourceDrilldown,
+    watchlistPlan,
+    caseHref,
+    watchlistHref,
+    alertHref,
+    onOpenDetails,
+    onStage,
+    onWatchlist,
+    onEscalate,
+    onReview,
+}: {
+    selected: AnalystWorkItem
+    reviewHandoff: SelectedReviewHandoff | null
+    caseDraft: SelectedCaseDraft | null
+    caseOwnership: SelectedCaseOwnershipPlan | null
+    alertPlan: SelectedAlertActionPlan | null
+    deliveryPlan: SelectedDeliveryReadinessPlan | null
+    sourceDrilldown: ReturnType<typeof selectedSourceDrilldownFor> | null
+    watchlistPlan: SelectedWatchlistPlan | null
+    caseHref?: string
+    watchlistHref?: string
+    alertHref?: string
+    onOpenDetails: () => void
+    onStage: () => void
+    onWatchlist: () => void
+    onEscalate: () => void
+    onReview: () => void
+}) {
+    const alertReady = Boolean(reviewHandoff?.alertHandoff.ready || alertPlan?.ready)
+    const caseReady = Boolean(reviewHandoff?.caseHandoff.ready || caseDraft)
+    const deliveryReady = deliveryPlan?.state === 'ready'
+    const watchReady = Boolean(watchlistPlan?.ready || watchlistHref)
+    const sourceCount = sourceDrilldown?.rows.length ?? 0
+    const owner = caseOwnership?.owner.label ?? 'unassigned'
+    const alertValue = deliveryPlan?.summary.alerts
+        ? `${deliveryPlan.summary.alerts} linked`
+        : alertPlan?.readiness.candidateCount
+            ? `${alertPlan.readiness.candidateCount} candidates`
+            : 'watchlist needed'
+    const caseValue = deliveryPlan?.summary.caseRoutes
+        ? `${deliveryPlan.summary.caseRoutes} linked`
+        : caseOwnership?.summary.caseCandidates
+            ? `${caseOwnership.summary.caseCandidates} candidates`
+            : caseDraft
+                ? 'draft ready'
+                : 'source needed'
+
+    return (
+        <section id='ti-selected-evidence' data-ti-actor-evidence-spotlight='true' className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel'>
+            <div className='grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_15rem]'>
+                <div className='min-w-0'>
+                    <div className='flex flex-wrap items-center gap-2'>
+                        <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Selected evidence</p>
+                        <span className={`rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
+                        <span className={decisionStepStatusClass(alertReady ? 'ready' : 'review')}>alert {alertReady ? 'linked' : 'review'}</span>
+                        <span className={decisionStepStatusClass(caseReady ? 'ready' : 'review')}>case {caseReady ? 'ready' : 'review'}</span>
+                        <span className={decisionStepStatusClass(watchReady ? 'ready' : 'review')}>watch {watchReady ? 'ready' : 'review'}</span>
+                    </div>
+                    <h2 className='mt-2 wrap-break-word text-lg font-semibold leading-6 text-ui-text dark:text-ui-text'>{displayRequirementText(selected.title)}</h2>
+                    <p className='mt-1 line-clamp-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selected.detail)}</p>
+                    <div className='mt-3 grid gap-2 sm:grid-cols-4'>
+                        <EvidenceMetric label='Source' value={selected.source} />
+                        <EvidenceMetric label='Strength' value={sourceBasisLabel(selected.confidence)} />
+                        <EvidenceMetric label='First seen' value={selected.timestamp} />
+                        <EvidenceMetric label='Source rows' value={sourceCount ? String(sourceCount) : 'source needed'} />
+                    </div>
+                </div>
+                <div data-ti-selected-action-rail='true' className='grid min-w-0 content-start gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised'>
+                    <div className='grid grid-cols-2 gap-2 text-xs'>
+                        <EvidenceMetric label='Owner' value={owner} />
+                        <EvidenceMetric label='Alert' value={alertValue} />
+                        <EvidenceMetric label='Case' value={caseValue} />
+                        <EvidenceMetric label='Delivery' value={deliveryReady ? 'ready' : deliveryPlan ? 'review' : 'pending'} />
+                    </div>
+                    <div className='grid grid-cols-2 gap-1.5'>
+                        <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
+                        <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onStage} href={caseHref} disabled={!caseHref && !caseReady}>Case</StripActionButton>
+                        <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate} href={alertHref}>Escalate</StripActionButton>
+                        <StripActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
+                    </div>
+                    <button
+                        type='button'
+                        onClick={onOpenDetails}
+                        className='inline-flex min-h-9 w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                    >
+                        <Eye className='h-3.5 w-3.5' />
+                        Open details
+                    </button>
+                </div>
+            </div>
+        </section>
+    )
 }
 
 function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchlistCount, gapCount, onToggle }: {
@@ -3149,7 +3253,7 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
                             </div>
                             <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'attached' : 'needed'}</span>
                         </div>
-                        <div className='mt-2 grid grid-cols-2 gap-2'>
+                        <div className='mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2'>
                             <EvidenceMetric label='Timestamp' value={row.reportDate ? formatDate(row.reportDate) : 'Not dated'} />
                             <EvidenceMetric label='Basis' value={sourceBasisLabel(row.confidence)} />
                         </div>
@@ -5340,75 +5444,6 @@ function caseReviewCandidatePayloadFor(row: CaseReviewIntakeItem, query: string)
         recommendedAction: row.recommendedAction,
         nextAction: row.nextAction,
     }
-}
-
-function SelectedWorkflowSummaryPanel({
-    selected,
-    reviewHandoff,
-    caseDraft,
-    caseOwnership,
-    alertPlan,
-    deliveryPlan,
-    sourceDrilldown,
-    onOpenDetails,
-}: {
-    selected?: AnalystWorkItem
-    reviewHandoff: SelectedReviewHandoff | null
-    caseDraft: SelectedCaseDraft | null
-    caseOwnership: SelectedCaseOwnershipPlan | null
-    alertPlan: SelectedAlertActionPlan | null
-    deliveryPlan: SelectedDeliveryReadinessPlan | null
-    sourceDrilldown: ReturnType<typeof selectedSourceDrilldownFor> | null
-    onOpenDetails: () => void
-}) {
-    const alertReady = Boolean(reviewHandoff?.alertHandoff.ready || alertPlan?.ready)
-    const caseReady = Boolean(reviewHandoff?.caseHandoff.ready || caseDraft)
-    const deliveryReady = deliveryPlan?.state === 'ready'
-    const sourceCount = sourceDrilldown?.rows.length ?? 0
-    const owner = caseOwnership?.owner.label ?? 'unassigned'
-    const alertValue = deliveryPlan?.summary.alerts
-        ? `${deliveryPlan.summary.alerts} linked`
-        : alertPlan?.readiness.candidateCount
-            ? `${alertPlan.readiness.candidateCount} candidates`
-            : 'watchlist needed'
-    const caseRouteValue = deliveryPlan?.summary.caseRoutes
-        ? `${deliveryPlan.summary.caseRoutes} linked`
-        : caseOwnership?.summary.caseCandidates
-            ? `${caseOwnership.summary.caseCandidates} candidates`
-            : caseDraft
-                ? 'draft ready'
-                : 'source needed'
-    return (
-        <Panel title='Selected workflow' description='Source, alert, and case state for the selected finding.' icon={<ShieldAlert className='h-4 w-4' />}>
-            <div className='grid gap-3'>
-                <div className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
-                    <p className='wrap-break-word text-sm font-semibold text-ui-text dark:text-ui-text'>{selected ? displayRequirementText(selected.title) : 'Select a finding'}</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {selected ? `${selected.source} · ${sourceBasisLabel(selected.confidence)} · ${selected.timestamp}` : 'Choose a row to inspect source and case context.'}
-                    </p>
-                </div>
-                <div className='grid grid-cols-2 gap-2'>
-                    <EvidenceMetric label='Source rows' value={sourceCount ? String(sourceCount) : 'source needed'} />
-                    <EvidenceMetric label='Owner' value={owner} />
-                    <EvidenceMetric label='Alert context' value={alertValue} />
-                    <EvidenceMetric label='Case path' value={caseRouteValue} />
-                </div>
-                <div className='flex min-w-0 flex-wrap gap-1.5'>
-                    <span className={decisionStepStatusClass(alertReady ? 'ready' : 'review')}>alert {alertReady ? 'linked' : 'review'}</span>
-                    <span className={decisionStepStatusClass(caseReady ? 'ready' : 'review')}>case {caseReady ? 'ready' : 'review'}</span>
-                    <span className={decisionStepStatusClass(deliveryReady ? 'ready' : deliveryPlan ? 'review' : 'blocked')}>delivery {deliveryReady ? 'ready' : deliveryPlan ? 'review' : 'pending'}</span>
-                </div>
-                <button
-                    type='button'
-                    onClick={onOpenDetails}
-                    className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
-                >
-                    <ClipboardList className='h-3.5 w-3.5' />
-                    Open workflow details
-                </button>
-            </div>
-        </Panel>
-    )
 }
 
 function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, caseOwnership, caseCreateRequest, watchlistPlan, alertPlan, deliveryPlan, enrichmentTriage, onNoteChange, onDecision, onRelevance, onStage }: {
