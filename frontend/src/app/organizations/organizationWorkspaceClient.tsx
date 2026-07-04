@@ -38,6 +38,7 @@ type OrganizationSettings = {
 
 type OrganizationMember = {
     userId: string
+    email?: string
     name?: string
     avatar?: string | null
     role: OrganizationRole
@@ -2930,8 +2931,8 @@ function inviteEmailConflicts(emails: string[], invites: OrganizationInvite[], m
         .map(invite => invite.email.toLowerCase()))
     const activeMemberEmailIds = new Set(members
         .filter(member => !['removed', 'revoked', 'inactive'].includes(member.status.toLowerCase()))
-        .map(member => member.userId.toLowerCase())
-        .filter(value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)))
+        .flatMap(member => [member.email?.toLowerCase(), member.userId.toLowerCase()])
+        .filter((value): value is string => Boolean(value) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)))
     return emails.filter(email => activeInviteEmails.has(email.toLowerCase()) || activeMemberEmailIds.has(email.toLowerCase()))
 }
 
