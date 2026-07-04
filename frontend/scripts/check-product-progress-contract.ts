@@ -22,6 +22,10 @@ for (const token of [
     'syntheticAnalystCaseDetailProof',
     'caseDetail: selectedCaseProof',
     'webhookDeliveryProofLedger(deliveries)',
+    'sourceProxyFromDwmProductFallback',
+    'payload?.schemaVersion !== \'dwm.product.v1\'',
+    'inventory?.schemaVersion !== \'dwm.source_inventory.v1\'',
+    'code: \'source_proxy_fallback_from_dwm_product\'',
 ]) {
     assert.ok(productProgressRouteSource.includes(token), `Product-progress route missing analyst case detail proof token: ${token}`)
 }
@@ -262,6 +266,63 @@ assert.equal(partialPayload.webhookHealth?.deliveryProofLedgerSource, '/api/dwm/
 assert.equal(partialPayload.webhookHealth?.deliveryProofLedgerPath, '/tmp/product-webhook-delivery-proof.json')
 assert.ok(partialPayload.webhookHealth?.backendProofContractVersion?.includes('product.webhook_delivery_proof_ledger.v1'), 'Webhook health must preserve delivery proof ledger schema.')
 assert.equal(partialPayload.dwmProduct?.status, 'needs_action')
+
+const dwmProductInventoryFallbackPayload = buildProductProgressPayload({
+    generatedAt,
+    checkedAt: generatedAt,
+    query: 'acworth-ga.gov',
+    routes,
+    sourceProxy: {
+        ok: true,
+        generatedAt,
+        query: 'acworth-ga.gov',
+        baseConfigured: false,
+        endpoints: {
+            sourceInventory: { ok: true, status: 200 },
+        },
+        sourceInventory: {
+            schemaVersion: 'dwm.source_inventory.v1',
+            generatedAt,
+            counts: {
+                registeredTotal: 1160,
+                registeredActiveOrCanary: 1150,
+                catalogTotalCandidates: 8000,
+                netNewCandidates: 7976,
+                duplicateCandidates: 24,
+                reviewQueue: 8000,
+            },
+        },
+        error: {
+            code: 'source_proxy_fallback_from_dwm_product',
+            message: 'Using /api/dwm/product?demo=false source inventory because scraper control proxy was unavailable.',
+        },
+    },
+    alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
+    deliveries: [{ id: 'deliv_acme_1', alertId: 'alert_acme_1', status: 'delivered', attemptedAt: generatedAt }],
+    alertGeneration: {
+        schemaVersion: 'dwm.alert_generation_readiness.v1',
+        status: 'ready',
+        readyForCustomerDelivery: true,
+        generationEvidenceWindowReady: true,
+        generationEvidenceWindowCaptureCount: 12,
+        latestEvidenceAt: generatedAt,
+        blockers: [],
+        source: routes.alertGenerationReadiness,
+        checkedAt: generatedAt,
+        proofTimestamp: generatedAt,
+    },
+    deploy: {
+        status: 'needs_action',
+        latestProbeAt: generatedAt,
+        frontendHealthy: true,
+        apiHealthy: true,
+        scraperHealthy: true,
+    },
+})
+assert.equal(dwmProductInventoryFallbackPayload.sourceProxy?.baseConfigured, false)
+assert.equal(dwmProductInventoryFallbackPayload.sourceProxy?.error?.code, 'source_proxy_fallback_from_dwm_product')
+assert.equal(dwmProductInventoryFallbackPayload.dashboardEvidence?.sourceProxyReady, true)
+assert.equal(dwmProductInventoryFallbackPayload.deployProbe?.scraperHealthy, true)
 
 for (const dependency of [
     partialPayload.publicTiProvenance,
@@ -925,6 +986,10 @@ for (const scopedProgressToken of [
     'Replay query:',
     'Audit export route:',
     'dwmProductReadiness',
+    'sourceProxyFromDwmProductFallback',
+    'source_proxy_fallback_from_dwm_product',
+    'dwm.source_inventory.v1',
+    'sourceCount < 1000',
     '/api/dwm/watchlists',
     '/api/dwm/product?demo=false',
     '/api/organizations/:id/webhooks',

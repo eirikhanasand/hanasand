@@ -64,7 +64,16 @@ export async function GET(request: NextRequest) {
     const selectedCaseProof = selectedCaseDetail.ok
         ? analystCaseDetailProof(selectedCaseDetail, selectedCaseDetailRoute || '/api/cases/:id')
         : syntheticAnalystCaseDetailProof(selectedCase, selectedCaseDetail, selectedCaseDetailRoute || '/api/cases/:id', generatedAt)
-    const normalizedSourceProxy = normalizeSourceProxy(sourceProxy, query, generatedAt)
+    const fetchedSourceProxy = normalizeSourceProxy(sourceProxy, query, generatedAt)
+    const normalizedSourceProxy = sourceProxyReady(fetchedSourceProxy)
+        ? fetchedSourceProxy
+        : sourceProxyFromDwmProductFallback({
+            fetch: dwmProduct,
+            previous: fetchedSourceProxy,
+            query,
+            generatedAt,
+            route: routes.dwmProduct || '/api/dwm/product?demo=false',
+        }) || fetchedSourceProxy
     const helpdeskProofLedger = (!supportRecovery.ok || !auditEvents.ok || !supportAuditExportProof(auditEvents))
         ? await loadProductHelpdeskAuditProofLedger()
         : undefined
@@ -305,6 +314,45 @@ function normalizeSourceProxy(result: FetchResult, query: string, generatedAt: s
             code: result.status ? 'source_proxy_http_error' : 'source_proxy_fetch_failed',
             message: result.error || `Source proxy returned HTTP ${result.status}.`,
         },
+    }
+}
+
+function sourceProxyFromDwmProductFallback(input: {
+    fetch: FetchResult
+    previous: DashboardSourceProofProxyPayload
+    query: string
+    generatedAt: string
+    route: string
+}): DashboardSourceProofProxyPayload | undefined {
+    const payload = input.fetch.json as {
+        schemaVersion?: string
+        generatedAt?: string
+        sourceInventory?: DashboardSourceProofProxyPayload['sourceInventory']
+        sourcePacks?: DashboardSourceProofProxyPayload['sourcePacks']
+    } | undefined
+    const inventory = payload?.sourceInventory
+    const counts = inventory?.counts
+    const sourceCount = Math.max(counts?.registeredActiveOrCanary || 0, counts?.registeredTotal || 0)
+    if (!input.fetch.ok || payload?.schemaVersion !== 'dwm.product.v1' || inventory?.schemaVersion !== 'dwm.source_inventory.v1' || sourceCount < 1000) {
+        return undefined
+    }
+
+    return {
+        ok: true,
+        generatedAt: inventory.generatedAt || payload.generatedAt || input.generatedAt,
+        query: input.query,
+        baseConfigured: input.previous.baseConfigured ?? false,
+        endpoints: {
+            ...input.previous.endpoints,
+            sourceInventory: { ok: true, status: 200 },
+            ...(payload.sourcePacks ? { sourcePacks: { ok: true, status: 200 } } : {}),
+        },
+        sourceInventory: inventory,
+        sourcePacks: payload.sourcePacks,
+        error: input.previous.error ? {
+            code: 'source_proxy_fallback_from_dwm_product',
+            message: `Using ${input.route} source inventory because scraper control proxy was unavailable: ${input.previous.error.message || input.previous.error.code || 'unknown error'}.`,
+        } : undefined,
     }
 }
 
