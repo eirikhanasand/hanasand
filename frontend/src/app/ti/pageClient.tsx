@@ -6796,13 +6796,13 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
 
 function ActorSummaryFact({ icon, label, value, meta }: { icon: ReactNode; label: string; value: string; meta: string }) {
     return (
-        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 dark:border-ui-border dark:bg-ui-raised'>
+        <div className='min-w-0 border-l border-ui-border py-1 pl-2 dark:border-ui-border'>
             <p className='inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>
                 <span className='shrink-0 text-ui-primary dark:text-ui-primary'>{icon}</span>
                 <span className='truncate'>{label}</span>
             </p>
-            <p className='mt-1 wrap-break-word text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{value}</p>
-            <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{meta}</p>
+            <p className='mt-0.5 wrap-break-word text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{value}</p>
+            <p className='mt-0.5 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{meta}</p>
         </div>
     )
 }
@@ -10049,7 +10049,7 @@ function techniqueDescription(attackId: string, name: string, tactic: string, de
 
 function ProfileStat({ icon, label, value, dark = false }: { icon: React.ReactNode; label: string; value: string; dark?: boolean }) {
     return (
-        <span className={`inline-flex min-w-0 flex-wrap items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs ${dark ? 'border-ui-border bg-ui-panel text-ui-text' : 'border-ui-border bg-ui-raised text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'}`}>
+        <span className={`inline-flex min-w-0 flex-wrap items-center gap-1.5 border-l py-1 pl-2 text-xs ${dark ? 'border-ui-border text-ui-text' : 'border-ui-border text-ui-muted dark:border-ui-border dark:text-ui-muted'}`}>
             <span className={`shrink-0 ${dark ? 'text-ui-primary' : 'text-ui-primary'}`}>{icon}</span>
             <span className='shrink-0'>{label}</span>
             <span className={`min-w-0 wrap-break-word font-semibold ${dark ? 'text-ui-text' : 'text-ui-text dark:text-ui-text'}`}>{value}</span>
