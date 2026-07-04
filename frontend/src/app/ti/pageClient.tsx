@@ -799,6 +799,14 @@ function SelectedEvidenceRail({
     const owner = caseOwnership?.owner.label ?? 'unassigned'
     const alertValue = selectedAlertContinuityValue(deliveryPlan, alertPlan, captureCount)
     const caseValue = selectedCaseContinuityValue(deliveryPlan, caseOwnership, caseDraft, captureCount)
+    const continuityGaps = selectedContinuityGaps({
+        captureCount,
+        sourceDrilldown,
+        watchlistPlan,
+        alertPlan,
+        caseOwnership,
+        deliveryPlan,
+    })
     const continuityRows = [
         {
             label: 'Watchlist',
@@ -865,6 +873,18 @@ function SelectedEvidenceRail({
                             <ContinuityRow key={row.label} label={row.label} value={row.value} state={row.state} href={row.href} fallback={row.fallback} />
                         ))}
                     </div>
+                    {continuityGaps.length ? (
+                        <div data-ti-continuity-gaps='true' className='grid min-w-0 gap-1 rounded-md border border-ui-warning/25 bg-ui-warning/10 p-2'>
+                            <p className='text-[10px] font-semibold uppercase text-ui-warning dark:text-ui-warning'>Handoff gaps</p>
+                            <div className='flex min-w-0 flex-wrap gap-1'>
+                                {continuityGaps.map(gap => (
+                                    <span key={gap} className='max-w-full wrap-break-word rounded-md border border-ui-warning/25 bg-ui-panel px-1.5 py-1 text-[10px] font-semibold leading-4 text-ui-warning dark:bg-ui-panel dark:text-ui-warning'>
+                                        {gap}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
                     <div className='grid grid-cols-2 gap-1.5'>
                         <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
                         <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onStage} href={caseHref} disabled={!caseHref && !caseReady}>Open case</StripActionButton>
@@ -883,6 +903,40 @@ function SelectedEvidenceRail({
             </div>
         </section>
     )
+}
+
+function selectedContinuityGaps(input: {
+    captureCount: number
+    sourceDrilldown: ReturnType<typeof selectedSourceDrilldownFor> | null
+    watchlistPlan: SelectedWatchlistPlan | null
+    alertPlan: SelectedAlertActionPlan | null
+    caseOwnership: SelectedCaseOwnershipPlan | null
+    deliveryPlan: SelectedDeliveryReadinessPlan | null
+}) {
+    const rawGaps = unique([
+        ...(input.captureCount ? [] : ['capture evidence']),
+        ...(input.watchlistPlan?.ready ? [] : ['org watchlist']),
+        ...(input.alertPlan?.ready ? [] : input.alertPlan?.sourceRefs.alertIds.length ? [] : ['alert ID']),
+        ...(input.caseOwnership?.sourceRefs.casePaths.length ? [] : ['case route']),
+        ...(input.deliveryPlan?.summary.destinations ? [] : ['delivery destination']),
+        ...(input.sourceDrilldown?.blockers ?? []),
+        ...(input.alertPlan?.blockers.map(blocker => blocker.detail) ?? []),
+        ...(input.caseOwnership?.blockers ?? []),
+        ...(input.deliveryPlan?.blockers ?? []),
+    ])
+
+    return unique(rawGaps.map(shortContinuityGap).filter(Boolean)).slice(0, 4)
+}
+
+function shortContinuityGap(value: string) {
+    const normalized = displayRequirementText(value).replace(/\.$/, '')
+    if (/capture/i.test(normalized)) return 'capture evidence'
+    if (/alert id|dwm alert/i.test(normalized)) return 'alert ID'
+    if (/watchlist|watch term|customer term/i.test(normalized)) return 'org watchlist'
+    if (/case route|case link|case path|case creation/i.test(normalized)) return 'case route'
+    if (/destination|webhook/i.test(normalized)) return 'delivery destination'
+    if (/source/i.test(normalized)) return 'source reference'
+    return normalized.length > 30 ? `${normalized.slice(0, 29).trimEnd()}…` : normalized
 }
 
 function selectedAlertContinuityValue(deliveryPlan: SelectedDeliveryReadinessPlan | null, alertPlan: SelectedAlertActionPlan | null, captureCount: number) {
