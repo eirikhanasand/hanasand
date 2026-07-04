@@ -5974,7 +5974,7 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                         </div>
                     </div>
                 ))}
-                {!plan.terms.length ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-[11px] leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>No watchlist terms are attached to this selected evidence.</p> : null}
+                {!plan.terms.length ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-[11px] leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Attach a watchlist term before routing this evidence.</p> : null}
             </div>
             {plan.relevanceRows.length ? (
                 <div data-ti-selected-watchlist-relevance='true' className='mt-2 grid gap-2'>
@@ -6219,7 +6219,7 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
                     </div>
                 ))}
                 {!plan.alerts.length ? (
-                    <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-[11px] leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>No related alert is attached to the selected evidence yet.</p>
+                    <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-[11px] leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Generate an alert before opening a case handoff.</p>
                 ) : null}
             </div>
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
@@ -9007,7 +9007,7 @@ function selectedTriageBriefFor(
             ? `Backed by ${proofRowCount} source result${proofRowCount === 1 ? '' : 's'} with capture or reference IDs attached.`
             : hasSourceReference
                 ? 'Source reference is present, but the public result does not yet include a capture ID. Verify before customer-facing escalation.'
-                : 'No source reference is attached to the selected result. Treat this as context until source evidence is added.',
+                : 'Verify source evidence before customer-facing escalation.',
         proofTone,
         safetyBoundary: 'Public TI results are metadata-only. This view does not expose source files, credential values, or webhook secrets.',
         labels: [
