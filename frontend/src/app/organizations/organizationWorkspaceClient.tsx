@@ -495,7 +495,7 @@ export default function OrganizationWorkspaceClient() {
                 nextBundle.webhooks = arrayValue<WebhookDestination>(payload.destinations ?? payload.webhooks)
             }
             if (key === 'deliveries') {
-                nextBundle.deliveries = arrayValue<DeliveryRow>(payload.deliveries ?? payload.items ?? payload.results)
+                nextBundle.deliveries = normalizedDeliveryRows(payload)
             }
             void url
         })
@@ -2473,6 +2473,18 @@ function arrayValue<T>(value: unknown): T[] {
     return Array.isArray(value) ? value as T[] : []
 }
 
+function cleanString(value: unknown) {
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function numberValue(value: unknown) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function booleanValue(value: unknown) {
+    return typeof value === 'boolean' ? value : undefined
+}
+
 function readableEndpoint(value: string) {
     return value.replace(/([A-Z])/g, ' $1').toLowerCase()
 }
@@ -3078,6 +3090,52 @@ function canReplayDelivery(delivery: DeliveryRow) {
 
 function firstDelivery(result: DeliveryResult) {
     return result.deliveries?.[0] || result.delivery || null
+}
+
+function normalizedDeliveryRows(payload: Record<string, unknown>): DeliveryRow[] {
+    const rawRows = arrayValue<DeliveryRow>(payload.deliveries ?? payload.items ?? payload.results)
+    const ledgerRows = arrayValue<Record<string, unknown>>(payload.deliveryLedger)
+    const evidenceRows = arrayValue<Record<string, unknown>>(payload.deliveryEvidence)
+    const enrichedById = new Map<string, Record<string, unknown>>()
+
+    for (const row of [...evidenceRows, ...ledgerRows]) {
+        const id = cleanString(row.deliveryId) || cleanString(row.requestId) || cleanString(row.id)
+        if (!id) continue
+        enrichedById.set(id, { ...(enrichedById.get(id) || {}), ...row })
+    }
+
+    return rawRows.map((row) => {
+        const id = row.id || row.requestId || ''
+        const enriched = id ? enrichedById.get(id) || {} : {}
+        const response = objectValue(enriched.response) || {}
+        const redactedDestination = objectValue(enriched.redactedDestination) || {}
+        return {
+            ...row,
+            id: row.id || cleanString(enriched.deliveryId) || cleanString(enriched.requestId) || id,
+            requestId: row.requestId || cleanString(enriched.requestId) || cleanString(enriched.deliveryId),
+            auditEventId: row.auditEventId || cleanString(enriched.auditEventId),
+            organizationId: row.organizationId || cleanString(enriched.orgId),
+            alertId: row.alertId || cleanString(enriched.alertId),
+            caseId: row.caseId || cleanString(enriched.caseId),
+            watchlistId: row.watchlistId || cleanString(enriched.watchlistId),
+            webhookDestinationId: row.webhookDestinationId || cleanString(enriched.destinationId),
+            endpointHash: row.endpointHash || cleanString(enriched.endpointHash) || cleanString(redactedDestination.endpointHash),
+            endpointHint: row.endpointHint || cleanString(enriched.redactedEndpointLabel) || cleanString(redactedDestination.endpointHint),
+            status: row.status || cleanString(enriched.status) || cleanString(enriched.rawStatus),
+            httpStatus: row.httpStatus ?? numberValue(enriched.responseStatus) ?? numberValue(response.httpStatus),
+            attemptedAt: row.attemptedAt || cleanString(enriched.attemptedAt),
+            createdAt: row.createdAt || cleanString(enriched.createdAt),
+            updatedAt: row.updatedAt || cleanString(enriched.updatedAt),
+            dryRun: row.dryRun ?? booleanValue(enriched.dryRun),
+            error: row.error || cleanString(enriched.error),
+            errorClass: row.errorClass || cleanString(enriched.errorClass),
+            responseSummary: row.responseSummary || cleanString(enriched.responseSummary) || cleanString(response.summary),
+            dedupeKey: row.dedupeKey || cleanString(enriched.dedupeKey) || cleanString(enriched.idempotencyKey),
+            attemptCount: row.attemptCount ?? numberValue(enriched.attemptCount),
+            retryCount: row.retryCount ?? numberValue(enriched.retryCount),
+            nextRetryAt: row.nextRetryAt ?? cleanString(enriched.nextRetryAt) ?? null,
+        }
+    })
 }
 
 function watchlistMutationMessage(bridge: DwmAlertBridgeResult | undefined, fallback: string) {
