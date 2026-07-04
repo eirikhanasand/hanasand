@@ -159,7 +159,7 @@ const faqItems = [
 
 const apiUseCases = [
     'Create tickets when a watched supplier appears in a new ransomware post.',
-    'Route Telegram-originated hints into analyst review before they become customer-visible facts.',
+    'Send Telegram-originated hints into analyst review before they become customer-visible facts.',
     'Attach actor, company, data mentioned, first-seen time, source family, and recommended action.',
     'Trigger identity-response work for session, OAuth, API-key, or infostealer-log exposure.',
 ]
@@ -641,7 +641,7 @@ function ThreatConsole({ payload }: { payload: ReturnType<typeof samplePayload> 
                 <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3'>
                     <p className='text-xs font-semibold uppercase tracking-[0.18em] text-ui-muted'>Webhook preview</p>
                     <div className='grid gap-2 font-mono text-xs text-ui-text sm:grid-cols-2'>
-                        <span>route: {alert.webhookDelivery.recommendedRoute}</span>
+                        <span>action: {alert.webhookDelivery.recommendedRoute}</span>
                         <span>dedupe: {webhookPreview.delivery.dedupeKey}</span>
                     </div>
                 </div>
