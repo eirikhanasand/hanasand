@@ -919,7 +919,7 @@ export default function OrganizationWorkspaceClient() {
         if (withUrl) {
             setDestinationDrafts(current => ({ ...current, [item.id]: { ...draft, url: '' } }))
         }
-        return withUrl ? 'Destination tested and saved.' : 'Saved route tested.'
+        return withUrl ? 'Destination tested and saved.' : 'Saved destination tested.'
     }, `watchlist-${item.id}`)
 
     const testSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('test-destination', async () => {
@@ -1082,7 +1082,7 @@ export default function OrganizationWorkspaceClient() {
                             Organizations
                         </div>
                         <h1 className='text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text sm:text-4xl'>Organization settings</h1>
-                        <p className='mt-3 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>Team access, shared watchlists, destinations, and routed alerts.</p>
+                        <p className='mt-3 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>Team access, shared watchlists, destinations, and alert handling.</p>
                     </div>
                     <button
                         type='button'
@@ -1369,7 +1369,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
             id: 'delivery',
             label: 'Delivery',
             value: configuredDestinations.length ? `${configuredDestinations.length} destination${configuredDestinations.length === 1 ? '' : 's'}` : 'Set delivery',
-            detail: failedDeliveries.length ? `${failedDeliveries.length} failed delivery` : bundle.deliveries.length ? `${bundle.deliveries.length} delivery event${bundle.deliveries.length === 1 ? '' : 's'}` : 'Test a Discord or webhook route',
+            detail: failedDeliveries.length ? `${failedDeliveries.length} failed delivery` : bundle.deliveries.length ? `${bundle.deliveries.length} delivery event${bundle.deliveries.length === 1 ? '' : 's'}` : 'Test a Discord or webhook destination',
             href: '#destinations',
             tone: failedDeliveries.length ? 'warning' : configuredDestinations.length ? 'ready' : 'blocked',
         },
@@ -1498,10 +1498,10 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
                 <div className='min-w-0'>
                     <h2 className='flex items-center gap-2 text-base font-semibold text-ui-primary dark:text-ui-primary'>
                         <CircleAlert className='h-4 w-4 text-ui-primary dark:text-ui-primary' />
-                        DWM routing for this organization
+                        DWM actions for this organization
                     </h2>
                     <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>
-                        Manage the selected {selectedSubject.type}, delivery route, and team access from one scoped view.
+                        Manage the selected {selectedSubject.type}, delivery destination, and team access from one scoped view.
                     </p>
                     <div className='mt-3 flex flex-wrap gap-2'>
                         {scopedValues.map(([label, value]) => (
@@ -1581,7 +1581,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
             href: '#watchlists',
             ready: destinationCount > 0,
             blocked: !watchlistCount || !canManage,
-            action: destinationCount ? 'Review route' : 'Test destination',
+            action: destinationCount ? 'Review destination' : 'Test destination',
         },
         {
             id: 'activity',
@@ -2029,9 +2029,9 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
     return (
         <details id='destinations' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-destinations-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Saved destinations' detail='Inventory, tests, and removal stay available after a route is attached.' />
+                <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Saved destinations' detail='Inventory, tests, and removal stay available after a destination is saved.' />
                 <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
-                    {visibleDestinations.length}/{destinations.length} route{destinations.length === 1 ? '' : 's'}
+                    {visibleDestinations.length}/{destinations.length} destination{destinations.length === 1 ? '' : 's'}
                 </span>
             </summary>
             <div className='grid gap-2 border-t border-ui-border p-4 dark:border-ui-border'>
@@ -2224,7 +2224,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
     return (
         <section id='watchlists' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Customer-owned terms that drive DWM alert scope, cases, and delivery routes.' />
+                <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Customer-owned terms that drive DWM alert scope, cases, and delivery destinations.' />
                 <button type='button' className={secondaryButtonClass} disabled={!canManage || archivedCount === 0 || Boolean(busy)} onClick={onCleanup}>
                     <Archive className='h-4 w-4' />
                     Cleanup archived
@@ -2517,7 +2517,7 @@ function DeliveryPayloadPreview({ delivery, compact = false }: { delivery: Deliv
 function DestinationControls({ item, organization, alert, delivery, draft, canManage, busy, onDraftChange, onSelect, onTest }: { item: WatchlistItem, organization: OrganizationSummary, alert?: ScopedAlert, delivery?: DeliveryRow | null, draft: DestinationDraft, canManage: boolean, busy: string, onDraftChange: (next: DestinationDraft) => void, onSelect: () => void, onTest: (mode: 'save' | 'replay') => void }) {
     const configured = destinationConfigured(item)
     const endpointHint = item.webhookEndpointHint || delivery?.endpointHint || 'Not configured'
-    const endpointHash = item.webhookEndpointHash || delivery?.endpointHash || 'No route hash'
+    const endpointHash = item.webhookEndpointHash || delivery?.endpointHash || 'No destination hash'
     const selectedAlertId = alert?.id || liveDwmAlertId
     const deliveryStatus = delivery?.status || (configured ? 'Configured' : 'None')
     const replayLabel = delivery?.status === 'failed' || delivery?.status === 'skipped' ? 'Retry' : 'Replay'
@@ -3161,7 +3161,7 @@ function visibilityRows(payload: Record<string, unknown> | null) {
     const rows = [
         ['Alert visibility', visibility?.alertReadAllowed ?? visibility?.allowed ?? payload.allowed],
         ['Case assignment', visibility?.caseAssignmentAllowed ?? visibility?.canAssignCase],
-        ['Case route', visibility?.caseRoute ?? payload.caseRoute ?? '/api/cases'],
+        ['Case link', visibility?.caseRoute ?? payload.caseRoute ?? '/api/cases'],
     ]
     return rows.map(([label, value]) => ({
         id: String(label),
@@ -3204,7 +3204,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
     const deliveryRows: ActivityItem[] = bundle.deliveries.map(delivery => ({
         id: `delivery-${delivery.id}`,
         at: delivery.attemptedAt || delivery.updatedAt || delivery.createdAt || new Date(0).toISOString(),
-        title: delivery.dryRun ? 'Destination tested' : 'Alert routed',
+        title: delivery.dryRun ? 'Destination tested' : 'Alert delivery recorded',
         detail: `${delivery.status || 'delivery'} · ${delivery.watchlistId || delivery.alertId || 'watchlist'}`,
         ok: !delivery.error && delivery.status !== 'failed',
         subjectType: 'destination',
@@ -3264,14 +3264,14 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         subjectId: item.id,
         metadata: compactMetadata([
             ['Owner', item.updatedBy || item.createdBy],
-            ['Route', item.webhookEndpointHint || item.webhookEndpointHash],
+            ['Destination', item.webhookEndpointHint || item.webhookEndpointHash],
             ['Ref', item.alertGenerationRef],
         ]),
     }))
     const destinationRows: ActivityItem[] = bundle.webhooks.map(destination => ({
         id: `destination-${destination.id}`,
         at: destination.updatedAt || destination.createdAt || new Date(0).toISOString(),
-        title: 'Destination route',
+        title: 'Destination',
         detail: `${destination.status || (destination.deliveryReady ? 'active' : 'configured')} · ${destination.endpointHint || destination.endpointHash || destination.id}`,
         ok: destination.status !== 'disabled' && destination.status !== 'deleted',
         subjectType: 'destination',
@@ -3881,7 +3881,7 @@ function watchlistMutationMessage(bridge: DwmAlertBridgeResult | undefined, fall
             matched ? `term ${matched}` : undefined,
             family ? `source ${family}` : undefined,
             evidence ? `${evidence} evidence item${evidence === 1 ? '' : 's'}` : undefined,
-            route ? `route ${route}` : undefined,
+            route ? `action ${route}` : undefined,
         ].filter(Boolean).join(' · ') + '.'
     }
     if (bridge.ok) {
