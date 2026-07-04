@@ -1061,7 +1061,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
                     >
                         <span className='flex items-center justify-between gap-2'>
                             <span className='truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
-                            <StatusPill status={row.tone === 'ready' ? 'ready' : row.tone === 'warning' ? 'review' : row.tone === 'blocked' ? 'needs action' : 'waiting'} />
+                            <StatusPill status={row.tone === 'ready' ? 'ready' : row.tone === 'warning' || row.tone === 'blocked' ? 'review' : 'waiting'} />
                         </span>
                         <span className='mt-2 block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
                         <span className='mt-1 block truncate text-xs text-ui-muted dark:text-ui-muted'>{row.detail}</span>
