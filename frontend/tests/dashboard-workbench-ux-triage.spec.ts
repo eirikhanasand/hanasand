@@ -22,6 +22,10 @@ test('dashboard keeps analyst queue primary and discloses delivery management', 
     expect(page).toContain('initialDeliveries={deliveries}')
     expect(page).toContain('alertOptions={webhookAlertOptions}')
     expect(page).toContain('loadDwmDeliveries(scope, viewerIdentity)')
+    expect(page).toContain('organizationDeliveryWorkspaceHref(alert.id, organizationId, latestDelivery)')
+    expect(page).toContain('Delivery workspace')
+    expect(page).toContain('params.set(\'focus\', \'destinations\')')
+    expect(page).toContain('params.set(\'deliveryId\', delivery.id)')
 })
 
 test('dashboard keeps delivery management collapsed behind a secondary disclosure', async () => {

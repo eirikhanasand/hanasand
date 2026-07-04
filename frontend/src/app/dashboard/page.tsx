@@ -527,6 +527,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
     const alertDeliveries = deliveries.filter(delivery => delivery.alertId === alert.id)
     const latestDelivery = latestDeliveryAttempt(alertDeliveries)
     const deliveryHistoryHref = alertDeliveryHistoryHref(alert.id, scope, latestDelivery)
+    const deliveryWorkspaceHref = organizationDeliveryWorkspaceHref(alert.id, organizationId, latestDelivery)
     const dwmWorkspaceHref = dwmAlertWorkspaceHref(alert.id, scope)
     const actionReadiness = alertAnalystActionReadiness(alert)
     const workflowPath = [
@@ -567,7 +568,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             owner: 'operator',
             source: 'Delivery route',
             entityId: webhookDestinationIds.join(', ') || workflowAlert.webhookDelivery.dedupeKey,
-            href: deliveryHistoryHref,
+            href: deliveryWorkspaceHref,
             detail: latestDelivery
                 ? `Latest ${latestDelivery.status} delivery ${latestDelivery.id}; ${alertDeliveries.length} attempt${alertDeliveries.length === 1 ? '' : 's'} in the delivery ledger.`
                 : `Delivery state: ${deliveryState}. Sends and tests stream here.`,
@@ -646,7 +647,8 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
         relatedLinks: [
             { href: `/api/dwm/alerts/${encodeURIComponent(alert.id)}`, label: 'Alert record' },
             ...(casePath ? [{ href: casePath, label: 'Case record' }] : []),
-            { href: deliveryHistoryHref, label: 'Delivery history' },
+            { href: deliveryWorkspaceHref, label: 'Delivery workspace' },
+            { href: deliveryHistoryHref, label: 'Delivery API' },
             { href: dwmWorkspaceHref, label: 'Open dark web case' },
             { href: '/dashboard/automations?setup=dwm', label: 'Webhook subscription' },
         ],
@@ -835,6 +837,18 @@ function alertDeliveryHistoryHref(alertId: string, scope: OperatorScope, deliver
     if (delivery?.id) params.set('deliveryId', delivery.id)
     if (delivery?.webhookDestinationId) params.set('webhookDestinationId', delivery.webhookDestinationId)
     return `/api/dwm/webhooks/deliveries?${params.toString()}`
+}
+
+function organizationDeliveryWorkspaceHref(alertId: string, organizationId?: string, delivery?: DwmDeliveryItem) {
+    if (!organizationId) return `/organizations?focus=destinations&alertId=${encodeURIComponent(alertId)}`
+    const params = new URLSearchParams()
+    params.set('organizationId', organizationId)
+    params.set('focus', 'destinations')
+    params.set('alertId', alertId)
+    if (delivery?.webhookDestinationId) params.set('destinationId', delivery.webhookDestinationId)
+    if (delivery?.id) params.set('deliveryId', delivery.id)
+    if (delivery?.watchlistId) params.set('watchlistId', delivery.watchlistId)
+    return `/organizations?${params.toString()}`
 }
 
 function dwmAlertWorkspaceHref(alertId: string, scope: OperatorScope) {
