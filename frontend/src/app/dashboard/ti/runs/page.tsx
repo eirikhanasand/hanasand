@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, PlayCircle, Rows3 } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Clock3, PlayCircle, Rows3 } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { getTiAdminOverview, sourceById } from '@/utils/tiAdmin/ops'
 import ManualRunButton from '../manualRunButton'
@@ -37,13 +37,25 @@ export default function TiRunsPage() {
                 <LiveFact title='Next source due' value={nextRun ? relativeUntil(nextRun.nextRunAt) : 'Selecting'} detail={nextRun ? sourceById(nextRun.sourceId)?.name || nextRun.sourceId : 'Scheduler is choosing the next source'} tone={nextRun && isOverdue(nextRun.nextRunAt) ? 'watch' : 'neutral'} />
             </section>
 
-            <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
-                <Metric title='Running' value={String(running)} detail='queued or active' tone={running ? 'hold' : 'ok'} />
-                <Metric title='Completed' value={String(completed)} detail='successful jobs' tone='ok' />
-                <Metric title='Failed' value={String(failed)} detail='needs retry' tone={failed ? 'warn' : 'ok'} />
-                <Metric title='Evidence' value={`${captureTotal} captures`} detail={`${screenshotTotal} screenshots · ${rowTotal} parsed rows`} tone='hold' />
-                <Metric title='Next run' value={nextRun ? relativeUntil(nextRun.nextRunAt) : 'Selecting'} detail={nextRun ? sourceById(nextRun.sourceId)?.name || nextRun.sourceId : 'Scheduler is choosing the next source'} tone='hold' />
-            </div>
+            <details data-ti-runs-summary-disclosure className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+                <summary className='flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 [&::-webkit-details-marker]:hidden'>
+                    <span className='inline-flex items-center gap-2'>
+                        <Rows3 className='h-4 w-4 text-ui-primary' />
+                        Run totals
+                    </span>
+                    <span className='inline-flex items-center gap-2 text-xs font-semibold text-ui-muted'>
+                        {running} active · {completed} complete · {failed} failed
+                        <ChevronDown className='h-4 w-4 transition-transform group-open:rotate-180' />
+                    </span>
+                </summary>
+                <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-5'>
+                    <Metric title='Running' value={String(running)} detail='queued or active' tone={running ? 'hold' : 'ok'} />
+                    <Metric title='Completed' value={String(completed)} detail='successful jobs' tone='ok' />
+                    <Metric title='Failed' value={String(failed)} detail='needs retry' tone={failed ? 'warn' : 'ok'} />
+                    <Metric title='Evidence' value={`${captureTotal} captures`} detail={`${screenshotTotal} screenshots · ${rowTotal} parsed rows`} tone='hold' />
+                    <Metric title='Next run' value={nextRun ? relativeUntil(nextRun.nextRunAt) : 'Selecting'} detail={nextRun ? sourceById(nextRun.sourceId)?.name || nextRun.sourceId : 'Scheduler is choosing the next source'} tone='hold' />
+                </div>
+            </details>
 
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>
@@ -123,10 +135,18 @@ export default function TiRunsPage() {
                     </div>
                 </DashboardPanel>
 
-                <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
-                    <h2 className='text-base font-semibold text-ui-text'>Evidence by source</h2>
-                    <p className='mt-1 text-sm text-ui-muted'>Collectors producing usable captures.</p>
-                    <div className='mt-4 grid gap-3'>
+                <details data-ti-runs-evidence-disclosure className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+                    <summary className='flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 [&::-webkit-details-marker]:hidden'>
+                        <span>
+                            <span className='block text-base font-semibold text-ui-text'>Evidence by source</span>
+                            <span className='mt-1 block text-sm text-ui-muted'>Collectors producing usable captures.</span>
+                        </span>
+                        <span className='inline-flex items-center gap-2 text-xs font-semibold text-ui-muted'>
+                            {captureTotal} captures · {screenshotTotal} screenshots
+                            <ChevronDown className='h-4 w-4 transition-transform group-open:rotate-180' />
+                        </span>
+                    </summary>
+                    <div className='grid gap-3 border-t border-ui-border p-4'>
                         {sources.map(source => {
                             const sourceRuns = runs.filter(run => run.sourceId === source.id)
                             const sourceCaptures = sourceRuns.reduce((sum, run) => sum + run.captures, 0)
@@ -145,7 +165,7 @@ export default function TiRunsPage() {
                             )
                         })}
                     </div>
-                </DashboardPanel>
+                </details>
             </div>
         </DashboardPage>
     )
