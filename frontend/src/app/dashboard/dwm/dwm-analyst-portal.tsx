@@ -1734,9 +1734,16 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const suppressReady = actionReady(alert, 'suppress')
     const closeReady = actionReady(alert, 'close')
     const reopenReady = actionReady(alert, 'reopen')
+    const transitionReason = actionUnavailableReason(alert, 'transition')
+    const replayReason = actionUnavailableReason(alert, 'replay')
+    const deliveryReason = hasDeliveryRoute ? actionUnavailableReason(alert, 'deliver') : 'Configure a webhook destination before testing or sending.'
+    const suppressReason = actionUnavailableReason(alert, 'suppress')
+    const closeReason = actionUnavailableReason(alert, 'close')
+    const reopenReason = actionUnavailableReason(alert, 'reopen')
     const caseId = alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
     const caseHref = caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert), 'alert_queue') : undefined
     const caseReady = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
+    const caseReason = caseReady ? undefined : 'Evidence must include a source or capture record before opening a case.'
     const nextAction = dwmNextOperatorAction({
         reviewState: alert.reviewState,
         deliveryState: alert.deliveryState,
@@ -1795,7 +1802,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
             <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4'>
                 <ActionStatus label='Owner' value={assignee} />
                 <ActionStatus label='Work state' value={stateLabel(alert.reviewState)} />
-                <ActionStatus label='Delivery' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'delivery available' : 'checking delivery'} tone={latestDelivery?.status === 'failed' || !hasDeliveryRoute ? 'warn' : 'neutral'} />
+                <ActionStatus label='Delivery' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'delivery route ready' : 'destination needed'} tone={latestDelivery?.status === 'failed' || !hasDeliveryRoute ? 'warn' : 'neutral'} />
                 <ActionStatus label='Case' value={alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || 'case is being prepared'} />
             </div>
             <div className='grid gap-2'>
@@ -1806,15 +1813,15 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                     <ActionAvailability label='Close' ready={closeReady} />
                 </div>
                 <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap'>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
-                    {caseHref ? <CaseLink href={caseHref}>Open case</CaseLink> : <CaseButton busy={busyAction === `case:${alert.id}`} disabled={!caseReady} icon='case' onClick={onOpenCase}>Open case</CaseButton>}
-                    <CaseButton busy={busyAction === `replay:${alert.id}`} disabled={!replayReady} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
-                    <CaseButton busy={busyAction === `test:${alert.id}`} disabled={!deliverReady} icon='send' onClick={() => onTest(alert.id)}>Test</CaseButton>
-                    <CaseButton busy={busyAction === `send:${alert.id}`} disabled={!deliverReady} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!suppressReady} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)}>Suppress</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!closeReady} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)}>Close</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!reopenReady} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} disabledReason={transitionReason} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} disabledReason={transitionReason} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
+                    {caseHref ? <CaseLink href={caseHref}>Open case</CaseLink> : <CaseButton busy={busyAction === `case:${alert.id}`} disabled={!caseReady} disabledReason={caseReason} icon='case' onClick={onOpenCase}>Open case</CaseButton>}
+                    <CaseButton busy={busyAction === `replay:${alert.id}`} disabled={!replayReady} disabledReason={replayReason} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
+                    <CaseButton busy={busyAction === `test:${alert.id}`} disabled={!deliverReady} disabledReason={deliveryReason} icon='send' onClick={() => onTest(alert.id)}>Test</CaseButton>
+                    <CaseButton busy={busyAction === `send:${alert.id}`} disabled={!deliverReady} disabledReason={deliveryReason} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!suppressReady} disabledReason={suppressReason} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)}>Suppress</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!closeReady} disabledReason={closeReason} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)}>Close</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!reopenReady} disabledReason={reopenReason} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
                 </div>
                 {actionMessage && (
                     <p className={`justify-self-start rounded-lg border px-3 py-2 text-xs font-semibold xl:justify-self-end ${actionMessage.ok ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'}`}>
@@ -2318,10 +2325,10 @@ function shortTime(value: string) {
     return `${byType.get('month')} ${byType.get('day')}, ${byType.get('hour')}:${byType.get('minute')}`
 }
 
-function CaseButton({ busy, disabled = false, icon, onClick, children }: { busy: boolean, disabled?: boolean, icon: 'review' | 'ready' | 'replay' | 'send' | 'false' | 'case', onClick: () => void, children: string }) {
+function CaseButton({ busy, disabled = false, disabledReason, icon, onClick, children }: { busy: boolean, disabled?: boolean, disabledReason?: string, icon: 'review' | 'ready' | 'replay' | 'send' | 'false' | 'case', onClick: () => void, children: string }) {
     const Icon = busy ? Loader2 : icon === 'case' ? FolderOpen : icon === 'send' ? Send : icon === 'false' ? XCircle : icon === 'replay' ? RotateCcw : icon === 'ready' ? CheckCircle2 : Play
     return (
-        <button type='button' onClick={onClick} disabled={busy || disabled} title={disabled ? 'Action is not available for this alert state.' : undefined} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas disabled:cursor-not-allowed disabled:opacity-60 sm:px-3'>
+        <button type='button' onClick={onClick} disabled={busy || disabled} title={disabled ? disabledReason || 'Action is not available for this alert state.' : undefined} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas disabled:cursor-not-allowed disabled:opacity-60 sm:px-3'>
             <Icon className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
             {children}
         </button>
@@ -2537,6 +2544,16 @@ function actionReady(alert: PortalAlert, action: DwmAlertAnalystAction) {
     if (actionState.blockedActions?.includes(action)) return false
     if (actionState.readyActions?.length) return actionState.readyActions.includes(action)
     return true
+}
+
+function actionUnavailableReason(alert: PortalAlert, action: DwmAlertAnalystAction) {
+    const actionState = alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness
+    if (!actionState) return undefined
+    const row = actionState.actions?.find(item => item.action === action)
+    const blocker = row?.blockerCodes?.length ? `${row.blockerCodes.map(stateLabel).slice(0, 2).join(', ')}.` : ''
+    if (blocker) return blocker
+    if (actionState.blockedActions?.includes(action)) return 'This action is blocked by the current alert workflow state.'
+    return undefined
 }
 
 async function readPayload(response: Response): Promise<{ error?: { message?: string }, attemptedCount?: number, case?: { id?: string }, alertCaseHandoff?: { caseId?: string }, delivery?: DeliveryItem, deliveries?: DeliveryItem[] }> {
