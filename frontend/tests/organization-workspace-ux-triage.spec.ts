@@ -203,7 +203,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(oktaRow).toBeHidden()
 
     await testInfo.attach('organizations-watchlist-filter-desktop', {
-        body: await page.screenshot({ fullPage: true }),
+        body: await page.screenshot({ path: '/tmp/organizations-watchlist-filter-desktop.png', fullPage: true }),
         contentType: 'image/png',
     })
 
@@ -212,7 +212,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
     expect(overflow).toBeLessThanOrEqual(1)
     await testInfo.attach('organizations-watchlist-filter-mobile', {
-        body: await page.screenshot({ fullPage: true }),
+        body: await page.screenshot({ path: '/tmp/organizations-watchlist-filter-mobile.png', fullPage: true }),
         contentType: 'image/png',
     })
 })
