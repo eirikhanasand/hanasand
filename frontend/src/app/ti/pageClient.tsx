@@ -343,9 +343,8 @@ function Results({ result }: { result: TiSearchResponse }) {
                         </div>
                         <div className='grid min-w-0 content-start gap-3'>
                             {selected ? (
-                                <div className='hidden min-w-0 lg:grid lg:content-start lg:gap-3'>
+                                <div className='hidden min-w-0 lg:block'>
                                     <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
-                                    <TopEvidenceQueuePreview items={visibleQueueItems} selectedId={selected.id} onSelect={setSelectedId} />
                                 </div>
                             ) : (
                                 <div className='hidden min-w-0 rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted lg:block'>
@@ -6201,43 +6200,6 @@ function TopSelectedEvidencePanel({ selected, drilldown, caseReady }: { selected
                     </p>
                     <span className='shrink-0 text-[11px] font-semibold text-ui-primary dark:text-ui-primary'>Review actions</span>
                 </div>
-            </div>
-        </section>
-    )
-}
-
-function TopEvidenceQueuePreview({ items, selectedId, onSelect }: { items: AnalystWorkItem[]; selectedId: string; onSelect: (id: string) => void }) {
-    const previewItems = items.slice(0, 3)
-    return (
-        <section data-ti-top-evidence-queue='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
-            <div className='flex min-w-0 items-center justify-between gap-3'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Evidence review</p>
-                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Prioritized findings with evidence strength and analyst context.</p>
-                </div>
-                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>{items.length} rows</span>
-            </div>
-            <div className='mt-3 grid gap-1.5'>
-                {previewItems.map(item => {
-                    const active = item.id === selectedId
-                    return (
-                        <button
-                            key={item.id}
-                            type='button'
-                            onClick={() => onSelect(item.id)}
-                            className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-lg border px-2.5 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${active ? 'border-ui-primary bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-primary/10' : 'border-ui-border bg-ui-panel hover:bg-ui-raised dark:border-ui-border dark:bg-ui-panel dark:hover:bg-ui-raised'}`}
-                        >
-                            <span className='min-w-0'>
-                                <span className='block truncate text-xs font-semibold text-ui-text dark:text-ui-text'>{displayRequirementText(item.title)}</span>
-                                <span className='mt-0.5 block truncate text-[11px] text-ui-muted dark:text-ui-muted'>{item.source} · {item.timestamp} · {sourceBasisLabel(item.confidence)}</span>
-                            </span>
-                            <span className={`self-start rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${severityClass(item.severity)}`}>{item.severity}</span>
-                        </button>
-                    )
-                })}
-                {!previewItems.length ? (
-                    <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-xs text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>Run a search to review evidence findings.</p>
-                ) : null}
             </div>
         </section>
     )
