@@ -1383,6 +1383,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
     const configuredDestinations = bundle.webhooks.filter(destination => destination.deliveryReady || destination.status === 'active' || destination.status === 'configured')
     const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status === 'failed' || Boolean(delivery.error))
     const routedCases = bundle.cases.filter(item => item.status !== 'closed')
+    const hasAlertOrCaseActivity = Boolean(bundle.alerts.length || routedCases.length)
     const rows = [
         {
             id: 'access',
@@ -1410,11 +1411,11 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
         },
         {
             id: 'cases',
-            label: 'Cases',
-            value: bundle.alerts.length || routedCases.length ? `${bundle.alerts.length} alert${bundle.alerts.length === 1 ? '' : 's'} · ${routedCases.length} case${routedCases.length === 1 ? '' : 's'}` : 'Waiting for match',
-            detail: organization.tenantId ? `Tenant ${organization.tenantId}` : 'Set alert matching scope',
+            label: 'Alert flow',
+            value: hasAlertOrCaseActivity ? `${bundle.alerts.length} alert${bundle.alerts.length === 1 ? '' : 's'} · ${routedCases.length} case${routedCases.length === 1 ? '' : 's'}` : activeTerms.length ? 'Listening for matches' : 'Add watch term',
+            detail: hasAlertOrCaseActivity ? 'Open DWM workspace' : activeTerms.length ? 'Matched captures will open alert and case rows' : 'Start with a shared watchlist term',
             href: '#delivery-history',
-            tone: bundle.alerts.length || routedCases.length ? 'ready' : 'neutral',
+            tone: hasAlertOrCaseActivity ? 'ready' : activeTerms.length ? 'neutral' : 'blocked',
         },
     ] as const
 
@@ -2982,6 +2983,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
 
 function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, title: string, route: string, rows: Array<{ id: string, primary: string, secondary: string }>, empty: string }) {
     const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
+    const showRecordActions = !route.startsWith('/api/')
     const copyRoute = async () => {
         try {
             await navigator.clipboard.writeText(route)
@@ -2994,14 +2996,16 @@ function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, tit
         <div className='rounded-lg border border-ui-border p-3 dark:border-ui-border'>
             <div className='flex items-center justify-between gap-3'>
                 <h3 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>{icon}{title}</h3>
-                <div className='flex items-center gap-1'>
-                    <button type='button' className={iconButtonClass} aria-label={`Copy ${title} records link`} onClick={() => void copyRoute()} data-org-scope-copy='true'>
-                        <Copy className='h-4 w-4' />
-                    </button>
-                    <a href={route} className={iconButtonClass} aria-label={`Open ${title} records`}>
-                        <ExternalLink className='h-4 w-4' />
-                    </a>
-                </div>
+                {showRecordActions ? (
+                    <div className='flex items-center gap-1'>
+                        <button type='button' className={iconButtonClass} aria-label={`Copy ${title} records link`} onClick={() => void copyRoute()} data-org-scope-copy='true'>
+                            <Copy className='h-4 w-4' />
+                        </button>
+                        <a href={route} className={iconButtonClass} aria-label={`Open ${title} records`}>
+                            <ExternalLink className='h-4 w-4' />
+                        </a>
+                    </div>
+                ) : null}
             </div>
             <div className='mt-3 grid gap-2'>
                 {rows.length === 0 && <EmptyLine text={empty} />}
