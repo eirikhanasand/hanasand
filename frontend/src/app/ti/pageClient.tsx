@@ -945,13 +945,14 @@ function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchli
         `${watchlistCount} watch terms`,
         `${gapCount} source questions`,
     ]
+    const summary = `${artifactCount} artifacts · ${sourceCount} sources · ${watchlistCount} watch terms · ${gapCount} source questions`
     return (
         <section id='ti-secondary-analysis' className='scroll-mt-24 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-canvas' data-ti-secondary-analysis-toggle='true'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
                 <div className='min-w-0'>
-                    <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>More actor detail</p>
+                    <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>Additional analysis</p>
                     <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        Source records, detail review, watchlist fit, and collection questions stay available without crowding the selected finding.
+                        {expanded ? 'Source records, detail review, watchlist fit, and collection questions are open.' : summary}
                     </p>
                 </div>
                 <button
@@ -960,16 +961,18 @@ function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchli
                     aria-expanded={expanded}
                     className='inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
                 >
-                    {expanded ? 'Collapse' : 'Expand'}
+                    {expanded ? 'Hide' : 'Show'}
                 </button>
             </div>
-            <div className='mt-3 flex flex-wrap gap-2'>
-                {metrics.map(metric => (
-                    <span key={metric} className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>
-                        {metric}
-                    </span>
-                ))}
-            </div>
+            {expanded ? (
+                <div className='mt-3 flex flex-wrap gap-2'>
+                    {metrics.map(metric => (
+                        <span key={metric} className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>
+                            {metric}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
         </section>
     )
 }
