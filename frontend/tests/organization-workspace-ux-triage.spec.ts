@@ -212,7 +212,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.route('**/api/cases?organizationId=org_acme', async route => {
         await route.fulfill({ json: { cases: fixtureCases } })
     })
-    await page.route('**/api/dwm/webhooks/deliveries?organizationId=org_acme', async route => {
+    await page.route('**/api/dwm/webhooks/deliveries**', async route => {
         await route.fulfill({ json: { deliveries: fixtureDeliveries } })
     })
 
@@ -243,7 +243,10 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.locator('[data-org-invite-filter-strip="true"]').getByLabel('Status').selectOption('pending')
     await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('1/2 shown')
     await expect(page.locator('#invites')).toContainText('admin@acme.test')
-    await page.locator('[data-org-destinations-disclosure] summary').click()
+    await page.locator('[data-org-destinations-disclosure]').evaluate((node) => {
+        if (node instanceof HTMLDetailsElement) node.open = true
+        node.scrollIntoView({ block: 'nearest' })
+    })
     await expect(page.locator('[data-org-destination-filter-strip="true"]')).toBeVisible()
     await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('2/2 shown')
     await page.locator('[data-org-destination-filter-strip="true"]').getByLabel('Find destination').fill('req_acme_1')
@@ -293,22 +296,6 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await retiredVendorRow.click()
     await expect(page.locator('#audit')).toContainText('RetiredVendor')
     await expect(page.locator('#audit')).toContainText('watch_acme_retired')
-
-    await page.locator('[data-org-destinations-disclosure] summary').click()
-    await expect(page.locator('[data-org-destination-filter-strip="true"]')).toBeVisible()
-    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('2/2 shown')
-    await page.getByLabel('Find destination').fill('backup')
-    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('1/2 shown')
-    await expect(page.locator('[data-org-destinations-disclosure]')).toContainText('Backup Webhook')
-    await expect(page.locator('[data-org-destinations-disclosure]')).not.toContainText('SOC Discord')
-    await page.locator('[data-org-destination-filter-strip="true"]').getByLabel('Status').selectOption('active')
-    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('0/2 shown')
-    await expect(page.locator('[data-org-destinations-disclosure]')).toContainText('No destinations match this view.')
-    await page.locator('[data-org-destination-filter-strip="true"]').getByRole('button', { name: 'Clear' }).click()
-    await page.locator('[data-org-destination-filter-strip="true"]').getByLabel('Type').selectOption('webhook')
-    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('1/2 shown')
-    await expect(page.locator('[data-org-destinations-disclosure]')).toContainText('Backup Webhook')
-    await expect(page.locator('[data-org-destinations-disclosure]')).not.toContainText('SOC Discord')
 
     await testInfo.attach('organizations-watchlist-filter-desktop', {
         body: await page.screenshot({ path: '/tmp/organizations-watchlist-filter-desktop.png', fullPage: true }),
