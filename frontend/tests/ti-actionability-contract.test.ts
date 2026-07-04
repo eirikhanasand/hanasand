@@ -44,7 +44,18 @@ assert(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRel
 assert(readArray(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRelevance).sourceCoverage).some(item => readObject(item).status === 'capture_ready'), 'Analyst handoff bundle should include source coverage readiness.')
 assert(readArray(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRelevance).watchlistIntersections).some(item => readObject(item).recommendedAction === 'open_case'), 'Analyst handoff bundle should include org watchlist intersections.')
 
-const sanitizedApt29Result = sanitizeTiResultForPublicPage(apt29Result())
+const apt29WithHostedCopyResidue = apt29Result()
+apt29WithHostedCopyResidue.ttps[0]!.detail = 'Tradecraft aligns with returned ATT&CK techniques for credential and cloud activity.'
+apt29WithHostedCopyResidue.actionability!.watchlistCandidates![0]!.reason = 'Public reporting and returned actor profile include Microsoft email intrusion context.'
+apt29WithHostedCopyResidue.actionability!.handoffs!.watchlist!.payloads[0]!.notes = 'apt29: Actor target sector from returned profile: Technology and cloud services.'
+apt29WithHostedCopyResidue.actionability!.enrichmentGaps = [{
+    id: 'gap_returned_observations',
+    title: 'Returned as evidence',
+    severity: 'medium',
+    detail: 'What returned: returned observations from stale actor-profile copy.',
+    dependency: 'returned profile',
+}]
+const sanitizedApt29Result = sanitizeTiResultForPublicPage(apt29WithHostedCopyResidue)
 assert(sanitizedApt29Result, 'Public /ti result sanitizer should return a result.')
 assert(sanitizedApt29Result?.actorIntelligence?.structuredProvenance?.some(row =>
     row.sourceId === 'src_microsoft_midnight_blizzard'
@@ -66,7 +77,8 @@ const sanitizedVictims = victimObservationsFor(sanitizedApt29Result)
 const sanitizedActor = buildActorIntelligence(sanitizedApt29Result, sanitizedVictims)
 const sanitizedActionability = buildTiActionability(sanitizedApt29Result, sanitizedActor, sanitizedVictims)
 const publicApt29Text = JSON.stringify({ result: sanitizedApt29Result, actor: sanitizedActor, actionability: sanitizedActionability })
-assert(!/What returned|returned actor profile|returned profile|returned observations|Returned as evidence|returned ATT&CK/i.test(publicApt29Text), 'Public APT29 serialization should avoid backend-shaped returned/profile wording.')
+assert(!/\breturned\b|What returned|returned actor profile|returned profile|returned observations|Returned as evidence|returned ATT&CK/i.test(publicApt29Text), 'Public APT29 serialization should avoid backend-shaped returned/profile wording.')
+assert(sanitizedApt29Result?.actionability?.handoffs?.watchlist?.payloads[0]?.notes.includes('actor profile'), 'Public /ti result sanitizer should keep watchlist handoff notes meaningful after copy cleanup.')
 assert(sanitizedActor.sourceCoverage.captureRows > 0, 'Sanitized /ti result should still produce capture-backed source coverage.')
 assert(sanitizedActor.malwareTools.length > 0, 'Sanitized /ti result should still carry actor tools and malware facts.')
 assert(sanitizedActionability.orgRelevance.watchlistIntersections.some(item =>
@@ -83,7 +95,7 @@ const blocked = (() => {
         generatedAt: '2026-06-29T00:00:00.000Z',
         mode: 'seeded',
         status: 'partial',
-        summary: 'Unattributed activity was returned without enough source-backed actor context.',
+        summary: 'Unattributed activity was returned without enough sourced actor context.',
         confidence: 0.34,
         lastSeen: '2025-01-01T00:00:00.000Z',
         aliases: [],

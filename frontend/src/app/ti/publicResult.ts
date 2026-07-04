@@ -3,7 +3,7 @@ import type { TiActionabilityContract, TiActorIntelligenceContract, TiSearchResp
 export function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): TiSearchResponse | null {
     if (!result) return null
 
-    return {
+    const publicResult: TiSearchResponse = {
         query: result.query,
         generatedAt: result.generatedAt,
         mode: result.mode,
@@ -93,6 +93,8 @@ export function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): 
             distribution: result.collectionStrategy.distribution
         } : undefined
     }
+
+    return sanitizeBackendShapedPublicText(publicResult)
 }
 
 function sanitizeActorIntelligence(actorIntelligence?: TiActorIntelligenceContract): TiActorIntelligenceContract | undefined {
@@ -211,7 +213,7 @@ function sanitizeActionability(actionability?: TiActionabilityContract): TiActio
 }
 
 function publicTiText(value: string) {
-    return value
+    return publicBackendCopyText(value)
         .replace(/GET\s+\/api\/organizations\/[^/\s]+\/alert-readiness/gi, 'Check organization alert state')
         .replace(/GET\s+\/api\/organizations\/[^/\s]+\/alert-status/gi, 'Check organization alert state')
         .replace(/\/api\/organizations\/[^/\s]+\/alert-readiness/gi, 'organization alert state')
@@ -247,4 +249,27 @@ function publicTiText(value: string) {
         .replace(/\bcredential-exposure metadata\b/gi, 'credential-exposure records')
         .replace(/\bcaptured metadata\b/gi, 'captured page text')
         .replace(/\bcollected as metadata\b/gi, 'collected as reviewable records')
+}
+
+function sanitizeBackendShapedPublicText<T>(value: T): T {
+    if (typeof value === 'string') return publicBackendCopyText(value) as T
+    if (Array.isArray(value)) return value.map(item => sanitizeBackendShapedPublicText(item)) as T
+    if (!value || typeof value !== 'object') return value
+
+    return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [key, sanitizeBackendShapedPublicText(item)]),
+    ) as T
+}
+
+function publicBackendCopyText(value: string) {
+    return value
+        .replace(/\bWhat returned\b/gi, 'Source summary')
+        .replace(/\bReturned as evidence\b/gi, 'Included as evidence')
+        .replace(/\breturned actor profile\b/gi, 'sourced actor profile')
+        .replace(/\breturned profile\b/gi, 'actor profile')
+        .replace(/\breturned observations\b/gi, 'source observations')
+        .replace(/\breturned ATT&CK\b/gi, 'mapped ATT&CK')
+        .replace(/\bwas returned\b/gi, 'was found')
+        .replace(/\bwere returned\b/gi, 'were found')
+        .replace(/\breturned\b/gi, 'reported')
 }
