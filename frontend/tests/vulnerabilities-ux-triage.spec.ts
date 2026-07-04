@@ -8,6 +8,7 @@ test('vulnerability scanner starts with triage and collapses telemetry', async (
     const summaryGrid = await readFile(path.join(root, 'src/components/monitoring/vulnerabilities/summaryGrid.tsx'), 'utf8')
     const header = await readFile(path.join(root, 'src/components/monitoring/vulnerabilities/header.tsx'), 'utf8')
     const imageDetails = await readFile(path.join(root, 'src/components/monitoring/vulnerabilities/imageDetails.tsx'), 'utf8')
+    const imageFindings = await readFile(path.join(root, 'src/components/monitoring/vulnerabilities/imageFindings.tsx'), 'utf8')
 
     expect(summaryGrid).toContain('Scanner needs review')
     expect(summaryGrid).toContain('Review image findings by impact')
@@ -28,4 +29,15 @@ test('vulnerability scanner starts with triage and collapses telemetry', async (
     expect(imageDetails).toContain('data-testid=\'vulnerability-image-breakdown\'')
     expect(imageDetails.indexOf('vulnerability-image-breakdown-disclosure')).toBeLessThan(imageDetails.indexOf('<ImageFindings'))
     expect(imageDetails).toContain('<ImageFindings image={image} />')
+
+    expect(imageFindings).toContain('data-testid=\'vulnerability-remediation-summary\'')
+    expect(imageFindings).toContain('Recommended remediation')
+    expect(imageFindings).toContain('const fixable = image.vulnerabilities.filter')
+    expect(imageFindings).toContain('const unresolved = image.vulnerabilities.length - fixable.length')
+    expect(imageFindings).toContain('fixable.find(isHighImpact) || fixable[0]')
+    expect(imageFindings).toContain('data-testid=\'vulnerability-package-concentration\'')
+    expect(imageFindings).toContain('packageConcentration(image.vulnerabilities)')
+    expect(imageFindings).toContain('function remediationHeadline')
+    expect(imageFindings).toContain('function remediationDetail')
+    expect(imageFindings).toContain('function packageConcentration')
 })
