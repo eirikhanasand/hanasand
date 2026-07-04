@@ -3324,7 +3324,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
             <div data-ti-artifact-workflow-readiness='true' className='mt-3 border-t border-ui-border pt-3 dark:border-ui-border'>
                 <div className='flex flex-wrap items-center justify-between gap-2 text-xs'>
                     <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
-                        Console routes · {workflowRows.filter(row => !row.blocked).length}/{workflowRows.length} ready · watchlist, alert, case, source
+                        Console action links · {workflowRows.filter(row => !row.blocked).length}/{workflowRows.length} ready · watchlist, alert, case, source
                     </p>
                     <p className='min-w-0 wrap-break-word text-[11px] font-medium text-ui-muted dark:text-ui-muted'>
                         {workflowRows
@@ -3334,7 +3334,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                             .join(' · ') || 'Console action owners'}
                     </p>
                     <button type='button' onClick={() => setShowRoutingChecks(value => !value)} className='inline-flex min-h-7 items-center justify-center border-l border-ui-border pl-2 text-[11px] font-semibold text-ui-text transition hover:text-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:text-ui-text'>
-                        {showRoutingChecks ? 'Hide routes' : 'Show routes'}
+                        {showRoutingChecks ? 'Hide action links' : 'Show action links'}
                     </button>
                 </div>
                 {showRoutingChecks ? (
@@ -4655,7 +4655,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                         {readyPayloadCount}/{payloads.length} ready
                     </span>
                     <button type='button' onClick={() => setShowPayloadDetails(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
-                        {showPayloadDetails ? 'Hide routes' : 'Show routes'}
+                        {showPayloadDetails ? 'Hide action links' : 'Show action links'}
                     </button>
                     <CopyPayloadButton label='Action exports' payload={actionability.actionPayloads} />
                 </div>
