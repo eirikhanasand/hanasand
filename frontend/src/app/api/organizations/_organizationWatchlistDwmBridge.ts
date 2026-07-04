@@ -175,15 +175,17 @@ export async function mirrorOrganizationWatchlistToDwmResult(input: {
         })
         const text = await response.text()
         const payload = parseJsonObject(text)
+        const watchlist = objectValue(payload.watchlist)
+        const alertRebuild = objectValue(payload.alertRebuild)
         mirrors.push({
             ok: response.ok,
             status: response.status,
-            watchlistId: payload.watchlist?.id ?? mirrorPayload.id,
+            watchlistId: stringValue(watchlist?.id) ?? mirrorPayload.id,
             watchlistStatus: mirrorPayload.status,
-            savedAlertCount: payload.alertRebuild?.savedAlertCount ?? 0,
-            alertIds: payload.alertRebuild?.alertIds ?? [],
-            sourceFamilies: payload.alertRebuild?.sourceFamilies ?? [],
-            matchedTerms: payload.alertRebuild?.matchedTerms ?? [],
+            savedAlertCount: numberValue(alertRebuild?.savedAlertCount) ?? 0,
+            alertIds: arrayOfStrings(alertRebuild?.alertIds),
+            sourceFamilies: arrayOfStrings(alertRebuild?.sourceFamilies),
+            matchedTerms: arrayOfStrings(alertRebuild?.matchedTerms),
             error: response.ok ? undefined : payload.error ?? payload,
         })
     }
@@ -233,12 +235,14 @@ export function buildDwmWatchlistMirrorAlertPreview(payload: JsonRecord): DwmWat
     const evidenceSummary = objectValue(alert.evidenceSummary)
     const workflowContext = objectValue(alert.workflowContext)
     const matchReason = objectValue(alert.matchReason ?? workflowContext?.matchReason)
+    const matchedTermRecord = objectValue(alert.matchedTerm) ?? objectValue(matchReason?.matchedTerm)
+    const sourceFamilies = arrayOfStrings(evidenceSummary?.sourceFamilies)
     const firstEvidence = evidence.map(objectValue).find(Boolean) ?? {}
-    const matchedTerm = stringValue(alert.matchedTerm?.value ?? matchReason?.matchedTerm?.value ?? matchReason?.matchedTerm)
+    const matchedTerm = stringValue(matchedTermRecord?.value ?? alert.matchedTerm ?? matchReason?.matchedTerm)
     return {
         id,
         detailRoute: stringValue(alert.alertDetailPath ?? payload.alertDetailPath) || `/dashboard/dwm?alert=${encodeURIComponent(id)}`,
-        sourceFamily: stringValue(alert.sourceFamily ?? evidenceSummary?.sourceFamilies?.[0] ?? workflowContext?.sourceFamily),
+        sourceFamily: stringValue(alert.sourceFamily ?? sourceFamilies[0] ?? workflowContext?.sourceFamily),
         matchedTerm,
         severity: stringValue(alert.severityOverride ?? alert.severity),
         recommendedRoute: stringValue(alert.recommendedRoute ?? workflowContext?.recommendedRoute),
@@ -252,6 +256,11 @@ export function buildDwmWatchlistMirrorAlertPreview(payload: JsonRecord): DwmWat
 function arrayOfRecords(value: unknown): JsonRecord[] {
     if (!Array.isArray(value)) return []
     return value.filter((item): item is JsonRecord => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+}
+
+function arrayOfStrings(value: unknown): string[] {
+    if (!Array.isArray(value)) return []
+    return value.map(item => stringValue(item)).filter((item): item is string => Boolean(item))
 }
 
 function normalizeDwmTermKind(value: unknown) {
