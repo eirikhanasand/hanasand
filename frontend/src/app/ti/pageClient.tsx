@@ -9718,7 +9718,7 @@ function EmptyState() {
         ['Recent evidence', 'Recent company, actor, domain, and detail results with evidence strength, freshness, source family, and review state.'],
         ['Source context', 'Linked source references, capture state, and open questions so analysts can judge whether a result is useful.'],
         ['Watchlist fit', 'Company, supplier, domain, and portfolio terms are separated from broad actor background.'],
-        ['Action path', 'Review, watch, escalate, export, or open the authenticated console when the result needs follow-up.'],
+        ['Follow-up actions', 'Review, watch, escalate, export, or open the authenticated console when the result needs follow-up.'],
     ]
 
     return (
