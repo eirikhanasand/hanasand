@@ -36,6 +36,7 @@ const coreTasks: TestTask[] = [
     scriptTask('git-import-parser', 'Git import parser contract', 'smoke-git-import-parser.ts'),
     scriptTask('ai-runtime-contract', 'AI runtime contract', 'validate-ai-runtime-contract.ts'),
     scriptTask('lxd-lifecycle', 'LXD lifecycle contract', 'test-lxd-lifecycle.ts'),
+    scriptTask('browser-sandbox-profiles', 'Browser sandbox profile persistence contract', 'smoke-browser-sandbox-profiles.ts'),
 ]
 
 const environmentTasks: TestTask[] = [

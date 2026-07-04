@@ -199,6 +199,7 @@ import {
     postDwmWebhookDestinationTest,
     putDwmWebhookDestination,
 } from './handlers/dwm/webhooks.ts'
+import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers/browserSandboxProfiles.ts'
 
 /**
  * Defines the routes available in the API.
@@ -304,6 +305,10 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/dwm/webhook-destinations/:id/test', postDwmWebhookDestinationTest)
     fastify.get('/dwm/webhook-deliveries', getDwmWebhookDeliveries)
     fastify.post('/dwm/webhook-deliveries', postDwmWebhookDelivery)
+
+    // Browser sandbox profiles
+    fastify.get('/browser-sandbox/profiles', getBrowserSandboxProfiles)
+    fastify.put('/browser-sandbox/profiles', putBrowserSandboxProfiles)
 
     // Article handlers
     fastify.get('/articles', getArticles)

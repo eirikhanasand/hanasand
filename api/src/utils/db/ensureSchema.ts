@@ -34,6 +34,18 @@ export default async function ensureSchema() {
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_load_test_runs_test_started_at ON load_test_runs(test_id, started_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_load_test_runs_url_started_at ON load_test_runs(url, started_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS browser_sandbox_profiles (
+            owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            tools JSONB NOT NULL DEFAULT '[]'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (owner_id, id)
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_browser_sandbox_profiles_owner_updated ON browser_sandbox_profiles(owner_id, updated_at DESC)')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_by TEXT')

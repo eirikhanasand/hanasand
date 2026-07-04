@@ -93,6 +93,7 @@ type SandboxEvidence = {
 }
 
 const storageKey = 'hanasand:browser-sandbox:profiles:v1'
+const profileApiPath = '/api/backend/browser-sandbox/profiles'
 const brokerBaseUrl = process.env.NEXT_PUBLIC_BROWSER_SANDBOX_WS || `${config.url.api_client_wss}/ws/browser-sandbox`
 const defaultTools: SandboxTool[] = [
     { id: 'virustotal', name: 'VirusTotal', url: 'https://www.virustotal.com/gui/search/{url}' },
@@ -131,7 +132,11 @@ export default function BrowserSandboxPageClient() {
     const [activeUrl, setActiveUrl] = useState('')
     const [events, setEvents] = useState<string[]>(['Sandbox ready.'])
     const [customProfileName, setCustomProfileName] = useState('')
+    const [customToolName, setCustomToolName] = useState('')
+    const [customToolUrl, setCustomToolUrl] = useState('')
     const [profilesLoaded, setProfilesLoaded] = useState(false)
+    const [profileSyncEnabled, setProfileSyncEnabled] = useState(false)
+    const [profileSyncState, setProfileSyncState] = useState<'local' | 'loading' | 'synced' | 'saving' | 'error'>('loading')
     const socketRef = useRef<WebSocket | null>(null)
 
     const normalizedTarget = useMemo(() => normalizeTarget(target), [target])
@@ -143,8 +148,9 @@ export default function BrowserSandboxPageClient() {
     }, [])
 
     useEffect(() => {
+        let cancelled = false
         try {
-            const stored = JSON.parse(window.localStorage.getItem(storageKey) || '[]') as SandboxProfile[]
+            const stored = sanitizeProfiles(JSON.parse(window.localStorage.getItem(storageKey) || '[]'))
             if (Array.isArray(stored) && stored.length) {
                 setProfiles(mergeProfiles(stored))
                 setSelectedProfileId(stored[0]?.id || defaultProfiles[0].id)
@@ -154,12 +160,64 @@ export default function BrowserSandboxPageClient() {
         } finally {
             setProfilesLoaded(true)
         }
+
+        fetch(profileApiPath, { credentials: 'include', cache: 'no-store' })
+            .then(async response => {
+                if (cancelled) return
+                if (response.status === 401 || response.status === 403) {
+                    setProfileSyncEnabled(false)
+                    setProfileSyncState('local')
+                    return
+                }
+                if (!response.ok) throw new Error('Profile sync failed')
+                const payload = await response.json() as { profiles?: unknown }
+                const serverProfiles = sanitizeProfiles(payload.profiles)
+                if (serverProfiles.length) {
+                    setProfiles(mergeProfiles(serverProfiles))
+                    setSelectedProfileId(serverProfiles[0]?.id || defaultProfiles[0].id)
+                }
+                setProfileSyncEnabled(true)
+                setProfileSyncState('synced')
+            })
+            .catch(() => {
+                if (cancelled) return
+                setProfileSyncEnabled(false)
+                setProfileSyncState('local')
+            })
+
+        return () => {
+            cancelled = true
+        }
     }, [])
 
     useEffect(() => {
         if (!profilesLoaded) return
-        window.localStorage.setItem(storageKey, JSON.stringify(profiles.filter(profile => !defaultProfiles.some(item => item.id === profile.id))))
-    }, [profiles, profilesLoaded])
+        const userProfiles = profiles.filter(profile => !isDefaultProfile(profile.id))
+        window.localStorage.setItem(storageKey, JSON.stringify(userProfiles))
+        if (!profileSyncEnabled) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setProfileSyncState('saving')
+            fetch(profileApiPath, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profiles: userProfiles }),
+                signal: controller.signal,
+            })
+                .then(response => {
+                    if (!response.ok) throw new Error('Profile sync failed')
+                    setProfileSyncState('synced')
+                })
+                .catch(error => {
+                    if (error?.name !== 'AbortError') setProfileSyncState('error')
+                })
+        }, 650)
+        return () => {
+            controller.abort()
+            window.clearTimeout(timer)
+        }
+    }, [profileSyncEnabled, profiles, profilesLoaded])
 
     useEffect(() => () => {
         socketRef.current?.close()
@@ -287,10 +345,29 @@ export default function BrowserSandboxPageClient() {
     }, [customProfileName])
 
     const deleteProfile = useCallback((id: string) => {
-        if (defaultProfiles.some(profile => profile.id === id)) return
+        if (isDefaultProfile(id)) return
         setProfiles(current => current.filter(profile => profile.id !== id))
         if (selectedProfileId === id) setSelectedProfileId(defaultProfiles[0].id)
     }, [selectedProfileId])
+
+    const addToolToSelectedProfile = useCallback(() => {
+        const name = customToolName.trim()
+        const url = customToolUrl.trim()
+        if (!name || !/^https?:\/\//i.test(url) || isDefaultProfile(selectedProfile.id)) return
+        const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `tool-${Date.now()}`
+        setProfiles(current => current.map(profile => profile.id === selectedProfile.id
+            ? { ...profile, tools: [...profile.tools.filter(tool => tool.id !== id), { id, name, url }].slice(0, 8) }
+            : profile))
+        setCustomToolName('')
+        setCustomToolUrl('')
+    }, [customToolName, customToolUrl, selectedProfile.id])
+
+    const removeToolFromSelectedProfile = useCallback((toolId: string) => {
+        if (isDefaultProfile(selectedProfile.id)) return
+        setProfiles(current => current.map(profile => profile.id === selectedProfile.id
+            ? { ...profile, tools: profile.tools.filter(tool => tool.id !== toolId) }
+            : profile))
+    }, [selectedProfile.id])
 
     if (sessionState === 'prompt') {
         return (
@@ -334,6 +411,7 @@ export default function BrowserSandboxPageClient() {
                                 <div>
                                     <h2 className='text-sm font-semibold text-ui-text'>Saved profiles</h2>
                                     <p className='mt-1 text-sm text-ui-muted'>Profiles run the selected URL through external triage surfaces in the remote sandbox context.</p>
+                                    <p className='mt-1 text-xs text-ui-muted'>{profileSyncLabel(profileSyncState)}</p>
                                 </div>
                                 <div className='flex gap-2'>
                                     <input value={customProfileName} onChange={event => setCustomProfileName(event.target.value)} placeholder='Profile name' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none' />
@@ -342,6 +420,16 @@ export default function BrowserSandboxPageClient() {
                                     </button>
                                 </div>
                             </div>
+                            <ProfileToolEditor
+                                profile={selectedProfile}
+                                locked={isDefaultProfile(selectedProfile.id)}
+                                toolName={customToolName}
+                                toolUrl={customToolUrl}
+                                onToolName={setCustomToolName}
+                                onToolUrl={setCustomToolUrl}
+                                onAddTool={addToolToSelectedProfile}
+                                onRemoveTool={removeToolFromSelectedProfile}
+                            />
                         </div>
                     </div>
                 </section>
@@ -401,6 +489,61 @@ export default function BrowserSandboxPageClient() {
                 </div>
             </section>
         </main>
+    )
+}
+
+function ProfileToolEditor({
+    profile,
+    locked,
+    toolName,
+    toolUrl,
+    onToolName,
+    onToolUrl,
+    onAddTool,
+    onRemoveTool,
+}: {
+    profile: SandboxProfile
+    locked: boolean
+    toolName: string
+    toolUrl: string
+    onToolName: (value: string) => void
+    onToolUrl: (value: string) => void
+    onAddTool: () => void
+    onRemoveTool: (id: string) => void
+}) {
+    return (
+        <div className='grid gap-3 rounded-md border border-ui-border bg-ui-raised p-3'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <div>
+                    <p className='text-sm font-semibold text-ui-text'>{profile.name}</p>
+                    <p className='mt-1 text-xs text-ui-muted'>{profile.tools.length ? `${profile.tools.length} tool${profile.tools.length === 1 ? '' : 's'} open on every run.` : 'Browser-only profile.'}</p>
+                </div>
+                {locked ? <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>built in</span> : null}
+            </div>
+            <div className='grid gap-2'>
+                {profile.tools.map(tool => (
+                    <div key={tool.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-panel p-2 text-sm md:grid-cols-[8rem_minmax(0,1fr)_auto]'>
+                        <span className='font-semibold text-ui-text'>{tool.name}</span>
+                        <span className='min-w-0 truncate font-mono text-xs text-ui-muted'>{tool.url}</span>
+                        {!locked ? (
+                            <button type='button' onClick={() => onRemoveTool(tool.id)} className='grid h-8 w-8 place-items-center rounded-md border border-ui-border text-ui-muted hover:text-ui-danger' aria-label={`Remove ${tool.name}`}>
+                                <Trash2 className='h-3.5 w-3.5' />
+                            </button>
+                        ) : null}
+                    </div>
+                ))}
+            </div>
+            {!locked ? (
+                <div className='grid gap-2 md:grid-cols-[12rem_minmax(0,1fr)_auto]'>
+                    <input value={toolName} onChange={event => onToolName(event.target.value)} placeholder='Tool name' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none' />
+                    <input value={toolUrl} onChange={event => onToolUrl(event.target.value)} placeholder='https://tool.example/search?q={url}' className='h-9 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 font-mono text-xs text-ui-text outline-none' />
+                    <button type='button' onClick={onAddTool} className='inline-flex h-9 items-center justify-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                        <Plus className='h-4 w-4' />
+                        Add
+                    </button>
+                </div>
+            ) : null}
+        </div>
     )
 }
 
@@ -633,11 +776,52 @@ function webcrackLoadValue(value: unknown): SandboxWebCrackLoad | undefined {
 }
 
 function mergeProfiles(input: SandboxProfile[]) {
-    const merged = [...input, ...defaultProfiles]
+    const merged = [...sanitizeProfiles(input), ...defaultProfiles]
     const seen = new Set<string>()
     return merged.filter(profile => {
         if (!profile?.id || seen.has(profile.id)) return false
         seen.add(profile.id)
         return true
     })
+}
+
+function sanitizeProfiles(value: unknown): SandboxProfile[] {
+    if (!Array.isArray(value)) return []
+    return value.flatMap(item => {
+        if (!item || typeof item !== 'object') return []
+        const profile = item as Partial<SandboxProfile>
+        const id = typeof profile.id === 'string' ? profile.id.trim() : ''
+        const name = typeof profile.name === 'string' ? profile.name.trim() : ''
+        if (!id || !name) return []
+        return [{
+            id,
+            name,
+            tools: sanitizeTools(profile.tools),
+        }]
+    }).slice(0, 16)
+}
+
+function sanitizeTools(value: unknown): SandboxTool[] {
+    if (!Array.isArray(value)) return []
+    return value.flatMap(item => {
+        if (!item || typeof item !== 'object') return []
+        const tool = item as Partial<SandboxTool>
+        const id = typeof tool.id === 'string' ? tool.id.trim() : ''
+        const name = typeof tool.name === 'string' ? tool.name.trim() : ''
+        const url = typeof tool.url === 'string' ? tool.url.trim() : ''
+        if (!id || !name || !/^https?:\/\//i.test(url)) return []
+        return [{ id, name, url }]
+    }).slice(0, 8)
+}
+
+function isDefaultProfile(id: string) {
+    return defaultProfiles.some(profile => profile.id === id)
+}
+
+function profileSyncLabel(state: 'local' | 'loading' | 'synced' | 'saving' | 'error') {
+    if (state === 'loading') return 'Loading account profiles.'
+    if (state === 'saving') return 'Saving profiles to account.'
+    if (state === 'synced') return 'Profiles synced to account.'
+    if (state === 'error') return 'Account profile sync failed; local copy is preserved.'
+    return 'Profiles saved locally on this browser.'
 }
