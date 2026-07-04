@@ -2015,11 +2015,13 @@ function SourcePosture({ snapshot, operations }: { snapshot: DwmProductSnapshot,
 }
 
 function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries: DeliveryItem[] }) {
-    const visible = alert ? deliveries.filter(delivery => delivery.alertId === alert.id || delivery.alertId === 'webhook_test') : deliveries
+    const visible = orderDeliveries(alert ? deliveries.filter(delivery => delivery.alertId === alert.id || delivery.alertId === 'webhook_test') : deliveries)
     const orgId = alert ? alertOrganizationId(alert) : undefined
     const caseId = alert?.caseId || alert?.caseIdCandidate || alert?.workflowContext?.caseIdCandidate || alert?.webhookContext?.caseIdCandidate
     const caseHref = alert && caseId ? caseDetailHref(caseId, alert.id, orgId, 'delivery_history') : undefined
     const latestDelivery = visible[0]
+    const lastFailedDelivery = visible.find(delivery => delivery.status === 'failed')
+    const lastSuccessfulDelivery = visible.find(delivery => delivery.status === 'delivered' || delivery.status === 'dry_run')
     const orgHref = organizationDeliveryWorkspaceHref({ organizationId: orgId, alertId: alert?.id, caseId, delivery: latestDelivery })
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel'>
@@ -2031,6 +2033,11 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
                 <Webhook className='h-4 w-4 text-ui-primary' />
             </div>
             <div className='grid gap-2 p-3'>
+                <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 text-xs sm:grid-cols-3' data-dwm-delivery-latest='true'>
+                    <DeliveryFact label='Last attempt' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : 'No delivery yet'} tone={latestDelivery?.status === 'failed' ? 'bad' : latestDelivery ? 'good' : 'neutral'} />
+                    <DeliveryFact label='Last success' value={lastSuccessfulDelivery ? `${stateLabel(lastSuccessfulDelivery.status)} · ${relativeTimeLabel(lastSuccessfulDelivery.attemptedAt)}` : 'Not recorded'} />
+                    <DeliveryFact label='Needs review' value={lastFailedDelivery ? `${stateLabel(lastFailedDelivery.status)} · ${relativeTimeLabel(lastFailedDelivery.attemptedAt)}` : 'No failed attempt'} tone={lastFailedDelivery ? 'warn' : 'neutral'} />
+                </div>
                 <div className='grid grid-cols-2 gap-2 text-[11px]'>
                     <a href={orgHref} className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 font-semibold text-ui-text transition hover:bg-ui-canvas'>
                         Destinations
@@ -2080,6 +2087,26 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
                 {!visible.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Test or send this alert to start delivery history.</p>}
             </div>
         </section>
+    )
+}
+
+function orderDeliveries(rows: DeliveryItem[]) {
+    return [...rows].sort((first, second) => String(second.attemptedAt).localeCompare(String(first.attemptedAt)))
+}
+
+function DeliveryFact({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'good' | 'warn' | 'bad' }) {
+    const toneClass = tone === 'good'
+        ? 'text-ui-success'
+        : tone === 'warn'
+            ? 'text-ui-warning'
+            : tone === 'bad'
+                ? 'text-ui-danger'
+                : 'text-ui-text'
+    return (
+        <div className='min-w-0'>
+            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className={`mt-1 truncate font-semibold ${toneClass}`}>{value}</p>
+        </div>
     )
 }
 
