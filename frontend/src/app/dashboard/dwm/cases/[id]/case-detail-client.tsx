@@ -366,7 +366,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
     const timeline = state.detail.timeline || state.exportPayload?.timelineSummary || []
     const evidence = state.detail.evidence || state.exportPayload?.evidenceSummary || []
-    const deliveries = state.detail.deliveries || state.exportPayload?.deliveryEvidence || []
+    const deliveries = orderCaseDeliveries(state.detail.deliveries || state.exportPayload?.deliveryEvidence || [])
     const latestDelivery = state.detail.deliveryContext?.latestDelivery || deliveries[0]
     const readOnly = Boolean(state.detail.access?.readOnly || state.detail.workflowActionPolicy?.summary?.readOnly)
     const scopedTenantId = resolvedTenantId(caseRecord, tenantId)
@@ -820,6 +820,10 @@ function Metric({ label, value, detail }: { label: string, value: string, detail
 
 function safeCaseEvidenceExcerpt(row: EvidenceRow) {
     return safeEvidenceExcerpt(row.safeExcerpt || row.excerpt || 'No safe excerpt available.')
+}
+
+function orderCaseDeliveries(rows: DeliveryRow[]) {
+    return [...rows].sort((first, second) => String(second.attemptedAt || '').localeCompare(String(first.attemptedAt || '')))
 }
 
 function EvidenceMobileRow({ row }: { row: EvidenceRow }) {

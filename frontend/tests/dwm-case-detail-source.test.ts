@@ -21,6 +21,8 @@ test('DWM case detail exposes webhook delivery traceability', () => {
     assert.match(source, /Manage destination/)
     assert.match(source, /Delivery history/)
     assert.match(source, /focus: 'destinations'/)
+    assert.match(source, /const deliveries = orderCaseDeliveries\(state\.detail\.deliveries \|\| state\.exportPayload\?\.deliveryEvidence \|\| \[\]\)/)
+    assert.match(source, /function orderCaseDeliveries\(rows: DeliveryRow\[\]\)/)
     assert.match(source, /latestDelivery\.nextRetryAt/)
     assert.match(source, /latestDelivery\.requestId \|\| latestDelivery\.auditEventId/)
     assert.match(source, /\/dashboard\/dwm\$\{queryString\(\{ tenantId, organizationId, alert: alertId \}\)\}/)
