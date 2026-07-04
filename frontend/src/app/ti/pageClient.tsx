@@ -217,6 +217,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedCaseOwnership = selected ? selectedCaseOwnershipFor(result, selected, actionability, selectedCaseDraft, selectedCaseActionTrail) : null
     const selectedCaseCreateRequest = selected ? selectedCaseCreateRequestFor(result, selected, actorIntel, actionability, selectedCaseDraft, selectedCaseOwnership, selectedSourceDrilldown, selectedWatchlistPlan) : null
     const selectedDeliveryPlan = selected ? selectedDeliveryReadinessPlanFor(result, selected, actionability, selectedAlertPlan, selectedCaseOwnership) : null
+    const selectedConsoleLinks = selected ? selectedConsoleLinksFor(result, selected, selectedWatchlistPlan, selectedCaseCreateRequest, selectedAlertPlan, selectedSourceDrilldown) : null
     const selectedTriageBrief = selected ? selectedTriageBriefFor(result, selected, actionability, watchlist, alertPacket, selectedCaseDraft) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const openGapCount = actionability.enrichmentGapQueue.length
@@ -275,6 +276,9 @@ function Results({ result }: { result: TiSearchResponse }) {
             onEscalate={() => applyDecision('escalated')}
             onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
             onCase={() => stageSelectedHandoff()}
+            watchlistHref={selectedConsoleLinks?.watchlist}
+            caseHref={selectedConsoleLinks?.case}
+            alertHref={selectedConsoleLinks?.alert}
             caseAvailable={Boolean(selectedCaseDraft && selectedCaseOwnership && selectedCaseCreateRequest && selectedWatchlistPlan && selectedAlertPlan && selectedDeliveryPlan && selectedEnrichmentTriage && selectedCaseActionTrail)}
         />
     ) : null
@@ -380,6 +384,9 @@ function Results({ result }: { result: TiSearchResponse }) {
                         actionability={actionability}
                         selected={selected}
                         caseAvailable={Boolean(selectedCaseDraft && selectedCaseOwnership && selectedCaseCreateRequest && selectedWatchlistPlan && selectedAlertPlan && selectedDeliveryPlan && selectedEnrichmentTriage && selectedCaseActionTrail)}
+                        watchlistHref={selectedConsoleLinks?.watchlist}
+                        caseHref={selectedConsoleLinks?.case}
+                        alertHref={selectedConsoleLinks?.alert}
                         onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
                         onCase={() => stageSelectedHandoff()}
                         onEscalate={() => applyDecision('escalated')}
@@ -1634,11 +1641,72 @@ type SourceCoverageWorkbenchRow = {
     payload: Record<string, unknown>
 }
 
+function selectedConsoleLinksFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    watchlistPlan: SelectedWatchlistPlan | null,
+    caseCreateRequest: SelectedCaseCreateRequest | null,
+    alertPlan: SelectedAlertActionPlan | null,
+    sourceDrilldown: ReturnType<typeof selectedSourceDrilldownFor> | null
+) {
+    const baseParams = {
+        actor: result.query,
+        selected: selected.id,
+        source: selected.source,
+        evidence: selected.priority?.rowId,
+        sourceId: selected.priority?.sourceIds[0] ?? sourceDrilldown?.rows[0]?.sourceId,
+        captureId: selected.priority?.captureIds[0] ?? sourceDrilldown?.rows.find(row => row.captureId)?.captureId,
+    }
+    return {
+        watchlist: authenticatedPublicTiHref(watchlistPlan?.route, {
+            ...baseParams,
+            action: 'watchlist',
+            term: watchlistPlan?.terms[0]?.value,
+            state: watchlistPlan?.state,
+        }),
+        case: authenticatedPublicTiHref(caseCreateRequest?.route, {
+            ...baseParams,
+            action: 'case',
+            caseState: caseCreateRequest?.state,
+            caseRoute: caseCreateRequest?.refs.casePaths[0],
+            alertId: caseCreateRequest?.refs.alertIds[0],
+        }),
+        alert: authenticatedPublicTiHref(alertPlan?.route, {
+            ...baseParams,
+            action: 'alert',
+            alertState: alertPlan?.state,
+            alertId: alertPlan?.sourceRefs.alertIds[0],
+        }),
+    }
+}
+
+function authenticatedPublicTiHref(route: string | undefined, params: Record<string, string | undefined>) {
+    const normalizedRoute = normalizedAuthenticatedRoute(route)
+    const [path, existingQuery = ''] = normalizedRoute.split('?')
+    const search = new URLSearchParams(existingQuery)
+    search.set('handoff', 'public-ti')
+    Object.entries(params).forEach(([key, value]) => {
+        if (value) search.set(key, value)
+    })
+    return `${path}?${search.toString()}`
+}
+
+function normalizedAuthenticatedRoute(route: string | undefined) {
+    if (!route) return '/dashboard/dwm'
+    if (route.startsWith('/v1/cases')) return '/dashboard/ti/workbench'
+    if (route.startsWith('/v1/dwm')) return '/dashboard/dwm'
+    if (route.startsWith('/dashboard')) return route
+    return '/dashboard/dwm'
+}
+
 function ActorActionStrip({
     actor,
     actionability,
     selected,
     caseAvailable,
+    watchlistHref,
+    caseHref,
+    alertHref,
     onWatchlist,
     onCase,
     onEscalate,
@@ -1648,6 +1716,9 @@ function ActorActionStrip({
     actionability: TiActionabilityModel
     selected?: AnalystWorkItem
     caseAvailable: boolean
+    watchlistHref?: string
+    caseHref?: string
+    alertHref?: string
     onWatchlist: () => void
     onCase: () => void
     onEscalate: () => void
@@ -1685,10 +1756,10 @@ function ActorActionStrip({
                         <span key={item} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{item}</span>
                     ))}
                 </div>
-                <div className='grid min-w-0 grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:justify-end'>
-                    <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist}>Watch</StripActionButton>
-                    <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onCase} disabled={!caseAvailable}>Create case</StripActionButton>
-                    <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate}>Escalate</StripActionButton>
+                <div data-ti-selected-console-links='true' className='grid min-w-0 grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:justify-end'>
+                    <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
+                    <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onCase} href={caseHref} disabled={!caseHref && !caseAvailable}>Create case</StripActionButton>
+                    <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate} href={alertHref}>Escalate</StripActionButton>
                     <StripActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
                     {exportRows.length ? (
                         <span className='min-w-0'>
@@ -1714,13 +1785,22 @@ function ActorActionStrip({
     )
 }
 
-function StripActionButton({ icon, children, onClick, disabled = false }: { icon: React.ReactNode; children: string; onClick: () => void; disabled?: boolean }) {
+function StripActionButton({ icon, children, onClick, href, disabled = false }: { icon: React.ReactNode; children: string; onClick: () => void; href?: string; disabled?: boolean }) {
+    const className = 'inline-flex min-h-8 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised dark:disabled:bg-ui-raised dark:disabled:text-ui-muted'
+    if (href && !disabled) {
+        return (
+            <a href={href} onClick={onClick} className={className}>
+                {icon}
+                {children}
+            </a>
+        )
+    }
     return (
         <button
             type='button'
             onClick={onClick}
             disabled={disabled}
-            className='inline-flex min-h-8 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised dark:disabled:bg-ui-raised dark:disabled:text-ui-muted'
+            className={className}
         >
             {icon}
             {children}
@@ -6355,6 +6435,9 @@ function MobileEvidenceWorkbar({
     onEscalate,
     onWatchlist,
     onCase,
+    watchlistHref,
+    caseHref,
+    alertHref,
     caseAvailable,
 }: {
     selected: AnalystWorkItem
@@ -6371,6 +6454,9 @@ function MobileEvidenceWorkbar({
     onEscalate: () => void
     onWatchlist: () => void
     onCase: () => void
+    watchlistHref?: string
+    caseHref?: string
+    alertHref?: string
     caseAvailable: boolean
 }) {
     const kindOptions: Array<{ value: AnalystWorkItem['kind'] | 'all'; label: string }> = [
@@ -6432,23 +6518,11 @@ function MobileEvidenceWorkbar({
                 </div>
             ) : null}
 
-            <div className='grid grid-cols-4 gap-1.5'>
-                <button type='button' onClick={onWatchlist} className='inline-flex min-h-8 items-center justify-center gap-1 rounded-md border border-ui-border bg-ui-panel px-1 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                    <BellRing className='h-3 w-3' />
-                    Watch
-                </button>
-                <button type='button' onClick={onCase} disabled={!caseAvailable} className='inline-flex min-h-8 items-center justify-center gap-1 rounded-md border border-ui-border bg-ui-panel px-1 text-[11px] font-semibold text-ui-text disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:disabled:bg-ui-raised dark:disabled:text-ui-muted'>
-                    <ClipboardList className='h-3 w-3' />
-                    Case
-                </button>
-                <button type='button' onClick={onEscalate} className='inline-flex min-h-8 items-center justify-center gap-1 rounded-md border border-ui-border bg-ui-panel px-1 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                    <Send className='h-3 w-3' />
-                    Escalate
-                </button>
-                <button type='button' onClick={onMarkReviewed} className='inline-flex min-h-8 items-center justify-center gap-1 rounded-md border border-ui-border bg-ui-panel px-1 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                    <CheckCircle2 className='h-3 w-3' />
-                    Review
-                </button>
+            <div data-ti-mobile-console-links='true' className='grid grid-cols-4 gap-1.5'>
+                <StripActionButton icon={<BellRing className='h-3 w-3' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
+                <StripActionButton icon={<ClipboardList className='h-3 w-3' />} onClick={onCase} href={caseHref} disabled={!caseHref && !caseAvailable}>Case</StripActionButton>
+                <StripActionButton icon={<Send className='h-3 w-3' />} onClick={onEscalate} href={alertHref}>Escalate</StripActionButton>
+                <StripActionButton icon={<CheckCircle2 className='h-3 w-3' />} onClick={onMarkReviewed}>Review</StripActionButton>
             </div>
         </section>
     )
