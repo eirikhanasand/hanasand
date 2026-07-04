@@ -2070,7 +2070,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                 disabled={Boolean(busy)}
                                 onChange={event => setDestinationQuery(event.target.value)}
                                 className={inputClass}
-                                placeholder='Name, route, hash, delivery'
+                                placeholder='Name, status, hash, delivery'
                             />
                         </label>
                         <SelectField
@@ -2278,7 +2278,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                         </div>
                         <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted md:col-span-3'>
                             Notes
-                            <textarea value={draft.notes} disabled={!canManage} onChange={event => setDraft({ ...draft, notes: event.target.value })} className={`${inputClass} min-h-16 resize-y`} placeholder='Reason, owner, routing context' />
+                            <textarea value={draft.notes} disabled={!canManage} onChange={event => setDraft({ ...draft, notes: event.target.value })} className={`${inputClass} min-h-16 resize-y`} placeholder='Reason, owner, delivery context' />
                         </label>
                         {draftDuplicate && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning md:col-span-3'>This term already exists in this organization.</p>}
                     </div>
@@ -2385,7 +2385,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                                 <StatusPill status={item.status} />
                                             </div>
                                             <p className='mt-2 line-clamp-2 wrap-break-word text-base font-semibold text-ui-text dark:text-ui-text'>{item.value}</p>
-                                            <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{item.notes || 'Add routing context.'}</p>
+                                            <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{item.notes || 'Add delivery context.'}</p>
                                             <div className='mt-2 grid gap-1 text-xs text-ui-muted dark:text-ui-muted sm:grid-cols-2'>
                                                 <span className='truncate'>Org: {sanitizeOrganizationDisplayCopy(item.organizationId || organization.id)}</span>
                                                 <span className='truncate'>Owner: {item.updatedBy || item.createdBy || 'system'}</span>
