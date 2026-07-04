@@ -250,7 +250,7 @@ export default function TrafficMap({
     return (
         <div className='grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_22rem]'>
             <section
-                className='flex min-h-168 flex-col rounded-2xl border border-ui-border
+                className='flex min-h-168 flex-col rounded-lg border border-ui-border
                     bg-ui-panel shadow-lg'
             >
                 <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-5 py-4'>
@@ -456,14 +456,14 @@ export default function TrafficMap({
                 >
                     <div className='space-y-2 text-sm text-ui-muted'>
                         <div
-                            className='flex items-center justify-between rounded-xl border border-ui-border
+                            className='flex items-center justify-between rounded-lg border border-ui-border
                                 bg-ui-panel px-3 py-2'
                         >
                             <span>Requests observed</span>
                             <span className='font-semibold text-ui-text'>{selectedPoint?.count || 0}</span>
                         </div>
                         <div
-                            className='flex items-center justify-between rounded-xl border border-ui-border
+                            className='flex items-center justify-between rounded-lg border border-ui-border
                                 bg-ui-panel px-3 py-2'
                         >
                             <span>Last seen</span>
@@ -472,14 +472,14 @@ export default function TrafficMap({
                             </span>
                         </div>
                         <div
-                            className='flex items-center justify-between rounded-xl border border-ui-border
+                            className='flex items-center justify-between rounded-lg border border-ui-border
                                 bg-ui-panel px-3 py-2'
                         >
                             <span>Live share</span>
                             <span className='font-semibold text-ui-text'>{selectedShare ? `${selectedShare}%` : 'metering'}</span>
                         </div>
                         <div
-                            className='flex items-center justify-between rounded-xl border border-ui-border
+                            className='flex items-center justify-between rounded-lg border border-ui-border
                                 bg-ui-panel px-3 py-2'
                         >
                             <span>Hotspot rank</span>
@@ -487,7 +487,7 @@ export default function TrafficMap({
                         </div>
                         <div className='grid gap-2 sm:grid-cols-2'>
                             <div
-                                className='rounded-xl border border-ui-primary/25 bg-ui-primary/10 px-3 py-3'
+                                className='rounded-lg border border-ui-primary/25 bg-ui-primary/10 px-3 py-3'
                             >
                                 <div className='mb-1 flex items-center gap-2 text-ui-primary'>
                                     <MapPinned className='h-4 w-4' />
@@ -496,7 +496,7 @@ export default function TrafficMap({
                                 <div className='text-sm font-semibold text-ui-text'>{selectedCapital?.label || 'Resolving'}</div>
                             </div>
                             <div
-                                className='rounded-xl border border-ui-warning/25 bg-ui-warning/10 px-3 py-3'
+                                className='rounded-lg border border-ui-warning/25 bg-ui-warning/10 px-3 py-3'
                             >
                                 <div className='mb-1 flex items-center gap-2 text-ui-warning'>
                                     <Route className='h-4 w-4' />
@@ -508,7 +508,7 @@ export default function TrafficMap({
                             </div>
                         </div>
                         <div
-                            className='flex items-center justify-between rounded-xl border border-ui-border
+                            className='flex items-center justify-between rounded-lg border border-ui-border
                                 bg-ui-panel px-3 py-2'
                         >
                             <span>Recent requests listed</span>
@@ -528,7 +528,7 @@ export default function TrafficMap({
                                     const coords = countryCentroids[entry.iso]
                                     if (coords) setViewBox(getCountryFocusView(coords))
                                 }}
-                                className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition ${
+                                className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition ${
                                     selectedCountry === entry.iso
                                         ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-text'
                                         : 'border-ui-border bg-ui-panel text-ui-muted '
@@ -556,7 +556,7 @@ export default function TrafficMap({
                 <InsightCard title='Recent Requests' icon={<Clock3 className='h-4 w-4 stroke-ui-success' />}>
                     <div className='space-y-2'>
                         {liveRecords.length ? selectedRecords.map((record) => (
-                            <div key={record.id} className='rounded-xl border border-ui-border bg-ui-panel p-3'>
+                            <div key={record.id} className='rounded-lg border border-ui-border bg-ui-panel p-3'>
                                 <div className='flex items-center justify-between gap-3'>
                                     <span className='text-sm font-medium text-ui-text'>{record.method} {record.path}</span>
                                     <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusClasses(record.status)}`}>

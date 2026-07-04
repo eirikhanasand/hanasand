@@ -5,7 +5,7 @@ import type { TrafficMetric } from '@/utils/monitoring/types'
 
 export function StatCard({ icon, label, value }: { icon: ReactNode, label: string, value: string }) {
     return (
-        <div className='rounded-xl border border-ui-border bg-ui-panel p-4'>
+        <div className='rounded-lg border border-ui-border bg-ui-panel p-4'>
             <div className='flex items-center justify-between text-ui-muted'>
                 <span className='text-[11px] font-medium uppercase tracking-[0.18em]'>{label}</span>
                 <div className='rounded-full border border-ui-border bg-ui-raised p-2'>{icon}</div>
@@ -17,7 +17,7 @@ export function StatCard({ icon, label, value }: { icon: ReactNode, label: strin
 
 export function InsightCard({ children, icon, title }: { children: ReactNode, icon: ReactNode, title: string }) {
     return (
-        <section className='rounded-2xl border border-ui-border bg-ui-panel p-4 shadow-lg'>
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-lg'>
             <div className='mb-3 flex items-center gap-3'>
                 <div className='rounded-full border border-ui-border bg-ui-raised p-2 text-ui-muted'>{icon}</div>
                 <h2 className='font-semibold text-ui-text'>{title}</h2>
@@ -41,7 +41,7 @@ export function SignalGroup({
             <div className='mb-2 text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>{title}</div>
             <div className='space-y-2'>
                 {entries.length ? entries.slice(0, 4).map((entry) => (
-                    <div key={entry.key} className='rounded-xl border border-ui-border bg-ui-panel px-3 py-2'>
+                    <div key={entry.key} className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>
                         <div className='truncate text-sm font-medium text-ui-text'>{entry.key}</div>
                         <div className='mt-1 text-xs text-ui-muted'>{entry.count} {valueLabel}</div>
                     </div>
@@ -53,7 +53,7 @@ export function SignalGroup({
 
 export function EmptyCopy({ text }: { text: string }) {
     return (
-        <div className='rounded-xl border border-dashed border-ui-border bg-ui-canvas px-3 py-4 text-sm text-ui-muted'>
+        <div className='rounded-lg border border-dashed border-ui-border bg-ui-canvas px-3 py-4 text-sm text-ui-muted'>
             {text}
         </div>
     )
