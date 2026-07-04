@@ -517,7 +517,7 @@ function Results({ result }: { result: TiSearchResponse }) {
 
                                     <div data-ti-selected-evidence-command-strip='true' className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-2 text-xs dark:border-ui-border dark:bg-ui-raised sm:grid-cols-[minmax(0,1fr)_auto]'>
                                         <p className='min-w-0 wrap-break-word leading-5 text-ui-muted dark:text-ui-muted'>
-                                            Case link: {selectedCaseDraft && selectedCaseOwnership ? 'Case draft ready' : selectedSourceDrilldown?.rows.length ? 'Add capture IDs' : 'Add source rows'} · {selectedSourceDrilldown?.rows.length ?? 0} source row{(selectedSourceDrilldown?.rows.length ?? 0) === 1 ? '' : 's'} linked.
+                                            Case link: {selectedCaseDraft && selectedCaseOwnership ? 'Case draft ready' : selectedSourceDrilldown?.rows.length ? 'Add capture references' : 'Add source rows'} · {selectedSourceDrilldown?.rows.length ?? 0} source row{(selectedSourceDrilldown?.rows.length ?? 0) === 1 ? '' : 's'} linked.
                                         </p>
                                         <span className='flex flex-wrap gap-2'>
                                             <a href='#ti-selected-evidence' className='inline-flex min-h-8 items-center justify-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
@@ -1001,7 +1001,7 @@ function selectedContinuityGaps(input: {
     const rawGaps = unique([
         ...(input.captureCount ? [] : ['capture evidence']),
         ...(input.watchlistPlan?.ready ? [] : ['org watchlist']),
-        ...(input.alertPlan?.ready ? [] : input.alertPlan?.sourceRefs.alertIds.length ? [] : ['alert ID']),
+        ...(input.alertPlan?.ready ? [] : input.alertPlan?.sourceRefs.alertIds.length ? [] : ['alert review']),
         ...(input.caseOwnership?.sourceRefs.casePaths.length ? [] : ['case route']),
         ...(input.deliveryPlan?.summary.destinations ? [] : ['delivery destination']),
         ...(input.sourceDrilldown?.blockers ?? []),
@@ -1016,7 +1016,7 @@ function selectedContinuityGaps(input: {
 function shortContinuityGap(value: string) {
     const normalized = displayRequirementText(value).replace(/\.$/, '')
     if (/capture/i.test(normalized)) return 'capture evidence'
-    if (/alert id|dwm alert/i.test(normalized)) return 'alert ID'
+    if (/alert id|dwm alert/i.test(normalized)) return 'alert review'
     if (/watchlist|watch term|customer term/i.test(normalized)) return 'org watchlist'
     if (/case route|case link|case path|case creation/i.test(normalized)) return 'case route'
     if (/destination|webhook/i.test(normalized)) return 'delivery destination'
@@ -3536,10 +3536,10 @@ function selectedArtifactPayloadFor(artifact: ActorArtifact, handoffs: ActorArti
 
 function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWorkItem['priority']> }) {
     const ids = [
-        ...priority.sourceIds.slice(0, 3).map(id => `source ${id}`),
-        ...priority.captureIds.slice(0, 2).map(id => `capture ${id}`),
-        ...priority.alertIds.slice(0, 2).map(id => `alert ${id}`),
-    ]
+        priority.sourceIds.length ? `${priority.sourceIds.length} source reference${priority.sourceIds.length === 1 ? '' : 's'}` : '',
+        priority.captureIds.length ? `${priority.captureIds.length} capture reference${priority.captureIds.length === 1 ? '' : 's'}` : '',
+        priority.alertIds.length ? `${priority.alertIds.length} alert review${priority.alertIds.length === 1 ? '' : 's'}` : '',
+    ].filter(Boolean)
     return (
         <div data-ti-evidence-priority='true' className='mt-4 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
             <div className='flex flex-wrap items-start justify-between gap-2'>
@@ -5124,7 +5124,7 @@ function compactSourceReferenceLabel(value: string) {
 }
 
 function sourceHealthEvidenceLabel(row: SourceHealthRow) {
-    if (row.captureId) return `capture ${row.captureId}`
+    if (row.captureId) return 'capture reference linked'
     const hasFieldPath = row.provenance.includes('[') || row.provenance.includes(']') || /sourceProvenance|relatedAlerts|handoffs|actorIntelligence/i.test(row.provenance)
     if (hasFieldPath) {
         return `${formatLabel(row.sourceFamily)} evidence request`
@@ -5133,12 +5133,12 @@ function sourceHealthEvidenceLabel(row: SourceHealthRow) {
 }
 
 function sourceHealthFieldLabel(value: string) {
-    if (/captureId/i.test(value)) return 'capture ID'
-    if (/sourceRequestId/i.test(value)) return 'source request ID'
+    if (/captureId/i.test(value)) return 'capture reference'
+    if (/sourceRequestId/i.test(value)) return 'source request'
     if (/reportDate|lastSeen|firstReportedAt/i.test(value)) return 'report date'
-    if (/sourceId/i.test(value)) return 'source ID'
+    if (/sourceId/i.test(value)) return 'source reference'
     if (/provenance|sourceUrl|url/i.test(value)) return 'source reference'
-    if (/relatedAlerts.*id|alertId/i.test(value)) return 'alert ID'
+    if (/relatedAlerts.*id|alertId/i.test(value)) return 'alert review'
     if (/casePath|caseId/i.test(value)) return 'case link'
     if (/webhookDestination/i.test(value)) return 'webhook destination'
     if (/organizationId|tenantId/i.test(value)) return 'organization scope'
@@ -5152,7 +5152,7 @@ function handoffMissingLabel(values: string[]) {
         if (/sourceProvenance|capture|source request|source URL|source hash|url/i.test(value)) return sourceHealthFieldLabel(value)
         if (/organization|org|tenant/i.test(value)) return 'organization scope'
         if (/watchlist/i.test(value)) return 'watchlist item'
-        if (/alert/i.test(value)) return 'alert ID'
+        if (/alert/i.test(value)) return 'alert review'
         if (/case/i.test(value)) return 'case link'
         if (/webhook|destination/i.test(value)) return 'webhook destination'
         if (/fresh|stale|after/i.test(value)) return 'fresh source evidence'
@@ -5199,12 +5199,12 @@ function displayRequirementText(value: string) {
         .replace(/generatedAlertReferences/gi, 'generated alert references')
         .replace(/TiSearchResponse\.actorIntelligence\.malwareTools\/campaigns/gi, 'actor tooling and campaign fields')
         .replace(/actorIntelligence\.structuredProvenance\[\]\.reportDate/gi, 'source report date')
-        .replace(/sourceProvenance\[\]\.sourceRequestId/gi, 'source request ID')
-        .replace(/sourceProvenance\[\]\.captureId/gi, 'capture ID')
-        .replace(/sourceProvenance\[\]\.sourceId/gi, 'source ID')
+        .replace(/sourceProvenance\[\]\.sourceRequestId/gi, 'source request')
+        .replace(/sourceProvenance\[\]\.captureId/gi, 'capture reference')
+        .replace(/sourceProvenance\[\]\.sourceId/gi, 'source reference')
         .replace(/sourceProvenance\[\]\.provenance/gi, 'source reference')
         .replace(/relatedAlerts\[\]\.casePath/gi, 'alert case link')
-        .replace(/relatedAlerts\[\]\.id/gi, 'alert ID')
+        .replace(/relatedAlerts\[\]\.id/gi, 'alert review')
         .replace(/relatedCases\[\]\.path/gi, 'case link')
         .replace(/handoffs\.alertRebuild\.endpoint/gi, 'alert rebuild action')
         .replace(/sourceProvenance\[\]/gi, 'source evidence')
@@ -5364,7 +5364,7 @@ function decisionStepsFor(actionability: TiActionabilityModel): DecisionStep[] {
             id: 'case',
             label: 'Open case',
             status: actionability.caseHandoff.blocked ? 'blocked' : 'ready',
-            detail: actionability.caseHandoff.blocked ? 'Case creation needs an alert ID and org-scoped context.' : 'Ready to open from related alert context.',
+            detail: actionability.caseHandoff.blocked ? 'Case creation needs alert review and org-scoped context.' : 'Ready to open from related alert context.',
             payload: actionability.caseHandoff,
             route: actionability.caseHandoff.backedRoute,
             missing: actionability.caseHandoff.missing,
@@ -8866,7 +8866,7 @@ function selectedSourceDrilldownFor(
             provenance: source.url || source.provenance || selected.provenance,
             href: source.url || linkFromText(source.provenance),
             confidence: selected.confidence,
-            handoff: 'Open the listed source and attach capture evidence before case replay if no capture ID is present.',
+            handoff: 'Open the listed source and attach capture evidence before case replay if no capture reference is present.',
         })),
         ...actorRows.map(row => drilldownRow({
             sourceId: row.sourceId,
@@ -8885,7 +8885,7 @@ function selectedSourceDrilldownFor(
             href: linkFromText(row.provenance),
             captureId: row.captureId,
             confidence: row.confidence,
-            handoff: row.captureId ? `Use capture ${row.captureId} as replayable case evidence.` : `Attach capture ID or source hash for ${row.sourceName} before case replay.`,
+            handoff: row.captureId ? 'Use linked capture reference as replayable case evidence.' : `Attach capture reference or source hash for ${row.sourceName} before case replay.`,
         })),
         ...clusterRows.map(row => drilldownRow({
             sourceName: row.sourceName,
@@ -8902,7 +8902,7 @@ function selectedSourceDrilldownFor(
             provenance: selected.href || selected.provenance || selected.source,
             href: selected.href,
             confidence: selected.confidence,
-            handoff: 'Attach source ID, source URL, capture ID, or source hash before this result can support stronger follow-up.',
+            handoff: 'Attach source reference, source URL, capture reference, or source hash before this result can support stronger follow-up.',
         }))
     }
     const rows = uniqueBy(candidates, row => `${row.sourceId ?? row.sourceName}:${row.provenance}:${row.captureId ?? ''}`).slice(0, 6)
@@ -9013,8 +9013,8 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
             title: 'Attach source capture provenance',
             status: hasSourceUrls ? 'ready' : 'needs_api',
             detail: hasSourceUrls
-                ? 'Available source references include URLs or IDs that can be opened or mapped into console evidence.'
-                : 'The result needs source URLs, capture IDs, or redacted source hashes before analyst trust is strong.',
+                ? 'Available source references include URLs or linked references that can be opened or mapped into console evidence.'
+                : 'The result needs source URLs, capture references, or redacted source hashes before analyst trust is strong.',
         },
         {
             title: 'Map actor to customer watchlists',
@@ -9301,9 +9301,9 @@ function selectedTriageBriefFor(
         whyItMatters,
         nextAction,
         evidenceStatus: hasCapture
-            ? `Backed by ${evidenceRowCount} source result${evidenceRowCount === 1 ? '' : 's'} with capture or reference IDs attached.`
+            ? `Backed by ${evidenceRowCount} source result${evidenceRowCount === 1 ? '' : 's'} with capture or source references attached.`
             : hasSourceReference
-                ? 'Source reference is present, but the public result does not yet include a capture ID. Verify before customer-facing escalation.'
+                ? 'Source reference is present, but the public result does not yet include a capture reference. Verify before customer-facing escalation.'
                 : 'Verify source evidence before customer-facing escalation.',
         evidenceTone,
         safetyBoundary: 'Public TI results are metadata-only. This view does not expose source files, credential values, or webhook secrets.',
@@ -9328,7 +9328,7 @@ function actorOperationsRowsFor(result: TiSearchResponse, actor: TiActorIntellig
         tactic: item.tactic,
         confidence: item.confidence,
         freshness: item.freshness,
-        source: item.sourceIds[0] ? `source ${item.sourceIds[0]}` : defaultSource,
+        source: item.sourceIds[0] ? 'Source reference linked' : defaultSource,
         sourceFamily: item.captureIds.length ? 'Capture linked' : item.missing.length ? 'Capture needed' : defaultFamily,
         timestamp: latestDate,
         artifactKind: 'technique',
@@ -9379,7 +9379,7 @@ function actorOperationsRowsFor(result: TiSearchResponse, actor: TiActorIntellig
         confidence: item.confidence,
         freshness: item.reportDate ? (isDateStale(item.reportDate, result.generatedAt) ? 'review' : 'ready') : 'blocked',
         source: item.source,
-        sourceFamily: item.sourceIds.length ? item.sourceIds.map(sourceId => `source ${sourceId}`).join(', ') : 'Victim observation',
+        sourceFamily: sourceReferenceCountLabel(item.sourceIds, 'Victim observation'),
         timestamp: item.reportDate || item.timeframe || latestDate,
         artifactKind: 'country',
         artifactLookup: item.country,
@@ -10084,7 +10084,7 @@ function SourceActivationPanel({ activation }: { activation: NonNullable<TiSearc
                                 </div>
                                 <span className={sourceActivationExecutionClass(action.execution)}>{sourceActivationExecutionLabel(action.execution)}</span>
                             </div>
-                            {action.sourceId ? <p className='mt-1 break-all font-mono text-[11px] text-ui-muted dark:text-ui-muted'>source {action.sourceId}</p> : null}
+                            {action.sourceId ? <p className='mt-1 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>source reference linked</p> : null}
                         </div>
                     ))}
                 </div>
@@ -10397,7 +10397,7 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
                             <div key={`${row.sourceName}-${row.provenance}`} className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs dark:border-ui-border dark:bg-ui-raised'>
                                 <p className='wrap-break-word font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}</p>
                                 <p className='mt-1 wrap-break-word text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.shownBecause)}</p>
-                                <p className='mt-2 text-[11px] text-ui-muted dark:text-ui-muted'>{[row.reportDate ? formatDate(row.reportDate) : '', typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : '', row.captureId ? `capture ${row.captureId}` : 'capture needed'].filter(Boolean).join(' · ')}</p>
+                                <p className='mt-2 text-[11px] text-ui-muted dark:text-ui-muted'>{[row.reportDate ? formatDate(row.reportDate) : '', typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : '', captureReferenceLabel(row.captureId)].filter(Boolean).join(' · ')}</p>
                             </div>
                         ))}
                         {!sourceRows.length ? (
@@ -10471,7 +10471,7 @@ function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnT
                         <div data-ti-geo-sources='true' data-ti-geo-provenance='true' className='mt-2 grid gap-1 border-t border-ui-border pt-2'>
                             {handoff.evidenceRows.slice(0, 2).map(row => (
                                 <p key={`${point.code}-${row.victim}-${row.reportDate}`} className='wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                    {row.victim} · {formatDate(row.reportDate)} · {sourceBasisLabel(row.confidence)} · {row.sourceIds.length ? row.sourceIds.map(sourceId => `source ${sourceId}`).join(', ') : row.source}
+                                    {row.victim} · {formatDate(row.reportDate)} · {sourceBasisLabel(row.confidence)} · {sourceReferenceCountLabel(row.sourceIds, row.source)}
                                 </p>
                             ))}
                         </div>
@@ -10528,6 +10528,15 @@ function formatLabel(value: string) {
     return value.replaceAll('_', ' ')
 }
 
+function captureReferenceLabel(value?: string | null) {
+    return value ? 'capture reference linked' : 'capture reference needed'
+}
+
+function sourceReferenceCountLabel(sourceIds: string[], fallback: string) {
+    if (sourceIds.length) return `${sourceIds.length} source reference${sourceIds.length === 1 ? '' : 's'} linked`
+    return fallback
+}
+
 function publicStateLabel(value: string) {
     if (value === 'blocked') return 'syncing'
     if (value === 'action_required') return 'reviewing'
@@ -10544,7 +10553,7 @@ function publicDecisionStatusLabel(value: DecisionStep['status']) {
 function coverageMissingLabel(value: string) {
     if (value.includes('captureId')) return 'capture references'
     if (value.includes('reportDate')) return 'report dates'
-    if (value.includes('sourceId')) return 'source identifiers'
+    if (value.includes('sourceId')) return 'source references'
     if (value.includes('structuredProvenance')) return 'structured source details'
     if (value.includes('datedActivityRow')) return 'dated activity'
     if (value.includes('provenanceRefs')) return 'source references'
