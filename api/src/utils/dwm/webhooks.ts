@@ -54,6 +54,9 @@ export type DwmWebhookDeliveryRow = {
     attempted_at: string
     created_at: string
     updated_at?: string
+    audit_event_id?: string | null
+    audit_action?: string | null
+    audit_actor_id?: string | null
 }
 
 export type DwmWebhookAuditRow = {
@@ -298,6 +301,9 @@ export function toDwmWebhookDelivery(row: DwmWebhookDeliveryRow) {
         casePath: row.case_path,
         attemptedAt: row.attempted_at,
         createdAt: row.created_at,
+        auditEventId: row.audit_event_id ?? null,
+        auditAction: row.audit_action ?? null,
+        auditActorId: row.audit_actor_id ?? null,
     }
     return {
         ...delivery,
@@ -511,10 +517,20 @@ export async function archiveDwmWebhookDestination(ownerId: string, id: string) 
 export async function listDwmWebhookDeliveries(ownerId: string, orgId?: string) {
     if (orgId && orgId !== ownerId) {
         const result = await run(`
-            SELECT *
-            FROM dwm_webhook_deliveries
-            WHERE org_id = $1
-            ORDER BY created_at DESC
+            SELECT deliveries.*,
+                   audit.id AS audit_event_id,
+                   audit.action AS audit_action,
+                   audit.actor_id AS audit_actor_id
+            FROM dwm_webhook_deliveries deliveries
+            LEFT JOIN LATERAL (
+                SELECT id, action, actor_id
+                FROM dwm_webhook_audit_events
+                WHERE delivery_id = deliveries.id
+                ORDER BY created_at DESC
+                LIMIT 1
+            ) audit ON TRUE
+            WHERE deliveries.org_id = $1
+            ORDER BY deliveries.created_at DESC
             LIMIT 100
         `, [orgId])
 
@@ -522,11 +538,21 @@ export async function listDwmWebhookDeliveries(ownerId: string, orgId?: string) 
     }
 
     const result = await run(`
-        SELECT *
-        FROM dwm_webhook_deliveries
-        WHERE owner_id = $1
-          AND ($2::TEXT IS NULL OR org_id = $2)
-        ORDER BY created_at DESC
+        SELECT deliveries.*,
+               audit.id AS audit_event_id,
+               audit.action AS audit_action,
+               audit.actor_id AS audit_actor_id
+        FROM dwm_webhook_deliveries deliveries
+        LEFT JOIN LATERAL (
+            SELECT id, action, actor_id
+            FROM dwm_webhook_audit_events
+            WHERE delivery_id = deliveries.id
+            ORDER BY created_at DESC
+            LIMIT 1
+        ) audit ON TRUE
+        WHERE deliveries.owner_id = $1
+          AND ($2::TEXT IS NULL OR deliveries.org_id = $2)
+        ORDER BY deliveries.created_at DESC
         LIMIT 100
     `, [ownerId, orgId || null])
 
@@ -8210,7 +8236,7 @@ async function deliverToDwmWebhookDestination({
             : delivery.status === 'skipped'
                 ? 'delivery.skipped'
                 : deliveryAuditActionForEvent(delivery.event_type)
-    await recordDwmWebhookAudit({
+    const auditEventId = await recordDwmWebhookAudit({
         ownerId,
         actorId: ownerId,
         orgId: delivery.org_id,
@@ -8237,7 +8263,12 @@ async function deliverToDwmWebhookDestination({
         },
     })
 
-    return toDwmWebhookDelivery(delivery)
+    return {
+        ...toDwmWebhookDelivery(delivery),
+        auditEventId,
+        auditAction,
+        auditActorId: ownerId,
+    }
 }
 
 async function recordSkippedDuplicateDwmWebhookDelivery({
@@ -8530,7 +8561,7 @@ async function recordMissingDestinationDwmWebhookDelivery({
     ])
 
     const delivery = result.rows[0] as DwmWebhookDeliveryRow
-    await recordDwmWebhookAudit({
+    const auditEventId = await recordDwmWebhookAudit({
         ownerId,
         actorId: ownerId,
         orgId: delivery.org_id,
@@ -8558,7 +8589,12 @@ async function recordMissingDestinationDwmWebhookDelivery({
         },
     })
 
-    return toDwmWebhookDelivery(delivery)
+    return {
+        ...toDwmWebhookDelivery(delivery),
+        auditEventId,
+        auditAction: 'delivery.skipped',
+        auditActorId: ownerId,
+    }
 }
 
 async function recordDwmWebhookAudit({
@@ -8578,6 +8614,7 @@ async function recordDwmWebhookAudit({
     action: string
     metadata?: Record<string, unknown>
 }) {
+    const id = crypto.randomUUID()
     await run(`
         INSERT INTO dwm_webhook_audit_events (
             id,
@@ -8591,7 +8628,7 @@ async function recordDwmWebhookAudit({
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::JSONB)
     `, [
-        crypto.randomUUID(),
+        id,
         ownerId,
         actorId,
         orgId,
@@ -8600,6 +8637,7 @@ async function recordDwmWebhookAudit({
         action,
         JSON.stringify(redactAuditMetadata(metadata)),
     ])
+    return id
 }
 
 async function loadDwmWebhookDestination(ownerId: string, id: string) {

@@ -47,6 +47,7 @@ import {
     planDwmWebhookDeliveryRetry,
     redactWebhookEndpoint,
     sanitizeDwmWebhookDeliveryDiagnostic,
+    toDwmWebhookDelivery,
     type DwmAlertWebhookTriggerOptions,
 } from '#utils/dwm/webhooks.ts'
 
@@ -74,6 +75,38 @@ expect(destination.endpointHash?.startsWith('endpoint_'), 'Endpoint hash should 
 expect(!JSON.stringify(destination).includes(secret), 'Destination normalization leaked endpoint secret.', destination)
 const sanitizedDiagnostic = sanitizeDwmWebhookDeliveryDiagnostic(`Discord rejected ${endpoint}?token=${secret} token=${secret}`)
 expect(Boolean(sanitizedDiagnostic) && sanitizedDiagnostic.includes('/api/webhooks/987654321/...') && sanitizedDiagnostic.includes('token=[redacted]') && !sanitizedDiagnostic.includes(secret), 'Persisted delivery diagnostics should redact webhook URLs and token fragments.', sanitizedDiagnostic)
+const mappedDeliveryWithAudit = toDwmWebhookDelivery({
+    id: 'delivery_mapping_contract',
+    destination_id: 'destination_mapping_contract',
+    owner_id: 'owner_contract',
+    org_id: 'org_contract',
+    alert_id: 'alert_mapping_contract',
+    event_type: 'dwm.alert.replayed',
+    status: 'dry_run',
+    dry_run: true,
+    endpoint_hint: 'https://discord.com/api/webhooks/987654321/...',
+    endpoint_hash: 'endpoint_mapping_contract',
+    payload_hash: 'payload_mapping_contract',
+    payload: {},
+    response_status: 0,
+    response_body: null,
+    error: null,
+    error_class: null,
+    attempt_count: 1,
+    next_retry_at: null,
+    idempotency_key: 'dwm.alert.replayed:org_contract:destination_mapping_contract:alert_mapping_contract',
+    watchlist_id: 'watchlist_mapping_contract',
+    watchlist_name: 'Mapping watchlist',
+    route: 'exposure_alert',
+    case_path: '/v1/cases/case_mapping_contract',
+    attempted_at: '2026-06-28T12:00:00.000Z',
+    created_at: '2026-06-28T12:00:00.000Z',
+    updated_at: '2026-06-28T12:01:00.000Z',
+    audit_event_id: 'audit_mapping_contract',
+    audit_action: 'delivery.replayed',
+    audit_actor_id: 'owner_contract',
+})
+expect(mappedDeliveryWithAudit.auditEventId === 'audit_mapping_contract' && mappedDeliveryWithAudit.auditAction === 'delivery.replayed' && mappedDeliveryWithAudit.auditActorId === 'owner_contract', 'Delivery list mapping should expose joined audit ids for operator history rows.', mappedDeliveryWithAudit)
 
 try {
     normalizeDwmWebhookDestinationInput({ endpointUrl: 'http://hooks.example.com/dwm' }, 'owner_contract')
