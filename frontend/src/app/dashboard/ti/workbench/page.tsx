@@ -2,13 +2,20 @@ import Link from 'next/link'
 import { ArrowUpRight, Inbox, Radar } from 'lucide-react'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import type { DwmAlert } from '@/utils/dwm/product'
+import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
+import { buildPublicTiHandoffCase, type DwmOrganizationState, type OperatorScope } from '../../operatorConsoleModel'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence } from './workbenchClient'
 import { dwmAlertToWorkbenchCase } from './dwmAlertAdapter'
 
 export const dynamic = 'force-dynamic'
 
-export default async function TiAnalystWorkbenchPage() {
+export default async function TiAnalystWorkbenchPage({
+    searchParams,
+}: {
+    searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+    const params = await searchParams
     const overview = getTiAdminOverview()
     const [liveAlerts, liveCases, deliveries] = await Promise.all([
         loadDwmAlerts(),
@@ -17,7 +24,20 @@ export default async function TiAnalystWorkbenchPage() {
     ])
     const alertsWithCaseState = attachCasesToAlerts(liveAlerts, liveCases)
     const alertsWithDelivery = attachDeliveriesToAlerts(alertsWithCaseState, deliveries)
-    const cases = buildWorkbenchCases(overview, alertsWithDelivery, liveCases)
+    const publicTiDecode = firstParam(params?.handoff) === PUBLIC_TI_HANDOFF_SOURCE
+        ? decodePublicTiHandoffPayload(firstParam(params?.payload), firstParam(params?.intent))
+        : null
+    const scope: OperatorScope = { tenantId: 'default' }
+    const publicTiCases = buildPublicTiHandoffCase({
+        decode: publicTiDecode,
+        scope,
+        organizationState: emptyOrganizationState(),
+        watchlists: [],
+        operations: null,
+        liveAlertCount: liveAlerts.length,
+    })
+    const cases = [...publicTiCases, ...buildWorkbenchCases(overview, alertsWithDelivery, liveCases)]
+    const initialSelectedId = publicTiCases[0]?.id
 
     return (
         <DashboardPage>
@@ -40,9 +60,22 @@ export default async function TiAnalystWorkbenchPage() {
                 )}
             />
 
-            <AnalystWorkbenchClient initialCases={cases} />
+            <AnalystWorkbenchClient initialCases={cases} initialSelectedId={initialSelectedId} />
         </DashboardPage>
     )
+}
+
+function firstParam(value: string | string[] | undefined) {
+    return Array.isArray(value) ? value[0] : value
+}
+
+function emptyOrganizationState(): DwmOrganizationState {
+    return {
+        organizations: [],
+        members: [],
+        pendingInvites: [],
+        webhooks: [],
+    }
 }
 
 async function loadDwmAlerts(): Promise<DwmAlert[]> {

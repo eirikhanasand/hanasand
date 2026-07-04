@@ -1479,6 +1479,7 @@ export function buildPublicTiHandoffCase(input: {
         artifact: payload.artifact,
         selectedPayload: payload.selectedPayload,
         actionPayloads: payload.actionPayloads,
+        actionReadiness: payload.actionReadiness,
     }
 
     return [publicTiHandoffCase({

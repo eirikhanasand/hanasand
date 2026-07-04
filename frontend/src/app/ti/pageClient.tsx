@@ -4,7 +4,7 @@ import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, countryFromValue, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
 import { buildTiActionability, type TiActionabilityModel } from '@/utils/ti/actionability'
-import { PUBLIC_TI_HANDOFF_ACTIONS, buildActorArtifactHandoffs, buildActorArtifacts, nextActorArtifactId, type ActorArtifact, type ActorArtifactHandoffs, type ActorArtifactKind } from '@/utils/ti/actorWorkbench'
+import { PUBLIC_TI_HANDOFF_ACTIONS, buildActorArtifactHandoffs, buildActorArtifacts, encodeHandoffPayload, nextActorArtifactId, type ActorArtifact, type ActorArtifactHandoffs, type ActorArtifactKind, type PublicTiHandoffPayload } from '@/utils/ti/actorWorkbench'
 import { countryCentroids } from '@/utils/monitoring/geo'
 import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WIDTH, project, type ViewBox, zoomViewBox } from '@/utils/monitoring/liveTrafficMap'
 import mapData from '@parent/public/world.json'
@@ -217,7 +217,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedCaseOwnership = selected ? selectedCaseOwnershipFor(result, selected, actionability, selectedCaseDraft, selectedCaseActionTrail) : null
     const selectedCaseCreateRequest = selected ? selectedCaseCreateRequestFor(result, selected, actorIntel, actionability, selectedCaseDraft, selectedCaseOwnership, selectedSourceDrilldown, selectedWatchlistPlan) : null
     const selectedDeliveryPlan = selected ? selectedDeliveryReadinessPlanFor(result, selected, actionability, selectedAlertPlan, selectedCaseOwnership) : null
-    const selectedConsoleLinks = selected ? selectedConsoleLinksFor(result, selected, selectedWatchlistPlan, selectedCaseCreateRequest, selectedAlertPlan, selectedSourceDrilldown) : null
+    const selectedConsoleLinks = selected ? selectedConsoleLinksFor(result, selected, selectedWatchlistPlan, selectedCaseCreateRequest, selectedAlertPlan, selectedSourceDrilldown, selectedArtifactHandoffs) : null
     const selectedTriageBrief = selected ? selectedTriageBriefFor(result, selected, actionability, watchlist, alertPacket, selectedCaseDraft) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const openGapCount = actionability.enrichmentGapQueue.length
@@ -1647,7 +1647,8 @@ function selectedConsoleLinksFor(
     watchlistPlan: SelectedWatchlistPlan | null,
     caseCreateRequest: SelectedCaseCreateRequest | null,
     alertPlan: SelectedAlertActionPlan | null,
-    sourceDrilldown: ReturnType<typeof selectedSourceDrilldownFor> | null
+    sourceDrilldown: ReturnType<typeof selectedSourceDrilldownFor> | null,
+    artifactHandoffs: ActorArtifactHandoffs | null
 ) {
     const baseParams = {
         actor: result.query,
@@ -1663,28 +1664,32 @@ function selectedConsoleLinksFor(
             action: 'watchlist',
             term: watchlistPlan?.terms[0]?.value,
             state: watchlistPlan?.state,
-        }),
+        }, artifactHandoffs?.authBridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist]),
         case: authenticatedPublicTiHref(caseCreateRequest?.route, {
             ...baseParams,
             action: 'case',
             caseState: caseCreateRequest?.state,
             caseRoute: caseCreateRequest?.refs.casePaths[0],
             alertId: caseCreateRequest?.refs.alertIds[0],
-        }),
+        }, artifactHandoffs?.authBridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case]),
         alert: authenticatedPublicTiHref(alertPlan?.route, {
             ...baseParams,
             action: 'alert',
             alertState: alertPlan?.state,
             alertId: alertPlan?.sourceRefs.alertIds[0],
-        }),
+        }, artifactHandoffs?.authBridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild]),
     }
 }
 
-function authenticatedPublicTiHref(route: string | undefined, params: Record<string, string | undefined>) {
+function authenticatedPublicTiHref(route: string | undefined, params: Record<string, string | undefined>, payload?: PublicTiHandoffPayload) {
     const normalizedRoute = normalizedAuthenticatedRoute(route)
     const [path, existingQuery = ''] = normalizedRoute.split('?')
     const search = new URLSearchParams(existingQuery)
     search.set('handoff', 'public-ti')
+    if (payload) {
+        search.set('intent', payload.action)
+        search.set('payload', decodeURIComponent(encodeHandoffPayload(payload)))
+    }
     Object.entries(params).forEach(([key, value]) => {
         if (value) search.set(key, value)
     })
