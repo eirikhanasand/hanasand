@@ -6,6 +6,7 @@ import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSq
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
 import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import { dwmNextOperatorAction, type DwmNextOperatorActionKind } from '@/utils/dwm/nextOperatorAction'
+import type { PublicTiHandoffDecodeResult } from '@/utils/ti/actorWorkbench'
 import { DwmWorkflowActions } from './dwm-workflow-actions'
 
 type PortalAlert = DwmAlert & {
@@ -115,6 +116,7 @@ type PortalProps = {
     deliveries: DeliveryItem[]
     dataHealth: DwmDataHealth
     initialAlertId?: string
+    publicTiHandoff?: PublicTiHandoffDecodeResult | null
 }
 
 type DwmDataHealth = {
@@ -135,7 +137,7 @@ type QueueFilter = 'active' | 'ready' | 'critical' | 'source' | 'high_confidence
 type InvestigationTab = 'evidence' | 'entities' | 'sources' | 'delivery'
 type EvidenceDispositionState = 'reviewed' | 'escalated' | 'suppressed' | 'false_positive'
 
-export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operations, alerts, deliveries, dataHealth, initialAlertId }: PortalProps) {
+export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operations, alerts, deliveries, dataHealth, initialAlertId, publicTiHandoff }: PortalProps) {
     const router = useRouter()
     const searchParams = useSearchParams()
     const [selectedId, setSelectedId] = useState(initialAlertId && alerts.some(alert => alert.id === initialAlertId) ? initialAlertId : alerts[0]?.id ?? '')
@@ -386,6 +388,18 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                     webhookState={webhookState}
                 />
 
+                {publicTiHandoff ? (
+                    <PublicTiDwmIntake
+                        handoff={publicTiHandoff}
+                        params={searchParams}
+                        tenantId={tenantId}
+                        organizationId={organizationId}
+                        activeSourceCount={activeSourceCount}
+                        sourceCount={sourceCount}
+                        caseCount={caseCount}
+                    />
+                ) : null}
+
                 <div className='grid min-h-[480px] min-w-0 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]'>
                     <aside className='order-2 min-w-0 border-b border-ui-border bg-ui-raised xl:order-none xl:border-b-0 xl:border-r'>
                         <div className='border-b border-ui-border p-4'>
@@ -608,6 +622,140 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
             </div>
         </section>
     )
+}
+
+function PublicTiDwmIntake({ handoff, params, tenantId, organizationId, activeSourceCount, sourceCount, caseCount }: {
+    handoff: PublicTiHandoffDecodeResult
+    params: ReturnType<typeof useSearchParams>
+    tenantId: string
+    organizationId?: string
+    activeSourceCount: number
+    sourceCount: number
+    caseCount: number
+}) {
+    const handoffQuery = params.toString()
+    const workbenchHref = handoffQuery ? `/dashboard/ti/workbench?${handoffQuery}` : '/dashboard/ti/workbench'
+    const sourceHref = '/dashboard/ti/sources'
+    const orgHref = organizationId ? `/organizations?organizationId=${encodeURIComponent(organizationId)}` : `/organizations?tenantId=${encodeURIComponent(tenantId)}`
+
+    if (!handoff.ok) {
+        return (
+            <section data-dwm-public-ti-handoff className='border-b border-ui-border bg-ui-panel px-4 py-3'>
+                <div className='flex flex-col gap-3 rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 sm:flex-row sm:items-center sm:justify-between'>
+                    <div className='min-w-0'>
+                        <p className='text-[10px] font-semibold uppercase text-ui-warning'>Public TI intake</p>
+                        <p className='mt-1 wrap-break-word text-sm font-semibold text-ui-text'>Handoff needs a fresh export.</p>
+                        <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{handoff.message}</p>
+                    </div>
+                    <a href='/ti' className='inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>
+                        Open actor search
+                    </a>
+                </div>
+            </section>
+        )
+    }
+
+    const payload = handoff.payload
+    const terms = publicTiHandoffTermLabels(payload).slice(0, 4)
+    const captures = payload.evidenceRefs?.captureIds.length ?? payload.sourceRequests.filter(item => item.captureId).length
+    const sourceNames = payload.evidenceRefs?.sourceNames.length ? payload.evidenceRefs.sourceNames : payload.sourceRequests.map(item => item.sourceName)
+    const selected = payload.actionReadiness.find(item => item.selected) ?? payload.actionReadiness.find(item => item.action === handoff.action)
+    const blockers = uniqueStrings([...payload.missing, ...payload.blockers.map(item => item.detail), ...(selected?.missing ?? [])]).slice(0, 3)
+    const continuityRows = [
+        {
+            label: 'Watchlist',
+            value: terms.length ? `${terms.length} term${terms.length === 1 ? '' : 's'}` : 'term needed',
+            detail: terms.join(', ') || 'Add a scoped organization term before alert rebuild.',
+            href: orgHref,
+            tone: terms.length && organizationId ? 'ready' : 'blocked',
+        },
+        {
+            label: 'Sources',
+            value: `${activeSourceCount}/${sourceCount}`,
+            detail: sourceNames.length ? sourceNames.slice(0, 2).join(', ') : `${payload.sourceRequests.length} source request${payload.sourceRequests.length === 1 ? '' : 's'}`,
+            href: sourceHref,
+            tone: activeSourceCount ? 'ready' : 'waiting',
+        },
+        {
+            label: 'Evidence',
+            value: captures ? `${captures} capture${captures === 1 ? '' : 's'}` : 'capture needed',
+            detail: payload.artifact.provenance.slice(0, 2).join(', ') || payload.artifact.label,
+            href: workbenchHref,
+            tone: captures ? 'ready' : 'blocked',
+        },
+        {
+            label: 'Cases',
+            value: payload.evidenceRefs?.casePaths.length ? `${payload.evidenceRefs.casePaths.length} linked` : caseCount ? `${caseCount} open` : 'review first',
+            detail: blockers.length ? blockers.join('; ') : `${payload.query} can move into case review.`,
+            href: workbenchHref,
+            tone: blockers.length ? 'blocked' : caseCount ? 'ready' : 'waiting',
+        },
+    ] as const
+
+    return (
+        <section data-dwm-public-ti-handoff className='border-b border-ui-border bg-ui-panel px-4 py-3'>
+            <div className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)_auto] xl:items-center'>
+                <div className='min-w-0'>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Public TI intake</p>
+                    <h2 className='mt-1 wrap-break-word text-sm font-semibold text-ui-text'>{payload.artifact.label || payload.query}</h2>
+                    <p className='mt-1 wrap-break-word text-xs text-ui-muted'>
+                        {publicTiActionLabel(handoff.action)} for {payload.query} · {payload.artifact.kind} · {payload.artifact.confidence}% confidence
+                    </p>
+                </div>
+                <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4'>
+                    {continuityRows.map(row => (
+                        <a key={row.label} href={row.href} className='grid min-h-20 min-w-0 content-between rounded-lg border border-ui-border bg-ui-panel p-2 transition hover:bg-ui-canvas focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                            <div className='flex min-w-0 items-center justify-between gap-2'>
+                                <p className='truncate text-[10px] font-semibold uppercase text-ui-muted'>{row.label}</p>
+                                <span className={`h-2 w-2 shrink-0 rounded-full ${row.tone === 'ready' ? 'bg-ui-success' : row.tone === 'blocked' ? 'bg-ui-warning' : 'bg-ui-primary'}`} />
+                            </div>
+                            <p className='mt-1 truncate text-sm font-semibold text-ui-text' title={row.value}>{row.value}</p>
+                            <p className='mt-1 line-clamp-2 text-[11px] leading-4 text-ui-muted' title={row.detail}>{row.detail}</p>
+                        </a>
+                    ))}
+                </div>
+                <div className='grid min-w-0 grid-cols-2 gap-2 xl:w-40 xl:grid-cols-1'>
+                    <a href={workbenchHref} className='inline-flex h-9 items-center justify-center rounded-lg bg-ui-primary px-3 text-xs font-semibold text-ui-canvas transition hover:opacity-90'>
+                        Review case
+                    </a>
+                    <a href={orgHref} className='inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas'>
+                        Watch terms
+                    </a>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+function publicTiHandoffTermLabels(payload: Extract<PublicTiHandoffDecodeResult, { ok: true }>['payload']) {
+    const bodyTerms = Array.isArray(payload.actionPayloads.watchlist.body.terms) ? payload.actionPayloads.watchlist.body.terms : []
+    return uniqueStrings([...payload.artifact.watchlistTerms, ...bodyTerms]
+        .flatMap(term => {
+            if (!term || typeof term !== 'object') return []
+            const value = 'value' in term ? String(term.value || '').trim() : ''
+            if (!value) return []
+            const kind = 'kind' in term && typeof term.kind === 'string' ? term.kind : inferTermKind(value)
+            return `${stateLabel(kind)}:${value}`
+        }))
+}
+
+function publicTiActionLabel(action: Extract<PublicTiHandoffDecodeResult, { ok: true }>['action']) {
+    if (action === 'create_watchlist') return 'Watchlist handoff'
+    if (action === 'rebuild_alerts') return 'Alert handoff'
+    if (action === 'open_case') return 'Case handoff'
+    if (action === 'queue_enrichment') return 'Source enrichment'
+    return 'Public TI handoff'
+}
+
+function inferTermKind(value: string) {
+    if (value.includes('@')) return 'email'
+    if (/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(value)) return 'domain'
+    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)) return 'ip'
+    return 'term'
+}
+
+function uniqueStrings(values: string[]) {
+    return Array.from(new Set(values.map(value => value.trim()).filter(Boolean)))
 }
 
 function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localState, busyAction, actionMessage, onLocalStateChange, onUpdate, onOpenCase, onReplay, onTest, onSend }: {

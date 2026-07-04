@@ -1,6 +1,7 @@
 import { DashboardPage } from '@/components/dashboard/ui'
 import type { DwmProductSnapshot } from '@/utils/dwm/product'
 import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
+import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { cookies, headers } from 'next/headers'
 import { DwmAnalystPortal } from './dwm-analyst-portal'
 
@@ -13,6 +14,9 @@ export default async function DashboardDwmPage({
 }) {
     const params = await searchParams
     const initialAlertId = firstParam(params?.alert)
+    const publicTiHandoff = firstParam(params?.handoff) === PUBLIC_TI_HANDOFF_SOURCE
+        ? decodePublicTiHandoffPayload(firstParam(params?.payload), firstParam(params?.intent))
+        : null
     const scope = {
         tenantId: firstParam(params?.tenantId)?.trim() || 'default',
         organizationId: firstParam(params?.organizationId)?.trim() || undefined,
@@ -48,6 +52,7 @@ export default async function DashboardDwmPage({
                 deliveries={deliveries}
                 dataHealth={dataHealth}
                 initialAlertId={initialAlertId}
+                publicTiHandoff={publicTiHandoff}
             />
         </DashboardPage>
     )
