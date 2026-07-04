@@ -9,6 +9,8 @@ test('ti control keeps search and work queue primary while telemetry is disclose
 
     expect(source).toContain('data-ti-control-telemetry-disclosure')
     expect(source).toContain('data-ti-control-telemetry-panels')
+    expect(source).toContain('data-ti-control-secondary-actions')
+    expect(source).toContain('Secondary controls')
     expect(source).toContain('Operations telemetry')
     expect(source).toContain('ChevronDown')
     expect(source).toContain('group-open:rotate-180')
@@ -16,6 +18,11 @@ test('ti control keeps search and work queue primary while telemetry is disclose
 
     expect(source.indexOf('placeholder=\'Actor, company, domain, CVE...\'')).toBeLessThan(source.indexOf('data-ti-control-telemetry-disclosure'))
     expect(source.indexOf('runAction(\'run_query\')')).toBeLessThan(source.indexOf('data-ti-control-telemetry-disclosure'))
+    expect(source.indexOf('runAction(\'run_query\')')).toBeLessThan(source.indexOf('data-ti-control-secondary-actions'))
+    expect(source.indexOf('data-ti-control-secondary-actions')).toBeLessThan(source.indexOf('runAction(\'canary_run\')'))
+    expect(source.indexOf('data-ti-control-secondary-actions')).toBeLessThan(source.indexOf('onClick={runEnrichment}'))
+    expect(source.indexOf('data-ti-control-secondary-actions')).toBeLessThan(source.indexOf('runAction(\'source_apply_plan\')'))
+    expect(source.indexOf('data-ti-control-secondary-actions')).toBeLessThan(source.indexOf('runAction(\'rebuild_alerts\')'))
     expect(source.indexOf('<aside className=\'border-b border-ui-border bg-ui-canvas xl:border-b-0 xl:border-r\'>')).toBeLessThan(source.indexOf('data-ti-control-telemetry-disclosure'))
     expect(source.indexOf('Next work')).toBeLessThan(source.indexOf('data-ti-control-telemetry-disclosure'))
     expect(source.indexOf('data-ti-control-telemetry-disclosure')).toBeLessThan(source.indexOf('title=\'Endpoints\''))

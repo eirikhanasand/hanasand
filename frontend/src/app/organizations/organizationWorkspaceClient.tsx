@@ -1542,28 +1542,21 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                 {busyLabel && <InlineBusy label={busyLabel} marker='data-org-member-busy' />}
                 {members.length === 0 && <EmptyLine text='Active members appear here after invites are accepted or the backend returns the current team.' />}
                 {members.length > 0 && (
-                    <table className='min-w-full border-separate border-spacing-0 text-left text-sm'>
-                        <thead className='text-xs uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>
-                            <tr>
-                                <th className='border-b border-ui-border py-2 pr-3 dark:border-ui-border'>User</th>
-                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Role</th>
-                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Status</th>
-                                <th className='border-b border-ui-border py-2 pl-3 text-right dark:border-ui-border'>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                    <>
+                        <div className='grid gap-2 md:hidden' data-org-member-mobile-list='true'>
                             {members.map(member => {
                                 const selectedRole = pendingRoles[member.userId] || member.role
                                 const roleChanged = selectedRole !== member.role
                                 const canMutateMember = canManage && memberCanMutate(member)
                                 const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                 return (
-                                    <tr
+                                    <article
                                         key={member.userId}
                                         role='button'
                                         tabIndex={0}
                                         aria-pressed={selected}
-                                        className={`cursor-pointer align-middle transition ${selected ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
+                                        className={`grid gap-3 rounded-lg border p-3 transition ${selected ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-raised' : 'border-ui-border bg-ui-panel hover:bg-ui-raised dark:border-ui-border dark:bg-ui-canvas dark:hover:bg-ui-panel'}`}
+                                        data-org-member-mobile-row='true'
                                         onClick={() => onSelectSubject({ type: 'member', id: member.userId })}
                                         onKeyDown={event => {
                                             if (event.key === 'Enter' || event.key === ' ') {
@@ -1572,51 +1565,120 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                             }
                                         }}
                                     >
-                                        <td className='max-w-44 border-b border-ui-border py-2 pr-3 dark:border-ui-border'>
-                                            <p className='truncate font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(member.name || member.email || member.userId)}</p>
-                                            <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(member.email && member.email !== member.userId ? member.email : member.userId)}</p>
-                                        </td>
-                                        <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                        <div className='flex min-w-0 items-start justify-between gap-3'>
+                                            <div className='min-w-0'>
+                                                <p className='truncate font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(member.name || member.email || member.userId)}</p>
+                                                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(member.email && member.email !== member.userId ? member.email : member.userId)}</p>
+                                            </div>
+                                            <StatusPill status={member.status} />
+                                        </div>
+                                        <div className='grid gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                             {canMutateMember ? (
-                                                <div className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
+                                                <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
                                                     <select className={compactSelectClass} value={selectedRole} disabled={Boolean(busy)} onChange={event => setPendingRoles(current => ({ ...current, [member.userId]: event.target.value as OrganizationRole }))}>
                                                         {roleOptions.map(option => <option key={option} value={option}>{option}</option>)}
                                                     </select>
-                                                    {roleChanged && (
-                                                        <button
-                                                            type='button'
-                                                            className={secondaryButtonClass}
-                                                            disabled={Boolean(busy)}
-                                                            onClick={() => {
-                                                                onRoleChange(member, selectedRole)
-                                                                setPendingRoles(current => {
-                                                                    const next = { ...current }
-                                                                    delete next[member.userId]
-                                                                    return next
-                                                                })
-                                                            }}
-                                                        >
-                                                            <CheckCircle2 className='h-4 w-4' />
-                                                            Apply
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        type='button'
+                                                        className={secondaryButtonClass}
+                                                        disabled={!roleChanged || Boolean(busy)}
+                                                        onClick={() => {
+                                                            onRoleChange(member, selectedRole)
+                                                            setPendingRoles(current => {
+                                                                const next = { ...current }
+                                                                delete next[member.userId]
+                                                                return next
+                                                            })
+                                                        }}
+                                                    >
+                                                        <CheckCircle2 className='h-4 w-4' />
+                                                        Apply
+                                                    </button>
                                                 </div>
                                             ) : <RoleBadge role={member.role} />}
-                                        </td>
-                                        <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                            <div className='grid gap-1'>
-                                                <StatusPill status={member.status} />
-                                                <RowStatus message={rowMessages[`member-${member.userId}`]} />
-                                            </div>
-                                        </td>
-                                        <td className='border-b border-ui-border py-2 pl-3 text-right dark:border-ui-border'>
                                             <ConfirmActionButton ariaLabel='Remove member' disabled={!canMutateMember || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
-                                        </td>
-                                    </tr>
+                                            <RowStatus message={rowMessages[`member-${member.userId}`]} />
+                                        </div>
+                                    </article>
                                 )
                             })}
-                        </tbody>
-                    </table>
+                        </div>
+                        <table className='hidden min-w-full border-separate border-spacing-0 text-left text-sm md:table' data-org-member-desktop-table='true'>
+                            <thead className='text-xs uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>
+                                <tr>
+                                    <th className='border-b border-ui-border py-2 pr-3 dark:border-ui-border'>User</th>
+                                    <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Role</th>
+                                    <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Status</th>
+                                    <th className='border-b border-ui-border py-2 pl-3 text-right dark:border-ui-border'>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {members.map(member => {
+                                    const selectedRole = pendingRoles[member.userId] || member.role
+                                    const roleChanged = selectedRole !== member.role
+                                    const canMutateMember = canManage && memberCanMutate(member)
+                                    const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
+                                    return (
+                                        <tr
+                                            key={member.userId}
+                                            role='button'
+                                            tabIndex={0}
+                                            aria-pressed={selected}
+                                            className={`cursor-pointer align-middle transition ${selected ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
+                                            onClick={() => onSelectSubject({ type: 'member', id: member.userId })}
+                                            onKeyDown={event => {
+                                                if (event.key === 'Enter' || event.key === ' ') {
+                                                    event.preventDefault()
+                                                    onSelectSubject({ type: 'member', id: member.userId })
+                                                }
+                                            }}
+                                        >
+                                            <td className='max-w-44 border-b border-ui-border py-2 pr-3 dark:border-ui-border'>
+                                                <p className='truncate font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(member.name || member.email || member.userId)}</p>
+                                                <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(member.email && member.email !== member.userId ? member.email : member.userId)}</p>
+                                            </td>
+                                            <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                                {canMutateMember ? (
+                                                    <div className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
+                                                        <select className={compactSelectClass} value={selectedRole} disabled={Boolean(busy)} onChange={event => setPendingRoles(current => ({ ...current, [member.userId]: event.target.value as OrganizationRole }))}>
+                                                            {roleOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                                                        </select>
+                                                        {roleChanged && (
+                                                            <button
+                                                                type='button'
+                                                                className={secondaryButtonClass}
+                                                                disabled={Boolean(busy)}
+                                                                onClick={() => {
+                                                                    onRoleChange(member, selectedRole)
+                                                                    setPendingRoles(current => {
+                                                                        const next = { ...current }
+                                                                        delete next[member.userId]
+                                                                        return next
+                                                                    })
+                                                                }}
+                                                            >
+                                                                <CheckCircle2 className='h-4 w-4' />
+                                                                Apply
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ) : <RoleBadge role={member.role} />}
+                                            </td>
+                                            <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                                <div className='grid gap-1'>
+                                                    <StatusPill status={member.status} />
+                                                    <RowStatus message={rowMessages[`member-${member.userId}`]} />
+                                                </div>
+                                            </td>
+                                            <td className='border-b border-ui-border py-2 pl-3 text-right dark:border-ui-border'>
+                                                <ConfirmActionButton ariaLabel='Remove member' disabled={!canMutateMember || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </>
                 )}
             </div>
         </details>

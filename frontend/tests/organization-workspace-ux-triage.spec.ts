@@ -29,6 +29,9 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('data-org-settings-disclosure')
     expect(page).toContain('Advanced organization settings')
     expect(page).toContain('data-org-members-disclosure')
+    expect(page).toContain('data-org-member-mobile-list=\'true\'')
+    expect(page).toContain('data-org-member-mobile-row=\'true\'')
+    expect(page).toContain('data-org-member-desktop-table=\'true\'')
     expect(page).toContain('data-org-destinations-disclosure')
     expect(page).toContain('Saved destinations')
 

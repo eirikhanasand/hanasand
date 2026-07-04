@@ -670,6 +670,20 @@ function Results({ result }: { result: TiSearchResponse }) {
     )
 }
 
+function useMediaQuery(query: string) {
+    const [matches, setMatches] = useState<boolean | null>(null)
+
+    useEffect(() => {
+        const media = window.matchMedia(query)
+        const update = () => setMatches(media.matches)
+        update()
+        media.addEventListener('change', update)
+        return () => media.removeEventListener('change', update)
+    }, [query])
+
+    return matches
+}
+
 function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchlistCount, gapCount, onToggle }: {
     expanded: boolean
     artifactCount: number
