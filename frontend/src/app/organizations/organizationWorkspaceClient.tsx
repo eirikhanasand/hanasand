@@ -334,6 +334,18 @@ function organizationDeliveryErrorText(value: unknown) {
     return sanitizeOrganizationDisplayCopy(value) || 'Delivery error redacted.'
 }
 
+function destinationDisplayState(input?: Pick<WebhookDestination, 'endpointHash' | 'endpointHint' | 'deliveryReady' | 'status'> | Pick<WatchlistItem, 'webhookEndpointHash' | 'webhookEndpointHint' | 'webhookUrlConfigured'> | Pick<DeliveryRow, 'endpointHash' | 'endpointHint' | 'webhookDestinationId'> | null) {
+    if (!input) return 'Destination pending'
+    if ('deliveryReady' in input && input.deliveryReady) return 'Destination configured'
+    if ('webhookUrlConfigured' in input && input.webhookUrlConfigured) return 'Destination configured'
+    if ('endpointHint' in input && input.endpointHint) return 'Destination configured'
+    if ('endpointHash' in input && input.endpointHash) return 'Destination configured'
+    if ('webhookEndpointHint' in input && input.webhookEndpointHint) return 'Destination configured'
+    if ('webhookEndpointHash' in input && input.webhookEndpointHash) return 'Destination configured'
+    if ('webhookDestinationId' in input && input.webhookDestinationId) return 'Saved destination'
+    return 'Destination pending'
+}
+
 function stopRowSelectionKeys(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Enter' || event.key === ' ') {
         event.stopPropagation()
@@ -2135,7 +2147,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                             <span className='flex min-w-0 items-start justify-between gap-2'>
                                 <span className='min-w-0'>
                                     <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(destination.name || destination.id)}</span>
-                                    <span className='mt-1 block truncate font-mono text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(destination.endpointHint || destination.endpointHash || 'redacted_destination')}</span>
+                                    <span className='mt-1 block truncate text-xs text-ui-muted dark:text-ui-muted'>{destinationDisplayState(destination)}</span>
                                 </span>
                                 <StatusPill status={destinationStatus} />
                             </span>
@@ -2171,7 +2183,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                 <>
                                     <span className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
                                         <span className='truncate'>Type: {destination.kind || destination.type || 'webhook'}</span>
-                                        <span className='truncate'>Hash: {sanitizeOrganizationDisplayCopy(destination.endpointHash || 'not available')}</span>
+                                        <span className='truncate'>Destination: {destinationDisplayState(destination)}</span>
                                     </span>
                                     <DestinationDeliverySummary delivery={latestDelivery} />
                                     {latestDelivery && <DeliveryPayloadPreview delivery={latestDelivery} compact />}
@@ -2440,9 +2452,9 @@ function WatchlistDestinationSummary({ item, delivery }: { item: WatchlistItem, 
                 <span className='font-semibold text-ui-text dark:text-ui-text'>Destination</span>
                 <StatusPill status={destinationConfigured(item) ? 'configured' : 'none'} />
             </div>
-            <span className='truncate text-ui-muted dark:text-ui-muted'>{item.webhookEndpointHint || delivery?.endpointHint || 'Set destination'}</span>
-            <span className='truncate font-mono text-ui-muted dark:text-ui-muted'>{item.webhookEndpointHash || delivery?.endpointHash || 'destination pending'}</span>
-            <span className='truncate text-ui-muted dark:text-ui-muted'>Last delivery: {delivery?.status || 'none'}</span>
+            <span className='truncate text-ui-muted dark:text-ui-muted'>{destinationDisplayState(item)}</span>
+            <span className='truncate text-ui-muted dark:text-ui-muted'>{delivery ? `Last ${delivery.dryRun ? 'test' : 'delivery'} ${delivery.status || 'attempted'}` : 'No delivery history yet'}</span>
+            <span className='truncate text-ui-muted dark:text-ui-muted'>History: {delivery ? formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt) : 'none'}</span>
         </div>
     )
 }
@@ -2465,7 +2477,7 @@ function DestinationDeliverySummary({ delivery }: { delivery?: DeliveryRow | nul
                 <span>{formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}</span>
             </span>
             <span className='truncate'>{failed ? sanitizeOrganizationDisplayCopy(delivery.error || delivery.errorClass || 'Delivery failed.') : sanitizeOrganizationDisplayCopy(delivery.responseSummary || delivery.errorClass || 'Delivery accepted.')}</span>
-            <span className='truncate font-mono'>Trace: {deliveryTraceLabel(delivery)}</span>
+            <span className='truncate'>{deliveryTraceLabel(delivery)}</span>
             {(delivery.nextRetryAt || delivery.attemptCount !== undefined || delivery.retryCount !== undefined) && (
                 <span className='truncate'>Retry: {delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
             )}
@@ -2516,8 +2528,7 @@ function DeliveryPayloadPreview({ delivery, compact = false }: { delivery: Deliv
 
 function DestinationControls({ item, organization, alert, delivery, draft, canManage, busy, onDraftChange, onSelect, onTest }: { item: WatchlistItem, organization: OrganizationSummary, alert?: ScopedAlert, delivery?: DeliveryRow | null, draft: DestinationDraft, canManage: boolean, busy: string, onDraftChange: (next: DestinationDraft) => void, onSelect: () => void, onTest: (mode: 'save' | 'replay') => void }) {
     const configured = destinationConfigured(item)
-    const endpointHint = item.webhookEndpointHint || delivery?.endpointHint || 'Not configured'
-    const endpointHash = item.webhookEndpointHash || delivery?.endpointHash || 'No destination hash'
+    const destinationState = destinationDisplayState(item)
     const selectedAlertId = alert?.id || liveDwmAlertId
     const deliveryStatus = delivery?.status || (configured ? 'Configured' : 'None')
     const replayLabel = delivery?.status === 'failed' || delivery?.status === 'skipped' ? 'Retry' : 'Replay'
@@ -2535,7 +2546,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                         Destination
                         <StatusPill status={configured ? 'configured' : 'not configured'} />
                     </p>
-                    <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{endpointHint} · {endpointHash}</p>
+                    <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{destinationState}</p>
                 </div>
                 <div className='grid grid-cols-2 gap-2 sm:flex'>
                     <button type='button' className={secondaryButtonClass} disabled={!configured || Boolean(busy)} onClick={() => onTest('replay')}>
@@ -2640,8 +2651,8 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                                                 </div>
                                             </td>
                                             <td className='max-w-56 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                                <p className='truncate font-mono text-xs text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || 'redacted destination')}</p>
-                                                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{delivery.webhookDestinationId || delivery.requestId || delivery.id}</p>
+                                                <p className='truncate text-xs font-semibold text-ui-text dark:text-ui-text'>{destinationDisplayState(delivery)}</p>
+                                                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{delivery.webhookDestinationId ? 'Saved delivery destination' : 'Delivery destination redacted'}</p>
                                                 <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
                                             </td>
                                             <td className='max-w-64 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
@@ -2656,7 +2667,7 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                                                 <div className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
                                                     <span>{delivery.errorClass ? sanitizeOrganizationDisplayCopy(delivery.errorClass) : delivery.nextRetryAt ? 'scheduled' : 'none'}</span>
                                                     <span>{delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
-                                                    {delivery.dedupeKey && <span className='max-w-40 truncate font-mono'>{delivery.dedupeKey}</span>}
+                                                    {delivery.dedupeKey && <span className='max-w-40 truncate'>Deduplicated delivery</span>}
                                                 </div>
                                             </td>
                                             <td className='border-b border-ui-border px-3 py-2 text-xs text-ui-muted dark:border-ui-border dark:text-ui-muted'>
@@ -2701,7 +2712,7 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, canManage, busy, r
                 <span className='text-xs font-medium text-ui-muted dark:text-ui-muted'>{formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}</span>
             </div>
             <div className='min-w-0'>
-                <p className='truncate font-mono text-xs font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || 'redacted destination')}</p>
+                <p className='truncate text-xs font-semibold text-ui-text dark:text-ui-text'>{destinationDisplayState(delivery)}</p>
                 <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
                 <div className='mt-2'>
                     <DeliveryReference delivery={delivery} organizationId={organizationId} />
@@ -2766,7 +2777,7 @@ function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, 
                 <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={webhooks.map(destination => ({
                     id: destination.id,
                     primary: destination.name || destination.id,
-                    secondary: `${destination.status || 'unknown'}${destination.endpointHash ? ` · ${destination.endpointHash}` : ''}`,
+                    secondary: `${destination.status || 'unknown'} · ${destinationDisplayState(destination)}`,
                 }))} empty='Save a watchlist destination to make customer delivery available here.' />
             </div>
         </section>
@@ -3219,8 +3230,8 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
             ...(delivery.watchlistItemIds || []),
         ].filter(Boolean) as string[],
         metadata: compactMetadata([
-            ['Endpoint', delivery.endpointHint || delivery.endpointHash],
-            ['Destination', delivery.webhookDestinationId],
+            ['Destination', destinationDisplayState(delivery)],
+            ['Saved route', delivery.webhookDestinationId ? 'Available' : undefined],
             ['Alert', delivery.alertId],
             ['Case', delivery.caseId],
             ['Watchlist', delivery.watchlistItemId || delivery.watchlistId],
@@ -3264,7 +3275,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         subjectId: item.id,
         metadata: compactMetadata([
             ['Owner', item.updatedBy || item.createdBy],
-            ['Destination', item.webhookEndpointHint || item.webhookEndpointHash],
+            ['Destination', destinationDisplayState(item)],
             ['Ref', item.alertGenerationRef],
         ]),
     }))
@@ -3272,13 +3283,13 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         id: `destination-${destination.id}`,
         at: destination.updatedAt || destination.createdAt || new Date(0).toISOString(),
         title: 'Destination',
-        detail: `${destination.status || (destination.deliveryReady ? 'active' : 'configured')} · ${destination.endpointHint || destination.endpointHash || destination.id}`,
+        detail: `${destination.status || (destination.deliveryReady ? 'active' : 'configured')} · ${destinationDisplayState(destination)}`,
         ok: destination.status !== 'disabled' && destination.status !== 'deleted',
         subjectType: 'destination',
         subjectId: destination.id,
         metadata: compactMetadata([
             ['Type', destination.kind || destination.type],
-            ['Hash', destination.endpointHash],
+            ['Destination', destinationDisplayState(destination)],
         ]),
     }))
     return [...local, ...alertRows, ...caseRows, ...deliveryRows, ...inviteRows, ...memberRows, ...watchlistRows, ...destinationRows]
@@ -3451,7 +3462,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
             ['Name', destination.name],
             ['Type', destination.kind || destination.type || 'webhook'],
             ['Status', destination.status || (destination.deliveryReady ? 'active' : 'configured')],
-            ['Endpoint', destination.endpointHint || destination.endpointHash],
+            ['Destination', destinationDisplayState(destination)],
             ['Last delivery', delivery?.status],
         ])
     }
@@ -3463,7 +3474,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
         ['Term', item?.value],
         ['Status', item?.status],
         ['Owner', item?.updatedBy || item?.createdBy],
-        ['Endpoint', item?.webhookEndpointHint || delivery?.endpointHint || item?.webhookEndpointHash || delivery?.endpointHash],
+        ['Destination', item ? destinationDisplayState(item) : destinationDisplayState(delivery)],
         ['Last delivery', delivery?.status],
         ['Alerts', String(alertCount)],
     ])
@@ -3721,7 +3732,7 @@ function deliveryHistoryHref(baseHref: string, subject: ActivitySubject) {
 
 function deliveryTraceLabel(delivery: DeliveryRow) {
     const trace = delivery.auditEventId || delivery.requestId || delivery.id
-    return `Trace: ${sanitizeOrganizationDisplayCopy(trace) || trace}`
+    return trace ? 'Delivery tracked' : 'Delivery pending'
 }
 
 function canReplayDelivery(delivery: DeliveryRow) {
