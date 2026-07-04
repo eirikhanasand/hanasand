@@ -2201,7 +2201,7 @@ function StatusBanner({ tone, text }: { tone: 'error' | 'warning' | 'success', t
             : 'border-ui-success/35 bg-ui-success/10 text-ui-success dark:border-ui-success/35 dark:bg-ui-success/10 dark:text-ui-success'
     const Icon = tone === 'success' ? CheckCircle2 : CircleAlert
     return (
-        <div className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm font-medium ${classes}`}>
+        <div className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm font-medium ${classes}`} role={tone === 'error' ? 'alert' : 'status'} aria-live={tone === 'error' ? 'assertive' : 'polite'}>
             <Icon className='mt-0.5 h-4 w-4 shrink-0' />
             <span>{sanitizeOrganizationDisplayCopy(text) || text}</span>
         </div>
@@ -2213,12 +2213,12 @@ function RowStatus({ message }: { message?: RowMessage }) {
     const tone = message.ok
         ? 'bg-ui-success/10 text-ui-success dark:bg-ui-success/10 dark:text-ui-success'
         : 'bg-ui-danger/10 text-ui-danger dark:bg-ui-danger/10 dark:text-ui-danger'
-    return <span className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[11px] font-semibold ${tone}`}>{sanitizeOrganizationDisplayCopy(message.text) || message.text}</span>
+    return <span className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[11px] font-semibold ${tone}`} role={message.ok ? 'status' : 'alert'} aria-live={message.ok ? 'polite' : 'assertive'}>{sanitizeOrganizationDisplayCopy(message.text) || message.text}</span>
 }
 
 function InlineBusy({ label, marker }: { label: string, marker: string }) {
     return (
-        <div className='mt-2 inline-flex w-fit items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' {...{ [marker]: 'true' }}>
+        <div className='mt-2 inline-flex w-fit items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' role='status' aria-live='polite' {...{ [marker]: 'true' }}>
             <Loader2 className='h-3.5 w-3.5 animate-spin' />
             {label}
         </div>
