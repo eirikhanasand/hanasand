@@ -1456,8 +1456,8 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
             </div>
             <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:flex xl:flex-wrap xl:justify-end' data-org-summary-chip-list='true'>
                 {rows.map(row => (
-                    <span key={row.id} className='grid min-h-12 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas' data-org-summary-chip={row.id}>
-                        <span className='grid h-7 w-7 place-items-center rounded-md bg-ui-panel text-ui-muted dark:bg-ui-panel dark:text-ui-muted'>{row.icon}</span>
+                    <span key={row.id} className='grid min-h-10 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-l border-ui-border py-1 pl-2 dark:border-ui-border' data-org-summary-chip={row.id}>
+                        <span className='shrink-0 text-ui-muted dark:text-ui-muted'>{row.icon}</span>
                         <span className='min-w-0'>
                             <span className='block truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.label}</span>
                             <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value} <span className='font-medium text-ui-muted dark:text-ui-muted'>{row.detail}</span></span>
