@@ -344,6 +344,27 @@ function organizationDisplayId(organization: Pick<OrganizationSummary, 'slug' | 
     return sanitizeOrganizationDisplayCopy(organization?.slug || organization?.id) || 'organization'
 }
 
+function organizationWorkspaceMeta(organization: OrganizationSummary) {
+    const parts = [
+        sanitizeOrganizationDisplayCopy(organization.tenantId || organization.slug || organization.id),
+        organization.status || 'active',
+        organization.memberCount !== undefined ? `${organization.memberCount} member${organization.memberCount === 1 ? '' : 's'}` : undefined,
+    ].filter(Boolean)
+    return parts.join(' · ') || organizationDisplayId(organization)
+}
+
+function organizationSearchText(organization: OrganizationSummary) {
+    return [
+        organization.id,
+        organization.slug,
+        organization.name,
+        organization.tenantId,
+        organization.role,
+        organization.status,
+        organization.memberCount,
+    ].filter(value => value !== undefined && value !== null).join(' ').toLowerCase()
+}
+
 function normalizeOrganizationName(value: string) {
     return value.trim().replace(/\s+/g, ' ')
 }
@@ -423,6 +444,7 @@ export default function OrganizationWorkspaceClient() {
     const [error, setError] = useState('')
     const [message, setMessage] = useState('')
     const [createName, setCreateName] = useState('')
+    const [workspaceQuery, setWorkspaceQuery] = useState('')
     const [createFirstWatchlist, setCreateFirstWatchlist] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
     const [inviteEmails, setInviteEmails] = useState('')
     const [inviteRole, setInviteRole] = useState<OrganizationRole>('member')
@@ -454,6 +476,11 @@ export default function OrganizationWorkspaceClient() {
     const settingsDirty = useMemo(() => !settingsEqual(settingsDraft, bundle.settings || {}), [settingsDraft, bundle.settings])
     const normalizedCreateName = normalizeOrganizationName(createName)
     const createNameInUse = normalizedCreateName ? organizationNameInUse(organizations, normalizedCreateName) : false
+    const normalizedWorkspaceQuery = workspaceQuery.trim().toLowerCase()
+    const visibleOrganizations = organizations.filter(organization => {
+        if (!normalizedWorkspaceQuery) return true
+        return organizationSearchText(organization).includes(normalizedWorkspaceQuery)
+    })
 
     const loadOrganizations = useCallback(async (nextSelectedId?: string) => {
         setLoading(true)
@@ -1028,7 +1055,26 @@ export default function OrganizationWorkspaceClient() {
                         {organizations.length === 0 && createOrganizationPanel}
 
                         <section className='rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                            <h2 className='px-2 py-2 text-sm font-semibold text-ui-text dark:text-ui-text'>Workspaces</h2>
+                            <div className='flex items-center justify-between gap-2 px-2 py-2'>
+                                <h2 className='text-sm font-semibold text-ui-text dark:text-ui-text'>Workspaces</h2>
+                                {organizations.length > 0 && (
+                                    <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' data-org-workspace-count='true'>
+                                        {visibleOrganizations.length}/{organizations.length}
+                                    </span>
+                                )}
+                            </div>
+                            {organizations.length > 1 && (
+                                <label className='mb-2 grid gap-1 px-2 text-xs font-semibold text-ui-muted dark:text-ui-muted' data-org-workspace-filter='true'>
+                                    Find workspace
+                                    <input
+                                        value={workspaceQuery}
+                                        disabled={Boolean(loading)}
+                                        onChange={event => setWorkspaceQuery(event.target.value)}
+                                        className={inputClass}
+                                        placeholder='Name, tenant, role'
+                                    />
+                                </label>
+                            )}
                             <div className='grid gap-1'>
                                 {loading && <SkeletonRows count={3} />}
                                 {!loading && organizations.length === 0 && (
@@ -1036,7 +1082,12 @@ export default function OrganizationWorkspaceClient() {
                                         No organizations yet. Create one to invite teammates, share watchlists, and route alerts together.
                                     </p>
                                 )}
-                                {organizations.map(organization => (
+                                {!loading && organizations.length > 0 && visibleOrganizations.length === 0 && (
+                                    <p className='px-2 py-3 text-sm text-ui-muted dark:text-ui-muted' data-org-workspace-filter-empty='true'>
+                                        No matching workspaces.
+                                    </p>
+                                )}
+                                {visibleOrganizations.map(organization => (
                                     <button
                                         type='button'
                                         key={organization.id}
@@ -1047,7 +1098,7 @@ export default function OrganizationWorkspaceClient() {
                                             <span className='truncate'>{organizationDisplayName(organization)}</span>
                                             <RoleBadge role={organization.role || 'member'} />
                                         </span>
-                                        <span className='truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayId(organization)}</span>
+                                        <span className='truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationWorkspaceMeta(organization)}</span>
                                     </button>
                                 ))}
                             </div>

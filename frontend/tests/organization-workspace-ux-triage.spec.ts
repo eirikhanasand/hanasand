@@ -18,6 +18,14 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('data-org-create-compact')
     expect(page).toContain('data-org-create-primary')
     expect(page).toContain('data-org-create-first-watchlist')
+    expect(page).toContain('data-org-workspace-filter')
+    expect(page).toContain('data-org-workspace-count')
+    expect(page).toContain('data-org-workspace-filter-empty')
+    expect(page).toContain('const [workspaceQuery, setWorkspaceQuery] = useState(\'\')')
+    expect(page).toContain('const visibleOrganizations = organizations.filter')
+    expect(page).toContain('organizationSearchText(organization).includes(normalizedWorkspaceQuery)')
+    expect(page).toContain('function organizationWorkspaceMeta')
+    expect(page).toContain('function organizationSearchText')
     expect(page).toContain('Organization and first shared term created.')
     expect(page).toContain('/api/organizations/${encodeURIComponent(organizationId)}/watchlists')
     expect(page).toContain('Initial shared watchlist term added from organization setup.')
@@ -149,7 +157,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     ])
 
     await page.route('**/api/organizations', async route => {
-        await route.fulfill({ json: { organizations: [fixtureOrganization] } })
+        await route.fulfill({ json: { organizations: [fixtureOrganization, fixtureViewerOrganization] } })
     })
     await page.route('**/api/organizations/org_acme/settings', async route => {
         await route.fulfill({ json: { settings: { name: 'Acme Security', slug: 'acme-security', defaultWebhookPolicy: 'active_destinations', alertVisibilityPolicy: 'members', lifecycleStatus: 'active', retentionDays: 365 } } })
@@ -185,6 +193,16 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.goto('/organizations?organizationId=org_acme&focus=watchlists', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByRole('heading', { name: 'Organization settings', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Acme Security owner/ })).toBeVisible()
+    await expect(page.locator('[data-org-workspace-filter="true"]')).toBeVisible()
+    await expect(page.locator('[data-org-workspace-count="true"]')).toContainText('2/2')
+    await expect(page.getByRole('button', { name: /Contoso viewer/ })).toBeVisible()
+    await page.getByLabel('Find workspace').fill('viewer')
+    await expect(page.locator('[data-org-workspace-count="true"]')).toContainText('1/2')
+    await expect(page.getByRole('button', { name: /Contoso viewer/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Acme Security owner/ })).toBeHidden()
+    await page.getByLabel('Find workspace').fill('')
+    await expect(page.locator('[data-org-workspace-count="true"]')).toContainText('2/2')
     await expect(page.getByRole('button', { name: /Acme Security owner/ })).toBeVisible()
     await expect(page.locator('[data-org-watchlist-filter-strip="true"]')).toBeVisible()
     await expect(page.locator('[data-org-watchlist-filter-count="true"]')).toContainText('3/3 shown')
@@ -231,6 +249,16 @@ const fixtureOrganization = {
     role: 'owner',
     status: 'active',
     memberCount: 2,
+}
+
+const fixtureViewerOrganization = {
+    id: 'org_contoso',
+    slug: 'contoso',
+    name: 'Contoso',
+    tenantId: 'tenant_contoso',
+    role: 'viewer',
+    status: 'active',
+    memberCount: 8,
 }
 
 const fixtureMembers = [
