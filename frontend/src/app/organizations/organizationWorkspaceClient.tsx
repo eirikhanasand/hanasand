@@ -1103,63 +1103,60 @@ export default function OrganizationWorkspaceClient() {
                     </div>
                 )}
 
-                <div className='grid gap-5 lg:grid-cols-[21rem_minmax(0,1fr)]'>
+                <div className={organizations.length === 0 && !loading ? 'grid gap-5' : 'grid gap-5 lg:grid-cols-[21rem_minmax(0,1fr)]'}>
                     <aside className='flex min-w-0 flex-col gap-4'>
                         {organizations.length === 0 && createOrganizationPanel}
 
-                        <section className='rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                            <div className='flex items-center justify-between gap-2 px-2 py-2'>
-                                <h2 className='text-sm font-semibold text-ui-text dark:text-ui-text'>Workspaces</h2>
-                                {organizations.length > 0 && (
-                                    <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' data-org-workspace-count='true'>
-                                        {visibleOrganizations.length}/{organizations.length}
-                                    </span>
-                                )}
-                            </div>
-                            {organizations.length > 1 && (
-                                <label className='mb-2 grid gap-1 px-2 text-xs font-semibold text-ui-muted dark:text-ui-muted' data-org-workspace-filter='true'>
-                                    Find workspace
-                                    <input
-                                        value={workspaceQuery}
-                                        disabled={Boolean(loading)}
-                                        onChange={event => setWorkspaceQuery(event.target.value)}
-                                        className={inputClass}
-                                        placeholder='Name, tenant, role'
-                                    />
-                                </label>
-                            )}
-                            <div className='grid gap-1'>
-                                {loading && <SkeletonRows count={3} />}
-                                {!loading && organizations.length === 0 && (
-                                    <p className='px-2 py-3 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-                                        No organizations yet. Create one to invite teammates, share watchlists, and route alerts together.
-                                    </p>
-                                )}
-                                {!loading && organizations.length > 0 && visibleOrganizations.length === 0 && (
-                                    <p className='px-2 py-3 text-sm text-ui-muted dark:text-ui-muted' data-org-workspace-filter-empty='true'>
-                                        No matching workspaces.
-                                    </p>
-                                )}
-                                {visibleOrganizations.map(organization => (
-                                    <button
-                                        type='button'
-                                        key={organization.id}
-                                        onClick={() => selectOrganization(organization.id)}
-                                        className={`grid gap-1 rounded-lg px-3 py-3 text-left transition ${selectedOrganization?.id === organization.id ? 'bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary' : 'hover:bg-ui-raised dark:hover:bg-ui-panel/6'}`}
-                                    >
-                                        <span className='flex items-center justify-between gap-2 text-sm font-semibold'>
-                                            <span className='truncate'>{organizationDisplayName(organization)}</span>
-                                            <RoleBadge role={organization.role || 'member'} />
+                        {(loading || organizations.length > 0) && (
+                            <section className='rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
+                                <div className='flex items-center justify-between gap-2 px-2 py-2'>
+                                    <h2 className='text-sm font-semibold text-ui-text dark:text-ui-text'>Workspaces</h2>
+                                    {organizations.length > 0 && (
+                                        <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' data-org-workspace-count='true'>
+                                            {visibleOrganizations.length}/{organizations.length}
                                         </span>
-                                        <span className='truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationWorkspaceMeta(organization)}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </section>
+                                    )}
+                                </div>
+                                {organizations.length > 1 && (
+                                    <label className='mb-2 grid gap-1 px-2 text-xs font-semibold text-ui-muted dark:text-ui-muted' data-org-workspace-filter='true'>
+                                        Find workspace
+                                        <input
+                                            value={workspaceQuery}
+                                            disabled={Boolean(loading)}
+                                            onChange={event => setWorkspaceQuery(event.target.value)}
+                                            className={inputClass}
+                                            placeholder='Name, tenant, role'
+                                        />
+                                    </label>
+                                )}
+                                <div className='grid gap-1'>
+                                    {loading && <SkeletonRows count={3} />}
+                                    {!loading && organizations.length > 0 && visibleOrganizations.length === 0 && (
+                                        <p className='px-2 py-3 text-sm text-ui-muted dark:text-ui-muted' data-org-workspace-filter-empty='true'>
+                                            No matching workspaces.
+                                        </p>
+                                    )}
+                                    {visibleOrganizations.map(organization => (
+                                        <button
+                                            type='button'
+                                            key={organization.id}
+                                            onClick={() => selectOrganization(organization.id)}
+                                            className={`grid gap-1 rounded-lg px-3 py-3 text-left transition ${selectedOrganization?.id === organization.id ? 'bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary' : 'hover:bg-ui-raised dark:hover:bg-ui-panel/6'}`}
+                                        >
+                                            <span className='flex items-center justify-between gap-2 text-sm font-semibold'>
+                                                <span className='truncate'>{organizationDisplayName(organization)}</span>
+                                                <RoleBadge role={organization.role || 'member'} />
+                                            </span>
+                                            <span className='truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationWorkspaceMeta(organization)}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
                         {organizations.length > 0 && createOrganizationPanel}
                     </aside>
 
-                    <main className='min-w-0'>
+                    {(selectedOrganization || organizations.length > 0) && <main className='min-w-0'>
                         {selectedOrganization ? (
                             <div className='grid gap-5'>
                                 <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={bundle.members.length} inviteCount={bundle.invites.length} webhookCount={bundle.webhooks.length} />
@@ -1252,7 +1249,7 @@ export default function OrganizationWorkspaceClient() {
                         ) : (
                             <EmptyWorkspacePreview />
                         )}
-                    </main>
+                    </main>}
                 </div>
             </div>
         </section>
