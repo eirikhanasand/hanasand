@@ -386,6 +386,7 @@ export default function OrganizationWorkspaceClient() {
     const [error, setError] = useState('')
     const [message, setMessage] = useState('')
     const [createName, setCreateName] = useState('')
+    const [createFirstWatchlist, setCreateFirstWatchlist] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
     const [inviteEmails, setInviteEmails] = useState('')
     const [inviteRole, setInviteRole] = useState<OrganizationRole>('member')
     const [watchlistDraft, setWatchlistDraft] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
@@ -592,6 +593,7 @@ export default function OrganizationWorkspaceClient() {
 
     const createOrganization = () => runAction('create-org', async () => {
         const name = normalizeOrganizationName(createName)
+        const firstWatchlistValue = createFirstWatchlist.value.trim()
         if (!name) throw new Error('Enter an organization name.')
         if (organizationNameInUse(organizations, name)) throw new Error('An organization with this name already exists.')
         const payload = await requestJson<{ organization?: OrganizationSummary }>('/api/organizations', {
@@ -599,9 +601,24 @@ export default function OrganizationWorkspaceClient() {
             body: JSON.stringify({ name }),
         })
         const organizationId = payload.organization?.id
-        if (organizationId) setSelectedId(organizationId)
+        if (organizationId) {
+            if (firstWatchlistValue) {
+                await requestJson(`/api/organizations/${encodeURIComponent(organizationId)}/watchlists`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        kind: createFirstWatchlist.kind,
+                        value: firstWatchlistValue,
+                        notes: createFirstWatchlist.notes.trim() || 'Initial shared watchlist term from organization setup.',
+                        reason: 'Initial shared watchlist term added from organization setup.',
+                        requestId: `org-ui-create-${Date.now()}`,
+                    }),
+                })
+            }
+            setSelectedId(organizationId)
+        }
         setCreateName('')
-        return 'Organization created.'
+        setCreateFirstWatchlist({ kind: 'domain', value: '', notes: '' })
+        return firstWatchlistValue ? 'Organization and first shared term created.' : 'Organization created.'
     })
 
     const saveSettings = () => selectedOrganization && runAction('save-settings', async () => {
@@ -894,6 +911,16 @@ export default function OrganizationWorkspaceClient() {
                 {createNameInUse && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Organization already exists.</span>}
                 {!createNameInUse && normalizedCreateName && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>Slug: {slugifyOrganizationName(normalizedCreateName)}</span>}
             </label>
+            <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' data-org-create-first-watchlist='true'>
+                <div className='grid gap-2 sm:grid-cols-[8rem_minmax(0,1fr)]'>
+                    <SelectField label='First term' value={createFirstWatchlist.kind} options={watchlistKinds} disabled={Boolean(busy)} onChange={value => setCreateFirstWatchlist({ ...createFirstWatchlist, kind: value as WatchlistKind })} />
+                    <Field label='Value' value={createFirstWatchlist.value} disabled={Boolean(busy)} onChange={value => setCreateFirstWatchlist({ ...createFirstWatchlist, value })} placeholder='company.com, supplier, actor' />
+                </div>
+                <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                    Notes
+                    <input value={createFirstWatchlist.notes} disabled={Boolean(busy)} onChange={event => setCreateFirstWatchlist({ ...createFirstWatchlist, notes: event.target.value })} className={inputClass} placeholder='Initial monitoring reason' />
+                </label>
+            </div>
             <button
                 type='button'
                 onClick={() => void createOrganization()}
