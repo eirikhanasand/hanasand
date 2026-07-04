@@ -153,7 +153,7 @@ const faqItems = [
     },
     {
         question: 'Do you store stolen data?',
-        answer: 'No. The product is built around source records, redaction, hashes, screenshots when approved, and customer-specific alert context. The goal is response speed without raw leaked-data bloat.',
+        answer: 'No. The product is built around source records, redaction, hashes, screenshots when approved, and customer-specific alert context. The goal is response speed without unnecessary raw leaked-data handling.',
     },
 ]
 
@@ -338,7 +338,7 @@ export default function DarkWebMonitoringPage() {
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-16 md:px-8 lg:grid-cols-[0.86fr_1.14fr] lg:items-center'>
                     <div className='grid min-w-0 gap-5'>
                         <p className='text-sm font-semibold uppercase tracking-[0.18em] text-ui-primary'>Telegram is the new dark web</p>
-                        <h2 className='text-4xl font-semibold tracking-normal md:text-5xl'>Telegram coverage has to be tied to source health, not vague claims.</h2>
+                        <h2 className='text-4xl font-semibold tracking-normal md:text-5xl'>Telegram coverage has to be tied to source health, not unqualified claims.</h2>
                         <p className='text-base leading-7 text-ui-muted'>
                             Criminal groups and access sellers often post in public or semi-public channels before the same claim reaches a broader leak site. Hanasand tracks those sources, checks whether they are healthy, and shows when a finding needs review.
                         </p>
@@ -355,8 +355,8 @@ export default function DarkWebMonitoringPage() {
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-16 md:px-8'>
                     <div className='grid max-w-4xl gap-3'>
                         <p className='text-sm font-semibold uppercase tracking-[0.18em] text-ui-primary'>Built for the analyst</p>
-                        <h2 className='text-4xl font-semibold md:text-5xl'>No vanity feed. No bulk scraped-row bloat.</h2>
-                        <p className='text-base leading-7 text-ui-muted'>Every alert needs to answer where it came from, why it matched, how urgent it is, and what to do next.</p>
+                        <h2 className='text-4xl font-semibold md:text-5xl'>Focused alert packets, built for analyst review.</h2>
+                        <p className='text-base leading-7 text-ui-muted'>Every alert should state where it came from, why it matched, how urgent it is, and what action owner should review next.</p>
                     </div>
                     <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
                         {workflow.map(item => {
