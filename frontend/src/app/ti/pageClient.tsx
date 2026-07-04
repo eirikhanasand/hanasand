@@ -4152,6 +4152,11 @@ function WatchlistBlock({ title, values }: { title: string; values: string[] }) 
     )
 }
 
+function countLinkedLabel(count: number, label: string) {
+    if (!count) return ''
+    return `${count} ${label}${count === 1 ? '' : 's'} linked`
+}
+
 function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabilityModel }) {
     const [showReviewPaths, setShowReviewPaths] = useState(false)
     const rows = [
@@ -4161,9 +4166,9 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
             state: actionability.actionPayloads.payloads.watchlistAdd.ready,
             route: actionability.actionPayloads.payloads.watchlistAdd.backedRoute ?? actionability.actionPayloads.payloads.watchlistAdd.route,
             ids: [
-                ...actionability.readiness.backedIds.organizationIds.slice(0, 2).map(id => `org ${id}`),
-                ...actionability.readiness.backedIds.watchlistItemIds.slice(0, 2).map(id => `item ${id}`),
-            ],
+                countLinkedLabel(actionability.readiness.backedIds.organizationIds.length, 'organization'),
+                countLinkedLabel(actionability.readiness.backedIds.watchlistItemIds.length, 'watch item'),
+            ].filter(Boolean),
             provenance: actionability.actionPayloads.payloads.watchlistAdd.provenance,
             blocker: actionability.actionPayloads.payloads.watchlistAdd.blockedBy[0],
             missing: actionability.actionPayloads.payloads.watchlistAdd.blockedBy.map(blocker => blocker.handoff),
@@ -4173,7 +4178,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
             label: 'Alert rebuild',
             state: actionability.createAlertHandoff.ready,
             route: actionability.createAlertHandoff.backedRoute || actionability.createAlertHandoff.endpoint,
-            ids: actionability.readiness.backedIds.alertIds.slice(0, 3).map(id => `alert ${id}`),
+            ids: [countLinkedLabel(actionability.readiness.backedIds.alertIds.length, 'alert')].filter(Boolean),
             provenance: actionability.actionPayloads.payloads.analystHandoffBundle.provenance,
             blocker: actionability.actionPayloads.payloads.analystHandoffBundle.blockedBy.find(blocker => blocker.ownerLane === 'alert'),
             missing: actionability.createAlertHandoff.missing,
@@ -4184,9 +4189,9 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
             state: actionability.caseHandoff.ready,
             route: actionability.caseHandoff.backedRoute || actionability.caseHandoff.endpoint,
             ids: [
-                ...actionability.readiness.backedIds.caseIds.slice(0, 2).map(id => `case ${id}`),
-                ...actionability.readiness.backedIds.casePaths.slice(0, 1),
-            ],
+                countLinkedLabel(actionability.readiness.backedIds.caseIds.length, 'case'),
+                countLinkedLabel(actionability.readiness.backedIds.casePaths.length, 'case route'),
+            ].filter(Boolean),
             provenance: actionability.actionPayloads.payloads.caseHandoff.provenance,
             blocker: actionability.actionPayloads.payloads.caseHandoff.blockedBy[0],
             missing: actionability.caseHandoff.missing,
@@ -4196,7 +4201,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
             label: 'Delivery',
             state: actionability.webhookDeliveryHandoff.ready,
             route: actionability.webhookDeliveryHandoff.backedRoute || actionability.webhookDeliveryHandoff.endpoint,
-            ids: actionability.readiness.backedIds.webhookDestinationIds.slice(0, 3).map(id => `destination ${id}`),
+            ids: [countLinkedLabel(actionability.readiness.backedIds.webhookDestinationIds.length, 'destination')].filter(Boolean),
             provenance: actionability.actionPayloads.payloads.webhookDelivery.provenance,
             blocker: actionability.actionPayloads.payloads.webhookDelivery.blockedBy[0],
             missing: actionability.webhookDeliveryHandoff.missing,
@@ -4206,7 +4211,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
             label: 'Source review',
             state: actionability.actionPayloads.payloads.sourceEnrichment.ready,
             route: actionability.actionPayloads.payloads.sourceEnrichment.backedRoute ?? actionability.actionPayloads.payloads.sourceEnrichment.route,
-            ids: actionability.readiness.backedIds.captureIds.slice(0, 3).map(id => `capture ${id}`),
+            ids: [countLinkedLabel(actionability.readiness.backedIds.captureIds.length, 'capture')].filter(Boolean),
             provenance: actionability.actionPayloads.payloads.sourceEnrichment.provenance,
             blocker: actionability.actionPayloads.payloads.sourceEnrichment.blockedBy.find(blocker => blocker.ownerLane === 'source') ?? actionability.actionPayloads.payloads.sourceEnrichment.blockedBy[0],
             missing: actionability.actionPayloads.payloads.sourceEnrichment.blockedBy.map(blocker => blocker.handoff),
@@ -4220,7 +4225,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Review evidence</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {readyCount} of {rows.length} review rows have source IDs, action link, and capture details ready for authenticated review.
+                        {readyCount} of {rows.length} review rows have source references, action links, and capture details ready for authenticated review.
                     </p>
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
@@ -4248,12 +4253,12 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
                             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                 {row.ids.length ? row.ids.map(id => (
                                     <span key={id} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>{id}</span>
-                                )) : <span className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-2 py-1 text-[11px] font-semibold text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>ID needed</span>}
+                                )) : <span className='rounded-md border border-ui-warning/35 bg-ui-warning/10 px-2 py-1 text-[11px] font-semibold text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>link needed</span>}
                                 {row.provenance.slice(0, 2).map(item => (
                                     <span key={`${row.id}-source-${item.sourceName}-${item.provenance}`} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>{item.sourceName}</span>
                                 ))}
                                 {row.provenance.filter(item => item.captureId).slice(0, 2).map(item => (
-                                    <span key={`${row.id}-capture-${item.captureId}`} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>capture {item.captureId}</span>
+                                    <span key={`${row.id}-capture-${item.captureId}`} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>capture linked</span>
                                 ))}
                             </div>
                             {row.blocker ? (
@@ -4261,7 +4266,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
                             ) : row.missing.length ? (
                                 <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(row.missing.slice(0, 2))}</p>
                             ) : (
-                                <p className='mt-2 text-[11px] leading-5 text-ui-success dark:text-ui-success'>Required identifiers and source details are present.</p>
+                                <p className='mt-2 text-[11px] leading-5 text-ui-success dark:text-ui-success'>Required links and source details are present.</p>
                             )}
                         </div>
                     ))}
