@@ -69,7 +69,7 @@ const stats = [
     ['Alert target', 'Company, vendor, domain, and brand mentions'],
     ['What gets sent', 'Actor, company, data mentioned, source, time, review status'],
     ['Freshness basis', 'New and changed leak-site posts'],
-    ['Where it goes', 'Webhook, API, and analyst console'],
+    ['Where it goes', 'Webhook, case queue, and analyst console'],
 ]
 
 const workflowShortcuts = [
@@ -101,7 +101,7 @@ const operatorPaths = [
     {
         label: 'Route notifications',
         state: 'Delivery',
-        value: 'Send reviewed alerts to configured webhooks, APIs, and the analyst console.',
+        value: 'Send reviewed alerts to configured webhooks, cases, and the analyst console.',
         href: '/dashboard/automations?setup=dwm',
     },
 ]
@@ -121,7 +121,7 @@ const customerSteps = [
     },
     {
         title: 'Route it to the right team',
-        detail: 'Send the packet to email, API, webhook, Slack/Jira/SIEM flows, or the analyst console.',
+        detail: 'Send the packet to email, webhook, Slack/Jira/SIEM flows, cases, or the analyst console.',
     },
 ]
 
@@ -349,7 +349,7 @@ function HomeOperatorStrip() {
             <HomeOperatorFact label='Product' value='Company exposure monitoring for security teams' />
             <HomeOperatorFact label='Coverage' value='Companies, vendors, domains, actors, and sources' />
             <HomeOperatorFact label='Alert packet' value='Source, evidence, confidence, freshness, and next action' />
-            <HomeOperatorFact label='Delivery' value='Webhook, API, and analyst console routing' />
+            <HomeOperatorFact label='Delivery' value='Webhook, case, and analyst console routing' />
             <HomeOperatorFact label='Setup path' value='Create an organization, add watchlists, route reviewed alerts' />
             <Link
                 href='/dashboard'
