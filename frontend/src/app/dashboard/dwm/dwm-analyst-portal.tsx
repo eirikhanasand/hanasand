@@ -143,8 +143,8 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
     const [localDeliveries, setLocalDeliveries] = useState<DeliveryItem[]>(deliveries)
     const [localCaseState, setLocalCaseState] = useLocalCaseState()
-    const [queueFilter, setQueueFilter] = useState<QueueFilter>('active')
-    const [queueQuery, setQueueQuery] = useState('')
+    const [queueFilter, setQueueFilter] = useState<QueueFilter>(() => normalizeQueueFilter(searchParams.get('filter')))
+    const [queueQuery, setQueueQuery] = useState(() => searchParams.get('q')?.slice(0, 120) ?? '')
     const queue = useMemo(() => filterAlerts(orderAlerts(alerts), queueFilter, queueQuery), [alerts, queueFilter, queueQuery])
     const selectedAlert = queue.find(alert => alert.id === selectedId) ?? queue[0]
     const selectedOrganizationId = selectedAlert ? alertOrganizationId(selectedAlert, organizationId) : organizationId
@@ -302,16 +302,38 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
 
     function selectAlert(alert: PortalAlert) {
         setSelectedId(alert.id)
-        const nextParams = new URLSearchParams(searchParams.toString())
-        nextParams.set('tenantId', tenantId)
-        const alertOrgId = alertOrganizationId(alert, organizationId)
-        if (alertOrgId) {
-            nextParams.set('organizationId', alertOrgId)
-        } else {
-            nextParams.delete('organizationId')
-        }
-        nextParams.set('alert', alert.id)
-        router.replace(`/dashboard/dwm?${nextParams.toString()}`, { scroll: false })
+        router.replace(dwmQueueHref({
+            params: searchParams,
+            tenantId,
+            organizationId: alertOrganizationId(alert, organizationId),
+            alertId: alert.id,
+            filter: queueFilter,
+            query: queueQuery,
+        }), { scroll: false })
+    }
+
+    function updateQueueFilter(filter: QueueFilter) {
+        setQueueFilter(filter)
+        router.replace(dwmQueueHref({
+            params: searchParams,
+            tenantId,
+            organizationId: selectedOrganizationId,
+            alertId: selectedAlert?.id,
+            filter,
+            query: queueQuery,
+        }), { scroll: false })
+    }
+
+    function updateQueueQuery(query: string) {
+        setQueueQuery(query)
+        router.replace(dwmQueueHref({
+            params: searchParams,
+            tenantId,
+            organizationId: selectedOrganizationId,
+            alertId: selectedAlert?.id,
+            filter: queueFilter,
+            query,
+        }), { scroll: false })
     }
 
     return (
@@ -366,7 +388,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                                     <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-muted' />
                                     <input
                                         value={queueQuery}
-                                        onChange={event => setQueueQuery(event.target.value)}
+                                        onChange={event => updateQueueQuery(event.target.value)}
                                         placeholder='Search company, actor, term, or status'
                                         className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel pl-9 pr-3 text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                                     />
@@ -376,7 +398,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                                         <button
                                             key={filter.id}
                                             type='button'
-                                            onClick={() => setQueueFilter(filter.id)}
+                                            onClick={() => updateQueueFilter(filter.id)}
                                             className={`h-8 rounded-lg border px-2 text-xs font-semibold transition ${queueFilter === filter.id ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-muted hover:bg-ui-canvas'}`}
                                         >
                                             {filter.label}
@@ -471,6 +493,37 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
 
 function alertOrganizationId(alert: PortalAlert, fallback?: string) {
     return alert.organizationId || alert.workflowContext?.organizationId || fallback
+}
+
+function normalizeQueueFilter(value: string | null): QueueFilter {
+    return queueFilters.some(filter => filter.id === value) ? value as QueueFilter : 'active'
+}
+
+function dwmQueueHref(input: { params: URLSearchParams, tenantId: string, organizationId?: string, alertId?: string, filter: QueueFilter, query: string }) {
+    const nextParams = new URLSearchParams(input.params.toString())
+    nextParams.set('tenantId', input.tenantId)
+    if (input.organizationId) {
+        nextParams.set('organizationId', input.organizationId)
+    } else {
+        nextParams.delete('organizationId')
+    }
+    if (input.alertId) {
+        nextParams.set('alert', input.alertId)
+    } else {
+        nextParams.delete('alert')
+    }
+    if (input.filter !== 'active') {
+        nextParams.set('filter', input.filter)
+    } else {
+        nextParams.delete('filter')
+    }
+    const query = input.query.trim()
+    if (query) {
+        nextParams.set('q', query.slice(0, 120))
+    } else {
+        nextParams.delete('q')
+    }
+    return `/dashboard/dwm?${nextParams.toString()}`
 }
 
 function scopeBody<T extends Record<string, unknown>>(body: T, tenantId: string, organizationId?: string) {
