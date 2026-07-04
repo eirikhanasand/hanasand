@@ -155,7 +155,7 @@ function PlanCard({ plan }: { plan: typeof plans[number] }) {
                 <span className='text-3xl font-semibold tracking-normal text-ui-text'>{plan.price}</span>
                 <span className='pb-1 text-sm font-medium text-ui-muted'>/ month</span>
             </div>
-            <Link href={plan.href} className={`mt-4 inline-flex h-10 w-full items-center justify-center rounded-md px-3 text-sm font-semibold transition ${plan.highlighted ? 'bg-ui-primary text-white hover:opacity-90 dark:text-ui-canvas' : 'border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'}`}>
+            <Link href={plan.href} className={`mt-4 inline-flex h-10 w-full items-center justify-center rounded-md px-3 text-sm font-semibold transition ${plan.highlighted ? 'bg-ui-primary text-ui-canvas hover:opacity-90' : 'border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'}`}>
                 Choose {plan.name}
             </Link>
             <div className='mt-4 grid gap-2 text-sm'>

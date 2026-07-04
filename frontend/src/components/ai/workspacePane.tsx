@@ -416,7 +416,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             >
                 <div className='flex gap-2'>
                     <input value={importInput} onChange={(event) => onImportInputChange(event.target.value)} placeholder='owner/repo, URL, or repo#branch:path' className='min-w-0 flex-1 rounded-xl bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
-                    <button type='button' onClick={() => void onImportRepo()} disabled={importPending} className='rounded-xl bg-ui-primary px-3 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60'>
+                    <button type='button' onClick={() => void onImportRepo()} disabled={importPending} className='rounded-xl bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity disabled:opacity-60'>
                         {importPending ? 'Importing' : 'Import'}
                     </button>
                 </div>
@@ -441,7 +441,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 subtitle='Create a Docker-ready Next.js workspace.'
             >
                 <input value={starterName} onChange={(event) => setStarterName(event.target.value)} placeholder='Project name' className='rounded-xl bg-ui-panel px-3 py-2 text-sm text-ui-text outline outline-ui-border placeholder:text-ui-muted' />
-                <button type='button' onClick={() => void onScaffoldStarter('nextjs_docker', starterName)} className='rounded-xl bg-ui-primary px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90'>
+                <button type='button' onClick={() => void onScaffoldStarter('nextjs_docker', starterName)} className='rounded-xl bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity hover:opacity-90'>
                     Create workspace
                 </button>
             </Panel>
@@ -542,7 +542,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     type='button'
                     onClick={() => void onStartDeployment({ vmName: deployVmName, port: deployPort, healthPath: deployHealthPath, accessPolicy: deployAccessPolicy, environment: deployEnvironment })}
                     disabled={deployPending}
-                    className='rounded-xl bg-ui-primary px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60'
+                    className='rounded-xl bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas transition-opacity hover:opacity-90 disabled:opacity-60'
                 >
                     {deployPending ? 'Checking launch target...' : 'Run launch check'}
                 </button>
