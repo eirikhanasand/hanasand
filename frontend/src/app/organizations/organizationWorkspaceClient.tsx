@@ -1614,44 +1614,47 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
     const nextAction = rows.find(row => !row.ready && !row.blocked) || rows.find(row => row.ready) || rows[0]
     const openAlertHref = alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}` : ''
     return (
-        <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-setup-progress='true'>
-            <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]'>
-                <div className='min-w-0'>
-                    <h2 className='flex items-center gap-2 text-base font-semibold text-ui-text dark:text-ui-text'>
-                        <ShieldCheck className='h-4 w-4 text-ui-primary' />
-                        Notification setup
-                    </h2>
-                    <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>
-                        {completed}/{rows.length} complete. Keep watchlists, destinations, and alert context ready for safe replay.
-                    </p>
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-setup-progress='true'>
+            <div className='grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center'>
+                <div className='min-w-0' data-org-setup-rail='true'>
+                    <div className='mb-2 flex min-w-0 items-center justify-between gap-3'>
+                        <h2 className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
+                            <ShieldCheck className='h-4 w-4 shrink-0 text-ui-primary' />
+                            <span className='truncate'>Notification setup</span>
+                        </h2>
+                        <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted' data-org-setup-progress-count='true'>
+                            {completed}/{rows.length}
+                        </span>
+                    </div>
+                    <div className='grid overflow-hidden rounded-lg border border-ui-border dark:border-ui-border sm:grid-cols-2 xl:grid-cols-4'>
+                        {rows.map(row => {
+                            const rowClass = `grid min-h-14 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-b border-ui-border px-3 py-2 text-left transition last:border-b-0 xl:border-b-0 xl:border-r xl:last:border-r-0 dark:border-ui-border ${row.ready ? 'bg-ui-panel dark:bg-ui-panel' : row.blocked ? 'bg-ui-raised opacity-75 dark:bg-ui-canvas' : 'bg-ui-primary/10 hover:bg-ui-primary/15 dark:bg-ui-primary/10 dark:hover:bg-ui-primary/15'}`
+                            const icon = row.ready ? <CheckCircle2 className='h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='h-4 w-4 shrink-0 text-ui-warning' />
+                            const content = (
+                                <>
+                                    {icon}
+                                    <span className='min-w-0'>
+                                        <span className='block truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.title}</span>
+                                        <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.body}</span>
+                                    </span>
+                                </>
+                            )
+                            return row.blocked
+                                ? <span key={row.id} className={rowClass} aria-disabled='true' data-org-setup-step={row.id}>{content}</span>
+                                : <a key={row.id} href={row.href} className={rowClass} data-org-setup-step={row.id}>{content}</a>
+                        })}
+                    </div>
                 </div>
-                <div className='rounded-lg border border-ui-primary/35 bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
-                    <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary dark:text-ui-primary'>Next action</p>
-                    <p className='mt-1 truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{nextAction.title}</p>
-                    <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{nextAction.body}</p>
-                    <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1'>
+                <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:min-w-72 xl:grid-cols-1' data-org-setup-next='true'>
+                    <span className='min-w-0 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 py-2 text-sm dark:border-ui-primary/35 dark:bg-ui-primary/10'>
+                        <span className='block truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary dark:text-ui-primary'>Next</span>
+                        <span className='mt-0.5 block truncate font-semibold text-ui-text dark:text-ui-text'>{nextAction.action}</span>
+                    </span>
+                    <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-1'>
                         <ActionAnchor href={nextAction.href} icon={<ExternalLink className='h-4 w-4' />} label={nextAction.action} disabled={nextAction.blocked} />
                         {openAlertHref && <ActionAnchor href={openAlertHref} icon={<CircleAlert className='h-4 w-4' />} label='Validate alert' disabled={!watchlistCount} />}
                     </div>
                 </div>
-            </div>
-            <div className='mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
-                {rows.map(row => {
-                    const rowClass = `grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg border px-3 py-3 transition ${row.ready ? 'border-ui-success/35 bg-ui-success/10 dark:border-ui-success/35 dark:bg-ui-success/10' : row.blocked ? 'border-ui-border bg-ui-raised opacity-70 dark:border-ui-border dark:bg-ui-canvas' : 'border-ui-primary/35 bg-ui-panel hover:border-ui-primary/35 dark:border-ui-border dark:bg-ui-panel'}`
-                    const content = (
-                        <>
-                            {row.ready ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-ui-warning' />}
-                            <span className='min-w-0'>
-                                <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.title}</span>
-                                <span className='block truncate text-xs text-ui-muted dark:text-ui-muted'>{row.body}</span>
-                                <span className='mt-2 block text-xs font-semibold text-ui-primary dark:text-ui-primary'>{row.blocked ? 'Owner or admin required' : row.action}</span>
-                            </span>
-                        </>
-                    )
-                    return row.blocked
-                        ? <span key={row.id} className={rowClass} aria-disabled='true'>{content}</span>
-                        : <a key={row.id} href={row.href} className={rowClass}>{content}</a>
-                })}
             </div>
         </section>
     )
