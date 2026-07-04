@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, AlarmClockCheck, BrainCircuit, CalendarClock, ClipboardList, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, ListChecks, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
+import { Activity, AlarmClockCheck, BookOpen, BrainCircuit, CalendarClock, ClipboardList, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, ListChecks, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 
@@ -55,7 +55,6 @@ export default function DashboardSidebar({
     const workspaceItems: Item[] = [
         { href: '/dashboard/projects', label: 'Workspaces', icon: <FolderKanban className='h-4 w-4' /> },
         { href: '/dashboard/shares', label: 'Code shares', icon: <FileCode2 className='h-4 w-4' /> },
-        { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
         { href: `/profile/${id}`, label: 'Profile', icon: <UserRound className='h-4 w-4' /> },
     ]
 
@@ -74,22 +73,27 @@ export default function DashboardSidebar({
         )
     }
 
+    contentItems.push(
+        { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
+    )
+
     if (canManageContent) {
         contentItems.push(
+            { href: '/dashboard/articles', label: 'Articles', icon: <BookOpen className='h-4 w-4' /> },
             { href: '/dashboard/thoughts', label: 'Thoughts', icon: <BrainCircuit className='h-4 w-4' /> },
         )
     }
 
     if (isAdmin) {
         tiAdminItems.push(
-            { href: '/dashboard/ti/control', label: 'Source operations', icon: <Radar className='h-4 w-4' /> },
-            { href: '/dashboard/ti/workbench', label: 'Analyst workbench', icon: <Inbox className='h-4 w-4' /> },
-            { href: '/dashboard/ti/activity', label: 'TI activity', icon: <Activity className='h-4 w-4' /> },
-            { href: '/dashboard/ti/enrichment', label: 'Actor enrichment', icon: <ListChecks className='h-4 w-4' /> },
-            { href: '/dashboard/ti/sources', label: 'TI sources', icon: <DatabaseZap className='h-4 w-4' /> },
-            { href: '/dashboard/ti/domains', label: 'TI domains', icon: <Globe2 className='h-4 w-4' /> },
+            { href: '/dashboard/ti/control', label: 'Collection', icon: <Radar className='h-4 w-4' /> },
+            { href: '/dashboard/ti/workbench', label: 'Recent attacks', icon: <Inbox className='h-4 w-4' /> },
+            { href: '/dashboard/ti/activity', label: 'Latest activity', icon: <Activity className='h-4 w-4' /> },
+            { href: '/dashboard/ti/enrichment', label: 'Actor profiles', icon: <ListChecks className='h-4 w-4' /> },
+            { href: '/dashboard/ti/sources', label: 'Sources', icon: <DatabaseZap className='h-4 w-4' /> },
+            { href: '/dashboard/ti/domains', label: 'Watched entities', icon: <Globe2 className='h-4 w-4' /> },
             { href: '/dashboard/ti/control', label: 'Collection runs', icon: <PlayCircle className='h-4 w-4' /> },
-            { href: '/dashboard/ti/audit', label: 'TI audit log', icon: <ClipboardList className='h-4 w-4' /> },
+            { href: '/dashboard/ti/audit', label: 'Audit log', icon: <ClipboardList className='h-4 w-4' /> },
         )
 
         adminItems.push(
@@ -98,7 +102,7 @@ export default function DashboardSidebar({
             { href: '/dashboard/db', label: 'Database', icon: <Database className='h-4 w-4' /> },
             { href: '/dashboard/db/backups', label: 'Backup', icon: <DatabaseBackup className='h-4 w-4' /> },
             { href: '/dashboard/system/rate-limits', label: 'Rate Limits', icon: <Gauge className='h-4 w-4' /> },
-            { href: '/dashboard/system/cron', label: 'Cron Jobs', icon: <CalendarClock className='h-4 w-4' /> },
+            { href: '/dashboard/cron-jobs', label: 'Cron Jobs', icon: <CalendarClock className='h-4 w-4' /> },
             { href: '/dashboard/system/impersonation', label: 'Impersonation', icon: <UserRoundCheck className='h-4 w-4' /> },
             { href: '/dashboard/management', label: 'Management', icon: <ShieldCheck className='h-4 w-4' /> },
         )
@@ -108,7 +112,7 @@ export default function DashboardSidebar({
     const toggleLabel = compact ? 'Expand sidebar' : 'Collapse sidebar'
     const sections: Section[] = [
         { title: 'Monitoring', items: productItems },
-        { title: 'Threat Intel', items: tiAdminItems },
+        { title: 'Threat monitoring', items: tiAdminItems },
         { title: 'Review', items: workspaceItems },
         { title: 'Content', items: contentItems },
         { title: 'System', items: systemItems },
@@ -122,13 +126,13 @@ export default function DashboardSidebar({
         .sort((a, b) => b.href.length - a.href.length)[0]?.href
 
     return (
-        <aside className={`dashboard-sidebar-sticky noscroll hidden min-h-0 overflow-auto rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm lg:block ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
+        <aside className={`dashboard-sidebar-sticky noscroll hidden min-h-0 overflow-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20 lg:block ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
             <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between gap-3 px-2 py-1'}`}>
                 {compact ? (
                     <button
                         type='button'
                         onClick={() => setDashboardViewMode('normal')}
-                        className='grid h-10 w-10 place-items-center rounded-lg border border-[#dfe5ee] text-[#596170] transition hover:bg-[#f8fafc] hover:text-[#171a21]'
+                        className='grid h-10 w-10 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-canvas hover:text-ui-text'
                         aria-label='Expand sidebar'
                         title='Expand sidebar'
                     >
@@ -137,13 +141,13 @@ export default function DashboardSidebar({
                 ) : (
                     <>
                         <div>
-                            <p className='text-[0.62rem] font-semibold uppercase text-[#3056d3]'>Console</p>
-                            <h2 className='mt-1 text-sm font-semibold text-[#171a21]'>Monitoring</h2>
+                            <p className='text-[0.62rem] font-semibold uppercase text-ui-primary'>Console</p>
+                            <h2 className='mt-1 text-sm font-semibold text-ui-text'>Monitoring</h2>
                         </div>
                         <button
                             type='button'
                             onClick={() => setDashboardViewMode('compact')}
-                            className='grid h-9 w-9 place-items-center rounded-lg border border-[#dfe5ee] text-[#667085] transition hover:bg-[#f8fafc] hover:text-[#171a21]'
+                            className='grid h-9 w-9 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-canvas hover:text-ui-text'
                             aria-label={toggleLabel}
                             title={toggleLabel}
                         >
@@ -156,7 +160,7 @@ export default function DashboardSidebar({
             <nav className='grid gap-3'>
                 {sections.map(section => (
                     <div key={section.title} className='grid gap-1'>
-                        {!compact && <p className='px-2 text-[0.62rem] font-semibold uppercase text-[#98a2b3]'>{section.title}</p>}
+                        {!compact && <p className='px-2 text-[0.62rem] font-semibold uppercase text-ui-muted'>{section.title}</p>}
                         <div className='grid gap-1 sm:grid-cols-2 lg:grid-cols-1'>
                             {section.items.map((item) => {
                                 const active = item.href === activeHref
@@ -171,8 +175,8 @@ export default function DashboardSidebar({
                                             compact ? 'justify-center' : 'gap-3'
                                         } ${
                                             active
-                                                ? 'border-[#b8c5ff] bg-[#eef3ff] text-[#3056d3]'
-                                                : 'border-transparent text-[#596170] hover:border-[#dfe5ee] hover:bg-[#f8fafc] hover:text-[#171a21]'
+                                                ? 'border-ui-primary bg-ui-primary/10 text-ui-primary'
+                                                : 'border-transparent text-ui-muted hover:border-ui-border hover:bg-ui-canvas hover:text-ui-text'
                                         }`}
                                     >
                                         {item.icon}

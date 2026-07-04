@@ -15,33 +15,33 @@ type ErrorNoticeProps = {
 const variants = {
     error: {
         icon: AlertCircle,
-        accent: 'bg-[#b42318]',
-        iconTone: 'text-[#b42318]',
-        shell: 'border-[#fecdca] bg-[#fff1f0] text-[#912018]',
-        title: 'text-[#912018]',
-        body: 'text-[#912018]',
-        button: 'border-[#fecdca] bg-white text-[#912018] hover:bg-[#fff7f6]',
-        secondary: 'text-[#912018] hover:bg-[#fff7f6]',
+        accent: 'bg-ui-danger',
+        iconTone: 'text-ui-danger',
+        shell: 'border-ui-danger bg-ui-panel text-ui-danger',
+        title: 'text-ui-danger',
+        body: 'text-ui-danger',
+        button: 'border-ui-danger bg-ui-raised text-ui-danger hover:bg-ui-panel',
+        secondary: 'text-ui-danger hover:bg-ui-raised',
     },
     info: {
         icon: Info,
-        accent: 'bg-[#3056d3]',
-        iconTone: 'text-[#3056d3]',
-        shell: 'border-[#b8c5ff] bg-[#eef3ff] text-[#2546a8]',
-        title: 'text-[#2546a8]',
-        body: 'text-[#344054]',
-        button: 'border-[#b8c5ff] bg-white text-[#2546a8] hover:bg-[#f8faff]',
-        secondary: 'text-[#2546a8] hover:bg-[#f8faff]',
+        accent: 'bg-ui-primary',
+        iconTone: 'text-ui-primary',
+        shell: 'border-ui-primary bg-ui-panel text-ui-text',
+        title: 'text-ui-primary',
+        body: 'text-ui-text',
+        button: 'border-ui-primary bg-ui-raised text-ui-primary hover:bg-ui-panel',
+        secondary: 'text-ui-primary hover:bg-ui-raised',
     },
     success: {
         icon: CheckCircle2,
-        accent: 'bg-[#147a3b]',
-        iconTone: 'text-[#147a3b]',
-        shell: 'border-[#bde8ca] bg-[#e9f8ef] text-[#11612f]',
-        title: 'text-[#11612f]',
-        body: 'text-[#11612f]',
-        button: 'border-[#bde8ca] bg-white text-[#11612f] hover:bg-[#f6fff9]',
-        secondary: 'text-[#11612f] hover:bg-[#f6fff9]',
+        accent: 'bg-ui-success',
+        iconTone: 'text-ui-success',
+        shell: 'border-ui-success bg-ui-panel text-ui-success',
+        title: 'text-ui-success',
+        body: 'text-ui-success',
+        button: 'border-ui-success bg-ui-raised text-ui-success hover:bg-ui-panel',
+        secondary: 'text-ui-success hover:bg-ui-raised',
     },
 }
 
@@ -77,7 +77,7 @@ export default function ErrorNotice({
                                 <button
                                     type='button'
                                     onClick={onAction}
-                                    className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3056d3] ${tone.button}`}
+                                    className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary ${tone.button}`}
                                 >
                                     {actionLabel}
                                 </button>
@@ -86,7 +86,7 @@ export default function ErrorNotice({
                                 <button
                                     type='button'
                                     onClick={onSecondaryAction}
-                                    className={`rounded-md px-2.5 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3056d3] ${tone.secondary}`}
+                                    className={`rounded-md px-2.5 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ui-primary ${tone.secondary}`}
                                 >
                                     {secondaryActionLabel}
                                 </button>
