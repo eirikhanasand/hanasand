@@ -254,6 +254,15 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </div>
             </DashboardPanel>
 
+            <MailPrimaryFlow
+                overview={overview}
+                visibleCount={filteredMessages.length}
+                selectedMessage={selectedMessage}
+                stale={showStaleWarning}
+                onCompose={() => setComposer({ ...emptyComposer, open: true })}
+                onReply={() => selectedMessage && setComposer(composeFromReply('reply', selectedMessage))}
+            />
+
             {error && (
                 <ErrorNotice
                     compact
@@ -701,5 +710,60 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </div>
             )}
         </DashboardPage>
+    )
+}
+
+function MailPrimaryFlow({ overview, visibleCount, selectedMessage, stale, onCompose, onReply }: {
+    overview: MailOverview | null
+    visibleCount: number
+    selectedMessage: MailOverview['selectedMessage']
+    stale: boolean
+    onCompose: () => void
+    onReply: () => void
+}) {
+    const unreadCount = overview?.mailboxes.reduce((sum, mailbox) => sum + (mailbox.unreadEmails || 0), 0) ?? 0
+    const health = overview?.health?.status || 'unknown'
+    const healthTone = health === 'healthy'
+        ? 'border-ui-success/35 bg-ui-success/10 text-ui-success'
+        : health === 'warning'
+            ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
+            : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+    const title = selectedMessage
+        ? `Reply or triage "${selectedMessage.subject || 'selected message'}"`
+        : unreadCount
+            ? `Review ${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`
+            : 'Mailbox is ready'
+    const detail = selectedMessage
+        ? `From ${selectedMessage.from.map(formatMailboxAddress).join(', ') || 'unknown sender'} · ${formatDate(selectedMessage.receivedAt, true)}`
+        : overview
+            ? `${visibleCount} visible message${visibleCount === 1 ? '' : 's'} in ${overview.mailboxAddress}.`
+            : 'Mail is loading; compose unlocks when the mailbox connects.'
+
+    return (
+        <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_auto]' data-mail-primary-flow>
+            <div className='min-w-0'>
+                <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
+                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>Recommended next</span>
+                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{unreadCount} unread</span>
+                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{visibleCount} visible</span>
+                    <span className={`rounded-md border px-2 py-1 ${healthTone}`}>health {health}</span>
+                    {stale ? <span className='rounded-md border border-ui-danger/35 bg-ui-danger/10 px-2 py-1 text-ui-danger'>stale</span> : null}
+                </div>
+                <h2 className='mt-3 wrap-break-word text-lg font-semibold text-ui-text'>{title}</h2>
+                <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{detail}</p>
+            </div>
+            <div className='flex flex-wrap items-center gap-2 lg:justify-end'>
+                {selectedMessage ? (
+                    <button type='button' onClick={onReply} className='inline-flex min-h-10 items-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90' data-mail-primary-action>
+                        <Reply className='h-4 w-4' />
+                        Reply
+                    </button>
+                ) : null}
+                <button type='button' onClick={onCompose} disabled={!overview} className='inline-flex min-h-10 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-50' data-mail-compose-primary>
+                    <MailPlus className='h-4 w-4' />
+                    Compose
+                </button>
+            </div>
+        </section>
     )
 }
