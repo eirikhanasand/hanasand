@@ -6525,7 +6525,7 @@ function stagedReadinessChips(item: StagedHandoff) {
     return [
         { label: 'review', value: item.reviewHandoff.blockers.length ? `${item.reviewHandoff.blockers.length} follow-up${item.reviewHandoff.blockers.length === 1 ? '' : 's'}` : 'ready', ready: item.reviewHandoff.blockers.length === 0 },
         { label: 'source', value: sourceMissing.length ? `${sourceMissing.length} missing` : `${item.sourceDrilldown.rows.length} result${item.sourceDrilldown.rows.length === 1 ? '' : 's'}`, ready: sourceMissing.length === 0 },
-        { label: 'case', value: item.caseDraft.missing.length ? `${item.caseDraft.missing.length} missing` : item.caseDraft.route ? 'route ready' : 'draft ready', ready: item.caseDraft.missing.length === 0 },
+        { label: 'case', value: item.caseDraft.missing.length ? `${item.caseDraft.missing.length} missing` : item.caseDraft.route ? 'case link ready' : 'draft ready', ready: item.caseDraft.missing.length === 0 },
         { label: 'owner', value: ownershipReady ? item.caseOwnership.owner.label : item.caseOwnership.blockers.length ? `${item.caseOwnership.blockers.length} follow-up${item.caseOwnership.blockers.length === 1 ? '' : 's'}` : 'review', ready: ownershipReady },
         { label: 'detail', value: artifactReady ? formatLabel(item.selectedArtifact.artifact.kind) : item.selectedArtifact.readiness.blockers.length ? `${item.selectedArtifact.readiness.blockers.length} follow-up${item.selectedArtifact.readiness.blockers.length === 1 ? '' : 's'}` : 'review', ready: artifactReady },
         { label: 'actor', value: actorReady ? `${item.caseCreateRequest.actorContext.techniques.length} method${item.caseCreateRequest.actorContext.techniques.length === 1 ? '' : 's'}` : 'needs context', ready: actorReady },
@@ -9730,7 +9730,7 @@ function EmptyState() {
                     ))}
                 </div>
                 <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-                    Public results use reviewable metadata and source context. Customer notification, saved watchlists, and delivery routes continue in the authenticated console.
+                    Public results use reviewable metadata and source context. Customer notification, saved watchlists, and delivery destinations continue in the authenticated console.
                 </p>
             </div>
             <div className='flex flex-wrap justify-center gap-2'>
