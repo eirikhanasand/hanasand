@@ -101,7 +101,7 @@ export default function LoadTestingOperations() {
                                 <ShieldCheck className='h-3.5 w-3.5' />
                                 Permission-gated
                             </p>
-                            <h2 className='mt-3 text-2xl font-semibold tracking-normal text-ui-text md:text-3xl'>Check an endpoint you control</h2>
+                            <h2 className='mt-3 text-2xl font-semibold tracking-normal text-ui-text md:text-3xl'>Run a service check with evidence you can act on</h2>
                             <p className='mt-2 text-sm leading-6 text-ui-muted'>Run a permitted HTTP check, then open the result for latency, failures, logs, and response evidence.</p>
                         </div>
                         <form onSubmit={startCheck} className='grid gap-3'>
@@ -128,7 +128,7 @@ export default function LoadTestingOperations() {
                             <div className='flex flex-wrap items-center gap-2 text-xs text-ui-subtle'>
                                 <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5 font-medium text-ui-text'>{selectedScenario.label}: {selectedScenario.detail}</span>
                                 <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5'>{Math.round(selectedScenario.timeout / 1000)}s timeout</span>
-                                <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5'>p95, errors, logs</span>
+                                <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5'>p95/p99 evidence</span>
                             </div>
                             <details className='rounded-lg border border-ui-border bg-ui-raised' data-load-test-scenario-disclosure>
                                 <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text transition hover:bg-ui-panel [&::-webkit-details-marker]:hidden'>
@@ -160,7 +160,9 @@ export default function LoadTestingOperations() {
                         <SnapshotRow icon={<Activity className='h-4 w-4' />} label='Now' value={activeScans.length ? `${activeScans.length} running` : 'No active checks'} tone={activeScans.length ? 'watch' : 'ok'} />
                         <SnapshotRow icon={<CheckCircle2 className='h-4 w-4' />} label='History' value={allScans.length ? `${allScans.length} recent` : 'No runs yet'} tone='neutral' />
                         <SnapshotRow icon={<Gauge className='h-4 w-4' />} label='Latest p95' value={p95 ? `${p95}ms` : 'Waiting for a run'} tone={p95 && p95 > 1000 ? 'watch' : 'ok'} />
-                        <SnapshotRow icon={<AlertTriangle className='h-4 w-4' />} label='Failures' value={failedScans.length ? `${failedScans.length} flagged` : 'Clear'} tone={failedScans.length ? 'bad' : 'ok'} />
+                        <SnapshotRow icon={<AlertTriangle className='h-4 w-4' />} label='Failures' value={failedScans.length ? String(failedScans.length) : 'Clear'} tone={failedScans.length ? 'bad' : 'ok'} />
+                        <SnapshotRow icon={<Gauge className='h-4 w-4' />} label='Latency' value='p95/p99 evidence' tone='neutral' />
+                        <SnapshotRow icon={<ArrowRight className='h-4 w-4' />} label='Artifacts' value='logs + share link' tone='neutral' />
                         <details className='rounded-lg border border-ui-border bg-ui-panel' data-load-test-policy-disclosure>
                             <summary className='cursor-pointer list-none px-3 py-2 text-sm font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>Policy and evidence</summary>
                             <div className='grid gap-2 border-t border-ui-border p-3'>
