@@ -1440,9 +1440,11 @@ function EmptyWorkspacePreview() {
                 </div>
                 <div className='min-w-0'>
                     <h2 className='text-xl font-semibold text-ui-text dark:text-ui-text'>Create an organization to start monitoring</h2>
-                    <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-                        Use the form on the left to create the workspace and seed the first shared watchlist term. The member, destination, alert, and activity controls appear after the organization exists.
-                    </p>
+                    <div className='mt-3 flex flex-wrap gap-2 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                        {['Create organization', 'Add shared term', 'Invite members', 'Test destination'].map(label => (
+                            <span key={label} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>{label}</span>
+                        ))}
+                    </div>
                     <a href='#org-create-primary' className='sr-only'>Create organization form</a>
                 </div>
             </div>
