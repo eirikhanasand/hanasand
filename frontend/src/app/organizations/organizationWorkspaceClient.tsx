@@ -2751,7 +2751,7 @@ function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, 
                     id: term.watchlistItemId || term.watchlistId || term.alertGenerationRef || term.term || term.value || 'term',
                     primary: term.term || term.value || 'Watchlist term',
                     secondary: term.matchReason || term.alertGenerationRef || term.kind || term.family || 'Org-scoped match',
-                }))} empty='Add an active shared watchlist term to export org-scoped alert terms.' />
+                }))} empty='Add an active shared watchlist term to create organization alert terms.' />
                 <ScopeColumn icon={<CircleAlert className='h-4 w-4' />} title='Alerts' route={`/api/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`} rows={alerts.map(alert => ({
                     id: alert.id,
                     primary: alert.title || alert.id,
@@ -2761,13 +2761,13 @@ function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, 
                     id: item.id,
                     primary: item.title || item.id,
                     secondary: `${item.status || 'status'}${item.assignedOwner ? ` · ${item.assignedOwner}` : ''}`,
-                }))} empty='Cases appear after an alert is reviewed or routed from the DWM workspace.' />
+                }))} empty='Cases appear after an alert is opened from the DWM workspace.' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibilityRows(alertCaseVisibility)} empty='Visibility decisions appear after alerts are reviewed or routed into cases.' />
                 <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={webhooks.map(destination => ({
                     id: destination.id,
                     primary: destination.name || destination.id,
                     secondary: `${destination.status || 'unknown'}${destination.endpointHash ? ` · ${destination.endpointHash}` : ''}`,
-                }))} empty='Save a watchlist destination to make customer delivery routes visible here.' />
+                }))} empty='Save a watchlist destination to make customer delivery available here.' />
             </div>
         </section>
     )
@@ -2827,7 +2827,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                 <RowStatus message={copyStatus} />
             </div>
             <div className='mt-4 grid gap-2'>
-                {activity.length === 0 && <EmptyLine text='No actions in this browser session yet.' />}
+                {activity.length === 0 && <EmptyLine text='Activity appears after team, watchlist, or destination actions.' />}
                 {activity.length > 0 && selectedRows.length === 0 && selectedSubject.type !== 'organization' && <EmptyLine text='No activity for the selected row.' />}
                 {visibleRows.map(item => {
                     const itemSubject = activitySubjectFromItem(item, organization.id)
