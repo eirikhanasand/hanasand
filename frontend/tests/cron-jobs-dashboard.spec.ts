@@ -37,6 +37,13 @@ test('cron jobs dashboard renders unified scheduled operations and controls', as
         const nextScanner = { ...scanner, status: 'running', running: true }
         await route.fulfill({ json: { job: nextScanner, jobs: fixtureJobs.map(job => job.id === 'api-vulnerability-scanner' ? nextScanner : job) } })
     })
+    await page.route('**/api/backend/system/cron/forgejo-standby-sync**', async route => {
+        const body = await route.request().postDataJSON()
+        updates.push(body)
+        const forgejo = fixtureJobs.find(job => job.id === 'forgejo-standby-sync')!
+        const nextForgejo = { ...forgejo, schedule: typeof body.schedule === 'string' ? body.schedule : forgejo.schedule }
+        await route.fulfill({ json: { job: nextForgejo, jobs: fixtureJobs.map(job => job.id === 'forgejo-standby-sync' ? nextForgejo : job) } })
+    })
 
     await page.goto('/dashboard/cron-jobs', { waitUntil: 'domcontentloaded' })
 
@@ -54,19 +61,29 @@ test('cron jobs dashboard renders unified scheduled operations and controls', as
     await expect(page.getByRole('heading', { name: 'Forgejo standby sync' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Alerts' })).toBeVisible()
     await expect(page.getByText('Observable only')).toHaveCount(4)
+    await expect(page.getByText('Schedule controls')).toBeVisible()
+    await expect(page.getByLabel('Cron expression')).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Save Forgejo standby sync schedule' })).toBeHidden()
     await expect(page.getByText('$0.0037/hr').first()).toBeHidden()
 
     await page.getByText('Runtime, cost, and log details').first().click()
     await expect(page.getByText('$0.0037/hr').first()).toBeVisible()
     await expect(page.getByText('ok').first()).toBeVisible()
 
-    await page.getByRole('button', { name: 'Pause' }).first().click()
+    await page.getByText('Schedule controls').click()
+    await expect(page.getByLabel('Cron expression')).toBeVisible()
+    await page.getByLabel('Cron expression').fill('*/10 * * * *')
+    await page.getByRole('button', { name: 'Save Forgejo standby sync schedule' }).click()
     await expect.poll(() => updates.length).toBe(1)
-    expect(updates[0]).toMatchObject({ enabled: false })
+    expect(updates[0]).toMatchObject({ schedule: '*/10 * * * *' })
+
+    await page.getByRole('button', { name: 'Pause' }).first().click()
+    await expect.poll(() => updates.length).toBe(2)
+    expect(updates[1]).toMatchObject({ enabled: false })
 
     await page.getByRole('button', { name: 'Run now' }).first().click()
-    await expect.poll(() => updates.length).toBe(2)
-    expect(updates[1]).toMatchObject({ action: 'run_now' })
+    await expect.poll(() => updates.length).toBe(3)
+    expect(updates[2]).toMatchObject({ action: 'run_now' })
     await expect(page.locator('span').filter({ hasText: /^running$/ })).toBeVisible()
 })
 

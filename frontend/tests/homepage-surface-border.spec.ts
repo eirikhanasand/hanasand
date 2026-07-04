@@ -5,7 +5,7 @@ const sampledSurfaces = [
     ['exposure panel header', '[data-home-exposure-panel-header="true"]'],
     ['exposure panel toolbar', '[data-home-exposure-panel-toolbar="true"]'],
     ['exposure table header', '[data-home-exposure-panel-table-header="true"]'],
-    ['product readiness panel', '[data-home-product-readiness="true"]'],
+    ['product status panel', '[data-home-product-status="true"]'],
     ['workflow coverage panel', '[data-home-workflow-coverage="true"]'],
     ['workflow coverage header', '[data-home-workflow-coverage-header="true"]'],
     ['workflow coverage table header', '[data-home-workflow-coverage-table-header="true"]'],
@@ -15,7 +15,7 @@ const sampledSurfaces = [
     ['example card', '[data-home-example-card="true"]'],
     ['example card footer', '[data-home-example-card-footer="true"]'],
     ['solution card', '[data-home-solution-card="true"]'],
-    ['readiness fact card', '[data-home-readiness-fact="true"]'],
+    ['status fact card', '[data-home-status-fact="true"]'],
 ] as const
 
 test.describe('homepage surface border theme tokens', () => {

@@ -165,19 +165,28 @@ export default function CronJobsClient() {
                                     </div>
 
                                     {job.controls.includes('edit_schedule') ? (
-                                        <label className='grid gap-1'>
-                                            <span className='text-xs font-semibold uppercase text-ui-muted'>Schedule</span>
-                                            <div className='flex gap-2'>
-                                                <input
-                                                    value={drafts[job.id] ?? job.schedule}
-                                                    onChange={event => setDrafts(current => ({ ...current, [job.id]: event.target.value }))}
-                                                    className='min-h-10 flex-1 rounded-lg border border-ui-border bg-ui-raised px-3 font-mono text-sm text-ui-text outline-none focus:border-ui-primary'
-                                                />
-                                                <button onClick={() => void save(job)} className='grid h-10 w-10 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary hover:bg-ui-panel' title='Save schedule' aria-label={`Save ${job.name} schedule`}>
-                                                    <Save className='h-4 w-4' />
-                                                </button>
-                                            </div>
-                                        </label>
+                                        <details data-testid='cron-schedule-controls' className='group rounded-lg border border-ui-border bg-ui-raised'>
+                                            <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary'>
+                                                <span>Schedule controls</span>
+                                                <span className='flex min-w-0 items-center gap-2 text-xs font-medium text-ui-muted'>
+                                                    <span className='truncate font-mono'>{drafts[job.id] ?? job.schedule}</span>
+                                                    <ChevronDown className='h-4 w-4 shrink-0 transition group-open:rotate-180' />
+                                                </span>
+                                            </summary>
+                                            <label className='grid gap-1 border-t border-ui-border p-3'>
+                                                <span className='text-xs font-semibold uppercase text-ui-muted'>Cron expression</span>
+                                                <div className='flex gap-2'>
+                                                    <input
+                                                        value={drafts[job.id] ?? job.schedule}
+                                                        onChange={event => setDrafts(current => ({ ...current, [job.id]: event.target.value }))}
+                                                        className='min-h-10 flex-1 rounded-lg border border-ui-border bg-ui-raised px-3 font-mono text-sm text-ui-text outline-none focus:border-ui-primary'
+                                                    />
+                                                    <button onClick={() => void save(job)} className='grid h-10 w-10 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary hover:bg-ui-panel' title='Save schedule' aria-label={`Save ${job.name} schedule`}>
+                                                        <Save className='h-4 w-4' />
+                                                    </button>
+                                                </div>
+                                            </label>
+                                        </details>
                                     ) : null}
 
                                     <details className='group rounded-lg border border-ui-border bg-ui-raised'>

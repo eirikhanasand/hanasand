@@ -334,20 +334,20 @@ function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreb
     return (
         <div
             className='landing-surface-border grid w-full max-w-6xl gap-3 rounded-xl border border-ui-border bg-ui-panel/90 p-3 text-left shadow-sm backdrop-blur sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.95fr_1.5fr_auto]'
-            data-home-product-readiness='true'
-            data-home-readiness-state={stateLabel}
-            data-home-readiness-ready-rows={scoreboard.readyRows}
-            data-home-readiness-total-rows={scoreboard.totalRows}
-            data-home-readiness-query={scoreboard.query}
-            data-home-readiness-deploy-state={scoreboard.deployGate.state}
-            data-home-readiness-ledger-state={ledger.state}
-            data-home-readiness-ledger-source={ledger.source}
-            data-home-readiness-ledger-blocked-count={ledger.customerVisibleBlockedCount}
-            data-home-readiness-ledger-row-count={ledger.rowCount}
-            data-home-readiness-ledger-deploy-risk={ledger.deployRisk}
+            data-home-product-status='true'
+            data-home-workflow-state={stateLabel}
+            data-home-workflow-ready-rows={scoreboard.readyRows}
+            data-home-workflow-total-rows={scoreboard.totalRows}
+            data-home-workflow-query={scoreboard.query}
+            data-home-deploy-state={scoreboard.deployGate.state}
+            data-home-path-state={ledger.state}
+            data-home-path-source={ledger.source}
+            data-home-path-blocked-count={ledger.customerVisibleBlockedCount}
+            data-home-path-row-count={ledger.rowCount}
+            data-home-path-deploy-risk={ledger.deployRisk}
             data-home-first-blocker-row={firstMissingRow?.id || ''}
             data-home-first-blocker-owner={firstMissingRow?.ownerLane || ''}
-            data-home-first-blocker-contract={firstMissingRow ? formatCustomerAction(firstMissingRow.backendProofContractVersion) : ''}
+            data-home-first-blocker-source={firstMissingRow ? formatCustomerAction(firstMissingRow.backendProofContractVersion) : ''}
             data-home-first-blocker-raw={formatCustomerAction(scoreboard.firstBlocker || '')}
         >
             <HomeReadinessFact label='Product' value='Company exposure monitoring for security teams' />
@@ -368,7 +368,7 @@ function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreb
 
 function HomeReadinessFact({ label, value }: { label: string, value: string }) {
     return (
-        <div className='landing-surface-border min-w-0 rounded-lg border border-ui-border bg-ui-raised px-3 py-2' data-home-readiness-fact='true'>
+        <div className='landing-surface-border min-w-0 rounded-lg border border-ui-border bg-ui-raised px-3 py-2' data-home-status-fact='true'>
             <p className='text-[11px] font-semibold uppercase text-ui-muted'>{label}</p>
             <p className='mt-1 line-clamp-2 text-sm font-semibold leading-5 text-ui-text'>{value}</p>
         </div>
