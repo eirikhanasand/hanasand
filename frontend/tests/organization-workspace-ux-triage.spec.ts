@@ -107,6 +107,9 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('onClick={() => itemSubject && onSelectSubject(itemSubject)}')
     expect(page).toContain('data-org-activity-context-action=\'true\'')
     expect(page).toContain('selectedSubjectActions(selectedSubject, organization)')
+    expect(page).toContain('const visibleRows = selectedSubject.type === \'organization\' ? activity.slice(0, 20) : selectedRows.slice(0, 20)')
+    expect(page).toContain('const totalRows = selectedSubject.type === \'organization\' ? activity.length : selectedRows.length')
+    expect(page).not.toMatch(/\.sort\(\(left, right\) => Date\.parse\(right\.at\) - Date\.parse\(left\.at\)\)\s*\.slice\(0, 12\)/)
     expect(page).toContain('Audit trail')
     expect(page).toContain('Delivery activity')
     expect(page).toContain('href: \'#delivery-history\'')
@@ -201,6 +204,9 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(page.locator('[data-org-watchlist-filter-count="true"]')).toContainText('1/3 shown')
     await expect(retiredVendorRow).toBeVisible()
     await expect(oktaRow).toBeHidden()
+    await retiredVendorRow.click()
+    await expect(page.locator('#audit')).toContainText('RetiredVendor')
+    await expect(page.locator('#audit')).toContainText('watch_acme_retired')
 
     await testInfo.attach('organizations-watchlist-filter-desktop', {
         body: await page.screenshot({ path: '/tmp/organizations-watchlist-filter-desktop.png', fullPage: true }),
@@ -237,9 +243,9 @@ const fixtureInvites = [
 ]
 
 const fixtureWatchlists = [
-    { id: 'watch_acme_domain', organizationId: 'org_acme', tenantId: 'tenant_acme', kind: 'domain', value: 'acme.com', status: 'active', notes: 'Customer-owned domain', createdBy: 'owner_acme', updatedBy: 'owner_acme', alertGenerationRef: 'org_acme:watch_acme_domain', webhookEndpointHint: 'discord...acme', webhookEndpointHash: 'wh_hash_acme', webhookUrlConfigured: true },
-    { id: 'watch_acme_vendor', organizationId: 'org_acme', tenantId: 'tenant_acme', kind: 'vendor', value: 'Okta', status: 'paused', notes: 'Identity provider', createdBy: 'analyst_acme', updatedBy: 'analyst_acme', alertGenerationRef: 'org_acme:watch_acme_vendor' },
-    { id: 'watch_acme_retired', organizationId: 'org_acme', tenantId: 'tenant_acme', kind: 'vendor', value: 'RetiredVendor', status: 'archived', notes: 'Retired supplier', createdBy: 'owner_acme', updatedBy: 'owner_acme', alertGenerationRef: 'org_acme:watch_acme_retired' },
+    { id: 'watch_acme_domain', organizationId: 'org_acme', tenantId: 'tenant_acme', kind: 'domain', value: 'acme.com', status: 'active', notes: 'Customer-owned domain', createdBy: 'owner_acme', updatedBy: 'owner_acme', updatedAt: '2026-07-01T09:00:00.000Z', alertGenerationRef: 'org_acme:watch_acme_domain', webhookEndpointHint: 'discord...acme', webhookEndpointHash: 'wh_hash_acme', webhookUrlConfigured: true },
+    { id: 'watch_acme_vendor', organizationId: 'org_acme', tenantId: 'tenant_acme', kind: 'vendor', value: 'Okta', status: 'paused', notes: 'Identity provider', createdBy: 'analyst_acme', updatedBy: 'analyst_acme', updatedAt: '2026-07-01T08:00:00.000Z', alertGenerationRef: 'org_acme:watch_acme_vendor' },
+    { id: 'watch_acme_retired', organizationId: 'org_acme', tenantId: 'tenant_acme', kind: 'vendor', value: 'RetiredVendor', status: 'archived', notes: 'Retired supplier', createdBy: 'owner_acme', updatedBy: 'owner_acme', updatedAt: '2026-07-01T07:00:00.000Z', alertGenerationRef: 'org_acme:watch_acme_retired' },
 ]
 
 const fixtureDestinations = [
@@ -256,4 +262,5 @@ const fixtureCases = [
 
 const fixtureDeliveries = [
     { id: 'delivery_acme_1', alertId: 'dwm_alert_acme', organizationId: 'org_acme', tenantId: 'tenant_acme', watchlistId: 'watch_acme_domain', webhookDestinationId: 'dest_acme_discord', endpointHint: 'discord...acme', endpointHash: 'wh_hash_acme', requestId: 'req_acme_1', auditEventId: 'audit_acme_1', dedupeKey: 'dedupe_acme_1', attemptedAt: '2026-07-04T09:35:00.000Z', dryRun: true, payloadHash: 'payload_hash_acme', status: 'dry_run', httpStatus: 204, attemptCount: 1, deliveryKind: 'discord' },
+    ...Array.from({ length: 14 }, (_, index) => ({ id: `delivery_acme_extra_${index}`, alertId: `dwm_alert_extra_${index}`, organizationId: 'org_acme', tenantId: 'tenant_acme', watchlistId: 'watch_acme_domain', webhookDestinationId: 'dest_acme_discord', endpointHint: 'discord...acme', endpointHash: 'wh_hash_acme', requestId: `req_acme_extra_${index}`, auditEventId: `audit_acme_extra_${index}`, dedupeKey: `dedupe_acme_extra_${index}`, attemptedAt: `2026-07-04T10:${String(index).padStart(2, '0')}:00.000Z`, dryRun: true, payloadHash: `payload_hash_extra_${index}`, status: 'dry_run', httpStatus: 204, attemptCount: 1, deliveryKind: 'discord' })),
 ]

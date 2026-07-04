@@ -2445,7 +2445,8 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
     const selectedRows = activityRowsForSubject(activity, selectedSubject)
     const contextRows = selectedContextRows(selectedSubject, organization, bundle)
-    const visibleRows = selectedSubject.type === 'organization' ? activity : selectedRows
+    const visibleRows = selectedSubject.type === 'organization' ? activity.slice(0, 20) : selectedRows.slice(0, 20)
+    const totalRows = selectedSubject.type === 'organization' ? activity.length : selectedRows.length
     const contextActions = selectedSubjectActions(selectedSubject, organization)
     const copySelectedActivity = async () => {
         try {
@@ -2465,7 +2466,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
                         <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(selectedSubjectLabel(selectedSubject, organization, bundle))}</p>
-                        <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{selectedSubject.type}</p>
+                        <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{selectedSubject.type} · {totalRows} event{totalRows === 1 ? '' : 's'}</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         {contextActions.map(action => (
@@ -2961,7 +2962,6 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
     }))
     return [...local, ...alertRows, ...caseRows, ...deliveryRows, ...inviteRows, ...memberRows, ...watchlistRows, ...destinationRows]
         .sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
-        .slice(0, 12)
 }
 
 function requestedSubjectFromSearch(input: {
