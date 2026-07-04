@@ -965,13 +965,13 @@ function selectedContinuityRefs(input: {
         },
         {
             label: 'Watch',
-            value: watchRefs.length ? `${watchRefs.length} ref${watchRefs.length === 1 ? '' : 's'}` : 'term needed',
+            value: watchRefs.length ? `${watchRefs.length} ref${watchRefs.length === 1 ? '' : 's'}` : 'watch term needed',
             state: input.watchlistPlan?.ready || watchRefs.length ? 'ready' : 'review',
             href: input.watchlistPlan?.route,
         },
         {
             label: 'Destinations',
-            value: destinationIds.length ? `${destinationIds.length} ready` : 'choose',
+            value: destinationIds.length ? `${destinationIds.length} ready` : 'destination needed',
             state: destinationIds.length ? 'ready' : 'blocked',
             href: input.deliveryPlan?.route,
         },
