@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Archive, BellRing, Building2, CheckCircle2, CircleAlert, Copy, ExternalLink, Loader2, Pause, Pencil, Play, RefreshCw, Settings, ShieldCheck, Trash2, UserPlus, Users, Webhook } from 'lucide-react'
@@ -523,6 +523,9 @@ export default function OrganizationWorkspaceClient() {
     const [rowMessages, setRowMessages] = useState<Record<string, RowMessage>>({})
     const [activity, setActivity] = useState<ActivityItem[]>([])
     const [selectedActivitySubject, setSelectedActivitySubject] = useState<ActivitySubject>({ type: 'organization', id: 'organization' })
+    const mountedRef = useRef(false)
+    const organizationLoadRef = useRef(0)
+    const bundleLoadRef = useRef(0)
 
     const selectedOrganization = useMemo(
         () => organizations.find(organization => organization.id === selectedId) || organizations[0],
@@ -547,11 +550,21 @@ export default function OrganizationWorkspaceClient() {
         return organizationSearchText(organization).includes(normalizedWorkspaceQuery)
     })
 
+    useEffect(() => {
+        mountedRef.current = true
+        return () => {
+            mountedRef.current = false
+        }
+    }, [])
+
     const loadOrganizations = useCallback(async (nextSelectedId?: string) => {
+        const requestId = organizationLoadRef.current + 1
+        organizationLoadRef.current = requestId
         setLoading(true)
         setError('')
         try {
             const payload = await requestJson<{ organizations?: OrganizationSummary[] }>('/api/organizations')
+            if (!mountedRef.current || organizationLoadRef.current !== requestId) return
             const nextOrganizations = payload.organizations || []
             setOrganizations(nextOrganizations)
             const preferred = nextSelectedId || requestedOrganizationId || selectedId
@@ -561,16 +574,21 @@ export default function OrganizationWorkspaceClient() {
                 setBundle(initialBundle)
             }
         } catch (err) {
+            if (!mountedRef.current || organizationLoadRef.current !== requestId) return
             setError(errorMessage(err))
             setOrganizations([])
             setSelectedId('')
             setBundle(initialBundle)
         } finally {
-            setLoading(false)
+            if (mountedRef.current && organizationLoadRef.current === requestId) {
+                setLoading(false)
+            }
         }
     }, [requestedOrganizationId, selectedId])
 
     const loadOrganizationBundle = useCallback(async (organizationId: string) => {
+        const requestId = bundleLoadRef.current + 1
+        bundleLoadRef.current = requestId
         setBusy('load-org')
         setError('')
         const endpoints = [
@@ -586,6 +604,7 @@ export default function OrganizationWorkspaceClient() {
             ['deliveries', `/api/dwm/webhooks/deliveries?organizationId=${encodeURIComponent(organizationId)}`],
         ] as const
         const results = await Promise.allSettled(endpoints.map(([, url]) => requestJson<Record<string, unknown>>(url)))
+        if (!mountedRef.current || bundleLoadRef.current !== requestId) return
         const nextBundle: OrgBundle = { ...initialBundle, loadErrors: [] }
 
         results.forEach((result, index) => {
