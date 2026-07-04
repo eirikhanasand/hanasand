@@ -517,7 +517,7 @@ function Results({ result }: { result: TiSearchResponse }) {
 
                                     <div data-ti-selected-evidence-command-strip='true' className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-2 text-xs dark:border-ui-border dark:bg-ui-raised sm:grid-cols-[minmax(0,1fr)_auto]'>
                                         <p className='min-w-0 wrap-break-word leading-5 text-ui-muted dark:text-ui-muted'>
-                                            Case path: {selectedCaseDraft && selectedCaseOwnership ? 'Case draft ready' : selectedSourceDrilldown?.rows.length ? 'Add capture IDs' : 'Add source rows'} · {selectedSourceDrilldown?.rows.length ?? 0} source row{(selectedSourceDrilldown?.rows.length ?? 0) === 1 ? '' : 's'} linked.
+                                            Case link: {selectedCaseDraft && selectedCaseOwnership ? 'Case draft ready' : selectedSourceDrilldown?.rows.length ? 'Add capture IDs' : 'Add source rows'} · {selectedSourceDrilldown?.rows.length ?? 0} source row{(selectedSourceDrilldown?.rows.length ?? 0) === 1 ? '' : 's'} linked.
                                         </p>
                                         <span className='flex flex-wrap gap-2'>
                                             <a href='#ti-selected-evidence' className='inline-flex min-h-8 items-center justify-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
@@ -3947,7 +3947,7 @@ function WatchlistRelevanceWorkbench({
                             Show key terms only
                         </button>
                     ) : null}
-                    {!rows.length ? <p className='p-4 text-sm text-ui-muted dark:text-ui-muted'>Link a watchlist term to route this result.</p> : null}
+                    {!rows.length ? <p className='p-4 text-sm text-ui-muted dark:text-ui-muted'>Link a watchlist term before opening this result for review.</p> : null}
                 </div>
                 <div className='min-w-0 border-t border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised xl:border-l xl:border-t-0'>
                     {selectedRow ? (
@@ -3970,7 +3970,7 @@ function WatchlistRelevanceWorkbench({
                                 <CopyPayloadButton label='Export' payload={selectedRow.payload} showLabel />
                             </div>
                             <div className='flex min-w-0 flex-wrap gap-1.5'>
-                                {selectedRow.route ? <a href={selectedRow.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'><ExternalLink className='h-3.5 w-3.5' />Open route</a> : null}
+                                {selectedRow.route ? <a href={selectedRow.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'><ExternalLink className='h-3.5 w-3.5' />Open action</a> : null}
                                 {selectedRow.casePath ? <a href={selectedRow.casePath} className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'><ClipboardList className='h-3.5 w-3.5' />Open case</a> : null}
                             </div>
                             {selectedRow.blockers.length ? (
@@ -3996,7 +3996,7 @@ function WatchlistBlock({ title, values }: { title: string; values: string[] }) 
             <div className='mt-2 flex flex-wrap gap-1.5'>
                 {visible.length ? visible.map(value => (
                     <span key={value} className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary'>{value}</span>
-                )) : <span className='text-xs text-ui-muted dark:text-ui-muted'>Add matching values to route this result.</span>}
+                )) : <span className='text-xs text-ui-muted dark:text-ui-muted'>Add matching values before opening this result for review.</span>}
             </div>
         </div>
     )
@@ -4070,7 +4070,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Review evidence</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {readyCount} of {rows.length} review paths have source IDs, route, and capture details ready for authenticated review.
+                        {readyCount} of {rows.length} review rows have source IDs, action link, and capture details ready for authenticated review.
                     </p>
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
@@ -4078,7 +4078,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
                         {readyCount}/{rows.length} ready
                     </span>
                     <button type='button' onClick={() => setShowReviewPaths(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
-                        {showReviewPaths ? 'Hide paths' : 'Show paths'}
+                        {showReviewPaths ? 'Hide rows' : 'Show rows'}
                     </button>
                 </div>
             </div>
@@ -5475,7 +5475,7 @@ function EnrichmentGapWorkbench({
                             {selectedArtifact ? <button type='button' onClick={() => onSelectArtifact(selectedArtifact)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Open detail</button> : null}
                         </div>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
-                            {selectedRow.route ? <a href={selectedRow.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'><ExternalLink className='h-3.5 w-3.5' />Open route</a> : null}
+                            {selectedRow.route ? <a href={selectedRow.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'><ExternalLink className='h-3.5 w-3.5' />Open action</a> : null}
                             <CopyPayloadButton label='Export gap' payload={selectedRow.payload} showLabel />
                         </div>
                     </div>
@@ -5924,7 +5924,7 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
                 <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                     {plan.replayRows.slice(0, 3).map(row => (
                         <span key={row.id} className={sourceHealthChipClass(row.ready ? 'ready' : 'blocked')}>
-                            {row.caseId ? `case ${row.caseId}` : row.blockerCodes.slice(0, 2).join(', ') || 'case route pending'}
+                            {row.caseId ? `case ${row.caseId}` : row.blockerCodes.slice(0, 2).join(', ') || 'case link pending'}
                         </span>
                     ))}
                 </div>
@@ -5932,7 +5932,7 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
             {plan.blockers.length ? (
                 <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(plan.blockers.slice(0, 4))}</p>
             ) : (
-                <p className='mt-2 text-[11px] leading-5 text-ui-success dark:text-ui-success'>Case route, alert, capture, and source references are ready for authenticated review.</p>
+                <p className='mt-2 text-[11px] leading-5 text-ui-success dark:text-ui-success'>Case link, alert, capture, and source references are ready for authenticated review.</p>
             )}
         </div>
     )
@@ -6117,7 +6117,7 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                         </div>
                     </div>
                 ))}
-                {!plan.terms.length ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-[11px] leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Attach a watchlist term before routing this evidence.</p> : null}
+                {!plan.terms.length ? <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-[11px] leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Attach a watchlist term before opening this evidence for review.</p> : null}
             </div>
             {plan.relevanceRows.length ? (
                 <div data-ti-selected-watchlist-relevance='true' className='mt-2 grid gap-2'>
@@ -6220,7 +6220,7 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
                                 ))}
                             </div>
                         ) : (
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>Map this source to a customer action path.</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>Map this source to a customer action.</p>
                         )}
                         {row.requestedFields.length ? (
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>Needs {row.requestedFields.map(sourceHealthFieldLabel).slice(0, 3).join(', ')}.</p>
@@ -6246,7 +6246,7 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                 </div>
             </div>
             <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>
-                {plan.handoff.route || plan.route ? 'Console action path available.' : 'Console action path pending.'}
+                {plan.handoff.route || plan.route ? 'Console action available.' : 'Console action pending.'}
             </p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
@@ -6275,7 +6275,7 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                                 {row.captureIds.length ? <span className={sourceHealthChipClass('ready')}>{row.captureIds.length} capture{row.captureIds.length === 1 ? '' : 's'}</span> : <span className={sourceHealthChipClass('blocked')}>capture needed</span>}
                             </div>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                {row.route ? 'Source action path available.' : 'Source action path pending.'}
+                                {row.route ? 'Source action available.' : 'Source action pending.'}
                             </p>
                             {row.blockers.length ? (
                                 <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(row.blockers.slice(0, 3))}</p>
@@ -6315,7 +6315,7 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
                 </div>
             </div>
             <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>
-                {plan.handoff.route || plan.route ? 'Delivery action path available.' : 'Delivery action path pending.'}
+                {plan.handoff.route || plan.route ? 'Delivery action available.' : 'Delivery action pending.'}
             </p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 grid gap-2'>
@@ -6333,7 +6333,7 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                             {alert.captureIds.length ? `${alert.captureIds.length} capture${alert.captureIds.length === 1 ? '' : 's'}` : 'Capture needed'}
                             {alert.destinationIds.length ? ` · ${alert.destinationIds.length} destination${alert.destinationIds.length === 1 ? '' : 's'}` : ' · destination needed'}
-                            {alert.casePath ? ` · ${displayRequirementText(alert.casePath)}` : ' · case route pending'}
+                            {alert.casePath ? ` · ${displayRequirementText(alert.casePath)}` : ' · case link pending'}
                         </p>
                         {alert.blockers.length ? (
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(alert.blockers.slice(0, 3))}</p>
@@ -6353,7 +6353,7 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
             {plan.blockers.length ? (
                 <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(plan.blockers.slice(0, 4))}</p>
             ) : (
-                <p className='mt-2 text-[11px] leading-5 text-ui-success dark:text-ui-success'>Alert, capture, destination, and case route refs are ready for authenticated dry-run delivery.</p>
+                <p className='mt-2 text-[11px] leading-5 text-ui-success dark:text-ui-success'>Alert, capture, destination, and case link refs are ready for authenticated dry-run delivery.</p>
             )}
         </div>
     )
@@ -7181,10 +7181,10 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
         watchTerms: watchlist.terms.slice(0, 8),
         evidenceBasis,
         routing: selected.kind === 'tradecraft'
-            ? 'Route to detection/hunting enrichment before customer notification.'
+            ? 'Send to detection and hunting enrichment before customer notification.'
             : selected.kind === 'victim' && !isCustomerAlert
-                ? 'Route to actor-profile enrichment and watchlist expansion.'
-                : 'Route to alert review, source verification, and customer delivery only after the console saves it.',
+                ? 'Send to actor-profile enrichment and watchlist expansion.'
+                : 'Send to alert review, source verification, and customer delivery only after the console saves it.',
         blockedUntil,
     }
 }
@@ -8387,7 +8387,7 @@ function selectedDeliveryReadinessPlanFor(
             ...(context?.blockerCodes ?? []).map(deliveryBlockerLabel),
             ...(captureIds.length ? [] : ['Capture evidence is required before delivery review.']),
             ...(destinationIds.length ? [] : ['Active webhook destination is required before delivery review.']),
-            ...(alert.casePath || context?.casePath ? [] : ['Case route is required before delivery review.']),
+            ...(alert.casePath || context?.casePath ? [] : ['Case link is required before delivery review.']),
         ]).slice(0, 8)
         return {
             id: alert.id,
@@ -8448,7 +8448,7 @@ function selectedDeliveryReadinessPlanFor(
         state,
         route,
         nextAction: ready
-            ? 'Open the authenticated delivery action with this alert, capture, destination, and case route context.'
+            ? 'Open the authenticated delivery action with this alert, capture, destination, and case link context.'
             : blockers.length ? `Resolve ${displayRequirementList(blockers.slice(0, 2))} before delivery review.` : 'Review the selected alert and choose an authenticated destination.',
         summary: {
             alerts: alertRows.length,
@@ -8478,7 +8478,7 @@ function selectedDeliveryReadinessPlanFor(
 
 function deliveryBlockerLabel(value: string) {
     if (value === 'missing_capture_evidence') return 'Capture evidence is required before delivery review.'
-    if (value === 'case_route_unavailable') return 'Case route is required before delivery review.'
+    if (value === 'case_route_unavailable') return 'Case link is required before delivery review.'
     if (value === 'delivery_disabled') return 'Active destination is required before delivery review.'
     if (value === 'entitlement_denied') return 'Organization entitlement must allow delivery review.'
     return formatLabel(value)
