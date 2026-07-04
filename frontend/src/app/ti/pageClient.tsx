@@ -11,7 +11,7 @@ import mapData from '@parent/public/world.json'
 import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Search, Send, ShieldAlert, ShieldCheck, UserPlus, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
@@ -6035,56 +6035,52 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
     const openGap = actionability.enrichmentGapQueue[0]
     const sourceCount = actor.provenanceRows.length || actor.sourceCoverage.totalRows || result.sources.length
     const methodNames = techniques.map(item => item.attackId || item.name).filter(Boolean)
+    const motivation = actor.motivation.slice(0, 2).join(' · ') || 'Motivation not stated'
+    const sourceMeta = `${sourceCountLabel(sourceCount)} · latest ${formatDate(latestDate)} · ${sourceBasisLabel(actor.confidence)}`
     const workflowSummary = [
         `${sourceCountLabel(sourceCount)} linked`,
         actionability.watchlistRelevance.terms.length ? `${actionability.watchlistRelevance.terms.length} watch terms` : 'watch term needed',
         actionability.relatedAlerts.length ? `${actionability.relatedAlerts.length} alerts` : 'no routed alert',
         actionability.relatedCases.length ? `${actionability.relatedCases.length} cases` : 'case handoff ready',
     ].join(' · ')
-    const rows = [
+    const facts = [
         {
             icon: <ShieldAlert className='h-4 w-4' />,
             label: 'Actor type',
             value: actor.actorClass || 'Actor class not stated',
-            meta: actor.motivation.slice(0, 2).join(' · ') || 'Motivation not stated',
-            tone: actor.actorClass ? 'ready' : 'review',
+            meta: motivation,
         },
         {
             icon: <Globe2 className='h-4 w-4' />,
-            label: 'Operating area',
+            label: 'Targets',
             value: targets.length ? targets.join(' · ') : 'No target pattern yet',
             meta: actor.geographies.length ? `${actor.geographies.length} region${actor.geographies.length === 1 ? '' : 's'}` : `${actor.targetSectors.length} target pattern${actor.targetSectors.length === 1 ? '' : 's'}`,
-            tone: targets.length ? 'ready' : 'review',
         },
         {
             icon: <Activity className='h-4 w-4' />,
-            label: 'Observed methods',
+            label: 'Methods',
             value: methodNames.length ? methodNames.join(' · ') : 'No mapped method yet',
             meta: `${actor.techniqueCoverage.length} technique${actor.techniqueCoverage.length === 1 ? '' : 's'} mapped`,
-            tone: actor.techniqueCoverage.length ? 'ready' : 'review',
         },
         {
             icon: <Database className='h-4 w-4' />,
             label: 'Source coverage',
-            value: `${sourceCountLabel(sourceCount)} · latest ${formatDate(latestDate)}`,
-            meta: `${actor.sourceCoverage.captureRows} captured page${actor.sourceCoverage.captureRows === 1 ? '' : 's'} · ${sourceBasisLabel(actor.confidence)}`,
-            tone: sourceCount ? 'ready' : 'blocked',
-        },
-        {
-            icon: <ClipboardList className='h-4 w-4' />,
-            label: 'Next review',
-            value: openGap ? displayRequirementText(openGap.title) : 'Profile has enough source context for review',
-            meta: openGap ? sourceHealthFieldLabel(openGap.requestedFields[0] ?? 'source') : 'No open source question',
-            tone: openGap ? 'review' : 'ready',
+            value: sourceMeta,
+            meta: `${actor.sourceCoverage.captureRows} captured page${actor.sourceCoverage.captureRows === 1 ? '' : 's'}`,
         },
     ] as const
+    const review = {
+        icon: <ClipboardList className='h-4 w-4' />,
+        value: openGap ? displayRequirementText(openGap.title) : 'Profile has enough source context for review',
+        meta: openGap ? sourceHealthFieldLabel(openGap.requestedFields[0] ?? 'source') : 'No open source question',
+    }
 
     return (
         <section data-ti-actor-glance='true' data-ti-actor-highlights='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Actor at a glance</p>
-                    <h2 className='mt-1 wrap-break-word text-base font-semibold text-ui-text dark:text-ui-text'>Identity, geography, methods, and review path</h2>
+                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Actor summary</p>
+                    <h2 className='mt-1 wrap-break-word text-base font-semibold text-ui-text dark:text-ui-text'>{actor.actorClass || 'Actor profile'}</h2>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
                         Aliases: {aliases.length ? aliases.join(' · ') : 'No aliases in this actor profile'}{result.aliases.length > aliases.length ? ` · +${result.aliases.length - aliases.length} more` : ''}
                     </p>
@@ -6093,28 +6089,27 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
                     {actor.sourceCoverage.stale ? 'refresh recommended' : 'current source set'}
                 </span>
             </div>
-            <div className='mt-3 divide-y divide-ui-border rounded-lg border border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-raised'>
-                {rows.map(row => (
-                    <div key={row.label} className='grid min-w-0 gap-2 px-3 py-2 text-sm sm:grid-cols-[9rem_minmax(0,1fr)_minmax(0,0.8fr)_5rem] sm:items-center'>
-                        <p className='inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>
-                            <span className='shrink-0 text-ui-primary dark:text-ui-primary'>{row.icon}</span>
-                            <span className='truncate'>{row.label}</span>
-                        </p>
-                        <p className='wrap-break-word font-semibold text-ui-text dark:text-ui-text'>{row.value}</p>
-                        <p className='wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{row.meta}</p>
-                        <span className={sourceHealthChipClass(row.tone)}>{row.tone === 'blocked' ? 'needed' : row.tone}</span>
-                    </div>
+            <div data-ti-actor-summary-grid='true' className='mt-3 grid min-w-0 gap-2 sm:grid-cols-2'>
+                {facts.map(fact => (
+                    <ActorSummaryFact key={fact.label} icon={fact.icon} label={fact.label} value={fact.value} meta={fact.meta} />
                 ))}
             </div>
-            <div className='mt-3 flex min-w-0 flex-col gap-2 border-t border-ui-border pt-3 dark:border-ui-border'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Workflow state</p>
-                    <p className='mt-1 wrap-break-word text-sm leading-6 text-ui-text dark:text-ui-text'>{workflowSummary}</p>
+            <div className='mt-3 grid min-w-0 gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
+                <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                    <div className='min-w-0'>
+                        <p className='inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>
+                            <span className='shrink-0 text-ui-primary dark:text-ui-primary'>{review.icon}</span>
+                            Next review
+                        </p>
+                        <p className='mt-1 wrap-break-word text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{review.value}</p>
+                    </div>
+                    <span className={sourceHealthChipClass(openGap ? 'review' : 'ready')}>{openGap ? 'review' : 'ready'}</span>
                 </div>
+                <p className='wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{review.meta} · {workflowSummary}</p>
             </div>
             {techniques.length ? (
-                <div className='mt-3 flex min-w-0 flex-wrap items-center gap-2'>
-                    <span className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Mapped ATT&CK techniques</span>
+                <div className='mt-3 flex min-w-0 flex-wrap items-center gap-1.5'>
+                    <span className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>ATT&CK</span>
                     {techniques.map(item => item.attackId ? (
                         <TechniqueBadge key={`${item.attackId}:${item.name}`} attackId={item.attackId} name={item.name} tactic={item.tactic} detail={item.detail} />
                     ) : (
@@ -6128,6 +6123,19 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
                 </p>
             ) : null}
         </section>
+    )
+}
+
+function ActorSummaryFact({ icon, label, value, meta }: { icon: ReactNode; label: string; value: string; meta: string }) {
+    return (
+        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 dark:border-[#273244] dark:bg-[#131c29]'>
+            <p className='inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>
+                <span className='shrink-0 text-[#3056d3] dark:text-[#9ab3ff]'>{icon}</span>
+                <span className='truncate'>{label}</span>
+            </p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold leading-5 text-[#171a21] dark:text-[#eef4ff]'>{value}</p>
+            <p className='mt-1 wrap-break-word text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>{meta}</p>
+        </div>
     )
 }
 
@@ -6164,18 +6172,18 @@ function TopSelectedEvidencePanel({ selected, drilldown, caseReady }: { selected
                 </div>
                 <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
             </div>
-            <div data-ti-selected-evidence-command-strip='true' className='mt-3 grid gap-2 rounded-lg border border-[#e0e5ed] bg-white p-2 text-xs dark:border-[#273244] dark:bg-[#0f1621]'>
+            <div data-ti-selected-evidence-command-strip='true' className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 text-xs dark:border-ui-border dark:bg-ui-panel'>
                 <div className='grid gap-2 sm:grid-cols-[minmax(0,1.2fr)_7rem_7rem_minmax(0,0.9fr)]'>
                     <CompactEvidenceFact label='Source' value={selected.source} />
                     <CompactEvidenceFact label='First seen' value={selected.timestamp} />
                     <CompactEvidenceFact label='Basis' value={sourceBasisLabel(selected.confidence)} />
                     <CompactEvidenceFact label='Case path' value={casePath} />
                 </div>
-                <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-[#eef1f5] pt-2 dark:border-[#273244]'>
-                    <p className='wrap-break-word text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>
+                <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-ui-border pt-2 dark:border-ui-border'>
+                    <p className='wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
                         {sourceRows ? `${sourceRows} source row${sourceRows === 1 ? '' : 's'} linked · ${captureRows} capture-ready${sourceFamilies.length ? ` · ${sourceFamilies.join(', ')}` : ''}` : 'Attach source rows before alert or case handoff.'}
                     </p>
-                    <span className='shrink-0 text-[11px] font-semibold text-[#3056d3] dark:text-[#9ab3ff]'>Actions below</span>
+                    <span className='shrink-0 text-[11px] font-semibold text-ui-primary dark:text-ui-primary'>Actions below</span>
                 </div>
             </div>
         </section>
@@ -6185,8 +6193,8 @@ function TopSelectedEvidencePanel({ selected, drilldown, caseReady }: { selected
 function CompactEvidenceFact({ label, value }: { label: string; value: string }) {
     return (
         <div className='min-w-0'>
-            <p className='text-[10px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{label}</p>
-            <p className='mt-0.5 wrap-break-word text-xs font-semibold leading-5 text-[#171a21] dark:text-[#eef4ff]'>{value || 'Not stated'}</p>
+            <p className='text-[10px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>{label}</p>
+            <p className='mt-0.5 wrap-break-word text-xs font-semibold leading-5 text-ui-text dark:text-ui-text'>{value || 'Not stated'}</p>
         </div>
     )
 }
