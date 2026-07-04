@@ -165,7 +165,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
             ? 'collecting'
             : 'source'
     const watchTermCount = snapshot.watchlist.length
-    const webhookState = localDeliveries.some(delivery => delivery.alertId === 'webhook_test' && (delivery.status === 'dry_run' || delivery.status === 'delivered')) ? 'Tested' : 'Not tested'
+    const webhookState = deliverySummaryLabel(localDeliveries)
     const apiProblemCount = [dataHealth.snapshot, dataHealth.operations, dataHealth.alerts, dataHealth.deliveries]
         .filter(item => item.state !== 'live').length + (dataHealth.usingFallbackAlerts ? 1 : 0)
     const workflowTelemetry = {
@@ -2246,6 +2246,20 @@ function deliveryActionMessage(rows: DeliveryItem[], attemptedCount: number | un
     const retry = row.nextRetryAt ? ` Retry ${relativeTimeLabel(row.nextRetryAt)}.` : ''
     const error = row.error ? ` ${row.error}` : ''
     return `${fallback} ${stateLabel(row.status)} for ${destination}.${retry}${error}`
+}
+
+function deliverySummaryLabel(rows: DeliveryItem[]) {
+    if (!rows.length) return 'Not tested'
+    if (rows.some(row => row.status === 'delivered')) {
+        return `${rows.filter(row => row.status === 'delivered').length} delivered`
+    }
+    if (rows.some(row => row.status === 'dry_run')) {
+        return `${rows.filter(row => row.status === 'dry_run').length} tested`
+    }
+    if (rows.some(row => row.status === 'failed')) {
+        return `${rows.filter(row => row.status === 'failed').length} failed`
+    }
+    return `${rows.length} attempted`
 }
 
 function retryStateLabel(delivery: DeliveryItem) {
