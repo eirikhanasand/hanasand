@@ -376,6 +376,17 @@ function memberSearchText(member: OrganizationMember) {
     ].filter(value => value !== undefined && value !== null).join(' ').toLowerCase()
 }
 
+function inviteSearchText(invite: OrganizationInvite) {
+    return [
+        invite.id,
+        invite.email,
+        invite.role,
+        invite.status,
+        invite.invitedBy,
+        invite.expiresAt,
+    ].filter(value => value !== undefined && value !== null).join(' ').toLowerCase()
+}
+
 function normalizeOrganizationName(value: string) {
     return value.trim().replace(/\s+/g, ' ')
 }
@@ -1569,11 +1580,21 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
 }
 
 function InvitePanel({ emails, setEmails, role, setRole, invites, members, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onInvite, onInviteAction, onCopyInvite }: { emails: string, setEmails: (value: string) => void, role: OrganizationRole, setRole: (value: OrganizationRole) => void, invites: OrganizationInvite[], members: OrganizationMember[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onInvite: () => void, onInviteAction: (invite: OrganizationInvite, action: 'revoke' | 'resend') => void, onCopyInvite: (invite: OrganizationInvite) => void }) {
+    const [inviteQuery, setInviteQuery] = useState('')
+    const [inviteStatusFilter, setInviteStatusFilter] = useState('all')
     const parsedEmails = parseInviteEmails(emails)
     const invalidEmails = invalidInviteEmails(emails)
     const inviteConflicts = inviteEmailConflicts(parsedEmails, invites, members)
     const canSendInvite = canManage && parsedEmails.length > 0 && invalidEmails.length === 0 && inviteConflicts.length === 0 && !busy
     const busyLabel = inviteBusyLabel(busy)
+    const normalizedInviteQuery = inviteQuery.trim().toLowerCase()
+    const visibleInvites = invites.filter(invite => {
+        const statusMatches = inviteStatusFilter === 'all' || invite.status === inviteStatusFilter
+        if (!statusMatches) return false
+        if (!normalizedInviteQuery) return true
+        return inviteSearchText(invite).includes(normalizedInviteQuery)
+    })
+    const inviteFiltersActive = Boolean(inviteQuery.trim()) || inviteStatusFilter !== 'all'
     return (
         <section id='invites' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <SectionTitle icon={<UserPlus className='h-4 w-4' />} title='Invite queue' detail={canManage ? 'Send, resend, revoke, copy.' : 'Owner or admin required.'} />
@@ -1595,44 +1616,82 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
             <div className='mt-5 grid gap-2'>
                 {invites.length === 0 && <EmptyLine text='Send invites from the form above. Pending access requests appear here with copy, resend, and revoke actions.' />}
                 {invites.length > 0 && (
-                    invites.map(invite => {
-                        const canCopy = Boolean(inviteLink(invite)) && inviteActionAllowed(invite, 'copy') && !busy
-                        const canResend = canManage && inviteActionAllowed(invite, 'resend') && !busy
-                        const canRevoke = canManage && inviteActionAllowed(invite, 'revoke') && !busy
-                        const selected = selectedSubject.type === 'invite' && selectedSubject.id === invite.id
-                        return (
-                            <div
-                                role='button'
-                                tabIndex={0}
-                                aria-pressed={selected}
-                                key={invite.id}
-                                className={`grid min-w-0 gap-3 rounded-lg border border-ui-border p-3 text-left transition dark:border-ui-border ${selected ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
-                                onClick={() => onSelectSubject({ type: 'invite', id: invite.id })}
-                                onKeyDown={event => {
-                                    if (event.key === 'Enter' || event.key === ' ') {
-                                        event.preventDefault()
-                                        onSelectSubject({ type: 'invite', id: invite.id })
-                                    }
-                                }}
-                            >
-                                <span className='grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
-                                    <span className='min-w-0'>
-                                        <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{invite.email}</span>
-                                        <span className='mt-1 flex flex-wrap gap-2'>
-                                            <RoleBadge role={invite.role} />
-                                            <StatusPill status={invite.status} />
-                                        </span>
-                                        <RowStatus message={rowMessages[`invite-${invite.id}`]} />
-                                    </span>
-                                    <span className='flex gap-1 sm:justify-end' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
-                                        <button type='button' aria-label='Copy invite link' className={iconButtonClass} disabled={!canCopy} onClick={event => { event.stopPropagation(); onCopyInvite(invite) }}><Copy className='h-4 w-4' /></button>
-                                        <button type='button' aria-label='Resend invite' className={iconButtonClass} disabled={!canResend} onClick={event => { event.stopPropagation(); onInviteAction(invite, 'resend') }}><RefreshCw className='h-4 w-4' /></button>
-                                        <ConfirmActionButton ariaLabel='Revoke invite' disabled={!canRevoke} onConfirm={() => onInviteAction(invite, 'revoke')} icon={<Trash2 className='h-4 w-4' />} />
-                                    </span>
+                    <>
+                        <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[minmax(0,1fr)_9rem_auto]' data-org-invite-filter-strip='true'>
+                            <label className='grid min-w-0 gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                                Find invite
+                                <input
+                                    value={inviteQuery}
+                                    disabled={Boolean(busy)}
+                                    onChange={event => setInviteQuery(event.target.value)}
+                                    className={inputClass}
+                                    placeholder='Email, role, status'
+                                />
+                            </label>
+                            <SelectField
+                                label='Status'
+                                value={inviteStatusFilter}
+                                options={['all', 'pending', 'accepted', 'revoked', 'expired']}
+                                disabled={Boolean(busy)}
+                                onChange={setInviteStatusFilter}
+                            />
+                            <div className='grid content-end gap-1'>
+                                <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-2 text-center text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted' data-org-invite-filter-count='true'>
+                                    {visibleInvites.length}/{invites.length} shown
                                 </span>
+                                <button
+                                    type='button'
+                                    className={secondaryButtonClass}
+                                    disabled={!inviteFiltersActive || Boolean(busy)}
+                                    onClick={() => {
+                                        setInviteQuery('')
+                                        setInviteStatusFilter('all')
+                                    }}
+                                >
+                                    Clear
+                                </button>
                             </div>
-                        )
-                    })
+                        </div>
+                        {visibleInvites.length === 0 && <EmptyLine text='No invites match this view.' />}
+                        {visibleInvites.map(invite => {
+                            const canCopy = Boolean(inviteLink(invite)) && inviteActionAllowed(invite, 'copy') && !busy
+                            const canResend = canManage && inviteActionAllowed(invite, 'resend') && !busy
+                            const canRevoke = canManage && inviteActionAllowed(invite, 'revoke') && !busy
+                            const selected = selectedSubject.type === 'invite' && selectedSubject.id === invite.id
+                            return (
+                                <div
+                                    role='button'
+                                    tabIndex={0}
+                                    aria-pressed={selected}
+                                    key={invite.id}
+                                    className={`grid min-w-0 gap-3 rounded-lg border border-ui-border p-3 text-left transition dark:border-ui-border ${selected ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
+                                    onClick={() => onSelectSubject({ type: 'invite', id: invite.id })}
+                                    onKeyDown={event => {
+                                        if (event.key === 'Enter' || event.key === ' ') {
+                                            event.preventDefault()
+                                            onSelectSubject({ type: 'invite', id: invite.id })
+                                        }
+                                    }}
+                                >
+                                    <span className='grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
+                                        <span className='min-w-0'>
+                                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{invite.email}</span>
+                                            <span className='mt-1 flex flex-wrap gap-2'>
+                                                <RoleBadge role={invite.role} />
+                                                <StatusPill status={invite.status} />
+                                            </span>
+                                            <RowStatus message={rowMessages[`invite-${invite.id}`]} />
+                                        </span>
+                                        <span className='flex gap-1 sm:justify-end' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
+                                            <button type='button' aria-label='Copy invite link' className={iconButtonClass} disabled={!canCopy} onClick={event => { event.stopPropagation(); onCopyInvite(invite) }}><Copy className='h-4 w-4' /></button>
+                                            <button type='button' aria-label='Resend invite' className={iconButtonClass} disabled={!canResend} onClick={event => { event.stopPropagation(); onInviteAction(invite, 'resend') }}><RefreshCw className='h-4 w-4' /></button>
+                                            <ConfirmActionButton ariaLabel='Revoke invite' disabled={!canRevoke} onConfirm={() => onInviteAction(invite, 'revoke')} icon={<Trash2 className='h-4 w-4' />} />
+                                        </span>
+                                    </span>
+                                </div>
+                            )
+                        })}
+                    </>
                 )}
             </div>
         </section>

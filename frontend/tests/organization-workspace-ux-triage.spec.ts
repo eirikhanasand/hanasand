@@ -109,6 +109,14 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('requestedInviteId')
     expect(page).toContain('requestedMemberId')
     expect(page).toContain('data-org-invite-conflicts=\'true\'')
+    expect(page).toContain('data-org-invite-filter-strip')
+    expect(page).toContain('data-org-invite-filter-count')
+    expect(page).toContain('const [inviteQuery, setInviteQuery] = useState(\'\')')
+    expect(page).toContain('const [inviteStatusFilter, setInviteStatusFilter] = useState(\'all\')')
+    expect(page).toContain('const visibleInvites = invites.filter')
+    expect(page).toContain('inviteSearchText(invite).includes(normalizedInviteQuery)')
+    expect(page).toContain('function inviteSearchText')
+    expect(page).toContain('No invites match this view.')
     expect(page).toContain('inviteEmailConflicts(parsedEmails, invites, members)')
     expect(page).toContain('inviteEmailConflicts(emails, bundle.invites, bundle.members)')
     expect(page).toContain('member.userId.toLowerCase()')
@@ -212,6 +220,19 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.getByLabel('Find workspace').fill('')
     await expect(page.locator('[data-org-workspace-count="true"]')).toContainText('2/2')
     await expect(page.getByRole('button', { name: /Acme Security owner/ })).toBeVisible()
+    await expect(page.locator('[data-org-invite-filter-strip="true"]')).toBeVisible()
+    await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('2/2 shown')
+    await page.getByLabel('Find invite').fill('revoked')
+    await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('1/2 shown')
+    await expect(page.locator('#invites')).toContainText('former@acme.test')
+    await expect(page.locator('#invites')).not.toContainText('admin@acme.test')
+    await page.locator('[data-org-invite-filter-strip="true"]').getByLabel('Status').selectOption('pending')
+    await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('0/2 shown')
+    await expect(page.locator('#invites')).toContainText('No invites match this view.')
+    await page.locator('[data-org-invite-filter-strip="true"]').getByRole('button', { name: 'Clear' }).click()
+    await page.locator('[data-org-invite-filter-strip="true"]').getByLabel('Status').selectOption('pending')
+    await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('1/2 shown')
+    await expect(page.locator('#invites')).toContainText('admin@acme.test')
     await page.locator('[data-org-members-disclosure] summary').click()
     await expect(page.locator('[data-org-member-filter-strip="true"]')).toBeVisible()
     await expect(page.locator('[data-org-member-filter-count="true"]')).toContainText('3/3 shown')
@@ -291,6 +312,7 @@ const fixtureMembers = [
 
 const fixtureInvites = [
     { id: 'invite_acme_admin', email: 'admin@acme.test', role: 'admin', status: 'pending', createdAt: '2026-07-03T10:00:00.000Z', expiresAt: '2026-07-10T10:00:00.000Z', acceptancePath: '/organizations/invites/invite_acme_admin' },
+    { id: 'invite_acme_former', email: 'former@acme.test', role: 'member', status: 'revoked', createdAt: '2026-07-02T10:00:00.000Z', expiresAt: '2026-07-09T10:00:00.000Z', acceptancePath: '/organizations/invites/invite_acme_former' },
 ]
 
 const fixtureWatchlists = [
