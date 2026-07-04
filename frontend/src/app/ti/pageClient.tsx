@@ -187,6 +187,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const [queueConfidenceFilter, setQueueConfidenceFilter] = useState<'all' | 'high' | 'medium'>('all')
     const [queueSort, setQueueSort] = useState<'priority' | 'confidence' | 'freshness'>('priority')
     const [showMoreAnalysis, setShowMoreAnalysis] = useState(false)
+    const [secondaryView, setSecondaryView] = useState<SecondaryAnalysisView>('profile')
     const [showFullQueue, setShowFullQueue] = useState(false)
     const [showGeoCoverage, setShowGeoCoverage] = useState(false)
     const largeViewport = useMediaQuery('(min-width: 1024px)')
@@ -557,55 +558,64 @@ function Results({ result }: { result: TiSearchResponse }) {
 
                                 {showMoreAnalysis ? (
                                     <>
+                                        <SecondaryAnalysisTabs active={secondaryView} onSelect={setSecondaryView} />
                                         <div id='ti-secondary-analysis' className='grid gap-3'>
                                             <TiCommandBar links={commandLinks} />
                                             <SectionOverviewRail items={sectionOverview} />
-                                            <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
+                                            {secondaryView === 'profile' ? <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} /> : null}
                                         </div>
-                                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
-                                        <ActorIntelligenceDossier
-                                            actor={actorIntel}
-                                            actionability={actionability}
-                                            result={result}
-                                            artifacts={actorArtifacts}
-                                            selectedArtifactId={selectedArtifact?.id}
-                                            onSelectArtifact={setSelectedArtifactId}
-                                        />
-                                        {actorArtifacts.length ? (
-                                            <ArtifactNavigator
-                                                artifacts={actorArtifacts}
-                                                selectedArtifactId={selectedArtifact?.id}
-                                                onSelectArtifact={setSelectedArtifactId}
+                                        {secondaryView === 'profile' ? (
+                                            <>
+                                                <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
+                                                <ActorIntelligenceDossier
+                                                    actor={actorIntel}
+                                                    actionability={actionability}
+                                                    result={result}
+                                                    artifacts={actorArtifacts}
+                                                    selectedArtifactId={selectedArtifact?.id}
+                                                    onSelectArtifact={setSelectedArtifactId}
+                                                />
+                                            </>
+                                        ) : null}
+                                        {secondaryView === 'artifacts' ? (
+                                            <>
+                                                {actorArtifacts.length ? (
+                                                    <ArtifactNavigator
+                                                        artifacts={actorArtifacts}
+                                                        selectedArtifactId={selectedArtifact?.id}
+                                                        onSelectArtifact={setSelectedArtifactId}
+                                                    />
+                                                ) : null}
+                                                {selectedArtifact && selectedArtifactHandoffs ? (
+                                                    <ActorArtifactWorkbench artifact={selectedArtifact} handoffs={selectedArtifactHandoffs} />
+                                                ) : null}
+                                                <ActorOperationsMatrix
+                                                    result={result}
+                                                    actor={actorIntel}
+                                                    victimObservations={victimObservations}
+                                                    selectedArtifactId={selectedArtifact?.id}
+                                                    onSelectArtifact={setSelectedArtifactId}
+                                                    onSelectArtifactBy={selectArtifactBy}
+                                                    onEscalate={() => applyDecision('escalated')}
+                                                    onReview={() => applyDecision('reviewing')}
+                                                />
+                                            </>
+                                        ) : null}
+                                        {secondaryView === 'sources' ? (
+                                            <SourceCoverageWorkbench
+                                                actor={actorIntel}
+                                                actionability={actionability}
+                                                sources={sources}
+                                                sourcePosture={collectionSources}
+                                                workItems={workItems}
+                                                selectedId={selected?.id}
+                                                sourceOptions={queueSourceOptions}
+                                                onSelectEvidence={setSelectedId}
+                                                onFilterSource={setQueueSourceFilter}
+                                                onEscalate={() => applyDecision('escalated')}
+                                                onReview={() => applyDecision('reviewing')}
                                             />
                                         ) : null}
-                                        {selectedArtifact && selectedArtifactHandoffs ? (
-                                            <ActorArtifactWorkbench artifact={selectedArtifact} handoffs={selectedArtifactHandoffs} />
-                                        ) : null}
-
-                                        <ActorOperationsMatrix
-                                            result={result}
-                                            actor={actorIntel}
-                                            victimObservations={victimObservations}
-                                            selectedArtifactId={selectedArtifact?.id}
-                                            onSelectArtifact={setSelectedArtifactId}
-                                            onSelectArtifactBy={selectArtifactBy}
-                                            onEscalate={() => applyDecision('escalated')}
-                                            onReview={() => applyDecision('reviewing')}
-                                        />
-
-                                        <SourceCoverageWorkbench
-                                            actor={actorIntel}
-                                            actionability={actionability}
-                                            sources={sources}
-                                            sourcePosture={collectionSources}
-                                            workItems={workItems}
-                                            selectedId={selected?.id}
-                                            sourceOptions={queueSourceOptions}
-                                            onSelectEvidence={setSelectedId}
-                                            onFilterSource={setQueueSourceFilter}
-                                            onEscalate={() => applyDecision('escalated')}
-                                            onReview={() => applyDecision('reviewing')}
-                                        />
                                     </>
                                 ) : null}
 
@@ -619,24 +629,26 @@ function Results({ result }: { result: TiSearchResponse }) {
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <div id='ti-actions' data-ti-actions='true'>
                             {showMoreAnalysis ? (
-                                <ActionPanel
-                                    note={selectedNote}
-                                    decision={selectedDecision}
-                                    relevance={selectedRelevance}
-                                    reviewHandoff={reviewHandoff}
-                                    caseDraft={selectedCaseDraft}
-                                    caseActionTrail={selectedCaseActionTrail}
-                                    caseOwnership={selectedCaseOwnership}
-                                    caseCreateRequest={selectedCaseCreateRequest}
-                                    watchlistPlan={selectedWatchlistPlan}
-                                    alertPlan={selectedAlertPlan}
-                                    deliveryPlan={selectedDeliveryPlan}
-                                    enrichmentTriage={selectedEnrichmentTriage}
-                                    onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
-                                    onDecision={applyDecision}
-                                    onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
-                                    onStage={stageSelectedHandoff}
-                                />
+                                secondaryView === 'actions' ? (
+                                    <ActionPanel
+                                        note={selectedNote}
+                                        decision={selectedDecision}
+                                        relevance={selectedRelevance}
+                                        reviewHandoff={reviewHandoff}
+                                        caseDraft={selectedCaseDraft}
+                                        caseActionTrail={selectedCaseActionTrail}
+                                        caseOwnership={selectedCaseOwnership}
+                                        caseCreateRequest={selectedCaseCreateRequest}
+                                        watchlistPlan={selectedWatchlistPlan}
+                                        alertPlan={selectedAlertPlan}
+                                        deliveryPlan={selectedDeliveryPlan}
+                                        enrichmentTriage={selectedEnrichmentTriage}
+                                        onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
+                                        onDecision={applyDecision}
+                                        onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
+                                        onStage={stageSelectedHandoff}
+                                    />
+                                ) : null
                             ) : null}
                         </div>
                         <StagedHandoffQueuePanel
@@ -646,11 +658,15 @@ function Results({ result }: { result: TiSearchResponse }) {
 
                         {showMoreAnalysis ? (
                             <>
-                                <ActionabilityPanel actionability={actionability} query={result.query} />
-                                <EnrichmentTasksPanel tasks={enrichmentTasks} intake={actionability.sourceEnrichmentIntake} />
-                                <SourceHealthPanel queue={actionability.sourceHealthQueue} intake={actionability.sourceEnrichmentIntake} coverage={actionability.actorEnrichmentCoverage} consumerReadiness={actionability.actorEnrichmentConsumerReadiness} payload={actionability.exportPayloads.enrichment} />
+                                {secondaryView === 'sources' ? (
+                                    <>
+                                        <EnrichmentTasksPanel tasks={enrichmentTasks} intake={actionability.sourceEnrichmentIntake} />
+                                        <SourceHealthPanel queue={actionability.sourceHealthQueue} intake={actionability.sourceEnrichmentIntake} coverage={actionability.actorEnrichmentCoverage} consumerReadiness={actionability.actorEnrichmentConsumerReadiness} payload={actionability.exportPayloads.enrichment} />
+                                    </>
+                                ) : null}
+                                {secondaryView === 'actions' ? <ActionabilityPanel actionability={actionability} query={result.query} /> : null}
 
-                                <Panel title='Activity timeline' description='Source timestamps plus review decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
+                                {secondaryView === 'profile' ? <Panel title='Activity timeline' description='Source timestamps plus review decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
                                     <div className='grid gap-3'>
                                         {[...timelineFor(result, selected), ...sessionEvents, ...relevanceEvents].slice(0, 8).map(event => (
                                             <div key={event.id} className='border-l-2 border-ui-border pl-3'>
@@ -660,23 +676,27 @@ function Results({ result }: { result: TiSearchResponse }) {
                                             </div>
                                         ))}
                                     </div>
-                                </Panel>
+                                </Panel> : null}
 
-                                <EnrichmentGapWorkbench
-                                    tasks={enrichmentTasks}
-                                    result={result}
-                                    actor={actorIntel}
-                                    actionability={actionability}
-                                    workItems={workItems}
-                                    artifacts={actorArtifacts}
-                                    selectedId={selected?.id}
-                                    selectedArtifactId={selectedArtifact?.id}
-                                    onSelectEvidence={setSelectedId}
-                                    onSelectArtifact={setSelectedArtifactId}
-                                    onReview={() => applyDecision('reviewing')}
-                                    onEscalate={() => applyDecision('escalated')}
-                                />
-                                {result.analystLoop?.sourceActivationWorkflow.required ? <SourceActivationPanel activation={result.analystLoop.sourceActivationWorkflow} /> : null}
+                                {secondaryView === 'sources' ? (
+                                    <>
+                                        <EnrichmentGapWorkbench
+                                            tasks={enrichmentTasks}
+                                            result={result}
+                                            actor={actorIntel}
+                                            actionability={actionability}
+                                            workItems={workItems}
+                                            artifacts={actorArtifacts}
+                                            selectedId={selected?.id}
+                                            selectedArtifactId={selectedArtifact?.id}
+                                            onSelectEvidence={setSelectedId}
+                                            onSelectArtifact={setSelectedArtifactId}
+                                            onReview={() => applyDecision('reviewing')}
+                                            onEscalate={() => applyDecision('escalated')}
+                                        />
+                                        {result.analystLoop?.sourceActivationWorkflow.required ? <SourceActivationPanel activation={result.analystLoop.sourceActivationWorkflow} /> : null}
+                                    </>
+                                ) : null}
                             </>
                         ) : null}
                     </aside>
@@ -685,7 +705,7 @@ function Results({ result }: { result: TiSearchResponse }) {
 
             {showMoreAnalysis ? (
                 <section className='grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
-                    <WatchlistRelevanceWorkbench
+                    {secondaryView === 'watchlist' ? <WatchlistRelevanceWorkbench
                         watchlist={watchlist}
                         actionability={actionability}
                         query={result.query}
@@ -696,9 +716,9 @@ function Results({ result }: { result: TiSearchResponse }) {
                         onSelectEvidence={setSelectedId}
                         onSelectArtifact={setSelectedArtifactId}
                         onMarkRelevant={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
-                    />
+                    /> : null}
 
-                    <Panel title='Sources' description='Sources checked for this result, including actor profiles, recent attacks, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
+                    {secondaryView === 'sources' ? <Panel title='Sources' description='Sources checked for this result, including actor profiles, recent attacks, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
                         <div id='ti-sources' className='sr-only'>Source coverage</div>
                         {datasets.map(item => (
                             <EvidenceBox key={`${item.type}-${item.name}`} href={item.url}>
@@ -709,7 +729,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 <p className='text-sm leading-6 text-ui-muted'>{item.coverage}</p>
                             </EvidenceBox>
                         ))}
-                    </Panel>
+                    </Panel> : null}
                 </section>
             ) : null}
 
@@ -949,6 +969,41 @@ function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchli
                 ))}
             </div>
         </section>
+    )
+}
+
+type SecondaryAnalysisView = 'profile' | 'artifacts' | 'sources' | 'watchlist' | 'actions'
+
+const secondaryAnalysisViews: { id: SecondaryAnalysisView; label: string; detail: string }[] = [
+    { id: 'profile', label: 'Profile', detail: 'Actor timeline and dossier' },
+    { id: 'artifacts', label: 'Artifacts', detail: 'IOCs and operations' },
+    { id: 'sources', label: 'Sources', detail: 'Coverage and gaps' },
+    { id: 'watchlist', label: 'Watchlist', detail: 'Customer term fit' },
+    { id: 'actions', label: 'Actions', detail: 'Case and delivery staging' },
+]
+
+function SecondaryAnalysisTabs({ active, onSelect }: { active: SecondaryAnalysisView; onSelect: (view: SecondaryAnalysisView) => void }) {
+    return (
+        <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-canvas' data-ti-secondary-analysis-tabs='true'>
+            <div className='grid grid-cols-2 gap-1.5 sm:grid-cols-5' role='tablist' aria-label='Actor detail work areas'>
+                {secondaryAnalysisViews.map(view => {
+                    const selected = view.id === active
+                    return (
+                        <button
+                            key={view.id}
+                            type='button'
+                            role='tab'
+                            aria-selected={selected}
+                            onClick={() => onSelect(view.id)}
+                            className={`grid min-h-12 min-w-0 content-center rounded-md border px-2 py-1.5 text-left text-xs transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${selected ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-text dark:border-ui-primary/40 dark:bg-ui-primary/15 dark:text-ui-text' : 'border-ui-border bg-ui-panel text-ui-muted hover:bg-ui-raised dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted dark:hover:bg-ui-raised'}`}
+                        >
+                            <span className='wrap-break-word font-semibold'>{view.label}</span>
+                            <span className='wrap-break-word text-[11px]'>{view.detail}</span>
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
     )
 }
 
