@@ -61,6 +61,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('inviteEmailConflicts(parsedEmails, invites, members)')
     expect(page).toContain('inviteEmailConflicts(emails, bundle.invites, bundle.members)')
     expect(page).toContain('member.userId.toLowerCase()')
+    expect(page).toContain('member.email && member.email !== member.userId ? member.email : member.userId')
+    expect(page).toContain('member.name || member.email || member.userId')
     expect(page).toContain('activeMemberEmailIds')
     expect(page).toContain('Already in this workspace:')
     expect(page).toContain('input.focus === \'invites\'')

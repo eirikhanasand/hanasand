@@ -1552,8 +1552,8 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                         }}
                                     >
                                         <td className='max-w-44 border-b border-ui-border py-2 pr-3 dark:border-ui-border'>
-                                            <p className='truncate font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(member.name || member.userId)}</p>
-                                            <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(member.userId)}</p>
+                                            <p className='truncate font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(member.name || member.email || member.userId)}</p>
+                                            <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(member.email && member.email !== member.userId ? member.email : member.userId)}</p>
                                         </td>
                                         <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                             {canMutateMember ? (
@@ -2610,12 +2610,13 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         id: `member-${member.userId}`,
         at: member.joinedAt || new Date(0).toISOString(),
         title: 'Member role',
-        detail: `${member.name || member.userId} · ${member.role} · ${member.status}`,
+        detail: `${member.name || member.email || member.userId} · ${member.role} · ${member.status}`,
         ok: member.status !== 'removed' && member.status !== 'revoked',
         subjectType: 'member',
         subjectId: member.userId,
         metadata: compactMetadata([
             ['User', member.userId],
+            ['Email', member.email],
             ['Invited by', member.invitedBy || undefined],
         ]),
     }))
@@ -2741,7 +2742,7 @@ function selectedSubjectLabel(subject: ActivitySubject, organization: Organizati
     }
     if (subject.type === 'member') {
         const member = bundle.members.find(item => item.userId === subject.id)
-        return member?.name || member?.userId || subject.id
+        return member?.name || member?.email || member?.userId || subject.id
     }
     if (subject.type === 'alert') {
         const alert = bundle.alerts.find(item => item.id === subject.id)
@@ -2782,6 +2783,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
         const member = bundle.members.find(item => item.userId === subject.id)
         return compactMetadata([
             ['User', member?.userId],
+            ['Email', member?.email],
             ['Role', member?.role],
             ['Status', member?.status],
             ['Joined', member?.joinedAt ? formatDate(member.joinedAt) : undefined],
@@ -2932,8 +2934,12 @@ function inviteEmailConflicts(emails: string[], invites: OrganizationInvite[], m
     const activeMemberEmailIds = new Set(members
         .filter(member => !['removed', 'revoked', 'inactive'].includes(member.status.toLowerCase()))
         .flatMap(member => [member.email?.toLowerCase(), member.userId.toLowerCase()])
-        .filter((value): value is string => Boolean(value) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)))
+        .filter(isEmailLike))
     return emails.filter(email => activeInviteEmails.has(email.toLowerCase()) || activeMemberEmailIds.has(email.toLowerCase()))
+}
+
+function isEmailLike(value: string | undefined): value is string {
+    return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
 
 function inviteActionAllowed(invite: OrganizationInvite, action: 'copy' | 'resend' | 'revoke') {
