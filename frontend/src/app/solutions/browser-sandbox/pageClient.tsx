@@ -28,6 +28,18 @@ type Capture = {
     error?: string
     evidence?: SandboxEvidence
     toolAnalysis?: SandboxToolAnalysis
+    networkSummary?: SandboxNetworkSummary
+}
+type SandboxNetworkSummary = {
+    requestCount?: number
+    responseCount?: number
+    failedCount?: number
+    uniqueDomainCount?: number
+    domains?: string[]
+    statusCounts?: Record<string, number>
+    redirectChain?: string[]
+    recentFailures?: Array<{ url?: string; failure?: string; at?: string }>
+    lastUpdatedAt?: string
 }
 type SandboxToolAnalysis = {
     toolKind?: string
@@ -199,6 +211,7 @@ export default function BrowserSandboxPageClient() {
                     reason: stringValue(payload.reason),
                     image,
                     evidence: evidenceValue(payload.evidence),
+                    networkSummary: networkSummaryValue(payload.networkSummary),
                 }))
                 return
             }
@@ -468,6 +481,12 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
                         </div>
                         {capture.image ? <img src={capture.image} alt={`${capture.label} screenshot`} className='rounded border border-ui-border' /> : null}
                         {capture.evidence?.textExcerpt ? <p className='line-clamp-3 text-xs leading-5 text-ui-muted'>{capture.evidence.textExcerpt}</p> : null}
+                        {capture.networkSummary ? (
+                            <div className='grid gap-1 rounded-md border border-ui-border bg-ui-panel p-2 text-[11px] text-ui-muted'>
+                                <p>{capture.networkSummary.requestCount || 0} requests · {capture.networkSummary.uniqueDomainCount || 0} domains · {capture.networkSummary.failedCount || 0} blocked/failed</p>
+                                {capture.networkSummary.domains?.length ? <p className='truncate font-mono'>{capture.networkSummary.domains.slice(0, 4).join('  ')}</p> : null}
+                            </div>
+                        ) : null}
                         {capture.evidence?.reasons?.length ? (
                             <div className='flex flex-wrap gap-1'>
                                 {capture.evidence.reasons.slice(0, 4).map(reason => <span key={reason} className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted'>{reason}</span>)}
@@ -513,12 +532,15 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     const deobfuscationTasks = captures.flatMap(capture => capture.evidence?.deobfuscationTasks || [])
     const comments = captures.flatMap(capture => capture.evidence?.comments || []).slice(0, 4)
     const confidence = Math.max(0, ...captures.map(capture => capture.evidence?.confidence || 0))
+    const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
+    const networkDomains = captures.flatMap(capture => capture.networkSummary?.domains || [])
+    const failedRequests = captures.reduce((count, capture) => count + (capture.networkSummary?.failedCount || 0), 0)
     const decodedIndicators = deobfuscationTasks.flatMap(task => [
         ...(task.indicators?.domains || []),
         ...(task.indicators?.ips || []),
         ...(task.indicators?.urls || []),
     ])
-    const allIndicators = Array.from(new Set([...indicators, ...decodedIndicators])).filter(indicator => !target.includes(indicator))
+    const allIndicators = Array.from(new Set([...indicators, ...decodedIndicators, ...networkDomains])).filter(indicator => !target.includes(indicator))
     const deobfuscationSummary = deobfuscationTasks.find(task => task.summary)?.summary || 'No decoded malicious payload summary is available yet.'
     const narrative = pageCaptures.length
         ? `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. Profile "${profile.name}" produced tool context from ${toolNames}. ${toolAnalyses.length ? toolAnalyses.flatMap(item => item.extractedSignals || []).join('; ') || 'External tools loaded but did not expose a parsed detection count yet.' : 'External tool detections are still pending.'} ${suspiciousCaptures.length ? `The rendered evidence is suspicious: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'The rendered evidence is not conclusive yet.'} ${comments.length ? `Community or page comments observed: ${comments.join(' ')}` : 'No community comments were extracted from the loaded pages yet.'}`
@@ -536,6 +558,9 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
             { label: 'urlquery alerts', value: urlquery?.alertCount !== undefined ? String(urlquery.alertCount) : 'unknown' },
             { label: 'Community comments', value: String(Math.max(virusTotal?.communityCommentCount || 0, urlquery?.communityCommentCount || 0, comments.length)) },
             { label: 'Redirect observed', value: redirected ? 'yes' : 'no' },
+            { label: 'Network requests', value: latestNetwork?.requestCount !== undefined ? String(latestNetwork.requestCount) : 'unknown' },
+            { label: 'Contacted domains', value: latestNetwork?.uniqueDomainCount !== undefined ? String(latestNetwork.uniqueDomainCount) : 'unknown' },
+            { label: 'Blocked/failed requests', value: String(failedRequests) },
             { label: 'Suspicious captures', value: String(suspiciousCaptures.length) },
             { label: 'Obfuscated scripts', value: String(obfuscatedScripts.length) },
             { label: 'Highest confidence', value: confidence ? `${confidence}%` : 'unknown' },
@@ -570,6 +595,11 @@ function evidenceValue(value: unknown): SandboxEvidence | undefined {
 function toolAnalysisValue(value: unknown): SandboxToolAnalysis | undefined {
     if (!value || typeof value !== 'object') return undefined
     return value as SandboxToolAnalysis
+}
+
+function networkSummaryValue(value: unknown): SandboxNetworkSummary | undefined {
+    if (!value || typeof value !== 'object') return undefined
+    return value as SandboxNetworkSummary
 }
 
 function mergeProfiles(input: SandboxProfile[]) {

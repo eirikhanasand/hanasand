@@ -26,6 +26,15 @@ type BrokerMessage = {
     text?: string
     direction?: string
 }
+type SandboxNetworkEvent = {
+    kind: 'request' | 'response' | 'failed' | 'download'
+    url: string
+    method?: string
+    resourceType?: string
+    status?: number
+    failure?: string
+    at: string
+}
 
 const DEFAULT_TARGET = 'http://sample-intel-source.onion'
 const DEFAULT_WIDTH = 1280
@@ -44,6 +53,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let remoteClipboard = ''
     let editableSelectAllArmed = false
     let messageQueue = Promise.resolve()
+    let networkEvents: SandboxNetworkEvent[] = []
 
     const send = (payload: Record<string, unknown>) => {
         if (connection.readyState === connection.OPEN) {
@@ -150,6 +160,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         await cleanup()
         closed = false
         remoteClipboard = ''
+        networkEvents = []
         const target = normalizeTarget(message.target || DEFAULT_TARGET)
         const network = message.network === 'regular' ? 'regular' : defaultNetwork
         const proxy = network === 'tor' ? process.env.ONION_SESSION_PROXY || process.env.TOR_SOCKS_PROXY || '' : ''
@@ -189,6 +200,43 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         page = await context.newPage()
         page.on('console', (entry) => send({ type: 'console', level: entry.type(), text: entry.text() }))
         page.on('pageerror', (error) => send({ type: 'pageerror', message: error.message }))
+        page.on('request', (request) => {
+            trackNetwork({
+                kind: 'request',
+                url: request.url(),
+                method: request.method(),
+                resourceType: request.resourceType(),
+                at: new Date().toISOString(),
+            })
+        })
+        page.on('response', (response) => {
+            trackNetwork({
+                kind: 'response',
+                url: response.url(),
+                status: response.status(),
+                at: new Date().toISOString(),
+            })
+        })
+        page.on('requestfailed', (request) => {
+            trackNetwork({
+                kind: 'failed',
+                url: request.url(),
+                method: request.method(),
+                resourceType: request.resourceType(),
+                failure: request.failure()?.errorText || 'request failed',
+                at: new Date().toISOString(),
+            })
+        })
+        page.on('download', (download) => {
+            trackNetwork({
+                kind: 'download',
+                url: download.url(),
+                failure: 'download blocked for sandbox safety',
+                at: new Date().toISOString(),
+            })
+            void download.cancel().catch(() => undefined)
+            send({ type: 'status', state: 'download_blocked', url: download.url(), message: 'Download blocked for sandbox safety.' })
+        })
         page.on('framenavigated', (frame) => {
             if (frame !== page?.mainFrame()) return
             send({ type: 'status', state: 'navigated', url: page.url(), sessionId })
@@ -250,6 +298,11 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await toolPage.close().catch(() => undefined)
             }
         }
+    }
+
+    function trackNetwork(event: SandboxNetworkEvent) {
+        networkEvents.push(event)
+        if (networkEvents.length > 600) networkEvents = networkEvents.slice(-600)
     }
 
     async function navigate(value: string) {
@@ -390,7 +443,48 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             capturedAt: new Date().toISOString(),
             reason,
             evidence: await collectPageEvidence(page),
+            networkSummary: summarizeNetworkEvents(networkEvents),
         })
+    }
+}
+
+function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
+    const requests = events.filter(event => event.kind === 'request')
+    const responses = events.filter(event => event.kind === 'response')
+    const failures = events.filter(event => event.kind === 'failed' || event.kind === 'download')
+    const domains = Array.from(new Set(events.map(event => domainFromUrl(event.url)).filter(Boolean))).slice(0, 80)
+    const statusCounts = responses.reduce<Record<string, number>>((current, event) => {
+        const bucket = event.status ? `${Math.floor(event.status / 100)}xx` : 'unknown'
+        current[bucket] = (current[bucket] || 0) + 1
+        return current
+    }, {})
+    const redirectChain = events
+        .filter(event => event.kind === 'response' && event.status && event.status >= 300 && event.status < 400)
+        .map(event => event.url)
+        .slice(-12)
+
+    return {
+        requestCount: requests.length,
+        responseCount: responses.length,
+        failedCount: failures.length,
+        uniqueDomainCount: domains.length,
+        domains,
+        statusCounts,
+        redirectChain,
+        recentFailures: failures.slice(-8).map(event => ({
+            url: event.url,
+            failure: event.failure || 'failed',
+            at: event.at,
+        })),
+        lastUpdatedAt: events.at(-1)?.at,
+    }
+}
+
+function domainFromUrl(value: string) {
+    try {
+        return new URL(value).hostname.toLowerCase()
+    } catch {
+        return ''
     }
 }
 
