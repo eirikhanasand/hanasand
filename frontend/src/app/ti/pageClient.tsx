@@ -6226,7 +6226,7 @@ function TopEvidenceQueuePreview({ items, selectedId, onSelect }: { items: Analy
                     )
                 })}
                 {!previewItems.length ? (
-                    <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-xs text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>Search results will appear here for review.</p>
+                    <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-xs text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>Run a search to review evidence findings.</p>
                 ) : null}
             </div>
         </section>
