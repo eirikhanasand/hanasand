@@ -1,0 +1,385 @@
+[
+  {
+    "name": "hanasand-about-clean-desktop",
+    "url": "https://hanasand.com/about",
+    "finalUrl": "https://hanasand.com/about",
+    "title": "About Hanasand | Hanasand",
+    "h1": "Hanasand monitors company exposure across actor pages and recent claims.",
+    "headings": [
+      "H1:Hanasand monitors company exposure across actor pages and recent claims.",
+      "H2:Current product focus",
+      "H2:Direct monitoring finds the mention",
+      "H2:Clean fields make alerts usable",
+      "H2:Alerts should be fast and usable",
+      "H2:Product",
+      "H2:Solutions",
+      "H2:Developers",
+      "H2:Company",
+      "H2:Legal"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console COMPANY Hanasand monitors company exposure across actor pages and recent claims. The product centers on high-speed, reviewable threat intelligence: recent mentions, actor context, company matching, and clean delivery. Open intelligence search Contact sales Current product focus Monitoring workflows for buyers who need recent exposure activity. Ransomware victim claims and actor-page changes Company, domain, brand, subsidiary, and supplier watchlists Actor overviews shaped for UI navigation and analyst review Bloom-filter style exposure checks where sensitive data should stay out of dashboards Direct monitoring finds the mention Public indexes help corroborate coverage while direct source checks, freshness logic, and company watchlists create the alert value. Clean fields make alerts usable Every alert should tell the buyer the actor, company, claim, timing, source, sector, country, review state, and delivery history. Alerts should be fast and usable The goal is notification packets a security team can route, review, and act on quickly. hanasand Telegram and dark web monitoring, actor c"
+  },
+  {
+    "name": "hanasand-articles-clean-desktop",
+    "url": "https://hanasand.com/articles",
+    "finalUrl": "https://hanasand.com/articles",
+    "title": "Articles | Hanasand",
+    "h1": "Articles",
+    "headings": [
+      "H1:Articles",
+      "H2:RECENTLY PUBLISHED",
+      "H2:ALL ARTICLES",
+      "H3:👋 Hey, I’m Eirik Hanasand",
+      "H3:Library Safety Manager",
+      "H3:How to set up performant low latency caching?",
+      "H3:How to create an event management React Native application",
+      "H3:How to create a scalable Discord bot for your community",
+      "H3:How to create server-side themes for Next.js",
+      "H2:Product",
+      "H2:Solutions",
+      "H2:Developers"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console Articles Project notes, product context, and preserved writing from the personal Hanasand notebook. RECENTLY PUBLISHED No recent articles right now. ALL ARTICLES Published 12.10.2025, 12:38 👋 Hey, I’m Eirik Hanasand Read article Published 12.05.2025, 04:10 Library Safety Manager Have you ever thought about blocking vulnerable dependencies proactively instead of retrospectively? If not, no worries, I got you! This article gives a brief overview of the application, and links to the full thesis detailing the entire application. Brief note Published 01.01.2024, 00:00 How to set up performant low latency caching? A small Next.js-oriented cache setup for low-latency responses without heavy abstractions. Read article Published 01.01.2024, 00:00 How to create an event management React Native application React Native event management work for schedules, notifications, and organization activity flows. Read article Published 01.01.2024, 00:00 How to create a scalable Discord bot for your community Custom Discord bot work for role management, game server mirrors, wiki pages, infrastructure automa"
+  },
+  {
+    "name": "hanasand-article-bot-clean-desktop",
+    "url": "https://hanasand.com/articles/bot",
+    "finalUrl": "https://hanasand.com/articles/bot",
+    "title": "Bot | Hanasand",
+    "h1": "How to create a scalable Discord bot for your community",
+    "headings": [
+      "H1:How to create a scalable Discord bot for your community",
+      "H2:Product",
+      "H2:Solutions",
+      "H2:Developers",
+      "H2:Company",
+      "H2:Legal"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console Articles How to create a scalable Discord bot for your community Custom Discord bot work for role management, game server mirrors, wiki pages, infrastructure automation, and self-updating deployments. Published 01.01.2024, 00:00 Updated 01.01.2024, 00:00 1 min read Start with the smallest workflow the server actually needs. A useful bot usually begins as one dependable command, one permission model, and one background job rather than a large command catalogue. Keep configuration outside the code, store secrets in the deployment environment, and log moderation actions in a channel that trusted admins can audit. For larger servers, split event handling from slow work so message events stay responsive while jobs such as role sync, wiki updates, or game-server mirrors run in a queue. The final check is operational: the bot should restart cleanly, explain failed commands to users, and give maintainers enough logs to diagnose permission or API-limit problems without reading the source. Browse other articles hanasand Telegram and dark web monitoring, actor context, identity exposure alerts, a"
+  },
+  {
+    "name": "hanasand-article-cache-clean-desktop",
+    "url": "https://hanasand.com/articles/cache",
+    "finalUrl": "https://hanasand.com/articles/cache",
+    "title": "Cache | Hanasand",
+    "h1": "How to set up performant low latency caching?",
+    "headings": [
+      "H1:How to set up performant low latency caching?",
+      "H2:Product",
+      "H2:Solutions",
+      "H2:Developers",
+      "H2:Company",
+      "H2:Legal"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console Articles How to set up performant low latency caching? A small Next.js-oriented cache setup for low-latency responses without heavy abstractions. Published 01.01.2024, 00:00 Updated 01.01.2024, 00:00 1 min read Cache the response that hurts users, not every response by default. A good first pass is to identify the route with repeated reads, define how stale the answer is allowed to be, and make invalidation explicit. For Next.js and API services, keep the fast path boring: normalize cache keys, include the current user or tenant when data is private, and set short TTLs until the data model is stable. Add longer-lived edge or Redis caches only after the route has clear ownership and observability. Production caching should be easy to turn off. Ship metrics for hit rate, latency, and stale responses so the cache can be treated as infrastructure rather than mystery state. Browse other articles hanasand Telegram and dark web monitoring, actor context, identity exposure alerts, and developer-ready threat intelligence under one product shell. monitoring API customer alerts Product Threat Int"
+  },
+  {
+    "name": "hanasand-article-event-clean-desktop",
+    "url": "https://hanasand.com/articles/event",
+    "finalUrl": "https://hanasand.com/articles/event",
+    "title": "Event | Hanasand",
+    "h1": "How to create an event management React Native application",
+    "headings": [
+      "H1:How to create an event management React Native application",
+      "H2:Product",
+      "H2:Solutions",
+      "H2:Developers",
+      "H2:Company",
+      "H2:Legal"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console Articles How to create an event management React Native application React Native event management work for schedules, notifications, and organization activity flows. Published 01.01.2024, 00:00 Updated 01.01.2024, 00:00 1 min read The useful version of an event app is not a calendar clone. It is a workflow for creating an event, inviting the right people, updating the schedule, and handling the awkward cases: cancellations, late changes, check-in, and reminders. Build the first version around offline-tolerant reads and careful notification settings. People open event apps while moving, so screens should be fast, forms should save drafts, and the most important details should fit on a phone without digging. For teams, add roles early. Organizers need editing rights, attendees need clear status, and admins need an audit trail when details change. Browse other articles hanasand Telegram and dark web monitoring, actor context, identity exposure alerts, and developer-ready threat intelligence under one product shell. monitoring API customer alerts Product Threat Intelligence Onion Sessions "
+  },
+  {
+    "name": "hanasand-article-lsm-clean-desktop",
+    "url": "https://hanasand.com/articles/lsm",
+    "finalUrl": "https://hanasand.com/articles/lsm",
+    "title": "Lsm | Hanasand",
+    "h1": "Library Safety Manager",
+    "headings": [
+      "H1:Library Safety Manager",
+      "H2:Product",
+      "H2:Solutions",
+      "H2:Developers",
+      "H2:Company",
+      "H2:Legal"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console Articles Library Safety Manager Have you ever thought about blocking vulnerable dependencies proactively instead of retrospectively? If not, no worries, I got you! This article gives a brief overview of the application, and links to the full thesis detailing the entire application. Published 12.05.2025, 04:10 Updated 12.05.2025, 05:41 1 min read Library Safety Manager Open Source Plugin For Artifactory. Allow and block packages for JFrog Artifactory to prevent download of malicious or vulnerable code. Sorry, the full thesis is finished but not published yet. It will be published in a month. Browse other articles hanasand Telegram and dark web monitoring, actor context, identity exposure alerts, and developer-ready threat intelligence under one product shell. monitoring API customer alerts Product Threat Intelligence Onion Sessions Dark Web Monitoring Load Testing Actor Overview Solutions All Solutions Bloom Filter Pricing Developers API docs Support Status Company About Eirik Articles Legal Terms of use Privacy policy Cookie policy Cookie settings All systems operational Terms of use P"
+  },
+  {
+    "name": "hanasand-article-readme-clean-desktop",
+    "url": "https://hanasand.com/articles/readme",
+    "finalUrl": "https://hanasand.com/articles/readme",
+    "title": "Readme | Hanasand",
+    "h1": "👋 Hey, I’m Eirik Hanasand",
+    "headings": [
+      "H1:👋 Hey, I’m Eirik Hanasand",
+      "H2:🧠 What Drives Me",
+      "H2:🧰 What I Build",
+      "H2:🛡️ My Focus Areas",
+      "H2:🌱 Currently Exploring",
+      "H2:✉️ Let’s Connect",
+      "H2:Product",
+      "H2:Solutions",
+      "H2:Developers",
+      "H2:Company",
+      "H2:Legal"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console Articles 👋 Hey, I’m Eirik Hanasand Published 12.10.2025, 12:38 Updated 12.10.2025, 12:38 5 min read I’m a software engineer and security-minded developer passionate about building tools that make development safer, faster, and more enjoyable. I love exploring the intersection of software engineering, cybersecurity, and design — where clean code meets practical impact. (Sorry for making GPT write this 😂, I would need more than 48 hours in a day to get everything I wanted done. I will write it meself at some point. Remember that this is a personal website, and only supposed to be half serious 🍹) 🧠 What Drives Me I’m motivated by curiosity and craftsmanship. Whether I’m hardening an API, improving a CI pipeline, or designing a React interface, I aim for clarity, simplicity, and security by default. I believe software should help people — and it should do so without getting in their way. 🧰 What I Build Some projects I’ve worked on recently: 🧩 Library Safety Manager (LSM) — an Artifactory extension that scans packages for vulnerabilities and malware using the OSV database. 📱 Event Ma"
+  },
+  {
+    "name": "hanasand-article-theme-clean-desktop",
+    "url": "https://hanasand.com/articles/theme",
+    "finalUrl": "https://hanasand.com/articles/theme",
+    "title": "Theme | Hanasand",
+    "h1": "How to create server-side themes for Next.js",
+    "headings": [
+      "H1:How to create server-side themes for Next.js",
+      "H2:Product",
+      "H2:Solutions",
+      "H2:Developers",
+      "H2:Company",
+      "H2:Legal"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console Articles How to create server-side themes for Next.js Notes on setting up server-side themes for Next.js without flash-of-default-theme problems. Published 01.01.2024, 00:00 Updated 01.01.2024, 00:00 1 min read Theme selection should be resolved before the page paints. Store the user preference in a cookie, read it on the server, and render the initial HTML with the correct class or data attribute so the interface does not flash through the wrong theme. Keep the theme tokens small and semantic: background, surface, foreground, muted text, accent, border, and danger are enough for most products. Components should consume those tokens instead of hard-coded color families, which keeps light, dark, and system themes aligned. The browser can still update the theme instantly after a user changes it, but the server value is the source of truth for the next navigation. Browse other articles hanasand Telegram and dark web monitoring, actor context, identity exposure alerts, and developer-ready threat intelligence under one product shell. monitoring API customer alerts Product Threat Intelligenc"
+  },
+  {
+    "name": "hanasand-eirik-clean-desktop",
+    "url": "https://hanasand.com/eirik",
+    "finalUrl": "https://hanasand.com/eirik",
+    "title": "Eirik Hanasand | Hanasand",
+    "h1": "Eirik Hanasand",
+    "headings": [
+      "H1:Eirik Hanasand",
+      "H2:Password exposure check",
+      "H2:Upload media",
+      "H2:Short links",
+      "H2:Service check",
+      "H2:Motivation wall",
+      "H2:Articles",
+      "H2:React Native event management application",
+      "H2:Pecubit and app design experiments",
+      "H2:Writing and build notes",
+      "H3:👋 Hey, I’m Eirik Hanasand",
+      "H3:Library Safety Manager"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console PERSONAL NOTEBOOK Eirik Hanasand This is the personal side of Hanasand: article projects, app experiments, and practical utilities that sit beside the product work. Read articles Motivation wall README Product Hanasand can move forward without erasing the personal work. This route keeps the project context visible without turning the main homepage back into a portfolio. SECURITY Password exposure check Exact-match password exposure checks from the personal Hanasand utility set. MEDIA Upload media A media upload and preview workflow for quick files, images, and CDN experiments. UTILITY Short links Small link utility for creating compact routes and sharing one-off references. OPERATIONS Service check A small utility for checking availability, routing, and page response behavior. NOTES Motivation wall A restored quote wall: a slow stream of motivational notes with its own mood. WRITING Articles Longer writeups and project notes that explain the experiments in context. Project notes Library safety manager and small operational dashboards. Discord bot work for organization, infrastructure, "
+  },
+  {
+    "name": "hanasand-eirik-motivation-clean-desktop",
+    "url": "https://hanasand.com/eirik/motivation",
+    "finalUrl": "https://hanasand.com/eirik/motivation",
+    "title": "Motivation | Hanasand",
+    "h1": "motivation wall",
+    "headings": [
+      "H1:motivation wall",
+      "H2:Product",
+      "H2:Solutions",
+      "H2:Developers",
+      "H2:Company",
+      "H2:Legal"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console Eirik / motivation wall 176 quotes Don't let later become never Grind. Hustle. Execute. No procastination No risk no story know your worth. this chapter feels really good. I always get what I want Go after dreams. Not people. Invest in yourself, it pays the best interest Discipline In order to become the 1% You have to do what the other 99& wont. and suddenly my dreams started chasing me I attract incredible opportunities in to my life Never give up Don't overthink it. Growth mindset Believe you can learn and improve, not that your skills are set in stone. Hold the vision Trust the process Be relentless dream big work hard Focus on progression, not perfection. If you know you can do better.. then do better The mind is everything. What you think you become - Buddha I am working on myself, for myself I see it, I like it, I want it, I got it I make money in my sleep I am living my dream life. You are your only limit. Money comes easily for me I'm so lucky everything works out for me ♡ Patience I am becoming the best version of myself. i will succeed in uni. a little progress each day adds"
+  },
+  {
+    "name": "hanasand-onion-session-clean-desktop",
+    "url": "https://hanasand.com/solutions/onion-session",
+    "finalUrl": "https://hanasand.com/solutions/onion-session",
+    "title": "Onion Session Workspace | Hanasand",
+    "h1": "Controlled onion review without moving raw material onto analyst machines.",
+    "headings": [
+      "H1:Controlled onion review without moving raw material onto analyst machines.",
+      "H2:A secured browser workspace for sensitive source checks.",
+      "H3:Source validation",
+      "H3:Evidence-safe review",
+      "H3:Alert handoff",
+      "H2:Networks",
+      "H2:Session policy",
+      "H2:Workspace ready",
+      "H2:Evidence packet",
+      "H2:Event log",
+      "H2:Analyst notes",
+      "H2:Built for owned collection, not scraped-row bloat."
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode",
+      "Onion Short-span Tor workspace Ready",
+      "I2P Hidden-service expansion Next",
+      "Freenet Public-data research mode Next",
+      "IPFS/libp2p Distributed source watch Next",
+      "Load sample onion page",
+      "10m",
+      "15m",
+      "30m",
+      "60m",
+      "Start",
+      "Copy"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console ONION SESSION WORKSPACE Controlled onion review without moving raw material onto analyst machines. Open a short-lived remote session, validate a source, capture metadata and notes, then hand off an evidence packet to monitoring, vendor-risk, or incident response. Open workspace Talk coverage Monitoring alerts SESSION WINDOW 10-60m Auto-expiring review sessions DEFAULT HANDLING Metadata No raw leaked files in workflow OUTPUT Packet Source, notes, route, timestamps Session desk Isolated viewport broker idle Timer 15:00 Circuit Fresh Mode Read-only OPERATIONAL WORKFLOW A secured browser workspace for sensitive source checks. Validate actor-page and leak-site claims before customer escalation. Review source changes from a short-lived remote browser instead of local analyst machines. Attach session notes, route state, capture mode, and source timing to downstream alerts. Source validation Open a new onion mirror, capture source state, and decide whether it belongs in monitoring. Evidence-safe review Keep analysts in a remote viewport with screenshots, hashes, notes, and raw-content controls"
+  },
+  {
+    "name": "hanasand-terms-clean-desktop",
+    "url": "https://hanasand.com/terms",
+    "finalUrl": "https://hanasand.com/terms",
+    "title": "Terms of use | Hanasand",
+    "h1": "Terms of use",
+    "headings": [
+      "H1:Terms of use",
+      "H2:1. Agreement and order of documents",
+      "H2:2. The service",
+      "H2:3. Customer accounts and administration",
+      "H2:4. Permitted use",
+      "H2:5. Prohibited use",
+      "H2:6. Customer data and monitoring inputs",
+      "H2:7. Threat intelligence sources and alert review",
+      "H2:8. Integrations, webhooks, and customer systems",
+      "H2:9. API use and rate limits",
+      "H2:10. Security",
+      "H2:11. Confidentiality"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console TERMS Terms of use Effective July 3, 2026. These terms govern access to Hanasand services, including monitoring, alerting, API, webhook, and customer console features. 1. Agreement and order of documents These Terms of Use form a binding agreement between Hanasand and the organization or person accessing the service. If you use Hanasand on behalf of a company, public body, or other organization, you confirm that you have authority to bind that organization. A signed order form, data processing agreement, security addendum, or other written agreement with Hanasand controls over these Terms where it expressly conflicts. Otherwise, these Terms apply to all use of the service. 2. The service Hanasand provides threat intelligence, exposure monitoring, alert routing, API access, webhooks, dashboards, and related operational tools. The service is designed to help customers identify, review, and route external risk signals; it is not a substitute for legal, incident response, insurance, or law enforcement advice. 3. Customer accounts and administration Customers are responsible for their users"
+  },
+  {
+    "name": "hanasand-test-clean-desktop",
+    "url": "https://hanasand.com/test",
+    "finalUrl": "https://hanasand.com/test",
+    "title": "Service Check | Hanasand",
+    "h1": "Create service check",
+    "headings": [
+      "H1:Create service check",
+      "H2:Service check launcher",
+      "H2:My Recent Runs",
+      "H2:Global Recent Scans",
+      "H2:Product",
+      "H2:Solutions",
+      "H2:Developers",
+      "H2:Company",
+      "H2:Legal"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode",
+      "Start check"
+    ],
+    "forms": [
+      {
+        "text": "Start check",
+        "inputs": [
+          "text"
+        ]
+      }
+    ],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console Create service check Results Service check launcher Start a permitted endpoint check, share the result link, then revisit the report when it finishes. 5 free checks remaining Start check My Recent Runs Your most recent service checks Personal check lane is ready. Runs you start from this browser stream here. Global Recent Scans Latest permitted checks across the service Global check lane is listening. New public run summaries stream here automatically. Always get permission before testing. hanasand Telegram and dark web monitoring, actor context, identity exposure alerts, and developer-ready threat intelligence under one product shell. monitoring API customer alerts Product Threat Intelligence Onion Sessions Dark Web Monitoring Load Testing Actor Overview Solutions All Solutions Bloom Filter Pricing Developers API docs Support Status Company About Eirik Articles Legal Terms of use Privacy policy Cookie policy Cookie settings All systems operational Terms of use Privacy policy Cookie policy Cookie settings © 2026 Hanasand v1.6.7"
+  },
+  {
+    "name": "hanasand-readiness-clean-desktop",
+    "url": "https://hanasand.com/readiness",
+    "finalUrl": "https://hanasand.com/readiness",
+    "title": "Product Operations | Hanasand",
+    "h1": "Threat monitoring gates",
+    "headings": [
+      "H1:Threat monitoring gates",
+      "H2:Live gates holding release",
+      "H3:public ti enrichment",
+      "H2:What is running now",
+      "H3:Multi-organization monitoring",
+      "H3:Threat actor search",
+      "H3:Shared alert workflow",
+      "H3:Delivery destinations",
+      "H3:Enterprise support",
+      "H2:Organizations",
+      "H2:Shared watchlists",
+      "H2:Source coverage"
+    ],
+    "buttons": [
+      "Product",
+      "Solutions",
+      "Resources",
+      "Switch to dark mode"
+    ],
+    "forms": [],
+    "body": "hanasand Product Solutions Developers Resources Pricing Switch to dark mode Support Go to Console LIVE OPERATIONS Threat monitoring gates Track the live lanes that keep monitoring, alerts, delivery, analyst work, and support actions moving. ROWS READY 8/9 CHECKED 3s ago LIVE FEED ready RELEASE GATE blocked LIVE SOURCE /api/product-progress GET /api/product-progress must return product.progress.readiness.v1; HTTP, fetch, and schema failures stay explicit on this progressSource object. STATE ready HTTP 200 FEED product.progress.readiness.v1 OPERATIONS FEED not configured Rows only turn green when the live lane is fresh, visible, and connected to the operator workflow. FEED STATE unavailable BLOCKED ROWS 0/0 AGE checking STALE AFTER 2h product_readiness_aggregate_not_configured missing_public_ti_provenance_readiness_api RELEASE GATES Live gates holding release A hold clears when the live operating lane is fresh and linked to an action the console can run. GATE LINKS 45 LINKED ROUTES 21 PROBE ROUTES 9 WORKFLOWS /dashboard/dwm /dashboard/ti/sources /dashboard/ti/workbench /dashboard/automations?setup=dwm +3 more LIVE APIS /api/organizations/default/alert-readiness /api/ti/scraper/contro"
+  }
+]
