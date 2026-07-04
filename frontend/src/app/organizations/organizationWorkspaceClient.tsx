@@ -144,6 +144,7 @@ type OrgBundle = {
 type DeliveryRow = {
     id: string
     requestId?: string
+    auditEventId?: string
     organizationId?: string
     tenantId?: string
     alertId?: string
@@ -1776,6 +1777,7 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject }: { o
                                     <td className='max-w-56 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                         <p className='truncate font-mono text-xs text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || 'redacted destination')}</p>
                                         <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{delivery.webhookDestinationId || delivery.requestId || delivery.id}</p>
+                                        <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
                                     </td>
                                     <td className='max-w-64 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                         <DeliveryReference delivery={delivery} organizationId={organization.id} />
@@ -2500,6 +2502,11 @@ function deliveryHistoryHref(baseHref: string, subject: ActivitySubject) {
     if (subject.type === 'case') params.set('caseId', subject.id)
     const suffix = params.toString()
     return suffix ? `${baseHref}&${suffix}` : baseHref
+}
+
+function deliveryTraceLabel(delivery: DeliveryRow) {
+    const trace = delivery.auditEventId || delivery.requestId || delivery.id
+    return `Trace: ${sanitizeOrganizationDisplayCopy(trace) || trace}`
 }
 
 function firstDelivery(result: DeliveryResult) {
