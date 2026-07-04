@@ -63,6 +63,11 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(page).toContain('onChange={event => updateQueueQuery(event.target.value)}')
     expect(page).toContain('Clear queue view')
     expect(page).toContain('onClick={clearQueueView}')
+    expect(page).toContain('function safeTimelineDetail(value: string)')
+    expect(page).toContain('event.note ? safeTimelineDetail(event.note)')
+    expect(page).toContain('detail: safeTimelineDetail(context.localState.note)')
+    expect(page).toContain('detail: delivery.error ? safeTimelineDetail(delivery.error)')
+    expect(page).toContain('row.error ? ` ${safeTimelineDetail(row.error)}`')
 })
 
 test('dwm next operator action prioritizes the workflow step an analyst can take now', () => {

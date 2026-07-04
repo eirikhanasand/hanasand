@@ -1531,7 +1531,7 @@ function DeliveryCaseActivityRail({ alert, deliveries, timeline, workflowContext
                     <ActionStatus label='Replay count' value={`${alert.replayCount ?? 0}`} />
                     <ActionStatus label='Destination' value={workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : workflowContext.hasWebhookRoute ? 'delivery available' : 'checking delivery'} tone={workflowContext.hasWebhookRoute ? 'neutral' : 'warn'} />
                 </div>
-                {failedDelivery?.error && <p className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'>{failedDelivery.error}</p>}
+                {failedDelivery?.error && <p className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'>{safeTimelineDetail(failedDelivery.error)}</p>}
                 <div className='overflow-hidden rounded-lg border border-ui-border'>
                     <table className='w-full text-left text-xs'>
                         <thead className='bg-ui-raised text-[10px] uppercase text-ui-muted'>
@@ -1921,7 +1921,7 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
                                 <a href={deliveryOrgHref} className='inline-flex h-7 items-center rounded-lg border border-ui-border bg-ui-panel px-2 text-ui-text transition hover:bg-ui-canvas'>Manage destination</a>
                                 {caseHref ? <a href={caseHref} className='inline-flex h-7 items-center rounded-lg border border-ui-border bg-ui-panel px-2 text-ui-text transition hover:bg-ui-canvas'>Open case trail</a> : null}
                             </div>
-                            {(delivery.error || delivery.errorClass) && <p className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 px-2 py-1.5 text-xs text-ui-danger'>{delivery.error || stateLabel(delivery.errorClass || 'delivery failed')}</p>}
+                            {(delivery.error || delivery.errorClass) && <p className='rounded-lg border border-ui-danger/35 bg-ui-danger/10 px-2 py-1.5 text-xs text-ui-danger'>{delivery.error ? safeTimelineDetail(delivery.error) : stateLabel(delivery.errorClass || 'delivery failed')}</p>}
                         </div>
                     )
                 })}
@@ -2329,7 +2329,7 @@ function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[], context?:
             id: `${alert.id}:local-note`,
             at: new Date().toISOString(),
             title: 'Decision drafted',
-            detail: context.localState.note,
+            detail: safeTimelineDetail(context.localState.note),
         } : undefined,
         context?.selectedEntity ? {
             id: `${alert.id}:entity:${context.selectedEntity.key}`,
@@ -2353,7 +2353,7 @@ function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[], context?:
             id: `${alert.id}:action-result`,
             at: new Date().toISOString(),
             title: context.actionMessage.ok ? 'Action completed' : 'Action failed',
-            detail: context.actionMessage.text,
+            detail: safeTimelineDetail(context.actionMessage.text),
         } : undefined,
     ].filter(Boolean) as Array<{ id: string, at: string, title: string, detail: string }>
     return [
@@ -2363,7 +2363,7 @@ function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[], context?:
             at: event.at,
             title: `${stateLabel(event.fromReviewState || 'queued')} to ${stateLabel(event.toReviewState || 'updated')}`,
             detail: [
-                event.note || `${stateLabel(event.fromDeliveryState || 'pending')} to ${stateLabel(event.toDeliveryState || 'pending')}`,
+                event.note ? safeTimelineDetail(event.note) : `${stateLabel(event.fromDeliveryState || 'pending')} to ${stateLabel(event.toDeliveryState || 'pending')}`,
                 event.toOwner ? `Owner: ${event.toOwner}` : undefined,
             ].filter(Boolean).join(' · '),
         })),
@@ -2371,10 +2371,14 @@ function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[], context?:
             id: delivery.id,
             at: delivery.attemptedAt,
             title: `Webhook ${stateLabel(delivery.status)}`,
-            detail: delivery.error || `HTTP ${delivery.httpStatus ?? 0} · ${delivery.endpointHash}`,
+            detail: delivery.error ? safeTimelineDetail(delivery.error) : `HTTP ${delivery.httpStatus ?? 0} · ${delivery.endpointHash}`,
         })),
         ...localRows,
     ].sort((a, b) => String(b.at).localeCompare(String(a.at)))
+}
+
+function safeTimelineDetail(value: string) {
+    return safeEvidenceExcerpt(value)
 }
 
 function actionReady(alert: PortalAlert, action: DwmAlertAnalystAction) {
@@ -2408,7 +2412,7 @@ function deliveryActionMessage(rows: DeliveryItem[], attemptedCount: number | un
     if (!row) return attemptedCount ? `${fallback} attempted.` : `${fallback} did not find a configured destination.`
     const destination = row.endpointHint || row.endpointHash || row.webhookDestinationId || row.destinationId || 'redacted destination'
     const retry = row.nextRetryAt ? ` Retry ${relativeTimeLabel(row.nextRetryAt)}.` : ''
-    const error = row.error ? ` ${row.error}` : ''
+    const error = row.error ? ` ${safeTimelineDetail(row.error)}` : ''
     return `${fallback} ${stateLabel(row.status)} for ${destination}.${retry}${error}`
 }
 
