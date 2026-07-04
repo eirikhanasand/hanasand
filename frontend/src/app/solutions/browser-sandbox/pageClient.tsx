@@ -27,6 +27,17 @@ type Capture = {
     image?: string | null
     error?: string
     evidence?: SandboxEvidence
+    toolAnalysis?: SandboxToolAnalysis
+}
+type SandboxToolAnalysis = {
+    toolKind?: string
+    vendorFlagged?: number
+    vendorTotal?: number
+    alertCount?: number
+    communityCommentCount?: number
+    communitySummary?: string
+    verdict?: string
+    extractedSignals?: string[]
 }
 type SandboxEvidence = {
     url?: string
@@ -43,7 +54,17 @@ type SandboxEvidence = {
     forms?: Array<{ action?: string; method?: string; sensitiveInputCount?: number; inputCount?: number }>
     scripts?: Array<{ id?: string; src?: string; inlineBytes?: number; obfuscationScore?: number; reasons?: string[]; sample?: string }>
     obfuscatedScripts?: Array<{ id?: string; src?: string; inlineBytes?: number; obfuscationScore?: number; reasons?: string[]; sample?: string }>
-    deobfuscationTasks?: Array<{ scriptId?: string; source?: string; webcrackReady?: boolean; sample?: string }>
+    deobfuscationTasks?: Array<{
+        scriptId?: string
+        source?: string
+        webcrackReady?: boolean
+        sample?: string
+        decodedPreview?: string
+        decodedTransforms?: string[]
+        indicators?: { domains?: string[]; ips?: string[]; urls?: string[] }
+        assessment?: string
+        summary?: string
+    }>
 }
 
 const storageKey = 'hanasand:browser-sandbox:profiles:v1'
@@ -193,6 +214,7 @@ export default function BrowserSandboxPageClient() {
                     image,
                     error: stringValue(payload.error),
                     evidence: evidenceValue(payload.evidence),
+                    toolAnalysis: toolAnalysisValue(payload.toolAnalysis),
                 }))
                 pushEvent(`${stringValue(payload.name) || 'Profile tool'} captured.`)
                 return
@@ -420,7 +442,7 @@ function AnalystSummary({ summary }: { summary: ReturnType<typeof buildAnalystSu
             {summary.deobfuscationTasks.length ? (
                 <div className='mt-3 rounded-md border border-ui-warning/30 bg-ui-warning/10 p-3'>
                     <p className='text-xs font-semibold uppercase text-ui-warning'>WebCrack queue</p>
-                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{summary.deobfuscationTasks.length} script sample{summary.deobfuscationTasks.length === 1 ? '' : 's'} ready for deobfuscation review.</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{summary.deobfuscationTasks.length} script sample{summary.deobfuscationTasks.length === 1 ? '' : 's'} ready for deobfuscation review. {summary.deobfuscationSummary}</p>
                 </div>
             ) : null}
         </section>
@@ -483,27 +505,41 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     ])
     const indicators = Array.from(new Set([...extracted, ...evidenceIndicators])).filter(indicator => !target.includes(indicator))
     const toolNames = toolCaptures.map(capture => capture.label).join(', ') || 'none yet'
+    const toolAnalyses = toolCaptures.map(capture => capture.toolAnalysis).filter(Boolean) as SandboxToolAnalysis[]
+    const virusTotal = toolAnalyses.find(item => item.toolKind === 'virustotal')
+    const urlquery = toolAnalyses.find(item => item.toolKind === 'urlquery')
     const suspiciousCaptures = captures.filter(capture => capture.evidence?.verdict === 'suspicious')
     const obfuscatedScripts = captures.flatMap(capture => capture.evidence?.obfuscatedScripts || [])
     const deobfuscationTasks = captures.flatMap(capture => capture.evidence?.deobfuscationTasks || [])
     const comments = captures.flatMap(capture => capture.evidence?.comments || []).slice(0, 4)
     const confidence = Math.max(0, ...captures.map(capture => capture.evidence?.confidence || 0))
+    const decodedIndicators = deobfuscationTasks.flatMap(task => [
+        ...(task.indicators?.domains || []),
+        ...(task.indicators?.ips || []),
+        ...(task.indicators?.urls || []),
+    ])
+    const allIndicators = Array.from(new Set([...indicators, ...decodedIndicators])).filter(indicator => !target.includes(indicator))
+    const deobfuscationSummary = deobfuscationTasks.find(task => task.summary)?.summary || 'No decoded malicious payload summary is available yet.'
     const narrative = pageCaptures.length
-        ? `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. Profile "${profile.name}" produced tool context from ${toolNames}. ${suspiciousCaptures.length ? `The rendered evidence is suspicious: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'The rendered evidence is not conclusive yet.'} ${comments.length ? `Community or page comments observed: ${comments.join(' ')}` : 'No community comments were extracted from the loaded pages yet.'}`
+        ? `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. Profile "${profile.name}" produced tool context from ${toolNames}. ${toolAnalyses.length ? toolAnalyses.flatMap(item => item.extractedSignals || []).join('; ') || 'External tools loaded but did not expose a parsed detection count yet.' : 'External tool detections are still pending.'} ${suspiciousCaptures.length ? `The rendered evidence is suspicious: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'The rendered evidence is not conclusive yet.'} ${comments.length ? `Community or page comments observed: ${comments.join(' ')}` : 'No community comments were extracted from the loaded pages yet.'}`
         : `The sandbox is preparing ${target || 'the submitted URL'}. Profile "${profile.name}" will capture external tool context for ${toolNames || 'selected tools'} when available.`
 
     return {
         narrative,
-        indicators,
+        indicators: allIndicators,
         deobfuscationTasks,
+        deobfuscationSummary,
         rows: [
             { label: 'Page captures', value: String(pageCaptures.length) },
             { label: 'Profile tools', value: `${toolCaptures.length}/${profile.tools.length}` },
+            { label: 'VirusTotal vendors', value: virusTotal?.vendorFlagged !== undefined ? `${virusTotal.vendorFlagged}/${virusTotal.vendorTotal || '?'}` : 'unknown' },
+            { label: 'urlquery alerts', value: urlquery?.alertCount !== undefined ? String(urlquery.alertCount) : 'unknown' },
+            { label: 'Community comments', value: String(Math.max(virusTotal?.communityCommentCount || 0, urlquery?.communityCommentCount || 0, comments.length)) },
             { label: 'Redirect observed', value: redirected ? 'yes' : 'no' },
             { label: 'Suspicious captures', value: String(suspiciousCaptures.length) },
             { label: 'Obfuscated scripts', value: String(obfuscatedScripts.length) },
             { label: 'Highest confidence', value: confidence ? `${confidence}%` : 'unknown' },
-            { label: 'Copyable indicators', value: String(indicators.length) },
+            { label: 'Copyable indicators', value: String(allIndicators.length) },
         ],
     }
 }
@@ -529,6 +565,11 @@ function stringValue(value: unknown) {
 function evidenceValue(value: unknown): SandboxEvidence | undefined {
     if (!value || typeof value !== 'object') return undefined
     return value as SandboxEvidence
+}
+
+function toolAnalysisValue(value: unknown): SandboxToolAnalysis | undefined {
+    if (!value || typeof value !== 'object') return undefined
+    return value as SandboxToolAnalysis
 }
 
 function mergeProfiles(input: SandboxProfile[]) {

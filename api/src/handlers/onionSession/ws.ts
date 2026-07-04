@@ -221,6 +221,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await toolPage.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined)
                 const buffer = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
                 const evidence = await collectPageEvidence(toolPage)
+                const toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence)
                 send({
                     type: 'tool_capture',
                     sessionId,
@@ -231,6 +232,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     capturedAt: startedAt,
                     image: buffer ? buffer.toString('base64') : null,
                     evidence,
+                    toolAnalysis,
                     target,
                 })
             } catch (error) {
@@ -476,12 +478,102 @@ async function collectPageEvidence(page: Page) {
         verdict: suspiciousReasons.length >= 2 || obfuscatedScripts.length ? 'suspicious' : 'unknown',
         confidence: Math.min(95, 35 + suspiciousReasons.length * 15 + obfuscatedScripts.length * 10),
         reasons: suspiciousReasons.length ? suspiciousReasons : ['No high-signal malicious pattern was extracted from the rendered page yet.'],
-        deobfuscationTasks: obfuscatedScripts.map(script => ({
-            scriptId: script.id,
-            source: script.src || 'inline',
-            webcrackReady: Boolean(script.sample),
-            sample: script.sample,
-        })),
+        deobfuscationTasks: obfuscatedScripts.map(script => summarizeDeobfuscationTask(script)),
+    }
+}
+
+function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<typeof collectPageEvidence>>) {
+    const tool = toolName.toLowerCase()
+    const text = [
+        evidence.url || '',
+        evidence.textExcerpt || '',
+        ...(evidence.comments || []),
+        ...(evidence.reasons || []),
+    ].join('\n')
+    const vendorMatch = text.match(/(\d{1,3})\s*\/\s*(\d{1,3})\s*(?:security\s*)?(?:vendors?|engines?)/i)
+        || text.match(/(\d{1,3})\s+(?:security\s*)?(?:vendors?|engines?)\s+(?:flagged|detected|marked)/i)
+    const alertMatch = text.match(/(\d{1,3})\s+(?:alerts?|detections?|blacklists?|malicious requests?)/i)
+    const communityMatch = text.match(/(\d{1,3})\s+(?:community\s*)?(?:comments?|votes?|reviews?)/i)
+    const isVirusTotal = /virus\s*total|virustotal/.test(tool) || /virustotal\.com/i.test(text)
+    const isUrlQuery = /urlquery|urlquery\.net/.test(tool) || /urlquery\.net/i.test(text)
+    const flagged = vendorMatch ? Number(vendorMatch[1]) : undefined
+    const total = vendorMatch?.[2] ? Number(vendorMatch[2]) : undefined
+    const alertCount = alertMatch ? Number(alertMatch[1]) : undefined
+    const communityCommentCount = communityMatch ? Number(communityMatch[1]) : evidence.comments?.length || undefined
+    const verdict = /malicious|phishing|suspicious|blacklist|detected/i.test(text)
+        ? 'suspicious'
+        : /clean|harmless|undetected|no security vendors/i.test(text)
+            ? 'clean'
+            : 'unknown'
+
+    return {
+        toolKind: isVirusTotal ? 'virustotal' : isUrlQuery ? 'urlquery' : /webcrack/i.test(tool) ? 'webcrack' : 'generic',
+        vendorFlagged: Number.isFinite(flagged) ? flagged : undefined,
+        vendorTotal: Number.isFinite(total) ? total : undefined,
+        alertCount: Number.isFinite(alertCount) ? alertCount : undefined,
+        communityCommentCount: Number.isFinite(communityCommentCount) ? communityCommentCount : undefined,
+        communitySummary: evidence.comments?.slice(0, 3).join(' ') || undefined,
+        verdict,
+        extractedSignals: [
+            isVirusTotal && Number.isFinite(flagged) ? `${flagged}/${total || '?'} vendors flagged` : '',
+            isUrlQuery && Number.isFinite(alertCount) ? `${alertCount} urlquery alert${alertCount === 1 ? '' : 's'}` : '',
+            communityCommentCount ? `${communityCommentCount} community comment${communityCommentCount === 1 ? '' : 's'}` : '',
+        ].filter(Boolean),
+    }
+}
+
+function summarizeDeobfuscationTask(script: ReturnType<typeof inspectScript>) {
+    const decoded = decodeScriptSample(script.sample)
+    const joined = [script.sample, decoded.preview].join('\n')
+    const indicators = extractIndicators(joined)
+    const maliciousReasons = [
+        indicators.ips.length || indicators.domains.length ? 'decoded network indicators' : '',
+        /document\.write|location\.href|window\.location|fetch\s*\(|XMLHttpRequest|navigator\.sendBeacon/i.test(joined) ? 'browser redirect or network call' : '',
+        /powershell|cmd\.exe|wscript|mshta|download|payload|stealer|wallet|seed phrase/i.test(joined) ? 'payload or credential-theft language' : '',
+        script.reasons.includes('dynamic execution') ? 'dynamic execution' : '',
+    ].filter(Boolean)
+
+    return {
+        scriptId: script.id,
+        source: script.src || 'inline',
+        webcrackReady: Boolean(script.sample),
+        sample: script.sample,
+        decodedPreview: decoded.preview,
+        decodedTransforms: decoded.transforms,
+        indicators,
+        assessment: maliciousReasons.length ? 'suspicious' : 'unknown',
+        summary: maliciousReasons.length
+            ? `Decoded script remains suspicious: ${maliciousReasons.join(', ')}.`
+            : 'Decoded sample did not expose a high-confidence payload in the extracted window.',
+    }
+}
+
+function decodeScriptSample(sample: string) {
+    const transforms: string[] = []
+    const decoded: string[] = []
+    for (const match of sample.matchAll(/['"`]([A-Za-z0-9+/]{40,}={0,2})['"`]/g)) {
+        const value = match[1]
+        try {
+            const output = Buffer.from(value, 'base64').toString('utf8')
+            if (looksPrintable(output)) {
+                transforms.push('base64 string')
+                decoded.push(output)
+            }
+        } catch {
+            // Ignore invalid base64 candidates; obfuscated pages often contain many decoys.
+        }
+    }
+    const unescaped = sample
+        .replace(/\\x([0-9a-f]{2})/gi, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)))
+        .replace(/\\u([0-9a-f]{4})/gi, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)))
+    if (unescaped !== sample) {
+        transforms.push('hex/unicode escapes')
+        decoded.push(unescaped)
+    }
+
+    return {
+        transforms: Array.from(new Set(transforms)),
+        preview: decoded.join('\n').replace(/\s+/g, ' ').trim().slice(0, 1200),
     }
 }
 
@@ -525,6 +617,14 @@ function extractIndicators(value: string) {
         ips: Array.from(new Set(ips)).slice(0, 80),
         urls: Array.from(new Set(urls)).slice(0, 80),
     }
+}
+
+function looksPrintable(value: string) {
+    const printable = Array.from(value).filter(character => {
+        const code = character.charCodeAt(0)
+        return code === 9 || code === 10 || code === 13 || (code >= 32 && code <= 126)
+    }).length
+    return printable >= 20 && printable / Math.max(1, value.length) > 0.75
 }
 
 function safeToolId(value: string) {
