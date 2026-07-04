@@ -1565,13 +1565,25 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
 }
 
 function OrgActionStrip({ alertId, canManage, hasWatchlists, hasDestination }: { alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
+    const actions: Array<{ href: string, icon: ReactNode, label: string }> = []
+    if (canManage) actions.push({ href: '#watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Create watchlist' })
+    if (canManage) actions.push({ href: '#invites', icon: <UserPlus className='h-4 w-4' />, label: 'Invite member' })
+    if (canManage && hasWatchlists) actions.push({ href: '#destinations', icon: <Webhook className='h-4 w-4' />, label: 'Test destination' })
+    if (alertId) actions.push({ href: `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}`, icon: <CircleAlert className='h-4 w-4' />, label: 'Open DWM alert' })
+    if (hasDestination || hasWatchlists) actions.push({ href: '#audit', icon: <CheckCircle2 className='h-4 w-4' />, label: 'Audit' })
+    const nextStep = !canManage
+        ? 'Owner or admin access unlocks setup actions.'
+        : !hasWatchlists
+            ? 'Start with a shared watchlist term.'
+            : !hasDestination
+                ? 'Test and save a delivery destination.'
+                : alertId
+                    ? ''
+                    : 'Reviewed alerts will appear after a watchlist match.'
     return (
-        <nav className='flex flex-wrap items-center gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' aria-label='Organization actions'>
-            <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Create watchlist' disabled={!canManage} disabledReason='Admin access is required to create shared watchlists.' />
-            <ActionAnchor href='#invites' icon={<UserPlus className='h-4 w-4' />} label='Invite member' disabled={!canManage} disabledReason='Admin access is required to invite team members.' />
-            <ActionAnchor href='#destinations' icon={<Webhook className='h-4 w-4' />} label='Test destination' disabled={!hasWatchlists} disabledReason='Add a watchlist term before testing delivery.' />
-            <ActionAnchor href={`/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}`} icon={<CircleAlert className='h-4 w-4' />} label='Open DWM alert' disabled={!alertId} disabledReason='No DWM alert is selected for this organization.' />
-            <ActionAnchor href='#audit' icon={<CheckCircle2 className='h-4 w-4' />} label='Audit' disabled={!hasDestination && !hasWatchlists} disabledReason='Create a watchlist or delivery destination before reviewing audit context.' />
+        <nav className='flex flex-wrap items-center gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' aria-label='Organization actions' data-org-action-strip='true'>
+            {actions.map(action => <ActionAnchor key={action.label} href={action.href} icon={action.icon} label={action.label} />)}
+            {nextStep ? <span className='inline-flex min-h-9 items-center rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted' data-org-action-next='true'>{nextStep}</span> : null}
         </nav>
     )
 }
