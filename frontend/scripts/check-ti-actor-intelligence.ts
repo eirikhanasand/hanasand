@@ -592,6 +592,62 @@ assert(quietProfile.sourceCoverage.missing.includes('sourceProvenance[].captureI
 assert(quiet.evidencePriority.some(item => item.rowId === 'collection-searching' && item.state === 'blocked'), 'Sparse actor should expose blocked evidence priority for collection rows.')
 assert(quiet.evidencePriority.every(item => item.blockers.some(blocker => blocker.ownerLane === 'source' || blocker.ownerLane === 'org' || blocker.ownerLane === 'alert')), 'Sparse priority rows should carry typed owner blockers.')
 assert(nextActorArtifactId(quietArtifacts, undefined, 'next') === '', 'Keyboard helper should stay empty for sparse actor artifacts.')
+
+const lockbitFixture: TiSearchResponse = {
+    ...fixture,
+    query: 'lockbit',
+    summary: 'LockBit actor profile for extortion monitoring.',
+    confidence: 0.62,
+    lastSeen: '2026-07-04T23:05:00.028Z',
+    aliases: ['LockBit', 'LockBit 3.0', 'LockBitSupp'],
+    recentActivity: [{
+        date: '2026-07-04T23:05:00.028Z',
+        title: 'LockBit 3.0 actor profile updated',
+        detail: 'Maintains actor context while monitored source captures update independently.',
+        confidence: 0.66,
+        sourceIds: ['src_lockbit_profile'],
+        claimType: 'general_activity',
+        affectedSectors: ['Enterprise company exposure'],
+        countries: ['United States'],
+        firstReportedAt: '2026-07-04T23:05:00.028Z',
+    }],
+    targets: [{
+        sector: 'Enterprise company exposure',
+        regions: ['Global'],
+        rationale: 'Ransomware and extortion monitoring context from public actor reporting.',
+        confidence: 0.62,
+    }],
+    ttps: [],
+    datasets: [],
+    sources: [{
+        id: 'src_lockbit_profile',
+        name: 'LockBit leak-site monitoring',
+        type: 'public_ti',
+        provenance: 'https://example.invalid/lockbit-profile',
+        url: 'https://example.invalid/lockbit-profile',
+    }],
+    notes: [],
+    actorIntelligence: undefined,
+    actionability: {
+        schemaVersion: 'ti.query.actionability.v1',
+        alertDisposition: 'watchlist_required',
+        shouldAlert: false,
+        rationale: 'Actor monitoring is available, but authenticated organization context is required before alert or case creation.',
+        watchlistCandidates: [
+            { kind: 'company', value: 'LockBit', reason: 'Track ransomware and extortion actor mentions in monitored sources.', confidence: 0.62 },
+        ],
+        relatedAlerts: [],
+        relatedCases: [],
+        sourceProvenance: [],
+        enrichmentGaps: [],
+    },
+}
+const lockbitProfile = buildActorIntelligence(lockbitFixture, [])
+assert(/ransomware|extortion/i.test(lockbitProfile.actorClass), 'LockBit fallback should classify the actor as ransomware/extortion.')
+assert(lockbitProfile.malwareTools.some(item => /lockbit/i.test(item)), 'LockBit fallback should preserve LockBit tooling labels from aliases.')
+assert(lockbitProfile.infrastructure.some(item => /leak|publication/i.test(item)), 'LockBit fallback should expose extortion infrastructure workflow context.')
+assert(lockbitProfile.campaigns.length > 0, 'LockBit fallback should expose activity-backed campaign rows.')
+assert(lockbitProfile.confidenceReasoning.some(item => /source records/i.test(item)), 'LockBit fallback should explain source-backed confidence.')
 for (const phrase of bannedUiCopy) {
     assert(!pageClientSource.toLowerCase().includes(phrase), `Public TI page should not render prompt-shaped/internal copy: ${phrase}.`)
 }
