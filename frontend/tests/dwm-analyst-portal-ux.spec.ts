@@ -10,6 +10,10 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(page).toContain('Recent attacks')
     expect(page).toContain('Search company, actor, term, or status')
     expect(page).toContain('SelectedActionBar')
+    expect(page).toContain('data-dwm-next-action=\'true\'')
+    expect(page).toContain('nextOperatorAction({')
+    expect(page).toContain('Send customer delivery')
+    expect(page).toContain('Waiting for source context')
     expect(page).toContain('Customer delivery')
     expect(page).toContain('caseDetailHref')
     expect(page).toContain('&focus=destinations')
@@ -24,6 +28,7 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
 
     expect(page.indexOf('<WorkflowRouteStrip')).toBeLessThan(page.indexOf('Recent attacks'))
     expect(page.indexOf('Recent attacks')).toBeLessThan(page.indexOf('SelectedActionBar'))
+    expect(page.indexOf('data-dwm-next-action=\'true\'')).toBeLessThan(page.indexOf('<ActionStatus label=\'Owner\''))
     expect(page.indexOf('data-dwm-selected-workflow-actions')).toBeGreaterThan(page.indexOf('<DeliveryPanel'))
 
     expect(page).toContain('<section id=\'dwm-workflow-actions\' className=\'scroll-mt-24\'>')
