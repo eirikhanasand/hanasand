@@ -188,6 +188,9 @@ function Results({ result }: { result: TiSearchResponse }) {
     const [queueSort, setQueueSort] = useState<'priority' | 'confidence' | 'freshness'>('priority')
     const [showMoreAnalysis, setShowMoreAnalysis] = useState(false)
     const [showFullQueue, setShowFullQueue] = useState(false)
+    const largeViewport = useMediaQuery('(min-width: 1024px)')
+    const renderDesktopActions = largeViewport !== false
+    const renderMobileWorkbar = largeViewport !== true
     const filteredWorkItems = useMemo(() => filteredAnalystWorkItems(workItems, {
         kind: queueKindFilter,
         source: queueSourceFilter,
@@ -335,36 +338,21 @@ function Results({ result }: { result: TiSearchResponse }) {
                             </div>
                             <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
                         </div>
-                        <div className='grid min-w-0 content-start gap-3'>
-                            {selected ? (
-                                <div className='hidden min-w-0 lg:grid lg:content-start lg:gap-3'>
-                                    <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
-                                </div>
-                            ) : (
-                                <div className='hidden min-w-0 rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted lg:block'>
-                                    Select a finding to inspect evidence, source context, and case handoff.
-                                </div>
-                            )}
-                            <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
-                        </div>
                     </div>
                 </div>
-                {mobileEvidenceWorkbar ? <div className='border-b border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
-                {selected ? (
-                    <div className='border-b border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>
-                        <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
-                    </div>
+                {renderMobileWorkbar && mobileEvidenceWorkbar ? <div className='border-b border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
+                {renderDesktopActions ? (
+                    <ActorActionStrip
+                        actor={actorIntel}
+                        actionability={actionability}
+                        selected={selected}
+                        caseAvailable={Boolean(selectedCaseDraft && selectedCaseOwnership && selectedCaseCreateRequest && selectedWatchlistPlan && selectedAlertPlan && selectedDeliveryPlan && selectedEnrichmentTriage && selectedCaseActionTrail)}
+                        onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
+                        onCase={() => stageSelectedHandoff()}
+                        onEscalate={() => applyDecision('escalated')}
+                        onReview={() => applyDecision('reviewing')}
+                    />
                 ) : null}
-                <ActorActionStrip
-                    actor={actorIntel}
-                    actionability={actionability}
-                    selected={selected}
-                    caseAvailable={Boolean(selectedCaseDraft && selectedCaseOwnership && selectedCaseCreateRequest && selectedWatchlistPlan && selectedAlertPlan && selectedDeliveryPlan && selectedEnrichmentTriage && selectedCaseActionTrail)}
-                    onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
-                    onCase={() => stageSelectedHandoff()}
-                    onEscalate={() => applyDecision('escalated')}
-                    onReview={() => applyDecision('reviewing')}
-                />
 
                 <div className='grid min-h-[44rem] min-w-0 lg:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]'>
                     <aside id='ti-activity' data-ti-queue='true' className='order-2 min-w-0 border-b border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-canvas lg:order-none lg:border-b-0 lg:border-r'>
@@ -471,6 +459,15 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <EvidenceMetric label='Source reference' value={displayRequirementText(selected.provenance)} />
                                     </div>
 
+                                    <div data-ti-selected-evidence-command-strip='true' className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-2 text-xs dark:border-ui-border dark:bg-ui-raised sm:grid-cols-[minmax(0,1fr)_auto]'>
+                                        <p className='min-w-0 wrap-break-word leading-5 text-ui-muted dark:text-ui-muted'>
+                                            Case path: {selectedCaseDraft && selectedCaseOwnership ? 'Case draft ready' : selectedSourceDrilldown?.rows.length ? 'Add capture IDs' : 'Add source rows'} · {selectedSourceDrilldown?.rows.length ?? 0} source row{(selectedSourceDrilldown?.rows.length ?? 0) === 1 ? '' : 's'} linked.
+                                        </p>
+                                        <a href='#ti-actions' className='inline-flex min-h-8 items-center justify-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
+                                            Review actions
+                                        </a>
+                                    </div>
+
                                     {selectedSourceDrilldown ? <SelectedEvidenceContextTable drilldown={selectedSourceDrilldown} /> : null}
                                     {showMoreAnalysis ? (
                                         <>
@@ -491,6 +488,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         </>
                                     ) : null}
                                 </section>
+                                <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} />
                                 <SecondaryAnalysisToggle
                                     expanded={showMoreAnalysis}
                                     artifactCount={actorArtifacts.length}
@@ -506,6 +504,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                             <TiCommandBar links={commandLinks} />
                                             <SectionOverviewRail items={sectionOverview} />
                                         </div>
+                                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                                         <ActorIntelligenceDossier
                                             actor={actorIntel}
                                             actionability={actionability}
@@ -560,7 +559,7 @@ function Results({ result }: { result: TiSearchResponse }) {
 
                     <aside className='order-3 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-hidden border-t border-ui-border bg-ui-panel p-4 lg:order-none lg:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
-                        <div data-ti-actions='true'>
+                        <div id='ti-actions' data-ti-actions='true'>
                             {showMoreAnalysis ? (
                                 <ActionPanel
                                     note={selectedNote}
@@ -9495,7 +9494,7 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                 </div>
                 <span className='rounded-lg bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-primary dark:bg-ui-raised dark:text-ui-primary'>{hasPoints ? `${geo.points.length} countries` : hasRegionalAreas ? `${regionalAreas.length} region${regionalAreas.length === 1 ? '' : 's'}` : 'Source coverage'}</span>
             </div>
-            <div className={`${hasPoints ? compact ? 'min-h-72' : 'min-h-80' : ''} relative overflow-hidden bg-ui-raised dark:bg-ui-canvas`}>
+            <div className={`${hasPoints ? compact ? 'min-h-60' : 'min-h-80' : ''} relative overflow-hidden bg-ui-raised dark:bg-ui-canvas`}>
                 {hasPoints ? (
                     <>
                         <div className='absolute left-3 top-3 z-20 rounded-lg border border-ui-border bg-ui-panel/90 px-3 py-1.5 text-xs text-ui-muted shadow-sm backdrop-blur dark:border-ui-border dark:bg-ui-panel/90 dark:text-ui-muted'>
@@ -9513,7 +9512,7 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
                             viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
                             role='img'
                             aria-label={`Country-level actor map for ${humanizeSlug(result.query)}`}
-                            className={`${compact ? 'h-72' : 'h-80'} relative z-10 w-full cursor-grab bg-ui-panel active:cursor-grabbing dark:bg-ui-canvas`}
+                            className={`${compact ? 'h-60' : 'h-80'} relative z-10 w-full cursor-grab bg-ui-panel active:cursor-grabbing dark:bg-ui-canvas`}
                             onMouseDown={(event) => {
                                 dragRef.current = { x: event.clientX, y: event.clientY, viewBox }
                             }}
