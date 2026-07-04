@@ -57,6 +57,17 @@ const DEFAULT_HEIGHT = 760
 const MAX_DURATION_MS = 60 * 60 * 1000
 const FRAME_INTERVAL_MS = 900
 const MAX_SCRIPT_SAMPLE = 3200
+const BLOCKED_SANDBOX_HOSTS = new Set([
+    'localhost',
+    'metadata.google.internal',
+    'metadata',
+])
+const BLOCKED_SANDBOX_HOST_SUFFIXES = [
+    '.local',
+    '.localhost',
+    '.internal',
+    '.lan',
+]
 
 export function handleOnionSessionSocket(connection: WebSocket, sessionId: string, defaultNetwork: 'tor' | 'regular' = 'tor') {
     let browser: Browser | null = null
@@ -213,6 +224,24 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             permissions: ['clipboard-read', 'clipboard-write'],
         })
         page = await context.newPage()
+        await page.route('**/*', async (route) => {
+            const requestUrl = route.request().url()
+            const safety = sandboxUrlSafety(requestUrl)
+            if (!safety.ok) {
+                trackNetwork({
+                    kind: 'failed',
+                    url: requestUrl,
+                    method: route.request().method(),
+                    resourceType: route.request().resourceType(),
+                    failure: `blocked unsafe sandbox request: ${safety.reason}`,
+                    at: new Date().toISOString(),
+                })
+                send({ type: 'status', state: 'unsafe_request_blocked', url: requestUrl, message: `Blocked unsafe sandbox request: ${safety.reason}.` })
+                await route.abort('blockedbyclient').catch(() => undefined)
+                return
+            }
+            await route.continue().catch(() => undefined)
+        })
         page.on('console', (entry) => send({ type: 'console', level: entry.type(), text: entry.text() }))
         page.on('pageerror', (error) => send({ type: 'pageerror', message: error.message }))
         page.on('request', (request) => {
@@ -336,6 +365,12 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     async function navigate(value: string) {
         if (!page) return
         const target = normalizeTarget(value)
+        const safety = sandboxUrlSafety(target)
+        if (!safety.ok) {
+            send({ type: 'navigation_error', target, message: `Blocked unsafe sandbox target: ${safety.reason}.` })
+            send({ type: 'status', state: 'unsafe_target_blocked', url: target, message: `Blocked unsafe sandbox target: ${safety.reason}.` })
+            return
+        }
         send({ type: 'status', state: 'navigating', target })
         await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 25_000 }).catch((error) => {
             send({ type: 'navigation_error', target, message: error instanceof Error ? error.message : String(error) })
@@ -843,6 +878,62 @@ function normalizeTarget(value: string) {
     if (!trimmed) return DEFAULT_TARGET
     if (/^https?:\/\//i.test(trimmed)) return trimmed
     return `http://${trimmed}`
+}
+
+function sandboxUrlSafety(value: string): { ok: true } | { ok: false; reason: string } {
+    let parsed: URL
+    try {
+        parsed = new URL(value)
+    } catch {
+        return { ok: false, reason: 'invalid URL' }
+    }
+
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+        return { ok: false, reason: 'only http and https URLs are allowed' }
+    }
+
+    if (parsed.username || parsed.password) {
+        return { ok: false, reason: 'embedded credentials are not allowed' }
+    }
+
+    const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    if (!host) return { ok: false, reason: 'missing hostname' }
+    if (BLOCKED_SANDBOX_HOSTS.has(host)) return { ok: false, reason: 'internal hostname' }
+    if (BLOCKED_SANDBOX_HOST_SUFFIXES.some(suffix => host.endsWith(suffix))) {
+        return { ok: false, reason: 'internal hostname suffix' }
+    }
+    if (isBlockedIPv4Host(host) || isBlockedIPv6Host(host)) {
+        return { ok: false, reason: 'private or local network address' }
+    }
+
+    return { ok: true }
+}
+
+function isBlockedIPv4Host(host: string) {
+    const parts = host.split('.')
+    if (parts.length !== 4 || parts.some(part => !/^\d+$/.test(part))) return false
+    const octets = parts.map(Number)
+    if (octets.some(octet => octet < 0 || octet > 255)) return false
+    const [a, b] = octets
+    return a === 0
+        || a === 10
+        || a === 127
+        || (a === 169 && b === 254)
+        || (a === 172 && b >= 16 && b <= 31)
+        || (a === 192 && b === 168)
+        || (a === 100 && b >= 64 && b <= 127)
+        || a >= 224
+}
+
+function isBlockedIPv6Host(host: string) {
+    if (!host.includes(':')) return false
+    const normalized = host.toLowerCase()
+    return normalized === '::'
+        || normalized === '::1'
+        || normalized.startsWith('fc')
+        || normalized.startsWith('fd')
+        || normalized.startsWith('fe80:')
+        || normalized.startsWith('ff')
 }
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number) {
