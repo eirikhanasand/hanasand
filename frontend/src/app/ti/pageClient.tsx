@@ -339,6 +339,34 @@ function Results({ result }: { result: TiSearchResponse }) {
                             </div>
                             <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
                         </div>
+                        <div className='grid min-w-0 content-start gap-3' data-ti-actor-visual='true'>
+                            <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
+                            {selected ? (
+                                <section data-ti-actor-evidence-spotlight='true' className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel'>
+                                    <div className='flex flex-wrap items-start justify-between gap-3'>
+                                        <div className='min-w-0'>
+                                            <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Selected evidence</p>
+                                            <h2 className='mt-1 wrap-break-word text-base font-semibold leading-6 text-ui-text dark:text-ui-text'>{displayRequirementText(selected.title)}</h2>
+                                            <p className='mt-1 line-clamp-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selected.detail)}</p>
+                                        </div>
+                                        <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
+                                    </div>
+                                    <div className='grid gap-2 sm:grid-cols-3'>
+                                        <EvidenceMetric label='Source' value={selected.source} />
+                                        <EvidenceMetric label='Strength' value={sourceBasisLabel(selected.confidence)} />
+                                        <EvidenceMetric label='First seen' value={selected.timestamp} />
+                                    </div>
+                                    <div className='flex flex-wrap gap-2'>
+                                        <a href='#ti-selected-evidence' className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'>
+                                            Inspect evidence
+                                        </a>
+                                        <a href='#ti-actions' className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-text bg-ui-text px-3 text-xs font-semibold text-ui-canvas transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-text dark:bg-ui-text dark:text-ui-canvas'>
+                                            Review actions
+                                        </a>
+                                    </div>
+                                </section>
+                            ) : null}
+                        </div>
                     </div>
                 </div>
                 {renderDesktopActions ? (
@@ -463,9 +491,14 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <p className='min-w-0 wrap-break-word leading-5 text-ui-muted dark:text-ui-muted'>
                                             Case path: {selectedCaseDraft && selectedCaseOwnership ? 'Case draft ready' : selectedSourceDrilldown?.rows.length ? 'Add capture IDs' : 'Add source rows'} · {selectedSourceDrilldown?.rows.length ?? 0} source row{(selectedSourceDrilldown?.rows.length ?? 0) === 1 ? '' : 's'} linked.
                                         </p>
-                                        <a href='#ti-actions' className='inline-flex min-h-8 items-center justify-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                            Review actions
-                                        </a>
+                                        <span className='flex flex-wrap gap-2'>
+                                            <a href='#ti-selected-evidence' className='inline-flex min-h-8 items-center justify-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
+                                                Inspect evidence
+                                            </a>
+                                            <a href='#ti-actions' className='inline-flex min-h-8 items-center justify-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
+                                                Review actions
+                                            </a>
+                                        </span>
                                     </div>
 
                                     {selectedSourceDrilldown ? <SelectedEvidenceContextTable drilldown={selectedSourceDrilldown} /> : null}
@@ -488,7 +521,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         </>
                                     ) : null}
                                 </section>
-                                <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} />
                                 <SecondaryAnalysisToggle
                                     expanded={showMoreAnalysis}
                                     artifactCount={actorArtifacts.length}

@@ -11,6 +11,10 @@ test.describe('public threat actor profile', () => {
         await expect(page.getByRole('heading', { name: 'APT29', exact: true })).toBeVisible()
         await expect(page.getByRole('heading', { name: 'Actor country map' })).toBeVisible()
         await expect(page.getByText('Reported operator origin and victim or target countries from linked sources.')).toBeVisible()
+        await expect(page.locator('[data-ti-actor-visual="true"]')).toBeVisible()
+        await expect(page.locator('[data-ti-actor-evidence-spotlight="true"]')).toBeVisible()
+        await expect(page.locator('[data-ti-actor-evidence-spotlight="true"]').getByRole('link', { name: 'Inspect evidence' })).toBeVisible()
+        await expect(page.locator('[data-ti-actor-evidence-spotlight="true"]').getByRole('link', { name: 'Review actions' })).toBeVisible()
 
         const body = page.locator('body')
         await expect(body).toContainText('Russia')
@@ -24,6 +28,12 @@ test.describe('public threat actor profile', () => {
         await expect(body).toContainText('Public reporting attributes APT29 to Russia-linked SVR activity.')
         await expect(body).toContainText('Latest activity')
         await expect(body).toContainText('Sources used')
+
+        const mapBox = await page.getByRole('heading', { name: 'Actor country map' }).boundingBox()
+        const activityBox = await page.locator('#ti-activity').boundingBox()
+        const spotlightBox = await page.locator('[data-ti-actor-evidence-spotlight="true"]').boundingBox()
+        expect(mapBox?.y ?? 0).toBeLessThan(activityBox?.y ?? Number.POSITIVE_INFINITY)
+        expect(spotlightBox?.y ?? 0).toBeLessThan(activityBox?.y ?? Number.POSITIVE_INFINITY)
 
         const bodyText = await body.innerText()
         expect(bodyText).not.toMatch(/\bblocked\b/i)
@@ -60,5 +70,7 @@ test.describe('public threat actor profile', () => {
         expect(source).toContain('renderDesktopActions')
         expect(source).not.toContain('data-ti-hero-map')
         expect(source).not.toContain('data-ti-hero-evidence')
+        expect(source).toContain('data-ti-actor-visual')
+        expect(source).toContain('data-ti-actor-evidence-spotlight')
     })
 })
