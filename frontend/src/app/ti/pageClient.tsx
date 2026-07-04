@@ -150,10 +150,11 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                     <button
                         type='submit'
                         aria-busy={busy}
-                        className={`${visible ? 'h-10 rounded-lg' : 'h-16 rounded-xl'} inline-flex items-center justify-center gap-2 bg-ui-text px-5 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted dark:bg-ui-primary dark:hover:bg-ui-primary`}
+                        aria-label={busy ? 'Searching threat intelligence' : 'Search threat intelligence'}
+                        className={`${visible ? 'h-10 min-w-28 rounded-lg' : 'h-16 min-w-36 rounded-xl'} inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap bg-ui-text px-5 text-sm font-semibold text-white transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted dark:bg-ui-primary dark:text-white dark:hover:bg-ui-primary`}
                     >
                         <Search className='h-4 w-4' />
-                        {busy ? 'Searching' : 'Search'}
+                        <span>{busy ? 'Searching' : 'Search'}</span>
                     </button>
                 </div>
                 {error ? <p className='text-sm text-ui-danger'>{error}</p> : null}
@@ -193,7 +194,7 @@ function Results({ result }: { result: TiSearchResponse }) {
         confidence: queueConfidenceFilter,
         sort: queueSort,
     }), [queueConfidenceFilter, queueKindFilter, queueSort, queueSourceFilter, workItems])
-    const visibleQueueItems = showFullQueue ? filteredWorkItems : filteredWorkItems.slice(0, 6)
+    const visibleQueueItems = showFullQueue ? filteredWorkItems : filteredWorkItems.slice(0, 4)
     const queueSourceOptions = useMemo(() => unique(workItems.map(item => item.source).filter(Boolean)).sort((a, b) => a.localeCompare(b)).slice(0, 8), [workItems])
     const queueSourceCounts = useMemo(() => sourceCountsFor(filteredWorkItems), [filteredWorkItems])
     const selected = filteredWorkItems.find(item => item.id === selectedId) ?? filteredWorkItems[0] ?? workItems.find(item => item.id === selectedId) ?? workItems[0]
@@ -338,19 +339,22 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
                                 ))}
                             </div>
-                            <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
                         </div>
                         <div className='grid min-w-0 content-start gap-3'>
                             <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                             {selected ? (
-                                <div className='hidden min-w-0 lg:block'>
+                                <div className='hidden min-w-0 lg:grid lg:content-start lg:gap-3'>
                                     <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
+                                    <TopEvidenceQueuePreview items={visibleQueueItems} selectedId={selected.id} onSelect={setSelectedId} />
                                 </div>
                             ) : (
                                 <div className='hidden min-w-0 rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted lg:block'>
                                     Select a finding to inspect evidence, source context, and case handoff.
                                 </div>
                             )}
+                        </div>
+                        <div className='min-w-0 xl:col-span-2'>
+                            <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
                         </div>
                     </div>
                 </div>
@@ -393,7 +397,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 onSortChange={setQueueSort}
                             />
                         </div>
-                        <div className='p-2 lg:max-h-[40rem] lg:overflow-y-auto'>
+                        <div className='p-2 lg:max-h-[32rem] lg:overflow-y-auto'>
                             {visibleQueueItems.map(item => {
                                 const decision = localDecisions[item.id]
                                 const active = selected?.id === item.id
@@ -428,7 +432,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     Show {filteredWorkItems.length - visibleQueueItems.length} more findings
                                 </button>
                             ) : null}
-                            {showFullQueue && filteredWorkItems.length > 6 ? (
+                            {showFullQueue && filteredWorkItems.length > 4 ? (
                                 <button
                                     type='button'
                                     onClick={() => setShowFullQueue(false)}
@@ -6187,6 +6191,43 @@ function TopSelectedEvidencePanel({ selected, drilldown, caseReady }: { selected
                     </p>
                     <span className='shrink-0 text-[11px] font-semibold text-ui-primary dark:text-ui-primary'>Actions below</span>
                 </div>
+            </div>
+        </section>
+    )
+}
+
+function TopEvidenceQueuePreview({ items, selectedId, onSelect }: { items: AnalystWorkItem[]; selectedId: string; onSelect: (id: string) => void }) {
+    const previewItems = items.slice(0, 3)
+    return (
+        <section data-ti-top-evidence-queue='true' className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
+            <div className='flex min-w-0 items-center justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Evidence queue</p>
+                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Top findings with source basis and handoff state.</p>
+                </div>
+                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>{items.length} rows</span>
+            </div>
+            <div className='mt-3 grid gap-1.5'>
+                {previewItems.map(item => {
+                    const active = item.id === selectedId
+                    return (
+                        <button
+                            key={item.id}
+                            type='button'
+                            onClick={() => onSelect(item.id)}
+                            className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-lg border px-2.5 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${active ? 'border-ui-primary bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-primary/10' : 'border-ui-border bg-ui-panel hover:bg-ui-raised dark:border-ui-border dark:bg-ui-panel dark:hover:bg-ui-raised'}`}
+                        >
+                            <span className='min-w-0'>
+                                <span className='block truncate text-xs font-semibold text-ui-text dark:text-ui-text'>{displayRequirementText(item.title)}</span>
+                                <span className='mt-0.5 block truncate text-[11px] text-ui-muted dark:text-ui-muted'>{item.source} · {item.timestamp} · {sourceBasisLabel(item.confidence)}</span>
+                            </span>
+                            <span className={`self-start rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${severityClass(item.severity)}`}>{item.severity}</span>
+                        </button>
+                    )
+                })}
+                {!previewItems.length ? (
+                    <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-xs text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>Search results will appear here for review.</p>
+                ) : null}
             </div>
         </section>
     )
