@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, BellRing, CheckCircle2, Copy, Loader2, RotateCcw, Send, ShieldCheck, UserRound, XCircle } from 'lucide-react'
 
-type CaseDetail = {
+export type CaseDetail = {
     schemaVersion?: string
     generatedAt?: string
     access?: { readOnly?: boolean, role?: string, blockerCodes?: string[] }
@@ -72,7 +72,7 @@ type CaseDetail = {
     nextAllowedActions?: CaseAction[]
 }
 
-type CaseExport = {
+export type CaseExport = {
     schemaVersion?: string
     summary?: {
         caseId?: string
@@ -198,12 +198,24 @@ type LoadState = {
 
 const primaryActions = ['review', 'assign', 'escalate', 'suppress', 'false_positive', 'close', 'reopen', 'note']
 
-export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId, routeRun }: { caseId: string, tenantId?: string, organizationId?: string, alertId?: string, routeRun?: string }) {
-    const [state, setState] = useState<LoadState>({ loading: true })
+export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId, routeRun, initialDetail, initialExportPayload }: {
+    caseId: string
+    tenantId?: string
+    organizationId?: string
+    alertId?: string
+    routeRun?: string
+    initialDetail?: CaseDetail
+    initialExportPayload?: CaseExport
+}) {
+    const [state, setState] = useState<LoadState>({
+        loading: !initialDetail,
+        detail: initialDetail,
+        exportPayload: initialExportPayload,
+    })
     const [busy, setBusy] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
     const [note, setNote] = useState('')
-    const [owner, setOwner] = useState('')
+    const [owner, setOwner] = useState(initialDetail?.case?.assignedOwner || initialDetail?.workflowState?.assignedOwner || '')
 
     const caseRecord = state.detail?.case
     const alert = state.detail?.alert
@@ -410,6 +422,15 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                             <Metric label='Timeline' value={`${timeline.length}`} detail={caseRecord.updatedAt ? `updated ${relativeTime(caseRecord.updatedAt)}` : 'no update'} />
                         </div>
 
+                        <DecisionBrief
+                            detail={state.detail}
+                            exportPayload={state.exportPayload}
+                            latestDelivery={latestDelivery}
+                            actionDockHref='#dwm-case-actions'
+                            destinationHref={destinationHref}
+                            deliveryHistoryHref={deliveryHistoryHref}
+                        />
+
                         <WorkflowStrip detail={state.detail} exportPayload={state.exportPayload} />
 
                         <section className='grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]'>
@@ -452,7 +473,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                         </section>
                     </section>
 
-                    <aside data-dwm-case-action-dock className='order-first grid min-w-0 content-start gap-3 xl:order-none'>
+                    <aside id='dwm-case-actions' data-dwm-case-action-dock className='order-first grid min-w-0 scroll-mt-24 content-start gap-3 xl:order-none'>
                         <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
                             <div className='flex items-center justify-between gap-2'>
                                 <h2 className='text-sm font-semibold text-ui-text'>Analyst actions</h2>
@@ -557,6 +578,93 @@ function RouteHandoffStrip({ routeRun, detail, exportPayload, latestDelivery }: 
                 </div>
             </div>
         </section>
+    )
+}
+
+function DecisionBrief({ detail, exportPayload, latestDelivery, actionDockHref, destinationHref, deliveryHistoryHref }: {
+    detail: CaseDetail
+    exportPayload?: CaseExport
+    latestDelivery?: DeliveryRow
+    actionDockHref: string
+    destinationHref: string
+    deliveryHistoryHref: string
+}) {
+    const evidenceCount = detail.evidence?.length ?? exportPayload?.summary?.evidenceCount ?? 0
+    const deliveryCount = detail.deliveries?.length ?? exportPayload?.summary?.deliveryCount ?? 0
+    const terms = matchedTerms(detail)
+    const blockers = uniqueStrings([
+        ...(detail.access?.blockerCodes ?? []),
+        ...(detail.workflowActionPolicy?.summary?.blockerCodes ?? []),
+        ...(detail.handoffActionReadiness?.blockers ?? []),
+        ...(detail.customerNotificationContext?.blockers ?? []),
+    ])
+    const nextActions = detail.nextActions ?? []
+    const primaryNext = nextActions.find(action => action.enabled !== false) ?? nextActions[0]
+    const deliveryFailed = latestDelivery?.status === 'failed'
+    const deliverySent = latestDelivery?.status === 'delivered' || detail.deliveryContext?.delivered
+    const recommended = blockers.length
+        ? 'Clear workflow blocker'
+        : !evidenceCount
+            ? 'Attach evidence'
+            : deliveryFailed
+                ? 'Fix destination'
+                : !deliveryCount
+                    ? 'Test delivery'
+                    : deliverySent
+                        ? 'Record decision'
+                        : 'Review delivery'
+    const recommendedDetail = primaryNext?.detail
+        || (blockers.length ? blockers.map(stateLabel).join(', ') : undefined)
+        || (deliveryFailed ? latestDelivery?.error || latestDelivery.errorClass || 'Delivery failed.' : undefined)
+        || (!evidenceCount ? 'No evidence rows are attached to this case.' : undefined)
+        || (deliveryCount ? `${deliveryCount} delivery attempt${deliveryCount === 1 ? '' : 's'} attached.` : 'No delivery attempt is attached yet.')
+    const primaryHref = primaryNext?.route || (deliveryFailed ? destinationHref : !deliveryCount ? actionDockHref : deliveryHistoryHref)
+    const sourceRefs = uniqueStrings([
+        ...(detail.alert?.provenance?.sourceIds ?? []),
+        ...(detail.alertContext?.provenance?.sourceIds ?? []),
+    ])
+    const captureRefs = uniqueStrings([
+        ...(detail.alert?.provenance?.captureIds ?? []),
+        ...(detail.alertContext?.provenance?.captureIds ?? []),
+    ])
+
+    return (
+        <section data-dwm-case-decision-brief className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.58fr)]'>
+            <div className='min-w-0'>
+                <div className='flex flex-wrap items-center gap-2'>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Decision brief</p>
+                    {blockers.length ? <StatusDot state='blocked' /> : <StatusDot state={deliverySent ? 'ready' : 'action'} />}
+                </div>
+                <h2 className='mt-2 wrap-break-word text-base font-semibold text-ui-text'>{primaryNext?.label || recommended}</h2>
+                <p className='mt-1 max-w-3xl wrap-break-word text-sm leading-6 text-ui-muted'>{recommendedDetail}</p>
+                <div className='mt-3 grid gap-2 sm:grid-cols-3'>
+                    <DecisionFact label='Matched term' value={terms[0] || detail.alert?.matchedTerm?.value || 'term pending'} />
+                    <DecisionFact label='Sources' value={sourceRefs.length ? `${sourceRefs.length} linked` : 'source pending'} title={sourceRefs.join(', ')} />
+                    <DecisionFact label='Captures' value={captureRefs.length ? `${captureRefs.length} linked` : 'capture pending'} title={captureRefs.join(', ')} />
+                </div>
+            </div>
+            <div className='grid min-w-0 content-start gap-2'>
+                <CommandLink href={primaryHref}>{primaryNext?.label || recommended}</CommandLink>
+                <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-1'>
+                    <CommandLink href={actionDockHref}>Analyst actions</CommandLink>
+                    <CommandLink href={deliveryHistoryHref}>Delivery history</CommandLink>
+                </div>
+                {blockers.length ? (
+                    <div className='rounded-lg border border-ui-warning/30 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning'>
+                        {blockers.slice(0, 3).map(stateLabel).join(', ')}
+                    </div>
+                ) : null}
+            </div>
+        </section>
+    )
+}
+
+function DecisionFact({ label, value, title }: { label: string, value: string, title?: string }) {
+    return (
+        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2'>
+            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className='mt-1 truncate text-xs font-semibold text-ui-text' title={title || value}>{value}</p>
+        </div>
     )
 }
 
