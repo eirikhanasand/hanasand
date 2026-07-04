@@ -154,7 +154,7 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
             confidence: Math.max(result.confidence || 0, 0.76),
             confidenceReasoning: [
                 'Aliases and attribution are corroborated across government and vendor reporting.',
-                'Victim observations include named organizations, sectors, timeframes, and source basis.',
+                'Victim observations include named organizations, sectors, timeframes, and evidence strength.',
                 'Tradecraft aligns with mapped ATT&CK techniques for credential, cloud, email, and command-and-control activity.',
             ],
             sourceProvenance: [

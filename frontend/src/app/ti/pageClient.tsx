@@ -314,12 +314,6 @@ function Results({ result }: { result: TiSearchResponse }) {
     return (
         <div className='grid gap-6'>
             <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                {mobileEvidenceWorkbar ? <div className='border-b border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
-                {selected ? (
-                    <div className='border-b border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>
-                        <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
-                    </div>
-                ) : null}
                 <div className='grid gap-4 border-b border-ui-border bg-ui-panel p-4 dark:border-ui-border dark:bg-ui-panel'>
                     <div className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] xl:items-stretch'>
                         <div className='grid min-w-0 content-start gap-4'>
@@ -343,7 +337,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         </div>
                         <div className='grid min-w-0 content-start gap-3'>
                             {selected ? (
-                                <div className='hidden min-w-0 lg:block'>
+                                <div className='hidden min-w-0 lg:grid lg:content-start lg:gap-3'>
                                     <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
                                 </div>
                             ) : (
@@ -351,9 +345,16 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     Select a finding to inspect evidence, source context, and case handoff.
                                 </div>
                             )}
+                            <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                         </div>
                     </div>
                 </div>
+                {mobileEvidenceWorkbar ? <div className='border-b border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
+                {selected ? (
+                    <div className='border-b border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>
+                        <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} />
+                    </div>
+                ) : null}
                 <ActorActionStrip
                     actor={actorIntel}
                     actionability={actionability}
@@ -505,7 +506,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                                             <TiCommandBar links={commandLinks} />
                                             <SectionOverviewRail items={sectionOverview} />
                                         </div>
-                                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                                         <ActorIntelligenceDossier
                                             actor={actorIntel}
                                             actionability={actionability}

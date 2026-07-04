@@ -1062,7 +1062,7 @@ function buildEvidencePriority(input: {
         route: casePaths[0],
         reasons: [
             `Targeting evidence for ${item.country} and ${item.sector}.`,
-            `Source basis: ${item.source}.`,
+            `Evidence strength: ${item.source}.`,
             ...sharedReasons,
         ],
     }))

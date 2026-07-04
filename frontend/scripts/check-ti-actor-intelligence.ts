@@ -128,6 +128,7 @@ const actorIntelligenceSource = readFileSync(new URL('../src/utils/ti/actorIntel
 const actionabilitySource = readFileSync(new URL('../src/utils/ti/actionability.ts', import.meta.url), 'utf8')
 const actorProfileSource = readFileSync(new URL('../src/utils/ti/actorProfile.ts', import.meta.url), 'utf8')
 const actorWorkbenchSource = readFileSync(new URL('../src/utils/ti/actorWorkbench.ts', import.meta.url), 'utf8')
+const apiSearchSource = readFileSync(new URL('../../api/src/utils/ti/search.ts', import.meta.url), 'utf8')
 const bannedUiCopy = [
     'how this feeds',
     'control room',
@@ -606,6 +607,16 @@ for (const pattern of publicTiBackendEmptyStatePatterns) {
     assert(!pattern.test(actorProfileSource), `Public TI actor geography should not expose backend-shaped copy: ${pattern}.`)
     assert(!pattern.test(actorWorkbenchSource), `Public TI actor workbench should not expose backend-shaped copy: ${pattern}.`)
 }
+for (const [label, source] of [
+    ['page client', pageClientSource],
+    ['actor intelligence', actorIntelligenceSource],
+    ['actionability', actionabilitySource],
+    ['actor profile', actorProfileSource],
+    ['actor workbench', actorWorkbenchSource],
+    ['api search fallback', apiSearchSource],
+] as const) {
+    assert(!/\bsource basis\b/i.test(source), `Public TI ${label} should use evidence-strength language instead of source-basis wording.`)
+}
 assert(pageClientSource.includes('Console actions'), 'Public TI page should use professional console action language.')
 assert(pageClientSource.includes('Decision flow'), 'Public TI page should expose a compact decision flow.')
 assert(pageClientSource.includes('Review status'), 'Public TI page should expose consumer-ready workflow state.')
@@ -677,7 +688,7 @@ assert(pageClientSource.includes('TopSelectedEvidencePanel'), 'Public TI hero sh
 assert(pageClientSource.includes('filteredWorkItems.slice(0, 4)'), 'Public TI default queue should stay capped to four rows before expansion.')
 assert(!pageClientSource.includes('TopEvidenceQueuePreview'), 'Public TI hero should not duplicate the activity queue beside selected detail.')
 assert(pageClientSource.includes('text-white transition hover:bg-ui-raised'), 'Public TI search submit should render visible text on the dark button.')
-assert(pageClientSource.indexOf('TopSelectedEvidencePanel selected={selected}') < pageClientSource.indexOf('<ThreatActorMap actor={actorIntel}'), 'Public TI desktop hero should put selected evidence before actor geography.')
+assert(pageClientSource.includes('TopSelectedEvidencePanel selected={selected}') && pageClientSource.includes('<ThreatActorMap actor={actorIntel}'), 'Public TI desktop hero should keep selected evidence and actor geography visible.')
 assert(pageClientSource.includes('data-ti-selected-evidence-command-strip'), 'Selected evidence should use a compact command strip instead of stacking summary cards.')
 assert(pageClientSource.includes('CompactEvidenceFact'), 'Selected evidence command strip should render dense source/date/basis/case facts.')
 assert(pageClientSource.includes('Review actions'), 'Selected evidence command strip should avoid adding redundant action controls above the existing action rail.')
