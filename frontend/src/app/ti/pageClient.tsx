@@ -5628,7 +5628,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                                 </div>
                             ))}
                         </div>
-                        {rows.length ? rows.slice(0, 5).map(row => (
+                        {rows.length ? rows.slice(0, 3).map(row => (
                             <div key={row.id} className='min-w-0 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
                                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                     <div className='min-w-0'>
@@ -5643,8 +5643,8 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                                     <span className={decisionStepStatusClass(row.state)}>{publicDecisionStatusLabel(row.state)}</span>
                                 </div>
                                 <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
-                                    {row.sourceId ? <span className={sourceHealthChipClass('review')}>source {row.sourceId}</span> : null}
-                                    {row.sourceRequestId ? <span className={sourceHealthChipClass('review')}>request {row.sourceRequestId}</span> : null}
+                                    {row.sourceId ? <span className={sourceHealthChipClass('review')}>source linked</span> : null}
+                                    {row.sourceRequestId ? <span className={sourceHealthChipClass('review')}>request linked</span> : null}
                                     <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'capture linked' : 'capture needed'}</span>
                                     {typeof row.confidence === 'number' ? <span className={sourceHealthChipClass('review')}>{sourceBasisLabel(row.confidence)}</span> : null}
                                     <span className={sourceHealthChipClass(row.ownerLane === 'source' ? 'blocked' : row.state)}>{readinessOwnerLabel(row.ownerLane)}</span>
