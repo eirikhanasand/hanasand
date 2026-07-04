@@ -557,13 +557,13 @@ function RouteHandoffStrip({ routeRun, detail, exportPayload, latestDelivery }: 
     const label = routeRun === 'metadata_claim'
         ? 'Metadata intake'
         : routeRun === 'source_pack'
-            ? 'Source pack route'
+            ? 'Source pack review'
             : routeRun === 'alert_queue'
                 ? 'Alert review'
-                : 'Route handoff'
+                : 'Action handoff'
     const nextAction = deliveryCount ? 'Record decision' : latestDelivery ? 'Review delivery' : 'Test webhook'
     const cells = [
-        { label: 'Route', value: label },
+        { label: 'Action', value: label },
         { label: 'Match', value: terms[0] || detail.alert?.matchedTerm?.value || 'term pending' },
         { label: 'Evidence', value: `${evidenceCount} rows` },
         { label: 'Delivery', value: latestDelivery?.status ? stateLabel(latestDelivery.status) : deliveryCount ? `${deliveryCount} attempts` : 'not sent' },
@@ -574,7 +574,7 @@ function RouteHandoffStrip({ routeRun, detail, exportPayload, latestDelivery }: 
         <section data-dwm-case-route-handoff className='rounded-lg border border-ui-border bg-ui-panel p-3'>
             <div className='grid gap-3'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Route handoff</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Action handoff</p>
                     <h2 className='mt-1 text-sm font-semibold text-ui-text'>Case opened from {label.toLowerCase()}</h2>
                     <p className='mt-1 text-xs leading-5 text-ui-muted'>Review the matched evidence, delivery state, and case decision before customer notification.</p>
                 </div>
