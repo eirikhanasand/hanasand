@@ -2861,7 +2861,7 @@ function StructuredProvenancePanel({ rows, actor, actionability, query }: { rows
                             <div className='flex flex-wrap items-center justify-between gap-2'>
                                 <p className='min-w-0 wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}</p>
                                 <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
-                                    <span className='shrink-0 text-[11px] text-ui-muted dark:text-ui-muted'>{row.reportDate ? formatDate(row.reportDate) : row.captureId ? `capture ${row.captureId}` : sourceBasisLabel(row.confidence)}</span>
+                                    <span className='shrink-0 text-[11px] text-ui-muted dark:text-ui-muted'>{row.reportDate ? formatDate(row.reportDate) : row.captureId ? 'capture linked' : sourceBasisLabel(row.confidence)}</span>
                                     <CopyPayloadButton label='Provenance artifact' payload={provenanceArtifactPayloadFor(row, actor, actionability, query)} />
                                     {href ? (
                                         <a href={href} target='_blank' rel='noopener noreferrer' className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
@@ -3404,7 +3404,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                             {request.captureId ? 'capture attached' : 'capture needed'}
                                         </span>
                                     </div>
-                                    <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{request.captureId ? `capture ${request.captureId}` : compactSourceReferenceLabel(request.provenance)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{request.captureId ? 'capture linked' : compactSourceReferenceLabel(request.provenance)}</p>
                                     {request.missing.length || typeof request.confidence === 'number' ? (
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                             {[typeof request.confidence === 'number' ? sourceBasisLabel(request.confidence) : '', ...request.missing.map(displayRequirementText)].filter(Boolean).join(' · ')}
@@ -3637,14 +3637,14 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                             <div className='min-w-0'>
                                 <p className='min-w-0 wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}</p>
                                 <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                    {[row.sourceId ? `source ${row.sourceId}` : '', row.reportDate ? formatDate(row.reportDate) : '', typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : ''].filter(Boolean).join(' · ') || 'Source metadata incomplete'}
+                                    {[row.sourceId ? 'source linked' : '', row.reportDate ? formatDate(row.reportDate) : '', typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : ''].filter(Boolean).join(' · ') || 'Source metadata incomplete'}
                                 </p>
                             </div>
                             <span className={row.state === 'ready' ? decisionStepStatusClass('ready') : row.state === 'needs_capture' ? decisionStepStatusClass('review') : decisionStepStatusClass('blocked')}>
                                 {row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'capture needed' : 'source needed'}
                             </span>
                         </div>
-                        <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{row.captureId ? `capture ${row.captureId}` : compactSourceReferenceLabel(row.provenance)}</p>
+                        <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{row.captureId ? 'capture linked' : compactSourceReferenceLabel(row.provenance)}</p>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.handoff)}</p>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                             <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-raised dark:text-ui-text'>
