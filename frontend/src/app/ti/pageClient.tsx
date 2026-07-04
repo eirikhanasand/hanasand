@@ -241,7 +241,7 @@ function Results({ result }: { result: TiSearchResponse }) {
         { icon: <Activity className='h-3.5 w-3.5' />, label: 'Freshness', value: formatDate(result.lastSeen || result.generatedAt) },
         { icon: <Inbox className='h-3.5 w-3.5' />, label: 'Open reviews', value: `${queueCounts.open} open` },
         { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Related alerts', value: String(actionability.relatedAlerts.length) },
-        { icon: <Database className='h-3.5 w-3.5' />, label: 'Gaps', value: `${openGapCount} open` },
+        { icon: <Database className='h-3.5 w-3.5' />, label: 'Source questions', value: `${openGapCount} open` },
     ]
     const sectionOverview = sectionOverviewFor({ result, actorIntel, actionability, workItems, victimObservations, watchlist })
     const commandLinks = [
@@ -375,7 +375,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <div className='flex items-center justify-between gap-3'>
                                 <div>
                                     <h2 className='text-sm font-semibold text-ui-text dark:text-ui-text'>Latest activity</h2>
-                                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Evidence ordered by severity, source basis, and recency.</p>
+                                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Evidence ordered by severity, source strength, and recency.</p>
                                 </div>
                                 <span className='rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary'>{workItems.length}</span>
                             </div>
@@ -470,7 +470,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     <div className='mt-4 grid gap-3 md:grid-cols-4'>
                                         <EvidenceMetric label='First seen' value={selected.timestamp} />
                                         <EvidenceMetric label='Source' value={selected.source} />
-                                        <EvidenceMetric label='Source basis' value={sourceBasisLabel(selected.confidence)} />
+                                        <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(selected.confidence)} />
                                         <EvidenceMetric label='Source reference' value={displayRequirementText(selected.provenance)} />
                                     </div>
 
@@ -686,15 +686,15 @@ function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchli
         `${artifactCount} artifacts`,
         `${sourceCount} sources`,
         `${watchlistCount} watch terms`,
-        `${gapCount} gaps`,
+        `${gapCount} source questions`,
     ]
     return (
         <section id='ti-secondary-analysis' className='scroll-mt-24 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-canvas' data-ti-secondary-analysis-toggle='true'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
                 <div className='min-w-0'>
-                    <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>Actor workbenches</p>
+                    <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>More actor detail</p>
                     <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        Source, detail, watchlist, and collection queues stay available without crowding the selected finding.
+                        Source records, detail review, watchlist fit, and collection questions stay available without crowding the selected finding.
                     </p>
                 </div>
                 <button
@@ -778,7 +778,7 @@ type WatchlistWorkbenchRow = {
 }
 
 type SectionOverviewItem = {
-    label: 'Overview' | 'Activity' | 'Targets' | 'Infrastructure' | 'Sources' | 'Evidence' | 'Watchlist relevance' | 'Related alerts/cases' | 'Collection gaps' | 'Actions'
+    label: 'Overview' | 'Activity' | 'Targets' | 'Infrastructure' | 'Sources' | 'Evidence' | 'Watchlist relevance' | 'Related alerts/cases' | 'Source questions' | 'Actions'
     value: string
     state: 'ready' | 'review' | 'blocked'
 }
@@ -1615,15 +1615,15 @@ function ActorActionStrip({
         `${actionability.watchlistRelevance.terms.length} watch terms`,
         `${actionability.relatedAlerts.length} alerts`,
         `${actionability.relatedCases.length} cases`,
-        `${actionability.enrichmentGapQueue.length} gaps`,
+        `${actionability.enrichmentGapQueue.length} source questions`,
     ]
     return (
         <div data-ti-actor-action-strip='true' className='border-b border-ui-border bg-ui-panel px-3 py-2 dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between'>
                 <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
                     <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-[11px] font-semibold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>Analyst actions</span>
-                    <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>Console actions</span>
-                    <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>Review status</span>
+                    <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>Delivery paths</span>
+                    <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>Session review</span>
                     {actionSummary.map(item => (
                         <span key={item} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{item}</span>
                     ))}
@@ -1775,7 +1775,7 @@ function ActorOperationsMatrix({
                                 <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selectedRow.detail)}</p>
                             </div>
                             <div className='grid grid-cols-2 gap-2 text-xs'>
-                                <EvidenceMetric label='Source basis' value={sourceBasisLabel(selectedRow.confidence)} />
+                                <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(selectedRow.confidence)} />
                                 <EvidenceMetric label='Source' value={selectedRow.source} />
                             </div>
                             <div className='grid grid-cols-2 gap-1.5'>
@@ -1970,7 +1970,7 @@ function ActorIntelligenceDossier({ actor, actionability, result, artifacts, sel
                 <div className='grid w-full min-w-0 basis-full grid-cols-2 gap-2 text-center text-xs sm:min-w-52 md:grid-cols-4 lg:w-auto lg:basis-auto'>
                     <EvidenceMetric label='First seen' value={actor.firstSeen} />
                     <EvidenceMetric label='Last seen' value={formatDate(actor.lastSeen || result.lastSeen)} />
-                    <EvidenceMetric label='Source basis' value={sourceBasisLabel(actor.confidence)} />
+                    <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(actor.confidence)} />
                     <EvidenceMetric label='Freshness' value={actor.freshness.stale ? 'Needs refresh' : 'Current'} />
                 </div>
             </div>
@@ -2570,7 +2570,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                         <td className='px-3 py-2'>
                                             <span className={sourceHealthChipClass(state)}>{artifactStateLabel(artifact)}</span>
                                             <p className='mt-1 text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                                {artifact.watchlistTerms.length} watch · {artifact.enrichmentTasks.length} gaps
+                                                {artifact.watchlistTerms.length} watch · {artifact.enrichmentTasks.length} source questions
                                             </p>
                                         </td>
                                         <td className='px-3 py-2'>
@@ -2595,7 +2595,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                             </div>
                             <div className='grid grid-cols-2 gap-2 text-xs'>
                                 <EvidenceMetric label='Type' value={formatLabel(selectedArtifact.kind)} />
-                                <EvidenceMetric label='Source basis' value={sourceBasisLabel(selectedArtifact.confidence)} />
+                                <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(selectedArtifact.confidence)} />
                                 <EvidenceMetric label='Watch' value={String(selectedArtifact.watchlistTerms.length)} />
                                 <EvidenceMetric label='Open questions' value={String(selectedArtifact.enrichmentTasks.length)} />
                             </div>
@@ -2648,7 +2648,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                 <div data-ti-selected-artifact-export='true' className='grid w-full min-w-0 basis-full gap-2 sm:min-w-72 lg:w-auto lg:basis-auto'>
                     <div className='grid grid-cols-3 gap-2 text-center text-xs'>
                         <EvidenceMetric label='Freshness' value={formatDate(artifact.freshness)} />
-                        <EvidenceMetric label='Source basis' value={sourceBasisLabel(artifact.confidence)} />
+                        <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(artifact.confidence)} />
                         <EvidenceMetric label='Review status' value={displayRequirementText(artifact.readiness.label)} />
                     </div>
                     <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 lg:justify-end'>
@@ -4548,7 +4548,7 @@ function decisionStepsFor(actionability: TiActionabilityModel): DecisionStep[] {
             label: 'Review sources',
             status: sourceStatus,
             detail: hasSourceProvenance
-                ? `${actionability.sourceProvenance.length} source reference${actionability.sourceProvenance.length === 1 ? '' : 's'} found; ${sourceMissing.length ? 'capture details still needed' : 'source basis is attached'}.`
+                ? `${actionability.sourceProvenance.length} source reference${actionability.sourceProvenance.length === 1 ? '' : 's'} found; ${sourceMissing.length ? 'capture details still needed' : 'evidence is attached'}.`
                 : 'No source result is attached to this actor result.',
             payload: actionability.exportPayloads.enrichment,
             route: sourceGap?.route ?? actionability.exportPayloads.enrichment.backedRoute,
@@ -5863,7 +5863,7 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                                 </span>
                             </div>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                {typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : 'source basis pending'}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
+                                {typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : 'evidence strength pending'}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
                             </p>
                         </div>
                     ))}
@@ -6047,7 +6047,7 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
         `${sourceCountLabel(sourceCount)} linked`,
         actionability.watchlistRelevance.terms.length ? `${actionability.watchlistRelevance.terms.length} watch terms` : 'watch term needed',
         actionability.relatedAlerts.length ? `${actionability.relatedAlerts.length} alerts` : 'no routed alert',
-        actionability.relatedCases.length ? `${actionability.relatedCases.length} cases` : 'case handoff ready',
+        actionability.relatedCases.length ? `${actionability.relatedCases.length} cases` : 'case candidate ready',
     ].join(' · ')
     const facts = [
         {
@@ -6055,6 +6055,12 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
             label: 'Actor type',
             value: actor.actorClass || 'Actor class not stated',
             meta: motivation,
+        },
+        {
+            icon: <ShieldCheck className='h-4 w-4' />,
+            label: 'Attribution',
+            value: actor.attribution || 'Attribution not stated',
+            meta: actor.confidenceReasoning[0] ? displayRequirementText(actor.confidenceReasoning[0]) : sourceBasisLabel(actor.confidence),
         },
         {
             icon: <Globe2 className='h-4 w-4' />,
@@ -6073,6 +6079,12 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
             label: 'Source coverage',
             value: sourceMeta,
             meta: `${actor.sourceCoverage.captureRows} captured page${actor.sourceCoverage.captureRows === 1 ? '' : 's'}`,
+        },
+        {
+            icon: <Clock3 className='h-4 w-4' />,
+            label: 'Observed period',
+            value: actor.firstSeen ? `${displayRequirementText(actor.firstSeen)} to ${formatDate(actor.lastSeen || latestDate)}` : `Updated ${formatDate(latestDate)}`,
+            meta: actor.freshness.reason,
         },
     ] as const
     const review = {
@@ -6125,7 +6137,7 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
             ) : null}
             {actor.provenanceRows.length ? (
                 <p className='mt-3 wrap-break-word border-t border-ui-border pt-3 text-xs leading-5 text-ui-muted dark:border-ui-border dark:text-ui-muted'>
-                    Visible sources: {actor.provenanceRows.slice(0, 4).map(row => `${row.sourceName}${row.reportDate ? ` (${formatDate(row.reportDate)})` : ''}`).join(' · ')}
+                    Sources used: {actor.provenanceRows.slice(0, 4).map(row => `${row.sourceName}${row.reportDate ? ` (${formatDate(row.reportDate)})` : ''}`).join(' · ')}
                 </p>
             ) : null}
         </section>
@@ -6189,7 +6201,7 @@ function TopSelectedEvidencePanel({ selected, drilldown, caseReady }: { selected
                     <p className='wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
                         {sourceRows ? `${sourceRows} source row${sourceRows === 1 ? '' : 's'} linked · ${captureRows} capture-ready${sourceFamilies.length ? ` · ${sourceFamilies.join(', ')}` : ''}` : 'Attach source rows before alert or case handoff.'}
                     </p>
-                    <span className='shrink-0 text-[11px] font-semibold text-ui-primary dark:text-ui-primary'>Actions below</span>
+                    <span className='shrink-0 text-[11px] font-semibold text-ui-primary dark:text-ui-primary'>Review actions</span>
                 </div>
             </div>
         </section>
@@ -6203,7 +6215,7 @@ function TopEvidenceQueuePreview({ items, selectedId, onSelect }: { items: Analy
             <div className='flex min-w-0 items-center justify-between gap-3'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Evidence review</p>
-                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Prioritized findings with source basis and analyst context.</p>
+                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Prioritized findings with evidence strength and analyst context.</p>
                 </div>
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>{items.length} rows</span>
             </div>
@@ -6289,7 +6301,7 @@ function EvidenceQueueFilters({
                     </select>
                 </label>
                 <label className='grid min-w-0 gap-1'>
-                    <span className='text-[10px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source basis</span>
+                    <span className='text-[10px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Evidence strength</span>
                     <select value={confidence} onChange={event => onConfidenceChange(event.target.value as 'all' | 'high' | 'medium')} className='h-9 min-w-0 rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
                         <option value='all'>Any</option>
                         <option value='high'>Strong</option>
@@ -6309,7 +6321,7 @@ function EvidenceQueueFilters({
                     <span className='text-[10px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Sort</span>
                     <select value={sort} onChange={event => onSortChange(event.target.value as 'priority' | 'confidence' | 'freshness')} className='h-9 min-w-0 rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
                         <option value='priority'>Priority</option>
-                        <option value='confidence'>Source basis</option>
+                        <option value='confidence'>Evidence strength</option>
                         <option value='freshness'>Freshness</option>
                     </select>
                 </label>
@@ -6492,7 +6504,7 @@ function sectionOverviewFor(input: {
         { label: 'Evidence', value: `${input.workItems.filter(item => item.evidence.length).length} supported`, state: input.workItems.some(item => item.evidence.length) ? 'ready' : 'blocked' },
         { label: 'Watchlist relevance', value: input.actionability.orgRelevance.organizationRefs.length ? `${input.actionability.orgRelevance.organizationRefs.length} matched` : `${input.actionability.orgRelevance.candidateTerms.length} candidate${input.actionability.orgRelevance.candidateTerms.length === 1 ? '' : 's'}`, state: input.actionability.orgRelevance.state },
         { label: 'Related alerts/cases', value: relatedRecords ? `${relatedRecords} linked` : `${caseCandidates} candidate${caseCandidates === 1 ? '' : 's'}`, state: relatedRecords ? 'ready' : caseCandidates ? 'review' : 'blocked' },
-        { label: 'Collection gaps', value: `${input.actionability.enrichmentGapQueue.length} open`, state: input.actionability.enrichmentGapQueue.length ? 'review' : 'ready' },
+        { label: 'Source questions', value: `${input.actionability.enrichmentGapQueue.length} open`, state: input.actionability.enrichmentGapQueue.length ? 'review' : 'ready' },
         { label: 'Actions', value: `${readyActions}/5 ready`, state: readyActions === 5 ? 'ready' : readyActions ? 'review' : 'blocked' },
     ]
 }
@@ -6666,7 +6678,7 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
     const evidenceBasis = unique([
         `${selected.source}; ${selected.provenance}`,
         `Timestamp: ${selected.timestamp}`,
-        `Source basis: ${sourceBasisLabel(selected.confidence)}`,
+        `Evidence strength: ${sourceBasisLabel(selected.confidence)}`,
         ...selected.evidence.slice(0, 3).map(displayRequirementText),
     ])
     const blockedUntil = [
@@ -8608,8 +8620,8 @@ function selectedTriageBriefFor(
             : `${sourceLabel} provides current context for ${result.query}: ${displayRequirementText(selected.title)}.`
     const whyItMatters = alertValue
         || (selected.severity === 'critical' || selected.severity === 'high'
-            ? `${formatLabel(selected.severity)} priority with ${sourceBasis.toLowerCase()} source basis; review it before customer notification or case routing.`
-            : `${sourceBasis} source basis that may support watchlist tuning, source review, or enrichment.`)
+            ? `${formatLabel(selected.severity)} priority with ${sourceBasis.toLowerCase()} evidence; review it before customer notification or case routing.`
+            : `${sourceBasis} evidence that may support watchlist tuning, source review, or enrichment.`)
     const nextAction = caseDraft?.ready
         ? 'Stage this item as a case candidate with the attached watch terms and source results.'
         : blocker
@@ -8629,7 +8641,7 @@ function selectedTriageBriefFor(
         safetyBoundary: 'Public TI results are metadata-only. This view does not expose raw leak files, credential values, or webhook secrets.',
         labels: [
             { label: 'Severity', value: formatLabel(selected.severity) },
-            { label: 'Source basis', value: sourceBasis },
+            { label: 'Evidence strength', value: sourceBasis },
             { label: 'Watch term', value: visibleTerm },
             { label: 'Freshness', value: selected.timestamp },
         ],
@@ -8979,7 +8991,7 @@ function artifactStateFor(artifact: ActorArtifact): 'ready' | 'review' | 'blocke
 
 function artifactStateLabel(artifact: ActorArtifact) {
     if (artifact.readiness.state === 'ready_for_org_handoff') return 'ready'
-    if (artifact.readiness.state === 'needs_source') return 'source gap'
+    if (artifact.readiness.state === 'needs_source') return 'source question'
     if (artifact.readiness.state === 'needs_watchlist_term') return 'watch gap'
     if (artifact.readiness.state === 'stale') return 'stale'
     return 'review'
@@ -9103,7 +9115,7 @@ function domainFromUrl(value?: string) {
 }
 
 function taskStatusLabel(status: EnrichmentTask['status']) {
-    if (status === 'needs_api') return 'source gap'
+    if (status === 'needs_api') return 'source question'
     if (status === 'needs_review') return 'review'
     if (status === 'watch') return 'watchlist'
     return 'ready'
@@ -9208,7 +9220,7 @@ function EmptyState() {
         { label: 'microsoft.com', href: '/ti/Microsoft', icon: <Building2 className='h-4 w-4' /> },
     ]
     const outcomeItems = [
-        ['Recent evidence', 'Recent company, actor, domain, and detail results with source basis, freshness, source family, and review state.'],
+        ['Recent evidence', 'Recent company, actor, domain, and detail results with evidence strength, freshness, source family, and review state.'],
         ['Source context', 'Linked source references, capture state, and open questions so analysts can judge whether a result is useful.'],
         ['Watchlist fit', 'Company, supplier, domain, and portfolio terms are separated from broad actor background.'],
         ['Action path', 'Review, watch, escalate, export, or open the authenticated console when the result needs follow-up.'],
@@ -9725,7 +9737,7 @@ function MapCoverageFallback({ regions, actor, actionability }: { regions: strin
                 ) : null}
             </div>
             <div className='flex min-w-0 flex-wrap gap-2'>
-                <span className={sourceHealthChipClass(gaps.length ? 'review' : 'ready')}>{gaps.length ? `${gaps.length} source gap${gaps.length === 1 ? '' : 's'}` : 'source context ready'}</span>
+                <span className={sourceHealthChipClass(gaps.length ? 'review' : 'ready')}>{gaps.length ? `${gaps.length} source question${gaps.length === 1 ? '' : 's'}` : 'source context ready'}</span>
                 <span className={sourceHealthChipClass(actionability.watchlistRelevance.terms.length ? 'ready' : 'review')}>{actionability.watchlistRelevance.terms.length ? `${actionability.watchlistRelevance.terms.length} watch terms` : 'watch term needed'}</span>
             </div>
         </div>

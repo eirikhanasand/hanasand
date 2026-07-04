@@ -73,7 +73,7 @@ const fixture: TiSearchResponse = {
             parserStatus: 'partial',
             lastCollectedAt: '2024-01-26',
             confidence: 0.82,
-            shownBecause: 'Microsoft disclosure is the source basis for observed activity and watchlist relevance.',
+            shownBecause: 'Microsoft disclosure is the evidence strength for observed activity and watchlist relevance.',
         }],
     },
     actionability: {
@@ -682,11 +682,11 @@ assert(pageClientSource.includes('text-white transition hover:bg-ui-raised'), 'P
 assert(pageClientSource.indexOf('TopSelectedEvidencePanel selected={selected}') < pageClientSource.indexOf('<ThreatActorMap actor={actorIntel}'), 'Public TI desktop hero should put selected evidence before actor geography.')
 assert(pageClientSource.includes('data-ti-selected-evidence-command-strip'), 'Selected evidence should use a compact command strip instead of stacking summary cards.')
 assert(pageClientSource.includes('CompactEvidenceFact'), 'Selected evidence command strip should render dense source/date/basis/case facts.')
-assert(pageClientSource.includes('Actions below'), 'Selected evidence command strip should avoid adding redundant action controls above the existing action rail.')
+assert(pageClientSource.includes('Review actions'), 'Selected evidence command strip should avoid adding redundant action controls above the existing action rail.')
 assert(pageClientSource.includes('Case path'), 'Selected evidence summary should show case handoff state.')
 assert(pageClientSource.includes('source row'), 'Selected evidence summary should expose source row linkage.')
 assert(pageClientSource.includes('Open detail'), 'Selected evidence summary should route directly to the detailed finding.')
-assert(pageClientSource.includes('Evidence ordered by severity, source basis, and recency.'), 'Public TI activity queue should explain backed ordering.')
+assert(pageClientSource.includes('Evidence ordered by severity, source strength, and recency.'), 'Public TI activity queue should explain backed ordering.')
 assert(pageClientSource.includes('Matched watchlists'), 'Public TI evidence fit should show matched organization watchlists when present.')
 assert(pageClientSource.includes('Open console'), 'Public TI page should route analysts to the authenticated console without internal lane names.')
 assert(pageClientSource.includes('Case handoff'), 'Public TI page should summarize case handoff state instead of dumping raw JSON.')
@@ -778,7 +778,7 @@ assert(pageClientSource.includes('ti.public_actor.campaign_activity.v1'), 'Campa
 assert(pageClientSource.includes('CopyPayloadButton label=\'Campaign activity\''), 'Campaign timeline rows should expose copyable campaign activity payloads.')
 assert(pageClientSource.includes('campaignActivityPayloadFor(item)'), 'Campaign timeline exports should preserve provenance, freshness, sectors, countries, and blockers.')
 assert(pageClientSource.includes('attach_to_case_review'), 'Campaign timeline payloads should be shaped for case review when evidence is complete.')
-assert(pageClientSource.includes('source gap'), 'Public TI enrichment statuses should use source-gap language instead of implementation labels.')
+assert(pageClientSource.includes('source question'), 'Public TI enrichment statuses should use source-question language instead of implementation labels.')
 assert(pageClientSource.includes('Review status'), 'Public TI page should expose backed readiness and degraded states in plain language.')
 assert(pageClientSource.includes('Linked records, follow-up fields, and next owner'), 'Public TI page should describe backed readiness without prompt-shaped language.')
 assert(pageClientSource.includes('data-ti-org-actor-identity'), 'Public TI org relevance should render actor identity fields.')
@@ -799,16 +799,16 @@ assert(pageClientSource.includes('requestedFields: unique(sourceIntakeItems.flat
 assert(pageClientSource.includes('data-ti-org-enrichment-gaps'), 'Public TI org relevance should render enrichment gaps.')
 assert(pageClientSource.includes('Actor identity'), 'Public TI org relevance should label actor identity without implementation wording.')
 assert(pageClientSource.includes('Profile data to review'), 'Public TI org relevance should expose collection/enrichment gaps.')
-assert(pageClientSource.includes('data-ti-collection-gap-intake'), 'Collection gaps should expose structured intake rows.')
+assert(pageClientSource.includes('data-ti-collection-gap-intake'), 'Source questions should expose structured intake rows.')
 assert(pageClientSource.includes('data-ti-collection-gap-task-export'), 'Collection gap rows should expose row-level task exports.')
 assert(pageClientSource.includes('ti.public_actor.collection_gap_task.v1'), 'Collection gap rows should export versioned source-lane task payloads.')
 assert(pageClientSource.includes('CopyPayloadButton label=\'Collection gap task\''), 'Collection gap rows should expose copyable task payloads.')
 assert(pageClientSource.includes('collectionGapTaskPayloadFor(task, intake)'), 'Collection gap task exports should be built from the source enrichment intake model.')
-assert(pageClientSource.includes('CopyPayloadButton label=\'Source enrichment intake\''), 'Collection gaps should export source enrichment intake for authenticated review.')
-assert(pageClientSource.includes('intake.summary.sourceRequests'), 'Collection gaps should summarize source request intake.')
-assert(pageClientSource.includes('task.requestedFields?.slice'), 'Collection gaps should show requested enrichment fields without raw payload dumping.')
-assert(pageClientSource.includes('sourceRequestRouteLabel(task.route)'), 'Collection gaps should show analyst-native route labels.')
-for (const section of ['Overview', 'Activity', 'Targeting', 'Infrastructure', 'Sources', 'Evidence', 'Watchlist Relevance', 'Related alerts/cases', 'Collection Gaps', 'Actions']) {
+assert(pageClientSource.includes('CopyPayloadButton label=\'Source enrichment intake\''), 'Source questions should export source enrichment intake for authenticated review.')
+assert(pageClientSource.includes('intake.summary.sourceRequests'), 'Source questions should summarize source request intake.')
+assert(pageClientSource.includes('task.requestedFields?.slice'), 'Source questions should show requested enrichment fields without raw payload dumping.')
+assert(pageClientSource.includes('sourceRequestRouteLabel(task.route)'), 'Source questions should show analyst-native route labels.')
+for (const section of ['Overview', 'Activity', 'Targeting', 'Infrastructure', 'Sources', 'Evidence', 'Watchlist Relevance', 'Related alerts/cases', 'Open source questions', 'Actions']) {
     assert(pageClientSource.toLowerCase().includes(section.toLowerCase()), `Public TI page should expose analyst-native section: ${section}.`)
 }
 for (const oldLabel of ['Priority Queue', 'Actor Profile', 'Reported Victims and Targets', 'Observed Tradecraft', 'Alert Packet', 'Workflow', 'Company Exposure', 'Monitoring Coverage', 'Monitoring Mix', 'Sources Used', 'Enrichment Queue']) {

@@ -30,6 +30,9 @@ test.describe('public threat actor profile', () => {
         expect(bodyText).not.toMatch(/NATO-aligned states/i)
         expect(bodyText).not.toMatch(/From live source conte(?:nt|xt)/i)
         expect(bodyText).not.toMatch(/What\s+returned/i)
+        expect(bodyText).not.toMatch(/Actor workbenches/i)
+        expect(bodyText).not.toMatch(/Source basis/i)
+        expect(bodyText).not.toMatch(/Collection gaps/i)
         expect(bodyText).not.toMatch(/\bNorth America\b/)
         expect(bodyText).not.toMatch(/4 mapped/i)
 
