@@ -14,6 +14,8 @@ import { useRouter } from 'next/navigation'
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
 
+const TI_WORKBENCH_PREVIEW_ROWS = 5
+
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const router = useRouter()
     const [query, setQuery] = useState(initialResult?.query ?? initialQuery)
@@ -2203,11 +2205,11 @@ function ActorOperationsMatrix({
         if (!rows.some(row => row.id === selectedRowId)) setSelectedRowId(rows[0]?.id ?? '')
     }, [rows, selectedRowId])
     const selectedRow = rows.find(row => row.id === selectedRowId) ?? rows[0]
-    const compactRows = rows.slice(0, 8)
+    const compactRows = rows.slice(0, TI_WORKBENCH_PREVIEW_ROWS)
     const visibleRows = showAllOperations
         ? rows
         : selectedRow && !compactRows.some(row => row.id === selectedRow.id)
-            ? [...compactRows.slice(0, 7), selectedRow]
+            ? [...compactRows.slice(0, TI_WORKBENCH_PREVIEW_ROWS - 1), selectedRow]
             : compactRows
     const hiddenOperationCount = Math.max(0, rows.length - visibleRows.length)
 
@@ -2363,11 +2365,11 @@ function SourceCoverageWorkbench({
     const readyCount = rows.filter(row => row.state === 'ready').length
     const reviewCount = rows.filter(row => row.state === 'review').length
     const blockedCount = rows.filter(row => row.state === 'blocked').length
-    const compactRows = rows.slice(0, 8)
+    const compactRows = rows.slice(0, TI_WORKBENCH_PREVIEW_ROWS)
     const visibleRows = showAllSources
         ? rows
         : selectedRow && !compactRows.some(row => row.id === selectedRow.id)
-            ? [...compactRows.slice(0, 7), selectedRow]
+            ? [...compactRows.slice(0, TI_WORKBENCH_PREVIEW_ROWS - 1), selectedRow]
             : compactRows
     const hiddenSourceCount = Math.max(0, rows.length - visibleRows.length)
 
@@ -3058,11 +3060,11 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
     const readyCount = artifacts.filter(artifact => artifactStateFor(artifact) === 'ready').length
     const reviewCount = artifacts.filter(artifact => artifactStateFor(artifact) === 'review').length
     const blockedCount = artifacts.filter(artifact => artifactStateFor(artifact) === 'blocked').length
-    const compactArtifacts = artifacts.slice(0, 8)
+    const compactArtifacts = artifacts.slice(0, TI_WORKBENCH_PREVIEW_ROWS)
     const visibleArtifacts = showAllArtifacts
         ? artifacts
         : selectedArtifact && !compactArtifacts.some(artifact => artifact.id === selectedArtifact.id)
-            ? [...compactArtifacts.slice(0, 7), selectedArtifact]
+            ? [...compactArtifacts.slice(0, TI_WORKBENCH_PREVIEW_ROWS - 1), selectedArtifact]
             : compactArtifacts
     const hiddenArtifactCount = Math.max(0, artifacts.length - visibleArtifacts.length)
 
@@ -3860,11 +3862,11 @@ function WatchlistRelevanceWorkbench({
     const blockedCount = rows.filter(row => row.state === 'blocked').length
     const selectedArtifact = selectedRow?.artifactIds.find(id => id === selectedArtifactId) ?? selectedRow?.artifactIds[0]
     const selectedEvidence = selectedRow?.evidenceItems.find(item => item.id === selectedId) ?? selectedRow?.evidenceItems[0]
-    const compactRows = rows.slice(0, 8)
+    const compactRows = rows.slice(0, TI_WORKBENCH_PREVIEW_ROWS)
     const visibleRows = showAllWatchlistRows
         ? rows
         : selectedRow && !compactRows.some(row => row.id === selectedRow.id)
-            ? [...compactRows.slice(0, 7), selectedRow]
+            ? [...compactRows.slice(0, TI_WORKBENCH_PREVIEW_ROWS - 1), selectedRow]
             : compactRows
     const hiddenWatchlistCount = Math.max(0, rows.length - visibleRows.length)
 
@@ -5368,11 +5370,11 @@ function EnrichmentGapWorkbench({
     const selectedArtifact = selectedRow?.artifactIds.find(id => id === selectedArtifactId) ?? selectedRow?.artifactIds[0]
     const blockedCount = rows.filter(row => row.state === 'blocked').length
     const reviewCount = rows.filter(row => row.state === 'review').length
-    const compactRows = rows.slice(0, 8)
+    const compactRows = rows.slice(0, TI_WORKBENCH_PREVIEW_ROWS)
     const visibleRows = showAllQuestions
         ? rows
         : selectedRow && !compactRows.some(row => row.id === selectedRow.id)
-            ? [...compactRows.slice(0, 7), selectedRow]
+            ? [...compactRows.slice(0, TI_WORKBENCH_PREVIEW_ROWS - 1), selectedRow]
             : compactRows
     const hiddenQuestionCount = Math.max(0, rows.length - visibleRows.length)
 
