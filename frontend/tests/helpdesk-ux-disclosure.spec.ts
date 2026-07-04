@@ -50,3 +50,45 @@ test('helpdesk keeps search primary and collapses filters and support actions by
     expect(supportForm).toContain('aria-pressed={active}')
     expect(supportForm).toContain('onClick={() => setOperation(tab.id)}')
 })
+
+test('helpdesk renders search first with filters and support actions collapsed', async ({ context, page, baseURL }) => {
+    const origin = baseURL || 'http://127.0.0.1:3000'
+    await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
+    await context.addCookies([
+        { name: 'name', value: 'Render Proof', url: origin },
+        { name: 'id', value: 'dashboard-render-proof-user', url: origin },
+        { name: 'access_token', value: 'local-dashboard-render-proof-token', url: origin },
+        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), url: origin },
+        { name: 'name', value: 'Render Proof', domain: 'localhost', path: '/' },
+        { name: 'id', value: 'dashboard-render-proof-user', domain: 'localhost', path: '/' },
+        { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: 'localhost', path: '/' },
+        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: 'localhost', path: '/' },
+        { name: 'name', value: 'Render Proof', domain: '127.0.0.1', path: '/' },
+        { name: 'id', value: 'dashboard-render-proof-user', domain: '127.0.0.1', path: '/' },
+        { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: '127.0.0.1', path: '/' },
+        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: '127.0.0.1', path: '/' },
+    ])
+
+    await page.goto('/dashboard/system/impersonation', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByRole('heading', { name: 'Helpdesk operations' })).toBeVisible()
+    await expect(page.getByPlaceholder('Search audit events')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Search' })).toBeVisible()
+    await expect(page.getByText('Filters', { exact: true })).toBeVisible()
+    await expect(page.getByText('Start or manage support action')).toBeVisible()
+
+    await expect(page.getByPlaceholder('Organization', { exact: true })).toBeHidden()
+    await expect(page.getByRole('group', { name: 'Support operation' })).toBeHidden()
+    await expect(page.getByText('Support inspection')).toBeHidden()
+    await expect(page.getByText('support.organization.access_recovery')).toBeHidden()
+    await expect(page.getByRole('link', { name: 'Access recovery' })).toBeVisible()
+
+    await page.getByText('Filters', { exact: true }).click()
+    await expect(page.getByPlaceholder('Organization', { exact: true })).toBeVisible()
+    await expect(page.getByPlaceholder('Actor')).toBeVisible()
+
+    await page.getByText('Start or manage support action').click()
+    await expect(page.getByRole('group', { name: 'Support operation' })).toBeVisible()
+    await expect(page.getByText('Support inspection')).toBeVisible()
+    await expect(page.getByRole('button', { name: /Session/ })).toBeVisible()
+})
