@@ -462,14 +462,9 @@ export default function SystemDashboard({
                         <h2 className='text-base font-semibold text-ui-text'>Virtual machines</h2>
                         <p className='mt-1 text-sm text-ui-muted'>{runningVms} running, {stoppedVms} stopped, {normalizedVms.length - runningVms - stoppedVms} checking status.</p>
                     </div>
-                    <button
-                        type='button'
-                        onClick={handleStopAll}
-                        className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger transition hover:bg-ui-danger/15'
-                    >
-                        <StopCircle className='h-4 w-4' />
-                        Stop all
-                    </button>
+                    <Link href='/dashboard/vms' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-raised'>
+                        Open VM inventory
+                    </Link>
                 </div>
                 {normalizedVms.length ? (
                     <div className='mt-4 overflow-x-auto'>
@@ -497,6 +492,24 @@ export default function SystemDashboard({
                 ) : (
                     <EmptyState title='VM inventory checking' body='Managed VM rows stream here as the inventory feed reports.' />
                 )}
+                <details className='mt-4 rounded-md border border-ui-border bg-ui-raised' data-system-vm-danger-actions>
+                    <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20 [&::-webkit-details-marker]:hidden'>
+                        <span>VM danger actions</span>
+                        <span className='text-xs font-medium text-ui-muted'>Stop all VMs</span>
+                    </summary>
+                    <div className='flex flex-wrap items-center justify-between gap-3 border-t border-ui-border p-3'>
+                        <p className='max-w-2xl text-sm leading-6 text-ui-muted'>Use this only for a planned maintenance window or emergency containment. Active VM sessions can be interrupted.</p>
+                        <button
+                            type='button'
+                            onClick={handleStopAll}
+                            className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger transition hover:bg-ui-danger/15'
+                            data-system-stop-all-vms
+                        >
+                            <StopCircle className='h-4 w-4' />
+                            Stop all VMs
+                        </button>
+                    </div>
+                </details>
             </DashboardPanel>
         </div>
     )
