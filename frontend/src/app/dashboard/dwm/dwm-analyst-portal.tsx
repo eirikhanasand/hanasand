@@ -452,7 +452,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                                         <span className='truncate text-sm font-semibold text-ui-text'>{alert.company}</span>
                                         <span className={severityClass(alert.severity)}>{alert.severity}</span>
                                     </div>
-                                    <p className='mt-1 truncate font-mono text-xs text-ui-muted'>{alert.matchedTerm.value}</p>
+                                    <p className='mt-1 truncate text-xs font-semibold text-ui-muted'>Watched term: {alert.matchedTerm.value}</p>
                                     <div className='mt-3 grid grid-cols-2 gap-2 text-[11px]'>
                                         <QueueCell label='queue' value={stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)} />
                                         <QueueCell label='urgency' value={stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))} tone={alert.routingContext?.urgency === 'immediate' || alert.severity === 'critical' ? 'bad' : 'neutral'} />
@@ -824,7 +824,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                     </div>
                     <h2 className='mt-3 wrap-break-word text-2xl font-semibold tracking-normal text-ui-text'>{alert.company}</h2>
                     <p className='mt-1 wrap-break-word text-sm leading-6 text-ui-muted'>
-                        Matched <span className='font-mono'>{alert.matchedTerm.value}</span>
+                        Matched <span className='font-semibold text-ui-text'>{alert.matchedTerm.value}</span>
                         <span className='block sm:inline'> from {stateLabel(alert.sourceFamily)} · {stateLabel(alert.artifactType)}</span>
                     </p>
                 </div>
@@ -885,7 +885,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                     <div>
                         <p className='text-xs font-semibold uppercase text-ui-muted'>Why this matched</p>
                         <div className='mt-2 flex flex-wrap gap-2'>
-                            <span className='rounded-full bg-ui-panel px-2 py-1 font-mono text-xs font-semibold text-ui-text'>{matchContext.normalizedTerm}</span>
+                            <span className='rounded-full bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-text'>{matchContext.normalizedTerm}</span>
                             <span className='rounded-full bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>{stateLabel(matchContext.termKind)}</span>
                             <span className='rounded-full bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>{matchContext.matchedFieldHints.length ? matchContext.matchedFieldHints.join(', ') : stateLabel(matchContext.matchType)}</span>
                         </div>
@@ -1942,7 +1942,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions }: { latestCaptures: 
                     {latestCaptures.slice(0, 8).map(capture => (
                         <div key={capture.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                             <div className='flex flex-wrap items-center gap-2'>
-                                <span className='font-mono text-xs font-semibold text-ui-text'>{capture.sourceName}</span>
+                                <span className='text-xs font-semibold text-ui-text'>{capture.sourceName}</span>
                                 <span className='rounded-full bg-ui-primary/10 px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{stateLabel(capture.family)}</span>
                                 <span className='text-xs text-ui-muted'>{relativeTimeLabel(capture.collectedAt)}</span>
                             </div>
@@ -2041,12 +2041,12 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
                 <div className='grid grid-cols-2 gap-2 text-[11px]'>
                     <a href={orgHref} className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 font-semibold text-ui-text transition hover:bg-ui-canvas'>
                         Destinations
-                        <span className='mt-0.5 block truncate font-mono font-normal text-ui-muted'>{orgId || 'default scope'}</span>
+                        <span className='mt-0.5 block truncate font-normal text-ui-muted'>{organizationScopeLabel(orgId)}</span>
                     </a>
                     {caseHref ? (
                         <a href={caseHref} className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 font-semibold text-ui-text transition hover:bg-ui-canvas'>
                             Case trail
-                            <span className='mt-0.5 block truncate font-mono font-normal text-ui-muted'>{caseId}</span>
+                            <span className='mt-0.5 block truncate font-normal text-ui-muted'>{caseLinkLabel(caseId)}</span>
                         </a>
                     ) : (
                         <div className='rounded-lg border border-dashed border-ui-border bg-ui-raised px-3 py-2 font-semibold text-ui-muted'>
@@ -2609,6 +2609,14 @@ function deliveryDestinationState(row: Pick<DeliveryItem, 'endpointHint' | 'endp
 function evidenceHashState(value?: string | null, copiedValue?: string) {
     if (!value) return 'hash pending'
     return copiedValue === value ? 'hash copied' : 'hash available'
+}
+
+function organizationScopeLabel(value?: string | null) {
+    return value ? 'Organization workspace' : 'Default workspace'
+}
+
+function caseLinkLabel(value?: string | null) {
+    return value ? 'Case linked' : 'Case pending'
 }
 
 function deliverySummaryLabel(rows: DeliveryItem[]) {
