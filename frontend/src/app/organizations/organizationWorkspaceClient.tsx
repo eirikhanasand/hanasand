@@ -2071,6 +2071,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     const selectedRows = activityRowsForSubject(activity, selectedSubject)
     const contextRows = selectedContextRows(selectedSubject, organization, bundle)
     const visibleRows = selectedSubject.type === 'organization' ? activity : selectedRows
+    const contextActions = selectedSubjectActions(selectedSubject, organization)
     const copySelectedActivity = async () => {
         try {
             const heading = `${organization.name || organization.id} · ${selectedSubject.type}`
@@ -2092,6 +2093,12 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                         <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{selectedSubject.type}</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
+                        {contextActions.map(action => (
+                            <a key={action.href} href={action.href} className={secondaryButtonClass} data-org-activity-context-action='true'>
+                                <ExternalLink className='h-4 w-4' />
+                                {action.label}
+                            </a>
+                        ))}
                         <button type='button' className={secondaryButtonClass} onClick={() => void copySelectedActivity()} data-org-activity-copy='true'>
                             <Copy className='h-4 w-4' />
                             Copy
@@ -2703,6 +2710,57 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
         ['Last delivery', delivery?.status],
         ['Alerts', String(alertCount)],
     ])
+}
+
+function selectedSubjectActions(subject: ActivitySubject, organization: OrganizationSummary) {
+    const organizationId = encodeURIComponent(organization.id)
+    if (subject.type === 'organization') {
+        return [
+            { label: 'Watchlists', href: '#watchlists' },
+            { label: 'Org API', href: `/api/organizations/${organizationId}` },
+        ]
+    }
+    if (subject.type === 'invite') {
+        return [
+            { label: 'Invites', href: '#invites' },
+            { label: 'Invite API', href: `/api/organizations/${organizationId}/invites` },
+        ]
+    }
+    if (subject.type === 'member') {
+        return [
+            { label: 'Members', href: '#members' },
+            { label: 'Member API', href: `/api/organizations/${organizationId}/members` },
+        ]
+    }
+    if (subject.type === 'watchlist') {
+        const watchlistId = encodeURIComponent(subject.id)
+        return [
+            { label: 'Watchlist', href: '#watchlists' },
+            { label: 'Alert terms', href: `/api/organizations/${organizationId}/watchlists/alert-terms?watchlistId=${watchlistId}` },
+        ]
+    }
+    if (subject.type === 'destination') {
+        const destinationId = encodeURIComponent(subject.id)
+        return [
+            { label: 'Destinations', href: '#destinations' },
+            { label: 'Deliveries', href: `/api/dwm/webhooks/deliveries?organizationId=${organizationId}&destinationId=${destinationId}` },
+        ]
+    }
+    if (subject.type === 'alert') {
+        const alertId = encodeURIComponent(subject.id)
+        return [
+            { label: 'Alert', href: `/dashboard/ti/workbench?alertId=${alertId}&organizationId=${organizationId}` },
+            { label: 'Deliveries', href: `/api/dwm/webhooks/deliveries?organizationId=${organizationId}&alertId=${alertId}` },
+        ]
+    }
+    if (subject.type === 'case') {
+        const caseId = encodeURIComponent(subject.id)
+        return [
+            { label: 'Case', href: `/dashboard/dwm/cases/${caseId}?organizationId=${organizationId}` },
+            { label: 'Cases API', href: `/api/cases?organizationId=${organizationId}` },
+        ]
+    }
+    return []
 }
 
 function compactMetadata(rows: Array<[string, string | undefined]>) {
