@@ -83,6 +83,7 @@ type AlertTerm = {
     organizationId?: string
     tenantId?: string
     watchlistId?: string
+    watchlistName?: string
     watchlistItemId?: string
     kind?: WatchlistKind
     family?: string
@@ -147,19 +148,23 @@ type DeliveryRow = {
     requestId?: string
     auditEventId?: string
     organizationId?: string
+    orgId?: string
     tenantId?: string
     alertId?: string
     caseId?: string
     actionId?: string
     watchlistId?: string
+    watchlistName?: string
     watchlistItemId?: string
     watchlistItemIds?: string[]
+    destinationId?: string
     webhookDestinationId?: string
     endpointHash?: string
     endpointHint?: string
     deliveryKind?: string
     status?: string
     httpStatus?: number
+    responseStatus?: number
     attemptedAt?: string
     createdAt?: string
     updatedAt?: string
@@ -167,10 +172,42 @@ type DeliveryRow = {
     error?: string
     errorClass?: string
     responseSummary?: string
+    responseBody?: string
+    payloadHash?: string
+    payload?: Record<string, unknown>
+    casePath?: string
+    payloadPreview?: DeliveryPayloadPreviewData | null
+    sanitizedPayloadPreview?: DeliveryPayloadPreviewData | null
     dedupeKey?: string
+    idempotencyKey?: string
     retryCount?: number
     attemptCount?: number
     nextRetryAt?: string | null
+}
+
+type DeliveryPayloadPreviewData = {
+    title?: string | null
+    contentPreview?: string | null
+    descriptionPreview?: string | null
+    fieldNames?: string[]
+    fields?: Array<{ name?: string, valuePreview?: string, inline?: boolean }>
+    payloadHash?: string | null
+    context?: {
+        orgName?: string | null
+        orgId?: string | null
+        alertTitle?: string | null
+        alertId?: string | null
+        severity?: string | null
+        sourceFamily?: string | null
+        evidenceCount?: number | null
+        evidenceTimestamp?: string | null
+        watchlistName?: string | null
+        watchlistId?: string | null
+        matchReason?: string | null
+        deliveryState?: string | null
+        casePath?: string | null
+        alertUrl?: string | null
+    }
 }
 
 type DeliveryResult = {
@@ -1823,9 +1860,10 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                 <>
                                     <span className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
                                         <span className='truncate'>Type: {destination.kind || destination.type || 'webhook'}</span>
-                                        <span className='truncate'>Hash: {sanitizeOrganizationDisplayCopy(destination.endpointHash || 'not returned')}</span>
+                                        <span className='truncate'>Hash: {sanitizeOrganizationDisplayCopy(destination.endpointHash || 'not available')}</span>
                                     </span>
                                     <DestinationDeliverySummary delivery={latestDelivery} />
+                                    {latestDelivery && <DeliveryPayloadPreview delivery={latestDelivery} compact />}
                                     <span className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                         <button type='button' className={secondaryButtonClass} disabled={Boolean(busy)} onClick={() => onTest(destination)}>
                                             <RefreshCw className='h-4 w-4' />
@@ -2072,6 +2110,47 @@ function DestinationDeliverySummary({ delivery }: { delivery?: DeliveryRow | nul
     )
 }
 
+function DeliveryPayloadPreview({ delivery, compact = false }: { delivery: DeliveryRow, compact?: boolean }) {
+    const preview = payloadPreviewForDelivery(delivery)
+    if (!preview) return null
+    const context = preview.context || {}
+    const fields = (preview.fields || []).slice(0, compact ? 2 : 4)
+    const fieldNames = preview.fieldNames?.slice(0, compact ? 3 : 6) || []
+    const route = context.casePath || context.alertUrl
+
+    return (
+        <div className='grid gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs dark:border-ui-border dark:bg-ui-canvas' data-org-delivery-payload-preview='true'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                <span className='truncate font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(preview.title || context.alertTitle || 'Discord payload preview')}</span>
+                <span className='shrink-0 rounded-md border border-ui-border bg-ui-panel px-2 py-0.5 font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>
+                    {delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'webhook'}
+                </span>
+            </div>
+            {preview.descriptionPreview && <p className='line-clamp-2 text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(preview.descriptionPreview)}</p>}
+            <div className='grid gap-1 sm:grid-cols-2'>
+                {context.orgName && <span className='truncate'>Org: {sanitizeOrganizationDisplayCopy(context.orgName)}</span>}
+                {context.watchlistName && <span className='truncate'>Watchlist: {sanitizeOrganizationDisplayCopy(context.watchlistName)}</span>}
+                {context.severity && <span className='truncate'>Severity: {sanitizeOrganizationDisplayCopy(context.severity)}</span>}
+                {context.sourceFamily && <span className='truncate'>Source: {sanitizeOrganizationDisplayCopy(context.sourceFamily)}</span>}
+                {context.evidenceCount !== undefined && context.evidenceCount !== null && <span className='truncate'>Evidence: {context.evidenceCount}</span>}
+                {context.deliveryState && <span className='truncate'>State: {sanitizeOrganizationDisplayCopy(context.deliveryState)}</span>}
+            </div>
+            {fields.length > 0 && (
+                <div className='grid gap-1'>
+                    {fields.map(field => (
+                        <p key={`${field.name}-${field.valuePreview}`} className='line-clamp-1 text-ui-muted dark:text-ui-muted'>
+                            <span className='font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(field.name || 'Field')}:</span> {sanitizeOrganizationDisplayCopy(field.valuePreview || '')}
+                        </p>
+                    ))}
+                </div>
+            )}
+            {fields.length === 0 && fieldNames.length > 0 && <p className='truncate text-ui-muted dark:text-ui-muted'>Fields: {fieldNames.map(sanitizeOrganizationDisplayCopy).join(', ')}</p>}
+            {context.matchReason && !compact && <p className='line-clamp-2 text-ui-muted dark:text-ui-muted'>Match: {sanitizeOrganizationDisplayCopy(context.matchReason)}</p>}
+            {route && !compact && <p className='truncate font-mono text-ui-muted dark:text-ui-muted'>Route: {sanitizeOrganizationDisplayCopy(route)}</p>}
+        </div>
+    )
+}
+
 function DestinationControls({ item, organization, alert, delivery, draft, canManage, busy, onDraftChange, onSelect, onTest }: { item: WatchlistItem, organization: OrganizationSummary, alert?: ScopedAlert, delivery?: DeliveryRow | null, draft: DestinationDraft, canManage: boolean, busy: string, onDraftChange: (next: DestinationDraft) => void, onSelect: () => void, onTest: (mode: 'save' | 'replay') => void }) {
     const configured = destinationConfigured(item)
     const endpointHint = item.webhookEndpointHint || delivery?.endpointHint || 'Not configured'
@@ -2127,6 +2206,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                 <span className='truncate'>Tenant: {sanitizeOrganizationDisplayCopy(item.tenantId || organization.tenantId || 'default')}</span>
             </div>
             {delivery?.error && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{delivery.error}</p>}
+            {delivery && <DeliveryPayloadPreview delivery={delivery} compact />}
         </div>
     )
 }
@@ -2205,6 +2285,9 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                                                 <DeliveryReference delivery={delivery} organizationId={organization.id} />
                                                 {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
                                                 {!delivery.error && delivery.responseSummary && <p className='mt-1 line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
+                                                <div className='mt-2'>
+                                                    <DeliveryPayloadPreview delivery={delivery} compact />
+                                                </div>
                                             </td>
                                             <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                                 <div className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
@@ -2269,6 +2352,7 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, canManage, busy, r
             </div>
             {delivery.error && <p className='line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
             {!delivery.error && delivery.responseSummary && <p className='line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
+            <DeliveryPayloadPreview delivery={delivery} compact />
             <div className='grid gap-2'>
                 <button type='button' className={secondaryButtonClass} disabled={!canManage || !replayable || Boolean(busy)} onClick={() => onReplay(delivery)}>
                     <RefreshCw className='h-4 w-4' />
@@ -2729,7 +2813,7 @@ function visibilityRows(payload: Record<string, unknown> | null) {
     return rows.map(([label, value]) => ({
         id: String(label),
         primary: String(label),
-        secondary: value === undefined || value === null ? 'Not returned' : String(value),
+        secondary: value === undefined || value === null ? 'Not available' : String(value),
     }))
 }
 
@@ -3302,28 +3386,113 @@ function normalizedDeliveryRows(payload: Record<string, unknown>): DeliveryRow[]
             id: row.id || cleanString(enriched.deliveryId) || cleanString(enriched.requestId) || id,
             requestId: row.requestId || cleanString(enriched.requestId) || cleanString(enriched.deliveryId),
             auditEventId: row.auditEventId || cleanString(enriched.auditEventId),
-            organizationId: row.organizationId || cleanString(enriched.orgId),
+            organizationId: row.organizationId || row.orgId || cleanString(enriched.orgId),
             alertId: row.alertId || cleanString(enriched.alertId),
             caseId: row.caseId || cleanString(enriched.caseId),
             watchlistId: row.watchlistId || cleanString(enriched.watchlistId),
-            webhookDestinationId: row.webhookDestinationId || cleanString(enriched.destinationId),
+            watchlistName: row.watchlistName || cleanString(enriched.watchlistName),
+            webhookDestinationId: row.webhookDestinationId || row.destinationId || cleanString(enriched.destinationId),
             endpointHash: row.endpointHash || cleanString(enriched.endpointHash) || cleanString(redactedDestination.endpointHash),
             endpointHint: row.endpointHint || cleanString(enriched.redactedEndpointLabel) || cleanString(redactedDestination.endpointHint),
             status: row.status || cleanString(enriched.status) || cleanString(enriched.rawStatus),
-            httpStatus: row.httpStatus ?? numberValue(enriched.responseStatus) ?? numberValue(response.httpStatus),
+            httpStatus: row.httpStatus ?? row.responseStatus ?? numberValue(enriched.responseStatus) ?? numberValue(response.httpStatus),
             attemptedAt: row.attemptedAt || cleanString(enriched.attemptedAt),
             createdAt: row.createdAt || cleanString(enriched.createdAt),
             updatedAt: row.updatedAt || cleanString(enriched.updatedAt),
             dryRun: row.dryRun ?? booleanValue(enriched.dryRun),
             error: row.error || cleanString(enriched.error),
             errorClass: row.errorClass || cleanString(enriched.errorClass),
-            responseSummary: row.responseSummary || cleanString(enriched.responseSummary) || cleanString(response.summary),
-            dedupeKey: row.dedupeKey || cleanString(enriched.dedupeKey) || cleanString(enriched.idempotencyKey),
+            responseSummary: row.responseSummary || row.responseBody || cleanString(enriched.responseSummary) || cleanString(response.summary),
+            dedupeKey: row.dedupeKey || row.idempotencyKey || cleanString(enriched.dedupeKey) || cleanString(enriched.idempotencyKey),
+            casePath: row.casePath || cleanString(enriched.casePath),
+            payload: row.payload || objectValue(enriched.payload) || undefined,
             attemptCount: row.attemptCount ?? numberValue(enriched.attemptCount),
             retryCount: row.retryCount ?? numberValue(enriched.retryCount),
             nextRetryAt: row.nextRetryAt ?? cleanString(enriched.nextRetryAt) ?? null,
+            payloadPreview: payloadPreviewForDelivery(row)
+                || payloadPreviewFromRecord(enriched.sanitizedPayloadPreview)
+                || payloadPreviewFromRecord(enriched.payloadPreview),
         }
     })
+}
+
+function payloadPreviewForDelivery(delivery: DeliveryRow): DeliveryPayloadPreviewData | null {
+    const direct = payloadPreviewFromRecord(delivery.sanitizedPayloadPreview)
+        || payloadPreviewFromRecord(delivery.payloadPreview)
+    if (direct) return direct
+    return payloadPreviewFromPayload(delivery.payload, delivery)
+}
+
+function payloadPreviewFromRecord(value: unknown): DeliveryPayloadPreviewData | null {
+    const record = objectValue(value)
+    if (!record) return null
+    const context = objectValue(record.context) || {}
+    const fields = arrayValue<Record<string, unknown>>(record.fields).map(field => ({
+        name: cleanString(field.name),
+        valuePreview: cleanString(field.valuePreview) || cleanString(field.value),
+        inline: booleanValue(field.inline),
+    })).filter(field => field.name || field.valuePreview)
+    return {
+        title: cleanString(record.title),
+        contentPreview: cleanString(record.contentPreview) || cleanString(record.content),
+        descriptionPreview: cleanString(record.descriptionPreview) || cleanString(record.description),
+        fieldNames: arrayValue<unknown>(record.fieldNames).map(cleanString).filter((item): item is string => Boolean(item)),
+        fields,
+        payloadHash: cleanString(record.payloadHash),
+        context: {
+            orgName: cleanString(context.orgName),
+            orgId: cleanString(context.orgId),
+            alertTitle: cleanString(context.alertTitle),
+            alertId: cleanString(context.alertId),
+            severity: cleanString(context.severity),
+            sourceFamily: cleanString(context.sourceFamily),
+            evidenceCount: numberValue(context.evidenceCount) ?? null,
+            evidenceTimestamp: cleanString(context.evidenceTimestamp),
+            watchlistName: cleanString(context.watchlistName),
+            watchlistId: cleanString(context.watchlistId),
+            matchReason: cleanString(context.matchReason),
+            deliveryState: cleanString(context.deliveryState),
+            casePath: cleanString(context.casePath),
+            alertUrl: cleanString(context.alertUrl),
+        },
+    }
+}
+
+function payloadPreviewFromPayload(payload: unknown, delivery: DeliveryRow): DeliveryPayloadPreviewData | null {
+    const record = objectValue(payload)
+    if (!record) return null
+    const embeds = arrayValue<Record<string, unknown>>(record.embeds)
+    const embed = embeds[0] || {}
+    const fields = arrayValue<Record<string, unknown>>(embed.fields).map(field => ({
+        name: cleanString(field.name),
+        valuePreview: cleanString(field.value),
+        inline: booleanValue(field.inline),
+    })).filter(field => field.name || field.valuePreview)
+    if (!fields.length && !cleanString(embed.title) && !cleanString(embed.description) && !cleanString(record.content)) return null
+    const fieldValue = (name: string) => fields.find(field => field.name?.toLowerCase() === name.toLowerCase())?.valuePreview
+    return {
+        title: cleanString(embed.title) || delivery.alertId || null,
+        contentPreview: cleanString(record.content) || null,
+        descriptionPreview: cleanString(embed.description) || null,
+        fieldNames: fields.map(field => field.name).filter((item): item is string => Boolean(item)),
+        fields,
+        payloadHash: delivery.payloadHash || null,
+        context: {
+            orgName: fieldValue('Organization') || delivery.organizationId || delivery.orgId || null,
+            alertTitle: cleanString(embed.title) || null,
+            alertId: delivery.alertId || null,
+            severity: fieldValue('Severity') || null,
+            sourceFamily: fieldValue('Source family') || null,
+            evidenceCount: numberValue(Number(fieldValue('Evidence count'))) ?? null,
+            evidenceTimestamp: fieldValue('Evidence timestamp') || fieldValue('Observed at') || null,
+            watchlistName: fieldValue('Watchlist') || delivery.watchlistName || delivery.watchlistId || null,
+            watchlistId: delivery.watchlistId || null,
+            matchReason: fieldValue('Match reason') || null,
+            deliveryState: fieldValue('Delivery state') || delivery.status || null,
+            casePath: fieldValue('Case') || delivery.casePath || null,
+            alertUrl: fieldValue('Alert URL') || null,
+        },
+    }
 }
 
 function watchlistMutationMessage(bridge: DwmAlertBridgeResult | undefined, fallback: string) {

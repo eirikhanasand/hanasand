@@ -7,6 +7,10 @@ test.describe('public threat actor profile', () => {
         await expect(page.getByRole('heading', { name: 'APT29', exact: true })).toBeVisible()
         await expect(page.getByRole('heading', { name: 'Actor country map' })).toBeVisible()
         await expect(page.getByText('Reported operator origin and victim or target countries from linked sources.')).toBeVisible()
+        await expect(page.locator('[data-ti-hero-map="true"]')).toBeVisible()
+        await expect(page.locator('[data-ti-hero-evidence="true"]')).toBeVisible()
+        await expect(page.locator('[data-ti-hero-evidence="true"]').getByRole('link', { name: 'Inspect evidence' })).toBeVisible()
+        await expect(page.locator('[data-ti-hero-evidence="true"]').getByRole('link', { name: 'Review actions' })).toBeVisible()
 
         const body = page.locator('body')
         await expect(body).toContainText('Russia')
@@ -24,6 +28,8 @@ test.describe('public threat actor profile', () => {
         const mapBox = await page.getByRole('heading', { name: 'Actor country map' }).boundingBox()
         const activityBox = await page.locator('#ti-activity').boundingBox()
         expect(mapBox?.y ?? 0).toBeLessThan(activityBox?.y ?? Number.POSITIVE_INFINITY)
+        const heroEvidenceBox = await page.locator('[data-ti-hero-evidence="true"]').boundingBox()
+        expect(heroEvidenceBox?.y ?? 0).toBeLessThan(activityBox?.y ?? Number.POSITIVE_INFINITY)
 
         const bodyText = await body.innerText()
         expect(bodyText).not.toMatch(/\bblocked\b/i)
