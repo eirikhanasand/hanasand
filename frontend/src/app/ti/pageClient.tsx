@@ -4619,7 +4619,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                         {formatLabel(source.sourceFamily)} · {formatLabel(source.status)}{source.lastCollectedAt ? ` · ${formatDate(source.lastCollectedAt)}` : ''}
                                     </p>
-                                    <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{source.captureId ? `capture ${source.captureId}` : compactSourceReferenceLabel(source.provenance)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{source.captureId ? 'capture linked' : compactSourceReferenceLabel(source.provenance)}</p>
                                 </div>
                                 {typeof source.confidence === 'number' ? <span className='shrink-0 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{Math.round(source.confidence * 100)}%</span> : null}
                             </div>
@@ -4648,7 +4648,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                 <div className='min-w-0'>
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{item.kind}: {item.value}</p>
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                        {watchlistIntersectionActionLabel(item.recommendedAction)} · {item.organizationId ? `org ${item.organizationId}` : 'organization needed'} · {item.watchlistItemId ? `watchlist item ${item.watchlistItemId}` : 'watchlist item needed'}
+                                        {watchlistIntersectionActionLabel(item.recommendedAction)} · {item.organizationId ? 'organization linked' : 'organization needed'} · {item.watchlistItemId ? 'watchlist linked' : 'watchlist item needed'}
                                     </p>
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                         {item.sourceFamilies.map(formatLabel).join(', ') || 'source family needed'} · {item.captureIds.length ? `${item.captureIds.length} capture${item.captureIds.length === 1 ? '' : 's'}` : 'capture needed'} · {item.alertIds.length ? `${item.alertIds.length} alert${item.alertIds.length === 1 ? '' : 's'}` : 'alert needed'}
@@ -4720,8 +4720,8 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                             row.evidence.sourceName,
                             row.evidence.reportDate ? formatDate(row.evidence.reportDate) : '',
                             typeof row.evidence.confidence === 'number' ? sourceBasisLabel(row.evidence.confidence) : '',
-                            row.evidence.sourceId ? `source ${row.evidence.sourceId}` : '',
-                            row.evidence.captureId ? `capture ${row.evidence.captureId}` : '',
+                            row.evidence.sourceId ? 'source linked' : '',
+                            row.evidence.captureId ? 'capture linked' : '',
                         ].filter(Boolean)
                         return (
                             <div key={row.rowId} className='rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised'>
@@ -4735,7 +4735,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                         <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.route)}</p>
                                         {row.alertId || row.watchlistItemId || row.captureIds.length ? (
                                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                                {[row.alertId ? `alert ${row.alertId}` : '', row.watchlistItemId ? `watchlist item ${row.watchlistItemId}` : '', row.captureIds.length ? `${row.captureIds.length} capture${row.captureIds.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ')}
+                                                {[row.alertId ? 'alert linked' : '', row.watchlistItemId ? 'watchlist linked' : '', row.captureIds.length ? `${row.captureIds.length} capture${row.captureIds.length === 1 ? '' : 's'} linked` : ''].filter(Boolean).join(' · ')}
                                             </p>
                                         ) : null}
                                         {rowBlocker ? <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-warning'>{displayRequirementText(rowBlocker.handoff)}</p> : null}
