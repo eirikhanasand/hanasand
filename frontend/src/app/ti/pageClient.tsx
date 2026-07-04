@@ -3323,20 +3323,14 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     <CopyPayloadButton label='console action bundle' payload={bridge} />
                 </div>
             </div>
-            <div data-ti-artifact-workflow-readiness='true' className='mt-4 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
-                <div className='flex flex-wrap items-center justify-between gap-2'>
-                    <div className='min-w-0'>
-                        <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Routing checks</p>
-                        <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>Watchlist, alert, case, and source actions tied to this detail.</p>
-                    </div>
-                    <div className='flex flex-wrap items-center gap-2'>
-                        <span className={workflowRows.every(row => !row.blocked) ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>
-                            {workflowRows.filter(row => !row.blocked).length}/{workflowRows.length} ready
-                        </span>
-                        <button type='button' onClick={() => setShowRoutingChecks(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
-                            {showRoutingChecks ? 'Hide checks' : 'Show checks'}
-                        </button>
-                    </div>
+            <div data-ti-artifact-workflow-readiness='true' className='mt-3 border-t border-ui-border pt-3 dark:border-ui-border'>
+                <div className='flex flex-wrap items-center justify-between gap-2 text-xs'>
+                    <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
+                        Workflow routes · {workflowRows.filter(row => !row.blocked).length}/{workflowRows.length} ready · watchlist, alert, case, source
+                    </p>
+                    <button type='button' onClick={() => setShowRoutingChecks(value => !value)} className='inline-flex min-h-7 items-center justify-center border-l border-ui-border pl-2 text-[11px] font-semibold text-ui-text transition hover:text-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:text-ui-text'>
+                        {showRoutingChecks ? 'Hide routes' : 'Show routes'}
+                    </button>
                 </div>
                 {showRoutingChecks ? (
                     <div className='mt-3 grid gap-2 md:grid-cols-2'>
