@@ -687,7 +687,7 @@ assert(pageClientSource.includes('data-ti-section-rail'), 'Public TI page should
 assert(pageClientSource.includes('id=\'ti-selected-evidence\''), 'Public TI page should render one primary selected-evidence detail surface.')
 assert(!pageClientSource.includes('data-ti-top-selected-evidence'), 'Public TI page should not duplicate selected evidence in the hero.')
 assert(!pageClientSource.includes('TopSelectedEvidencePanel'), 'Public TI page should not keep a duplicate selected-evidence hero component.')
-assert(pageClientSource.includes('filteredWorkItems.slice(0, 4)'), 'Public TI default queue should stay capped to four rows before expansion.')
+assert(pageClientSource.includes('filteredWorkItems.slice(0, 3)'), 'Public TI default queue should stay capped to three rows before expansion.')
 assert(!pageClientSource.includes('TopEvidenceQueuePreview'), 'Public TI hero should not duplicate the activity queue beside selected detail.')
 assert(pageClientSource.includes('text-white transition hover:bg-ui-raised'), 'Public TI search submit should render visible text on the dark button.')
 assert(pageClientSource.indexOf('id=\'ti-selected-evidence\'') < pageClientSource.indexOf('<ThreatActorMap actor={actorIntel}'), 'Public TI should keep selected evidence before geography and secondary workbenches.')

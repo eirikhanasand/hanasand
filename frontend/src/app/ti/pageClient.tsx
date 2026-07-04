@@ -197,7 +197,7 @@ function Results({ result }: { result: TiSearchResponse }) {
         confidence: queueConfidenceFilter,
         sort: queueSort,
     }), [queueConfidenceFilter, queueKindFilter, queueSort, queueSourceFilter, workItems])
-    const visibleQueueItems = showFullQueue ? filteredWorkItems : filteredWorkItems.slice(0, 4)
+    const visibleQueueItems = showFullQueue ? filteredWorkItems : filteredWorkItems.slice(0, 3)
     const queueSourceOptions = useMemo(() => unique(workItems.map(item => item.source).filter(Boolean)).sort((a, b) => a.localeCompare(b)).slice(0, 8), [workItems])
     const queueSourceCounts = useMemo(() => sourceCountsFor(filteredWorkItems), [filteredWorkItems])
     const selected = filteredWorkItems.find(item => item.id === selectedId) ?? filteredWorkItems[0] ?? workItems.find(item => item.id === selectedId) ?? workItems[0]
@@ -417,7 +417,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     Show {filteredWorkItems.length - visibleQueueItems.length} more findings
                                 </button>
                             ) : null}
-                            {showFullQueue && filteredWorkItems.length > 4 ? (
+                            {showFullQueue && filteredWorkItems.length > 3 ? (
                                 <button
                                     type='button'
                                     onClick={() => setShowFullQueue(false)}

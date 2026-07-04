@@ -1,4 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+
+const root = process.cwd()
 
 test.describe('public threat actor profile', () => {
     test('APT29 renders country-level map and concrete victim context', async ({ page }, testInfo) => {
@@ -37,5 +41,24 @@ test.describe('public threat actor profile', () => {
             body: await page.screenshot({ fullPage: false }),
             contentType: 'image/png',
         })
+    })
+
+    test('keeps the mobile workbar and queue disclosure compact', async () => {
+        const source = await readFile(path.join(root, 'src/app/ti/pageClient.tsx'), 'utf8')
+        const workspaceIndex = source.indexOf('data-ti-workspace=\'true\'')
+        const mobileWorkbarIndex = source.indexOf('renderMobileWorkbar && mobileEvidenceWorkbar')
+        const profileSummaryIndex = source.indexOf('<div className=\'grid gap-4 border-b border-ui-border bg-ui-panel p-4')
+        const desktopActionsIndex = source.indexOf('<ActorActionStrip')
+
+        expect(workspaceIndex).toBeGreaterThan(-1)
+        expect(mobileWorkbarIndex).toBeGreaterThan(workspaceIndex)
+        expect(profileSummaryIndex).toBeGreaterThan(mobileWorkbarIndex)
+        expect(desktopActionsIndex).toBeGreaterThan(profileSummaryIndex)
+        expect(source).toContain('filteredWorkItems.slice(0, 3)')
+        expect(source).toContain('showFullQueue && filteredWorkItems.length > 3')
+        expect(source).toContain('lg:hidden')
+        expect(source).toContain('renderDesktopActions')
+        expect(source).not.toContain('data-ti-hero-map')
+        expect(source).not.toContain('data-ti-hero-evidence')
     })
 })
