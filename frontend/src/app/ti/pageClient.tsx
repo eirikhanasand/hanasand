@@ -4288,7 +4288,7 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
             </div>
             {records.length ? (
                 <div className='mt-3 grid gap-2'>
-                    {records.slice(0, 4).map(record => (
+                    {records.slice(0, 2).map(record => (
                         <div key={record.id} className='rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised'>
                             <div className='flex flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
@@ -4323,7 +4323,7 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                         </div>
                     </div>
                     <div className='mt-2 grid min-w-0 gap-2'>
-                        {caseIntake.items.slice(0, 3).map(item => (
+                        {caseIntake.items.slice(0, 2).map(item => (
                             <div key={item.id} className='rounded-md border border-ui-warning/35 bg-ui-panel/70 p-2 dark:border-ui-warning/35 dark:bg-ui-warning/10'>
                                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                     <div className='min-w-0'>
