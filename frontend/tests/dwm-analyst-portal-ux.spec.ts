@@ -18,13 +18,13 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
 
     expect(page).toContain('data-dwm-workflow-snapshot')
     expect(page).toContain('Workflow route')
-    expect(page).toContain('Open this when diagnosing the full monitoring path')
-    expect(page).toContain('data-dwm-selected-workflow-actions-disclosure')
-    expect(page).toContain('Workflow setup and route controls')
+    expect(page).toContain('Use this path when a source match needs to become a customer case and delivery')
+    expect(page).toContain('Run path')
+    expect(page).toContain('data-dwm-selected-workflow-actions')
 
     expect(page.indexOf('<WorkflowRouteStrip')).toBeLessThan(page.indexOf('Recent attacks'))
     expect(page.indexOf('Recent attacks')).toBeLessThan(page.indexOf('SelectedActionBar'))
-    expect(page.indexOf('data-dwm-selected-workflow-actions-disclosure')).toBeGreaterThan(page.indexOf('<DeliveryPanel'))
+    expect(page.indexOf('data-dwm-selected-workflow-actions')).toBeGreaterThan(page.indexOf('<DeliveryPanel'))
 
     expect(page).toContain('<section id=\'dwm-workflow-actions\' className=\'scroll-mt-24\'>')
     expect(page).toContain('<NoCaseWorkspace latestCaptures={latestCaptures} workflowActions={workflowActions} />')
