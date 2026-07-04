@@ -1544,7 +1544,7 @@ function OrgActionStrip({ alertId, canManage, hasWatchlists, hasDestination }: {
         <nav className='flex flex-wrap items-center gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' aria-label='Organization actions'>
             <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Create watchlist' disabled={!canManage} />
             <ActionAnchor href='#invites' icon={<UserPlus className='h-4 w-4' />} label='Invite member' disabled={!canManage} />
-            <ActionAnchor href='#watchlists' icon={<Webhook className='h-4 w-4' />} label='Test destination' disabled={!hasWatchlists} />
+            <ActionAnchor href='#destinations' icon={<Webhook className='h-4 w-4' />} label='Test destination' disabled={!hasWatchlists} />
             <ActionAnchor href={`/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}`} icon={<CircleAlert className='h-4 w-4' />} label='Open DWM alert' disabled={!alertId} />
             <ActionAnchor href='#audit' icon={<CheckCircle2 className='h-4 w-4' />} label='Audit' disabled={!hasDestination && !hasWatchlists} />
         </nav>
@@ -1594,7 +1594,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
             id: 'destinations',
             title: 'Delivery destination',
             body: destinationCount ? 'Destination saved' : watchlistCount ? 'Test and save a destination' : 'Create a watchlist first',
-            href: '#watchlists',
+            href: '#destinations',
             ready: destinationCount > 0,
             blocked: !watchlistCount || !canManage,
             action: destinationCount ? 'Review destination' : 'Test destination',

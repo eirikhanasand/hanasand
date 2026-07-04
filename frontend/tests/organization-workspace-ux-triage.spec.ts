@@ -59,6 +59,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).not.toContain('Keep watchlists, destinations, and alert context ready for safe replay.')
     expect(page).toContain('Shared watchlists')
     expect(page).toContain('Test destination')
+    expect(page).toContain('<ActionAnchor href=\'#destinations\' icon={<Webhook className=\'h-4 w-4\' />} label=\'Test destination\' disabled={!hasWatchlists} />')
+    expect(page).toContain('href: \'#destinations\'')
     expect(page).toContain('data-org-empty-focused-create')
     expect(page).toContain('Create an organization to start monitoring')
     expect(page).toContain('Add shared term')
