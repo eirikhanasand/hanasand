@@ -2316,10 +2316,5 @@ function stateLabel(value: string) {
 function relativeTimeLabel(value: string) {
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return value
-    const minutes = Math.max(1, Math.round((Date.now() - date.getTime()) / 60000))
-    if (minutes < 60) return `${minutes} min ago`
-    const hours = Math.round(minutes / 60)
-    if (hours < 48) return `${hours} hr ago`
-    const days = Math.round(hours / 24)
-    return `${days} d ago`
+    return shortTime(value)
 }
