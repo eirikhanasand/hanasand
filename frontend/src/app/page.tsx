@@ -69,7 +69,7 @@ const stats = [
     ['Alert target', 'Company, vendor, domain, and brand mentions'],
     ['What gets sent', 'Actor, company, data mentioned, source, time, review status'],
     ['Freshness basis', 'New and changed leak-site posts'],
-    ['Where it goes', 'Webhook, case queue, and analyst console'],
+    ['Where it goes', 'Webhook, case workflow, and analyst console'],
 ]
 
 const workflowShortcuts = [
