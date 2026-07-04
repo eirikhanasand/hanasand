@@ -927,7 +927,7 @@ function RouteRunSummary({ route, organizationId }: { route: WorkflowRouteSummar
                     ) : null}
                     {destinationHref ? (
                         <Link href={destinationHref} className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
-                            Open destinations
+                            Open delivery log
                         </Link>
                     ) : null}
                     {route.alertId ? <span className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 font-mono text-[11px] text-ui-muted'>{route.alertId}</span> : null}
@@ -950,7 +950,7 @@ function organizationDestinationPath(organizationId: string, alertId?: string, c
     const params = new URLSearchParams({ organizationId, focus: 'destinations' })
     if (alertId) params.set('alertId', alertId)
     if (caseId) params.set('caseId', caseId)
-    return `/organizations?${params.toString()}`
+    return `/organizations?${params.toString()}#delivery-history`
 }
 
 function RouteStateCard({ label, value, detail, tone }: { label: string, value: string, detail: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
