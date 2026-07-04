@@ -35,13 +35,19 @@ export default function TiSourcesPage() {
                 actions={<ManualRunButton label='Run all sources' />}
             />
 
-            <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
-                <Metric title='Active' value={`${activeCount}/${sources.length}`} detail='collecting sources' tone='ok' />
-                <Metric title='Reviewed' value={String(aiReviewedCount)} detail={reviewCount ? `${reviewCount} in review` : 'ready for monitoring'} tone={reviewCount ? 'warn' : 'ok'} />
-                <Metric title='Stale' value={String(staleCount)} detail='late or not collecting' tone={staleCount ? 'warn' : 'ok'} />
-                <Metric title='Sensitive' value={String(restrictedCount)} detail='safe-field sources' tone='hold' />
-                <Metric title='Due next' value={nextDue ? shortTime(nextDue.source.nextRunAt) : 'Listening'} detail={nextDue?.source.name || 'waiting for the next source check'} tone='hold' />
-            </div>
+            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-ti-source-inventory-summary-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span>Source inventory summary</span>
+                    <span className='text-xs font-medium text-ui-muted'>{activeCount}/{sources.length} active · {reviewCount} in review · {staleCount} stale</span>
+                </summary>
+                <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-5' data-ti-source-inventory-metrics>
+                    <Metric title='Active' value={`${activeCount}/${sources.length}`} detail='collecting sources' tone='ok' />
+                    <Metric title='Reviewed' value={String(aiReviewedCount)} detail={reviewCount ? `${reviewCount} in review` : 'ready for monitoring'} tone={reviewCount ? 'warn' : 'ok'} />
+                    <Metric title='Stale' value={String(staleCount)} detail='late or not collecting' tone={staleCount ? 'warn' : 'ok'} />
+                    <Metric title='Sensitive' value={String(restrictedCount)} detail='safe-field sources' tone='hold' />
+                    <Metric title='Due next' value={nextDue ? shortTime(nextDue.source.nextRunAt) : 'Listening'} detail={nextDue?.source.name || 'waiting for the next source check'} tone='hold' />
+                </div>
+            </details>
 
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='grid border-b border-ui-border bg-ui-panel px-4 py-3 lg:grid-cols-[1fr_auto] lg:items-center'>
@@ -167,15 +173,12 @@ export default function TiSourcesPage() {
                     </div>
                 </DashboardPanel>
 
-                <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
-                    <div className='flex items-center justify-between gap-3'>
-                        <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Capture coverage</h2>
-                            <p className='mt-1 text-sm text-ui-muted'>Stored visual evidence by source.</p>
-                        </div>
-                        <Camera className='h-4 w-4 text-ui-primary' />
-                    </div>
-                    <div className='mt-4 grid gap-3'>
+                <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-ti-source-capture-coverage-disclosure>
+                    <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
+                        <span className='inline-flex items-center gap-2'><Camera className='h-4 w-4 text-ui-primary' /> Capture coverage</span>
+                        <span className='text-xs font-medium text-ui-muted'>{captures.length} captures across {sources.length} sources</span>
+                    </summary>
+                    <div className='grid gap-3 border-t border-ui-border p-4' data-ti-source-capture-coverage>
                         {sourceRows.map(row => (
                             <div key={row.source.id} className='rounded-md border border-ui-border bg-ui-canvas p-3'>
                                 <div className='flex items-center justify-between gap-3'>
@@ -188,7 +191,7 @@ export default function TiSourcesPage() {
                             </div>
                         ))}
                     </div>
-                </DashboardPanel>
+                </details>
             </div>
         </DashboardPage>
     )
