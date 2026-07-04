@@ -2597,11 +2597,21 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         ok: !delivery.error && delivery.status !== 'failed',
         subjectType: 'destination',
         subjectId: delivery.webhookDestinationId || delivery.watchlistItemId || delivery.watchlistId || delivery.alertId,
-        relatedSubjectIds: [delivery.webhookDestinationId, delivery.watchlistItemId, delivery.watchlistId, ...(delivery.watchlistItemIds || [])].filter(Boolean) as string[],
+        relatedSubjectIds: [
+            delivery.webhookDestinationId,
+            delivery.watchlistItemId,
+            delivery.watchlistId,
+            delivery.alertId,
+            delivery.caseId,
+            delivery.actionId,
+            ...(delivery.watchlistItemIds || []),
+        ].filter(Boolean) as string[],
         metadata: compactMetadata([
             ['Endpoint', delivery.endpointHint || delivery.endpointHash],
             ['Destination', delivery.webhookDestinationId],
             ['Alert', delivery.alertId],
+            ['Case', delivery.caseId],
+            ['Watchlist', delivery.watchlistItemId || delivery.watchlistId],
             ['Kind', delivery.deliveryKind],
         ]),
     }))
@@ -2743,7 +2753,7 @@ function activityRowsForSubject(activity: ActivityItem[], subject: ActivitySubje
     if (subject.type === 'destination') {
         return activity.filter(item => (item.subjectType === 'destination' || item.subjectType === 'watchlist') && (item.subjectId === subject.id || item.relatedSubjectIds?.includes(subject.id)))
     }
-    return activity.filter(item => item.subjectType === subject.type && (item.subjectId === subject.id || item.relatedSubjectIds?.includes(subject.id)))
+    return activity.filter(item => item.subjectId === subject.id || item.relatedSubjectIds?.includes(subject.id))
 }
 
 function selectedSubjectLabel(subject: ActivitySubject, organization: OrganizationSummary, bundle: OrgBundle) {

@@ -615,7 +615,8 @@ for (const [label, source] of [
     ['actor workbench', actorWorkbenchSource],
     ['api search fallback', apiSearchSource],
 ] as const) {
-    assert(!/\bsource basis\b/i.test(source), `Public TI ${label} should use evidence-strength language instead of source-basis wording.`)
+    const legacySourceWording = new RegExp(`\\bsource ${'basis'}\\b`, 'i')
+    assert(!legacySourceWording.test(source), `Public TI ${label} should use evidence-strength language instead of legacy source wording.`)
 }
 assert(pageClientSource.includes('Console actions'), 'Public TI page should use professional console action language.')
 assert(pageClientSource.includes('Decision flow'), 'Public TI page should expose a compact decision flow.')

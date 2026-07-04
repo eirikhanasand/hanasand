@@ -16,9 +16,10 @@ test.describe('public threat actor profile', () => {
         await expect(body).toContainText('Democratic National Committee')
         await expect(body).toContainText('SolarWinds Orion customers and U.S. federal agencies')
         await expect(body).toContainText('Microsoft corporate email accounts')
-        await expect(body).toContainText('Hewlett Packard Enterprise')
+        await expect(body).toContainText('Government and policy organizations')
         await expect(body).toContainText('Public reporting attributes APT29 to Russia-linked SVR activity.')
-        await expect(body).toContainText('Evidence queue')
+        await expect(body).toContainText('Latest activity')
+        await expect(body).toContainText('Sources used')
 
         const mapBox = await page.getByRole('heading', { name: 'Actor country map' }).boundingBox()
         const activityBox = await page.locator('#ti-activity').boundingBox()
