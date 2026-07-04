@@ -244,7 +244,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const alertContextValue = actionability.relatedAlerts.length
         ? `${actionability.relatedAlerts.length} linked`
         : actionability.alertGenerationReadiness.candidateCount
-            ? `${actionability.alertGenerationReadiness.candidateCount} candidates`
+            ? `${actionability.alertGenerationReadiness.candidateCount} alert reviews`
             : 'watchlist needed'
     const profileStats = [
         { icon: <ShieldCheck className='h-3.5 w-3.5' />, label: 'Sources', value: sourceCountLabel(sources.length) },
@@ -771,19 +771,10 @@ function SelectedEvidenceRail({
     const deliveryReady = deliveryPlan?.state === 'ready'
     const watchReady = Boolean(watchlistPlan?.ready || watchlistHref)
     const sourceCount = sourceDrilldown?.rows.length ?? 0
+    const captureCount = sourceDrilldown?.rows.filter(row => Boolean(row.captureId)).length ?? 0
     const owner = caseOwnership?.owner.label ?? 'unassigned'
-    const alertValue = deliveryPlan?.summary.alerts
-        ? `${deliveryPlan.summary.alerts} linked`
-        : alertPlan?.readiness.candidateCount
-            ? `${alertPlan.readiness.candidateCount} candidates`
-            : 'watchlist needed'
-    const caseValue = deliveryPlan?.summary.caseRoutes
-        ? `${deliveryPlan.summary.caseRoutes} linked`
-        : caseOwnership?.summary.caseCandidates
-            ? `${caseOwnership.summary.caseCandidates} candidates`
-            : caseDraft
-                ? 'draft ready'
-                : 'source needed'
+    const alertValue = selectedAlertContinuityValue(deliveryPlan, alertPlan, captureCount)
+    const caseValue = selectedCaseContinuityValue(deliveryPlan, caseOwnership, caseDraft, captureCount)
     const continuityRows = [
         {
             label: 'Watchlist',
@@ -797,21 +788,21 @@ function SelectedEvidenceRail({
         {
             label: 'Alert',
             value: alertValue,
-            state: alertReady ? 'ready' : 'review',
+            state: alertReady ? 'ready' : captureCount ? 'review' : 'blocked',
             href: alertHref,
             fallback: alertPlan?.nextAction ?? 'Attach watchlist and source context before alert review.',
         },
         {
             label: 'Case',
             value: caseValue,
-            state: caseReady ? 'ready' : 'review',
+            state: caseReady ? 'ready' : captureCount ? 'review' : 'blocked',
             href: caseHref,
             fallback: caseOwnership?.nextAction ?? 'Attach source evidence before authenticated case handoff.',
         },
         {
             label: 'Delivery',
-            value: deliveryReady ? 'ready' : deliveryPlan ? 'review' : 'pending',
-            state: deliveryReady ? 'ready' : deliveryPlan ? 'review' : 'blocked',
+            value: deliveryReady ? 'ready' : deliveryPlan?.summary.captures ? 'review' : 'capture needed',
+            state: deliveryReady ? 'ready' : deliveryPlan?.summary.captures ? 'review' : 'blocked',
             href: deliveryPlan?.route,
             fallback: deliveryPlan?.nextAction ?? 'Choose an authenticated destination before delivery review.',
         },
@@ -870,6 +861,21 @@ function SelectedEvidenceRail({
     )
 }
 
+function selectedAlertContinuityValue(deliveryPlan: SelectedDeliveryReadinessPlan | null, alertPlan: SelectedAlertActionPlan | null, captureCount: number) {
+    if (deliveryPlan?.summary.alerts) return `${deliveryPlan.summary.alerts} linked`
+    if (captureCount === 0) return 'capture needed'
+    if (alertPlan?.readiness.candidateCount) return `${alertPlan.readiness.candidateCount} alert reviews`
+    return 'watchlist needed'
+}
+
+function selectedCaseContinuityValue(deliveryPlan: SelectedDeliveryReadinessPlan | null, caseOwnership: SelectedCaseOwnershipPlan | null, caseDraft: SelectedCaseDraft | null, captureCount: number) {
+    if (deliveryPlan?.summary.caseRoutes) return `${deliveryPlan.summary.caseRoutes} linked`
+    if (captureCount === 0) return 'capture needed'
+    if (caseOwnership?.summary.caseCandidates) return `${caseOwnership.summary.caseCandidates} case reviews`
+    if (caseDraft) return 'draft ready'
+    return 'source needed'
+}
+
 function ContinuityRow({ label, value, state, href, fallback }: { label: string; value: string; state: DecisionStep['status']; href?: string; fallback: string }) {
     const content = (
         <>
@@ -877,7 +883,7 @@ function ContinuityRow({ label, value, state, href, fallback }: { label: string;
                 <span className='block truncate text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>{label}</span>
                 <span className='block truncate text-xs font-semibold text-ui-text dark:text-ui-text'>{value}</span>
             </span>
-            <span className={decisionStepStatusClass(state)}>{href ? 'console' : decisionStepStatusLabel(state)}</span>
+            <span className={decisionStepStatusClass(state)}>{href && state !== 'blocked' ? 'console' : decisionStepStatusLabel(state)}</span>
         </>
     )
 
@@ -2037,12 +2043,12 @@ function ActorActionStrip({
     const alertSummary = actionability.relatedAlerts.length
         ? `${actionability.relatedAlerts.length} linked alerts`
         : actionability.alertGenerationReadiness.candidateCount
-            ? `${actionability.alertGenerationReadiness.candidateCount} alert candidates`
+            ? `${actionability.alertGenerationReadiness.candidateCount} alert reviews`
             : 'watchlist before alert'
     const caseSummary = actionability.relatedCases.length
         ? `${actionability.relatedCases.length} linked cases`
         : actionability.caseReviewIntake.summary.total
-            ? `${actionability.caseReviewIntake.summary.total} case candidates`
+            ? `${actionability.caseReviewIntake.summary.total} case reviews`
             : 'case source needed'
     const actionSummary = [
         `${actionability.watchlistRelevance.terms.length} watch terms`,
