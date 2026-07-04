@@ -60,7 +60,7 @@ export default function TestClientPopup({
         <div className='fixed inset-0 z-50 flex items-center justify-center bg-ui-canvas/65 backdrop-blur-md p-4'>
             <div
                 className='relative flex h-[min(85vh,54rem)] w-full max-w-5xl flex-col overflow-hidden
-                    rounded-2xl bg-ui-canvas shadow-2xl outline outline-ui-border'
+                    rounded-lg bg-ui-canvas shadow-2xl outline outline-ui-border'
             >
                 <div className='absolute inset-x-0 top-0 h-1 bg-linear-to-r from-ui-primary/60 via-ui-primary to-ui-primary/50' />
                 <div className='flex items-center justify-between border-b border-ui-border px-6 py-4'>
@@ -84,7 +84,7 @@ export default function TestClientPopup({
                         <div ref={scrollerRef} className='flex-1 space-y-4 overflow-y-auto p-6'>
                             {!messages.length ? (
                                 <div
-                                    className='flex h-full min-h-56 items-center justify-center rounded-2xl
+                                    className='flex h-full min-h-56 items-center justify-center rounded-lg
                                         bg-ui-canvas/20 p-6 text-center outline outline-dashed outline-ui-border'
                                 >
                                     <div>
@@ -107,7 +107,7 @@ export default function TestClientPopup({
                                 messages.map((message) => (
                                     <div
                                         key={message.id}
-                                        className={`max-w-3xl rounded-2xl border px-4 py-3 ${
+                                        className={`max-w-3xl rounded-lg border px-4 py-3 ${
                                             message.role === 'user'
                                                 ? 'ml-auto border-ui-primary/20 bg-ui-primary/12 text-ui-text/90'
                                                 : message.error
@@ -138,7 +138,7 @@ export default function TestClientPopup({
                                         }
                                     }}
                                     placeholder='Ask the client something...'
-                                    className='min-h-28 w-full rounded-2xl bg-ui-canvas/20 px-4 py-3 text-sm text-ui-text/90 outline outline-ui-border transition-colors placeholder:text-ui-text/35 focus:outline-ui-primary/35'
+                                    className='min-h-28 w-full rounded-lg bg-ui-canvas/20 px-4 py-3 text-sm text-ui-text/90 outline outline-ui-border transition-colors placeholder:text-ui-text/35 focus:outline-ui-primary/35'
                                 />
                                 <div className='flex justify-end'>
                                     <Button
@@ -173,7 +173,7 @@ export default function TestClientPopup({
 function StatCard({ title, value, error = false }: { title: string, value: string, error?: boolean }) {
     return (
         <div
-            className={`rounded-2xl border p-3 ${
+            className={`rounded-lg border p-3 ${
                 error ? 'border-ui-danger/20 bg-ui-danger/10' : 'bg-ui-canvas/20 outline outline-ui-border'
             }`}
         >

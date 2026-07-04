@@ -6,6 +6,7 @@ const root = process.cwd()
 
 test('ai worker console focuses operator triage while preserving live telemetry paths', async () => {
     const page = await readFile(path.join(root, 'src/app/dashboard/system/ai/pageClient.tsx'), 'utf8')
+    const popup = await readFile(path.join(root, 'src/components/gpt/testClientPopup.tsx'), 'utf8')
 
     expect(page).toContain('aiClientRequest(\'/ai/economics?days=30\')')
     expect(page).toContain('useGptPageState()')
@@ -30,4 +31,10 @@ test('ai worker console focuses operator triage while preserving live telemetry 
     expect(page).toContain('data-ai-history-panels')
     expect(page.indexOf('data-ai-economics-disclosure')).toBeLessThan(page.indexOf('data-ai-economics-metrics'))
     expect(page.indexOf('data-ai-history-disclosure')).toBeLessThan(page.indexOf('data-ai-history-panels'))
+
+    expect(popup).toContain('Test client')
+    expect(popup).toContain('Current tokens')
+    expect(popup).toContain('Generated tokens')
+    expect(popup).toContain('ErrorNotice')
+    expect(popup).not.toMatch(/rounded-(?:xl|2xl|3xl)/)
 })
