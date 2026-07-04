@@ -3317,47 +3317,30 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                             </div>
                         ) : null}
                     </div>
-                    {payloadRows.map(row => (
-                        <PayloadHandoffRow key={row.id} label={row.label} detail={row.detail} payload={row.payload} route={row.route} blocked={row.blocked} />
-                    ))}
-                    <CopyPayloadButton label='console action bundle' payload={bridge} />
                 </div>
             </div>
             <div data-ti-artifact-workflow-readiness='true' className='mt-3 border-t border-ui-border pt-3 dark:border-ui-border'>
                 <div className='flex flex-wrap items-center justify-between gap-2 text-xs'>
                     <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
-                        Workflow routes · {workflowRows.filter(row => !row.blocked).length}/{workflowRows.length} ready · watchlist, alert, case, source
+                        Console routes · {workflowRows.filter(row => !row.blocked).length}/{workflowRows.length} ready · watchlist, alert, case, source
+                    </p>
+                    <p className='min-w-0 wrap-break-word text-[11px] font-medium text-ui-muted dark:text-ui-muted'>
+                        {workflowRows
+                            .map(row => row.readiness ? actionOwnerLabel(row.readiness.ownerLane) : '')
+                            .filter((label, index, labels) => label && labels.indexOf(label) === index)
+                            .slice(0, 3)
+                            .join(' · ') || 'Console action owners'}
                     </p>
                     <button type='button' onClick={() => setShowRoutingChecks(value => !value)} className='inline-flex min-h-7 items-center justify-center border-l border-ui-border pl-2 text-[11px] font-semibold text-ui-text transition hover:text-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:text-ui-text'>
                         {showRoutingChecks ? 'Hide routes' : 'Show routes'}
                     </button>
                 </div>
                 {showRoutingChecks ? (
-                    <div className='mt-3 grid gap-2 md:grid-cols-2'>
+                    <div className='mt-3 grid gap-2'>
                         {workflowRows.map(row => (
-                            <div key={`workflow-${row.id}`} className='rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised'>
-                                <div className='flex flex-wrap items-center justify-between gap-2'>
-                                    <p className='min-w-0 wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{row.label}</p>
-                                    <span className={row.blocked ? decisionStepStatusClass('blocked') : decisionStepStatusClass('ready')}>
-                                        {row.blocked ? 'syncing' : 'ready'}
-                                    </span>
-                                </div>
-                                <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.endpoint)}</p>
-                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                    {row.readiness?.missing.length ? displayRequirementList(row.readiness.missing.slice(0, 2)) : row.missing.length ? displayRequirementList(row.missing.slice(0, 2)) : 'Required artifact context is present.'}
-                                </p>
-                                {row.readiness ? (
-                                    <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
-                                        <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                            {actionOwnerLabel(row.readiness.ownerLane)}
-                                        </span>
-                                        <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                            {row.readiness.sourceRequestCount} source request{row.readiness.sourceRequestCount === 1 ? '' : 's'}
-                                        </span>
-                                    </div>
-                                ) : null}
-                            </div>
+                            <PayloadHandoffRow key={`workflow-${row.id}`} label={row.label} detail={row.detail} payload={row.payload} route={row.route} blocked={row.blocked} />
                         ))}
+                        <CopyPayloadButton label='Console action bundle' payload={bridge} />
                     </div>
                 ) : null}
             </div>
