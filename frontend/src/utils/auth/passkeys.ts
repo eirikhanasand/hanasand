@@ -1,34 +1,29 @@
 export type PasskeyOptionsEnvelope = {
     challengeId: string
-    publicKey: Record<string, any>
+    publicKey: Record<string, unknown>
 }
 
-export function decodePasskeyRequestOptions(publicKey: Record<string, any>): PublicKeyCredentialRequestOptions {
+export function decodePasskeyRequestOptions(publicKey: Record<string, unknown>): PublicKeyCredentialRequestOptions {
     return {
         ...publicKey,
         challenge: base64urlToArrayBuffer(String(publicKey.challenge || '')),
         allowCredentials: Array.isArray(publicKey.allowCredentials)
-            ? publicKey.allowCredentials.map((credential: Record<string, any>) => ({
-                ...credential,
-                id: base64urlToArrayBuffer(String(credential.id || '')),
-            }))
+            ? publicKey.allowCredentials.map(credential => decodeCredentialDescriptor(credential))
             : [],
     } as PublicKeyCredentialRequestOptions
 }
 
-export function decodePasskeyCreationOptions(publicKey: Record<string, any>): PublicKeyCredentialCreationOptions {
+export function decodePasskeyCreationOptions(publicKey: Record<string, unknown>): PublicKeyCredentialCreationOptions {
+    const user = recordValue(publicKey.user)
     return {
         ...publicKey,
         challenge: base64urlToArrayBuffer(String(publicKey.challenge || '')),
         user: {
-            ...publicKey.user,
-            id: base64urlToArrayBuffer(String(publicKey.user?.id || '')),
+            ...user,
+            id: base64urlToArrayBuffer(String(user.id || '')),
         },
         excludeCredentials: Array.isArray(publicKey.excludeCredentials)
-            ? publicKey.excludeCredentials.map((credential: Record<string, any>) => ({
-                ...credential,
-                id: base64urlToArrayBuffer(String(credential.id || '')),
-            }))
+            ? publicKey.excludeCredentials.map(credential => decodeCredentialDescriptor(credential))
             : [],
     } as PublicKeyCredentialCreationOptions
 }
@@ -71,6 +66,18 @@ function base64urlToArrayBuffer(value: string) {
         bytes[index] = binary.charCodeAt(index)
     }
     return bytes.buffer
+}
+
+function decodeCredentialDescriptor(value: unknown) {
+    const credential = recordValue(value)
+    return {
+        ...credential,
+        id: base64urlToArrayBuffer(String(credential.id || '')),
+    }
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
 function arrayBufferToBase64url(buffer: ArrayBuffer) {
