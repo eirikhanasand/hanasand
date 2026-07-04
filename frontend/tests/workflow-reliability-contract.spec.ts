@@ -8,6 +8,7 @@ test('public workflow reliability contracts are not demo-only', async () => {
     const pwnedClient = await readFile(path.join(root, 'src/utils/pwned/checkHash.ts'), 'utf8')
     const pwnedRoute = await readFile(path.join(root, 'src/app/api/pwned/route.ts'), 'utf8')
     const pwnedPage = await readFile(path.join(root, 'src/app/pwned/pageClient.tsx'), 'utf8')
+    const registerPage = await readFile(path.join(root, 'src/app/register/pageClient.tsx'), 'utf8')
     const contact = await readFile(path.join(root, 'src/components/contact/contact.tsx'), 'utf8')
     const contactRoute = await readFile(path.join(root, 'src/app/api/contact/route.ts'), 'utf8')
     const dwmPage = await readFile(path.join(root, 'src/app/solutions/dwm/pageClient.tsx'), 'utf8')
@@ -21,6 +22,14 @@ test('public workflow reliability contracts are not demo-only', async () => {
     expect(pwnedPage).toContain('setHashInput(\'\')')
     expect(pwnedPage).toContain('data-bloom-hash-safety-boundary')
     expect(pwnedPage).toContain('This page does not ask for the underlying secret.')
+
+    expect(registerPage).toContain('data-managed-onboarding-intake')
+    expect(registerPage).toContain('fetch(\'/api/contact\'')
+    expect(registerPage).toContain('plan: \'managed-onboarding\'')
+    expect(registerPage).toContain('securityReview: true')
+    expect(registerPage).toContain('data-managed-onboarding-result')
+    expect(registerPage).not.toContain('name=\'businessEmail\'')
+    expect(registerPage).not.toContain('name=\'company\'')
 
     expect(contact).toContain('fetch(\'/api/contact\'')
     expect(contact).toContain('Ticket <span')

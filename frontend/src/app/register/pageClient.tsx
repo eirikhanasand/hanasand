@@ -5,13 +5,18 @@ import { getCookie } from '@/utils/cookies/cookies'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { ArrowRight, Building2, Mail } from 'lucide-react'
+import { ArrowRight, Building2, CheckCircle2, Mail, ShieldCheck } from 'lucide-react'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 import ErrorNotice from '@/components/error/errorNotice'
 
 type RegisterPageProps = {
     path: string | null
     serverInternal: boolean
+}
+
+type ManagedSetupResult = {
+    ticketId: string
+    nextStep: string
 }
 
 const authInputClass = 'h-10 rounded-lg border border-ui-border bg-ui-panel px-3.5 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
@@ -23,6 +28,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     const router = useRouter()
     const [hydrated, setHydrated] = useState(false)
     const [busy, setBusy] = useState(false)
+    const [setupBusy, setSetupBusy] = useState(false)
+    const [managedSetupResult, setManagedSetupResult] = useState<ManagedSetupResult | null>(null)
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
     const passwordCounts = countPassword(password)
@@ -39,6 +46,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     const upperCaseColor = password.length > 0 ? passwordCounts.uppercase >= 2 ? 'text-ui-success' : 'text-ui-danger' : ''
     const specialCharacterColor = password.length > 0 ? passwordCounts.symbols >= 2 ? 'text-ui-success' : 'text-ui-danger' : ''
     const { condition: error, setCondition: setError } = useClearStateAfter()
+    const { condition: setupError, setCondition: setSetupError } = useClearStateAfter()
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const redirectPath = safeRedirectPath(path)
 
@@ -67,6 +75,56 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         setBusy(true)
     }
 
+    async function handleManagedSetup(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+        setManagedSetupResult(null)
+        setSetupError(null)
+
+        const formData = new FormData(e.currentTarget)
+        const name = String(formData.get('setupName') || '').trim()
+        const email = String(formData.get('setupEmail') || '').trim()
+        const company = String(formData.get('setupCompany') || '').trim()
+        const context = String(formData.get('setupContext') || '').trim()
+
+        if (!name || !email || !company || context.length < 20) {
+            return setSetupError('Name, work email, company, and a short monitoring context are required.')
+        }
+
+        setSetupBusy(true)
+        try {
+            const response = await fetch('/api/contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    email,
+                    company,
+                    subject: 'Managed Hanasand onboarding request',
+                    message: `Managed setup request\n\nCompany: ${company}\nMonitoring context: ${context}`,
+                    intent: 'enterprise',
+                    plan: 'managed-onboarding',
+                    deliveryPreference: 'email',
+                    replyWindow: 'this-week',
+                    securityReview: true,
+                }),
+            })
+            const payload = await response.json().catch(() => ({})) as { error?: string, ticketId?: string, nextStep?: string }
+            if (!response.ok || payload.error) {
+                throw new Error(payload.error || 'Managed setup intake is temporarily unavailable.')
+            }
+
+            setManagedSetupResult({
+                ticketId: payload.ticketId || 'received',
+                nextStep: payload.nextStep || 'We received the request. Expect a reply by email with coverage fit and setup steps.',
+            })
+            e.currentTarget.reset()
+        } catch (err) {
+            setSetupError(err instanceof Error ? err.message : 'Managed setup intake is temporarily unavailable.')
+        } finally {
+            setSetupBusy(false)
+        }
+    }
+
     useEffect(() => {
         const token = getCookie('access_token')
         const id = getCookie('id')
@@ -88,19 +146,62 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                     </p>
                     <div className='grid gap-3'>
                         <OnboardingItem title='Self-serve console' detail='Create an account now and continue to the dashboard.' />
-                        <OnboardingItem title='Managed pilot' detail='Share company, watchlist, delivery, SSO, and compliance needs before rollout.' />
+                        <OnboardingItem title='Managed pilot' detail='Send company, watchlist, delivery, SSO, and compliance needs before rollout.' />
                         <OnboardingItem title='Procurement ready path' detail='Use contact sales for DPA, security review, invoice terms, or vendor onboarding.' />
                     </div>
-                    <Link href='/contact?intent=sales' className='inline-flex h-10 w-fit items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:text-ui-primary'>
-                        Start managed setup
-                        <ArrowRight className='h-4 w-4' />
-                    </Link>
+                    <form className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-4' onSubmit={handleManagedSetup} data-managed-onboarding-intake='true'>
+                        <div className='flex items-start gap-2'>
+                            <ShieldCheck className='mt-0.5 h-4 w-4 shrink-0 text-ui-primary' />
+                            <div>
+                                <h2 className='text-sm font-semibold text-ui-text'>Request managed setup</h2>
+                                <p className='mt-1 text-xs leading-5 text-ui-muted'>Creates an intake ticket for coverage fit, tenant setup, SSO, retention, and procurement review.</p>
+                            </div>
+                        </div>
+                        <Notify message={setupError} />
+                        {managedSetupResult ? (
+                            <div className='rounded-lg border border-ui-success/30 bg-ui-success/10 p-3 text-sm leading-6 text-ui-success' data-managed-onboarding-result='true'>
+                                <div className='flex items-center gap-2 font-semibold'>
+                                    <CheckCircle2 className='h-4 w-4' />
+                                    Setup request received
+                                </div>
+                                <p className='mt-1'>Ticket <span className='font-mono font-semibold'>{managedSetupResult.ticketId}</span>. {managedSetupResult.nextStep}</p>
+                            </div>
+                        ) : null}
+                        <div className='grid gap-2 sm:grid-cols-2'>
+                            <label className='grid gap-1.5' htmlFor='managed-setup-name'>
+                                <span className='text-xs font-semibold text-ui-muted'>Name</span>
+                                <input id='managed-setup-name' name='setupName' placeholder='Avery Chen' autoComplete='name' className={authInputClass} required />
+                            </label>
+                            <label className='grid gap-1.5' htmlFor='managed-setup-email'>
+                                <span className='flex items-center gap-1.5 text-xs font-semibold text-ui-muted'><Mail className='h-3.5 w-3.5' /> Work email</span>
+                                <input id='managed-setup-email' name='setupEmail' type='email' placeholder='avery@company.com' autoComplete='email' className={authInputClass} required />
+                            </label>
+                        </div>
+                        <label className='grid gap-1.5' htmlFor='managed-setup-company'>
+                            <span className='flex items-center gap-1.5 text-xs font-semibold text-ui-muted'><Building2 className='h-3.5 w-3.5' /> Company</span>
+                            <input id='managed-setup-company' name='setupCompany' placeholder='Acme Security' autoComplete='organization' className={authInputClass} required />
+                        </label>
+                        <label className='grid gap-1.5' htmlFor='managed-setup-context'>
+                            <span className='text-xs font-semibold text-ui-muted'>Monitoring context</span>
+                            <textarea
+                                id='managed-setup-context'
+                                name='setupContext'
+                                placeholder='Company domains, vendors, delivery preference, SSO or procurement deadline'
+                                className='min-h-24 rounded-lg border border-ui-border bg-ui-panel px-3.5 py-2.5 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
+                                required
+                            />
+                        </label>
+                        <button type='submit' disabled={setupBusy} className={authPrimaryButtonClass}>
+                            {setupBusy ? 'Sending' : 'Send setup request'}
+                            <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
+                        </button>
+                    </form>
                 </div>
 
                 <div className='grid w-full gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-lg md:p-5'>
                     <div className='grid gap-1'>
                         <h2 className='text-xl font-semibold text-ui-text'>Create console account</h2>
-                        <p className='text-sm leading-6 text-ui-muted'>Use a work identity when possible so support can connect the account to an organization later.</p>
+                        <p className='text-sm leading-6 text-ui-muted'>Use this for individual evaluation. Team rollout, SSO, retention, and procurement should use the managed setup request.</p>
                     </div>
                     {(internal && path) && <ErrorNotice variant='info' message={`Create an account to continue to ${path}.`} />}
 
@@ -139,28 +240,6 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                 className={authInputClass}
                                 autoComplete='name'
                                 required
-                            />
-                        </label>
-                        <label className='grid gap-1.5' htmlFor='register-email'>
-                            <span className='flex items-center gap-1.5 text-xs font-semibold text-ui-muted'><Mail className='h-3.5 w-3.5' /> Work email <span className='font-normal text-ui-muted/70'>(optional)</span></span>
-                            <input
-                                id='register-email'
-                                type='email'
-                                name='businessEmail'
-                                placeholder='avery@company.com'
-                                className={authInputClass}
-                                autoComplete='email'
-                            />
-                        </label>
-                        <label className='grid gap-1.5' htmlFor='register-company'>
-                            <span className='flex items-center gap-1.5 text-xs font-semibold text-ui-muted'><Building2 className='h-3.5 w-3.5' /> Company <span className='font-normal text-ui-muted/70'>(optional)</span></span>
-                            <input
-                                id='register-company'
-                                type='text'
-                                name='company'
-                                placeholder='Acme Security'
-                                className={authInputClass}
-                                autoComplete='organization'
                             />
                         </label>
                         <label className='grid gap-1.5' htmlFor='register-password'>
