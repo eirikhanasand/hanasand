@@ -1172,7 +1172,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
             id: 'delivery',
             label: 'Webhook',
             value: latestDelivery ? stateLabel(latestDelivery.status) : workflowContext.hasWebhookRoute ? 'ready to test' : 'not configured',
-            detail: latestDelivery ? `${relativeTimeLabel(latestDelivery.attemptedAt)} · ${latestDelivery.endpointHash}` : workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : 'Customer send blocked: add or test a destination before sending.',
+            detail: latestDelivery ? `${relativeTimeLabel(latestDelivery.attemptedAt)} · ${deliveryDestinationState(latestDelivery)}` : workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : 'Customer send blocked: add or test a destination before sending.',
             state: latestDelivery?.status === 'delivered' || latestDelivery?.status === 'dry_run' ? 'ready' : workflowContext.hasWebhookRoute ? 'action' : 'blocked',
         },
         {
@@ -2513,7 +2513,7 @@ function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[], context?:
             id: delivery.id,
             at: delivery.attemptedAt,
             title: `Webhook ${stateLabel(delivery.status)}`,
-            detail: delivery.error ? safeTimelineDetail(delivery.error) : `HTTP ${delivery.httpStatus ?? 0} · ${delivery.endpointHash}`,
+            detail: delivery.error ? safeTimelineDetail(delivery.error) : `HTTP ${delivery.httpStatus ?? 0} · ${deliveryDestinationState(delivery)}`,
         })),
         ...localRows,
     ].sort((a, b) => String(b.at).localeCompare(String(a.at)))
@@ -2567,10 +2567,16 @@ function mergeDeliveries(incoming: DeliveryItem[], current: DeliveryItem[]) {
 function deliveryActionMessage(rows: DeliveryItem[], attemptedCount: number | undefined, fallback: string) {
     const row = rows[0]
     if (!row) return attemptedCount ? `${fallback} attempted.` : `${fallback} did not find a configured destination.`
-    const destination = row.endpointHint || row.endpointHash || row.webhookDestinationId || row.destinationId || 'redacted destination'
+    const destination = deliveryDestinationState(row)
     const retry = row.nextRetryAt ? ` Retry ${relativeTimeLabel(row.nextRetryAt)}.` : ''
     const error = row.error ? ` ${safeTimelineDetail(row.error)}` : ''
     return `${fallback} ${stateLabel(row.status)} for ${destination}.${retry}${error}`
+}
+
+function deliveryDestinationState(row: Pick<DeliveryItem, 'endpointHint' | 'endpointHash' | 'webhookDestinationId' | 'destinationId'>) {
+    if (row.endpointHint || row.endpointHash) return 'configured destination'
+    if (row.webhookDestinationId || row.destinationId) return 'saved destination'
+    return 'redacted destination'
 }
 
 function deliverySummaryLabel(rows: DeliveryItem[]) {
