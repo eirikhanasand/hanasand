@@ -1201,29 +1201,29 @@ function EmptyWorkspacePreview() {
             id: 'watchlists',
             icon: <BellRing className='h-4 w-4' />,
             title: 'Shared watchlists',
-            detail: 'Add organization-owned company, domain, supplier, actor, or keyword terms after the workspace is created.',
+            detail: 'Company, domain, supplier, actor, keyword',
             state: 'Create org first',
         },
         {
             id: 'destinations',
             icon: <Webhook className='h-4 w-4' />,
             title: 'Webhook destinations',
-            detail: 'Connect Discord or generic webhook endpoints, test dry-run delivery, and keep secrets redacted.',
+            detail: 'Discord, webhook, dry test, replay',
             state: 'Waiting for org',
         },
         {
             id: 'audit',
             icon: <CheckCircle2 className='h-4 w-4' />,
             title: 'Activity',
-            detail: 'Destination tests, alert replays, member changes, and case delivery actions are listed here once scoped to an org.',
+            detail: 'Invites, role changes, delivery actions',
             state: 'No events',
         },
     ]
 
     return (
         <div className='grid gap-4'>
-            <section className='rounded-lg border border-ui-border bg-ui-panel p-6 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-empty-focused-create='true'>
-                <div className='grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start'>
+            <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-empty-focused-create='true'>
+                <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start'>
                     <div className='min-w-0'>
                         <div className='flex min-w-0 items-start gap-3'>
                             <div className='grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>
@@ -1231,17 +1231,24 @@ function EmptyWorkspacePreview() {
                             </div>
                             <div className='min-w-0'>
                                 <h2 className='text-xl font-semibold text-ui-text dark:text-ui-text'>Create the first organization</h2>
-                                <p className='mt-1 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-                                    Start with the workspace. Team access, shared watchlists, destinations, cases, and activity appear after the organization exists.
-                                </p>
+                                <div className='mt-3 flex flex-wrap gap-2 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Org</span>
+                                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Members</span>
+                                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Watchlists</span>
+                                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Destinations</span>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <ol className='grid gap-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
+                    <ol className='grid gap-2 text-sm text-ui-muted dark:text-ui-muted'>
                         {setupRails.map((step, index) => (
-                            <li key={step.id} className='flex gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas'>
+                            <li key={step.id} className='grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas'>
                                 <span className='flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ui-primary/10 text-xs font-bold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{index + 1}</span>
-                                <span>{step.title}</span>
+                                <span className='min-w-0'>
+                                    <span className='block truncate font-semibold text-ui-text dark:text-ui-text'>{step.title}</span>
+                                    <span className='block truncate text-xs'>{step.detail}</span>
+                                </span>
+                                <span className='hidden rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold dark:border-ui-border dark:bg-ui-panel sm:inline-flex'>{step.state}</span>
                             </li>
                         ))}
                     </ol>
@@ -1257,7 +1264,7 @@ function EmptyWorkspacePreview() {
                             </span>
                             <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{item.state}</span>
                         </div>
-                        <p className='mt-3 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{item.detail}</p>
+                        <p className='mt-3 truncate text-sm text-ui-muted dark:text-ui-muted'>{item.detail}</p>
                     </div>
                 ))}
             </section>
