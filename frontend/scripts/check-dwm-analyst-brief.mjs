@@ -31,7 +31,7 @@ for (const token of [
     'Run path',
     'buildAnalystBrief(alert, evidenceSummary, routingContext, workflowContext)',
     'safeAlertSummary(alert)',
-    'keep raw leaked files and secrets out of the customer update',
+    'keep sensitive file contents and secrets out of the customer update',
     'test delivery before sending',
 ]) {
     assert.ok(source.includes(token), `DWM analyst portal missing brief token: ${token}`)

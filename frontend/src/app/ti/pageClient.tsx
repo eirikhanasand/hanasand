@@ -8799,7 +8799,7 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
     const actionabilityTasks: EnrichmentTask[] = actionability.enrichmentGapQueue.map(gap => ({
         title: gap.title,
         status: gap.severity === 'high' ? 'needs_api' : 'needs_review',
-        detail: `${gap.detail} Source family: ${formatLabel(gap.sourceFamily)}. Needs: ${gap.requestedFields.map(sourceHealthFieldLabel).join(', ')}. Route: ${sourceRequestRouteLabel(gap.route)}.`,
+        detail: `${gap.detail} Source family: ${formatLabel(gap.sourceFamily)}. Needs: ${gap.requestedFields.map(sourceHealthFieldLabel).join(', ')}. Work queue: ${sourceRequestRouteLabel(gap.route)}.`,
         route: gap.route,
         sourceFamily: gap.sourceFamily,
         requestedFields: gap.requestedFields,

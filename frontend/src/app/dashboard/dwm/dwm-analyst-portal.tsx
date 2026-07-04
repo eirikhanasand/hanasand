@@ -2289,7 +2289,7 @@ function buildAnalystBrief(
         whyItMatters: routingContext.reason,
         nextAction: alert.recommendedAction,
         readyForCustomer,
-        evidenceBoundary: `Show ${visibleCounts}; keep raw leaked files and secrets out of the customer update.`,
+        evidenceBoundary: `Show ${visibleCounts}; keep sensitive file contents and secrets out of the customer update.`,
         sourceRecords: `${evidenceSummary.evidenceCount} record${evidenceSummary.evidenceCount === 1 ? '' : 's'} across ${sourceFamilies || stateLabel(alert.sourceFamily)}, newest ${freshness}.`,
         workflowReadiness: workflowContext.hasWebhookRoute
             ? `${stateLabel(routingContext.queue)} is available; ${workflowContext.lastDelivery ? `last delivery ${stateLabel(workflowContext.lastDelivery.status)} ${relativeTimeLabel(workflowContext.lastDelivery.attemptedAt)}` : 'test delivery before sending'}.`
