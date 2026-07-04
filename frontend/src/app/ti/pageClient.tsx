@@ -3002,6 +3002,7 @@ function DossierList({ title, description, values, artifactKind, artifactByLooku
 }
 
 function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: { artifacts: ActorArtifact[]; selectedArtifactId?: string; onSelectArtifact: (artifactId: string) => void }) {
+    const [showAllArtifacts, setShowAllArtifacts] = useState(false)
     function move(direction: 'next' | 'previous' | 'first' | 'last') {
         const next = nextActorArtifactId(artifacts, selectedArtifactId, direction)
         if (next) onSelectArtifact(next)
@@ -3010,6 +3011,13 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
     const readyCount = artifacts.filter(artifact => artifactStateFor(artifact) === 'ready').length
     const reviewCount = artifacts.filter(artifact => artifactStateFor(artifact) === 'review').length
     const blockedCount = artifacts.filter(artifact => artifactStateFor(artifact) === 'blocked').length
+    const compactArtifacts = artifacts.slice(0, 8)
+    const visibleArtifacts = showAllArtifacts
+        ? artifacts
+        : selectedArtifact && !compactArtifacts.some(artifact => artifact.id === selectedArtifact.id)
+            ? [...compactArtifacts.slice(0, 7), selectedArtifact]
+            : compactArtifacts
+    const hiddenArtifactCount = Math.max(0, artifacts.length - visibleArtifacts.length)
 
     return (
         <section
@@ -3058,7 +3066,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                             </tr>
                         </thead>
                         <tbody className='divide-y divide-ui-border'>
-                            {artifacts.map(artifact => {
+                            {visibleArtifacts.map(artifact => {
                                 const active = artifact.id === selectedArtifact?.id
                                 const state = artifactStateFor(artifact)
                                 return (
@@ -3092,6 +3100,23 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                             })}
                         </tbody>
                     </table>
+                    {hiddenArtifactCount ? (
+                        <button
+                            type='button'
+                            onClick={() => setShowAllArtifacts(true)}
+                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                        >
+                            Show {hiddenArtifactCount} more details
+                        </button>
+                    ) : showAllArtifacts && artifacts.length > compactArtifacts.length ? (
+                        <button
+                            type='button'
+                            onClick={() => setShowAllArtifacts(false)}
+                            className='m-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                        >
+                            Show key details only
+                        </button>
+                    ) : null}
                 </div>
                 <div className='min-w-0 border-t border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised xl:border-l xl:border-t-0'>
                     {selectedArtifact ? (
