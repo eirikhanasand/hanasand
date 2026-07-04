@@ -1879,13 +1879,13 @@ function NoCaseWorkspace({ latestCaptures, workflowActions }: { latestCaptures: 
         },
         {
             stage: 'Collection',
-            state: latestCaptures.length ? `${latestCaptures.length} accepted capture${latestCaptures.length === 1 ? '' : 's'}` : 'No accepted captures',
+            state: latestCaptures.length ? `${latestCaptures.length} accepted capture${latestCaptures.length === 1 ? '' : 's'}` : 'Run collection next',
             action: 'Run collection',
             detail: newestCapture ? `${newestCapture.sourceName} ${relativeTimeLabel(newestCapture.collectedAt)}` : 'Approved source records appear after duplicate and safety checks.',
         },
         {
             stage: 'Case path',
-            state: 'No alert selected',
+            state: 'Select or rebuild alert',
             action: 'Rebuild alerts',
             detail: 'Matches become reviewable alerts with evidence, provenance, and delivery state.',
         },
