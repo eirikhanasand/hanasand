@@ -1,12 +1,14 @@
 import WebSocket, { type RawData } from 'ws'
-import { chromium, type Browser, type Page } from 'playwright'
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
 import recordLog from '#utils/logs/recordLog.ts'
 
 type BrokerMessage = {
     type?: string
     sessionId?: string
+    network?: 'tor' | 'regular'
     target?: string
     durationMinutes?: number
+    profileTools?: Array<{ id?: string; name?: string; url?: string }>
     width?: number
     height?: number
     x?: number
@@ -31,7 +33,7 @@ const DEFAULT_HEIGHT = 760
 const MAX_DURATION_MS = 60 * 60 * 1000
 const FRAME_INTERVAL_MS = 900
 
-export function handleOnionSessionSocket(connection: WebSocket, sessionId: string) {
+export function handleOnionSessionSocket(connection: WebSocket, sessionId: string, defaultNetwork: 'tor' | 'regular' = 'tor') {
     let browser: Browser | null = null
     let page: Page | null = null
     let frameTimer: NodeJS.Timeout | null = null
@@ -148,15 +150,19 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         closed = false
         remoteClipboard = ''
         const target = normalizeTarget(message.target || DEFAULT_TARGET)
-        const proxy = process.env.ONION_SESSION_PROXY || process.env.TOR_SOCKS_PROXY || ''
+        const network = message.network === 'regular' ? 'regular' : defaultNetwork
+        const proxy = network === 'tor' ? process.env.ONION_SESSION_PROXY || process.env.TOR_SOCKS_PROXY || '' : ''
         const durationMs = Math.min(MAX_DURATION_MS, Math.max(60_000, (message.durationMinutes || 15) * 60_000))
 
         send({
             type: 'status',
             state: 'launching',
             sessionId,
+            network,
             torProxyConfigured: Boolean(proxy),
-            message: proxy ? 'Launching isolated browser through configured Tor proxy.' : 'Launching isolated browser without Tor proxy; configure ONION_SESSION_PROXY or TOR_SOCKS_PROXY for onion routing.',
+            message: network === 'regular'
+                ? 'Launching isolated regular-web browser with a fresh context.'
+                : proxy ? 'Launching isolated browser through configured Tor proxy.' : 'Launching isolated browser without Tor proxy; configure ONION_SESSION_PROXY or TOR_SOCKS_PROXY for onion routing.',
         })
 
         browser = await chromium.launch({
@@ -182,6 +188,11 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         page = await context.newPage()
         page.on('console', (entry) => send({ type: 'console', level: entry.type(), text: entry.text() }))
         page.on('pageerror', (error) => send({ type: 'pageerror', message: error.message }))
+        page.on('framenavigated', (frame) => {
+            if (frame !== page?.mainFrame()) return
+            send({ type: 'status', state: 'navigated', url: page.url(), sessionId })
+            void sendFrame(true, 'navigation')
+        })
 
         closeTimer = setTimeout(() => {
             void cleanup()
@@ -190,10 +201,50 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }, durationMs)
 
         await navigate(target)
+        await captureProfileTools(context, message.profileTools || [], target)
         frameTimer = setInterval(() => {
             void sendFrame(false)
         }, FRAME_INTERVAL_MS)
-        send({ type: 'ready', sessionId, target, torProxyConfigured: Boolean(proxy) })
+        send({ type: 'ready', sessionId, target, network, torProxyConfigured: Boolean(proxy) })
+    }
+
+    async function captureProfileTools(context: BrowserContext, tools: Array<{ id?: string; name?: string; url?: string }>, target: string) {
+        for (const tool of tools.slice(0, 6)) {
+            if (!tool.url) continue
+            const toolPage = await context.newPage().catch(() => null)
+            if (!toolPage) continue
+            const startedAt = new Date().toISOString()
+            const toolUrl = tool.url.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
+            try {
+                await toolPage.goto(toolUrl, { waitUntil: 'domcontentloaded', timeout: 25_000 })
+                await toolPage.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined)
+                const buffer = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
+                send({
+                    type: 'tool_capture',
+                    sessionId,
+                    id: tool.id || safeToolId(tool.name || toolUrl),
+                    name: tool.name || toolUrl,
+                    url: toolPage.url(),
+                    title: await toolPage.title().catch(() => ''),
+                    capturedAt: startedAt,
+                    image: buffer ? buffer.toString('base64') : null,
+                    target,
+                })
+            } catch (error) {
+                send({
+                    type: 'tool_capture',
+                    sessionId,
+                    id: tool.id || safeToolId(tool.name || toolUrl),
+                    name: tool.name || toolUrl,
+                    url: toolUrl,
+                    capturedAt: startedAt,
+                    error: error instanceof Error ? error.message : String(error),
+                    target,
+                })
+            } finally {
+                await toolPage.close().catch(() => undefined)
+            }
+        }
     }
 
     async function navigate(value: string) {
@@ -314,7 +365,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }).catch(() => '')
     }
 
-    async function sendFrame(force: boolean) {
+    async function sendFrame(force: boolean, reason = 'interval') {
         if (!page || closed || connection.readyState !== connection.OPEN) return
         const buffer = await page.screenshot({ type: 'jpeg', quality: 68, animations: 'disabled' }).catch(() => null)
         if (!buffer) return
@@ -329,8 +380,16 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             width: viewport?.width || DEFAULT_WIDTH,
             height: viewport?.height || DEFAULT_HEIGHT,
             sessionId,
+            url: page.url(),
+            title: await page.title().catch(() => ''),
+            capturedAt: new Date().toISOString(),
+            reason,
         })
     }
+}
+
+function safeToolId(value: string) {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64) || 'tool'
 }
 
 function parseMessage(raw: RawData): BrokerMessage | null {

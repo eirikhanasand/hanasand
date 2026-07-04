@@ -173,6 +173,11 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
     fastify.get<{ Params: { id: string } }>('/api/ws/onion-session/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
         handleOnionSessionSocket(connection, req.params.id)
     })
+
+    // regular-web sandbox browser session
+    fastify.get<{ Params: { id: string } }>('/api/ws/browser-sandbox/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
+        handleOnionSessionSocket(connection, req.params.id, 'regular')
+    })
 })
 
 type ShareTerminal = {

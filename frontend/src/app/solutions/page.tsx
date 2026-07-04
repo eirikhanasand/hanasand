@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, BellRing, Code2, Database, Gauge, LockKeyhole, Network, Radar, ShieldCheck, Waypoints } from 'lucide-react'
+import { ArrowRight, BellRing, Code2, Database, Gauge, Globe2, LockKeyhole, Network, Radar, ShieldCheck, Waypoints } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
@@ -27,6 +27,15 @@ const primarySolutions = [
         href: '/solutions/onion-session',
         icon: Network,
         points: ['10-60 minute isolated sessions', 'Read-only and fresh-circuit controls', 'Evidence packet instead of local raw-content handling'],
+        price: 'Bundled with monitoring',
+    },
+    {
+        title: 'Regular Website Sandbox',
+        eyebrow: 'URL analysis',
+        detail: 'Open untrusted regular-web URLs in an isolated browser, capture redirect screenshots, and run saved SOC triage profiles.',
+        href: '/solutions/browser-sandbox',
+        icon: Globe2,
+        points: ['URL-first remote browser launch', 'Saved VirusTotal, urlquery, and WebCrack profiles', 'Screenshot timeline with analyst summary'],
         price: 'Bundled with monitoring',
     },
     {
