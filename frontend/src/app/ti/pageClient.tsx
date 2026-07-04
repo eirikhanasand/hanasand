@@ -651,10 +651,12 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 ) : null
                             ) : null}
                         </div>
-                        <StagedHandoffQueuePanel
-                            items={Object.values(stagedHandoffs)}
-                            onClear={() => setStagedHandoffs({})}
-                        />
+                        {Object.keys(stagedHandoffs).length ? (
+                            <StagedHandoffQueuePanel
+                                items={Object.values(stagedHandoffs)}
+                                onClear={() => setStagedHandoffs({})}
+                            />
+                        ) : null}
 
                         {showMoreAnalysis ? (
                             <>
