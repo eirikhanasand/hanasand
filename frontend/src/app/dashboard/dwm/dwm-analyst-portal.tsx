@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
@@ -647,9 +648,9 @@ function PublicTiDwmIntake({ handoff, params, tenantId, organizationId, activeSo
                         <p className='mt-1 wrap-break-word text-sm font-semibold text-ui-text'>Handoff needs a fresh export.</p>
                         <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{handoff.message}</p>
                     </div>
-                    <a href='/ti' className='inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>
+                    <Link href='/ti' className='inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised'>
                         Open actor search
-                    </a>
+                    </Link>
                 </div>
             </section>
         )

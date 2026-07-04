@@ -60,7 +60,7 @@ test('regular browser sandbox route exposes URL-first SOC triage workflow', asyn
 
     expect(wsSource).toContain('/api/ws/browser-sandbox/:id')
     expect(wsSource).toContain('handleOnionSessionSocket(connection, req.params.id, \'regular\')')
-    expect(brokerSource).toContain("network?: 'tor' | 'regular'")
+    expect(brokerSource).toContain('network?: \'tor\' | \'regular\'')
     expect(brokerSource).toContain('profileTools')
     expect(brokerSource).toContain('tool_capture')
     expect(brokerSource).toContain('capturedAt')

@@ -2384,7 +2384,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                                 <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{item.kind}</span>
                                                 <StatusPill status={item.status} />
                                             </div>
-                                            <p className='mt-2 line-clamp-2 break-words text-base font-semibold text-ui-text dark:text-ui-text'>{item.value}</p>
+                                            <p className='mt-2 line-clamp-2 wrap-break-word text-base font-semibold text-ui-text dark:text-ui-text'>{item.value}</p>
                                             <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{item.notes || 'Add routing context.'}</p>
                                             <div className='mt-2 grid gap-1 text-xs text-ui-muted dark:text-ui-muted sm:grid-cols-2'>
                                                 <span className='truncate'>Org: {sanitizeOrganizationDisplayCopy(item.organizationId || organization.id)}</span>
