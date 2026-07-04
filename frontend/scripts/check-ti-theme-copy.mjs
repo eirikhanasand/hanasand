@@ -6,17 +6,19 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const tiPage = readFileSync(path.join(root, 'src/app/ti/pageClient.tsx'), 'utf8')
 
-const requiredDarkTokens = [
-    'dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]',
-    'dark:border-[#314057] dark:bg-[#1d2939] dark:text-[#c6d3e4]',
-    'dark:border-[#23563a] dark:bg-[#10281b] dark:text-[#9df0b8]',
-    'dark:border-[#7f2c35] dark:bg-[#321316] dark:text-[#ffb8b0]',
-    'dark:border-[#6f5417] dark:bg-[#2a220f] dark:text-[#ffd879]',
+const requiredSemanticChipTokens = [
+    'dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary',
+    'dark:border-ui-success/35 dark:bg-ui-success/10 dark:text-ui-success',
+    'dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning',
+    'dark:border-ui-danger/35 dark:bg-ui-danger/10 dark:text-ui-danger',
 ]
 
-for (const token of requiredDarkTokens) {
-    assert.ok(tiPage.includes(token), `Public TI dark-mode contrast token is missing: ${token}`)
+for (const token of requiredSemanticChipTokens) {
+    assert.ok(tiPage.includes(token), `Public TI semantic dark-mode chip token is missing: ${token}`)
 }
+
+assert.equal(tiPage.includes('divide-[#eef1f5]'), false, 'Public TI should use shared divider tokens instead of bespoke light dividers')
+assert.equal(tiPage.includes('dark:divide-[#273244]'), false, 'Public TI should use shared divider tokens instead of bespoke dark dividers')
 
 const riskyLightChipPatterns = [
     /className=['"`][^'"`]*bg-\[#eef3ff\][^'"`]*text-\[#3056d3\](?![^'"`]*dark:bg)(?![^'"`]*dark:text)/g,

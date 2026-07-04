@@ -1717,7 +1717,7 @@ function ActorOperationsMatrix({
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
-                        <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                        <tbody className='divide-y divide-ui-border'>
                             {rows.map(row => {
                                 const active = selectedRow?.id === row.id || (row.artifactLookup && selectedArtifactId?.includes(row.artifactLookup.toLowerCase().replace(/[^a-z0-9]+/g, '-')))
                                 return (
@@ -1855,7 +1855,7 @@ function SourceCoverageWorkbench({
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
-                        <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                        <tbody className='divide-y divide-ui-border'>
                             {rows.map(row => {
                                 const active = selectedRow?.id === row.id
                                 const linkedSelected = row.evidenceItems.some(item => item.id === selectedId)
@@ -2543,7 +2543,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
-                        <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                        <tbody className='divide-y divide-ui-border'>
                             {artifacts.map(artifact => {
                                 const active = artifact.id === selectedArtifact?.id
                                 const state = artifactStateFor(artifact)
@@ -2895,7 +2895,7 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
                             <th className='px-3 py-2 font-semibold'>Next action</th>
                         </tr>
                     </thead>
-                    <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                    <tbody className='divide-y divide-ui-border'>
                         {rows.map(row => (
                             <tr key={row.rowId} className='bg-ui-panel align-top dark:bg-ui-raised'>
                                 <td className='px-3 py-2'>
@@ -3317,7 +3317,7 @@ function WatchlistRelevanceWorkbench({
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
-                        <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                        <tbody className='divide-y divide-ui-border'>
                             {rows.map(row => {
                                 const active = selectedRow?.id === row.id
                                 return (
@@ -4764,7 +4764,7 @@ function EnrichmentGapWorkbench({
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
-                        <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                        <tbody className='divide-y divide-ui-border'>
                             {rows.map(row => {
                                 const active = selectedRow?.id === row.id
                                 return (
@@ -6093,7 +6093,7 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
                     {actor.sourceCoverage.stale ? 'refresh recommended' : 'current source set'}
                 </span>
             </div>
-            <div className='mt-3 divide-y divide-[#eef1f5] rounded-lg border border-ui-border bg-ui-panel dark:divide-[#273244] dark:border-ui-border dark:bg-ui-raised'>
+            <div className='mt-3 divide-y divide-ui-border rounded-lg border border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-raised'>
                 {rows.map(row => (
                     <div key={row.label} className='grid min-w-0 gap-2 px-3 py-2 text-sm sm:grid-cols-[9rem_minmax(0,1fr)_minmax(0,0.8fr)_5rem] sm:items-center'>
                         <p className='inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>
