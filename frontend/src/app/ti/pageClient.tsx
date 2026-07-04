@@ -2463,7 +2463,7 @@ function SourceCoverageWorkbench({
                             Show key sources only
                         </button>
                     ) : null}
-                    {!rows.length ? <p className='p-4 text-sm text-ui-muted dark:text-ui-muted'>Add source coverage before routing this actor.</p> : null}
+                    {!rows.length ? <p className='p-4 text-sm text-ui-muted dark:text-ui-muted'>Add source coverage before reviewing this actor.</p> : null}
                 </div>
                 <div className='min-w-0 border-t border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised xl:border-l xl:border-t-0'>
                     {selectedRow ? (
@@ -3243,7 +3243,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
             <div className='mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='grid gap-3 md:grid-cols-2'>
                     <EvidencePanel title='Evidence'>
-                        {artifact.evidence.length ? artifact.evidence.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Review source evidence before routing.</li>}
+                        {artifact.evidence.length ? artifact.evidence.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Review source evidence before case work.</li>}
                     </EvidencePanel>
                     <EvidencePanel title='Source details'>
                         {artifact.provenance.length ? artifact.provenance.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Source details are missing for this detail.</li>}
@@ -3282,7 +3282,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                             {request.captureId ? 'capture attached' : 'capture needed'}
                                         </span>
                                     </div>
-                                    <p className='mt-1 break-all font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{request.captureId ?? displayRequirementText(request.provenance)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{request.captureId ? `capture ${request.captureId}` : compactSourceReferenceLabel(request.provenance)}</p>
                                     {request.missing.length || typeof request.confidence === 'number' ? (
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                             {[typeof request.confidence === 'number' ? sourceBasisLabel(request.confidence) : '', ...request.missing.map(displayRequirementText)].filter(Boolean).join(' · ')}
@@ -3443,7 +3443,7 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}</p>
-                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.provenance)}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.provenance)}</p>
                             </div>
                             <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'attached' : 'needed'}</span>
                         </div>
@@ -3471,7 +3471,7 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
                             <tr key={row.rowId} className='bg-ui-panel align-top dark:bg-ui-raised'>
                                 <td className='px-3 py-2'>
                                     <p className='wrap-break-word font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}</p>
-                                    <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.provenance)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.provenance)}</p>
                                 </td>
                                 <td className='px-3 py-2 text-ui-muted dark:text-ui-muted'>{row.reportDate ? formatDate(row.reportDate) : 'Not dated'}</td>
                                 <td className='px-3 py-2 text-ui-muted dark:text-ui-muted'>{sourceBasisLabel(row.confidence)}</td>
@@ -3522,7 +3522,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                                 {row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'capture needed' : 'source needed'}
                             </span>
                         </div>
-                        <p className='mt-1 break-all font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{row.captureId ? `capture ${row.captureId}` : displayRequirementText(row.provenance)}</p>
+                        <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{row.captureId ? `capture ${row.captureId}` : compactSourceReferenceLabel(row.provenance)}</p>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.handoff)}</p>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                             <span className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-raised dark:text-ui-text'>
@@ -4198,11 +4198,11 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{item.sourceName}</p>
                                     <span className={item.captureId ? 'shrink-0 text-[11px] text-ui-success' : 'shrink-0 text-[11px] text-ui-warning'}>{item.captureId ? 'capture attached' : 'capture needed'}</span>
                                 </div>
-                                <p className='mt-1 break-all font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(item.provenance)}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(item.provenance)}</p>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
                             </div>
                         ))}
-                        {!actionability.sourceClusters.length ? <p className='text-xs text-ui-muted dark:text-ui-muted'>Add source details before routing.</p> : null}
+                        {!actionability.sourceClusters.length ? <p className='text-xs text-ui-muted dark:text-ui-muted'>Add source details before review.</p> : null}
                     </div>
                 </div>
 
@@ -4497,7 +4497,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                         {formatLabel(source.sourceFamily)} · {formatLabel(source.status)}{source.lastCollectedAt ? ` · ${formatDate(source.lastCollectedAt)}` : ''}
                                     </p>
-                                    <p className='mt-1 break-all font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{source.captureId ? `capture ${source.captureId}` : displayRequirementText(source.provenance)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{source.captureId ? `capture ${source.captureId}` : compactSourceReferenceLabel(source.provenance)}</p>
                                 </div>
                                 {typeof source.confidence === 'number' ? <span className='shrink-0 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{Math.round(source.confidence * 100)}%</span> : null}
                             </div>
@@ -5959,7 +5959,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                     <CopyPayloadButton label='Case create request' payload={request} />
                 </div>
             </div>
-            <p className='mt-2 break-all font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{request.request.method} {consumerRequestPathLabel(request.request.path)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{consumerRequestPathLabel(request.request.path)} ready for authenticated review.</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(request.nextAction)}</p>
             <div data-ti-selected-case-actor-context='true' className='mt-2 rounded-md border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-panel'>
                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
@@ -9317,7 +9317,7 @@ function sourceCoverageWorkbenchRowsFor({
             confidenceValues: [],
             sourceId: source.id,
             missing: source.url || source.provenance ? [] : ['sourceProvenance[].provenance'],
-            nextAction: href ? 'Open source and attach matching evidence row when routing to case work.' : 'Attach source URL or source reference before routing.',
+            nextAction: href ? 'Open source and attach a matching evidence row before case work.' : 'Attach source URL or source reference before review.',
             actor,
             workItems,
             sourceOptions,
@@ -9827,7 +9827,7 @@ function defaultCollectionSources(): NonNullable<TiSearchResponse['collectionStr
         {
             source: 'Infostealer and credential-exposure records',
             role: 'owned_collection_target',
-            summary: 'Company/domain exposure records routed through review without credential values, raw dumps, or unsafe redistribution.',
+            summary: 'Company/domain exposure records reviewed without credential values, bulk dump content, or unsafe redistribution.',
             buyerValue: 'Buyers care when their domain, vendor, executive, or portfolio company appears in fresh exposure records; the value is the alert and triage context, not dump access.'
         },
         {
@@ -10321,7 +10321,7 @@ function geographyContextPayloadFor(point: ReturnType<typeof actorGeoProfile>['p
         },
         action: handoff?.watchlistTerm ? 'review_watchlist_term' : 'queue_source_enrichment',
         watchlistTerm: handoff?.watchlistTerm ?? null,
-        enrichmentTask: handoff?.enrichmentTask ?? `Attach source evidence before routing ${point.label} into monitoring.`,
+        enrichmentTask: handoff?.enrichmentTask ?? `Attach source evidence before reviewing ${point.label} in monitoring.`,
         provenanceSummary: handoff?.provenanceSummary ?? point.detail,
         evidence: handoff?.evidenceRows.map(row => ({
             victim: row.victim,
