@@ -26,7 +26,7 @@ for (const token of [
     '<section id=\'dwm-workflow-actions\' className=\'scroll-mt-24\'>',
     'dwm-workflow-actions',
     'data-dwm-workflow-snapshot',
-    'Workflow route',
+    'Action path',
     'Watchlist to source, alert, case, and delivery.',
     'Run path',
     'buildAnalystBrief(alert, evidenceSummary, routingContext, workflowContext)',

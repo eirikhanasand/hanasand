@@ -588,7 +588,7 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
         <section data-dwm-workflow-snapshot className='border-b border-ui-border bg-ui-raised'>
             <div className='flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
                 <div>
-                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Workflow route</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Action path</p>
                     <p className='mt-1 text-sm font-semibold text-ui-text'>Watchlist to source, alert, case, and delivery.</p>
                 </div>
                 <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-ui-muted'>
@@ -1188,7 +1188,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
         <section data-dwm-workflow-spine className='rounded-lg border border-ui-border bg-ui-raised'>
             <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-ui-primary'>Workflow</p>
+                    <p className='text-xs font-semibold uppercase text-ui-primary'>Action path</p>
                     <h3 className='mt-0.5 text-base font-semibold text-ui-text'>Watchlist match to customer handoff</h3>
                 </div>
                 <a href='#dwm-workflow-actions' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
@@ -2544,7 +2544,7 @@ function actionUnavailableReason(alert: PortalAlert, action: DwmAlertAnalystActi
     const row = actionState.actions?.find(item => item.action === action)
     const blocker = row?.blockerCodes?.length ? `${row.blockerCodes.map(stateLabel).slice(0, 2).join(', ')}.` : ''
     if (blocker) return blocker
-    if (actionState.blockedActions?.includes(action)) return 'This action needs the current alert workflow to move forward.'
+    if (actionState.blockedActions?.includes(action)) return 'This action needs the current alert state to move forward.'
     return undefined
 }
 
