@@ -232,7 +232,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
         { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: '127.0.0.1', path: '/' },
     ])
 
-    await page.route('**/api/organizations', async route => {
+    await page.route(/\/api\/organizations(?:\?.*)?$/, async route => {
         await route.fulfill({ json: { organizations: [fixtureOrganization, fixtureViewerOrganization] } })
     })
     await page.route('**/api/organizations/org_acme/settings', async route => {
