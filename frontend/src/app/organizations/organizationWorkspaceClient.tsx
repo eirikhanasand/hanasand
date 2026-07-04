@@ -204,6 +204,10 @@ type DestinationDraft = {
     url: string
 }
 
+type DestinationCreateDraft = DestinationDraft & {
+    name: string
+}
+
 type DestinationEditDraft = {
     name: string
     kind: 'discord' | 'webhook'
@@ -329,6 +333,7 @@ export default function OrganizationWorkspaceClient() {
     const [watchlistDraft, setWatchlistDraft] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
     const [settingsDraft, setSettingsDraft] = useState<OrganizationSettings>({})
     const [editingWatchlist, setEditingWatchlist] = useState<Record<string, { kind: WatchlistKind, value: string, notes: string }>>({})
+    const [destinationCreateDraft, setDestinationCreateDraft] = useState<DestinationCreateDraft>({ name: '', kind: 'discord', url: '' })
     const [destinationDrafts, setDestinationDrafts] = useState<Record<string, DestinationDraft>>({})
     const [editingDestinations, setEditingDestinations] = useState<Record<string, DestinationEditDraft>>({})
     const [deliveryResults, setDeliveryResults] = useState<Record<string, DeliveryRow>>({})
@@ -722,6 +727,25 @@ export default function OrganizationWorkspaceClient() {
         return delivery?.status ? `Destination test ${delivery.status}.` : 'Destination test sent.'
     }, `destination-${destination.id}`)
 
+    const createSavedDestination = () => selectedOrganization && runAction('create-destination', async () => {
+        const url = destinationCreateDraft.url.trim()
+        if (!validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
+        const kind = destinationCreateDraft.kind
+        await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks`, {
+            method: 'POST',
+            body: JSON.stringify({
+                name: destinationCreateDraft.name.trim() || `${kind === 'discord' ? 'Discord' : 'Webhook'} destination`,
+                kind,
+                endpointUrl: url,
+                webhookUrl: url,
+                status: 'active',
+                requestId: `org-ui-${Date.now()}`,
+            }),
+        })
+        setDestinationCreateDraft({ name: '', kind: 'discord', url: '' })
+        return 'Destination added.'
+    }, 'destination-create')
+
     const updateSavedDestination = (destination: WebhookDestination, draft: DestinationEditDraft) => selectedOrganization && runAction('update-destination', async () => {
         const url = draft.url.trim()
         if (url && !validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
@@ -906,7 +930,7 @@ export default function OrganizationWorkspaceClient() {
                                     <div className='grid min-w-0 content-start gap-5'>
                                         <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
                                         <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
-                                        <DestinationPanel destinations={bundle.webhooks} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={setSelectedActivitySubject} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} />
+                                        <DestinationPanel destinations={bundle.webhooks} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} createDraft={destinationCreateDraft} setCreateDraft={setDestinationCreateDraft} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={setSelectedActivitySubject} onCreate={() => void createSavedDestination()} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} />
                                     </div>
                                 </section>
 
@@ -1356,7 +1380,9 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
     )
 }
 
-function DestinationPanel({ destinations, canManage, busy, rowMessages, selectedSubject, editing, setEditing, onSelectSubject, onTest, onUpdate, onDelete }: { destinations: WebhookDestination[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onDelete: (destination: WebhookDestination) => void }) {
+function DestinationPanel({ destinations, canManage, busy, rowMessages, selectedSubject, createDraft, setCreateDraft, editing, setEditing, onSelectSubject, onCreate, onTest, onUpdate, onDelete }: { destinations: WebhookDestination[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, createDraft: DestinationCreateDraft, setCreateDraft: (next: DestinationCreateDraft) => void, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onCreate: () => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onDelete: (destination: WebhookDestination) => void }) {
+    const createUrl = createDraft.url.trim()
+    const createUrlInvalid = Boolean(createUrl) && !validDestinationUrl(createUrl)
     return (
         <details id='destinations' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-destinations-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
@@ -1366,7 +1392,30 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                 </span>
             </summary>
             <div className='grid gap-2 border-t border-ui-border p-4 dark:border-ui-border'>
-                {destinations.length === 0 && <EmptyLine text='Saved watchlist destinations appear here after a route is tested and attached.' />}
+                {canManage && (
+                    <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' data-org-destination-create='true'>
+                        <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem]'>
+                            <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                                Name
+                                <input value={createDraft.name} disabled={Boolean(busy)} onChange={event => setCreateDraft({ ...createDraft, name: event.target.value })} className={inputClass} placeholder='Security alerts' />
+                            </label>
+                            <SelectField label='Type' value={createDraft.kind} options={destinationKinds} disabled={Boolean(busy)} onChange={value => setCreateDraft({ ...createDraft, kind: value as DestinationCreateDraft['kind'] })} />
+                        </div>
+                        <div className='grid gap-2 md:grid-cols-[minmax(12rem,1fr)_auto] md:items-end'>
+                            <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                                URL
+                                <input value={createDraft.url} disabled={Boolean(busy)} onChange={event => setCreateDraft({ ...createDraft, url: event.target.value })} className={inputClass} placeholder='https://discord.com/api/webhooks/...' />
+                                {createUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
+                            </label>
+                            <button type='button' className={primaryButtonClass} disabled={!createUrl || createUrlInvalid || Boolean(busy)} onClick={onCreate}>
+                                <CheckCircle2 className='h-4 w-4' />
+                                Add destination
+                            </button>
+                        </div>
+                        <RowStatus message={rowMessages['destination-create']} />
+                    </div>
+                )}
+                {destinations.length === 0 && <EmptyLine text={canManage ? 'No saved destinations yet.' : 'No saved destinations available.'} />}
                 {destinations.map(destination => {
                     const draft = editing[destination.id]
                     const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')

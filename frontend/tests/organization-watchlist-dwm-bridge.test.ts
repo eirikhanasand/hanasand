@@ -13,6 +13,13 @@ const dwmAnalystPortalSource = readFileSync(new URL('../src/app/dashboard/dwm/dw
 
 test('organization workspace exposes destination lifecycle controls safely', () => {
     assert.match(organizationWorkspaceSource, /validDestinationUrl\(url\)/, 'destination save should validate URL shape before dry-run.')
+    assert.match(organizationWorkspaceSource, /createSavedDestination/, 'organization settings should allow direct destination creation.')
+    assert.match(organizationWorkspaceSource, /data-org-destination-create='true'/, 'saved destinations should expose a compact create control.')
+    assert.match(organizationWorkspaceSource, /\/api\/organizations\/\$\{encodeURIComponent\(selectedOrganization\.id\)\}\/webhooks`,/, 'destination creation should use the org-scoped destination proxy.')
+    assert.match(organizationWorkspaceSource, /method: 'POST'/, 'destination creation should use POST through the frontend org proxy.')
+    assert.match(organizationWorkspaceSource, /endpointUrl: url/, 'destination creation should send the endpoint only to the backend proxy.')
+    assert.match(organizationWorkspaceSource, /webhookUrl: url/, 'destination creation should preserve legacy backend URL compatibility.')
+    assert.match(organizationWorkspaceSource, /Destination added\./, 'destination creation should return a concrete operator result.')
     assert.match(organizationWorkspaceSource, /\/api\/organizations\/\$\{encodeURIComponent\(selectedOrganization\.id\)\}\/webhooks\/\$\{encodeURIComponent\(destination\.id\)\}/, 'saved destination updates should use the org-scoped destination proxy.')
     assert.match(organizationWorkspaceSource, /method: 'PATCH'/, 'saved destination edits should use PATCH through the frontend org proxy.')
     assert.match(organizationWorkspaceSource, /aria-label='Edit destination'/, 'saved destinations should expose an edit action.')
