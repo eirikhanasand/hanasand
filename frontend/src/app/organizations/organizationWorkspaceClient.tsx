@@ -1585,6 +1585,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                             role='button'
                             tabIndex={0}
                             aria-pressed={selected}
+                            id={`destination-${encodeURIComponent(destination.id)}`}
                             key={destination.id}
                             onClick={() => onSelectSubject({ type: 'destination', id: destination.id })}
                             onKeyDown={event => {
@@ -2717,47 +2718,47 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
     if (subject.type === 'organization') {
         return [
             { label: 'Watchlists', href: '#watchlists' },
-            { label: 'Org API', href: `/api/organizations/${organizationId}` },
+            { label: 'Audit trail', href: '#audit' },
         ]
     }
     if (subject.type === 'invite') {
         return [
             { label: 'Invites', href: '#invites' },
-            { label: 'Invite API', href: `/api/organizations/${organizationId}/invites` },
+            { label: 'Audit trail', href: '#audit' },
         ]
     }
     if (subject.type === 'member') {
         return [
             { label: 'Members', href: '#members' },
-            { label: 'Member API', href: `/api/organizations/${organizationId}/members` },
+            { label: 'Audit trail', href: '#audit' },
         ]
     }
     if (subject.type === 'watchlist') {
         const watchlistId = encodeURIComponent(subject.id)
         return [
             { label: 'Watchlist', href: '#watchlists' },
-            { label: 'Alert terms', href: `/api/organizations/${organizationId}/watchlists/alert-terms?watchlistId=${watchlistId}` },
+            { label: 'Open alert scope', href: `/dashboard/ti/workbench?organizationId=${organizationId}&watchlistId=${watchlistId}` },
         ]
     }
     if (subject.type === 'destination') {
         const destinationId = encodeURIComponent(subject.id)
         return [
             { label: 'Destinations', href: '#destinations' },
-            { label: 'Deliveries', href: `/api/dwm/webhooks/deliveries?organizationId=${organizationId}&destinationId=${destinationId}` },
+            { label: 'Delivery activity', href: `#destination-${destinationId}` },
         ]
     }
     if (subject.type === 'alert') {
         const alertId = encodeURIComponent(subject.id)
         return [
             { label: 'Alert', href: `/dashboard/ti/workbench?alertId=${alertId}&organizationId=${organizationId}` },
-            { label: 'Deliveries', href: `/api/dwm/webhooks/deliveries?organizationId=${organizationId}&alertId=${alertId}` },
+            { label: 'Organization activity', href: '#audit' },
         ]
     }
     if (subject.type === 'case') {
         const caseId = encodeURIComponent(subject.id)
         return [
             { label: 'Case', href: `/dashboard/dwm/cases/${caseId}?organizationId=${organizationId}` },
-            { label: 'Cases API', href: `/api/cases?organizationId=${organizationId}` },
+            { label: 'Organization activity', href: '#audit' },
         ]
     }
     return []
