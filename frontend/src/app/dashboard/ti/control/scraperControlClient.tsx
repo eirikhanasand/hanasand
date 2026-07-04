@@ -2,7 +2,7 @@
 
 import type { FormEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, AlertTriangle, CheckCircle2, Clock3, DatabaseZap, FileSearch, Gauge, GitBranch, History, ListChecks, PauseCircle, PlayCircle, RefreshCcw, RotateCcw, Search, SlidersHorizontal, UserRound, Workflow, XCircle } from 'lucide-react'
+import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Clock3, DatabaseZap, FileSearch, Gauge, GitBranch, History, ListChecks, PauseCircle, PlayCircle, RefreshCcw, RotateCcw, Search, SlidersHorizontal, UserRound, Workflow, XCircle } from 'lucide-react'
 
 type EndpointState = { ok: boolean; status: number; error?: string }
 type ControlSnapshot = {
@@ -432,10 +432,16 @@ export default function TiScraperControlClient() {
                 </div>
             </section>
 
-            <details className='overflow-hidden rounded-md border border-ui-border bg-ui-panel' data-ti-control-telemetry-disclosure>
+            <details className='group overflow-hidden rounded-md border border-ui-border bg-ui-panel' data-ti-control-telemetry-disclosure>
                 <summary className='flex cursor-pointer list-none flex-col gap-1 px-3 py-2 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                    <span>Operations telemetry</span>
-                    <span className='text-xs font-medium text-ui-muted'>{healthyEndpoints}/{Math.max(endpointRows.length, 1)} checks healthy · {queueCount} queued · {sourceGrowth.alertsGenerated} alerts</span>
+                    <span className='inline-flex items-center gap-2'>
+                        <GitBranch className='h-4 w-4 text-ui-primary' />
+                        Operations telemetry
+                    </span>
+                    <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
+                        {healthyEndpoints}/{Math.max(endpointRows.length, 1)} checks healthy · {queueCount} queued · {sourceGrowth.alertsGenerated} alerts
+                        <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
+                    </span>
                 </summary>
                 <div className='grid gap-2 border-t border-ui-border p-2' data-ti-control-telemetry-panels>
                     <section className='grid gap-2 sm:grid-cols-2 xl:grid-cols-5'>

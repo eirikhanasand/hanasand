@@ -10,6 +10,8 @@ test('ti control keeps search and work queue primary while telemetry is disclose
     expect(source).toContain('data-ti-control-telemetry-disclosure')
     expect(source).toContain('data-ti-control-telemetry-panels')
     expect(source).toContain('Operations telemetry')
+    expect(source).toContain('ChevronDown')
+    expect(source).toContain('group-open:rotate-180')
     expect(source).toContain('{healthyEndpoints}/{Math.max(endpointRows.length, 1)} checks healthy')
 
     expect(source.indexOf('placeholder=\'Actor, company, domain, CVE...\'')).toBeLessThan(source.indexOf('data-ti-control-telemetry-disclosure'))
