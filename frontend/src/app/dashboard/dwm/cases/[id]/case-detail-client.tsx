@@ -150,14 +150,24 @@ type EvidenceRow = {
 type DeliveryRow = {
     id?: string
     alertId?: string
+    caseId?: string
+    requestId?: string
+    auditEventId?: string
     status?: string
     attemptedAt?: string
     endpointHash?: string
+    endpointHint?: string
+    webhookDestinationId?: string
+    destinationId?: string
     payloadHash?: string
     dedupeKey?: string
     dryRun?: boolean
     httpStatus?: number
     error?: string
+    errorClass?: string
+    attemptCount?: number | null
+    retryCount?: number | null
+    nextRetryAt?: string | null
 }
 
 type TimelineRow = {
@@ -349,6 +359,12 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const scopedTenantId = resolvedTenantId(caseRecord, tenantId)
     const scopedOrganizationId = resolvedOrganizationId(caseRecord, organizationId)
     const scopedAlertId = resolvedAlertId(caseRecord, alertContext, alertId)
+    const deliveryHistoryHref = scopedOrganizationId
+        ? `/organizations${queryString({ organizationId: scopedOrganizationId, caseId: caseRecord.id, alertId: scopedAlertId, focus: 'destinations' })}#delivery-history`
+        : '/organizations?focus=destinations#delivery-history'
+    const destinationHref = scopedOrganizationId
+        ? `/organizations${queryString({ organizationId: scopedOrganizationId, caseId: caseRecord.id, alertId: scopedAlertId, destinationId: latestDelivery?.webhookDestinationId || latestDelivery?.destinationId, focus: 'destinations' })}`
+        : '/organizations?focus=destinations'
 
     return (
         <main className='grid gap-3 text-ui-text'>
@@ -456,11 +472,23 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                 <div className='grid gap-2 text-xs text-ui-muted'>
                                     <KeyValue label='Status' value={stateLabel(latestDelivery.status)} />
                                     <KeyValue label='Attempted' value={relativeTime(latestDelivery.attemptedAt)} />
-                                    <KeyValue label='Endpoint' value={latestDelivery.endpointHash || 'destination pending'} mono />
+                                    <KeyValue label='Endpoint' value={latestDelivery.endpointHint || latestDelivery.endpointHash || latestDelivery.webhookDestinationId || latestDelivery.destinationId || 'destination pending'} mono />
                                     <KeyValue label='Dedupe' value={latestDelivery.dedupeKey || 'pending'} mono />
+                                    <div className='grid grid-cols-2 gap-2'>
+                                        <KeyValue label='Request' value={latestDelivery.requestId || latestDelivery.auditEventId || 'pending'} mono />
+                                        <KeyValue label='Retry' value={latestDelivery.nextRetryAt ? relativeTime(latestDelivery.nextRetryAt) : latestDelivery.errorClass ? stateLabel(latestDelivery.errorClass) : `${latestDelivery.attemptCount ?? latestDelivery.retryCount ?? 0} attempts`} />
+                                    </div>
+                                    <div className='grid grid-cols-2 gap-2'>
+                                        <KeyValue label='Mode' value={latestDelivery.dryRun ? 'Dry run' : latestDelivery.httpStatus ? `HTTP ${latestDelivery.httpStatus}` : 'queued'} />
+                                        <KeyValue label='Case link' value={caseRecord.id} mono />
+                                    </div>
                                     {latestDelivery.error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-ui-danger'>{latestDelivery.error}</p> : null}
                                 </div>
                             ) : <EmptyLine text='No webhook delivery attempt is attached to this case.' />}
+                            <div className='mt-3 grid grid-cols-2 gap-2'>
+                                <CommandLink href={destinationHref}>Manage destination</CommandLink>
+                                <CommandLink href={deliveryHistoryHref}>Delivery history</CommandLink>
+                            </div>
                             <div className='mt-3 grid grid-cols-2 gap-2'>
                                 <button type='button' onClick={() => sendWebhook(true)} disabled={readOnly || busy !== null || !(caseRecord.alertId || alertId)} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
                                     {busy === 'webhook-test' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}Test
