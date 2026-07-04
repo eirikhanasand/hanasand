@@ -881,6 +881,53 @@ export default function OrganizationWorkspaceClient() {
         return 'Destination removed.'
     }, `destination-${destination.id}`)
 
+    const createOrganizationForm = (
+        <div className='grid gap-3'>
+            <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                Name
+                <input
+                    value={createName}
+                    onChange={event => setCreateName(event.target.value)}
+                    className={inputClass}
+                    placeholder='Acme Security'
+                />
+                {createNameInUse && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Organization already exists.</span>}
+                {!createNameInUse && normalizedCreateName && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>Slug: {slugifyOrganizationName(normalizedCreateName)}</span>}
+            </label>
+            <button
+                type='button'
+                onClick={() => void createOrganization()}
+                disabled={!normalizedCreateName || createNameInUse || Boolean(busy)}
+                className={primaryButtonClass}
+            >
+                <Building2 className='h-4 w-4' />
+                Create org
+            </button>
+        </div>
+    )
+    const createOrganizationPanel = organizations.length > 0 ? (
+        <details className='group rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-create-compact='true'>
+            <summary className='flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/30 dark:text-ui-text dark:hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
+                <span className='inline-flex min-w-0 items-center gap-2'>
+                    <Building2 className='h-4 w-4 shrink-0 text-ui-primary' />
+                    <span className='truncate'>Create organization</span>
+                </span>
+                <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted group-open:hidden dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>New</span>
+            </summary>
+            <div className='border-t border-ui-border px-2 pb-2 pt-3 dark:border-ui-border'>
+                {createOrganizationForm}
+            </div>
+        </details>
+    ) : (
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-create-primary='true'>
+            <h2 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
+                <Building2 className='h-4 w-4 text-ui-primary' />
+                Create organization
+            </h2>
+            <div className='mt-3'>{createOrganizationForm}</div>
+        </section>
+    )
+
     return (
         <section className='min-h-full overflow-x-hidden bg-ui-canvas text-ui-text dark:bg-ui-canvas dark:text-ui-text'>
             <div className='mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8'>
@@ -914,34 +961,7 @@ export default function OrganizationWorkspaceClient() {
 
                 <div className='grid gap-5 lg:grid-cols-[21rem_minmax(0,1fr)]'>
                     <aside className='flex min-w-0 flex-col gap-4'>
-                        <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                            <h2 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
-                                <Building2 className='h-4 w-4 text-ui-primary' />
-                                Create organization
-                            </h2>
-                            <div className='mt-3 grid gap-3'>
-                                <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
-                                    Name
-                                    <input
-                                        value={createName}
-                                        onChange={event => setCreateName(event.target.value)}
-                                        className={inputClass}
-                                        placeholder='Acme Security'
-                                    />
-                                    {createNameInUse && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Organization already exists.</span>}
-                                    {!createNameInUse && normalizedCreateName && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>Slug: {slugifyOrganizationName(normalizedCreateName)}</span>}
-                                </label>
-                                <button
-                                    type='button'
-                                    onClick={() => void createOrganization()}
-                                    disabled={!normalizedCreateName || createNameInUse || Boolean(busy)}
-                                    className={primaryButtonClass}
-                                >
-                                    <Building2 className='h-4 w-4' />
-                                    Create org
-                                </button>
-                            </div>
-                        </section>
+                        {organizations.length === 0 && createOrganizationPanel}
 
                         <section className='rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
                             <h2 className='px-2 py-2 text-sm font-semibold text-ui-text dark:text-ui-text'>Workspaces</h2>
@@ -968,6 +988,7 @@ export default function OrganizationWorkspaceClient() {
                                 ))}
                             </div>
                         </section>
+                        {organizations.length > 0 && createOrganizationPanel}
                     </aside>
 
                     <main className='min-w-0'>
