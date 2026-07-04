@@ -20,6 +20,8 @@ test('backup dashboard focuses next action while preserving run and restore work
 
     expect(page).toContain('data-backup-targets')
     expect(page).toContain('data-backup-target-details')
+    expect(page).toContain('data-backup-restore-proof')
+    expect(page).toContain('Restore readiness proof')
     expect(page).toContain('triggerBackupAction()')
     expect(page).toContain('/dashboard/db/restore?service=${encodeURIComponent(backupServiceSlug(backup))}')
     expect(page).toContain('presentation.safeError')

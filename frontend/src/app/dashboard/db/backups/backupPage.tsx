@@ -199,6 +199,8 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                             <p className='mt-3 text-sm text-ui-muted'>{presentation.restoreDisabledReason}</p>
                         )}
 
+                        <RestoreProof proof={presentation.restoreProof} />
+
                         {presentation.safeError && (
                             <ConfigurationBlocker safeError={presentation.safeError} rawDetails={presentation.rawDetails} compact />
                         )}
@@ -269,6 +271,33 @@ function InfoCell({ label, value }: { label: string; value: string }) {
         <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
             <p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p>
             <p className='mt-2 wrap-break-word font-medium text-ui-text'>{value}</p>
+        </div>
+    )
+}
+
+function RestoreProof({ proof }: { proof: BackupPresentation['restoreProof'] }) {
+    return (
+        <div className='mt-4 rounded-lg border border-ui-border bg-ui-panel p-3' data-backup-restore-proof={proof.state}>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <p className='text-sm font-semibold text-ui-text'>Restore readiness proof</p>
+                <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${proof.state === 'ready' ? 'border-ui-success bg-ui-success/15 text-ui-success' : 'border-ui-warning bg-ui-warning/15 text-ui-warning'}`}>
+                    {proof.state === 'ready' ? 'Ready' : 'Blocked'}
+                </span>
+            </div>
+            <div className='mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4'>
+                {proof.checks.map(check => (
+                    <div key={check.id} className='rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs'>
+                        <p className='font-semibold uppercase text-ui-muted'>{check.label}</p>
+                        <p className='mt-1 wrap-break-word text-ui-text'>{check.value}</p>
+                        <p className={`mt-1 font-semibold ${check.state === 'ready' ? 'text-ui-success' : check.state === 'blocked' ? 'text-ui-warning' : 'text-ui-muted'}`}>{check.state}</p>
+                    </div>
+                ))}
+            </div>
+            {proof.blockers.length > 0 && (
+                <ul className='mt-3 grid gap-1 text-xs leading-5 text-ui-warning'>
+                    {proof.blockers.slice(0, 3).map(blocker => <li key={blocker}>{blocker}</li>)}
+                </ul>
+            )}
         </div>
     )
 }

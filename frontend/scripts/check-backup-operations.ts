@@ -24,6 +24,9 @@ const healthy = presentBackup({
 
 assert.equal(healthy.healthLabel, 'Healthy', 'success state should report healthy')
 assert.equal(healthy.restoreReady, true, 'success state should allow restore browsing')
+assert.equal(healthy.restoreProof.schemaVersion, 'hanasand.backup.restore_readiness.v1', 'restore proof should publish a stable schema')
+assert.equal(healthy.restoreProof.state, 'ready', 'healthy backup with an indexed file should have ready restore proof')
+assert.equal(healthy.restoreProof.blockers.length, 0, 'healthy backup should not expose restore blockers')
 assert.equal(healthy.retention, '14 days', 'success state should preserve retention')
 assert.equal(healthy.storageTarget, 's3://backups/primary', 'success state should preserve storage target')
 
@@ -38,6 +41,8 @@ const unavailable = presentBackup({
 
 assert.equal(unavailable.healthLabel, 'Unavailable', 'auth failure should report unavailable')
 assert.equal(unavailable.restoreReady, false, 'auth failure should disable restore')
+assert.equal(unavailable.restoreProof.state, 'blocked', 'auth failure should block restore proof')
+assert.ok(unavailable.restoreProof.blockers.some(blocker => /cannot authenticate/i.test(blocker)), 'auth failure should appear as a restore proof blocker')
 assert.match(unavailable.safeError || '', /cannot authenticate to the database/i, 'auth failure should be summarized safely')
 assert.doesNotMatch(unavailable.safeError || '', /password authentication failed|hanasand/i, 'safe error should not dump raw postgres auth internals')
 assert.match(unavailable.restoreDisabledReason || '', /until backup status and files can be verified/i, 'auth failure should explain disabled restore')
@@ -51,8 +56,21 @@ const empty = presentBackup({
 })
 
 assert.equal(empty.restoreReady, false, 'no-backups-yet state should disable restore')
+assert.equal(empty.restoreProof.state, 'blocked', 'no-backups-yet should block restore proof')
+assert.ok(empty.restoreProof.blockers.some(blocker => /No completed backup timestamp/i.test(blocker)), 'no-backups-yet should explain missing timestamp')
+assert.ok(empty.restoreProof.blockers.some(blocker => /No indexed backup file/i.test(blocker)), 'no-backups-yet should explain missing indexed file')
 assert.match(empty.restoreDisabledReason || '', /until at least one backup file exists/i, 'no-backups-yet should explain disabled restore')
 assert.equal(empty.latestFile, 'Not reported', 'unsupported latest file should be honest observable-only state')
+
+const timestampOnly = presentBackup({
+    id: 'primary_database',
+    name: 'primary_database',
+    status: 'Available',
+    lastBackup: '2026-07-02T10:00:00.000Z',
+    nextBackup: null,
+})
+assert.equal(timestampOnly.restoreReady, false, 'restore should require an indexed backup file, not only a timestamp')
+assert.match(timestampOnly.restoreDisabledReason || '', /indexed backup file/i, 'timestamp-only backup should explain missing indexed file')
 
 const loadError = presentBackupLoadError('Error: password authentication failed for user "hanasand"')
 assert.match(loadError.safeError, /cannot authenticate to the database/i, 'route load error should become actionable')
@@ -74,6 +92,8 @@ assert.match(apiRoutes, /fastify\.get\('\/backup\/files', getDatabaseBackupFiles
 assert.match(apiRoutes, /fastify\.post\('\/backup\/restore', postDatabaseBackupRestore\)/, 'API should expose POST /backup/restore')
 assert.match(backupPage, /presentations\.map/, 'backup actions should render inside each backup target card')
 assert.match(backupPage, /restoreDisabledReason/, 'restore disabled state should carry a visible reason')
+assert.match(backupPage, /data-backup-restore-proof/, 'backup page should surface restore proof state per target')
+assert.match(backupPage, /Restore readiness proof/, 'backup page should label the restore proof section')
 assert.match(backupPage, /Technical details/, 'raw details should be behind progressive disclosure')
 assert.match(backupPage, /Open logs/, 'error state should link operators to logs')
 assert.match(backupPage, /return 'Never'/, 'missing last backup should render as never, not a loading promise')

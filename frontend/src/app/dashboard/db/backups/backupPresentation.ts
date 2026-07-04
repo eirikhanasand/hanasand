@@ -14,15 +14,37 @@ export type BackupPresentation = {
     latestSize: string
     duration: string
     healthCheck: string
+    restoreProof: BackupRestoreProof
+}
+
+export type BackupRestoreProof = {
+    schemaVersion: 'hanasand.backup.restore_readiness.v1'
+    state: 'ready' | 'blocked'
+    checks: Array<{
+        id: 'status' | 'last_backup' | 'indexed_file' | 'storage'
+        label: string
+        value: string
+        state: 'ready' | 'blocked' | 'unknown'
+    }>
+    blockers: string[]
 }
 
 export function presentBackup(backup: BackupService): BackupPresentation {
     const safeError = backup.error ? summarizeBackupError(backup.error) : undefined
     const hasLastBackup = Boolean(backup.lastBackup)
+    const hasIndexedFile = Boolean(backup.latestFile)
     const status = backup.status.toLowerCase()
     const isUnavailable = Boolean(safeError) || status.includes('unavailable') || status.includes('down') || status.includes('fail')
     const isHealthy = !isUnavailable && (status.includes('up') || status.includes('ok') || status.includes('healthy') || status.includes('available'))
-    const restoreReady = hasLastBackup && !isUnavailable
+    const restoreReady = hasLastBackup && hasIndexedFile && !isUnavailable
+    const restoreProof = buildRestoreProof({
+        backup,
+        safeError,
+        hasLastBackup,
+        hasIndexedFile,
+        isUnavailable,
+        restoreReady,
+    })
 
     return {
         healthLabel: isHealthy ? 'Healthy' : isUnavailable ? 'Unavailable' : 'Attention',
@@ -39,13 +61,65 @@ export function presentBackup(backup: BackupService): BackupPresentation {
             ? undefined
             : safeError
                 ? 'Restore is disabled until backup status and files can be verified.'
-                : 'Restore is disabled until at least one backup file exists.',
+                : hasLastBackup
+                    ? 'Restore is disabled until an indexed backup file is verified.'
+                    : 'Restore is disabled until at least one backup file exists.',
         retention: backup.retention || 'Not reported',
         storageTarget: backup.storageTarget || backup.totalStorage || 'Not reported',
         latestFile: backup.latestFile || 'Not reported',
         latestSize: backup.latestSize || backup.dbSize || 'Not reported',
         duration: backup.latestDuration || 'Not reported',
         healthCheck: safeError ? 'Unavailable' : backup.healthCheck || (hasLastBackup ? 'Verified' : 'No restore point yet'),
+        restoreProof,
+    }
+}
+
+function buildRestoreProof(input: {
+    backup: BackupService
+    safeError?: string
+    hasLastBackup: boolean
+    hasIndexedFile: boolean
+    isUnavailable: boolean
+    restoreReady: boolean
+}): BackupRestoreProof {
+    const storageTarget = input.backup.storageTarget || input.backup.totalStorage || ''
+    const blockers = [
+        input.safeError,
+        input.hasLastBackup ? '' : 'No completed backup timestamp is reported.',
+        input.hasIndexedFile ? '' : 'No indexed backup file is reported.',
+        storageTarget ? '' : 'No backup storage target is reported.',
+    ].filter((item): item is string => Boolean(item))
+
+    return {
+        schemaVersion: 'hanasand.backup.restore_readiness.v1',
+        state: input.restoreReady ? 'ready' : 'blocked',
+        blockers,
+        checks: [
+            {
+                id: 'status',
+                label: 'Backup status',
+                value: input.safeError ? 'Unavailable' : input.backup.status || 'Not reported',
+                state: input.isUnavailable ? 'blocked' : 'ready',
+            },
+            {
+                id: 'last_backup',
+                label: 'Completed backup',
+                value: input.backup.lastBackup || 'Not reported',
+                state: input.hasLastBackup ? 'ready' : 'blocked',
+            },
+            {
+                id: 'indexed_file',
+                label: 'Indexed file',
+                value: input.backup.latestFile || 'Not reported',
+                state: input.hasIndexedFile ? 'ready' : 'blocked',
+            },
+            {
+                id: 'storage',
+                label: 'Storage target',
+                value: storageTarget || 'Not reported',
+                state: storageTarget ? 'ready' : 'unknown',
+            },
+        ],
     }
 }
 
