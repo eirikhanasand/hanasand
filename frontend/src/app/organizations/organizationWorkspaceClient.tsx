@@ -753,21 +753,21 @@ export default function OrganizationWorkspaceClient() {
     }, `destination-${destination.id}`)
 
     return (
-        <section className='min-h-full overflow-x-hidden bg-[#f7f8fb] text-[#171a21] dark:bg-[#0e1520] dark:text-[#f5f7fb]'>
+        <section className='min-h-full overflow-x-hidden bg-ui-canvas text-ui-text dark:bg-ui-canvas dark:text-ui-text'>
             <div className='mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8'>
-                <header className='flex flex-col gap-4 border-b border-[#dfe5ee] pb-5 dark:border-[#273345] lg:flex-row lg:items-end lg:justify-between'>
+                <header className='flex flex-col gap-4 border-b border-ui-border pb-5 dark:border-ui-border lg:flex-row lg:items-end lg:justify-between'>
                     <div className='max-w-3xl'>
-                        <div className='mb-2 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#8fb2ff]'>
+                        <div className='mb-2 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-ui-primary dark:text-ui-primary'>
                             <Building2 className='h-4 w-4' />
                             Organizations
                         </div>
-                        <h1 className='text-3xl font-semibold tracking-normal text-[#171a21] dark:text-white sm:text-4xl'>Organization settings</h1>
-                        <p className='mt-3 max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#a8b3c5]'>Team access, shared watchlists, destinations, and routed alerts.</p>
+                        <h1 className='text-3xl font-semibold tracking-normal text-ui-text dark:text-white sm:text-4xl'>Organization settings</h1>
+                        <p className='mt-3 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>Team access, shared watchlists, destinations, and routed alerts.</p>
                     </div>
                     <button
                         type='button'
                         onClick={() => void loadOrganizations(selectedOrganization?.id)}
-                        className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#cfd7e6] bg-white px-4 text-sm font-semibold text-[#202838] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb] dark:hover:bg-[#18263a]'
+                        className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
                         disabled={Boolean(busy || loading)}
                     >
                         {busy === 'load-org' || loading ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
@@ -785,13 +785,13 @@ export default function OrganizationWorkspaceClient() {
 
                 <div className='grid gap-5 lg:grid-cols-[21rem_minmax(0,1fr)]'>
                     <aside className='flex min-w-0 flex-col gap-4'>
-                        <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
-                            <h2 className='flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-white'>
-                                <Building2 className='h-4 w-4 text-[#3056d3]' />
+                        <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
+                            <h2 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-white'>
+                                <Building2 className='h-4 w-4 text-ui-primary' />
                                 Create organization
                             </h2>
                             <div className='mt-3 grid gap-3'>
-                                <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1]'>
+                                <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                                     Name
                                     <input
                                         value={createName}
@@ -799,8 +799,8 @@ export default function OrganizationWorkspaceClient() {
                                         className={inputClass}
                                         placeholder='Acme Security'
                                     />
-                                    {createNameInUse && <span className='text-xs font-semibold text-[#b42318] dark:text-[#fecaca]'>Organization already exists.</span>}
-                                    {!createNameInUse && normalizedCreateName && <span className='text-xs font-semibold text-[#667085] dark:text-[#a8b3c5]'>Slug: {slugifyOrganizationName(normalizedCreateName)}</span>}
+                                    {createNameInUse && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Organization already exists.</span>}
+                                    {!createNameInUse && normalizedCreateName && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>Slug: {slugifyOrganizationName(normalizedCreateName)}</span>}
                                 </label>
                                 <button
                                     type='button'
@@ -814,12 +814,12 @@ export default function OrganizationWorkspaceClient() {
                             </div>
                         </section>
 
-                        <section className='rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
-                            <h2 className='px-2 py-2 text-sm font-semibold text-[#171a21] dark:text-white'>Workspaces</h2>
+                        <section className='rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
+                            <h2 className='px-2 py-2 text-sm font-semibold text-ui-text dark:text-white'>Workspaces</h2>
                             <div className='grid gap-1'>
                                 {loading && <SkeletonRows count={3} />}
                                 {!loading && organizations.length === 0 && (
-                                    <p className='px-2 py-3 text-sm leading-6 text-[#667085] dark:text-[#a8b3c5]'>
+                                    <p className='px-2 py-3 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
                                         No organizations yet. Create one to invite teammates, share watchlists, and route alerts together.
                                     </p>
                                 )}
@@ -828,13 +828,13 @@ export default function OrganizationWorkspaceClient() {
                                         type='button'
                                         key={organization.id}
                                         onClick={() => setSelectedId(organization.id)}
-                                        className={`grid gap-1 rounded-lg px-3 py-3 text-left transition ${selectedOrganization?.id === organization.id ? 'bg-[#eef4ff] text-[#172554] dark:bg-[#1b2a44] dark:text-[#dbeafe]' : 'hover:bg-[#f5f7fb] dark:hover:bg-white/6'}`}
+                                        className={`grid gap-1 rounded-lg px-3 py-3 text-left transition ${selectedOrganization?.id === organization.id ? 'bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary' : 'hover:bg-ui-raised dark:hover:bg-ui-panel/6'}`}
                                     >
                                         <span className='flex items-center justify-between gap-2 text-sm font-semibold'>
                                             <span className='truncate'>{organizationDisplayName(organization)}</span>
                                             <RoleBadge role={organization.role || 'member'} />
                                         </span>
-                                        <span className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{organizationDisplayId(organization)}</span>
+                                        <span className='truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayId(organization)}</span>
                                     </button>
                                 ))}
                             </div>
@@ -961,25 +961,25 @@ function EmptyWorkspacePreview() {
 
     return (
         <div className='grid gap-4'>
-            <section className='rounded-lg border border-[#dfe5ee] bg-white p-6 shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-empty-focused-create='true'>
+            <section className='rounded-lg border border-ui-border bg-ui-panel p-6 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-empty-focused-create='true'>
                 <div className='grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start'>
                     <div className='min-w-0'>
                         <div className='flex min-w-0 items-start gap-3'>
-                            <div className='grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#eef4ff] text-[#3056d3] dark:bg-[#172a4b] dark:text-[#a9c3ff]'>
+                            <div className='grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>
                                 <Building2 className='h-5 w-5' />
                             </div>
                             <div className='min-w-0'>
-                                <h2 className='text-xl font-semibold text-[#171a21] dark:text-white'>Create the first organization</h2>
-                                <p className='mt-1 max-w-2xl text-sm leading-6 text-[#667085] dark:text-[#a8b3c5]'>
+                                <h2 className='text-xl font-semibold text-ui-text dark:text-white'>Create the first organization</h2>
+                                <p className='mt-1 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
                                     Start with the workspace. Team access, shared watchlists, destinations, cases, and activity appear after the organization exists.
                                 </p>
                             </div>
                         </div>
                     </div>
-                    <ol className='grid gap-2 text-sm leading-6 text-[#475467] dark:text-[#c4cedd]'>
+                    <ol className='grid gap-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
                         {setupRails.map((step, index) => (
-                            <li key={step.id} className='flex gap-3 rounded-md border border-[#edf1f7] bg-[#f8fafc] px-3 py-2 dark:border-[#253246] dark:bg-[#0c1420]'>
-                                <span className='flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#e8efff] text-xs font-bold text-[#3056d3] dark:bg-[#172a4b] dark:text-[#a9c3ff]'>{index + 1}</span>
+                            <li key={step.id} className='flex gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas'>
+                                <span className='flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ui-primary/10 text-xs font-bold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{index + 1}</span>
                                 <span>{step.title}</span>
                             </li>
                         ))}
@@ -988,15 +988,15 @@ function EmptyWorkspacePreview() {
             </section>
             <section className='grid gap-3 md:grid-cols-3'>
                 {setupRails.map(item => (
-                    <div key={item.id} id={item.id} className='min-w-0 rounded-lg border border-dashed border-[#cfd7e6] bg-white p-4 shadow-sm dark:border-[#344258] dark:bg-[#111927]'>
+                    <div key={item.id} id={item.id} className='min-w-0 rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
                         <div className='flex items-center justify-between gap-3'>
-                            <span className='inline-flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-white'>
-                                <span className='grid h-8 w-8 place-items-center rounded-lg bg-[#eef4ff] text-[#3056d3] dark:bg-[#172a4b] dark:text-[#a9c3ff]'>{item.icon}</span>
+                            <span className='inline-flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-white'>
+                                <span className='grid h-8 w-8 place-items-center rounded-lg bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{item.icon}</span>
                                 {item.title}
                             </span>
-                            <span className='shrink-0 rounded-md border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-[11px] font-semibold text-[#667085] dark:border-[#26344a] dark:bg-[#0d1522] dark:text-[#a8b3c5]'>{item.state}</span>
+                            <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{item.state}</span>
                         </div>
-                        <p className='mt-3 text-sm leading-6 text-[#667085] dark:text-[#a8b3c5]'>{item.detail}</p>
+                        <p className='mt-3 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{item.detail}</p>
                     </div>
                 ))}
             </section>
@@ -1006,7 +1006,7 @@ function EmptyWorkspacePreview() {
 
 function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, archivedWatchlists, memberCount, inviteCount, webhookCount }: { organization: OrganizationSummary, activeWatchlists: number, pausedWatchlists: number, archivedWatchlists: number, memberCount: number, inviteCount: number, webhookCount: number }) {
     return (
-        <section className='grid min-w-0 gap-3 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927] sm:grid-cols-2 lg:grid-cols-4'>
+        <section className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel sm:grid-cols-2 lg:grid-cols-4'>
             <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Role' value={organization.role || 'member'} detail={organization.status || 'active'} />
             <Metric icon={<Users className='h-4 w-4' />} label='Members' value={String(memberCount || organization.memberCount || organization.activeMemberCount || 0)} detail={`${inviteCount || organization.pendingInviteCount || 0} pending`} />
             <Metric icon={<BellRing className='h-4 w-4' />} label='Watchlists' value={String(activeWatchlists || organization.sharedWatchlistCount || 0)} detail={`${pausedWatchlists} paused · ${archivedWatchlists} archived`} />
@@ -1039,23 +1039,23 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
         ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organization.id)}`
         : ''
     return (
-        <section className='rounded-lg border border-[#c7d7fe] bg-[#f5f8ff] p-4 shadow-sm dark:border-[#2f4b7a] dark:bg-[#111d31]' data-dwm-handoff='true'>
+        <section className='rounded-lg border border-ui-primary/35 bg-ui-primary/10 p-4 shadow-sm dark:border-ui-primary/35 dark:bg-ui-panel' data-dwm-handoff='true'>
             <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
                 <div className='min-w-0'>
-                    <h2 className='flex items-center gap-2 text-base font-semibold text-[#172554] dark:text-[#dbeafe]'>
-                        <CircleAlert className='h-4 w-4 text-[#3056d3] dark:text-[#9cc2ff]' />
+                    <h2 className='flex items-center gap-2 text-base font-semibold text-ui-primary dark:text-ui-primary'>
+                        <CircleAlert className='h-4 w-4 text-ui-primary dark:text-ui-primary' />
                         DWM context is scoped to this organization
                     </h2>
-                    <p className='mt-1 text-sm leading-5 text-[#475467] dark:text-[#a8b3c5]'>
+                    <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>
                         Use this workspace to manage the watchlist, delivery route, and team access for the selected {selectedSubject.type}.
                     </p>
                     <div className='mt-3 flex flex-wrap gap-2'>
                         {scopedValues.map(([label, value]) => (
-                            <span key={`${label}-${value}`} className='max-w-full truncate rounded-md border border-[#dbe6ff] bg-white px-2 py-1 text-xs font-semibold text-[#344054] dark:border-[#314f86] dark:bg-[#0d1522] dark:text-[#dbeafe]'>
+                            <span key={`${label}-${value}`} className='max-w-full truncate rounded-md border border-ui-primary/35 bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-text dark:border-ui-primary/35 dark:bg-ui-canvas dark:text-ui-primary'>
                                 {label}: {sanitizeOrganizationDisplayCopy(value) || value}
                             </span>
                         ))}
-                        {focus && <span className='rounded-md border border-[#dbe6ff] bg-white px-2 py-1 text-xs font-semibold text-[#344054] dark:border-[#314f86] dark:bg-[#0d1522] dark:text-[#dbeafe]'>Focus: {focus}</span>}
+                        {focus && <span className='rounded-md border border-ui-primary/35 bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-text dark:border-ui-primary/35 dark:bg-ui-canvas dark:text-ui-primary'>Focus: {focus}</span>}
                     </div>
                 </div>
                 <div className='grid gap-2 sm:grid-cols-2 lg:flex'>
@@ -1071,7 +1071,7 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
 
 function OrgActionStrip({ alertId, canManage, hasWatchlists, hasDestination }: { alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
     return (
-        <nav className='flex flex-wrap items-center gap-2 rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm dark:border-[#273345] dark:bg-[#111927]' aria-label='Organization actions'>
+        <nav className='flex flex-wrap items-center gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' aria-label='Organization actions'>
             <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Create watchlist' disabled={!canManage} />
             <ActionAnchor href='#invites' icon={<UserPlus className='h-4 w-4' />} label='Invite member' disabled={!canManage} />
             <ActionAnchor href='#watchlists' icon={<Webhook className='h-4 w-4' />} label='Test destination' disabled={!hasWatchlists} />
@@ -1083,8 +1083,8 @@ function OrgActionStrip({ alertId, canManage, hasWatchlists, hasDestination }: {
 
 function ActionAnchor({ href, icon, label, disabled }: { href: string, icon: ReactNode, label: string, disabled?: boolean }) {
     const classes = disabled
-        ? 'pointer-events-none inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#dfe5ee] bg-[#f3f6fa] px-3 py-2 text-sm font-semibold text-[#98a2b3] dark:border-[#26344a] dark:bg-[#162033] dark:text-[#667085]'
-        : 'inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#cfd7e6] bg-white px-3 py-2 text-sm font-semibold text-[#202838] transition hover:bg-[#f2f5f9] dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb] dark:hover:bg-[#18263a]'
+        ? 'pointer-events-none inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'
+        : 'inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:bg-ui-raised dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
     return <a className={classes} href={href} aria-disabled={disabled}>{icon}{label}</a>
 }
 
@@ -1141,21 +1141,21 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
     const nextAction = rows.find(row => !row.ready && !row.blocked) || rows.find(row => row.ready) || rows[0]
     const openAlertHref = alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}` : ''
     return (
-        <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-setup-progress='true'>
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-setup-progress='true'>
             <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]'>
                 <div className='min-w-0'>
-                    <h2 className='flex items-center gap-2 text-base font-semibold text-[#171a21] dark:text-white'>
-                        <ShieldCheck className='h-4 w-4 text-[#3056d3]' />
+                    <h2 className='flex items-center gap-2 text-base font-semibold text-ui-text dark:text-white'>
+                        <ShieldCheck className='h-4 w-4 text-ui-primary' />
                         Workspace launch path
                     </h2>
-                    <p className='mt-1 text-sm leading-5 text-[#667085] dark:text-[#a8b3c5]'>
+                    <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>
                         {completed}/{rows.length} complete. Finish the next required action, then validate delivery from a real alert.
                     </p>
                 </div>
-                <div className='rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-3 dark:border-[#2a3b58] dark:bg-[#101b2d]'>
-                    <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9cc2ff]'>Next action</p>
-                    <p className='mt-1 truncate text-sm font-semibold text-[#171a21] dark:text-white'>{nextAction.title}</p>
-                    <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#667085] dark:text-[#a8b3c5]'>{nextAction.body}</p>
+                <div className='rounded-lg border border-ui-primary/35 bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
+                    <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary dark:text-ui-primary'>Next action</p>
+                    <p className='mt-1 truncate text-sm font-semibold text-ui-text dark:text-white'>{nextAction.title}</p>
+                    <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{nextAction.body}</p>
                     <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1'>
                         <ActionAnchor href={nextAction.href} icon={<ExternalLink className='h-4 w-4' />} label={nextAction.action} disabled={nextAction.blocked} />
                         {openAlertHref && <ActionAnchor href={openAlertHref} icon={<CircleAlert className='h-4 w-4' />} label='Validate alert' disabled={!watchlistCount} />}
@@ -1168,13 +1168,13 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                         key={row.id}
                         href={row.href}
                         aria-disabled={row.blocked}
-                        className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg border px-3 py-3 transition ${row.ready ? 'border-[#b7e4c7] bg-[#f0fdf4] dark:border-[#244b33] dark:bg-[#0f2418]' : row.blocked ? 'pointer-events-none border-[#e6ebf2] bg-[#f8fafc] opacity-70 dark:border-[#26344a] dark:bg-[#0d1522]' : 'border-[#dbe6ff] bg-[#f8fbff] hover:border-[#9db8ff] dark:border-[#2a3b58] dark:bg-[#101b2d]'}`}
+                        className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg border px-3 py-3 transition ${row.ready ? 'border-ui-success/35 bg-ui-success/10 dark:border-ui-success/35 dark:bg-ui-success/10' : row.blocked ? 'pointer-events-none border-ui-border bg-ui-raised opacity-70 dark:border-ui-border dark:bg-ui-canvas' : 'border-ui-primary/35 bg-ui-panel hover:border-ui-primary/35 dark:border-ui-border dark:bg-ui-panel'}`}
                     >
-                        {row.ready ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-[#067647]' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-[#b45309]' />}
+                        {row.ready ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-ui-warning' />}
                         <span className='min-w-0'>
-                            <span className='block truncate text-sm font-semibold text-[#171a21] dark:text-white'>{row.title}</span>
-                            <span className='block truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{row.body}</span>
-                            <span className='mt-2 block text-xs font-semibold text-[#3056d3] dark:text-[#9cc2ff]'>{row.blocked ? 'Owner or admin required' : row.action}</span>
+                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-white'>{row.title}</span>
+                            <span className='block truncate text-xs text-ui-muted dark:text-ui-muted'>{row.body}</span>
+                            <span className='mt-2 block text-xs font-semibold text-ui-primary dark:text-ui-primary'>{row.blocked ? 'Owner or admin required' : row.action}</span>
                         </span>
                     </a>
                 ))}
@@ -1185,14 +1185,14 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
 
 function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canManage, busy, onSave, onReset }: { settingsDraft: OrganizationSettings, setSettingsDraft: (next: OrganizationSettings) => void, settingsDirty: boolean, canManage: boolean, busy: string, onSave: () => void, onReset: () => void }) {
     return (
-        <details id='settings' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-settings-disclosure>
-            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-[#3056d3]/25 dark:hover:bg-[#101b2d] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+        <details id='settings' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-settings-disclosure>
+            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                 <SectionTitle icon={<Settings className='h-4 w-4' />} title='Advanced organization settings' detail={canManage ? 'Policy controls stay here when workspace setup needs them.' : 'Read-only policy view.'} />
-                <span className='shrink-0 rounded-md border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs font-semibold text-[#667085] dark:border-[#26344a] dark:bg-[#0d1522] dark:text-[#a8b3c5]'>
+                <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
                     {settingsDirty ? 'Unsaved changes' : 'Policy controls'}
                 </span>
             </summary>
-            <div className='grid gap-3 border-t border-[#e6ebf2] p-4 dark:border-[#26344a] md:grid-cols-2'>
+            <div className='grid gap-3 border-t border-ui-border p-4 dark:border-ui-border md:grid-cols-2'>
                 <Field label='Name' value={settingsDraft.name || ''} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, name: value })} />
                 <Field label='Slug' value={settingsDraft.slug || ''} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, slug: value })} />
                 <SelectField label='Webhook policy' value={settingsDraft.defaultWebhookPolicy || 'active_destinations'} options={webhookPolicies} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, defaultWebhookPolicy: value })} />
@@ -1200,8 +1200,8 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
                 <SelectField label='Lifecycle' value={settingsDraft.lifecycleStatus || 'active'} options={lifecycleStatuses} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, lifecycleStatus: value })} />
                 <Field label='Retention days' type='number' value={String(settingsDraft.retentionDays || 365)} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, retentionDays: Number(value) || 365 })} />
             </div>
-            <div className='flex flex-wrap items-center justify-end gap-2 border-t border-[#e6ebf2] px-4 py-3 dark:border-[#26344a]'>
-                {settingsDirty && <span className='mr-auto rounded-md bg-[#fff7d6] px-2 py-1 text-xs font-semibold text-[#8a4b00] dark:bg-[#332604] dark:text-[#fde68a]'>Unsaved changes</span>}
+            <div className='flex flex-wrap items-center justify-end gap-2 border-t border-ui-border px-4 py-3 dark:border-ui-border'>
+                {settingsDirty && <span className='mr-auto rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>Unsaved changes</span>}
                 <button type='button' className={secondaryButtonClass} disabled={!canManage || !settingsDirty || Boolean(busy)} onClick={onReset}>
                     Reset
                 </button>
@@ -1219,14 +1219,14 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
     const invalidEmails = invalidInviteEmails(emails)
     const canSendInvite = canManage && parsedEmails.length > 0 && invalidEmails.length === 0 && !busy
     return (
-        <section id='invites' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
+        <section id='invites' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <SectionTitle icon={<UserPlus className='h-4 w-4' />} title='Invite queue' detail={canManage ? 'Send, resend, revoke, copy.' : 'Owner or admin required.'} />
             <div className='mt-4 grid gap-3'>
-                <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1]'>
+                <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                     Emails
                     <textarea value={emails} disabled={!canManage} onChange={event => setEmails(event.target.value)} className={`${inputClass} min-h-24 resize-y`} placeholder='analyst@company.com, admin@company.com' />
-                    {invalidEmails.length > 0 && <span className='text-xs font-semibold text-[#b42318] dark:text-[#fecaca]'>Invalid: {invalidEmails.slice(0, 2).join(', ')}{invalidEmails.length > 2 ? ` +${invalidEmails.length - 2}` : ''}</span>}
-                    {invalidEmails.length === 0 && parsedEmails.length > 0 && <span className='text-xs font-semibold text-[#667085] dark:text-[#a8b3c5]'>{parsedEmails.length} recipient{parsedEmails.length === 1 ? '' : 's'}</span>}
+                    {invalidEmails.length > 0 && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Invalid: {invalidEmails.slice(0, 2).join(', ')}{invalidEmails.length > 2 ? ` +${invalidEmails.length - 2}` : ''}</span>}
+                    {invalidEmails.length === 0 && parsedEmails.length > 0 && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>{parsedEmails.length} recipient{parsedEmails.length === 1 ? '' : 's'}</span>}
                 </label>
                 <SelectField label='Role' value={role} options={roleOptions} disabled={!canManage} onChange={value => setRole(value as OrganizationRole)} />
                 <button type='button' className={primaryButtonClass} disabled={!canSendInvite} onClick={onInvite}>
@@ -1246,7 +1246,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
                                 role='button'
                                 tabIndex={0}
                                 key={invite.id}
-                                className={`grid min-w-0 gap-3 rounded-lg border border-[#eef2f7] p-3 text-left transition dark:border-[#1d2a3d] ${selectedSubject.type === 'invite' && selectedSubject.id === invite.id ? 'bg-[#eef4ff] dark:bg-[#17243a]' : 'hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'}`}
+                                className={`grid min-w-0 gap-3 rounded-lg border border-ui-border p-3 text-left transition dark:border-ui-border ${selectedSubject.type === 'invite' && selectedSubject.id === invite.id ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
                                 onClick={() => onSelectSubject({ type: 'invite', id: invite.id })}
                                 onKeyDown={event => {
                                     if (event.key === 'Enter' || event.key === ' ') onSelectSubject({ type: 'invite', id: invite.id })
@@ -1254,7 +1254,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
                             >
                                 <span className='grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
                                     <span className='min-w-0'>
-                                        <span className='block truncate text-sm font-semibold text-[#171a21] dark:text-white'>{invite.email}</span>
+                                        <span className='block truncate text-sm font-semibold text-ui-text dark:text-white'>{invite.email}</span>
                                         <span className='mt-1 flex flex-wrap gap-2'>
                                             <RoleBadge role={invite.role} />
                                             <StatusPill status={invite.status} />
@@ -1279,23 +1279,23 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
 function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onRoleChange, onRemove }: { members: OrganizationMember[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onRoleChange: (member: OrganizationMember, role: OrganizationRole) => void, onRemove: (member: OrganizationMember) => void }) {
     const [pendingRoles, setPendingRoles] = useState<Record<string, OrganizationRole>>({})
     return (
-        <details id='members' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-members-disclosure>
-            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-[#3056d3]/25 dark:hover:bg-[#101b2d] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+        <details id='members' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-members-disclosure>
+            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                 <SectionTitle icon={<Users className='h-4 w-4' />} title='Members' detail='Roles, status, and removal are available when access needs review.' />
-                <span className='shrink-0 rounded-md border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs font-semibold text-[#667085] dark:border-[#26344a] dark:bg-[#0d1522] dark:text-[#a8b3c5]'>
+                <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
                     {members.length} member{members.length === 1 ? '' : 's'}
                 </span>
             </summary>
-            <div className='overflow-x-auto border-t border-[#e6ebf2] p-4 dark:border-[#26344a]'>
+            <div className='overflow-x-auto border-t border-ui-border p-4 dark:border-ui-border'>
                 {members.length === 0 && <EmptyLine text='Active members appear here after invites are accepted or the backend returns the current team.' />}
                 {members.length > 0 && (
                     <table className='min-w-full border-separate border-spacing-0 text-left text-sm'>
-                        <thead className='text-xs uppercase tracking-[0.08em] text-[#667085] dark:text-[#a8b3c5]'>
+                        <thead className='text-xs uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>
                             <tr>
-                                <th className='border-b border-[#e6ebf2] py-2 pr-3 dark:border-[#26344a]'>User</th>
-                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>Role</th>
-                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>Status</th>
-                                <th className='border-b border-[#e6ebf2] py-2 pl-3 text-right dark:border-[#26344a]'>Actions</th>
+                                <th className='border-b border-ui-border py-2 pr-3 dark:border-ui-border'>User</th>
+                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Role</th>
+                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Status</th>
+                                <th className='border-b border-ui-border py-2 pl-3 text-right dark:border-ui-border'>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1304,12 +1304,12 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                 const roleChanged = selectedRole !== member.role
                                 const canMutateMember = canManage && memberCanMutate(member)
                                 return (
-                                    <tr key={member.userId} className={`cursor-pointer align-middle transition ${selectedSubject.type === 'member' && selectedSubject.id === member.userId ? 'bg-[#eef4ff] dark:bg-[#17243a]' : 'hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'}`} onClick={() => onSelectSubject({ type: 'member', id: member.userId })}>
-                                        <td className='max-w-44 border-b border-[#eef2f7] py-2 pr-3 dark:border-[#1d2a3d]'>
-                                            <p className='truncate font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(member.name || member.userId)}</p>
-                                            <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(member.userId)}</p>
+                                    <tr key={member.userId} className={`cursor-pointer align-middle transition ${selectedSubject.type === 'member' && selectedSubject.id === member.userId ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`} onClick={() => onSelectSubject({ type: 'member', id: member.userId })}>
+                                        <td className='max-w-44 border-b border-ui-border py-2 pr-3 dark:border-ui-border'>
+                                            <p className='truncate font-semibold text-ui-text dark:text-white'>{sanitizeOrganizationDisplayCopy(member.name || member.userId)}</p>
+                                            <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(member.userId)}</p>
                                         </td>
-                                        <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                        <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                             {canMutateMember ? (
                                                 <div className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()}>
                                                     <select className={compactSelectClass} value={selectedRole} disabled={Boolean(busy)} onChange={event => setPendingRoles(current => ({ ...current, [member.userId]: event.target.value as OrganizationRole }))}>
@@ -1336,13 +1336,13 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                                 </div>
                                             ) : <RoleBadge role={member.role} />}
                                         </td>
-                                        <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                        <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                             <div className='grid gap-1'>
                                                 <StatusPill status={member.status} />
                                                 <RowStatus message={rowMessages[`member-${member.userId}`]} />
                                             </div>
                                         </td>
-                                        <td className='border-b border-[#eef2f7] py-2 pl-3 text-right dark:border-[#1d2a3d]'>
+                                        <td className='border-b border-ui-border py-2 pl-3 text-right dark:border-ui-border'>
                                             <ConfirmActionButton ariaLabel='Remove member' disabled={!canMutateMember || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
                                         </td>
                                     </tr>
@@ -1358,14 +1358,14 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
 
 function DestinationPanel({ destinations, canManage, busy, rowMessages, selectedSubject, editing, setEditing, onSelectSubject, onTest, onUpdate, onDelete }: { destinations: WebhookDestination[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onDelete: (destination: WebhookDestination) => void }) {
     return (
-        <details id='destinations' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-destinations-disclosure>
-            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-[#3056d3]/25 dark:hover:bg-[#101b2d] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+        <details id='destinations' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-destinations-disclosure>
+            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                 <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Saved destinations' detail='Inventory, tests, and removal stay available after a route is attached.' />
-                <span className='shrink-0 rounded-md border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs font-semibold text-[#667085] dark:border-[#26344a] dark:bg-[#0d1522] dark:text-[#a8b3c5]'>
+                <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
                     {destinations.length} route{destinations.length === 1 ? '' : 's'}
                 </span>
             </summary>
-            <div className='grid gap-2 border-t border-[#e6ebf2] p-4 dark:border-[#26344a]'>
+            <div className='grid gap-2 border-t border-ui-border p-4 dark:border-ui-border'>
                 {destinations.length === 0 && <EmptyLine text='Saved watchlist destinations appear here after a route is tested and attached.' />}
                 {destinations.map(destination => {
                     const draft = editing[destination.id]
@@ -1385,29 +1385,29 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                                     onSelectSubject({ type: 'destination', id: destination.id })
                                 }
                             }}
-                            className={`grid min-w-0 gap-3 rounded-lg border p-3 text-left transition ${selectedSubject.type === 'destination' && selectedSubject.id === destination.id ? 'border-[#8fb2ff] bg-[#f5f8ff] dark:border-[#4267a7] dark:bg-[#101b2d]' : 'border-[#e6ebf2] hover:bg-[#f8fafc] dark:border-[#26344a] dark:hover:bg-[#111d2d]'}`}
+                            className={`grid min-w-0 gap-3 rounded-lg border p-3 text-left transition ${selectedSubject.type === 'destination' && selectedSubject.id === destination.id ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-panel' : 'border-ui-border hover:bg-ui-raised dark:border-ui-border dark:hover:bg-ui-panel'}`}
                         >
                             <span className='flex min-w-0 items-start justify-between gap-2'>
                                 <span className='min-w-0'>
-                                    <span className='block truncate text-sm font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(destination.name || destination.id)}</span>
-                                    <span className='mt-1 block truncate font-mono text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(destination.endpointHint || destination.endpointHash || 'redacted_destination')}</span>
+                                    <span className='block truncate text-sm font-semibold text-ui-text dark:text-white'>{sanitizeOrganizationDisplayCopy(destination.name || destination.id)}</span>
+                                    <span className='mt-1 block truncate font-mono text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(destination.endpointHint || destination.endpointHash || 'redacted_destination')}</span>
                                 </span>
                                 <StatusPill status={destinationStatus} />
                             </span>
                             {draft ? (
                                 <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem_8rem]'>
-                                    <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1]'>
+                                    <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                                         Name
                                         <input value={draft.name} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, name: event.target.value } }))} className={inputClass} />
                                     </label>
                                     <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, kind: value as DestinationEditDraft['kind'] } }))} />
                                     <SelectField label='Status' value={draft.status} options={['active', 'paused']} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, status: value } }))} />
-                                    <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1] md:col-span-3'>
+                                    <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted md:col-span-3'>
                                         Rotate URL
                                         <input value={draft.url} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, url: event.target.value } }))} className={inputClass} placeholder='Leave blank to keep the stored redacted endpoint' />
-                                        {draftUrlInvalid && <span className='text-xs font-semibold text-[#b42318] dark:text-[#fecaca]'>Use a valid HTTPS URL.</span>}
+                                        {draftUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
                                     </label>
-                                    {!draftUrlInvalid && !draftChanged && <p className='rounded-md bg-[#f8fafc] px-3 py-2 text-xs font-semibold text-[#667085] dark:bg-[#0d1522] dark:text-[#a8b3c5] md:col-span-3'>No changes to save.</p>}
+                                    {!draftUrlInvalid && !draftChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-3'>No changes to save.</p>}
                                     <div className='flex flex-wrap gap-2 md:col-span-3' onClick={event => event.stopPropagation()}>
                                         <button type='button' className={primaryButtonClass} disabled={draftUrlInvalid || !draftChanged || Boolean(busy)} onClick={() => onUpdate(destination, draft)}>
                                             <CheckCircle2 className='h-4 w-4' />
@@ -1423,7 +1423,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                                 </div>
                             ) : (
                                 <>
-                                    <span className='grid gap-1 text-xs text-[#667085] dark:text-[#a8b3c5]'>
+                                    <span className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
                                         <span className='truncate'>Type: {destination.kind || destination.type || 'webhook'}</span>
                                         <span className='truncate'>Hash: {sanitizeOrganizationDisplayCopy(destination.endpointHash || 'not returned')}</span>
                                     </span>
@@ -1463,7 +1463,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
 function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const archivedCount = watchlists.filter(item => item.status === 'archived').length
     return (
-        <section id='watchlists' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
+        <section id='watchlists' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
                 <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Customer-owned terms that drive DWM alert scope, cases, and delivery routes.' />
                 <button type='button' className={secondaryButtonClass} disabled={!canManage || archivedCount === 0 || Boolean(busy)} onClick={onCleanup}>
@@ -1472,13 +1472,13 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                 </button>
             </div>
             <div className='mt-2'><RowStatus message={rowMessages['watchlists-cleanup']} /></div>
-            <div className='mt-4 rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-3 dark:border-[#2a3b58] dark:bg-[#101b2d]' data-org-watchlist-starter='true'>
+            <div className='mt-4 rounded-lg border border-ui-primary/35 bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel' data-org-watchlist-starter='true'>
                 <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
                     <div className='min-w-0'>
-                        <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9cc2ff]'>Scope starter</p>
-                        <p className='mt-1 text-sm leading-5 text-[#475467] dark:text-[#c6d1e2]'>Choose a term type, then enter the real company, domain, supplier, actor, or keyword value.</p>
+                        <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary dark:text-ui-primary'>Scope starter</p>
+                        <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>Choose a term type, then enter the real company, domain, supplier, actor, or keyword value.</p>
                     </div>
-                    <span className='shrink-0 rounded-lg border border-[#c7d7fe] bg-white px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4267a7] dark:bg-[#0d1522] dark:text-[#9cc2ff]'>
+                    <span className='shrink-0 rounded-lg border border-ui-primary/35 bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-primary dark:border-ui-primary/35 dark:bg-ui-canvas dark:text-ui-primary'>
                         {watchlists.length} saved
                     </span>
                 </div>
@@ -1489,22 +1489,22 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                             type='button'
                             disabled={!canManage || Boolean(busy)}
                             onClick={() => setDraft({ kind: template.kind, value: '', notes: template.notes })}
-                            className='inline-flex min-h-9 items-center rounded-lg border border-[#cfd7e6] bg-white px-3 text-xs font-semibold text-[#202838] transition hover:border-[#9db8ff] hover:bg-[#eef4ff] disabled:cursor-not-allowed disabled:opacity-55 dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb] dark:hover:bg-[#18263a]'
+                            className='inline-flex min-h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
                         >
                             {template.label}
                         </button>
                     ))}
                 </div>
             </div>
-            <div className='mt-4 grid gap-3 rounded-lg border border-[#e6ebf2] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522] md:grid-cols-[9rem_1fr]'>
+            <div className='mt-4 grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[9rem_1fr]'>
                 <SelectField label='Type' value={draft.kind} options={watchlistKinds} disabled={!canManage} onChange={value => setDraft({ ...draft, kind: value as WatchlistKind })} />
                 <Field label='Term' value={draft.value} disabled={!canManage} onChange={value => setDraft({ ...draft, value })} placeholder='company.com, supplier name, brand, actor' />
-                <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1] md:col-span-2'>
+                <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted md:col-span-2'>
                     Notes
                     <textarea value={draft.notes} disabled={!canManage} onChange={event => setDraft({ ...draft, notes: event.target.value })} className={`${inputClass} min-h-20 resize-y`} placeholder='Why this term matters to the organization' />
                 </label>
                 <div className='md:col-span-2'>
-                    {draftDuplicate && <p className='mb-2 rounded-md bg-[#fff7ed] px-3 py-2 text-xs font-semibold text-[#9a3412] dark:bg-[#2b1606] dark:text-[#fed7aa]'>This term already exists in this organization.</p>}
+                    {draftDuplicate && <p className='mb-2 rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>This term already exists in this organization.</p>}
                     <button type='button' className={primaryButtonClass} disabled={!canManage || !draft.value.trim() || draftDuplicate || Boolean(busy)} onClick={onCreate}>
                         <BellRing className='h-4 w-4' />
                         Add shared term
@@ -1514,8 +1514,8 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
 
             <div className='mt-5 grid gap-3'>
                 {watchlists.length === 0 && (
-                    <div className='rounded-lg border border-dashed border-[#b8c5ff] bg-[#f8fbff] p-4 text-sm leading-6 text-[#475467] dark:border-[#344258] dark:bg-[#101b2d] dark:text-[#c6d1e2]'>
-                        <p className='font-semibold text-[#171a21] dark:text-white'>No watchlist terms yet.</p>
+                    <div className='rounded-lg border border-dashed border-ui-primary/35 bg-ui-panel p-4 text-sm leading-6 text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>
+                        <p className='font-semibold text-ui-text dark:text-white'>No watchlist terms yet.</p>
                         <p className='mt-1'>Start with a scope template, enter a real customer-owned term, then save it to generate org-scoped alert terms and delivery context.</p>
                     </div>
                 )}
@@ -1524,17 +1524,17 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                     const editDuplicate = edit ? isDuplicateWatchlistTerm(watchlists, edit.kind, edit.value, item.id) : false
                     const editChanged = edit ? watchlistDraftChanged(item, edit) : false
                     return (
-                        <div key={item.id} className={`rounded-lg border p-3 transition ${selectedSubject.type === 'watchlist' && selectedSubject.id === item.id ? 'border-[#8fb2ff] bg-[#f5f8ff] dark:border-[#4267a7] dark:bg-[#101b2d]' : 'border-[#e6ebf2] dark:border-[#26344a]'}`} onClick={() => onSelectSubject({ type: 'watchlist', id: item.id })}>
+                        <div key={item.id} className={`rounded-lg border p-3 transition ${selectedSubject.type === 'watchlist' && selectedSubject.id === item.id ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-panel' : 'border-ui-border dark:border-ui-border'}`} onClick={() => onSelectSubject({ type: 'watchlist', id: item.id })}>
                             {edit ? (
                                 <div className='grid gap-3 md:grid-cols-[9rem_1fr]'>
                                     <SelectField label='Type' value={edit.kind} options={watchlistKinds} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [item.id]: { ...edit, kind: value as WatchlistKind } }))} />
                                     <Field label='Term' value={edit.value} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [item.id]: { ...edit, value } }))} />
-                                    <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1] md:col-span-2'>
+                                    <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted md:col-span-2'>
                                         Notes
                                         <textarea value={edit.notes} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [item.id]: { ...edit, notes: event.target.value } }))} className={`${inputClass} min-h-20 resize-y`} />
                                     </label>
-                                    {editDuplicate && <p className='rounded-md bg-[#fff7ed] px-3 py-2 text-xs font-semibold text-[#9a3412] dark:bg-[#2b1606] dark:text-[#fed7aa] md:col-span-2'>This term already exists in this organization.</p>}
-                                    {!editDuplicate && !editChanged && <p className='rounded-md bg-[#f8fafc] px-3 py-2 text-xs font-semibold text-[#667085] dark:bg-[#0d1522] dark:text-[#a8b3c5] md:col-span-2'>No changes to save.</p>}
+                                    {editDuplicate && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning md:col-span-2'>This term already exists in this organization.</p>}
+                                    {!editDuplicate && !editChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-2'>No changes to save.</p>}
                                     <div className='flex flex-wrap gap-2 md:col-span-2'>
                                         <button type='button' className={primaryButtonClass} disabled={!edit.value.trim() || editDuplicate || !editChanged || Boolean(busy)} onClick={() => onSave(item)}>
                                             <CheckCircle2 className='h-4 w-4' />
@@ -1552,12 +1552,12 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                     <div className='grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)_auto] lg:items-start'>
                                         <div className='min-w-0'>
                                             <div className='flex flex-wrap items-center gap-2'>
-                                                <span className='rounded-md bg-[#eef4ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#1b2a44] dark:text-[#9cc2ff]'>{item.kind}</span>
+                                                <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{item.kind}</span>
                                                 <StatusPill status={item.status} />
                                             </div>
-                                            <p className='mt-2 wrap-break-word text-base font-semibold text-[#171a21] dark:text-white'>{item.value}</p>
-                                            <p className='mt-1 truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{item.notes || 'No notes.'}</p>
-                                            <div className='mt-2 grid gap-1 text-xs text-[#667085] dark:text-[#a8b3c5] sm:grid-cols-2'>
+                                            <p className='mt-2 wrap-break-word text-base font-semibold text-ui-text dark:text-white'>{item.value}</p>
+                                            <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{item.notes || 'No notes.'}</p>
+                                            <div className='mt-2 grid gap-1 text-xs text-ui-muted dark:text-ui-muted sm:grid-cols-2'>
                                                 <span className='truncate'>Org: {sanitizeOrganizationDisplayCopy(item.organizationId || organization.id)}</span>
                                                 <span className='truncate'>Owner: {item.updatedBy || item.createdBy || 'system'}</span>
                                                 <span className='truncate'>Ref: {item.alertGenerationRef || item.id}</span>
@@ -1597,7 +1597,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                 })}
             </div>
 
-            <div className='mt-4 rounded-lg border border-[#d8e7db] bg-[#f0fdf4] p-3 text-sm text-[#14532d] dark:border-[#244b33] dark:bg-[#0f2418] dark:text-[#bbf7d0]'>
+            <div className='mt-4 rounded-lg border border-ui-success/35 bg-ui-success/10 p-3 text-sm text-ui-success dark:border-ui-success/35 dark:bg-ui-success/10 dark:text-ui-success'>
                 <strong>{activeTerms.length}</strong> active exported term{activeTerms.length === 1 ? '' : 's'} available to alert generation.
             </div>
         </section>
@@ -1606,14 +1606,14 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
 
 function WatchlistDestinationSummary({ item, delivery }: { item: WatchlistItem, delivery?: DeliveryRow | null }) {
     return (
-        <div className='grid gap-1 rounded-lg border border-[#edf1f7] bg-white p-3 text-xs dark:border-[#1d2a3d] dark:bg-[#101928]'>
+        <div className='grid gap-1 rounded-lg border border-ui-border bg-ui-panel p-3 text-xs dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex items-center justify-between gap-2'>
-                <span className='font-semibold text-[#202838] dark:text-[#eef3fb]'>Destination</span>
+                <span className='font-semibold text-ui-text dark:text-ui-text'>Destination</span>
                 <StatusPill status={destinationConfigured(item) ? 'configured' : 'none'} />
             </div>
-            <span className='truncate text-[#667085] dark:text-[#a8b3c5]'>{item.webhookEndpointHint || delivery?.endpointHint || 'No endpoint'}</span>
-            <span className='truncate font-mono text-[#667085] dark:text-[#93a4bd]'>{item.webhookEndpointHash || delivery?.endpointHash || 'no_route_hash'}</span>
-            <span className='truncate text-[#667085] dark:text-[#a8b3c5]'>Last delivery: {delivery?.status || 'none'}</span>
+            <span className='truncate text-ui-muted dark:text-ui-muted'>{item.webhookEndpointHint || delivery?.endpointHint || 'No endpoint'}</span>
+            <span className='truncate font-mono text-ui-muted dark:text-ui-muted'>{item.webhookEndpointHash || delivery?.endpointHash || 'no_route_hash'}</span>
+            <span className='truncate text-ui-muted dark:text-ui-muted'>Last delivery: {delivery?.status || 'none'}</span>
         </div>
     )
 }
@@ -1628,18 +1628,18 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
     const destinationUrl = draft.url.trim()
     const destinationUrlInvalid = Boolean(destinationUrl) && !validDestinationUrl(destinationUrl)
     return (
-        <div className='grid gap-3 rounded-lg border border-[#dbe3ef] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]' onClick={event => {
+        <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' onClick={event => {
             event.stopPropagation()
             onSelect()
         }}>
             <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
                 <div className='min-w-0'>
-                    <p className='flex flex-wrap items-center gap-2 text-sm font-semibold text-[#202838] dark:text-[#eef3fb]'>
-                        <Webhook className='h-4 w-4 text-[#3056d3]' />
+                    <p className='flex flex-wrap items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
+                        <Webhook className='h-4 w-4 text-ui-primary' />
                         Destination
                         <StatusPill status={configured ? 'configured' : 'not configured'} />
                     </p>
-                    <p className='mt-1 truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{endpointHint} · {endpointHash}</p>
+                    <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{endpointHint} · {endpointHash}</p>
                 </div>
                 <div className='grid grid-cols-2 gap-2 sm:flex'>
                     <button type='button' className={secondaryButtonClass} disabled={!configured || Boolean(busy)} onClick={() => onTest('replay')}>
@@ -1654,10 +1654,10 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
             </div>
             <div className='grid gap-2 md:grid-cols-[8rem_minmax(12rem,1fr)_auto]'>
                 <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={!canManage || Boolean(busy)} onChange={value => onDraftChange({ ...draft, kind: value as DestinationDraft['kind'] })} />
-                <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1]'>
+                <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                     URL
                     <input value={draft.url} disabled={!canManage || Boolean(busy)} onChange={event => onDraftChange({ ...draft, url: event.target.value })} className={inputClass} placeholder='https://discord.com/api/webhooks/...' />
-                    {destinationUrlInvalid && <span className='text-xs font-semibold text-[#b42318] dark:text-[#fecaca]'>Use a valid HTTPS URL.</span>}
+                    {destinationUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
                 </label>
                 <label className='grid content-end'>
                     <span className='sr-only'>Test destination</span>
@@ -1667,12 +1667,12 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                     </button>
                 </label>
             </div>
-            <div className='grid gap-2 text-xs text-[#667085] dark:text-[#a8b3c5] sm:grid-cols-3'>
+            <div className='grid gap-2 text-xs text-ui-muted dark:text-ui-muted sm:grid-cols-3'>
                 <span className='truncate'>Selected alert: {selectedAlertId}</span>
                 <span className='truncate'>Last delivery: {deliveryStatus}</span>
                 <span className='truncate'>Tenant: {sanitizeOrganizationDisplayCopy(item.tenantId || organization.tenantId || 'default')}</span>
             </div>
-            {delivery?.error && <p className='rounded-md bg-[#fff7ed] px-3 py-2 text-xs font-medium text-[#9a3412] dark:bg-[#2b1606] dark:text-[#fed7aa]'>{delivery.error}</p>}
+            {delivery?.error && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{delivery.error}</p>}
         </div>
     )
 }
@@ -1687,7 +1687,7 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject }: { o
     const totalFailures = scopedDeliveries.filter(delivery => delivery.status === 'failed' || delivery.error).length
     const retryCount = scopedDeliveries.filter(delivery => Boolean(delivery.nextRetryAt)).length
     return (
-        <section id='delivery-history' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-delivery-history='true'>
+        <section id='delivery-history' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-delivery-history='true'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
                 <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Delivery history' detail='Recent tests, replays, failures, and retry state for the selected organization scope.' />
                 <div className='flex flex-wrap gap-2'>
@@ -1700,47 +1700,47 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject }: { o
                     </a>
                 </div>
             </div>
-            <div className='mt-4 overflow-x-auto rounded-lg border border-[#e6ebf2] dark:border-[#26344a]'>
+            <div className='mt-4 overflow-x-auto rounded-lg border border-ui-border dark:border-ui-border'>
                 {scopedDeliveries.length === 0 ? (
                     <EmptyLine text={selectedSubject.type === 'organization' ? 'No delivery attempts for this organization yet.' : 'No delivery attempts for the selected row.'} />
                 ) : (
                     <table className='min-w-full border-separate border-spacing-0 text-left text-sm'>
-                        <thead className='bg-[#f8fafc] text-xs uppercase tracking-[0.08em] text-[#667085] dark:bg-[#0d1522] dark:text-[#a8b3c5]'>
+                        <thead className='bg-ui-raised text-xs uppercase tracking-[0.08em] text-ui-muted dark:bg-ui-canvas dark:text-ui-muted'>
                             <tr>
-                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>State</th>
-                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>Target</th>
-                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>Alert / case</th>
-                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>Retry</th>
-                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>When</th>
+                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>State</th>
+                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Target</th>
+                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Alert / case</th>
+                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>Retry</th>
+                                <th className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>When</th>
                             </tr>
                         </thead>
                         <tbody>
                             {scopedDeliveries.map(delivery => (
-                                <tr key={delivery.id} className='align-top hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'>
-                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                <tr key={delivery.id} className='align-top hover:bg-ui-raised dark:hover:bg-ui-panel'>
+                                    <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                         <div className='grid gap-1'>
                                             <StatusPill status={delivery.status || 'attempt'} />
-                                            <span className='text-xs text-[#667085] dark:text-[#a8b3c5]'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'webhook'}</span>
-                                            {delivery.httpStatus !== undefined && <span className='text-xs text-[#667085] dark:text-[#a8b3c5]'>HTTP {delivery.httpStatus}</span>}
+                                            <span className='text-xs text-ui-muted dark:text-ui-muted'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'webhook'}</span>
+                                            {delivery.httpStatus !== undefined && <span className='text-xs text-ui-muted dark:text-ui-muted'>HTTP {delivery.httpStatus}</span>}
                                         </div>
                                     </td>
-                                    <td className='max-w-56 border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
-                                        <p className='truncate font-mono text-xs text-[#202838] dark:text-[#eef3fb]'>{sanitizeOrganizationDisplayCopy(delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || 'redacted destination')}</p>
-                                        <p className='mt-1 truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{delivery.webhookDestinationId || delivery.requestId || delivery.id}</p>
+                                    <td className='max-w-56 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                        <p className='truncate font-mono text-xs text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || 'redacted destination')}</p>
+                                        <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{delivery.webhookDestinationId || delivery.requestId || delivery.id}</p>
                                     </td>
-                                    <td className='max-w-64 border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                    <td className='max-w-64 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                         <DeliveryReference delivery={delivery} organizationId={organization.id} />
-                                        {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-[#fff7ed] px-2 py-1 text-xs font-medium text-[#9a3412] dark:bg-[#2b1606] dark:text-[#fed7aa]'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
-                                        {!delivery.error && delivery.responseSummary && <p className='mt-1 line-clamp-2 text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
+                                        {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
+                                        {!delivery.error && delivery.responseSummary && <p className='mt-1 line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
                                     </td>
-                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
-                                        <div className='grid gap-1 text-xs text-[#667085] dark:text-[#a8b3c5]'>
+                                    <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
+                                        <div className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
                                             <span>{delivery.errorClass ? sanitizeOrganizationDisplayCopy(delivery.errorClass) : delivery.nextRetryAt ? 'scheduled' : 'none'}</span>
                                             <span>{delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
                                             {delivery.dedupeKey && <span className='max-w-40 truncate font-mono'>{delivery.dedupeKey}</span>}
                                         </div>
                                     </td>
-                                    <td className='border-b border-[#eef2f7] px-3 py-2 text-xs text-[#667085] dark:border-[#1d2a3d] dark:text-[#a8b3c5]'>
+                                    <td className='border-b border-ui-border px-3 py-2 text-xs text-ui-muted dark:border-ui-border dark:text-ui-muted'>
                                         {formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}
                                     </td>
                                 </tr>
@@ -1758,10 +1758,10 @@ function DeliveryReference({ delivery, organizationId }: { delivery: DeliveryRow
     const alertHref = delivery.alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(delivery.alertId)}&organizationId=${encodeURIComponent(organizationId)}` : ''
     return (
         <div className='grid gap-1 text-xs'>
-            {delivery.caseId ? <a href={caseHref} className='truncate font-semibold text-[#3056d3] hover:text-[#183899] dark:text-[#9cc2ff]'>Case {delivery.caseId}</a> : null}
-            {delivery.alertId ? <a href={alertHref} className='truncate font-semibold text-[#3056d3] hover:text-[#183899] dark:text-[#9cc2ff]'>Alert {delivery.alertId}</a> : null}
-            {!delivery.caseId && !delivery.alertId ? <span className='truncate text-[#667085] dark:text-[#a8b3c5]'>No alert attached</span> : null}
-            <span className='truncate text-[#667085] dark:text-[#a8b3c5]'>{delivery.watchlistItemId || delivery.watchlistId || delivery.actionId || 'watchlist pending'}</span>
+            {delivery.caseId ? <a href={caseHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>Case {delivery.caseId}</a> : null}
+            {delivery.alertId ? <a href={alertHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>Alert {delivery.alertId}</a> : null}
+            {!delivery.caseId && !delivery.alertId ? <span className='truncate text-ui-muted dark:text-ui-muted'>No alert attached</span> : null}
+            <span className='truncate text-ui-muted dark:text-ui-muted'>{delivery.watchlistItemId || delivery.watchlistId || delivery.actionId || 'watchlist pending'}</span>
         </div>
     )
 }
@@ -1769,7 +1769,7 @@ function DeliveryReference({ delivery, organizationId }: { delivery: DeliveryRow
 function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, organizationId }: { alertTerms: AlertTerm[], alerts: ScopedAlert[], cases: ScopedCase[], webhooks: WebhookDestination[], alertCaseVisibility: Record<string, unknown> | null, organizationId: string }) {
     const route = `/api/organizations/${encodeURIComponent(organizationId)}`
     return (
-        <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination scope' detail='Org-scoped watchlist, case, and delivery records used by monitoring flows.' />
             <div className='mt-4 grid gap-3 lg:grid-cols-2'>
                 <ScopeColumn icon={<BellRing className='h-4 w-4' />} title='Alert terms' route={`${route}/watchlists/alert-terms`} rows={alertTerms.map(term => ({
@@ -1803,13 +1803,13 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     const contextRows = selectedContextRows(selectedSubject, organization, bundle)
     const visibleRows = selectedSubject.type === 'organization' ? activity : selectedRows
     return (
-        <section id='audit' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
+        <section id='audit' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <SectionTitle icon={<CheckCircle2 className='h-4 w-4' />} title='Activity' detail='Selected row, delivery, and team actions.' />
-            <div className='mt-4 grid gap-3 rounded-lg border border-[#e6ebf2] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]'>
+            <div className='mt-4 grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
-                        <p className='truncate text-sm font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(selectedSubjectLabel(selectedSubject, organization, bundle))}</p>
-                        <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{selectedSubject.type}</p>
+                        <p className='truncate text-sm font-semibold text-ui-text dark:text-white'>{sanitizeOrganizationDisplayCopy(selectedSubjectLabel(selectedSubject, organization, bundle))}</p>
+                        <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{selectedSubject.type}</p>
                     </div>
                     <button type='button' className={secondaryButtonClass} onClick={() => onSelectSubject({ type: 'organization', id: organization.id })}>
                         All
@@ -1817,9 +1817,9 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                 </div>
                 <dl className='grid gap-2 text-xs sm:grid-cols-2'>
                     {contextRows.map(row => (
-                        <div key={row.label} className='min-w-0 rounded-md bg-white px-2 py-1.5 dark:bg-[#111927]'>
-                            <dt className='truncate font-semibold text-[#667085] dark:text-[#a8b3c5]'>{row.label}</dt>
-                            <dd className='truncate font-mono text-[#202838] dark:text-[#eef3fb]'>{sanitizeOrganizationDisplayCopy(row.value) || row.value}</dd>
+                        <div key={row.label} className='min-w-0 rounded-md bg-ui-panel px-2 py-1.5 dark:bg-ui-panel'>
+                            <dt className='truncate font-semibold text-ui-muted dark:text-ui-muted'>{row.label}</dt>
+                            <dd className='truncate font-mono text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(row.value) || row.value}</dd>
                         </div>
                     ))}
                 </dl>
@@ -1828,21 +1828,21 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                 {activity.length === 0 && <EmptyLine text='No actions in this browser session yet.' />}
                 {activity.length > 0 && selectedRows.length === 0 && selectedSubject.type !== 'organization' && <EmptyLine text='No activity for the selected row.' />}
                 {visibleRows.map(item => (
-                    <div key={item.id} className='rounded-lg border border-[#e6ebf2] p-3 dark:border-[#26344a]'>
+                    <div key={item.id} className='rounded-lg border border-ui-border p-3 dark:border-ui-border'>
                         <div className='flex items-start gap-2'>
-                            {item.ok ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-[#067647]' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-[#b42318]' />}
+                            {item.ok ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-ui-danger' />}
                             <div className='min-w-0 flex-1'>
                                 <div className='flex flex-wrap items-center gap-2'>
-                                    <p className='truncate text-sm font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(item.title) || item.title}</p>
-                                    {item.subjectType && <span className='rounded-md bg-[#eef2f7] px-2 py-0.5 text-[11px] font-semibold text-[#596170] dark:bg-[#1e293b] dark:text-[#cbd5e1]'>{item.subjectType}</span>}
+                                    <p className='truncate text-sm font-semibold text-ui-text dark:text-white'>{sanitizeOrganizationDisplayCopy(item.title) || item.title}</p>
+                                    {item.subjectType && <span className='rounded-md bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>{item.subjectType}</span>}
                                 </div>
-                                <p className='mt-1 text-sm leading-5 text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(item.detail) || item.detail}</p>
+                                <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(item.detail) || item.detail}</p>
                                 {item.metadata && item.metadata.length > 0 && (
-                                    <div className='mt-2 grid gap-1 text-[11px] text-[#667085] dark:text-[#a8b3c5]'>
+                                    <div className='mt-2 grid gap-1 text-[11px] text-ui-muted dark:text-ui-muted'>
                                         {item.metadata.slice(0, 3).map(row => <span key={`${item.id}-${row.label}`} className='truncate'>{row.label}: {sanitizeOrganizationDisplayCopy(row.value) || row.value}</span>)}
                                     </div>
                                 )}
-                                <p className='mt-2 text-xs text-[#7a8493] dark:text-[#93a4bd]'>{formatDate(item.at)}</p>
+                                <p className='mt-2 text-xs text-ui-muted dark:text-ui-muted'>{formatDate(item.at)}</p>
                             </div>
                         </div>
                     </div>
@@ -1854,23 +1854,23 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
 
 function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, title: string, route: string, rows: Array<{ id: string, primary: string, secondary: string }>, empty: string }) {
     return (
-        <div className='rounded-lg border border-[#e6ebf2] p-3 dark:border-[#26344a]'>
+        <div className='rounded-lg border border-ui-border p-3 dark:border-ui-border'>
             <div className='flex items-center justify-between gap-3'>
-                <h3 className='flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-white'>{icon}{title}</h3>
-                <a href={route} className='text-[#3056d3] transition hover:text-[#183899] dark:text-[#9cc2ff]' aria-label={`Open ${title} records`}>
+                <h3 className='flex items-center gap-2 text-sm font-semibold text-ui-text dark:text-white'>{icon}{title}</h3>
+                <a href={route} className='text-ui-primary transition hover:text-ui-primary dark:text-ui-primary' aria-label={`Open ${title} records`}>
                     <ExternalLink className='h-4 w-4' />
                 </a>
             </div>
             <div className='mt-3 grid gap-2'>
                 {rows.length === 0 && <EmptyLine text={empty} />}
                 {rows.slice(0, 5).map(row => (
-                    <div key={row.id} className='rounded-md bg-[#f8fafc] p-2 dark:bg-[#0d1522]'>
-                        <p className='truncate text-sm font-semibold text-[#202838] dark:text-[#eef3fb]'>{sanitizeOrganizationDisplayCopy(row.primary) || row.primary}</p>
-                        <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(row.secondary) || row.secondary}</p>
+                    <div key={row.id} className='rounded-md bg-ui-raised p-2 dark:bg-ui-canvas'>
+                        <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(row.primary) || row.primary}</p>
+                        <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(row.secondary) || row.secondary}</p>
                     </div>
                 ))}
             </div>
-            <p className='mt-3 truncate font-mono text-[11px] text-[#667085] dark:text-[#93a4bd]'>{sanitizeOrganizationDisplayCopy(route) || route}</p>
+            <p className='mt-3 truncate font-mono text-[11px] text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(route) || route}</p>
         </div>
     )
 }
@@ -1879,8 +1879,8 @@ function SectionTitle({ icon, title, detail }: { icon: ReactNode, title: string,
     return (
         <div className='flex items-start justify-between gap-4'>
             <div>
-                <h2 className='flex items-center gap-2 text-base font-semibold text-[#171a21] dark:text-white'>{icon}{title}</h2>
-                <p className='mt-1 text-sm leading-5 text-[#667085] dark:text-[#a8b3c5]'>{detail}</p>
+                <h2 className='flex items-center gap-2 text-base font-semibold text-ui-text dark:text-white'>{icon}{title}</h2>
+                <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>{detail}</p>
             </div>
         </div>
     )
@@ -1888,17 +1888,17 @@ function SectionTitle({ icon, title, detail }: { icon: ReactNode, title: string,
 
 function Metric({ icon, label, value, detail }: { icon: ReactNode, label: string, value: string, detail: string }) {
     return (
-        <div className='min-w-0 rounded-lg border border-[#e6ebf2] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]'>
-            <p className='flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#667085] dark:text-[#a8b3c5]'>{icon}{label}</p>
-            <p className='mt-2 truncate text-2xl font-semibold text-[#171a21] dark:text-white'>{value}</p>
-            <p className='mt-1 truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{detail}</p>
+        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas'>
+            <p className='flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{icon}{label}</p>
+            <p className='mt-2 truncate text-2xl font-semibold text-ui-text dark:text-white'>{value}</p>
+            <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{detail}</p>
         </div>
     )
 }
 
 function Field({ label, value, onChange, disabled, placeholder = '', type = 'text' }: { label: string, value: string, onChange: (value: string) => void, disabled?: boolean, placeholder?: string, type?: string }) {
     return (
-        <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1]'>
+        <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
             {label}
             <input type={type} value={value} disabled={disabled} onChange={event => onChange(event.target.value)} className={inputClass} placeholder={placeholder} />
         </label>
@@ -1907,7 +1907,7 @@ function Field({ label, value, onChange, disabled, placeholder = '', type = 'tex
 
 function SelectField({ label, value, options, onChange, disabled }: { label: string, value: string, options: string[], onChange: (value: string) => void, disabled?: boolean }) {
     return (
-        <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1]'>
+        <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
             {label}
             <select value={value} disabled={disabled} onChange={event => onChange(event.target.value)} className={inputClass}>
                 {options.map(option => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}
@@ -1917,27 +1917,27 @@ function SelectField({ label, value, options, onChange, disabled }: { label: str
 }
 
 function RoleBadge({ role }: { role: OrganizationRole }) {
-    return <span className='shrink-0 rounded-md bg-[#eef4ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#1b2a44] dark:text-[#9cc2ff]'>{role}</span>
+    return <span className='shrink-0 rounded-md bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{role}</span>
 }
 
 function StatusPill({ status }: { status: string }) {
     const normalized = status.toLowerCase()
     const tone = normalized === 'active' || normalized === 'delivered' || normalized === 'dry_run'
-        ? 'bg-[#dcfae6] text-[#067647] dark:bg-[#12351f] dark:text-[#86efac]'
+        ? 'bg-ui-success/15 text-ui-success dark:bg-ui-success/10 dark:text-ui-success'
         : normalized === 'paused' || normalized.includes('retry') || normalized === 'skipped'
-            ? 'bg-[#fff7d6] text-[#8a4b00] dark:bg-[#332604] dark:text-[#fde68a]'
+            ? 'bg-ui-warning/10 text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'
             : normalized === 'failed' || normalized.includes('failed') || normalized === 'disabled'
-                ? 'bg-[#fff1f3] text-[#b42318] dark:bg-[#2a1010] dark:text-[#fecaca]'
-                : 'bg-[#f1f4f8] text-[#596170] dark:bg-[#1e293b] dark:text-[#cbd5e1]'
+                ? 'bg-ui-danger/10 text-ui-danger dark:bg-ui-danger/10 dark:text-ui-danger'
+                : 'bg-ui-raised text-ui-muted dark:bg-ui-raised dark:text-ui-muted'
     return <span className={`rounded-md px-2 py-1 text-xs font-semibold ${tone}`}>{status}</span>
 }
 
 function StatusBanner({ tone, text }: { tone: 'error' | 'warning' | 'success', text: string }) {
     const classes = tone === 'error'
-        ? 'border-[#fecdca] bg-[#fffbfa] text-[#b42318] dark:border-[#7f1d1d] dark:bg-[#2a1010] dark:text-[#fecaca]'
+        ? 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger dark:border-ui-danger/35 dark:bg-ui-danger/10 dark:text-ui-danger'
         : tone === 'warning'
-            ? 'border-[#fedf89] bg-[#fffaeb] text-[#93370d] dark:border-[#704d0a] dark:bg-[#271a05] dark:text-[#fde68a]'
-            : 'border-[#abefc6] bg-[#f6fef9] text-[#067647] dark:border-[#14532d] dark:bg-[#092114] dark:text-[#bbf7d0]'
+            ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'
+            : 'border-ui-success/35 bg-ui-success/10 text-ui-success dark:border-ui-success/35 dark:bg-ui-success/10 dark:text-ui-success'
     const Icon = tone === 'success' ? CheckCircle2 : CircleAlert
     return (
         <div className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm font-medium ${classes}`}>
@@ -1950,8 +1950,8 @@ function StatusBanner({ tone, text }: { tone: 'error' | 'warning' | 'success', t
 function RowStatus({ message }: { message?: RowMessage }) {
     if (!message) return null
     const tone = message.ok
-        ? 'bg-[#ecfdf3] text-[#067647] dark:bg-[#102b1a] dark:text-[#86efac]'
-        : 'bg-[#fff1f3] text-[#b42318] dark:bg-[#2a1010] dark:text-[#fecaca]'
+        ? 'bg-ui-success/10 text-ui-success dark:bg-ui-success/10 dark:text-ui-success'
+        : 'bg-ui-danger/10 text-ui-danger dark:bg-ui-danger/10 dark:text-ui-danger'
     return <span className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[11px] font-semibold ${tone}`}>{sanitizeOrganizationDisplayCopy(message.text) || message.text}</span>
 }
 
@@ -1981,11 +1981,11 @@ function ConfirmActionButton({ ariaLabel, disabled, onConfirm, icon }: { ariaLab
 }
 
 function EmptyLine({ text }: { text: string }) {
-    return <p className='rounded-md bg-[#f8fafc] px-3 py-2 text-sm text-[#667085] dark:bg-[#0d1522] dark:text-[#a8b3c5]'>{text}</p>
+    return <p className='rounded-md bg-ui-raised px-3 py-2 text-sm text-ui-muted dark:bg-ui-canvas dark:text-ui-muted'>{text}</p>
 }
 
 function SkeletonRows({ count }: { count: number }) {
-    return Array.from({ length: count }, (_, index) => <div key={index} className='h-14 animate-pulse rounded-lg bg-[#eef2f7] dark:bg-[#1a2638]' />)
+    return Array.from({ length: count }, (_, index) => <div key={index} className='h-14 animate-pulse rounded-lg bg-ui-raised dark:bg-ui-raised' />)
 }
 
 async function requestJson<T = Record<string, unknown>>(url: string, init: RequestInit = {}): Promise<T> {
@@ -2492,10 +2492,10 @@ function deliveryTime(delivery: DeliveryRow) {
     return Number.isFinite(time) ? time : 0
 }
 
-const inputClass = 'h-10 w-full rounded-lg border border-[#cfd7e6] bg-white px-3 text-sm text-[#171a21] outline-none transition placeholder:text-[#98a2b3] focus:border-[#3056d3] focus:ring-2 focus:ring-[#3056d3]/15 disabled:cursor-not-allowed disabled:bg-[#eef2f7] disabled:text-[#667085] dark:border-[#344258] dark:bg-[#0d1522] dark:text-[#f5f7fb] dark:placeholder:text-[#69778c] dark:focus:border-[#8fb2ff] dark:disabled:bg-[#182131]'
-const compactSelectClass = 'h-9 rounded-lg border border-[#cfd7e6] bg-white px-2 text-sm font-semibold text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#3056d3]/15 disabled:cursor-not-allowed disabled:bg-[#eef2f7] disabled:text-[#667085] dark:border-[#344258] dark:bg-[#0d1522] dark:text-[#f5f7fb]'
-const primaryButtonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b3342] disabled:cursor-not-allowed disabled:opacity-55 dark:bg-[#f5f7fb] dark:text-[#111827] dark:hover:bg-white'
-const secondaryButtonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#cfd7e6] bg-white px-3 text-sm font-semibold text-[#202838] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-55 dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb] dark:hover:bg-[#18263a]'
-const iconButtonClass = 'grid h-10 w-10 place-items-center rounded-lg border border-[#cfd7e6] bg-white text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-55 dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb] dark:hover:bg-[#18263a]'
-const iconDangerButtonClass = 'grid h-10 w-10 place-items-center rounded-lg border border-[#fecdca] bg-[#fffbfa] text-[#b42318] transition hover:bg-[#fff1f0] disabled:cursor-not-allowed disabled:opacity-55 dark:border-[#7f1d1d] dark:bg-[#2a1010] dark:text-[#fecaca] dark:hover:bg-[#3b1414]'
-const dangerConfirmButtonClass = 'inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-lg border border-[#fecdca] bg-[#fff1f0] px-3 text-sm font-semibold text-[#b42318] transition hover:bg-[#ffe4e0] disabled:cursor-not-allowed disabled:opacity-55 dark:border-[#7f1d1d] dark:bg-[#3b1414] dark:text-[#fecaca] dark:hover:bg-[#4a1717]'
+const inputClass = 'h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/15 disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text dark:placeholder:text-ui-muted dark:focus:border-ui-primary/35 dark:disabled:bg-ui-raised'
+const compactSelectClass = 'h-9 rounded-lg border border-ui-border bg-ui-panel px-2 text-sm font-semibold text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/15 disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text'
+const primaryButtonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-white transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55 dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-panel'
+const secondaryButtonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
+const iconButtonClass = 'grid h-10 w-10 place-items-center rounded-lg border border-ui-border bg-ui-panel text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-raised'
+const iconDangerButtonClass = 'grid h-10 w-10 place-items-center rounded-lg border border-ui-danger/35 bg-ui-danger/10 text-ui-danger transition hover:bg-ui-danger/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-danger/35 dark:bg-ui-danger/10 dark:text-ui-danger dark:hover:bg-ui-danger/10'
+const dangerConfirmButtonClass = 'inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-lg border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger transition hover:bg-ui-danger/10 disabled:cursor-not-allowed disabled:opacity-55 dark:border-ui-danger/35 dark:bg-ui-danger/10 dark:text-ui-danger dark:hover:bg-ui-danger/10'
