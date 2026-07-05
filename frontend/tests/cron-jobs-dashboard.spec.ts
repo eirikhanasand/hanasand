@@ -56,6 +56,7 @@ test('cron jobs dashboard renders unified scheduled operations and controls', as
     await expect(page.getByRole('heading', { name: 'DWM alert generation readiness' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Vulnerability image scanner' })).toBeVisible()
     await expect(page.getByRole('link', { name: /Vulnerability image scanner/ })).toContainText('Docker socket is unavailable at /var/run/docker.sock')
+    await expect(page.getByText(/Last success/).first()).toBeVisible()
     await expect(page.getByText('blocked', { exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'DWM exposure queue collection' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Forgejo standby sync' })).toBeVisible()

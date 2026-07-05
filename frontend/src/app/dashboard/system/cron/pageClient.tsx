@@ -140,7 +140,7 @@ export default function CronJobsClient() {
                                             <div className='mt-3 grid gap-2 sm:grid-cols-3'>
                                                 <Info icon={<CalendarClock className='h-4 w-4' />} label='Schedule' value={job.schedule} />
                                                 <Info icon={<Clock3 className='h-4 w-4' />} label='Next run' value={timeLabel(job.nextRunAt)} />
-                                                <Info icon={<AlertTriangle className='h-4 w-4' />} label='Health' value={job.failureCount ? `${job.failureCount}: ${job.lastError || 'See logs'}` : 'Clear'} />
+                                                <Info icon={<AlertTriangle className='h-4 w-4' />} label='Reliability' value={reliabilityLabel(job)} />
                                             </div>
                                         </div>
                                         <div className='flex flex-wrap gap-2 lg:justify-end'>
@@ -253,6 +253,12 @@ function controlLabel(job: ManagedCronJob) {
     if (job.controlMode === 'run_only') return 'Run now supported'
     if (job.controlMode === 'editable') return 'Pause/resume and schedule edit'
     return job.controls.includes('run_now') ? 'Safe pause/resume and run now' : 'Safe pause/resume'
+}
+
+function reliabilityLabel(job: ManagedCronJob) {
+    if (job.failureCount) return `${job.failureCount} failure${job.failureCount === 1 ? '' : 's'} · ${job.lastError || 'see logs'}`
+    if (job.lastSuccessAt) return `Last success ${timeLabel(job.lastSuccessAt)}`
+    return 'No failures reported'
 }
 
 function resourceLabel(job: ManagedCronJob) {
