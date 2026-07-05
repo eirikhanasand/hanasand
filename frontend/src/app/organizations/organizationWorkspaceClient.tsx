@@ -3238,6 +3238,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, 
                     id: term.watchlistItemId || term.watchlistId || term.alertGenerationRef || term.term || term.value || 'term',
                     primary: term.term || term.value || 'Watchlist term',
                     secondary: term.matchReason || compactReference(term.alertGenerationRef, 'watch') || term.kind || term.family || 'Shared watchlist match',
+                    href: term.watchlistItemId || term.watchlistId ? `#watchlist-${encodeURIComponent(term.watchlistItemId || term.watchlistId || '')}` : undefined,
                 }))} empty='Add an active shared watchlist term to create organization alert terms.' />
                 <ScopeColumn icon={<CircleAlert className='h-4 w-4' />} title='Alerts' route={`/api/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`} rows={alerts.map(alert => {
                     const matchReason = matchReasonForRecord(alert.id, deliveries)
@@ -3245,6 +3246,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, 
                         id: alert.id,
                         primary: alert.title || compactReference(alert.id, 'alert') || 'Alert',
                         secondary: [alert.severity || 'severity', alert.status || 'status', compactReference(alert.watchlistItemId || alert.watchlistItemIds?.[0] || alert.watchlistIds?.[0], 'watchlist'), matchReason ? `Match: ${matchReason}` : undefined].filter(Boolean).join(' · '),
+                        href: `/dashboard/ti/workbench?alertId=${encodeURIComponent(alert.id)}&organizationId=${encodeURIComponent(organizationId)}`,
                     }
                 })} empty='Alerts appear after a live capture matches an active org watchlist term.' rowPrefix='alert-record' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Cases' route={`/api/cases?organizationId=${encodeURIComponent(organizationId)}`} rows={cases.map(item => {
@@ -3253,6 +3255,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, 
                         id: item.id,
                         primary: item.title || compactReference(item.id, 'case') || 'Case',
                         secondary: [item.status || 'status', organizationMemberLabel(item.assignedOwner, members), matchReason ? `Match: ${matchReason}` : undefined].filter(Boolean).join(' · '),
+                        href: `/dashboard/dwm/cases/${encodeURIComponent(item.id)}?organizationId=${encodeURIComponent(organizationId)}`,
                     }
                 })} empty='Cases appear after an alert is opened from exposure monitoring.' rowPrefix='case-record' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibility} empty='Visibility decisions appear after alerts are reviewed or opened as cases.' />
@@ -3260,6 +3263,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, 
                     id: destination.id,
                     primary: destination.name || compactReference(destination.id, 'destination') || 'Destination',
                     secondary: `${destination.status || 'unknown'} · ${destinationDisplayState(destination)}`,
+                    href: `#destination-${encodeURIComponent(destination.id)}`,
                 }))} empty='Save a watchlist destination to make customer delivery available here.' />
             </div>
         </section>
@@ -3393,7 +3397,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     )
 }
 
-function ScopeColumn({ icon, title, route, rows, empty, rowPrefix }: { icon: ReactNode, title: string, route: string, rows: Array<{ id: string, primary: string, secondary: string }>, empty: string, rowPrefix?: string }) {
+function ScopeColumn({ icon, title, route, rows, empty, rowPrefix }: { icon: ReactNode, title: string, route: string, rows: Array<{ id: string, primary: string, secondary: string, href?: string }>, empty: string, rowPrefix?: string }) {
     const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
     const [showAll, setShowAll] = useState(false)
     const showRecordActions = !route.startsWith('/api/')
@@ -3424,12 +3428,24 @@ function ScopeColumn({ icon, title, route, rows, empty, rowPrefix }: { icon: Rea
             </div>
             <div className='mt-3 grid gap-2'>
                 {rows.length === 0 && <EmptyLine text={empty} />}
-                {visibleRows.map(row => (
-                    <div key={row.id} id={rowPrefix ? `${rowPrefix}-${encodeURIComponent(row.id)}` : undefined} className='scroll-mt-24 rounded-md bg-ui-raised p-2 dark:bg-ui-canvas'>
-                        <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(row.primary) || row.primary}</p>
-                        <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(row.secondary) || row.secondary}</p>
-                    </div>
-                ))}
+                {visibleRows.map(row => {
+                    const content = (
+                        <>
+                            <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(row.primary) || row.primary}</p>
+                            <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(row.secondary) || row.secondary}</p>
+                        </>
+                    )
+                    const className = 'scroll-mt-24 rounded-md bg-ui-raised p-2 transition hover:bg-ui-panel dark:bg-ui-canvas dark:hover:bg-ui-raised'
+                    return row.href ? (
+                        <a key={row.id} href={row.href} id={rowPrefix ? `${rowPrefix}-${encodeURIComponent(row.id)}` : undefined} className={className}>
+                            {content}
+                        </a>
+                    ) : (
+                        <div key={row.id} id={rowPrefix ? `${rowPrefix}-${encodeURIComponent(row.id)}` : undefined} className={className}>
+                            {content}
+                        </div>
+                    )
+                })}
                 {rows.length > 5 && (
                     <button
                         type='button'
