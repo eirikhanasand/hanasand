@@ -3358,6 +3358,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
 function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, title: string, route: string, rows: Array<{ id: string, primary: string, secondary: string }>, empty: string }) {
     const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
     const showRecordActions = !route.startsWith('/api/')
+    const hiddenRows = Math.max(0, rows.length - 5)
     const copyRoute = async () => {
         try {
             await navigator.clipboard.writeText(route)
@@ -3389,6 +3390,7 @@ function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, tit
                         <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(row.secondary) || row.secondary}</p>
                     </div>
                 ))}
+                {hiddenRows > 0 && <span className='rounded-md bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted'>{hiddenRows} more</span>}
             </div>
             <div className='mt-3'><RowStatus message={copyStatus} /></div>
         </div>
