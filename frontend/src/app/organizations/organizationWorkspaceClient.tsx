@@ -1150,7 +1150,7 @@ export default function OrganizationWorkspaceClient() {
     const replayDelivery = (delivery: DeliveryRow) => selectedOrganization && runAction('replay-delivery', async () => {
         requireManage()
         const destinationId = deliveryDestinationIds(delivery, bundle.webhooks)[0]
-        if (!canReplayDelivery(delivery, bundle.webhooks)) throw new Error('Delivery replay needs a destination and alert, case, or watchlist reference.')
+        if (!canReplayDelivery(delivery, bundle.webhooks)) throw new Error('Delivery replay needs a destination or saved watchlist route.')
         const result = await requestJson<DeliveryResult>('/api/dwm/webhooks/deliver', {
             method: 'POST',
             body: JSON.stringify({
@@ -4609,10 +4609,9 @@ function escapeRegExp(value: string) {
 }
 
 function canReplayDelivery(delivery: DeliveryRow, destinations: WebhookDestination[] = []) {
-    return Boolean(
-        deliveryDestinationIds(delivery, destinations)[0]
-        && (delivery.alertId || delivery.caseId || deliveryWatchlistId(delivery) || delivery.actionId)
-    )
+    const watchlistId = deliveryWatchlistId(delivery)
+    return Boolean(deliveryDestinationIds(delivery, destinations)[0] || watchlistId)
+        && Boolean(delivery.alertId || delivery.caseId || watchlistId || delivery.actionId)
 }
 
 function firstDelivery(result: DeliveryResult) {
