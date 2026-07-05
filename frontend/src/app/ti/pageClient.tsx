@@ -3262,7 +3262,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                 <th className='px-3 py-2 font-semibold'>Results</th>
                                 <th className='px-3 py-2 font-semibold'>Freshness</th>
                                 <th className='px-3 py-2 font-semibold'>Basis</th>
-                                <th className='px-3 py-2 font-semibold'>Review status</th>
+                                <th className='px-3 py-2 font-semibold'>Workflow state</th>
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
@@ -3384,7 +3384,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     <div className='grid grid-cols-3 gap-2 text-center text-xs'>
                         <EvidenceMetric label='Freshness' value={formatDate(artifact.freshness)} />
                         <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(artifact.confidence)} />
-                        <EvidenceMetric label='Review status' value={displayRequirementText(artifact.readiness.label)} />
+                        <EvidenceMetric label='Workflow state' value={displayRequirementText(artifact.readiness.label)} />
                     </div>
                     <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 lg:justify-end'>
                         <span className={sourceHealthChipClass(artifact.readiness.state === 'ready_for_org_handoff' ? 'ready' : artifact.readiness.state === 'needs_source' || artifact.readiness.state === 'needs_watchlist_term' ? 'blocked' : 'review')}>{publicStateLabel(artifact.readiness.state)}</span>
@@ -3476,7 +3476,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
             <div data-ti-artifact-workflow-readiness='true' className='mt-3 border-t border-ui-border pt-3 dark:border-ui-border'>
                 <div className='flex flex-wrap items-center justify-between gap-2 text-xs'>
                     <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
-                        Console action links · {workflowRows.filter(row => !row.blocked).length}/{workflowRows.length} ready · watchlist, alert, case, source
+                        Console action links · {workflowRows.filter(row => !row.blocked).length}/{workflowRows.length} available · watchlist, alert, case, source
                     </p>
                     <p className='min-w-0 wrap-break-word text-[11px] font-medium text-ui-muted dark:text-ui-muted'>
                         {workflowRows
@@ -3655,7 +3655,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
-                    <span className={decisionStepStatusClass(state)}>{readyRows}/{drilldown.rows.length} ready</span>
+                    <span className={decisionStepStatusClass(state)}>{readyRows}/{drilldown.rows.length} linked</span>
                     <CopyPayloadButton label='Source details' payload={drilldown} />
                 </div>
             </div>
@@ -4227,12 +4227,12 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Review evidence</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {readyCount} of {rows.length} review rows have source references, action links, and capture details ready for authenticated review.
+                        {readyCount} of {rows.length} review rows have source references, action links, and capture details for authenticated review.
                     </p>
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
                     <span className={readyCount === rows.length ? decisionStepStatusClass('ready') : readyCount ? decisionStepStatusClass('review') : decisionStepStatusClass('blocked')}>
-                        {readyCount}/{rows.length} ready
+                        {readyCount}/{rows.length} linked
                     </span>
                     <button type='button' onClick={() => setShowReviewPaths(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
                         {showReviewPaths ? 'Hide rows' : 'Show rows'}
@@ -4433,7 +4433,7 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Related alerts/cases</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {records.length} linked record{records.length === 1 ? '' : 's'} · {actionability.caseReplayReadiness.summary.ready} ready to replay · {actionability.webhookDeliveryHandoff.ready ? 'delivery ready' : 'delivery syncing'}
+                        {records.length} linked record{records.length === 1 ? '' : 's'} · {actionability.caseReplayReadiness.summary.ready} replay path{actionability.caseReplayReadiness.summary.ready === 1 ? '' : 's'} · {actionability.webhookDeliveryHandoff.ready ? 'delivery available' : 'delivery syncing'}
                     </p>
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -4469,9 +4469,9 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                 <div className='mt-3 rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 dark:border-ui-warning/35 dark:bg-ui-warning/10'>
                     <div data-ti-case-review-intake='true' className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                         <div className='min-w-0'>
-                            <p className='text-xs font-semibold uppercase text-ui-warning'>Case review intake</p>
+                            <p className='text-xs font-semibold uppercase text-ui-warning'>Case review</p>
                             <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-warning'>
-                                {caseIntake.summary.total} candidate{caseIntake.summary.total === 1 ? '' : 's'} for {query} · {actionability.caseReplayReadiness.summary.ready} ready to replay · {caseIntake.summary.captures} capture{caseIntake.summary.captures === 1 ? '' : 's'}
+                                {caseIntake.summary.total} candidate{caseIntake.summary.total === 1 ? '' : 's'} for {query} · {actionability.caseReplayReadiness.summary.ready} replay path{actionability.caseReplayReadiness.summary.ready === 1 ? '' : 's'} · {caseIntake.summary.captures} capture{caseIntake.summary.captures === 1 ? '' : 's'}
                             </p>
                         </div>
                         <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -4809,7 +4809,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
                     <span className={readyPayloadCount === payloads.length ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>
-                        {readyPayloadCount}/{payloads.length} ready
+                        {readyPayloadCount}/{payloads.length} available
                     </span>
                     <button type='button' onClick={() => setShowPayloadDetails(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
                         {showPayloadDetails ? 'Hide action links' : 'Show action links'}
@@ -4845,7 +4845,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                                         {primaryBlocker ? (
                                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-warning'>{readinessOwnerLabel(primaryBlocker.ownerLane)}: {displayRequirementText(primaryBlocker.handoff)}</p>
                                         ) : (
-                                            <p className='mt-1 text-[11px] leading-5 text-ui-success'>Required IDs and source details are present.</p>
+                                            <p className='mt-1 text-[11px] leading-5 text-ui-success'>Required records and source details are present.</p>
                                         )}
                                     </div>
                                     <div className='flex min-w-0 w-full flex-wrap items-center justify-start gap-1.5 sm:w-auto sm:justify-end sm:shrink-0'>
@@ -4903,7 +4903,7 @@ function actionPayloadSummaryLines(
         ]
     }
     return [
-        `${actionability.sourceEnrichmentIntake.summary.total} intake item${actionability.sourceEnrichmentIntake.summary.total === 1 ? '' : 's'}`,
+        `${actionability.sourceEnrichmentIntake.summary.total} source item${actionability.sourceEnrichmentIntake.summary.total === 1 ? '' : 's'}`,
         `${actionability.sourceEnrichmentIntake.summary.sourceRequests} source request${actionability.sourceEnrichmentIntake.summary.sourceRequests === 1 ? '' : 's'}`,
         `${actionability.sourceEnrichmentIntake.summary.captures} capture${actionability.sourceEnrichmentIntake.summary.captures === 1 ? '' : 's'}`,
         `${payload.blockedBy.length} follow-up${payload.blockedBy.length === 1 ? '' : 's'}`,
@@ -4924,8 +4924,8 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
         <div className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Review status</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>Linked records, follow-up fields, and next action for this result.</p>
+                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Linked records</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>Org records, follow-up fields, and next action for this result.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
                     <span className={actionability.readiness.state === 'ready' ? decisionStepStatusClass('ready') : actionability.readiness.state === 'blocked' ? decisionStepStatusClass('blocked') : decisionStepStatusClass('review')}>
@@ -4972,7 +4972,7 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
         <div data-ti-consumer-readiness='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
             <div className='flex flex-wrap items-center justify-between gap-2 text-xs'>
                 <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
-                    Console actions · {readyStages}/{actionability.consumerReadiness.stages.length} stages ready
+                    Console actions · {readyStages}/{actionability.consumerReadiness.stages.length} available
                 </p>
                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
                     <button type='button' onClick={() => setShowStageDetails(value => !value)} className='inline-flex min-h-7 items-center justify-center border-l border-ui-border pl-2 text-[11px] font-semibold text-ui-text transition hover:text-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:text-ui-text'>
@@ -5469,7 +5469,7 @@ function EnrichmentTasksPanel({ tasks, intake }: { tasks: EnrichmentTask[]; inta
         <Panel title='Open source questions' description='Source, capture, and data work required before this result can support stronger alerts.' icon={<Database className='h-4 w-4' />}>
             <div className='mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2'>
                 <p className='wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                    <span className='font-semibold text-ui-text dark:text-ui-text'>Source review intake</span> · {intake.summary.total} intake item{intake.summary.total === 1 ? '' : 's'} · {intake.summary.sourceRequests} source request{intake.summary.sourceRequests === 1 ? '' : 's'} · {intake.summary.captures} capture{intake.summary.captures === 1 ? '' : 's'}
+                    <span className='font-semibold text-ui-text dark:text-ui-text'>Source review</span> · {intake.summary.total} item{intake.summary.total === 1 ? '' : 's'} · {intake.summary.sourceRequests} source request{intake.summary.sourceRequests === 1 ? '' : 's'} · {intake.summary.captures} capture{intake.summary.captures === 1 ? '' : 's'}
                 </p>
                 <CopyPayloadButton label='Source enrichment intake' payload={intake} />
             </div>
@@ -6182,7 +6182,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                         {request.watchlistBasis.relevanceRows.filter(row => row.alertable).length} ready for review
                     </span>
                     <span className={sourceHealthChipClass(request.actionReplay.ready ? 'ready' : 'blocked')}>
-                        {request.actionReplay.rows.filter(row => row.ready).length}/{request.actionReplay.rows.length} ready to replay
+                        {request.actionReplay.rows.filter(row => row.ready).length}/{request.actionReplay.rows.length} replay paths
                     </span>
                     {request.watchlistBasis.intersections.slice(0, 2).map(item => (
                         <span key={item.intersectionId} className={sourceHealthChipClass(item.state === 'ready' ? 'ready' : item.state === 'blocked' ? 'blocked' : 'review')}>
@@ -6362,7 +6362,7 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
         <div data-ti-selected-enrichment-triage='true' className='border-t border-ui-border pt-3 dark:border-ui-border'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs'>
                 <p className='min-w-0 wrap-break-word font-semibold text-ui-muted dark:text-ui-muted'>
-                    Source actions · {triage.summary.sourceRows} sources · {triage.summary.intakeItems} intake · {triage.summary.sourceRequests} requests · {triage.summary.captures} captures
+                    Source actions · {triage.summary.sourceRows} sources · {triage.summary.intakeItems} work items · {triage.summary.sourceRequests} requests · {triage.summary.captures} captures
                 </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(triage.state)}>{decisionStepStatusLabel(triage.state)}</span>
@@ -6384,7 +6384,7 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
                         </div>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5' data-ti-selected-enrichment-readiness='true'>
                             <span className={sourceHealthChipClass(row.ownerLane === 'source' ? 'blocked' : row.state)}>{readinessOwnerLabel(row.ownerLane)}</span>
-                            <span className={sourceHealthChipClass(row.matchingIntakeItemIds.length ? 'review' : 'blocked')}>{row.matchingIntakeItemIds.length} intake item{row.matchingIntakeItemIds.length === 1 ? '' : 's'}</span>
+                            <span className={sourceHealthChipClass(row.matchingIntakeItemIds.length ? 'review' : 'blocked')}>{row.matchingIntakeItemIds.length} source item{row.matchingIntakeItemIds.length === 1 ? '' : 's'}</span>
                             {row.captureId ? <span className={sourceHealthChipClass('ready')}>capture linked</span> : <span className={sourceHealthChipClass('blocked')}>capture needed</span>}
                             {row.sourceRequestId ? <span className={sourceHealthChipClass('review')}>request {row.sourceRequestId}</span> : null}
                         </div>
@@ -7182,7 +7182,7 @@ function sectionOverviewFor(input: {
         { label: 'Watchlist relevance', value: input.actionability.orgRelevance.organizationRefs.length ? `${input.actionability.orgRelevance.organizationRefs.length} matched` : `${input.actionability.orgRelevance.candidateTerms.length} candidate${input.actionability.orgRelevance.candidateTerms.length === 1 ? '' : 's'}`, state: input.actionability.orgRelevance.state },
         { label: 'Related alerts/cases', value: relatedRecords ? `${relatedRecords} linked` : `${caseCandidates} candidate${caseCandidates === 1 ? '' : 's'}`, state: relatedRecords ? 'ready' : caseCandidates ? 'review' : 'blocked' },
         { label: 'Source questions', value: `${input.actionability.enrichmentGapQueue.length} open`, state: input.actionability.enrichmentGapQueue.length ? 'review' : 'ready' },
-        { label: 'Actions', value: `${readyActions}/5 ready`, state: readyActions === 5 ? 'ready' : readyActions ? 'review' : 'blocked' },
+        { label: 'Actions', value: `${readyActions}/5 available`, state: readyActions === 5 ? 'ready' : readyActions ? 'review' : 'blocked' },
     ]
 }
 
