@@ -1472,6 +1472,7 @@ export default function OrganizationWorkspaceClient() {
                                     <DeliveryHistoryPanel
                                         organization={selectedOrganization}
                                         deliveries={bundle.deliveries}
+                                        destinations={bundle.webhooks}
                                         selectedSubject={selectedActivitySubject}
                                         canManage={canManage}
                                         busy={busy}
@@ -3016,10 +3017,10 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
     )
 }
 
-function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canManage, busy, rowMessages, onReplay }: { organization: OrganizationSummary, deliveries: DeliveryRow[], selectedSubject: ActivitySubject, canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, onReplay: (delivery: DeliveryRow) => void }) {
+function DeliveryHistoryPanel({ organization, deliveries, destinations, selectedSubject, canManage, busy, rowMessages, onReplay }: { organization: OrganizationSummary, deliveries: DeliveryRow[], destinations: WebhookDestination[], selectedSubject: ActivitySubject, canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, onReplay: (delivery: DeliveryRow) => void }) {
     const [showAll, setShowAll] = useState(false)
     const matchingDeliveries = deliveries
-        .filter(delivery => deliveryMatchesSubject(delivery, selectedSubject))
+        .filter(delivery => deliveryMatchesSubject(delivery, selectedSubject, destinations))
         .sort((left, right) => deliveryTime(right) - deliveryTime(left))
     const scopedDeliveries = matchingDeliveries
         .slice(0, showAll ? matchingDeliveries.length : 8)
@@ -4443,14 +4444,10 @@ function deliveryDestinationIds(delivery: DeliveryRow, destinations: WebhookDest
     ].filter(Boolean) as string[]
 }
 
-function deliveryMatchesSubject(delivery: DeliveryRow, subject: ActivitySubject) {
+function deliveryMatchesSubject(delivery: DeliveryRow, subject: ActivitySubject, destinations: WebhookDestination[] = []) {
     if (subject.type === 'organization') return true
     if (subject.type === 'destination') {
-        return delivery.webhookDestinationId === subject.id
-            || delivery.destinationId === subject.id
-            || delivery.watchlistId === subject.id
-            || delivery.watchlistItemId === subject.id
-            || delivery.watchlistItemIds?.includes(subject.id)
+        return deliveryDestinationIds(delivery, destinations).includes(subject.id)
     }
     if (subject.type === 'watchlist') {
         return delivery.watchlistId === subject.id
