@@ -99,7 +99,7 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('Create an organization to start monitoring')
     expect(page).toContain('Add shared term')
     expect(page).toContain('Invite member')
-    expect(page).toContain('const deliveryHref = destinationId || focus === \'destinations\' || focus === \'webhooks\'')
+    expect(page).toContain('const deliveryHref = deliveryId || destinationId || focus === \'destinations\' || focus === \'webhooks\'')
     expect(page).toContain('{deliveryHref && <ActionAnchor href={deliveryHref} icon={<Webhook className=\'h-4 w-4\' />} label=\'Open delivery log\' />}')
     expect(page).not.toContain('Use the form on the left to create the workspace and seed the first shared watchlist term.')
     expect(page).not.toContain('Create org first')
