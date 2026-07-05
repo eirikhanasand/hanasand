@@ -2860,7 +2860,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
             </div>
 
             <div className='mt-4 rounded-lg border border-ui-success/35 bg-ui-success/10 p-3 text-sm text-ui-success dark:border-ui-success/35 dark:bg-ui-success/10 dark:text-ui-success'>
-                <strong>{activeTerms.length}</strong> active exported term{activeTerms.length === 1 ? '' : 's'} available to alert generation.
+                <strong>{activeTerms.length}</strong> active watch term{activeTerms.length === 1 ? '' : 's'} routing alerts for this organization.
             </div>
         </section>
     )
