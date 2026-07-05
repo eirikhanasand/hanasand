@@ -1535,9 +1535,9 @@ function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, se
                                         <p className='mt-1 text-[11px] text-ui-muted'>{stateLabel(item.sourceFamily)} · {relativeTimeLabel(item.observedAt || item.firstSeenAt || alert.firstSeenAt)}</p>
                                     </td>
                                     <td className='px-3 py-3'>
-                                        <div className='grid gap-1.5'>
-                                            <ImpactChip label='Watchlist' value={alert.matchedTerm.value} />
-                                            <ImpactChip label='Delivery' value={workflowContext.lastDelivery ? stateLabel(workflowContext.lastDelivery.status) : alert.deliveryState || 'pending_review'} />
+                                        <div className='grid gap-1'>
+                                            <p className='max-w-[180px] truncate text-[11px] font-semibold text-ui-text' title={alert.matchedTerm.value}>{alert.matchedTerm.value}</p>
+                                            <p className='text-[11px] text-ui-muted'>{workflowContext.lastDelivery ? stateLabel(workflowContext.lastDelivery.status) : stateLabel(alert.deliveryState || 'pending_review')}</p>
                                         </div>
                                     </td>
                                     <td className='px-3 py-3'>
@@ -1593,15 +1593,6 @@ function RouteWatchlistImpactRail({ alert, selectedEvidence, selectedEntity, wor
                 <ActionStatus label='Destination' value={workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} configured` : workflowContext.hasWebhookRoute ? 'delivery available' : 'checking delivery'} tone={workflowContext.hasWebhookRoute ? 'neutral' : 'warn'} />
             </div>
         </section>
-    )
-}
-
-function ImpactChip({ label, value }: { label: string, value: string }) {
-    return (
-        <span className='inline-flex min-h-7 max-w-full items-center gap-1 border-l border-ui-border pl-2 text-[11px] font-semibold text-ui-muted'>
-            <span className='text-ui-muted'>{label}:</span>
-            <span className='truncate text-ui-text' title={value}>{value}</span>
-        </span>
     )
 }
 
