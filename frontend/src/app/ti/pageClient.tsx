@@ -517,10 +517,12 @@ function Results({ result }: { result: TiSearchResponse }) {
 
                                             <div className='mt-4 grid gap-3 md:grid-cols-2'>
                                                 <EvidencePanel title='Evidence'>
-                                                    {selected.evidence.map(line => <li key={line}>{line}</li>)}
+                                                    {selected.evidence.slice(0, TI_SELECTED_DETAIL_LIST_ROWS).map(line => <li key={line}>{line}</li>)}
+                                                    {selected.evidence.length > TI_SELECTED_DETAIL_LIST_ROWS ? <li className='text-ui-muted'>+{selected.evidence.length - TI_SELECTED_DETAIL_LIST_ROWS} more evidence rows in workbenches</li> : null}
                                                 </EvidencePanel>
                                                 <EvidencePanel title='Recommended next step'>
-                                                    {selected.nextActions.map(line => <li key={line}>{displayRequirementText(line)}</li>)}
+                                                    {selected.nextActions.slice(0, TI_SELECTED_DETAIL_LIST_ROWS).map(line => <li key={line}>{displayRequirementText(line)}</li>)}
+                                                    {selected.nextActions.length > TI_SELECTED_DETAIL_LIST_ROWS ? <li className='text-ui-muted'>+{selected.nextActions.length - TI_SELECTED_DETAIL_LIST_ROWS} more actions in workbenches</li> : null}
                                                 </EvidencePanel>
                                             </div>
                                         </>
