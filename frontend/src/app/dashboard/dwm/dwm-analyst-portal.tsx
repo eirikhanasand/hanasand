@@ -1724,6 +1724,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const suppressReady = actionReady(alert, 'suppress')
     const closeReady = actionReady(alert, 'close')
     const reopenReady = actionReady(alert, 'reopen')
+    const transitionReason = actionUnavailableReason(alert, 'transition')
     const replayReason = actionUnavailableReason(alert, 'replay')
     const deliveryReason = hasDeliveryRoute ? actionUnavailableReason(alert, 'deliver') : 'Configure a webhook destination before testing or sending.'
     const closeReason = actionUnavailableReason(alert, 'close')
@@ -1808,10 +1809,11 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
             </p>
             <div className='grid gap-2'>
                 <div className='flex flex-wrap gap-1.5'>
-                    <ActionAvailability label='Case actions' ready={transitionReady} />
-                    <ActionAvailability label='Replay' ready={replayReady} />
-                    <ActionAvailability label='Delivery' ready={deliverReady} />
-                    <ActionAvailability label='Close' ready={closeReady} />
+                    <ActionAvailability label='Review' ready={transitionReady} reason={transitionReason} />
+                    <ActionAvailability label='Case' ready={Boolean(caseHref) || caseReady} reason={caseReason} />
+                    <ActionAvailability label='Replay' ready={replayReady} reason={replayReason} />
+                    <ActionAvailability label='Delivery' ready={deliverReady} reason={deliveryReason} />
+                    <ActionAvailability label='Close' ready={closeReady} reason={closeReason} />
                 </div>
                 {blockedActions.length ? (
                     <div className='grid gap-2 rounded-lg border border-ui-warning/30 bg-ui-warning/10 p-2 text-xs text-ui-text' data-dwm-action-blockers='true'>
@@ -1855,12 +1857,22 @@ function nextOperatorActionBusy(kind: DwmNextOperatorActionKind, alertId: string
     return undefined
 }
 
-function ActionAvailability({ label, ready }: { label: string, ready: boolean }) {
+function ActionAvailability({ label, ready, reason }: { label: string, ready: boolean, reason?: string }) {
+    const state = ready ? 'available' : shortActionBlocker(reason)
     return (
-        <span className={`min-w-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${ready ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'}`}>
-            {label}: {ready ? 'available' : 'blocked'}
+        <span title={ready ? undefined : reason} aria-label={`${label}: ${state}`} className={`min-w-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${ready ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'}`}>
+            {label}: {state}
         </span>
     )
+}
+
+function shortActionBlocker(reason?: string) {
+    const normalized = reason?.toLowerCase() || ''
+    if (normalized.includes('destination') || normalized.includes('webhook')) return 'add destination'
+    if (normalized.includes('evidence') || normalized.includes('source') || normalized.includes('capture')) return 'needs evidence'
+    if (normalized.includes('case')) return 'needs case'
+    if (normalized.includes('alert state') || normalized.includes('state')) return 'state blocked'
+    return 'needs setup'
 }
 
 function ActionStatus({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'warn' }) {

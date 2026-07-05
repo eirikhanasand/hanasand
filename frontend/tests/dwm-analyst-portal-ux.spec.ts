@@ -16,6 +16,10 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(page).toContain('const blockedActions = [')
     expect(page).toContain('data-dwm-action-blockers=\'true\'')
     expect(page).toContain('Configure a webhook destination before testing or sending.')
+    expect(page).toContain('<ActionAvailability label=\'Delivery\' ready={deliverReady} reason={deliveryReason} />')
+    expect(page).toContain('function shortActionBlocker')
+    expect(page).toContain('return \'add destination\'')
+    expect(page).toContain('return \'needs evidence\'')
     expect(page).toContain('dwmNextOperatorAction({')
     expect(page).toContain('nextOperatorActionBusy')
     expect(actionContract).toContain('Send customer delivery')
@@ -38,7 +42,7 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
 
     expect(page.indexOf('<WorkflowRouteStrip')).toBeLessThan(page.indexOf('Recent attacks'))
     expect(page.indexOf('Recent attacks')).toBeLessThan(page.indexOf('SelectedActionBar'))
-    expect(page.indexOf('data-dwm-next-action=\'true\'')).toBeLessThan(page.indexOf('<ActionStatus label=\'Owner\''))
+    expect(page.indexOf('data-dwm-next-action=\'true\'')).toBeLessThan(page.indexOf('Owner {assignee}'))
     expect(page.indexOf('data-dwm-selected-workflow-actions')).toBeGreaterThan(page.indexOf('<DeliveryPanel'))
 
     expect(page).toContain('<section id=\'dwm-workflow-actions\' className=\'scroll-mt-24\'>')
