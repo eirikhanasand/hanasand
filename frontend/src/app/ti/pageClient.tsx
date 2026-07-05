@@ -1088,20 +1088,14 @@ function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchli
     gapCount: number
     onToggle: () => void
 }) {
-    const metrics = [
-        `${artifactCount} artifacts`,
-        `${sourceCount} sources`,
-        `${watchlistCount} watch terms`,
-        `${gapCount} source questions`,
-    ]
     const summary = `${artifactCount} artifacts · ${sourceCount} sources · ${watchlistCount} watch terms · ${gapCount} source questions`
     return (
-        <section id='ti-secondary-analysis' className='scroll-mt-24 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-canvas' data-ti-secondary-analysis-toggle='true'>
-            <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+        <section id='ti-secondary-analysis' className='scroll-mt-24 border-y border-ui-border bg-ui-canvas px-3 py-2 dark:border-ui-border dark:bg-ui-canvas' data-ti-secondary-analysis-toggle='true'>
+            <div className='flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
                 <div className='min-w-0'>
-                    <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>Additional analysis</p>
-                    <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {expanded ? 'Source records, detail review, watchlist fit, and collection questions are open.' : summary}
+                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Analysis workbenches</p>
+                    <p className='mt-0.5 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
+                        {expanded ? 'Source, artifact, watchlist, and delivery workbenches are open.' : summary}
                     </p>
                 </div>
                 <button
@@ -1113,15 +1107,6 @@ function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchli
                     {expanded ? 'Hide' : 'Show'}
                 </button>
             </div>
-            {expanded ? (
-                <div className='mt-3 flex flex-wrap gap-2'>
-                    {metrics.map(metric => (
-                        <span key={metric} className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>
-                            {metric}
-                        </span>
-                    ))}
-                </div>
-            ) : null}
         </section>
     )
 }
