@@ -3159,6 +3159,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, 
     const route = `/api/organizations/${encodeURIComponent(organizationId)}`
     const visibility = visibilityRows(alertCaseVisibility)
     const hasScopeRows = Boolean(alertTerms.length || alerts.length || cases.length || webhooks.length || visibility.length)
+    const failedDeliveries = deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error)).length
     if (!hasScopeRows) {
         return (
             <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-scope-empty='true'>
@@ -3183,6 +3184,13 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, 
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-scope-records='true'>
             <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination records' detail='Matched records for this organization.' />
+            <div className='mt-3 flex flex-wrap gap-2' data-org-scope-record-counts='true'>
+                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Terms: {alertTerms.length}</span>
+                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Alerts: {alerts.length}</span>
+                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Cases: {cases.length}</span>
+                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Destinations: {webhooks.length}</span>
+                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Failures: {failedDeliveries}</span>
+            </div>
             <div className='mt-4 grid gap-3 lg:grid-cols-2'>
                 <ScopeColumn icon={<BellRing className='h-4 w-4' />} title='Alert terms' route={`${route}/watchlists/alert-terms`} rows={alertTerms.map(term => ({
                     id: term.watchlistItemId || term.watchlistId || term.alertGenerationRef || term.term || term.value || 'term',
