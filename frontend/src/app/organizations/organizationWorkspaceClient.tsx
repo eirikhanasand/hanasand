@@ -10,6 +10,8 @@ type OrganizationStatus = 'active' | 'archived' | 'deleted' | string
 type WatchlistStatus = 'active' | 'paused' | 'archived' | string
 type WatchlistKind = 'company' | 'domain' | 'vendor' | 'actor' | 'keyword'
 
+const ORG_ACTIVITY_PREVIEW_ROWS = 8
+
 type OrganizationSummary = {
     id: string
     tenantId?: string
@@ -2963,7 +2965,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
     const selectedRows = activityRowsForSubject(activity, selectedSubject)
     const contextRows = selectedContextRows(selectedSubject, organization, bundle)
-    const visibleRows = selectedSubject.type === 'organization' ? activity.slice(0, 20) : selectedRows.slice(0, 20)
+    const visibleRows = selectedSubject.type === 'organization' ? activity.slice(0, ORG_ACTIVITY_PREVIEW_ROWS) : selectedRows.slice(0, ORG_ACTIVITY_PREVIEW_ROWS)
     const totalRows = selectedSubject.type === 'organization' ? activity.length : selectedRows.length
     const contextActions = selectedSubjectActions(selectedSubject, organization)
     const copySelectedActivity = async () => {

@@ -14,5 +14,7 @@ assert(source.includes('const workspaceMeta = sanitizeOrganizationDisplayCopy(or
 assert(source.includes('const showRecordActions = !route.startsWith(\'/api/\')'), 'Organization scope panels should hide endpoint copy/open controls for API-backed routes.')
 assert(source.includes('Action unavailable'), 'Organization route misses should render as action availability copy.')
 assert(!source.includes('Endpoint unavailable'), 'Organization UI should not expose endpoint-shaped error copy.')
+assert(source.includes('const ORG_ACTIVITY_PREVIEW_ROWS = 8'), 'Organization activity rail should stay compact by default.')
+assert(!/activity\.slice\(0,\s*20\)|selectedRows\.slice\(0,\s*20\)/.test(source), 'Organization activity rail should not render a long event wall by default.')
 
 console.log('[organizations-workspace-copy] org workspace copy guardrails passed')
