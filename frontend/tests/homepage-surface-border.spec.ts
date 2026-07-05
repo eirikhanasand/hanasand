@@ -6,12 +6,12 @@ const sampledSurfaces = [
     ['exposure panel toolbar', '[data-home-exposure-panel-toolbar="true"]'],
     ['exposure table header', '[data-home-exposure-panel-table-header="true"]'],
     ['product status panel', '[data-home-product-status="true"]'],
-    ['workflow coverage panel', '[data-home-workflow-coverage="true"]'],
-    ['workflow coverage header', '[data-home-workflow-coverage-header="true"]'],
+    ['operator paths panel', '[data-home-operator-paths="true"]'],
+    ['operator paths header', '[data-home-operator-paths-header="true"]'],
     ['workflow coverage table header', '[data-home-workflow-coverage-table-header="true"]'],
-    ['workflow demo panel', '[data-home-workflow-panel="true"]'],
-    ['workflow demo panel header', '[data-home-workflow-panel-header="true"]'],
-    ['workflow demo step', '[data-home-workflow-step="true"]'],
+    ['alert path panel', '[data-home-workflow-panel="true"]'],
+    ['alert path header', '[data-home-workflow-panel-header="true"]'],
+    ['alert path step', '[data-home-workflow-step="true"]'],
     ['example card', '[data-home-example-card="true"]'],
     ['example card footer', '[data-home-example-card-footer="true"]'],
     ['solution card', '[data-home-solution-card="true"]'],
@@ -26,6 +26,10 @@ test.describe('homepage surface border theme tokens', () => {
 
             await page.goto('/', { waitUntil: 'domcontentloaded' })
             await expect(page.locator('[data-home-exposure-panel="true"]')).toBeVisible()
+            await expect(page.locator('body')).not.toContainText(/coverage\s+\d+\/\d+\s+customer paths live/i)
+            await expect(page.locator('body')).not.toContainText(/customer routes\s+activating/i)
+            await expect(page.locator('body')).not.toContainText(/bloom filter/i)
+            await expect(page.locator('body')).not.toContainText(/\b(readiness|proof|receipt|contract|control room|named examples|dashboard slop)\b/i)
 
             const report = await page.evaluate((surfaces) => {
                 function normalizeColor(value: string) {

@@ -406,10 +406,9 @@ function HomeOperatorPaths() {
                         >
                             <div className='min-w-0'>
                                 <p className='wrap-break-word font-semibold text-ui-text'>{item.label}</p>
-                                <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{item.state}</p>
                             </div>
                             <span className='w-fit rounded-full border border-ui-primary/30 bg-ui-primary/10 px-2.5 py-1 text-xs font-semibold text-ui-primary'>
-                                Open
+                                {item.state}
                             </span>
                             <p className='min-w-0 wrap-break-word text-ui-muted'>{item.value}</p>
                             <Link href={item.href} className='inline-flex min-h-9 min-w-20 w-fit items-center justify-center px-3 py-2 text-sm font-semibold text-ui-primary hover:text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/20 md:justify-self-end'>
