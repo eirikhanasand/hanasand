@@ -127,6 +127,8 @@ for (const token of [
     'Prepare starter list',
     'No saved terms yet. Prepare a starter list or paste customer-owned company, domain, supplier, brand, or product terms.',
     'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.',
+    'webhookUrl: webhookConfigured ? webhookUrl.trim() : undefined',
+    'Enter an HTTPS webhook URL or open an organization with a saved delivery destination before sending queued alerts.',
     'data-dwm-inline-webhook',
     'disabledReason',
 ]) {

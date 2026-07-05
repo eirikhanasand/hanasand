@@ -518,6 +518,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     }
 
     async function deliverWebhooks() {
+        const disabledReason = webhookSendDisabledReason
+        if (disabledReason) {
+            setResult({ ok: false, message: disabledReason, actionHref: '#dwm-inline-webhook', actionLabel: 'Add endpoint' })
+            focusWebhookInput(false)
+            return
+        }
         setBusyAction('delivery')
         setResult(null)
 
@@ -525,6 +531,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const delivery = await postJson('/api/dwm/webhooks/deliver', {
                 ...scope,
                 limit: 25,
+                webhookUrl: webhookConfigured ? webhookUrl.trim() : undefined,
             })
             if (!delivery.ok) throw new Error(delivery.message)
             const attemptedCount = typeof delivery.attemptedCount === 'number' ? delivery.attemptedCount : 0
@@ -570,10 +577,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
     }
 
-    function focusWebhookInput() {
+    function focusWebhookInput(updateResult = true) {
         webhookInputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
         webhookInputRef.current?.focus()
-        setResult({ ok: true, message: 'Paste an HTTPS endpoint, then test the delivery destination.', actionHref: '#dwm-inline-webhook', actionLabel: 'Add endpoint' })
+        if (updateResult) {
+            setResult({ ok: true, message: 'Paste an HTTPS endpoint, then test the delivery destination.', actionHref: '#dwm-inline-webhook', actionLabel: 'Add endpoint' })
+        }
     }
 
     function seedStarterWatchlist() {
@@ -600,6 +609,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const sourceDisabledReason = sourceReady ? '' : 'Add a public Telegram handle or t.me URL first.'
     const claimDisabledReason = claimReady ? '' : 'Add the actor name and affected company before ingesting evidence.'
     const webhookTestDisabledReason = webhookConfigured ? '' : 'Enter an HTTPS webhook URL before testing delivery.'
+    const webhookSendDisabledReason = webhookConfigured || organizationId ? '' : 'Enter an HTTPS webhook URL or open an organization with a saved delivery destination before sending queued alerts.'
     const routeQueue = [
         {
             id: 'full_route',
@@ -713,7 +723,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         />
                     </label>
                     <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test destination</WorkflowButton>
-                    <WorkflowButton busy={busyAction === 'delivery'} disabled={busy} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send queued</WorkflowButton>
+                    <WorkflowButton busy={busyAction === 'delivery'} disabled={busy || Boolean(webhookSendDisabledReason)} disabledReason={webhookSendDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send queued</WorkflowButton>
                     <p className='text-xs leading-5 text-ui-subtle lg:col-span-3'>
                         {webhookConfigured ? 'Delivery actions use the staged endpoint for dry-runs and queued alert sends.' : 'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.'}
                     </p>
@@ -745,7 +755,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         <WorkflowButton busy={busyAction === 'telegram-pack'} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={expandTelegramCoverage}>Expand Telegram</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'darkweb'} disabled={busy} icon={<ShieldCheck className='h-4 w-4' />} onClick={approveDarkwebMetadata}>Approve metadata</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'source-case'} disabled={busy || Boolean(watchlistDisabledReason)} disabledReason={watchlistDisabledReason || undefined} icon={<ShieldCheck className='h-4 w-4' />} onClick={runSourcePackToCase}>Run to case</WorkflowButton>
-                        <WorkflowButton busy={busyAction === 'delivery'} disabled={busy} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
+                        <WorkflowButton busy={busyAction === 'delivery'} disabled={busy || Boolean(webhookSendDisabledReason)} disabledReason={webhookSendDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
                         {starterTermsActive ? <WorkflowButton busy={false} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={seedStarterWatchlist}>Prepare starter list</WorkflowButton> : null}
                     </div>

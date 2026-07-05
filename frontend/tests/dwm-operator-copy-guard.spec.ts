@@ -21,6 +21,8 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     expect(workflowActions).toContain('data-dwm-workflow-result-action=\'true\'')
     expect(workflowActions).toContain('deliverySetupHref(organizationId, alert.id, caseId || undefined)')
     expect(workflowActions).toContain('Configure or test a destination before sending customer notification.')
+    expect(workflowActions).toContain('webhookUrl: webhookConfigured ? webhookUrl.trim() : undefined')
+    expect(workflowActions).toContain('Enter an HTTPS webhook URL or open an organization with a saved delivery destination before sending queued alerts.')
     expect(workflowActions).toContain('id=\'dwm-inline-webhook\'')
     expect(workflowActions).toContain('alert linked')
     expect(workflowActions).toContain('data-dwm-command-disabled-reason=\'true\'')
