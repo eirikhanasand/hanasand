@@ -442,9 +442,9 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                             <option value='organization'>Org</option>
                             <option value='user'>User</option>
                         </select>
-                        <input className={inputClass} name='targetId' placeholder='Organization or user id' required />
+                        <input className={inputClass} name='targetId' placeholder='Organization or user ID' required />
                     </div>
-                    <input className={inputClass} name='context' placeholder='Case or customer context' />
+                    <input className={inputClass} name='context' placeholder='Support case or customer context' />
                     <textarea className={textAreaClass} name='reason' placeholder='Audit reason with support case or requester' minLength={10} required />
                     <button className={primaryButton} disabled={submitting === 'inspect'} type='submit'>{submitting === 'inspect' ? 'Inspecting...' : 'Inspect access'}</button>
                 </form>
@@ -507,9 +507,9 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                 </div>
                 <form className='grid gap-2' onSubmit={submitImpersonation}>
                     <div className='grid gap-2 sm:grid-cols-2'>
-                        <input className={inputClass} name='targetId' placeholder='Target user id' required />
-                        <input className={inputClass} name='organizationId' placeholder='Organization id' />
-                        <input className={inputClass} name='supportSessionId' placeholder='Support session id' />
+                        <input className={inputClass} name='targetId' placeholder='Target user ID' required />
+                        <input className={inputClass} name='organizationId' placeholder='Organization ID' />
+                        <input className={inputClass} name='supportSessionId' placeholder='Support session ID' />
                         <select className={inputClass} name='durationMinutes' defaultValue='30' required>
                             <option value='15'>15 minutes</option>
                             <option value='30'>30 minutes</option>
@@ -536,7 +536,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                 <details className='rounded-md border border-ui-border bg-ui-canvas'>
                     <summary className='cursor-pointer list-none px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/20'>End current session</summary>
                     <form className='grid gap-2 border-t border-ui-border p-3' onSubmit={stopImpersonation}>
-                        <input className={inputClass} name='context' placeholder='Stop context' />
+                        <input className={inputClass} name='context' placeholder='Session close context' />
                         <textarea className={textAreaClass} name='reason' placeholder='Stop reason with support case or requester' minLength={10} required />
                         <button className={secondaryButton} disabled={submitting === 'stop'} type='submit'>{submitting === 'stop' ? 'Ending...' : 'End current session'}</button>
                     </form>
@@ -557,16 +557,16 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                 </div>
                 <form className='grid gap-2' onSubmit={submitRecovery}>
                     <div className='grid gap-2 sm:grid-cols-2'>
-                        <input className={inputClass} name='organizationId' placeholder='Organization id' required />
+                        <input className={inputClass} name='organizationId' placeholder='Organization ID' required />
                         <input className={inputClass} name='email' placeholder='Recovery email' required type='email' />
-                        <input className={inputClass} name='targetUserId' placeholder='User id' />
+                        <input className={inputClass} name='targetUserId' placeholder='Target user ID' />
                         <select className={inputClass} name='role' defaultValue='admin'>
                             <option value='admin'>Admin</option>
                             <option value='member'>Member</option>
                         </select>
                     </div>
-                    <input className={inputClass} name='caseId' placeholder='Case id' />
-                    <input className={inputClass} name='context' placeholder='Context' />
+                    <input className={inputClass} name='caseId' placeholder='Support case ID' />
+                    <input className={inputClass} name='context' placeholder='Recovery context' />
                     <textarea className={textAreaClass} name='reason' placeholder='Audit reason with support case or requester' minLength={10} required />
                     <label className='flex items-center gap-2 text-sm text-ui-muted'>
                         <input className='h-4 w-4 accent-ui-primary' name='approvalRequired' type='checkbox' />
@@ -593,13 +593,13 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                 <h3 className='text-sm font-semibold text-ui-text'>Recovery decision</h3>
                 <form className='grid gap-2' onSubmit={submitDecision}>
                     <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]'>
-                        <input className={inputClass} name='requestId' placeholder='Recovery request id' required />
+                        <input className={inputClass} name='requestId' placeholder='Recovery request ID' required />
                         <select className={inputClass} name='action' defaultValue='approve'>
                             <option value='approve'>Approve</option>
                             <option value='deny'>Deny</option>
                         </select>
                     </div>
-                    <input className={inputClass} name='context' placeholder='Decision context' />
+                    <input className={inputClass} name='context' placeholder='Review context' />
                     <textarea className={textAreaClass} name='reason' placeholder='Approval or denial reason' minLength={10} required />
                     <button className={secondaryButton} disabled={submitting === 'decision'} type='submit'>{submitting === 'decision' ? 'Recording...' : 'Record decision'}</button>
                 </form>
@@ -621,8 +621,8 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                 <h3 className='text-sm font-semibold text-ui-text'>Recovery queue</h3>
                 <form className='grid gap-2' onSubmit={submitSearch}>
                     <div className='grid gap-2 sm:grid-cols-2'>
-                        <input className={inputClass} name='request' placeholder='Request id' />
-                        <input className={inputClass} name='org' placeholder='Organization id' />
+                        <input className={inputClass} name='request' placeholder='Recovery request ID' />
+                        <input className={inputClass} name='org' placeholder='Organization ID' />
                         <select className={inputClass} name='status' defaultValue=''>
                             <option value=''>Status</option>
                             <option value='pending_approval'>Pending</option>
