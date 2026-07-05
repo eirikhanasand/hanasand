@@ -488,11 +488,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             await navigate(target)
             await dismissCookieOverlays(page).catch(() => undefined)
             await sendFrame(true, 'initial_target')
-            const primaryEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
-            await captureProfileTools(context, message.profileTools || [], target, primaryEvidence?.deobfuscationTasks || [])
-            frameTimer = setInterval(() => {
-                void sendFrame(false)
-            }, FRAME_INTERVAL_MS)
             send({
                 type: 'ready',
                 sessionId,
@@ -503,6 +498,11 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 run: browserRun.run,
                 quota: browserRun.quota,
             })
+            frameTimer = setInterval(() => {
+                void sendFrame(false)
+            }, FRAME_INTERVAL_MS)
+            const primaryEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
+            await captureProfileTools(context, message.profileTools || [], target, primaryEvidence?.deobfuscationTasks || [])
         } catch (error) {
             await cleanup()
             throw error
@@ -536,7 +536,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         || blockerSummary.verdict === 'clean'
                     const blocker = `${readiness.blocker || 'provider-capture-blocked'}`
                     const isBlockerWithNoData = /provider-blocked-(?:urlquery|virustotal|generic)|provider-result-timeout/.test(blocker) && !hasParsedProviderResult
-                    const isHardBlocker = blocker === 'anti-bot-challenge' || /cloudflare-or-challenge/.test(blocker)
+                    const isHardBlocker = /cloudflare-or-challenge/.test(blocker)
                     send({
                         type: 'tool_capture',
                         sessionId,
