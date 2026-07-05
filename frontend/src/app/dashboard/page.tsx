@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { BellRing, Building2, ListChecks, Radar } from 'lucide-react'
 import { DashboardPage } from '@/components/dashboard/ui'
-import { safeAlertSummary } from '@/utils/dwm/display'
+import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import type { DwmAlert, DwmAlertAnalystAction, DwmAlertAnalystActionReadiness, DwmSeverity } from '@/utils/dwm/product'
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
@@ -629,7 +629,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             captureMode: item.captureMode.replaceAll('_', ' '),
             redactionState: item.redactionState.replaceAll('_', ' '),
             contentHash: item.contentHash,
-            excerpt: item.excerpt,
+            excerpt: safeEvidenceExcerpt(item.excerpt),
             observedAt: item.observedAt || item.firstSeenAt || alert.firstSeenAt,
             provenance: item.provenance ? `${item.provenance.sourceId} · ${item.provenance.captureId} · ${item.provenance.captureMode}` : `${item.sourceFamily.replaceAll('_', ' ')} · ${alert.webhookDelivery.dedupeKey}`,
             confidence: alert.confidence,
