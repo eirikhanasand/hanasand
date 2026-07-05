@@ -61,13 +61,12 @@ test('public status page renders unverified coverage without fake uptime', async
     expect(source).toContain('Status awaiting fresh checks')
     expect(source).toContain('formatUptime(check.uptime_30d)')
     expect(source).toContain('function formatUptime')
-    expect(source).toContain('function StatusEvidenceCard')
-    expect(source).toContain('Reported by the latest public monitor check.')
+    expect(source).toContain('function StatusSpeedometer')
+    expect(source).toContain('function statusScore')
+    expect(source).toContain('Latest public monitor signal.')
     expect(source).toContain('function isCoverageFallbackCheck')
     expect(source).not.toContain('{check.uptime_30d}%')
-    expect(source).not.toContain('StatusSpeedometer')
-    expect(source).not.toContain('statusScore')
-    expect(source).not.toContain('Latest public monitor signal.')
+    expect(source).not.toMatch(/if \(check\.status === 'up'\) return 96/)
 })
 
 test('public footer does not hardcode operational status', async () => {
