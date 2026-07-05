@@ -32,7 +32,7 @@ export default async function DashboardDwmPage({
     const operations = operationsResult.data
     const savedAlerts = alertsResult.data
     const deliveries = deliveriesResult.data
-    const alerts = savedAlerts.length ? savedAlerts : snapshot.alerts
+    const alerts = mergeDwmAlerts(savedAlerts, snapshot.alerts)
     const dataHealth = {
         snapshot: snapshotResult,
         operations: operationsResult,
@@ -258,6 +258,42 @@ type DwmOperationsSnapshot = {
 type DwmAlertInboxItem = DwmProductSnapshot['alerts'][number] & {
     deliveryState?: string
     workflowNote?: string
+    provenance?: {
+        captureIds?: string[]
+        matchedEvidenceIds?: string[]
+        sourceIds?: string[]
+    }
+    sourceProvenanceSummary?: {
+        captureIds?: string[]
+        generationEvidenceWindow?: {
+            captureIds?: string[]
+        }
+    }
+}
+
+function mergeDwmAlerts(savedAlerts: DwmAlertInboxItem[], snapshotAlerts: DwmProductSnapshot['alerts']): DwmAlertInboxItem[] {
+    if (!savedAlerts.length) return snapshotAlerts
+    const snapshotById = new Map(snapshotAlerts.map(alert => [alert.id, alert]))
+    const merged = savedAlerts.map(alert => {
+        const snapshotAlert = snapshotById.get(alert.id) as DwmAlertInboxItem | undefined
+        if (!snapshotAlert) return alert
+        return {
+            ...snapshotAlert,
+            ...alert,
+            evidence: alert.evidence.length ? alert.evidence : snapshotAlert.evidence,
+            provenance: mergeObject(snapshotAlert.provenance, alert.provenance),
+            sourceProvenanceSummary: mergeObject(snapshotAlert.sourceProvenanceSummary, alert.sourceProvenanceSummary),
+        }
+    })
+    const savedIds = new Set(savedAlerts.map(alert => alert.id))
+    return [...merged, ...snapshotAlerts.filter(alert => !savedIds.has(alert.id))]
+}
+
+function mergeObject<T>(fallback: T, override: T): T {
+    return {
+        ...(typeof fallback === 'object' && fallback ? fallback : {}),
+        ...(typeof override === 'object' && override ? override : {}),
+    } as T
 }
 
 type DwmDeliveryItem = {

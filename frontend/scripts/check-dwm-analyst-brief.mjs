@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('../src/app/dashboard/dwm/dwm-analyst-portal.tsx', import.meta.url), 'utf8')
+const pageSource = readFileSync(new URL('../src/app/dashboard/dwm/page.tsx', import.meta.url), 'utf8')
 const workflowSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-workflow-actions.tsx', import.meta.url), 'utf8')
 const inboxSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-alert-inbox.tsx', import.meta.url), 'utf8')
 const caseDetailSource = readFileSync(new URL('../src/app/dashboard/dwm/cases/[id]/case-detail-client.tsx', import.meta.url), 'utf8')
@@ -108,6 +109,11 @@ assert.ok(source.includes('workflowContext.hasWebhookRoute ? \'test available\' 
 assert.ok(!source.includes('workflowContext.hasWebhookRoute ? \'test available\' : \'not configured\''), 'DWM selected alert webhook state should not render setup as not configured.')
 assert.ok(source.includes('return \'no retry scheduled\''), 'DWM retry state should use delivery workflow language.')
 assert.ok(!source.includes('return \'none\''), 'DWM retry state should not render dead none labels.')
+assert.ok(pageSource.includes('mergeDwmAlerts(savedAlerts, snapshot.alerts)'), 'DWM page should preserve capture-rich product alerts when saved alert state is thinner.')
+assert.ok(pageSource.includes('evidence: alert.evidence.length ? alert.evidence : snapshotAlert.evidence'), 'DWM saved alerts should fall back to product-snapshot evidence rows.')
+assert.ok(source.includes('const alertCaptureCount = uniqueStrings(alerts.flatMap(alertCaptureIds)).length'), 'DWM workflow counters should use alert capture IDs when operations are unavailable.')
+assert.ok(source.includes('alertWatchlistMatchCount(alerts)'), 'DWM workflow counters should derive visible matches from alerts when operations are unavailable.')
+assert.ok(source.includes('function alertCasePath(alert: PortalAlert)'), 'DWM selected case links should use alert case paths.')
 
 for (const token of [
     'data-dwm-workflow-runbook',

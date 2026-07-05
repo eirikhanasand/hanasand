@@ -17,6 +17,7 @@ type PortalAlert = DwmAlert & {
     organizationId?: string
     caseId?: string
     caseIdCandidate?: string
+    casePath?: string
     replayCount?: number
     lastReplayedAt?: string
     savedAt?: string
@@ -25,13 +26,17 @@ type PortalAlert = DwmAlert & {
         organizationId?: string
         watchlistIds?: string[]
         webhookDestinationIds?: string[]
+        caseId?: string
         caseIdCandidate?: string
+        casePath?: string
         captureIds?: string[]
     }
     webhookContext?: {
         hasWebhookRoute?: boolean
         webhookDestinationIds?: string[]
+        caseId?: string
         caseIdCandidate?: string
+        casePath?: string
         captureIds?: string[]
     }
     provenance?: {
@@ -176,9 +181,10 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
     const latestCaptures = operations?.latestCaptures ?? []
     const activeSourceCount = operations?.counts.activeSourceCount ?? 0
     const sourceCount = operations?.counts.sourceCount ?? 0
-    const captureCount = operations?.counts.captureCount ?? latestCaptures.length
-    const watchlistMatchCount = operations?.counts.watchlistMatchCount || latestCaptureWatchlistMatchCount(latestCaptures)
-    const caseCount = alerts.filter(alert => alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate).length
+    const alertCaptureCount = uniqueStrings(alerts.flatMap(alertCaptureIds)).length
+    const captureCount = operations?.counts.captureCount || latestCaptures.length || alertCaptureCount
+    const watchlistMatchCount = operations?.counts.watchlistMatchCount || latestCaptureWatchlistMatchCount(latestCaptures) || alertWatchlistMatchCount(alerts)
+    const caseCount = alerts.filter(hasAlertCaseLink).length
     const latestRunLabel = operations?.latestRun
         ? `${operations.latestRun.captureCount} captures`
         : activeSourceCount
@@ -780,6 +786,10 @@ function latestCaptureWatchlistMatchCount(captures: OperationsSnapshot['latestCa
     return uniqueStrings(captures.flatMap(capture => capture.matchedWatchTerms)).length
 }
 
+function alertWatchlistMatchCount(alerts: PortalAlert[]) {
+    return uniqueStrings(alerts.map(alert => alert.matchedTerm.value)).length
+}
+
 function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localState, busyAction, actionMessage, onLocalStateChange, onUpdate, onOpenCase, onReplay, onTest, onSend }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
@@ -821,7 +831,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
     const [copiedHash, setCopiedHash] = useState('')
     const evidenceDispositions = localState?.evidenceDispositions ?? {}
     const analystBrief = buildAnalystBrief(alert, evidenceSummary, routingContext, workflowContext)
-    const caseHref = workflowContext.caseId ? caseDetailHref(workflowContext.caseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined
+    const caseHref = workflowContext.casePath || (workflowContext.caseId ? caseDetailHref(workflowContext.caseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined)
     const timeline = buildTimeline(alert, deliveries, {
         localState,
         selectedEvidence,
@@ -1148,7 +1158,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
     const latestDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
     const actualCaseId = alert.caseId
     const caseCandidate = alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
-    const casePath = actualCaseId ? caseDetailHref(actualCaseId, alert.id, workflowContext.organizationId, 'alert_queue') : alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness?.actions?.find(action => action.action === 'case_link' && action.casePath)?.casePath
+    const casePath = workflowContext.casePath || (actualCaseId ? caseDetailHref(actualCaseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined)
     const canOpenCase = Boolean(alert.id && alertCaptureIds(alert).length)
     const routeControlLabel = actualCaseId
         ? latestDelivery
@@ -1749,8 +1759,9 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const replayReason = actionUnavailableReason(alert, 'replay')
     const deliveryReason = hasDeliveryRoute ? actionUnavailableReason(alert, 'deliver') : 'Configure a webhook destination before testing or sending.'
     const closeReason = actionUnavailableReason(alert, 'close')
-    const caseId = alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
-    const caseHref = caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert), 'alert_queue') : undefined
+    const casePath = alertCasePath(alert)
+    const caseId = alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseId || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseId || alert.webhookContext?.caseIdCandidate || caseIdFromPath(casePath)
+    const caseHref = casePath || (caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert), 'alert_queue') : undefined)
     const caseReady = Boolean(alert.id && alertCaptureIds(alert).length)
     const caseReason = caseReady ? undefined : 'Evidence must include a source or capture record before opening a case.'
     const nextAction = dwmNextOperatorAction({
@@ -1826,7 +1837,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                 )}
             </div>
             <p className='wrap-break-word text-xs font-semibold text-ui-muted'>
-                Owner {assignee} · {stateLabel(alert.reviewState)} · {latestDelivery ? `${stateLabel(latestDelivery.status)} ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'destination configured' : 'destination needed'} · {alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || 'case is being prepared'}
+                Owner {assignee} · {stateLabel(alert.reviewState)} · {latestDelivery ? `${stateLabel(latestDelivery.status)} ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'destination configured' : 'destination needed'} · {caseId || 'case is being prepared'}
             </p>
             <div className='grid gap-2'>
                 <div className='flex flex-wrap gap-1.5'>
@@ -2523,16 +2534,29 @@ function selectedWorkflowContext(alert: PortalAlert, deliveries: DeliveryItem[])
     const organizationId = alert.organizationId || workflowContext?.organizationId
     const watchlistIds = workflowContext?.watchlistIds || []
     const webhookDestinationIds = webhookContext?.webhookDestinationIds || workflowContext?.webhookDestinationIds || []
-    const caseId = alert.caseId || alert.caseIdCandidate || workflowContext?.caseIdCandidate || webhookContext?.caseIdCandidate
+    const casePath = alertCasePath(alert)
+    const caseId = alert.caseId || alert.caseIdCandidate || workflowContext?.caseId || workflowContext?.caseIdCandidate || webhookContext?.caseId || webhookContext?.caseIdCandidate || caseIdFromPath(casePath)
     const lastDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
     return {
         organizationId,
         watchlistIds,
         webhookDestinationIds,
         caseId,
+        casePath,
         hasWebhookRoute: Boolean(webhookContext?.hasWebhookRoute || webhookDestinationIds.length || alert.webhookDelivery.dedupeKey),
         lastDelivery,
     }
+}
+
+function hasAlertCaseLink(alert: PortalAlert) {
+    return Boolean(alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseId || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseId || alert.webhookContext?.caseIdCandidate || alertCasePath(alert))
+}
+
+function alertCasePath(alert: PortalAlert) {
+    return alert.casePath
+        || alert.workflowContext?.casePath
+        || alert.webhookContext?.casePath
+        || alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness?.actions?.find(action => action.action === 'case_link' && action.casePath)?.casePath
 }
 
 function stateWeight(alert: PortalAlert) {
@@ -2707,6 +2731,16 @@ function evidenceReferenceState(item: PortalAlert['evidence'][number]) {
     const ids = evidenceCaptureIds(item)
     if (ids.length) return ids[0]
     return 'capture pending'
+}
+
+function caseIdFromPath(path?: string) {
+    const match = path?.match(/\/cases\/([^/?#]+)/) || path?.match(/\/v1\/cases\/([^/?#]+)/)
+    if (!match?.[1]) return undefined
+    try {
+        return decodeURIComponent(match[1])
+    } catch {
+        return match[1]
+    }
 }
 
 function sourceReferenceState(item: PortalAlert['evidence'][number]) {
