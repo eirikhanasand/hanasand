@@ -63,6 +63,7 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
 
     const nowMs = now ?? Date.now()
     const visibleChecks = currentStatus.checks.filter((check) => isCurrentPublicCheck(check, nowMs))
+    const hasCoverageFallback = visibleChecks.some(isCoverageFallbackCheck)
     const { endpointCount, domainCount, liveSurfaceCount } = trafficSummary
     const statusTone = {
         up: 'border-ui-success bg-ui-success/15 text-ui-success',
@@ -86,7 +87,7 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                             <span className='text-xs font-semibold uppercase'>Overall health</span>
                             <span className='rounded-md bg-ui-panel px-2 py-1 text-xs font-semibold'>{currentStatus.overall.toUpperCase()}</span>
                         </div>
-                        <div className='text-2xl font-semibold'>{statusHeadline(currentStatus.overall)}</div>
+                        <div className='text-2xl font-semibold'>{statusHeadline(currentStatus.overall, hasCoverageFallback)}</div>
                         <p className='text-sm leading-6'>
                             Checked {relativeTime(latestCheckedAt(currentStatus), now)}.
                         </p>
@@ -119,7 +120,7 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                                     <div className='flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
                                         <HeartPulse className='h-4 w-4 shrink-0 text-ui-success' />
                                         <span>Uptime</span>
-                                        <span className='ml-auto font-semibold text-ui-text'>{check.uptime_30d}%</span>
+                                        <span className='ml-auto font-semibold text-ui-text'>{formatUptime(check.uptime_30d)}</span>
                                     </div>
                                     <div className='flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
                                         <Timer className='h-4 w-4 shrink-0 text-ui-primary' />
@@ -195,10 +196,24 @@ function latestCheckedAt(status: ServiceStatus) {
     return newestCheck || status.generated_at
 }
 
-function statusHeadline(status: ServiceStatus['overall']) {
+function statusHeadline(status: ServiceStatus['overall'], hasCoverageFallback = false) {
     if (status === 'up') return 'All systems operational'
+    if (hasCoverageFallback) return 'Status awaiting fresh checks'
     if (status === 'degraded') return 'Some services are slower than usual'
     return 'Service interruption'
+}
+
+function formatUptime(value: string) {
+    const numeric = Number(value)
+    if (Number.isFinite(numeric)) {
+        return `${value}%`
+    }
+
+    return value || 'unverified'
+}
+
+function isCoverageFallbackCheck(check: ServiceStatus['checks'][number]) {
+    return check.service === 'Status coverage' && check.check_name === 'Public monitor freshness'
 }
 
 function SummaryCard({ icon, label, title, body }: { icon: React.ReactNode, label: string, title: string, body: string }) {
@@ -233,6 +248,7 @@ function publicStatusLabel(value: string) {
         .replace(/prod[-_\s]*rate[-_\s]*limit/gi, 'rate limits')
         .replace(/internal/gi, 'service')
         .replace(/api[-_\s]*index/gi, 'API')
+        .replace(/\bapi\b/gi, 'API')
         .replace(/share[-_\s]*page/gi, 'workspace links')
         .replace(/delete[-_\s]*account/gi, 'account deletion')
         .replace(/user[-_\s]*creation/gi, 'account creation')
@@ -240,5 +256,7 @@ function publicStatusLabel(value: string) {
         .replace(/\s+/g, ' ')
         .trim()
 
-    return normalized.replace(/\b\w/g, (char) => char.toUpperCase())
+    return normalized
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+        .replace(/\bApi\b/g, 'API')
 }

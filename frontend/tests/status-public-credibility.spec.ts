@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import { publicStatusCoverageCheck, toPublicServiceStatus } from '@/utils/status/publicStatus'
 import type { ServiceStatus } from '@/utils/status/getStatus'
+
+const root = process.cwd()
 
 test('public status does not claim operational health without fresh public checks', () => {
     const status = toPublicServiceStatus({
@@ -49,4 +53,14 @@ test('public status fallback check is reusable by API and page fallbacks', () =>
         status: 'degraded',
         checked_at: '2026-07-05T00:00:00.000Z',
     })
+})
+
+test('public status page renders unverified coverage without fake uptime', async () => {
+    const source = await readFile(path.join(root, 'src/app/status/pageClient.tsx'), 'utf8')
+
+    expect(source).toContain('Status awaiting fresh checks')
+    expect(source).toContain('formatUptime(check.uptime_30d)')
+    expect(source).toContain('function formatUptime')
+    expect(source).toContain('function isCoverageFallbackCheck')
+    expect(source).not.toContain('{check.uptime_30d}%')
 })
