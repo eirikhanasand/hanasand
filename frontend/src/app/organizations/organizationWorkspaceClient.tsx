@@ -2788,6 +2788,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
 }
 
 function WatchlistDestinationSummary({ item, delivery }: { item: WatchlistItem, delivery?: DeliveryRow | null }) {
+    const endpoint = sanitizeOrganizationDisplayCopy(item.webhookEndpointHint) || compactReference(item.webhookEndpointHash, 'route')
     return (
         <div className='grid gap-1 rounded-lg border border-ui-border bg-ui-panel p-3 text-xs dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex items-center justify-between gap-2'>
@@ -2795,6 +2796,7 @@ function WatchlistDestinationSummary({ item, delivery }: { item: WatchlistItem, 
                 <StatusPill status={destinationConfigured(item) ? 'configured' : 'route needed'} />
             </div>
             <span className='truncate text-ui-muted dark:text-ui-muted'>{destinationDisplayState(item)}</span>
+            {endpoint && <span className='truncate text-ui-muted dark:text-ui-muted'>Route: {endpoint}</span>}
             <span className='truncate text-ui-muted dark:text-ui-muted'>{delivery ? `Last ${delivery.dryRun ? 'test' : 'delivery'} ${delivery.status || 'attempted'}` : 'No delivery history yet'}</span>
             <span className='truncate text-ui-muted dark:text-ui-muted'>History: {delivery ? formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt) : 'waiting for test'}</span>
         </div>
