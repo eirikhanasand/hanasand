@@ -444,6 +444,7 @@ test('organization workspace empty state renders create path', async ({ context,
 
 test('organization workspace renders searchable shared watchlists', async ({ context, page, baseURL }, testInfo) => {
     const origin = baseURL || 'http://127.0.0.1:3000'
+    const inviteCreates: Array<{ emails?: string[], role?: string }> = []
     const inviteActions: Array<{ inviteId: string, action: string }> = []
     const memberRoleChanges: Array<{ userId: string, role: string }> = []
     const memberRemovals: string[] = []
@@ -497,6 +498,12 @@ test('organization workspace renders searchable shared watchlists', async ({ con
         await route.fulfill({ json: { ok: true } })
     })
     await page.route('**/api/organizations/org_acme/invites', async route => {
+        if (route.request().method() === 'POST') {
+            const body = await route.request().postDataJSON() as { emails?: string[], role?: string }
+            inviteCreates.push({ emails: body.emails, role: body.role })
+            await route.fulfill({ json: { ok: true, invites: fixtureInvites } })
+            return
+        }
         await route.fulfill({ json: { invites: fixtureInvites } })
     })
     await page.route('**/api/organizations/org_acme/invites/*/actions', async route => {
@@ -617,6 +624,10 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(page.getByRole('button', { name: /Acme Security owner/ })).toBeVisible()
     await expect(page.locator('[data-org-invite-filter-strip="true"]')).toBeVisible()
     await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('2/2 shown')
+    await page.locator('#invites').getByLabel('Emails').fill('new.member@acme.test')
+    await page.locator('#invites').getByRole('button', { name: 'Send invites' }).click()
+    expect(inviteCreates).toContainEqual({ emails: ['new.member@acme.test'], role: 'member' })
+    await expect(page.getByText('1 member invite sent.')).toBeVisible()
     await page.getByLabel('Find invite').fill('revoked')
     await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('1/2 shown')
     await expect(page.locator('#invites')).toContainText('former@acme.test')
