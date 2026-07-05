@@ -2118,6 +2118,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                 const roleChanged = selectedRole !== member.role
                                 const canMutateMember = canManage && memberCanMutate(member)
                                 const memberMutationReason = !canManage ? 'Owner or admin required' : !memberCanMutate(member) ? 'Owner role cannot be changed here' : ''
+                                const memberAccess = canMutateMember ? 'Role editable' : member.role === 'owner' ? 'Owner locked' : 'Read-only'
                                 const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                 return (
                                     <article
@@ -2143,6 +2144,9 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                             <StatusPill status={member.status} />
                                         </div>
                                         <div className='grid gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
+                                            <span className='w-fit rounded-full border border-ui-border px-2 py-0.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-member-access-state='true'>
+                                                {memberAccess}
+                                            </span>
                                             {canMutateMember ? (
                                                 <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
                                                     <select className={compactSelectClass} value={selectedRole} disabled={Boolean(busy)} onChange={event => setPendingRoles(current => ({ ...current, [member.userId]: event.target.value as OrganizationRole }))}>
@@ -2188,6 +2192,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                     const roleChanged = selectedRole !== member.role
                                     const canMutateMember = canManage && memberCanMutate(member)
                                     const memberMutationReason = !canManage ? 'Owner or admin required' : !memberCanMutate(member) ? 'Owner role cannot be changed here' : ''
+                                    const memberAccess = canMutateMember ? 'Role editable' : member.role === 'owner' ? 'Owner locked' : 'Read-only'
                                     const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                     return (
                                         <tr
@@ -2238,6 +2243,9 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                             <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                                 <div className='grid gap-1'>
                                                     <StatusPill status={member.status} />
+                                                    <span className='w-fit rounded-full border border-ui-border px-2 py-0.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-member-access-state='true'>
+                                                        {memberAccess}
+                                                    </span>
                                                     <RowStatus message={rowMessages[`member-${member.userId}`]} />
                                                 </div>
                                             </td>
