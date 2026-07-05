@@ -62,9 +62,137 @@ const DEFAULT_WIDTH = 1280
 const DEFAULT_HEIGHT = 760
 const MAX_DURATION_MS = 60 * 60 * 1000
 const FRAME_INTERVAL_MS = 900
+const DEFAULT_REGULAR_SANDBOX_MAX_SESSIONS = 10
+
+type SandboxAdmissionStatus = {
+    activeSessions: number
+    queuedSessions: number
+    maxSessions: number
+    queuePosition?: number
+}
+type SandboxAdmissionRelease = {
+    release: () => void
+    status: SandboxAdmissionStatus
+}
+type SandboxAdmissionRequest = {
+    sessionId: string
+    send: (payload: Record<string, unknown>) => void
+    resolve: (release: SandboxAdmissionRelease) => void
+    cancelled: boolean
+}
+
+let activeRegularSandboxSessions = 0
+const regularSandboxQueue: SandboxAdmissionRequest[] = []
 
 function allowLocalSandboxTargets() {
     return process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS === '1'
+}
+
+function regularSandboxMaxSessions() {
+    const configured = Number(process.env.BROWSER_SANDBOX_MAX_SESSIONS)
+    if (!Number.isFinite(configured)) return DEFAULT_REGULAR_SANDBOX_MAX_SESSIONS
+    return Math.max(1, Math.min(100, Math.floor(configured)))
+}
+
+function currentRegularSandboxAdmissionStatus(queuePosition?: number): SandboxAdmissionStatus {
+    return {
+        activeSessions: activeRegularSandboxSessions,
+        queuedSessions: regularSandboxQueue.length,
+        maxSessions: regularSandboxMaxSessions(),
+        queuePosition,
+    }
+}
+
+function requestRegularSandboxAdmission(sessionId: string, send: (payload: Record<string, unknown>) => void) {
+    const maxSessions = regularSandboxMaxSessions()
+    if (activeRegularSandboxSessions < maxSessions) {
+        activeRegularSandboxSessions += 1
+        return {
+            promise: Promise.resolve({
+                release: releaseRegularSandboxAdmission(),
+                status: currentRegularSandboxAdmissionStatus(),
+            }),
+            cancel: () => undefined,
+        }
+    }
+
+    let entry: SandboxAdmissionRequest
+    const promise = new Promise<SandboxAdmissionRelease>((resolve) => {
+        entry = { sessionId, send, resolve, cancelled: false }
+        regularSandboxQueue.push(entry)
+        sendRegularSandboxQueueStatus(entry)
+        broadcastRegularSandboxQueuePositions()
+    })
+
+    return {
+        promise,
+        cancel: () => {
+            entry.cancelled = true
+            const index = regularSandboxQueue.indexOf(entry)
+            if (index >= 0) {
+                regularSandboxQueue.splice(index, 1)
+                broadcastRegularSandboxQueuePositions()
+            }
+        },
+    }
+}
+
+function releaseRegularSandboxAdmission() {
+    let released = false
+    return () => {
+        if (released) return
+        released = true
+        activeRegularSandboxSessions = Math.max(0, activeRegularSandboxSessions - 1)
+        drainRegularSandboxQueue()
+    }
+}
+
+function drainRegularSandboxQueue() {
+    const maxSessions = regularSandboxMaxSessions()
+    while (activeRegularSandboxSessions < maxSessions && regularSandboxQueue.length) {
+        const entry = regularSandboxQueue.shift()
+        if (!entry || entry.cancelled) continue
+        activeRegularSandboxSessions += 1
+        const status = currentRegularSandboxAdmissionStatus()
+        entry.send({
+            type: 'status',
+            state: 'capacity_admitted',
+            sessionId: entry.sessionId,
+            capacity: status,
+            message: 'Sandbox capacity is available. Starting this queued browser now.',
+        })
+        entry.resolve({
+            release: releaseRegularSandboxAdmission(),
+            status,
+        })
+    }
+    broadcastRegularSandboxQueuePositions()
+}
+
+function sendRegularSandboxQueueStatus(entry: SandboxAdmissionRequest) {
+    const position = regularSandboxQueue.indexOf(entry) + 1
+    const status = currentRegularSandboxAdmissionStatus(position > 0 ? position : undefined)
+    entry.send({
+        type: 'status',
+        state: 'capacity_busy',
+        sessionId: entry.sessionId,
+        capacity: status,
+        message: `All ${status.maxSessions} sandbox slots are busy. This run is queued at position ${status.queuePosition}.`,
+    })
+}
+
+function broadcastRegularSandboxQueuePositions() {
+    for (const [index, entry] of regularSandboxQueue.entries()) {
+        if (entry.cancelled) continue
+        const status = currentRegularSandboxAdmissionStatus(index + 1)
+        entry.send({
+            type: 'status',
+            state: 'capacity_queue_position',
+            sessionId: entry.sessionId,
+            capacity: status,
+            message: `Queued for sandbox capacity. Position ${status.queuePosition} of ${status.queuedSessions}.`,
+        })
+    }
 }
 
 export function handleOnionSessionSocket(connection: WebSocket, sessionId: string, defaultNetwork: 'tor' | 'regular' = 'tor') {
@@ -72,6 +200,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let page: Page | null = null
     let frameTimer: NodeJS.Timeout | null = null
     let closeTimer: NodeJS.Timeout | null = null
+    let cancelAdmission: (() => void) | null = null
+    let releaseAdmission: (() => void) | null = null
     let closed = false
     let lastFrame = ''
     let remoteClipboard = ''
@@ -87,6 +217,10 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
 
     const cleanup = async () => {
         closed = true
+        cancelAdmission?.()
+        cancelAdmission = null
+        releaseAdmission?.()
+        releaseAdmission = null
         if (frameTimer) clearInterval(frameTimer)
         if (closeTimer) clearTimeout(closeTimer)
         frameTimer = null
@@ -189,124 +323,142 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         const network = message.network === 'regular' ? 'regular' : defaultNetwork
         const proxy = network === 'tor' ? process.env.ONION_SESSION_PROXY || process.env.TOR_SOCKS_PROXY || '' : ''
         const durationMs = Math.min(MAX_DURATION_MS, Math.max(60_000, (message.durationMinutes || 15) * 60_000))
+        const admission = network === 'regular' ? requestRegularSandboxAdmission(sessionId, send) : null
+        cancelAdmission = admission?.cancel || null
 
-        send({
-            type: 'status',
-            state: 'launching',
-            sessionId,
-            network,
-            torProxyConfigured: Boolean(proxy),
-            message: network === 'regular'
-                ? 'Launching isolated regular-web browser with a fresh context.'
-                : proxy ? 'Launching isolated browser through configured Tor proxy.' : 'Launching isolated browser without Tor proxy; configure ONION_SESSION_PROXY or TOR_SOCKS_PROXY for onion routing.',
-        })
+        try {
+            const slot = admission ? await admission.promise : null
+            cancelAdmission = null
+            if (slot) {
+                if (closed) {
+                    slot.release()
+                    return
+                }
+                releaseAdmission = slot.release
+            }
 
-        browser = await chromium.launch({
-            headless: true,
-            executablePath: process.env.CHROMIUM_BIN || '/usr/bin/chromium-browser',
-            proxy: proxy ? { server: proxy } : undefined,
-            args: [
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                '--no-first-run',
-                '--no-default-browser-check',
-                '--disable-background-networking',
-            ],
-        })
-        const context = await browser.newContext({
-            viewport: {
-                width: clampNumber(message.width, 640, 2400, DEFAULT_WIDTH),
-                height: clampNumber(message.height, 420, 1600, DEFAULT_HEIGHT),
-            },
-            ignoreHTTPSErrors: true,
-            permissions: network === 'regular' ? [] : ['clipboard-read', 'clipboard-write'],
-        })
-        page = await context.newPage()
-        await page.route('**/*', async (route) => {
-            const requestUrl = route.request().url()
-            const safety = sandboxUrlSafety(requestUrl, { allowLocalTargets: allowLocalSandboxTargets() })
-            if (!safety.ok) {
+            send({
+                type: 'status',
+                state: 'launching',
+                sessionId,
+                network,
+                torProxyConfigured: Boolean(proxy),
+                capacity: slot?.status,
+                message: network === 'regular'
+                    ? 'Launching isolated regular-web browser with a fresh context.'
+                    : proxy ? 'Launching isolated browser through configured Tor proxy.' : 'Launching isolated browser without Tor proxy; configure ONION_SESSION_PROXY or TOR_SOCKS_PROXY for onion routing.',
+            })
+
+            browser = await chromium.launch({
+                headless: true,
+                executablePath: process.env.CHROMIUM_BIN || '/usr/bin/chromium-browser',
+                proxy: proxy ? { server: proxy } : undefined,
+                args: [
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--no-first-run',
+                    '--no-default-browser-check',
+                    '--disable-background-networking',
+                ],
+            })
+            const context = await browser.newContext({
+                viewport: {
+                    width: clampNumber(message.width, 640, 2400, DEFAULT_WIDTH),
+                    height: clampNumber(message.height, 420, 1600, DEFAULT_HEIGHT),
+                },
+                ignoreHTTPSErrors: true,
+                permissions: network === 'regular' ? [] : ['clipboard-read', 'clipboard-write'],
+            })
+            page = await context.newPage()
+            await page.route('**/*', async (route) => {
+                const requestUrl = route.request().url()
+                const safety = sandboxUrlSafety(requestUrl, { allowLocalTargets: allowLocalSandboxTargets() })
+                if (!safety.ok) {
+                    trackNetwork({
+                        kind: 'failed',
+                        url: requestUrl,
+                        method: route.request().method(),
+                        resourceType: route.request().resourceType(),
+                        failure: `blocked unsafe sandbox request: ${safety.reason}`,
+                        at: new Date().toISOString(),
+                    })
+                    send({ type: 'status', state: 'unsafe_request_blocked', url: requestUrl, message: `Blocked unsafe sandbox request: ${safety.reason}.` })
+                    await route.abort('blockedbyclient').catch(() => undefined)
+                    return
+                }
+                await route.continue().catch(() => undefined)
+            })
+            page.on('console', (entry) => send({ type: 'console', level: entry.type(), text: entry.text() }))
+            page.on('pageerror', (error) => send({ type: 'pageerror', message: error.message }))
+            page.on('request', (request) => {
                 trackNetwork({
-                    kind: 'failed',
-                    url: requestUrl,
-                    method: route.request().method(),
-                    resourceType: route.request().resourceType(),
-                    failure: `blocked unsafe sandbox request: ${safety.reason}`,
+                    kind: 'request',
+                    url: request.url(),
+                    method: request.method(),
+                    resourceType: request.resourceType(),
                     at: new Date().toISOString(),
                 })
-                send({ type: 'status', state: 'unsafe_request_blocked', url: requestUrl, message: `Blocked unsafe sandbox request: ${safety.reason}.` })
-                await route.abort('blockedbyclient').catch(() => undefined)
-                return
-            }
-            await route.continue().catch(() => undefined)
-        })
-        page.on('console', (entry) => send({ type: 'console', level: entry.type(), text: entry.text() }))
-        page.on('pageerror', (error) => send({ type: 'pageerror', message: error.message }))
-        page.on('request', (request) => {
-            trackNetwork({
-                kind: 'request',
-                url: request.url(),
-                method: request.method(),
-                resourceType: request.resourceType(),
-                at: new Date().toISOString(),
             })
-        })
-        page.on('response', (response) => {
-            trackNetwork({
-                kind: 'response',
-                url: response.url(),
-                status: response.status(),
-                at: new Date().toISOString(),
+            page.on('response', (response) => {
+                trackNetwork({
+                    kind: 'response',
+                    url: response.url(),
+                    status: response.status(),
+                    at: new Date().toISOString(),
+                })
             })
-        })
-        page.on('requestfailed', (request) => {
-            trackNetwork({
-                kind: 'failed',
-                url: request.url(),
-                method: request.method(),
-                resourceType: request.resourceType(),
-                failure: request.failure()?.errorText || 'request failed',
-                at: new Date().toISOString(),
+            page.on('requestfailed', (request) => {
+                trackNetwork({
+                    kind: 'failed',
+                    url: request.url(),
+                    method: request.method(),
+                    resourceType: request.resourceType(),
+                    failure: request.failure()?.errorText || 'request failed',
+                    at: new Date().toISOString(),
+                })
             })
-        })
-        page.on('download', (download) => {
-            trackNetwork({
-                kind: 'download',
-                url: download.url(),
-                failure: 'download blocked for sandbox safety',
-                at: new Date().toISOString(),
+            page.on('download', (download) => {
+                trackNetwork({
+                    kind: 'download',
+                    url: download.url(),
+                    failure: 'download blocked for sandbox safety',
+                    at: new Date().toISOString(),
+                })
+                void download.cancel().catch(() => undefined)
+                send({ type: 'status', state: 'download_blocked', url: download.url(), message: 'Download blocked for sandbox safety.' })
             })
-            void download.cancel().catch(() => undefined)
-            send({ type: 'status', state: 'download_blocked', url: download.url(), message: 'Download blocked for sandbox safety.' })
-        })
-        page.on('framenavigated', (frame) => {
-            if (frame !== page?.mainFrame()) return
-            send({ type: 'status', state: 'navigated', url: page.url(), sessionId })
-            void sendFrame(true, 'navigation')
-        })
-        page.on('domcontentloaded', () => {
-            send({ type: 'status', state: 'domcontentloaded', url: page?.url(), sessionId, message: 'Captured DOM-ready browser state.' })
-            void sendFrame(true, 'domcontentloaded')
-        })
-        page.on('load', () => {
-            send({ type: 'status', state: 'loaded', url: page?.url(), sessionId, message: 'Captured loaded browser state.' })
-            void sendFrame(true, 'load')
-        })
+            page.on('framenavigated', (frame) => {
+                if (frame !== page?.mainFrame()) return
+                send({ type: 'status', state: 'navigated', url: page.url(), sessionId })
+                void sendFrame(true, 'navigation')
+            })
+            page.on('domcontentloaded', () => {
+                send({ type: 'status', state: 'domcontentloaded', url: page?.url(), sessionId, message: 'Captured DOM-ready browser state.' })
+                void sendFrame(true, 'domcontentloaded')
+            })
+            page.on('load', () => {
+                send({ type: 'status', state: 'loaded', url: page?.url(), sessionId, message: 'Captured loaded browser state.' })
+                void sendFrame(true, 'load')
+            })
 
-        closeTimer = setTimeout(() => {
-            void cleanup()
-            send({ type: 'ended', reason: 'timeout', sessionId })
-            connection.close()
-        }, durationMs)
+            closeTimer = setTimeout(() => {
+                void cleanup()
+                send({ type: 'ended', reason: 'timeout', sessionId })
+                connection.close()
+            }, durationMs)
 
-        await navigate(target)
-        await sendFrame(true, 'initial_target')
-        const primaryEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
-        await captureProfileTools(context, message.profileTools || [], target, primaryEvidence?.deobfuscationTasks || [])
-        frameTimer = setInterval(() => {
-            void sendFrame(false)
-        }, FRAME_INTERVAL_MS)
-        send({ type: 'ready', sessionId, target, network, torProxyConfigured: Boolean(proxy) })
+            await navigate(target)
+            await sendFrame(true, 'initial_target')
+            const primaryEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
+            await captureProfileTools(context, message.profileTools || [], target, primaryEvidence?.deobfuscationTasks || [])
+            frameTimer = setInterval(() => {
+                void sendFrame(false)
+            }, FRAME_INTERVAL_MS)
+            send({ type: 'ready', sessionId, target, network, torProxyConfigured: Boolean(proxy), capacity: currentRegularSandboxAdmissionStatus() })
+        } catch (error) {
+            await cleanup()
+            throw error
+        }
     }
 
     async function captureProfileTools(

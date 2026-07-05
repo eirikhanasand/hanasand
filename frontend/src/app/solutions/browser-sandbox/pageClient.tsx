@@ -1,11 +1,17 @@
 'use client'
 
-import { Check, Clipboard, Globe2, Play, Plus, RotateCcw, ShieldCheck, Square, Trash2 } from 'lucide-react'
+import { Check, Clipboard, Globe2, Hourglass, Play, Plus, RotateCcw, ShieldCheck, Square, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 
-type SessionState = 'prompt' | 'connecting' | 'live' | 'ended'
+type SessionState = 'prompt' | 'queued' | 'connecting' | 'live' | 'ended'
 type SocketState = 'closed' | 'connecting' | 'open' | 'error'
+type SandboxCapacity = {
+    activeSessions: number
+    queuedSessions: number
+    maxSessions: number
+    queuePosition?: number
+}
 type SandboxProfile = {
     id: string
     name: string
@@ -147,6 +153,7 @@ export default function BrowserSandboxPageClient() {
     const [profilesLoaded, setProfilesLoaded] = useState(false)
     const [profileSyncEnabled, setProfileSyncEnabled] = useState(false)
     const [profileSyncState, setProfileSyncState] = useState<'local' | 'loading' | 'synced' | 'saving' | 'error'>('loading')
+    const [capacity, setCapacity] = useState<SandboxCapacity | null>(null)
     const socketRef = useRef<WebSocket | null>(null)
 
     const normalizedTarget = useMemo(() => normalizeTarget(target), [target])
@@ -244,6 +251,7 @@ export default function BrowserSandboxPageClient() {
         setCaptures([])
         setActiveImage(null)
         setActiveUrl(url)
+        setCapacity(null)
         setSessionState('connecting')
         setSocketState('connecting')
         pushEvent(`Launching isolated browser for ${url}.`)
@@ -273,6 +281,7 @@ export default function BrowserSandboxPageClient() {
             const payload = parsePayload(message.data)
             if (!payload) return
             if (payload.type === 'ready') {
+                setCapacity(capacityValue(payload.capacity) || null)
                 setSessionState('live')
                 pushEvent('Regular-web sandbox is live.')
                 return
@@ -316,6 +325,14 @@ export default function BrowserSandboxPageClient() {
                 return
             }
             if (payload.type === 'status') {
+                const statusState = stringValue(payload.state)
+                const nextCapacity = capacityValue(payload.capacity)
+                if (nextCapacity) setCapacity(nextCapacity)
+                if (statusState === 'capacity_busy' || statusState === 'capacity_queue_position') {
+                    setSessionState('queued')
+                } else if (statusState === 'capacity_admitted' || statusState === 'launching') {
+                    setSessionState('connecting')
+                }
                 if (payload.url) setActiveUrl(String(payload.url))
                 pushEvent(String(payload.message || payload.state || 'Browser status updated.'))
                 return
@@ -342,6 +359,7 @@ export default function BrowserSandboxPageClient() {
         setCaptures([])
         setActiveImage(null)
         setActiveUrl('')
+        setCapacity(null)
         pushEvent('Sandbox reset.')
     }, [pushEvent])
 
@@ -416,6 +434,11 @@ export default function BrowserSandboxPageClient() {
                                 </button>
                             </div>
                             <ProfilePicker profiles={profiles} selectedProfileId={selectedProfileId} onSelect={setSelectedProfileId} onDelete={deleteProfile} />
+                            <div className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-3 text-xs text-ui-muted md:grid-cols-3'>
+                                <span><strong className='text-ui-text'>10 active sandboxes by default</strong></span>
+                                <span><strong className='text-ui-text'>Queued</strong> when capacity is full</span>
+                                <span><strong className='text-ui-text'>Isolated</strong> browser context per run</span>
+                            </div>
                         </form>
                         <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'>
                             <div className='flex flex-wrap items-center justify-between gap-2'>
@@ -460,6 +483,7 @@ export default function BrowserSandboxPageClient() {
                         <div className='flex flex-wrap items-center gap-2'>
                             <StatusPill label='Session' value={sessionState} good={sessionState === 'live'} />
                             <StatusPill label='Broker' value={socketState} good={socketState === 'open'} />
+                            {capacity ? <StatusPill label='Capacity' value={capacity.queuePosition ? `${capacity.queuePosition}/${capacity.queuedSessions} queued` : `${capacity.activeSessions}/${capacity.maxSessions} active`} good={!capacity.queuePosition} /> : null}
                             <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
                                 <Square className='h-4 w-4' />
                                 Stop
@@ -484,13 +508,14 @@ export default function BrowserSandboxPageClient() {
                             ) : (
                                 <div className='grid max-w-md gap-2 text-center'>
                                     <ShieldCheck className='mx-auto h-8 w-8 text-ui-primary' />
-                                    <p className='text-lg font-semibold text-ui-text'>{sessionState === 'connecting' ? 'Launching isolated browser' : 'Waiting for first frame'}</p>
-                                    <p className='text-sm leading-6 text-ui-muted'>The browser runs remotely; screenshots appear when navigation or redirects update the active tab.</p>
+                                    <p className='text-lg font-semibold text-ui-text'>{sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Launching isolated browser' : 'Waiting for first frame'}</p>
+                                    <p className='text-sm leading-6 text-ui-muted'>{sessionState === 'queued' ? queueCopy(capacity) : 'The browser runs remotely; screenshots appear when navigation or redirects update the active tab.'}</p>
                                 </div>
                             )}
                         </div>
                     </section>
                     <aside className='grid min-h-0 gap-4 xl:grid-rows-[auto_minmax(0,1fr)_auto]'>
+                        <CapacityPanel capacity={capacity} sessionState={sessionState} />
                         <AnalystSummary summary={summary} />
                         <CaptureTimeline captures={captures} />
                         <div className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted'>
@@ -589,6 +614,35 @@ function ProfilePicker({ profiles, selectedProfileId, onSelect, onDelete }: { pr
                 )
             })}
         </div>
+    )
+}
+
+function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity | null; sessionState: SessionState }) {
+    const active = capacity?.activeSessions ?? 0
+    const max = capacity?.maxSessions ?? 10
+    const queued = capacity?.queuedSessions ?? 0
+    const position = capacity?.queuePosition
+    const busy = sessionState === 'queued'
+
+    return (
+        <section className={`rounded-lg border p-4 ${busy ? 'border-ui-warning/35 bg-ui-warning/10' : 'border-ui-border bg-ui-panel'}`}>
+            <div className='flex items-start gap-3'>
+                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-md border ${busy ? 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning' : 'border-ui-primary/30 bg-ui-primary/10 text-ui-primary'}`}>
+                    {busy ? <Hourglass className='h-4 w-4' /> : <ShieldCheck className='h-4 w-4' />}
+                </div>
+                <div className='min-w-0 flex-1'>
+                    <p className='text-sm font-semibold text-ui-text'>{busy ? 'Queued for isolated capacity' : 'Sandbox capacity'}</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{busy ? queueCopy(capacity) : `${active}/${max} regular sandbox slots are active. Overflow runs queue instead of failing silently.`}</p>
+                </div>
+                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'>
+                    {position ? `#${position}` : `${active}/${max}`}
+                </span>
+            </div>
+            <div className='mt-3 h-1.5 overflow-hidden rounded-full bg-ui-raised'>
+                <div className={`h-full ${busy ? 'bg-ui-warning' : 'bg-ui-primary'}`} style={{ width: `${Math.min(100, Math.round((active / Math.max(1, max)) * 100))}%` }} />
+            </div>
+            {queued ? <p className='mt-2 text-xs text-ui-muted'>{queued} queued run{queued === 1 ? '' : 's'} waiting for a browser slot.</p> : null}
+        </section>
     )
 }
 
@@ -961,6 +1015,33 @@ function networkSummaryValue(value: unknown): SandboxNetworkSummary | undefined 
 function webcrackLoadValue(value: unknown): SandboxWebCrackLoad | undefined {
     if (!value || typeof value !== 'object') return undefined
     return value as SandboxWebCrackLoad
+}
+
+function capacityValue(value: unknown): SandboxCapacity | null {
+    if (!value || typeof value !== 'object') return null
+    const record = value as Record<string, unknown>
+    const activeSessions = finiteNumber(record.activeSessions)
+    const queuedSessions = finiteNumber(record.queuedSessions)
+    const maxSessions = finiteNumber(record.maxSessions)
+    if (activeSessions === null || queuedSessions === null || maxSessions === null) return null
+    const queuePosition = finiteNumber(record.queuePosition)
+    return {
+        activeSessions,
+        queuedSessions,
+        maxSessions,
+        queuePosition: queuePosition === null ? undefined : queuePosition,
+    }
+}
+
+function finiteNumber(value: unknown) {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric)) return null
+    return Math.max(0, Math.round(numeric))
+}
+
+function queueCopy(capacity: SandboxCapacity | null) {
+    if (!capacity?.queuePosition) return 'All browser slots are busy. This run will start automatically when a slot is released.'
+    return `All ${capacity.maxSessions} regular browser slots are busy. This run is position ${capacity.queuePosition} of ${capacity.queuedSessions} and will start automatically.`
 }
 
 function mergeProfiles(input: SandboxProfile[]) {

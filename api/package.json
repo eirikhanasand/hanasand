@@ -44,6 +44,7 @@
     "smoke:onion-session": "bun scripts/smoke-onion-session-broker.ts",
     "smoke:onion-session-proxy": "bun scripts/smoke-onion-session-proxy.ts",
     "smoke:onion-session-ui": "bun scripts/smoke-onion-session-ui.ts",
+    "smoke:browser-sandbox-capacity": "bun scripts/smoke-browser-sandbox-capacity.ts",
     "test:lxd-lifecycle": "bun scripts/test-lxd-lifecycle.ts"
   },
   "author": "",
