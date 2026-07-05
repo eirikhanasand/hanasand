@@ -16,6 +16,7 @@ assert(source.includes('Action unavailable'), 'Organization route misses should 
 assert(!source.includes('Endpoint unavailable'), 'Organization UI should not expose endpoint-shaped error copy.')
 assert(source.includes('const ORG_ACTIVITY_PREVIEW_ROWS = 8'), 'Organization activity rail should stay compact by default.')
 assert(!/activity\.slice\(0,\s*20\)|selectedRows\.slice\(0,\s*20\)/.test(source), 'Organization activity rail should not render a long event wall by default.')
+assert(!source.includes('data-org-setup-blocked-count'), 'Organization setup rail should not render a noisy blocked/access counter in normal setup state.')
 assert(source.includes('destinationConfigured(item) ? \'configured\' : \'route needed\''), 'Organization destination state should use operator action language.')
 assert(source.includes('configured ? \'configured\' : \'route needed\''), 'Organization destination editor should use operator action language.')
 assert(source.includes('History: {delivery ? formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt) : \'waiting for test\'}'), 'Organization destination history should explain missing delivery history.')

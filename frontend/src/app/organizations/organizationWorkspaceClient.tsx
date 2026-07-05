@@ -358,6 +358,16 @@ function deliveryOutcomeSummary(delivery: DeliveryRow) {
     return 'Delivery attempt recorded.'
 }
 
+function deliveryActionResultSummary(delivery: DeliveryRow | null | undefined, fallback: string) {
+    if (!delivery) return fallback
+    const trace = deliveryTraceLabel(delivery)
+    const traceText = trace ? ` ${trace}.` : ''
+    if (delivery.status === 'failed' || delivery.error) return `${deliveryFailureSummary(delivery)}${traceText}`
+    if (delivery.status === 'skipped') return `${deliveryOutcomeSummary(delivery)}${traceText}`
+    if (delivery.dryRun || delivery.status === 'dry_run') return `Dry-run rendered the Discord/webhook payload without sending externally.${traceText}`
+    return `${deliveryOutcomeSummary(delivery)}${traceText}`
+}
+
 function deliveryRetryText(delivery: DeliveryRow) {
     const attempts = delivery.attemptCount ?? delivery.retryCount ?? 0
     if (delivery.nextRetryAt) return `Retry scheduled ${formatDate(delivery.nextRetryAt)} after ${attempts} attempt${attempts === 1 ? '' : 's'}`
@@ -391,6 +401,13 @@ function stopRowSelectionKeys(event: KeyboardEvent<HTMLElement>) {
 
 function organizationDisplayName(organization: Pick<OrganizationSummary, 'name' | 'slug' | 'id'> | undefined) {
     return sanitizeOrganizationDisplayCopy(organization?.name || organization?.slug || organization?.id) || 'Organization'
+}
+
+function organizationMemberLabel(userId: string | undefined | null, members: OrganizationMember[]) {
+    if (!userId) return undefined
+    const member = members.find(item => item.userId === userId || item.email === userId)
+    if (member) return sanitizeOrganizationDisplayCopy(member.name || member.email || member.userId)
+    return compactReference(userId, 'user') || userId
 }
 
 function organizationDisplayId(organization: Pick<OrganizationSummary, 'slug' | 'id'> | undefined) {
@@ -994,7 +1011,8 @@ export default function OrganizationWorkspaceClient() {
         if (withUrl) {
             setDestinationDrafts(current => ({ ...current, [item.id]: { ...draft, url: '' } }))
         }
-        return withUrl ? 'Destination tested and saved.' : 'Saved destination tested.'
+        const resultText = deliveryActionResultSummary(delivery, withUrl ? 'Destination tested and saved.' : 'Saved destination tested.')
+        return withUrl ? `${resultText} Destination saved for this watchlist.` : resultText
     }, `watchlist-${item.id}`)
 
     const testSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('test-destination', async () => {
@@ -1010,7 +1028,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         const delivery = firstDelivery(result)
-        return delivery?.status ? `Destination test ${delivery.status}.` : 'Destination test sent.'
+        return deliveryActionResultSummary(delivery, 'Destination test requested.')
     }, `destination-${destination.id}`)
 
     const replayDelivery = (delivery: DeliveryRow) => selectedOrganization && runAction('replay-delivery', async () => {
@@ -1034,7 +1052,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         const nextDelivery = firstDelivery(result)
-        return nextDelivery?.status ? `Delivery replay ${nextDelivery.status}.` : 'Delivery replay requested.'
+        return deliveryActionResultSummary(nextDelivery, 'Delivery replay requested.')
     }, `delivery-${delivery.id}`)
 
     const createSavedDestination = () => selectedOrganization && runAction('create-destination', async () => {
@@ -1277,6 +1295,7 @@ export default function OrganizationWorkspaceClient() {
                                         <WatchlistPanel
                                             watchlists={bundle.watchlists}
                                             activeTerms={bundle.alertTerms}
+                                            members={bundle.members}
                                             canManage={canManage}
                                             busy={busy}
                                             draft={watchlistDraft}
@@ -1761,7 +1780,6 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
 
     const visibleRows = rows
     const completed = visibleRows.filter(row => row.ready).length
-    const lockedCount = visibleRows.filter(row => !row.ready && row.blocked).length
     const nextAction = rows.find(row => !row.ready && !row.blocked) || rows.find(row => row.ready) || rows[0]
     const openAlertHref = alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}` : ''
     return (
@@ -1776,11 +1794,6 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                         <span className='shrink-0 border-l border-ui-border pl-2 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-setup-progress-count='true'>
                             {completed}/{visibleRows.length} setup
                         </span>
-                        {lockedCount ? (
-                            <span className='shrink-0 rounded-md border border-ui-warning/30 bg-ui-warning/10 px-2 py-1 text-[11px] font-semibold text-ui-warning' data-org-setup-blocked-count='true'>
-                                {lockedCount} needs access
-                            </span>
-                        ) : null}
                     </div>
                     <div className='grid border-t border-ui-border dark:border-ui-border sm:grid-cols-2 xl:grid-cols-4'>
                         {visibleRows.map(row => {
@@ -2380,7 +2393,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
     )
 }
 
-function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
+function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], members: OrganizationMember[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const [watchlistQuery, setWatchlistQuery] = useState('')
     const [watchlistStatusFilter, setWatchlistStatusFilter] = useState('all')
     const archivedCount = watchlists.filter(item => item.status === 'archived').length
@@ -2559,9 +2572,9 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                             <p className='mt-2 line-clamp-2 wrap-break-word text-base font-semibold text-ui-text dark:text-ui-text'>{item.value}</p>
                                             <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{item.notes || 'Add delivery context.'}</p>
                                             <div className='mt-2 grid gap-1 text-xs text-ui-muted dark:text-ui-muted sm:grid-cols-2'>
-                                                <span className='truncate'>Org: {sanitizeOrganizationDisplayCopy(item.organizationId || organization.id)}</span>
-                                                <span className='truncate'>Owner: {item.updatedBy || item.createdBy || 'system'}</span>
-                                                <span className='truncate'>Ref: {item.alertGenerationRef || item.id}</span>
+                                                <span className='truncate'>Org: {organizationDisplayName(organization)}</span>
+                                                <span className='truncate'>Owner: {organizationMemberLabel(item.updatedBy || item.createdBy, members)}</span>
+                                                <span className='truncate'>Ref: {compactReference(item.alertGenerationRef || item.id, 'watch')}</span>
                                                 <span className='truncate'>Alerts: {alertsForWatchlist(item, alerts).length}</span>
                                             </div>
                                         </div>
@@ -3400,10 +3413,10 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         subjectId: alert.id,
         relatedSubjectIds: [alert.watchlistItemId, ...(alert.watchlistItemIds || []), ...(alert.watchlistIds || [])].filter(Boolean) as string[],
         metadata: compactMetadata([
-            ['Alert', alert.id],
+            ['Alert', compactReference(alert.id, 'alert')],
             ['Severity', alert.severity],
             ['Status', alert.status],
-            ['Watchlist', alert.watchlistItemId || alert.watchlistItemIds?.[0] || alert.watchlistIds?.[0]],
+            ['Watchlist', compactReference(alert.watchlistItemId || alert.watchlistItemIds?.[0] || alert.watchlistIds?.[0], 'watchlist')],
         ]),
     }))
     const caseRows: ActivityItem[] = bundle.cases.map(item => ({
@@ -3415,7 +3428,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         subjectType: 'case',
         subjectId: item.id,
         metadata: compactMetadata([
-            ['Case', item.id],
+            ['Case', compactReference(item.id, 'case')],
             ['Status', item.status],
             ['Owner', item.assignedOwner],
         ]),
@@ -3440,9 +3453,9 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         metadata: compactMetadata([
             ['Destination', destinationDisplayState(delivery)],
             ['Saved route', delivery.webhookDestinationId ? 'Available' : undefined],
-            ['Alert', delivery.alertId],
-            ['Case', delivery.caseId],
-            ['Watchlist', delivery.watchlistItemId || delivery.watchlistId],
+            ['Alert', compactReference(delivery.alertId, 'alert')],
+            ['Case', compactReference(delivery.caseId, 'case')],
+            ['Watchlist', compactReference(delivery.watchlistItemId || delivery.watchlistId, 'watchlist')],
             ['Kind', delivery.deliveryKind],
         ]),
     }))
@@ -3468,7 +3481,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         subjectType: 'member',
         subjectId: member.userId,
         metadata: compactMetadata([
-            ['User', member.userId],
+            ['User', organizationMemberLabel(member.userId, bundle.members)],
             ['Email', member.email],
             ['Invited by', member.invitedBy || undefined],
         ]),
@@ -3482,9 +3495,9 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         subjectType: 'watchlist',
         subjectId: item.id,
         metadata: compactMetadata([
-            ['Owner', item.updatedBy || item.createdBy],
+            ['Owner', organizationMemberLabel(item.updatedBy || item.createdBy, bundle.members)],
             ['Destination', destinationDisplayState(item)],
-            ['Ref', item.alertGenerationRef],
+            ['Ref', compactReference(item.alertGenerationRef || item.id, 'ref')],
         ]),
     }))
     const destinationRows: ActivityItem[] = bundle.webhooks.map(destination => ({
@@ -3498,6 +3511,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         metadata: compactMetadata([
             ['Type', destination.kind || destination.type],
             ['Destination', destinationDisplayState(destination)],
+            ['Ref', compactReference(destination.id, 'dest')],
         ]),
     }))
     return [...local, ...alertRows, ...caseRows, ...deliveryRows, ...inviteRows, ...memberRows, ...watchlistRows, ...destinationRows]
@@ -3635,7 +3649,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
     if (subject.type === 'organization') {
         return compactMetadata([
             ['Org', organizationDisplayId(organization)],
-            ['Tenant', sanitizeOrganizationDisplayCopy(organization.tenantId || 'default') || 'default'],
+            ['Tenant', compactReference(organization.tenantId || 'default', 'tenant')],
             ['Role', organization.role || 'member'],
             ['Members', String(bundle.members.length)],
             ['Watchlists', String(bundle.watchlists.length)],
@@ -3654,7 +3668,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
     if (subject.type === 'member') {
         const member = bundle.members.find(item => item.userId === subject.id)
         return compactMetadata([
-            ['User', member?.userId],
+            ['User', organizationMemberLabel(member?.userId, bundle.members)],
             ['Email', member?.email],
             ['Role', member?.role],
             ['Status', member?.status],
@@ -3664,17 +3678,17 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
     if (subject.type === 'alert') {
         const alert = bundle.alerts.find(item => item.id === subject.id)
         return compactMetadata([
-            ['Alert', alert?.id || subject.id],
+            ['Alert', alert?.title || compactReference(alert?.id || subject.id, 'alert')],
             ['Severity', alert?.severity],
             ['Status', alert?.status],
-            ['Watchlist', alert?.watchlistItemId || alert?.watchlistItemIds?.[0] || alert?.watchlistIds?.[0]],
+            ['Watchlist', compactReference(alert?.watchlistItemId || alert?.watchlistItemIds?.[0] || alert?.watchlistIds?.[0], 'watchlist')],
             ['Updated', alert?.updatedAt ? formatDate(alert.updatedAt) : undefined],
         ])
     }
     if (subject.type === 'case') {
         const item = bundle.cases.find(row => row.id === subject.id)
         return compactMetadata([
-            ['Case', item?.id || subject.id],
+            ['Case', item?.title || compactReference(item?.id || subject.id, 'case')],
             ['Status', item?.status],
             ['Owner', item?.assignedOwner],
             ['Updated', item?.updatedAt ? formatDate(item.updatedAt) : undefined],
@@ -3686,11 +3700,11 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
             .filter(row => row.webhookDestinationId === destination.id)
             .sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
         return compactMetadata([
-            ['Destination', destination.id],
             ['Name', destination.name],
             ['Type', destination.kind || destination.type || 'webhook'],
             ['Status', destination.status || (destination.deliveryReady ? 'active' : 'configured')],
             ['Destination', destinationDisplayState(destination)],
+            ['Ref', compactReference(destination.id, 'dest')],
             ['Last delivery', delivery?.status],
         ])
     }
@@ -3698,11 +3712,12 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
     const delivery = item ? latestDeliveryForWatchlist(item, bundle.deliveries) : null
     const alertCount = item ? alertsForWatchlist(item, bundle.alerts).length : 0
     return compactMetadata([
-        ['Watchlist', item?.id || subject.id],
+        ['Watchlist', item?.value || compactReference(item?.id || subject.id, 'watchlist')],
         ['Term', item?.value],
         ['Status', item?.status],
-        ['Owner', item?.updatedBy || item?.createdBy],
+        ['Owner', organizationMemberLabel(item?.updatedBy || item?.createdBy, bundle.members)],
         ['Destination', item ? destinationDisplayState(item) : destinationDisplayState(delivery)],
+        ['Ref', compactReference(item?.alertGenerationRef || item?.id || subject.id, 'watch')],
         ['Last delivery', delivery?.status],
         ['Alerts', String(alertCount)],
     ])
@@ -3982,7 +3997,13 @@ function deliveryTraceLabel(delivery: DeliveryRow) {
 function shortTraceId(value: string) {
     const cleaned = value.trim()
     if (cleaned.length <= 16) return cleaned
-    return cleaned.slice(-12)
+    return cleaned.slice(-12).replace(/^[:_-]+/, '') || cleaned.slice(-12)
+}
+
+function compactReference(value: string | undefined | null, label = 'ref') {
+    if (!value) return undefined
+    const clean = sanitizeOrganizationDisplayCopy(value) || value
+    return `${label} ${shortTraceId(clean)}`
 }
 
 function canReplayDelivery(delivery: DeliveryRow) {
