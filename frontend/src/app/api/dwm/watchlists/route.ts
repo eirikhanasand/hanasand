@@ -12,6 +12,9 @@ export async function GET(request: NextRequest) {
         if (proofLedger) {
             return NextResponse.json(watchlistPayloadFromLedger(proofLedger), { headers: { 'cache-control': 'no-store' } })
         }
+        if (hasWatchlistProofLedgerEnv()) {
+            return NextResponse.json({ error: { code: 'dwm_watchlist_proof_unavailable', message: 'DWM watchlist proof ledger did not match this request.' } }, { status: 503, headers: { 'cache-control': 'no-store' } })
+        }
     }
 
     return proxyTiRequest(request, '/v1/dwm/watchlists', { method: 'GET' })
@@ -19,4 +22,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     return proxyTiRequest(request, '/v1/dwm/watchlists', { method: 'POST' })
+}
+
+function hasWatchlistProofLedgerEnv() {
+    return Boolean(
+        process.env.PRODUCT_PROGRESS_DWM_WATCHLIST_PROOF_JSON?.trim()
+        || process.env.HANASAND_PRODUCT_PROGRESS_DWM_WATCHLIST_PROOF_JSON?.trim()
+        || process.env.PRODUCT_PROGRESS_DWM_WATCHLIST_PROOF_PATH?.trim()
+        || process.env.HANASAND_PRODUCT_PROGRESS_DWM_WATCHLIST_PROOF_PATH?.trim(),
+    )
 }
