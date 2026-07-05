@@ -18,15 +18,15 @@ import { useState } from 'react'
 const productItems = [
     { title: 'Organizations', detail: 'Manage members, shared watchlists, alert scope, and destinations.', href: '/organizations', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'Watch companies, vendors, domains, and brands for reviewable exposure alerts.', href: '/solutions/dwm', icon: BellRing },
-    { title: 'Threat Intelligence', detail: 'Search companies, actors, claims, sources, and alert context.', href: '/ti', icon: Radar },
-    { title: 'Actor Overview', detail: 'Actor profiles, victim pivots, and review-ready timelines.', href: '/ti', icon: Waypoints },
+    { title: 'Threat Intelligence', detail: 'Search companies, groups, source changes, and alert context.', href: '/ti', icon: Radar },
+    { title: 'Group Overview', detail: 'Group profiles, company pivots, and review-ready timelines.', href: '/ti', icon: Waypoints },
     { title: 'API and Webhooks', detail: 'Route reviewed alert fields into customer tools and analyst workflows.', href: '/developers', icon: Code2 },
 ]
 
 const solutionItems = [
     { title: 'All Solutions', detail: 'Company exposure monitoring, API delivery, and review workflows.', href: '/solutions', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'Company and vendor alerts from watched exposure sources.', href: '/solutions/dwm', icon: BellRing },
-    { title: 'Threat Search', detail: 'Open the public intelligence workspace for companies and actors.', href: '/ti', icon: Radar },
+    { title: 'Threat Search', detail: 'Open the public intelligence workspace for companies and groups.', href: '/ti', icon: Radar },
     { title: 'Browser', detail: 'Regular and Tor browser runs with isolated capture, profiles, and queueing.', href: '/solutions/browser', icon: Network },
 ]
 
