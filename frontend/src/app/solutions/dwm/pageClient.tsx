@@ -17,7 +17,7 @@ import {
     TicketCheck,
     Webhook,
 } from 'lucide-react'
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 
 const snapshot = demoDwmProductSnapshot()
 const activeSourceCount = snapshot.sourceCoverage.reduce((sum, source) => sum + source.activeCount, 0)
@@ -175,7 +175,12 @@ export default function DarkWebMonitoringPage() {
     const [subscriptionId, setSubscriptionId] = useState('')
     const [testingWebhook, setTestingWebhook] = useState(false)
     const [webhookReceipt, setWebhookReceipt] = useState<{ eventId: string, receivedAt: string } | null>(null)
+    const [hydrated, setHydrated] = useState(false)
     const payload = useMemo(() => samplePayload(watchlist), [watchlist])
+
+    useEffect(() => {
+        setHydrated(true)
+    }, [])
 
     function updateEndpoint(value: string) {
         setEndpoint(value)
@@ -213,7 +218,7 @@ export default function DarkWebMonitoringPage() {
         })
         writeWebhookDraft(draft)
         setSubscriptionId(nextSubscriptionId)
-        setStatus(`Webhook draft saved for ${terms.length} watched term${terms.length === 1 ? '' : 's'}. Review the payload here, then create the alert in the console when ready.`)
+        setStatus(`Preview draft saved locally for ${terms.length} watched term${terms.length === 1 ? '' : 's'}. The endpoint is not contacted from this public page.`)
     }
 
     async function testWebhookPreview() {
@@ -237,7 +242,7 @@ export default function DarkWebMonitoringPage() {
                 eventId: body.eventId || 'accepted',
                 receivedAt: body.receivedAt || new Date().toISOString(),
             })
-            setStatus('Sample delivery accepted by the public receiver.')
+            setStatus('Sample payload accepted by the Hanasand receiver. Your endpoint was not contacted.')
         } catch (error) {
             setStatus(error instanceof Error ? error.message : 'The sample webhook receiver did not accept the payload.')
         } finally {
@@ -484,11 +489,11 @@ export default function DarkWebMonitoringPage() {
                         </div>
                     </div>
 
-                    <section className='grid min-w-0 gap-5 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm md:p-5'>
+                    <section className='grid min-w-0 gap-5 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm md:p-5' data-dwm-webhook-preview-ready={hydrated ? 'true' : 'false'}>
                         <div className='flex items-start justify-between gap-4'>
                             <div>
-                                <h2 className='text-xl font-semibold'>Subscribe a webhook</h2>
-                                <p className='mt-1 text-sm text-ui-muted'>Add an HTTPS endpoint and the terms to watch. Preview the payload before creating the console subscription.</p>
+                                <h2 className='text-xl font-semibold'>Webhook payload preview</h2>
+                                <p className='mt-1 text-sm text-ui-muted'>Inspect the alert shape and validate the sample receiver here. Customer endpoint delivery is created inside the authenticated console.</p>
                             </div>
                             <Webhook className='h-5 w-5 text-ui-primary' />
                         </div>
@@ -500,16 +505,19 @@ export default function DarkWebMonitoringPage() {
                             <span className='text-sm font-semibold text-ui-text'>Watched terms</span>
                             <textarea id='dwm-watched-terms' aria-label='Watched terms' value={watchlist} onChange={event => updateWatchlist(event.target.value)} className={`${inputClass} min-h-28 resize-y`} placeholder='Company, domain, supplier, brand...' />
                         </label>
+                        <div className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs leading-5 text-ui-muted' data-dwm-public-webhook-boundary='true'>
+                            Endpoint safety: saving a draft stores the endpoint and watched terms in this browser only. Testing sends the sample payload to Hanasand&apos;s receiver so you can inspect the shape without contacting your endpoint.
+                        </div>
                         <div className='grid gap-3 md:grid-cols-[auto_auto_auto_1fr] md:items-center'>
-                            <button type='button' onClick={prepareWebhookAlert} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
-                                Save draft
+                            <button type='button' onClick={prepareWebhookAlert} disabled={!hydrated} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'>
+                                Save local preview
                                 <ArrowRight className='h-4 w-4' />
                             </button>
-                            <button type='button' onClick={() => void testWebhookPreview()} disabled={testingWebhook} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-60'>
-                                {testingWebhook ? 'Testing...' : 'Test sample delivery'}
+                            <button type='button' onClick={() => void testWebhookPreview()} disabled={!hydrated || testingWebhook} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-60'>
+                                {testingWebhook ? 'Testing...' : 'Validate sample payload'}
                             </button>
                             <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel'>
-                                Create alert
+                                Create in console
                             </Link>
                             <button type='button' onClick={copyPayload} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel'>
                                 <Copy className='h-4 w-4' />
