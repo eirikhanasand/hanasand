@@ -151,6 +151,9 @@ test('homepage exposure queue empty state reads like monitoring product copy', a
 
     expect(source).toContain('Monitoring company mentions across exposure sources.')
     expect(source).toContain('Monitoring exposure sources.')
+    expect(source).toContain('Live exposure feed is temporarily unavailable.')
+    expect(source).toContain('Exposure feed temporarily unavailable.')
+    expect(source).toMatch(/if \(status === 'unavailable'\) return 'Unavailable'/)
     expect(source).not.toContain('Checking for new company mentions...')
     expect(source).not.toContain('Checking for new company mentions.')
 })
