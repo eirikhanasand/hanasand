@@ -2108,6 +2108,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                             const copyReason = !canManage ? 'Owner or admin required' : !inviteLink(invite) ? 'Invite link unavailable' : !inviteActionAllowed(invite, 'copy') ? 'Pending invite required' : ''
                             const resendReason = !canManage ? 'Owner or admin required' : !inviteActionAllowed(invite, 'resend') ? 'Invite already accepted' : ''
                             const revokeReason = !canManage ? 'Owner or admin required' : !inviteActionAllowed(invite, 'revoke') ? 'Invite already closed' : ''
+                            const linkState = !canManage ? 'restricted' : linkAvailable ? 'available' : 'closed'
                             const selected = selectedSubject.type === 'invite' && selectedSubject.id === invite.id
                             return (
                                 <div
@@ -2132,7 +2133,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                                                 <RoleBadge role={invite.role} />
                                                 <StatusPill status={invite.status} />
                                                 <span className='rounded-full border border-ui-border px-2 py-0.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-invite-link-state='true'>
-                                                    Link {linkAvailable ? 'available' : 'closed'}
+                                                    Link {linkState}
                                                 </span>
                                             </span>
                                             <RowStatus message={rowMessages[`invite-${invite.id}`]} />
