@@ -246,18 +246,23 @@ function exposureQueueLabel(status: string) {
     if (status === 'live') return 'Live'
     if (status === 'stale') return 'Updating'
     if (status === 'empty') return 'Watching'
+    if (status === 'unavailable') return 'Unavailable'
     return 'Checking'
 }
 
 function exposureQueueTone(status: string) {
     if (status === 'live') return 'border-ui-success/35 bg-ui-success/10 text-ui-success'
     if (status === 'stale') return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
+    if (status === 'unavailable') return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
     return 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary'
 }
 
 function latestActivitySubtitle(queue: ExposureQueue, items: ExposureQueueItem[]) {
-    if (!items.length && (queue.status === 'checking' || queue.status === 'unavailable')) {
-        return 'Checking for new company mentions...'
+    if (!items.length && queue.status === 'unavailable') {
+        return 'Live exposure feed is temporarily unavailable.'
+    }
+    if (!items.length && queue.status === 'checking') {
+        return 'Monitoring company mentions across exposure sources.'
     }
     const age = queue.freshness?.collectionAgeMinutes ?? queue.freshness?.ageMinutes
     if (queue.status === 'live' && typeof age === 'number') {
@@ -270,7 +275,8 @@ function latestActivitySubtitle(queue: ExposureQueue, items: ExposureQueueItem[]
 }
 
 function latestActivityEmptyTitle(status: string) {
-    if (status === 'checking' || status === 'unavailable') return 'Checking for new company mentions.'
+    if (status === 'unavailable') return 'Exposure feed temporarily unavailable.'
+    if (status === 'checking') return 'Monitoring exposure sources.'
     return 'No recent activity yet.'
 }
 

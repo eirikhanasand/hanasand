@@ -1,4 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+
+const root = process.cwd()
 
 const sampledSurfaces = [
     ['exposure panel', '[data-home-exposure-panel="true"]'],
@@ -140,4 +144,13 @@ test.describe('homepage surface border theme tokens', () => {
             }
         })
     }
+})
+
+test('homepage exposure queue empty state reads like monitoring product copy', async () => {
+    const source = await readFile(path.join(root, 'src/app/homeExposureQueueClient.tsx'), 'utf8')
+
+    expect(source).toContain('Monitoring company mentions across exposure sources.')
+    expect(source).toContain('Monitoring exposure sources.')
+    expect(source).not.toContain('Checking for new company mentions...')
+    expect(source).not.toContain('Checking for new company mentions.')
 })
