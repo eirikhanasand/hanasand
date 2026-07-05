@@ -340,7 +340,7 @@ function organizationDeliveryErrorText(value: unknown) {
 function deliveryFailureSummary(delivery: DeliveryRow) {
     const errorClass = String(delivery.errorClass || '').toLowerCase()
     const raw = organizationDeliveryErrorText(delivery.error || delivery.errorClass || delivery.responseSummary)
-    if (errorClass.includes('missing_webhook_url') || errorClass.includes('destination_unavailable')) return 'No active Discord or webhook destination is configured for this alert scope.'
+    if (errorClass.includes('missing_webhook_url') || errorClass.includes('destination_unavailable')) return 'No active Discord or webhook destination is configured for this alert.'
     if (errorClass.includes('unsupported_destination')) return 'Destination type is not supported for Discord/webhook delivery.'
     if (errorClass.includes('permission') || errorClass.includes('access')) return 'Your role cannot test or replay this destination.'
     if (errorClass.includes('disabled') || errorClass.includes('paused')) return 'Destination is disabled. Enable it before replaying alert delivery.'
@@ -1643,7 +1643,7 @@ function DwmHandoffBanner({ organization, bundle, selectedSubject, alertId, case
                 <div className='grid gap-2 sm:grid-cols-2 lg:flex'>
                     <ActionAnchor href='#audit' icon={<CheckCircle2 className='h-4 w-4' />} label='Review context' />
                     <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Manage watchlist' />
-                    {deliveryHref && <ActionAnchor href={deliveryHref} icon={<Webhook className='h-4 w-4' />} label='Open delivery log' />}
+                    {deliveryHref && <ActionAnchor href={deliveryHref} icon={<Webhook className='h-4 w-4' />} label='Delivery history' />}
                     {caseHref && <ActionAnchor href={caseHref} icon={<ExternalLink className='h-4 w-4' />} label='Open case' />}
                     {alertHref && <ActionAnchor href={alertHref} icon={<ExternalLink className='h-4 w-4' />} label='Open alert' />}
                 </div>
@@ -2430,7 +2430,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
     return (
         <section id='watchlists' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Customer-owned terms that drive DWM alert scope, cases, and delivery destinations.' />
+                <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Customer-owned terms that drive DWM alerts, cases, and delivery destinations.' />
                 <button type='button' className={secondaryButtonClass} disabled={!canManage || archivedCount === 0 || Boolean(busy)} onClick={onCleanup}>
                     <Archive className='h-4 w-4' />
                     Cleanup archived
@@ -2957,7 +2957,7 @@ function ScopePanel({ alertTerms, alerts, cases, members, webhooks, alertCaseVis
     if (!hasScopeRows) {
         return (
             <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-scope-empty='true'>
-                <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Monitoring scope' detail='Shared watchlists create the alert, case, and delivery context shown here.' />
+                <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Monitoring records' detail='Shared watchlists create the alert, case, and delivery context shown here.' />
                 <div className='mt-4 grid gap-3 rounded-lg border border-dashed border-ui-border bg-ui-raised p-4 dark:border-ui-border dark:bg-ui-canvas sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
                     <div className='min-w-0'>
                         <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>No monitoring records yet</p>
@@ -2973,7 +2973,7 @@ function ScopePanel({ alertTerms, alerts, cases, members, webhooks, alertCaseVis
     }
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-            <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination scope' detail='Shared watchlist, case, and delivery records used by monitoring flows.' />
+            <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination records' detail='Shared watchlist, case, and delivery records used by monitoring flows.' />
             <div className='mt-4 grid gap-3 lg:grid-cols-2'>
                 <ScopeColumn icon={<BellRing className='h-4 w-4' />} title='Alert terms' route={`${route}/watchlists/alert-terms`} rows={alertTerms.map(term => ({
                     id: term.watchlistItemId || term.watchlistId || term.alertGenerationRef || term.term || term.value || 'term',
@@ -3790,7 +3790,7 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         return [
             { label: 'Watchlist', href: '#watchlists' },
             { label: 'Delivery activity', href: '#delivery-history' },
-            { label: 'Open alert scope', href: `/dashboard/ti/workbench?organizationId=${organizationId}&watchlistId=${watchlistId}` },
+            { label: 'Open alert workspace', href: `/dashboard/ti/workbench?organizationId=${organizationId}&watchlistId=${watchlistId}` },
         ]
     }
     if (subject.type === 'destination') {
