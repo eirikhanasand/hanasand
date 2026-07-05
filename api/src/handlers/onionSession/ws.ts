@@ -220,7 +220,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 height: clampNumber(message.height, 420, 1600, DEFAULT_HEIGHT),
             },
             ignoreHTTPSErrors: true,
-            permissions: ['clipboard-read', 'clipboard-write'],
+            permissions: network === 'regular' ? [] : ['clipboard-read', 'clipboard-write'],
         })
         page = await context.newPage()
         await page.route('**/*', async (route) => {
