@@ -89,6 +89,7 @@ const inputClass = 'h-9 min-w-0 rounded-md border border-ui-border bg-ui-panel p
 const textAreaClass = 'min-h-20 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
 const primaryButton = 'h-9 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55'
 const secondaryButton = 'h-9 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-55'
+const minimumAuditReasonMessage = 'Add a specific audit reason with at least 10 characters before continuing.'
 const operationTabs: Array<{ id: SupportOperation, label: string, detail: string }> = [
     { id: 'inspect', label: 'Inspect', detail: 'Members, invites, audit' },
     { id: 'impersonation', label: 'Session', detail: 'Start or end scoped access' },
@@ -156,6 +157,10 @@ function auditHref(requestId: string, action?: string) {
     return `/dashboard/system/impersonation?${query.toString()}`
 }
 
+function supportReasonIsSpecific(reason: string) {
+    return reason.trim().length >= 10
+}
+
 export default function AccessRecoveryForm() {
     const [operation, setOperation] = useState<SupportOperation>('inspect')
     const [inspectionResult, setInspectionResult] = useState<InspectionPayload | null>(null)
@@ -177,6 +182,10 @@ export default function AccessRecoveryForm() {
         const targetId = String(form.get('targetId') || '').trim()
         const reason = String(form.get('reason') || '').trim()
         const context = String(form.get('context') || '').trim()
+        if (!supportReasonIsSpecific(reason)) {
+            setInspectionMessage(minimumAuditReasonMessage)
+            return
+        }
         const query = new URLSearchParams()
         if (reason) query.set('reason', reason)
         if (context) query.set('context', context)
@@ -217,6 +226,10 @@ export default function AccessRecoveryForm() {
             caseId: String(form.get('caseId') || '').trim(),
             approvalRequired: form.get('approvalRequired') === 'on',
         }
+        if (!supportReasonIsSpecific(payload.reason)) {
+            setRecoveryMessage(minimumAuditReasonMessage)
+            return
+        }
 
         setSubmitting('recovery')
         setRecoveryMessage('')
@@ -249,6 +262,10 @@ export default function AccessRecoveryForm() {
         const payload = {
             reason: String(form.get('reason') || '').trim(),
             context: String(form.get('context') || '').trim(),
+        }
+        if (!supportReasonIsSpecific(payload.reason)) {
+            setDecisionMessage(minimumAuditReasonMessage)
+            return
         }
 
         setSubmitting('decision')
@@ -315,6 +332,10 @@ export default function AccessRecoveryForm() {
             scope,
             reason: String(form.get('reason') || '').trim(),
         }
+        if (!supportReasonIsSpecific(payload.reason)) {
+            setImpersonationMessage(minimumAuditReasonMessage)
+            return
+        }
 
         setSubmitting('impersonation')
         setImpersonationMessage('')
@@ -343,6 +364,11 @@ export default function AccessRecoveryForm() {
     async function stopImpersonation(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
+        const reason = String(form.get('reason') || '').trim()
+        if (!supportReasonIsSpecific(reason)) {
+            setImpersonationMessage(minimumAuditReasonMessage)
+            return
+        }
         setSubmitting('stop')
         setImpersonationMessage('')
         try {
@@ -350,7 +376,7 @@ export default function AccessRecoveryForm() {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    reason: String(form.get('reason') || '').trim(),
+                    reason,
                     context: String(form.get('context') || '').trim(),
                 }),
             })
@@ -419,7 +445,7 @@ export default function AccessRecoveryForm() {
                         <input className={inputClass} name='targetId' placeholder='Organization or user id' required />
                     </div>
                     <input className={inputClass} name='context' placeholder='Case or customer context' />
-                    <textarea className={textAreaClass} name='reason' placeholder='Reason' required />
+                    <textarea className={textAreaClass} name='reason' placeholder='Audit reason with support case or requester' minLength={10} required />
                     <button className={primaryButton} disabled={submitting === 'inspect'} type='submit'>{submitting === 'inspect' ? 'Inspecting...' : 'Inspect access'}</button>
                 </form>
                 <Message value={inspectionMessage} tone={inspectionResult?.error ? 'error' : inspectionMessage ? 'success' : 'neutral'} />
@@ -504,14 +530,14 @@ export default function AccessRecoveryForm() {
                             </label>
                         ))}
                     </div>
-                    <textarea className={textAreaClass} name='reason' placeholder='Reason' required />
+                    <textarea className={textAreaClass} name='reason' placeholder='Audit reason with support case or requester' minLength={10} required />
                     <button className={primaryButton} disabled={submitting === 'impersonation'} type='submit'>{submitting === 'impersonation' ? 'Starting...' : 'Start scoped session'}</button>
                 </form>
                 <details className='rounded-md border border-ui-border bg-ui-canvas'>
                     <summary className='cursor-pointer list-none px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/20'>End current session</summary>
                     <form className='grid gap-2 border-t border-ui-border p-3' onSubmit={stopImpersonation}>
                         <input className={inputClass} name='context' placeholder='Stop context' />
-                        <textarea className={textAreaClass} name='reason' placeholder='Stop reason' required />
+                        <textarea className={textAreaClass} name='reason' placeholder='Stop reason with support case or requester' minLength={10} required />
                         <button className={secondaryButton} disabled={submitting === 'stop'} type='submit'>{submitting === 'stop' ? 'Ending...' : 'End current session'}</button>
                     </form>
                 </details>
@@ -541,7 +567,7 @@ export default function AccessRecoveryForm() {
                     </div>
                     <input className={inputClass} name='caseId' placeholder='Case id' />
                     <input className={inputClass} name='context' placeholder='Context' />
-                    <textarea className={textAreaClass} name='reason' placeholder='Reason' required />
+                    <textarea className={textAreaClass} name='reason' placeholder='Audit reason with support case or requester' minLength={10} required />
                     <label className='flex items-center gap-2 text-sm text-ui-muted'>
                         <input className='h-4 w-4 accent-ui-primary' name='approvalRequired' type='checkbox' />
                         Require second review
@@ -574,7 +600,7 @@ export default function AccessRecoveryForm() {
                         </select>
                     </div>
                     <input className={inputClass} name='context' placeholder='Decision context' />
-                    <textarea className={textAreaClass} name='reason' placeholder='Approval or denial reason' required />
+                    <textarea className={textAreaClass} name='reason' placeholder='Approval or denial reason' minLength={10} required />
                     <button className={secondaryButton} disabled={submitting === 'decision'} type='submit'>{submitting === 'decision' ? 'Recording...' : 'Record decision'}</button>
                 </form>
                 <Message value={decisionMessage} tone={decisionResult?.error ? 'error' : decisionMessage ? 'success' : 'neutral'} />

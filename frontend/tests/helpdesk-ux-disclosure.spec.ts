@@ -31,6 +31,12 @@ test('helpdesk audit keeps advanced controls behind explicit disclosures', async
 
     expect(supportForm).toContain('type SupportOperation = \'inspect\' | \'impersonation\' | \'recovery\' | \'decision\' | \'queue\'')
     expect(supportForm).toContain('const [operation, setOperation] = useState<SupportOperation>(\'inspect\')')
+    expect(supportForm).toContain('minimumAuditReasonMessage')
+    expect(supportForm).toContain('function supportReasonIsSpecific(reason: string)')
+    expect(supportForm).toContain('if (!supportReasonIsSpecific(reason))')
+    expect(supportForm).toContain('if (!supportReasonIsSpecific(payload.reason))')
+    expect(supportForm).toContain('minLength={10}')
+    expect(supportForm).toContain('Audit reason with support case or requester')
     expect(supportForm).toContain('data-testid=\'support-primary-operation\'')
     expect(supportForm).toContain('Inspect first')
     expect(supportForm).toContain('data-testid=\'support-secondary-operations\'')
