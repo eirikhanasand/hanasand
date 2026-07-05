@@ -2508,7 +2508,7 @@ function SourceCoverageWorkbench({
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selectedRow.provenance)}</p>
                             </div>
                             <p className='wrap-break-word text-xs font-semibold text-ui-muted dark:text-ui-muted'>
-                                {formatLabel(selectedRow.family)} · {selectedRow.evidenceItems.length} results · capture {selectedRow.captureId ? 'attached' : 'missing'} · request {selectedRow.sourceRequestId ? 'queued' : 'none'}
+                                {formatLabel(selectedRow.family)} · {selectedRow.evidenceItems.length} results · capture {selectedRow.captureId ? 'attached' : 'missing'} · request {selectedRow.sourceRequestId ? 'queued' : 'not queued'}
                             </p>
                             {selectedRow.missing.length ? (
                                 <div className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>

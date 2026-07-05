@@ -659,7 +659,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         <RouteStateCard label='Sources' value={`${activeSourceCount}/${sourceCount}`} detail={sourceCount ? 'active' : 'load pack'} tone={activeSourceCount ? 'ok' : 'warn'} />
                         <RouteStateCard label='Captures' value={String(captureCount)} detail={latestRunStatus ? `${latestRunStatus}${latestRunCaptureCount ? ` · ${latestRunCaptureCount}` : ''}` : 'idle'} tone={captureCount ? 'ok' : 'neutral'} />
                         <RouteStateCard label='Alerts' value={String(alertCount)} detail={`${telemetry?.watchlistMatchCount ?? 0} matches`} tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
-                        <RouteStateCard label='Webhook' value={deliveryCount ? `${deliveryCount}` : webhookConfigured ? 'staged' : 'none'} detail={deliveryCount ? 'attempts' : webhookConfigured ? 'test' : 'add URL'} tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
+                        <RouteStateCard label='Webhook' value={deliveryCount ? `${deliveryCount}` : webhookConfigured ? 'staged' : 'route needed'} detail={deliveryCount ? 'attempts' : webhookConfigured ? 'test' : 'add URL'} tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
                     </div>
                 </div>
                 {result ? (

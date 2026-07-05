@@ -1331,7 +1331,7 @@ function SourceCoverageStrip({ evidenceSummary, sourceCoverage, sourceHealth, so
                         <span className='flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-[11px] leading-4 text-ui-muted'>
                             <span>{row.activeCount}/{row.sourceCount} active</span>
                             <span>{row.evidenceCount} evidence</span>
-                            <span>{row.newest ? relativeTimeLabel(row.newest) : 'none'}</span>
+                            <span>{row.newest ? relativeTimeLabel(row.newest) : 'waiting for capture'}</span>
                         </span>
                     </button>
                 ))}

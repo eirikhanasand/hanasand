@@ -691,6 +691,7 @@ assert(pageClientSource.includes('const TI_MOBILE_SOURCE_FILTER_OPTIONS = 5'), '
 assert(pageClientSource.includes('const TI_ACTIVITY_TIMELINE_ROWS = 3'), 'Public TI activity timeline should stay compact before expansion.')
 assert(pageClientSource.includes('const TI_SOURCE_REFERENCE_ROWS = 4'), 'Public TI source reference panel should stay compact.')
 assert(pageClientSource.includes('const TI_ENRICHMENT_GAP_PREVIEW_ROWS = 4'), 'Public TI enrichment gap workbench should stay compact.')
+assert(pageClientSource.includes('request {selectedRow.sourceRequestId ? \'queued\' : \'not queued\'}'), 'Public TI selected source state should avoid dead none labels.')
 assert(pageClientSource.includes('Linked records'), 'Public TI page should expose consumer workflow state as linked records.')
 assert(pageClientSource.includes('data-ti-consumer-readiness'), 'Public TI page should expose consumer readiness rows for render checks.')
 assert(pageClientSource.includes('data-ti-consumer-field-readiness'), 'Public TI consumer readiness should expose required field readiness chips.')

@@ -16,5 +16,10 @@ assert(source.includes('Action unavailable'), 'Organization route misses should 
 assert(!source.includes('Endpoint unavailable'), 'Organization UI should not expose endpoint-shaped error copy.')
 assert(source.includes('const ORG_ACTIVITY_PREVIEW_ROWS = 8'), 'Organization activity rail should stay compact by default.')
 assert(!/activity\.slice\(0,\s*20\)|selectedRows\.slice\(0,\s*20\)/.test(source), 'Organization activity rail should not render a long event wall by default.')
+assert(source.includes('destinationConfigured(item) ? \'configured\' : \'route needed\''), 'Organization destination state should use operator action language.')
+assert(source.includes('History: {delivery ? formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt) : \'waiting for test\'}'), 'Organization destination history should explain missing delivery history.')
+assert(source.includes('delivery.nextRetryAt ? \'scheduled\' : \'no retry scheduled\''), 'Organization delivery rows should avoid dead none labels.')
+assert(!source.includes('destinationConfigured(item) ? \'configured\' : \'none\''), 'Organization destination state should not render dead none labels.')
+assert(!source.includes('History: {delivery ? formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt) : \'none\'}'), 'Organization destination history should not render dead none labels.')
 
 console.log('[organizations-workspace-copy] org workspace copy guardrails passed')

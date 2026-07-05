@@ -100,6 +100,10 @@ assert.ok(!caseDetailSource.includes('evidence.map((row, index)'), 'DWM case det
 assert.ok(!caseDetailSource.includes('timeline.map((row, index)'), 'DWM case detail should not render all timeline rows by default.')
 assert.ok(caseDetailSource.includes('|| \'watch term pending\''), 'DWM case detail should use customer workflow language when watch terms are not attached.')
 assert.ok(!caseDetailSource.includes('|| \'none\''), 'DWM case detail should not render dead none states for watch terms.')
+assert.ok(workflowSource.includes('webhookConfigured ? \'staged\' : \'route needed\''), 'DWM workflow should render missing webhook routes as an operator action.')
+assert.ok(!workflowSource.includes('webhookConfigured ? \'staged\' : \'none\''), 'DWM workflow should not render dead none labels for webhook routing.')
+assert.ok(source.includes('row.newest ? relativeTimeLabel(row.newest) : \'waiting for capture\''), 'DWM source coverage should explain missing freshness as capture state.')
+assert.ok(!source.includes('row.newest ? relativeTimeLabel(row.newest) : \'none\''), 'DWM source coverage should not render dead none labels for freshness.')
 
 for (const token of [
     'data-dwm-workflow-runbook',

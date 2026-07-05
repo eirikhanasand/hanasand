@@ -2605,11 +2605,11 @@ function WatchlistDestinationSummary({ item, delivery }: { item: WatchlistItem, 
         <div className='grid gap-1 rounded-lg border border-ui-border bg-ui-panel p-3 text-xs dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex items-center justify-between gap-2'>
                 <span className='font-semibold text-ui-text dark:text-ui-text'>Destination</span>
-                <StatusPill status={destinationConfigured(item) ? 'configured' : 'none'} />
+                <StatusPill status={destinationConfigured(item) ? 'configured' : 'route needed'} />
             </div>
             <span className='truncate text-ui-muted dark:text-ui-muted'>{destinationDisplayState(item)}</span>
             <span className='truncate text-ui-muted dark:text-ui-muted'>{delivery ? `Last ${delivery.dryRun ? 'test' : 'delivery'} ${delivery.status || 'attempted'}` : 'No delivery history yet'}</span>
-            <span className='truncate text-ui-muted dark:text-ui-muted'>History: {delivery ? formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt) : 'none'}</span>
+            <span className='truncate text-ui-muted dark:text-ui-muted'>History: {delivery ? formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt) : 'waiting for test'}</span>
         </div>
     )
 }
@@ -2823,7 +2823,7 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                                             </td>
                                             <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                                 <div className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
-                                                    <span>{delivery.errorClass ? sanitizeOrganizationDisplayCopy(delivery.errorClass) : delivery.nextRetryAt ? 'scheduled' : 'none'}</span>
+                                                    <span>{delivery.errorClass ? sanitizeOrganizationDisplayCopy(delivery.errorClass) : delivery.nextRetryAt ? 'scheduled' : 'no retry scheduled'}</span>
                                                     <span>{deliveryRetryText(delivery)}</span>
                                                     {delivery.dedupeKey && <span className='max-w-40 truncate'>Deduplicated delivery</span>}
                                                 </div>
