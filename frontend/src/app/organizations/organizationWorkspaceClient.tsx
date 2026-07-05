@@ -2683,7 +2683,8 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                     const edit = editing[item.id]
                     const editDuplicate = edit ? isDuplicateWatchlistTerm(watchlists, edit.kind, edit.value, item.id) : false
                     const editChanged = edit ? watchlistDraftChanged(item, edit) : false
-                    const lifecycleLabel = item.status === 'active' ? 'Active routes' : item.status === 'paused' ? 'Paused excluded' : item.status === 'archived' ? 'Archived closed' : `${item.status} state`
+                    const status = item.status.toLowerCase()
+                    const lifecycleLabel = status === 'active' ? 'Active routes' : status === 'paused' ? 'Paused excluded' : status === 'archived' ? 'Archived closed' : `${item.status} state`
                     const selected = selectedSubject.type === 'watchlist' && selectedSubject.id === item.id
                     return (
                         <div
@@ -2749,10 +2750,10 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                                                     <button type='button' aria-label='Edit watchlist term' title='Edit watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [item.id]: { kind: item.kind, value: item.value, notes: item.notes || '' } }))}>
                                                         <Pencil className='h-4 w-4' />
                                                     </button>
-                                                    {item.status === 'active' && <button type='button' aria-label='Pause watchlist term' title='Pause watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'pause')}><Pause className='h-4 w-4' /></button>}
-                                                    {item.status === 'paused' && <button type='button' aria-label='Resume watchlist term' title='Resume watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'resume')}><Play className='h-4 w-4' /></button>}
-                                                    {item.status === 'archived' && <button type='button' aria-label='Restore watchlist term' title='Restore watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'restore')}><Archive className='h-4 w-4' /></button>}
-                                                    {item.status !== 'archived' && <ConfirmActionButton ariaLabel='Archive watchlist term' disabled={Boolean(busy)} onConfirm={() => onDelete(item)} icon={<Trash2 className='h-4 w-4' />} />}
+                                                    {status === 'active' && <button type='button' aria-label='Pause watchlist term' title='Pause watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'pause')}><Pause className='h-4 w-4' /></button>}
+                                                    {status === 'paused' && <button type='button' aria-label='Resume watchlist term' title='Resume watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'resume')}><Play className='h-4 w-4' /></button>}
+                                                    {status === 'archived' && <button type='button' aria-label='Restore watchlist term' title='Restore watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'restore')}><Archive className='h-4 w-4' /></button>}
+                                                    {status !== 'archived' && <ConfirmActionButton ariaLabel='Archive watchlist term' disabled={Boolean(busy)} onConfirm={() => onDelete(item)} icon={<Trash2 className='h-4 w-4' />} />}
                                                 </>
                                             ) : (
                                                 <span className='inline-flex min-h-10 items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted' aria-disabled='true' title='Owner or admin required' aria-label='Watchlist actions: Owner or admin required'>
