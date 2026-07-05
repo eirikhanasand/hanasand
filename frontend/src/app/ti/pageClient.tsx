@@ -16,7 +16,9 @@ import { humanizeSlug } from '../seo'
 
 const TI_WORKBENCH_PREVIEW_ROWS = 1
 const TI_EVIDENCE_QUEUE_PREVIEW_ROWS = 2
-const TI_SELECTED_CONTEXT_ROWS = 3
+const TI_SELECTED_CONTEXT_ROWS = 2
+const TI_SELECTED_CONTINUITY_REF_ROWS = 2
+const TI_SELECTED_CONTINUITY_GAP_ROWS = 3
 const TI_SELECTED_DETAIL_LIST_ROWS = 3
 const TI_SELECTED_SOURCE_REQUEST_ROWS = 2
 const TI_MOBILE_SOURCE_FILTER_OPTIONS = 5
@@ -843,7 +845,7 @@ function SelectedEvidenceRail({
                         <div data-ti-selected-source-inline='true' className='mt-3 hidden border-t border-ui-border pt-3 dark:border-ui-border lg:block'>
                             <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
                                 <span className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source context</span>
-                                {sourceDrilldown.rows.slice(0, 3).map(row => (
+                                {sourceDrilldown.rows.slice(0, TI_SELECTED_CONTEXT_ROWS).map(row => (
                                     <span
                                         key={`${row.sourceName}-${row.sourceId || row.provenance}`}
                                         title={row.provenance}
@@ -853,7 +855,7 @@ function SelectedEvidenceRail({
                                         <span className={row.captureId ? 'text-ui-success' : 'text-ui-warning'}>{row.captureId ? 'capture' : 'capture needed'}</span>
                                     </span>
                                 ))}
-                                {sourceDrilldown.rows.length > 3 ? <span className='text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>+{sourceDrilldown.rows.length - 3}</span> : null}
+                                {sourceDrilldown.rows.length > TI_SELECTED_CONTEXT_ROWS ? <span className='text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>+{sourceDrilldown.rows.length - TI_SELECTED_CONTEXT_ROWS}</span> : null}
                             </div>
                         </div>
                     ) : null}
@@ -872,11 +874,11 @@ function SelectedEvidenceRail({
                         ))}
                     </div>
                     <div data-ti-auth-continuity-refs='true' className='flex min-w-0 flex-wrap gap-1'>
-                        {continuityRefs.slice(0, 3).map(ref => (
+                        {continuityRefs.slice(0, TI_SELECTED_CONTINUITY_REF_ROWS).map(ref => (
                             <ContinuityRefChip key={ref.label} refItem={ref} />
                         ))}
-                        {continuityRefs.length > 3 ? (
-                            <span className='inline-flex max-w-full items-center rounded-md bg-ui-raised px-1.5 py-1 text-[10px] font-semibold leading-4 text-ui-muted dark:bg-ui-panel dark:text-ui-muted'>+{continuityRefs.length - 3} refs</span>
+                        {continuityRefs.length > TI_SELECTED_CONTINUITY_REF_ROWS ? (
+                            <span className='inline-flex max-w-full items-center rounded-md bg-ui-raised px-1.5 py-1 text-[10px] font-semibold leading-4 text-ui-muted dark:bg-ui-panel dark:text-ui-muted'>+{continuityRefs.length - TI_SELECTED_CONTINUITY_REF_ROWS} refs</span>
                         ) : null}
                     </div>
                     {continuityGaps.length ? (
@@ -886,11 +888,14 @@ function SelectedEvidenceRail({
                                 <span>{continuityGaps.length}</span>
                             </summary>
                             <div className='mt-1 flex min-w-0 flex-wrap gap-1'>
-                                {continuityGaps.map(gap => (
+                                {continuityGaps.slice(0, TI_SELECTED_CONTINUITY_GAP_ROWS).map(gap => (
                                     <span key={gap} className='max-w-full wrap-break-word rounded-md border border-ui-warning/25 bg-ui-panel px-1.5 py-1 text-[10px] font-semibold leading-4 text-ui-warning dark:bg-ui-panel dark:text-ui-warning'>
                                         {gap}
                                     </span>
                                 ))}
+                                {continuityGaps.length > TI_SELECTED_CONTINUITY_GAP_ROWS ? (
+                                    <span className='rounded-md border border-ui-warning/25 bg-ui-panel px-1.5 py-1 text-[10px] font-semibold leading-4 text-ui-warning dark:bg-ui-panel dark:text-ui-warning'>+{continuityGaps.length - TI_SELECTED_CONTINUITY_GAP_ROWS} more</span>
+                                ) : null}
                             </div>
                         </details>
                     ) : null}
