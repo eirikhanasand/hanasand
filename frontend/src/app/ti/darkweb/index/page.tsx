@@ -5,10 +5,10 @@ import { buildRouteMetadata } from '../../../seo'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = buildRouteMetadata({
-    title: 'Threat Actor Source Map',
+    title: 'Exposure Source Map',
     description: 'Search monitored leak sites, company mentions, review states, and dark web monitoring details.',
     path: '/ti/darkweb/index',
-    keywords: ['threat actor source map', 'dark web index', 'company exposure monitoring'],
+    keywords: ['exposure source map', 'dark web index', 'company exposure monitoring'],
 })
 
 interface DarkwebIndexPageProps {
@@ -105,12 +105,12 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                 <section className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm lg:grid-cols-[1.2fr_0.8fr]'>
                     <div className='grid gap-3'>
                         <div className='flex flex-wrap items-center gap-2'>
-                            <h1 className='text-3xl font-semibold text-ui-text md:text-4xl'>Threat actor source map</h1>
+                            <h1 className='text-3xl font-semibold text-ui-text md:text-4xl'>Exposure source map</h1>
                             <Badge tone='ok'>company alerts</Badge>
                             <Badge tone='watch'>leak sites</Badge>
                         </div>
                         <p className='max-w-4xl text-sm leading-6 text-ui-muted'>
-                            Search monitored leak sites, recent attacks, and captured page summaries for company names, actor names, posted dates, sectors, countries, and data descriptions. This is the working index behind fast customer notifications and UI-friendly actor overviews.
+                            Search monitored exposure sources, recent postings, and captured page summaries for company names, group names, posted dates, sectors, countries, and data descriptions. This is the working index behind fast customer notifications and customer-ready summaries.
                         </p>
                     </div>
                     <div className='grid gap-2 text-sm'>
@@ -124,24 +124,24 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                 <section className='grid gap-3 lg:grid-cols-3'>
                     <ProductTile
                         icon={<Radar className='h-4 w-4' />}
-                        title='Direct actor checks'
-                        detail='Use public indexes as seeds, then verify fresh leak-site changes directly where collection is approved.'
+                        title='Source verification'
+                        detail='Use public indexes as seeds, then verify fresh exposure-source changes directly where collection is approved.'
                     />
                     <ProductTile
                         icon={<Building2 className='h-4 w-4' />}
                         title='Company watchlists'
-                        detail='Match customers, subsidiaries, vendors, domains, and brands against new actor posts and captured page text.'
+                        detail='Match customers, subsidiaries, vendors, domains, and brands against new exposure posts and captured page text.'
                     />
                     <ProductTile
                         icon={<Globe2 className='h-4 w-4' />}
                         title='Monitoring mix'
-                        detail='Use public indexes as seed coverage, then track monitored actor infrastructure and exposure records in one customer-ready map.'
+                        detail='Use public indexes as seed coverage, then track monitored source infrastructure and exposure records in one customer-ready map.'
                     />
                 </section>
 
                 <form className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' action='/ti/darkweb/index'>
                     <div className='grid gap-3 md:grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_auto] md:items-end'>
-                        <Input label='Search' name='q' defaultValue={query} placeholder='company, actor, domain, sector...' />
+                        <Input label='Search' name='q' defaultValue={query} placeholder='company, group, domain, sector...' />
                         <Input label='Network' name='network' defaultValue={network} placeholder='tor, i2p, clear web' />
                         <Input label='Review type' name='legalTriage' defaultValue={legalTriage} placeholder='approved, review' />
                         <Input label='Status' name='reviewState' defaultValue={reviewState} placeholder='ready, watching' />
@@ -155,7 +155,7 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
 
                 <section className='grid gap-3'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <h2 className='text-lg font-semibold text-ui-text'>Actor and company activity</h2>
+                        <h2 className='text-lg font-semibold text-ui-text'>Exposure activity</h2>
                         <p className='text-xs text-ui-muted'>{records.length} shown{searchIndex?.nextCursor ? ' · more available' : ''}</p>
                     </div>
                     {records.length ? (
@@ -177,8 +177,8 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                                 <h2 className='text-xl font-semibold text-ui-text'>{query ? 'No matching activity in the current index' : 'Search company and actor activity'}</h2>
                                 <p className='text-sm leading-6 text-ui-muted'>
                                     {query
-                                        ? 'Try a broader company, actor, sector, or domain. Alerts are useful when a watched term appears; empty searches stay quiet.'
-                                        : 'Enter a company, actor, domain, supplier, or sector to review monitored exposure records.'}
+                                        ? 'Try a broader company, group, sector, or domain. Alerts are useful when a watched term appears; empty searches stay quiet.'
+                                        : 'Enter a company, group, domain, supplier, or sector to review monitored exposure records.'}
                                 </p>
                             </div>
                         </div>
@@ -211,7 +211,7 @@ function RecordRow({ record }: { record: DarkwebRecord }) {
                     <span>{sourceCountText(record)}</span>
                     {record.retentionClass ? <span>{record.retentionClass}</span> : null}
                 </div>
-                <Hints label='Actors' values={record.actorHints} />
+                <Hints label='Groups' values={record.actorHints} />
                 <Hints label='Companies' values={record.victimHints} />
                 <Hints label='TTPs' values={record.ttpHints} />
                 {record.blockedReason ? <p className='text-xs text-ui-warning'>Needs analyst review before customer alerting.</p> : null}
