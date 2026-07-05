@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BellRing, CheckCircle2, CreditCard, FileCheck2, Gauge, Radio, ShieldCheck, Zap } from 'lucide-react'
+import { BellRing, CheckCircle2, CreditCard, FileCheck2, Gauge, Radio, ShieldCheck } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import type { ReactNode } from 'react'
 
@@ -14,7 +14,6 @@ const plans = [
         watchTerms: '25 watch terms',
         delivery: 'Webhook alerts',
         review: 'Standard analyst review',
-        checks: '5 load checks / month',
         includes: ['Dark web monitoring', 'Alert delivery', 'Threat search access'],
     },
     {
@@ -25,7 +24,6 @@ const plans = [
         watchTerms: '100 watch terms',
         delivery: 'Webhook + case routing',
         review: 'Priority analyst review',
-        checks: '50 load checks / month',
         includes: ['Everything in Monitor', 'Case workflows', 'Webhook delivery history'],
         highlighted: true,
     },
@@ -37,16 +35,18 @@ const plans = [
         watchTerms: '500 watch terms',
         delivery: 'API + webhook + cases',
         review: 'Priority review with actor context',
-        checks: '250 load checks / month',
         includes: ['Everything in Response', 'Scoped API tokens', 'Actor context enrichment'],
     },
 ]
 
 const gates = [
     { label: 'Monitoring delivery', value: 'Live', detail: 'Manage webhook and case delivery.', href: '/dashboard/automations', icon: <BellRing className='h-4 w-4' />, tone: 'ok' as const },
-    { label: 'Load checks', value: '5 left', detail: 'Run checks from the load testing page.', href: '/dashboard/load-testing', icon: <Zap className='h-4 w-4' />, tone: 'trial' as const },
     { label: 'API keys', value: 'Scoped', detail: 'Create owner-linked tokens.', href: '/dashboard/system/rate-limits', icon: <Gauge className='h-4 w-4' />, tone: 'ok' as const },
     { label: 'Billing', value: 'Trial', detail: 'Upgrade or talk to sales.', href: '/contact?intent=subscription', icon: <CreditCard className='h-4 w-4' />, tone: 'trial' as const },
+]
+
+const utilityGates = [
+    { label: 'Service checks', value: 'Utility', detail: 'Permitted endpoint checks for URLs you control.', href: '/dashboard/load-testing', icon: <Gauge className='h-4 w-4' />, tone: 'trial' as const },
 ]
 
 const enterpriseReviewItems = [
@@ -77,13 +77,13 @@ export default function SubscriptionPage() {
                                 <span className='rounded-full border border-ui-success bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-success'>Monitoring routes enabled</span>
                             </div>
                             <h2 className='mt-2 text-lg font-semibold text-ui-text'>Current access</h2>
-                            <p className='mt-1 max-w-3xl text-sm leading-5 text-ui-muted'>You can test monitoring, delivery, API keys, and load checks now. Upgrade when you need more watch terms, review priority, or API-driven delivery.</p>
+                            <p className='mt-1 max-w-3xl text-sm leading-5 text-ui-muted'>You can test monitoring, delivery, and scoped API keys now. Upgrade when you need more watch terms, review priority, or API-driven delivery.</p>
                         </div>
                         <div className='grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[520px]'>
                             <AccessMetric label='Watch terms' value='Trial' />
                             <AccessMetric label='Delivery' value='Live' />
                             <AccessMetric label='API' value='Scoped' />
-                            <AccessMetric label='Checks' value='5' />
+                            <AccessMetric label='Review' value='Trial' />
                         </div>
                     </div>
                 </DashboardPanel>
@@ -130,7 +130,6 @@ export default function SubscriptionPage() {
                                         <th className='px-3 py-2'>Watchlist</th>
                                         <th className='px-3 py-2'>Delivery</th>
                                         <th className='px-3 py-2'>Review</th>
-                                        <th className='px-3 py-2'>Checks</th>
                                         <th className='px-3 py-2 text-right'>Action</th>
                                     </tr>
                                 </thead>
@@ -144,7 +143,6 @@ export default function SubscriptionPage() {
                                             <td className='px-3 py-2 text-ui-muted'>{plan.watchTerms}</td>
                                             <td className='px-3 py-2 text-ui-muted'>{plan.delivery}</td>
                                             <td className='px-3 py-2 text-ui-muted'>{plan.review}</td>
-                                            <td className='px-3 py-2 text-ui-muted'>{plan.checks}</td>
                                             <td className='px-3 py-2 text-right'>
                                                 <Link href={plan.href} className='inline-flex h-8 items-center justify-center rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>
                                                     Choose
@@ -160,11 +158,20 @@ export default function SubscriptionPage() {
                     <DashboardPanel className='border-ui-border bg-ui-panel p-3'>
                         <div className='mb-2'>
                             <h2 className='text-sm font-semibold text-ui-text'>Workspace entitlements</h2>
-                            <p className='mt-0.5 text-xs text-ui-muted'>Jump to the live surface behind each capability.</p>
+                            <p className='mt-0.5 text-xs text-ui-muted'>Jump to the live monitoring surface behind each capability.</p>
                         </div>
                         <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-1'>
                             {gates.map(gate => <OperationGate key={gate.label} {...gate} />)}
                         </div>
+                        <details className='mt-3 rounded-md border border-ui-border bg-ui-raised' data-subscription-utility-entitlements>
+                            <summary className='flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3 text-xs font-semibold uppercase text-ui-muted [&::-webkit-details-marker]:hidden'>
+                                Utility tools
+                                <span className='text-[11px] normal-case text-ui-muted'>Separate from monitoring plans</span>
+                            </summary>
+                            <div className='grid gap-2 border-t border-ui-border p-2'>
+                                {utilityGates.map(gate => <OperationGate key={gate.label} {...gate} />)}
+                            </div>
+                        </details>
                     </DashboardPanel>
                 </div>
 
@@ -211,7 +218,6 @@ function PlanCard({ plan }: { plan: typeof plans[number] }) {
                 <PlanLine label='Watchlist' value={plan.watchTerms} />
                 <PlanLine label='Delivery' value={plan.delivery} />
                 <PlanLine label='Review' value={plan.review} />
-                <PlanLine label='Checks' value={plan.checks} />
             </div>
             <div className='mt-4 border-t border-ui-border pt-3'>
                 <p className='text-[11px] font-semibold uppercase text-ui-muted'>Included</p>
