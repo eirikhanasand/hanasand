@@ -58,7 +58,7 @@ const BLOCKED_SANDBOX_HOST_SUFFIXES = [
     '.lan',
 ]
 
-export function sandboxUrlSafety(value: string): { ok: true } | { ok: false; reason: string } {
+export function sandboxUrlSafety(value: string, options: { allowLocalTargets?: boolean } = {}): { ok: true } | { ok: false; reason: string } {
     let parsed: URL
     try {
         parsed = new URL(value)
@@ -76,11 +76,11 @@ export function sandboxUrlSafety(value: string): { ok: true } | { ok: false; rea
 
     const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase()
     if (!host) return { ok: false, reason: 'missing hostname' }
-    if (BLOCKED_SANDBOX_HOSTS.has(host)) return { ok: false, reason: 'internal hostname' }
-    if (BLOCKED_SANDBOX_HOST_SUFFIXES.some(suffix => host.endsWith(suffix))) {
+    if (!options.allowLocalTargets && BLOCKED_SANDBOX_HOSTS.has(host)) return { ok: false, reason: 'internal hostname' }
+    if (!options.allowLocalTargets && BLOCKED_SANDBOX_HOST_SUFFIXES.some(suffix => host.endsWith(suffix))) {
         return { ok: false, reason: 'internal hostname suffix' }
     }
-    if (isBlockedIPv4Host(host) || isBlockedIPv6Host(host)) {
+    if (!options.allowLocalTargets && (isBlockedIPv4Host(host) || isBlockedIPv6Host(host))) {
         return { ok: false, reason: 'private or local network address' }
     }
 

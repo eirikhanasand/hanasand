@@ -64,6 +64,10 @@ const DEFAULT_HEIGHT = 760
 const MAX_DURATION_MS = 60 * 60 * 1000
 const FRAME_INTERVAL_MS = 900
 
+function allowLocalSandboxTargets() {
+    return process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS === '1'
+}
+
 export function handleOnionSessionSocket(connection: WebSocket, sessionId: string, defaultNetwork: 'tor' | 'regular' = 'tor') {
     let browser: Browser | null = null
     let page: Page | null = null
@@ -221,7 +225,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         page = await context.newPage()
         await page.route('**/*', async (route) => {
             const requestUrl = route.request().url()
-            const safety = sandboxUrlSafety(requestUrl)
+            const safety = sandboxUrlSafety(requestUrl, { allowLocalTargets: allowLocalSandboxTargets() })
             if (!safety.ok) {
                 trackNetwork({
                     kind: 'failed',
@@ -369,7 +373,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     async function navigate(value: string) {
         if (!page) return
         const target = normalizeTarget(value)
-        const safety = sandboxUrlSafety(target)
+        const safety = sandboxUrlSafety(target, { allowLocalTargets: allowLocalSandboxTargets() })
         if (!safety.ok) {
             send({ type: 'navigation_error', target, message: `Blocked unsafe sandbox target: ${safety.reason}.` })
             send({ type: 'status', state: 'unsafe_target_blocked', url: target, message: `Blocked unsafe sandbox target: ${safety.reason}.` })

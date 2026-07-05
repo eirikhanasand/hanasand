@@ -39,6 +39,10 @@ const coreTasks: TestTask[] = [
     scriptTask('lxd-lifecycle', 'LXD lifecycle contract', 'test-lxd-lifecycle.ts'),
     scriptTask('browser-sandbox-profiles', 'Browser sandbox profile persistence contract', 'smoke-browser-sandbox-profiles.ts'),
     scriptTask('browser-sandbox-analysis', 'Browser sandbox analysis contract', 'smoke-browser-sandbox-analysis.ts'),
+    {
+        ...scriptTask('browser-sandbox-broker', 'Browser sandbox broker runtime contract', 'smoke-browser-sandbox-broker.ts'),
+        requires: 'playwright',
+    },
 ]
 
 const environmentTasks: TestTask[] = [
