@@ -686,7 +686,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <div className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
                         <p className='text-[10px] font-semibold uppercase text-ui-subtle'>Workflow state</p>
                         <p className='mt-1 text-sm font-semibold text-ui-text'>{alertCount ? `${alertCount} alert${alertCount === 1 ? '' : 's'} ready` : termCount ? 'Ready to collect' : 'Add watchlist terms'}</p>
-                        <p className='mt-1 text-xs leading-5 text-ui-muted'>{deliveryCount ? `${deliveryCount} delivery attempt${deliveryCount === 1 ? '' : 's'} recorded.` : 'Stage a webhook when the case needs customer notification.'}</p>
+                        <p className='mt-1 text-xs leading-5 text-ui-muted'>{deliveryCount ? `${deliveryCount} delivery attempt${deliveryCount === 1 ? '' : 's'} recorded.` : 'No destination yet. Add or test an HTTPS Discord/webhook endpoint before sending.'}</p>
                     </div>
                 )}
             </section>
@@ -725,7 +725,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test destination</WorkflowButton>
                     <WorkflowButton busy={busyAction === 'delivery'} disabled={busy || Boolean(webhookSendDisabledReason)} disabledReason={webhookSendDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send queued</WorkflowButton>
                     <p className='text-xs leading-5 text-ui-subtle lg:col-span-3'>
-                        {webhookConfigured ? 'Delivery actions use the staged endpoint for dry-runs and queued alert sends.' : 'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.'}
+                        {webhookConfigured ? 'Dry-run uses this endpoint and records the delivery result without external send by default.' : 'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.'}
                     </p>
                 </div>
                 {lastRoute ? <RouteRunSummary route={lastRoute} organizationId={organizationId} /> : null}
