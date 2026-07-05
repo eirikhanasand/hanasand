@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="${HANASAND_DB_MONITOR_DIR:-/home/hanasand/hanasand-deploy-64d9339/ops/db-dashboard-monitor}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+CURRENT_DEPLOY_DIR="/home/hanasand/hanasand-deploy-clean/ops/db-dashboard-monitor"
+APP_DIR="${HANASAND_DB_MONITOR_DIR:-$CURRENT_DEPLOY_DIR}"
 ENV_FILE="${HANASAND_DB_MONITOR_ENV:-/home/hanasand/monitor-state/db-dashboard-monitor.env}"
 LOG_FILE="${HANASAND_DB_MONITOR_LOG:-/home/hanasand/monitor-state/db-dashboard-monitor.log}"
 LOCK_FILE="${HANASAND_DB_MONITOR_LOCK:-/tmp/hanasand-db-dashboard-monitor.lock}"
@@ -19,6 +21,10 @@ if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   source "$ENV_FILE"
   set +a
+fi
+
+if [[ ! -f "$APP_DIR/db-dashboard-monitor.mjs" ]]; then
+  APP_DIR="$SCRIPT_DIR"
 fi
 
 cd "$APP_DIR"

@@ -244,14 +244,30 @@ async function sendDiscord({ status, color, title, description, fields }) {
 }
 
 function buildDiscordPayload({ status, color, title, description, fields }) {
+    const fieldMap = new Map((fields || []).map(field => [field.name, field.value]))
+    const cause = fieldMap.get('Cause') || fieldMap.get('What failed') || reasonLabel(status)
+    const action = fieldMap.get('Action') || fieldMap.get('Operator action') || 'Open the monitor evidence and rerun the check.'
+    const evidence = fieldMap.get('Evidence') || fieldMap.get('URL') || `${baseUrl}${dashboardPath}`
+    const impact = truncate(cleanSentence(description), 82)
+    const actionText = truncate(cleanSentence(action), 56)
+    const conciseContent = status === 'DOWN'
+        ? `${discordMention} ${title}. ${impact} Next: ${actionText}.`
+        : undefined
+
     return {
-        content: status === 'DOWN' ? `${discordMention} ${title}. ${truncate(description, 180)}` : undefined,
+        content: conciseContent,
         embeds: [{
             title,
-            description: truncate(description, 900),
+            description: truncate(description, 500),
             color,
             timestamp: now.toISOString(),
-            fields,
+            fields: [
+                { name: 'Cause', value: truncate(cause, 220), inline: true },
+                { name: 'Impact', value: truncate(description, 300), inline: false },
+                { name: 'Action', value: truncate(action, 260), inline: false },
+                { name: 'Evidence', value: truncate(evidence, 260), inline: false },
+                ...(fields || []).filter(field => !['Cause', 'What failed', 'Action', 'Operator action', 'Evidence', 'URL'].includes(field.name)),
+            ],
         }],
     }
 }
@@ -259,14 +275,14 @@ function buildDiscordPayload({ status, color, title, description, fields }) {
 function resultFields(result) {
     const metrics = result.metrics || {}
     return [
-        { name: 'URL', value: `${baseUrl}${dashboardPath}`, inline: true },
-        { name: 'Monitor user', value: username || 'not configured', inline: true },
-        { name: 'Latency', value: `${result.latencyMs}ms`, inline: true },
-        { name: 'What failed', value: reasonLabel(result.reason), inline: true },
-        { name: 'Operator action', value: operatorAction(result.reason), inline: false },
+        { name: 'Cause', value: reasonLabel(result.reason), inline: true },
+        { name: 'Action', value: operatorAction(result.reason), inline: false },
+        { name: 'Evidence', value: result.ok ? `${baseUrl}${dashboardPath}` : `${baseUrl}${dashboardPath}\nScreenshot: ${failureScreenshotPath}`, inline: false },
         { name: 'Clusters', value: String(metrics.clusters ?? 'unknown'), inline: true },
         { name: 'Databases', value: String(metrics.databases ?? 'unknown'), inline: true },
-        ...(result.ok ? [] : [{ name: 'Failure screenshot', value: failureScreenshotPath, inline: false }]),
+        { name: 'Storage', value: metrics.storageBytes ? formatBytes(metrics.storageBytes) : 'unknown', inline: true },
+        { name: 'Latency', value: `${result.latencyMs}ms`, inline: true },
+        { name: 'Monitor user', value: username || 'not configured', inline: true },
     ]
 }
 
@@ -369,6 +385,10 @@ function truncate(value, max) {
     return text.length > max ? `${text.slice(0, max - 1)}...` : text
 }
 
+function cleanSentence(value) {
+    return String(value || '').replace(/\s+/g, ' ').replace(/[.\s]+$/g, '')
+}
+
 function formatBytes(bytes) {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
     const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -431,7 +451,9 @@ function runSelfTest() {
     assert.match(discordPayload.content, /Database dashboard unavailable: unavailable/)
     assert.match(discordPayload.content, /unavailable or reconnecting telemetry state/)
     assert.doesNotMatch(discordPayload.content, /check failed/i)
-    assert.ok(discordPayload.embeds[0].fields.some(field => field.name === 'Operator action' && /API auth|PostgreSQL telemetry/.test(field.value)))
+    assert.ok(discordPayload.content.length < 220)
+    assert.ok(discordPayload.embeds[0].fields.some(field => field.name === 'Action' && /API auth|PostgreSQL telemetry/.test(field.value)))
+    assert.ok(discordPayload.embeds[0].fields.some(field => field.name === 'Evidence' && /db-dashboard-monitor-failure\.png/.test(field.value)))
 
     const shell = evaluateDashboardText(`
         Operations
