@@ -3233,6 +3233,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, watchlists
     const route = `/api/organizations/${encodeURIComponent(organizationId)}`
     const visibility = visibilityRows(alertCaseVisibility)
     const watchlistDestinationRows = watchlistsWithOwnDestination(watchlists, webhooks)
+    const configuredDestinations = webhooks.filter(organizationDestinationConfigured).length + watchlistDestinationRows.length
     const hasScopeRows = Boolean(alertTerms.length || alerts.length || cases.length || webhooks.length || watchlistDestinationRows.length || visibility.length)
     const failedDeliveries = deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error)).length
     if (!hasScopeRows) {
@@ -3263,7 +3264,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, watchlists
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Terms: {alertTerms.length}</span>
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Alerts: {alerts.length}</span>
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Cases: {cases.length}</span>
-                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Destinations: {webhooks.length + watchlistDestinationRows.length}</span>
+                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Destinations: {configuredDestinations}</span>
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Failures: {failedDeliveries}</span>
             </div>
             <div className='mt-4 grid gap-3 lg:grid-cols-2'>
