@@ -2856,7 +2856,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                                         canManage={canManage}
                                         busy={busy}
                                         onDraftChange={next => setDestinationDrafts(current => ({ ...current, [item.id]: next }))}
-                                        onSelect={() => onSelectSubject({ type: 'destination', id: item.id })}
+                                        onSelect={() => onSelectSubject({ type: 'watchlist', id: item.id })}
                                         onTest={mode => onTestDestination(item, mode)}
                                     />
                                     <RowStatus message={rowMessages[`watchlist-${item.id}`]} />
