@@ -21,7 +21,7 @@ test('public workflow reliability contracts are not demo-only', async () => {
     expect(pwnedRoute).not.toContain('password =')
     expect(pwnedPage).toContain('setHashInput(\'\')')
     expect(pwnedPage).toContain('data-bloom-hash-safety-boundary')
-    expect(pwnedPage).toContain('This page does not ask for the underlying secret.')
+    expect(pwnedPage).toContain('This lookup does not ask for, derive, or transmit the underlying secret.')
 
     expect(registerPage).toContain('data-managed-onboarding-intake')
     expect(registerPage).toContain('fetch(\'/api/contact\'')
@@ -45,7 +45,9 @@ test('public workflow reliability contracts are not demo-only', async () => {
     expect(contactRoute).toContain('security review material')
 
     expect(dwmPage).toContain('fetch(\'/api/dwm/webhook-sink\'')
-    expect(dwmPage).toContain('Test sample delivery')
-    expect(dwmPage).toContain('Save draft')
+    expect(dwmPage).toContain('Validate sample payload')
+    expect(dwmPage).toContain('Save local preview')
+    expect(dwmPage).toContain('data-dwm-public-webhook-boundary')
+    expect(dwmPage).toContain('Your endpoint was not contacted.')
     expect(dwmPage).not.toContain('window.location.assign(\'/dashboard/automations?setup=dwm\')')
 })
