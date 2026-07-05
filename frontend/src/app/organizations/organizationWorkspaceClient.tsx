@@ -3965,8 +3965,10 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
     if (subject.type === 'organization') {
         return [
             { label: 'Settings', href: '#settings' },
+            { label: 'Members', href: '#members' },
             { label: 'Invites', href: '#invites' },
             { label: 'Watchlists', href: '#watchlists' },
+            { label: 'Destinations', href: '#destinations' },
             { label: 'Activity', href: '#audit' },
         ]
     }
