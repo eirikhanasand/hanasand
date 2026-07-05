@@ -236,15 +236,15 @@ export default function DarkWebMonitoringPage() {
             })
             const body = await response.json().catch(() => ({})) as { eventId?: string, receivedAt?: string, error?: string }
             if (!response.ok || body.error) {
-                throw new Error(body.error || 'The sample webhook receiver did not accept the payload.')
+                throw new Error(body.error || 'The delivery preview receiver did not accept the payload.')
             }
             setWebhookReceipt({
                 eventId: body.eventId || 'accepted',
                 receivedAt: body.receivedAt || new Date().toISOString(),
             })
-            setStatus('Sample payload accepted by the Hanasand receiver. Your endpoint was not contacted.')
+            setStatus('Delivery preview accepted by the Hanasand receiver. Your endpoint was not contacted.')
         } catch (error) {
-            setStatus(error instanceof Error ? error.message : 'The sample webhook receiver did not accept the payload.')
+            setStatus(error instanceof Error ? error.message : 'The delivery preview receiver did not accept the payload.')
         } finally {
             setTestingWebhook(false)
         }
@@ -506,7 +506,7 @@ export default function DarkWebMonitoringPage() {
                             <textarea id='dwm-watched-terms' aria-label='Watched terms' value={watchlist} onChange={event => updateWatchlist(event.target.value)} className={`${inputClass} min-h-28 resize-y`} placeholder='Company, domain, supplier, brand...' />
                         </label>
                         <div className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs leading-5 text-ui-muted' data-dwm-public-webhook-boundary='true'>
-                            Endpoint safety: saving a draft stores the endpoint and watched terms in this browser only. Testing sends the sample payload to Hanasand&apos;s receiver so you can inspect the shape without contacting your endpoint.
+                            Endpoint safety: saving a draft stores the endpoint and watched terms in this browser only. Testing sends the delivery preview to Hanasand&apos;s receiver so you can inspect the shape without contacting your endpoint.
                         </div>
                         <div className='grid gap-3 md:grid-cols-[auto_auto_auto_1fr] md:items-center'>
                             <button type='button' onClick={prepareWebhookAlert} disabled={!hydrated} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'>
@@ -514,7 +514,7 @@ export default function DarkWebMonitoringPage() {
                                 <ArrowRight className='h-4 w-4' />
                             </button>
                             <button type='button' onClick={() => void testWebhookPreview()} disabled={!hydrated || testingWebhook} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-60'>
-                                {testingWebhook ? 'Testing...' : 'Validate sample payload'}
+                                {testingWebhook ? 'Testing...' : 'Validate delivery preview'}
                             </button>
                             <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel'>
                                 Create in console

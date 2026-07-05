@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('public DWM webhook preview validates sample payload without creating a tenant subscription', async ({ page }) => {
+test('public DWM webhook preview validates delivery shape without creating a tenant subscription', async ({ page }) => {
     await page.goto('/solutions/dwm#webhooks', { waitUntil: 'domcontentloaded' })
     const preview = page.locator('#webhooks')
     await preview.scrollIntoViewIfNeeded()
@@ -15,8 +15,8 @@ test('public DWM webhook preview validates sample payload without creating a ten
     await expect(preview.getByText(/Preview draft saved locally/)).toBeVisible()
     await expect(preview.getByText(/The endpoint is not contacted from this public page/)).toBeVisible()
 
-    await preview.getByRole('button', { name: 'Validate sample payload' }).click()
-    await expect(preview.getByText(/Sample payload accepted by the Hanasand receiver/)).toBeVisible()
+    await preview.getByRole('button', { name: 'Validate delivery preview' }).click()
+    await expect(preview.getByText(/Delivery preview accepted by the Hanasand receiver/)).toBeVisible()
     await expect(preview.getByText(/Your endpoint was not contacted/)).toBeVisible()
     await expect(preview.getByRole('link', { name: 'Create in console' })).toHaveAttribute('href', '/dashboard/automations?setup=dwm')
 })

@@ -57,7 +57,7 @@ test('public workflow reliability contracts are not demo-only', async () => {
     expect(contactRoute).toContain('security review material')
 
     expect(dwmPage).toContain('fetch(\'/api/dwm/webhook-sink\'')
-    expect(dwmPage).toContain('Validate sample payload')
+    expect(dwmPage).toContain('Validate delivery preview')
     expect(dwmPage).toContain('Save local preview')
     expect(dwmPage).toContain('data-dwm-public-webhook-boundary')
     expect(dwmPage).toContain('Your endpoint was not contacted.')
