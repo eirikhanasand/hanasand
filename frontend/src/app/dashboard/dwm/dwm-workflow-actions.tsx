@@ -686,7 +686,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     </div>
                 ) : (
                     <div className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
-                        <p className='text-[10px] font-semibold uppercase text-ui-subtle'>Workflow state</p>
+                        <p className='text-[10px] font-semibold uppercase text-ui-subtle'>Route state</p>
                         <p className='mt-1 text-sm font-semibold text-ui-text'>{alertCount ? `${alertCount} alert${alertCount === 1 ? '' : 's'} ready` : termCount ? 'Ready to collect' : 'Add watchlist terms'}</p>
                         <p className='mt-1 text-xs leading-5 text-ui-muted'>{deliveryCount ? `${deliveryCount} delivery attempt${deliveryCount === 1 ? '' : 's'} recorded.` : 'No destination yet. Add or test an HTTPS Discord/webhook endpoint before sending.'}</p>
                     </div>

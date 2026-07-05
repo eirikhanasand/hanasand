@@ -3173,7 +3173,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                 <th className='px-3 py-2 font-semibold'>Results</th>
                                 <th className='px-3 py-2 font-semibold'>Freshness</th>
                                 <th className='px-3 py-2 font-semibold'>Basis</th>
-                                <th className='px-3 py-2 font-semibold'>Workflow state</th>
+                                <th className='px-3 py-2 font-semibold'>Action state</th>
                             </tr>
                         </thead>
                         <tbody className='divide-y divide-ui-border'>
@@ -3285,7 +3285,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     <div className='grid grid-cols-3 gap-2 text-center text-xs'>
                         <EvidenceMetric label='Freshness' value={formatDate(artifact.freshness)} />
                         <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(artifact.confidence)} />
-                        <EvidenceMetric label='Workflow state' value={displayRequirementText(artifact.readiness.label)} />
+                        <EvidenceMetric label='Action state' value={displayRequirementText(artifact.readiness.label)} />
                     </div>
                     <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 lg:justify-end'>
                         <span className={sourceHealthChipClass(artifact.readiness.state === 'ready_for_org_handoff' ? 'ready' : artifact.readiness.state === 'needs_source' || artifact.readiness.state === 'needs_watchlist_term' ? 'blocked' : 'review')}>{publicStateLabel(artifact.readiness.state)}</span>
