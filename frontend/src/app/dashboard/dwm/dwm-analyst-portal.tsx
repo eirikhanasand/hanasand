@@ -366,7 +366,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                                 {alerts.length} cases · {activeCount} active · {criticalCount} critical · {readyCount} sendable
                             </p>
                             <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted'>
-                                {freshCount} fresh · {highConfidenceCount} at 80%+ confidence · {watchTermCount} watchlist terms · webhook {webhookState} · run {latestRunLabel} · {apiProblemCount ? `${apiProblemCount} data issue${apiProblemCount === 1 ? '' : 's'}` : 'data live'}
+                                {freshCount} fresh · {highConfidenceCount} strong evidence · {watchTermCount} watchlist terms · webhook {webhookState} · run {latestRunLabel} · {apiProblemCount ? `${apiProblemCount} data issue${apiProblemCount === 1 ? '' : 's'}` : 'data live'}
                             </p>
                         </div>
                         <div className='min-w-0 text-left sm:shrink-0 sm:text-right'>
@@ -706,7 +706,7 @@ function PublicTiDwmIntake({ handoff, params, tenantId, organizationId, activeSo
                     <p className='text-[10px] font-semibold uppercase text-ui-primary'>Actor evidence handoff</p>
                     <h2 className='mt-1 wrap-break-word text-sm font-semibold text-ui-text'>{payload.artifact.label || payload.query}</h2>
                     <p className='mt-1 wrap-break-word text-xs text-ui-muted'>
-                        {publicTiActionLabel(handoff.action)} for {payload.query} · {payload.artifact.kind} · {payload.artifact.confidence}% confidence
+                        {publicTiActionLabel(handoff.action)} for {payload.query} · {payload.artifact.kind} · {evidenceStrengthLabel(payload.artifact.confidence)} evidence
                     </p>
                 </div>
                 <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4'>
@@ -828,7 +828,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                 <div className='min-w-0'>
                     <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center'>
                         <span className={severityClass(alert.severity)}>{alert.severity}</span>
-                        <span className='min-w-0 rounded-full bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-primary'>{alert.confidence}% confidence</span>
+                        <span className='min-w-0 rounded-full bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-primary'>{evidenceStrengthLabel(alert.confidence)} evidence</span>
                         <span className='min-w-0 rounded-full bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-muted'>{stateLabel(alert.reviewState)}</span>
                         <span className='min-w-0 rounded-full bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-muted'>{stateLabel(alert.deliveryState || 'pending_review')}</span>
                     </div>
@@ -1363,10 +1363,10 @@ function ExposureEntitiesPanel({ entities, selectedEntityKey, workflowContext, o
                         <tr>
                             <th className='px-4 py-2 font-semibold'>Entity</th>
                             <th className='px-4 py-2 font-semibold'>Kind</th>
-                            <th className='px-4 py-2 font-semibold'>Evidence</th>
+                            <th className='px-4 py-2 font-semibold'>Items</th>
                             <th className='px-4 py-2 font-semibold'>Sources</th>
                             <th className='px-4 py-2 font-semibold'>Newest</th>
-                            <th className='px-4 py-2 font-semibold'>Confidence</th>
+                            <th className='px-4 py-2 font-semibold'>Strength</th>
                             <th className='px-4 py-2 font-semibold'>Next</th>
                         </tr>
                     </thead>
@@ -1385,7 +1385,7 @@ function ExposureEntitiesPanel({ entities, selectedEntityKey, workflowContext, o
                                     </div>
                                 </td>
                                 <td className='px-4 py-3 font-semibold text-ui-muted'>{relativeTimeLabel(entity.newestAt)}</td>
-                                <td className='px-4 py-3 font-semibold text-ui-muted'>{entity.confidence}%</td>
+                                <td className='px-4 py-3 font-semibold text-ui-muted'>{evidenceStrengthLabel(entity.confidence)}</td>
                                 <td className='px-4 py-3'>
                                     <button type='button' onClick={(event) => { event.stopPropagation(); onSelectEntity(entity.key) }} className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas'>
                                         Review
@@ -2168,7 +2168,7 @@ const queueFilters: Array<{ id: QueueFilter, label: string }> = [
     { id: 'ready', label: 'Ready' },
     { id: 'critical', label: 'Critical' },
     { id: 'source', label: 'Source' },
-    { id: 'high_confidence', label: '80%+' },
+    { id: 'high_confidence', label: 'Strong' },
     { id: 'fresh', label: 'Fresh' },
     { id: 'pending_delivery', label: 'To send' },
     { id: 'reviewing', label: 'Reviewing' },
@@ -2192,7 +2192,7 @@ function ActorPanel({ snapshot }: { snapshot: DwmProductSnapshot }) {
                     <div key={actor.actor} className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                         <div className='flex items-center justify-between gap-3'>
                             <span className='text-sm font-semibold text-ui-text'>{actor.actor}</span>
-                            <span className='rounded-full bg-ui-primary/10 px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{actor.confidence}%</span>
+                            <span className='rounded-full bg-ui-primary/10 px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{evidenceStrengthLabel(actor.confidence)}</span>
                         </div>
                         <div className='mt-3 grid grid-cols-3 gap-2 text-[11px]'>
                             <QueueCell label='sources' value={`${actor.sourceCount}`} />
@@ -2754,6 +2754,12 @@ function dispositionClass(state?: EvidenceDispositionState) {
 
 function stateLabel(value: string) {
     return value.replaceAll('_', ' ')
+}
+
+function evidenceStrengthLabel(value: number) {
+    if (value >= 80) return 'Strong'
+    if (value >= 60) return 'Medium'
+    return 'Low'
 }
 
 function relativeTimeLabel(value: string) {
