@@ -20,7 +20,7 @@ const TI_SELECTED_CONTEXT_ROWS = 3
 const TI_SELECTED_DETAIL_LIST_ROWS = 3
 const TI_SELECTED_SOURCE_REQUEST_ROWS = 2
 const TI_DESKTOP_SOURCE_FILTER_CHIPS = 4
-const TI_MOBILE_SOURCE_FILTER_CHIPS = 3
+const TI_MOBILE_SOURCE_FILTER_OPTIONS = 5
 const TI_ACTIVITY_TIMELINE_ROWS = 5
 const TI_SOURCE_REFERENCE_ROWS = 4
 
@@ -6950,37 +6950,29 @@ function MobileEvidenceWorkbar({
                 </div>
             </div>
 
-            <div className='flex min-w-0 flex-wrap gap-1.5 pb-1'>
-                {kindOptions.map(item => (
-                    <button
-                        key={item.value}
-                        type='button'
-                        onClick={() => onKindChange(item.value)}
-                        className={`inline-flex min-h-8 min-w-11 shrink-0 items-center justify-center rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${kind === item.value ? 'border-ui-primary bg-ui-primary/10 text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'}`}
-                    >
-                        {item.label}
-                    </button>
-                ))}
-                <button type='button' onClick={() => onConfidenceChange(confidence === 'high' ? 'all' : 'high')} className={`inline-flex min-h-8 shrink-0 items-center rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${confidence === 'high' ? 'border-ui-primary bg-ui-primary/10 text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'}`}>
-                    Strong basis
-                </button>
+            <div data-ti-mobile-filter-controls='true' className='grid min-w-0 grid-cols-3 gap-1.5'>
+                <label className='grid min-w-0 gap-1'>
+                    <span className='text-[10px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Type</span>
+                    <select value={kind} onChange={event => onKindChange(event.target.value as AnalystWorkItem['kind'] | 'all')} className='h-8 min-w-0 rounded-md border border-ui-border bg-ui-panel px-1.5 text-[11px] font-semibold text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
+                        {kindOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                    </select>
+                </label>
+                <label className='grid min-w-0 gap-1'>
+                    <span className='text-[10px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source</span>
+                    <select value={source} onChange={event => onSourceChange(event.target.value)} className='h-8 min-w-0 rounded-md border border-ui-border bg-ui-panel px-1.5 text-[11px] font-semibold text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
+                        <option value='all'>All</option>
+                        {sourceCounts.slice(0, TI_MOBILE_SOURCE_FILTER_OPTIONS).map(item => <option key={item.source} value={item.source}>{item.source} ({item.count})</option>)}
+                    </select>
+                </label>
+                <label className='grid min-w-0 gap-1'>
+                    <span className='text-[10px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Basis</span>
+                    <select value={confidence} onChange={event => onConfidenceChange(event.target.value as 'all' | 'high' | 'medium')} className='h-8 min-w-0 rounded-md border border-ui-border bg-ui-panel px-1.5 text-[11px] font-semibold text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
+                        <option value='all'>Any</option>
+                        <option value='high'>Strong</option>
+                        <option value='medium'>Moderate</option>
+                    </select>
+                </label>
             </div>
-
-            {sourceCounts.length ? (
-                <div className='flex min-w-0 flex-wrap gap-1.5 pb-1'>
-                    {sourceCounts.slice(0, TI_MOBILE_SOURCE_FILTER_CHIPS).map(item => (
-                        <button
-                            key={item.source}
-                            type='button'
-                            onClick={() => onSourceChange(source === item.source ? 'all' : item.source)}
-                            className={`inline-flex min-h-8 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${source === item.source ? 'border-ui-primary bg-ui-primary/10 text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'}`}
-                        >
-                            <span>{item.source}</span>
-                            <span className='rounded bg-ui-raised px-1 text-[10px] text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>{item.count}</span>
-                        </button>
-                    ))}
-                </div>
-            ) : null}
 
             <div data-ti-mobile-console-links='true' className='grid grid-cols-4 gap-1.5'>
                 <StripActionButton icon={<BellRing className='h-3 w-3' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
