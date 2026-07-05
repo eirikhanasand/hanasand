@@ -3869,20 +3869,24 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
             ['Invited by', member.invitedBy || undefined],
         ]),
     }))
-    const watchlistRows: ActivityItem[] = bundle.watchlists.map(item => ({
-        id: `watchlist-${item.id}`,
-        at: item.updatedAt || item.archivedAt || item.createdAt || new Date(0).toISOString(),
-        title: 'Watchlist term',
-        detail: `${item.kind} · ${item.value} · ${item.status}`,
-        ok: item.status.toLowerCase() !== 'archived',
-        subjectType: 'watchlist',
-        subjectId: item.id,
-        metadata: compactMetadata([
-            ['Owner', organizationMemberLabel(item.updatedBy || item.createdBy, bundle.members)],
-            ['Destination', destinationDisplayState(item)],
-            ['Ref', compactReference(item.alertGenerationRef || item.id, 'ref')],
-        ]),
-    }))
+    const watchlistRows: ActivityItem[] = bundle.watchlists.map(item => {
+        const destination = destinationForWatchlist(item, bundle.webhooks)
+        return {
+            id: `watchlist-${item.id}`,
+            at: item.updatedAt || item.archivedAt || item.createdAt || new Date(0).toISOString(),
+            title: 'Watchlist term',
+            detail: `${item.kind} · ${item.value} · ${item.status}`,
+            ok: item.status.toLowerCase() !== 'archived',
+            subjectType: 'watchlist',
+            subjectId: item.id,
+            relatedSubjectIds: [destination?.id, item.webhookDestinationId, item.alertGenerationRef].filter(Boolean) as string[],
+            metadata: compactMetadata([
+                ['Owner', organizationMemberLabel(item.updatedBy || item.createdBy, bundle.members)],
+                ['Destination', destinationDisplayState(destination || item)],
+                ['Ref', compactReference(item.alertGenerationRef || item.id, 'ref')],
+            ]),
+        }
+    })
     const destinationRows: ActivityItem[] = bundle.webhooks.map(destination => ({
         id: `destination-${destination.id}`,
         at: destination.updatedAt || destination.createdAt || new Date(0).toISOString(),
@@ -4250,7 +4254,8 @@ function selectedSubjectDestinationId(subject: ActivitySubject, bundle: OrgBundl
     if (subject.type === 'watchlist') {
         const item = bundle.watchlists.find(row => row.id === subject.id)
         const delivery = item ? latestDeliveryForWatchlist(item, bundle.deliveries) : undefined
-        return item?.webhookDestinationId || (delivery ? deliveryDestinationIds(delivery, bundle.webhooks)[0] : '') || ''
+        const destination = item ? destinationForWatchlist(item, bundle.webhooks) : undefined
+        return destination?.id || item?.webhookDestinationId || (delivery ? deliveryDestinationIds(delivery, bundle.webhooks)[0] : '') || ''
     }
     if (subject.type === 'alert') {
         const delivery = bundle.deliveries.find(item => item.alertId === subject.id && deliveryDestinationIds(item, bundle.webhooks)[0])
@@ -4418,6 +4423,12 @@ function destinationEditChanged(destination: WebhookDestination, draft: Destinat
 
 function destinationConfigured(item: WatchlistItem) {
     return Boolean(item.webhookUrlConfigured || item.webhookDestinationId || item.webhookEndpointHash || item.webhookEndpointHint)
+}
+
+function destinationForWatchlist(item: WatchlistItem, destinations: WebhookDestination[]) {
+    return destinations.find(destination => destination.id === item.webhookDestinationId
+        || (destination.endpointHash && item.webhookEndpointHash === destination.endpointHash)
+        || (destination.endpointHint && item.webhookEndpointHint === destination.endpointHint))
 }
 
 function organizationDestinationConfigured(destination: WebhookDestination) {
