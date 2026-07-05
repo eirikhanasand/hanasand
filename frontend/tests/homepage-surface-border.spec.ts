@@ -157,3 +157,16 @@ test('homepage exposure queue empty state reads like monitoring product copy', a
     expect(source).not.toContain('Checking for new company mentions...')
     expect(source).not.toContain('Checking for new company mentions.')
 })
+
+test('site atmosphere layer stays inside the viewport', async () => {
+    const source = await readFile(path.join(root, 'src/app/globals.css'), 'utf8')
+    const block = source.match(/\.site-atmosphere\s*\{[^}]+\}/)?.[0] || ''
+    const afterBlock = source.match(/\.site-atmosphere::after\s*\{[^}]+\}/)?.[0] || ''
+
+    expect(block).toContain('inline-size: 100vw;')
+    expect(block).toContain('block-size: 100vh;')
+    expect(block).toContain('contain: strict;')
+    expect(afterBlock).toContain('inset: 0;')
+    expect(afterBlock).not.toContain('inset: -')
+    expect(afterBlock).not.toContain('transform:')
+})

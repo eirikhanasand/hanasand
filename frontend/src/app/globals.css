@@ -225,7 +225,10 @@ button:not(:disabled),
   pointer-events: none;
   position: fixed;
   inset: 0;
+  inline-size: 100vw;
+  block-size: 100vh;
   z-index: 0;
+  contain: strict;
   overflow: hidden;
 }
 
@@ -248,14 +251,13 @@ button:not(:disabled),
 .site-atmosphere::after {
   content: '';
   position: absolute;
-  inset: -28%;
+  inset: 0;
   opacity: 0.68;
   background:
     radial-gradient(ellipse 56rem 38rem at 82% 10%, var(--ambient-primary) 0%, transparent 76%),
     radial-gradient(ellipse 50rem 42rem at 11% 72%, var(--ambient-secondary) 0%, transparent 78%),
     radial-gradient(ellipse 70rem 46rem at 55% 34%, var(--ambient-neutral) 0%, transparent 82%);
   filter: blur(48px);
-  transform: scale(1.04);
 }
 
 .site-loading-screen {
