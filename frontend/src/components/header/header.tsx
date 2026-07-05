@@ -143,7 +143,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     <BrandLogo />
 
                     <nav className='hidden items-center gap-5 lg:flex'>
-                        <PublicDropdown label='Product' items={productItems} />
+                        <PublicDropdown label='Product' items={token ? productItems.map(item => item.href === '/solutions/dwm' ? { ...item, href: '/dashboard/dwm' } : item) : productItems} />
                         <PublicDropdown label='Solutions' items={token ? solutionItems.map(item => item.href === '/solutions/dwm' ? { ...item, href: '/dashboard/dwm' } : item) : solutionItems} />
                         <Link href='/developers' className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>
                             Developers

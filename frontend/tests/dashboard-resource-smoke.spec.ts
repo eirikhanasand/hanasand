@@ -82,12 +82,26 @@ const privilegedDashboardRoutes = [
     { path: '/dashboard/management', heading: 'Admin' },
 ]
 
+const adminOnlyOperationHrefs = [
+    '/dashboard/automations',
+    '/dashboard/projects',
+    '/dashboard/shares',
+    '/dashboard/logs',
+    '/dashboard/mail',
+    '/dashboard/db',
+    '/dashboard/system/rate-limits',
+    '/dashboard/cron-jobs',
+    '/dashboard/system/impersonation',
+    '/dashboard/management',
+]
+
 test.describe('dashboard resource routes', () => {
     test.describe.configure({ mode: 'serial' })
     test.setTimeout(180_000)
 
     test('sidebar keeps admin controls internal and out of normal customer navigation', async () => {
         const sidebar = await readFile(path.join(root, 'src/components/dashboard/dashboardSidebar.tsx'), 'utf8')
+        const header = await readFile(path.join(root, 'src/components/header/header.tsx'), 'utf8')
         const smoke = await readFile(path.join(root, 'tests/dashboard-resource-smoke.spec.ts'), 'utf8')
 
         for (const name of privilegedSidebarLinks) {
@@ -97,6 +111,11 @@ test.describe('dashboard resource routes', () => {
 
         expect(smoke).toContain('expectNormalUserSidebar')
         expect(smoke).toContain('toHaveCount(0)')
+
+        for (const href of adminOnlyOperationHrefs) {
+            expect(header, `Public/customer header should not expose ${href}`).not.toContain(`href='${href}'`)
+            expect(header, `Public/customer header should not expose ${href}`).not.toContain(`href: '${href}'`)
+        }
     })
 
     test('authenticated dashboard resource routes load without auth or server errors', async ({ browser, request, baseURL }, testInfo) => {
