@@ -116,7 +116,7 @@ for (const token of [
     'Watchlist to case',
     'Workflow updated',
     'Action blocked',
-    'Every command calls the DWM API and refreshes the queue.',
+    'Run watchlist, collection, case, and delivery steps from one queue.',
     'Org watchlists',
     'Commands',
     'RouteStateCard label=\'Terms\'',
@@ -126,15 +126,23 @@ for (const token of [
     'workflowTerms(terms)',
     'Prepare starter list',
     'No saved terms yet. Prepare a starter list or paste customer-owned company, domain, supplier, brand, or product terms.',
-    'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.',
+    'Add an HTTPS Discord or webhook endpoint before testing customer delivery.',
     'No destination yet. Add or test an HTTPS Discord/webhook endpoint before sending.',
-    'Dry-run uses this endpoint and records the delivery result without external send by default.',
+    'Test saves a delivery attempt without sending externally.',
     'webhookUrl: webhookConfigured ? webhookUrl.trim() : undefined',
     'Enter an HTTPS webhook URL or open an organization with a saved delivery destination before sending queued alerts.',
     'data-dwm-inline-webhook',
     'disabledReason',
 ]) {
     assert.ok(workflowSource.includes(token), `DWM workflow actions missing practical runbook token: ${token}`)
+}
+
+for (const blockedCopy of [
+    'Every command calls the DWM API',
+    'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.',
+    'Dry-run uses this endpoint and records the delivery result without external send by default.',
+]) {
+    assert.ok(!workflowSource.includes(blockedCopy), `DWM workflow actions should not render implementation-shaped copy: ${blockedCopy}`)
 }
 
 console.log('dwm analyst brief ok')

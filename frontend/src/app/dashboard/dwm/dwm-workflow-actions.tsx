@@ -695,7 +695,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div className='min-w-0'>
                         <h3 className='text-sm font-semibold text-ui-text'>Commands</h3>
-                        <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Every command calls the DWM API and refreshes the queue.</p>
+                        <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Run watchlist, collection, case, and delivery steps from one queue.</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         {organizationId ? (
@@ -725,7 +725,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test destination</WorkflowButton>
                     <WorkflowButton busy={busyAction === 'delivery'} disabled={busy || Boolean(webhookSendDisabledReason)} disabledReason={webhookSendDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send queued</WorkflowButton>
                     <p className='text-xs leading-5 text-ui-subtle lg:col-span-3'>
-                        {webhookConfigured ? 'Dry-run uses this endpoint and records the delivery result without external send by default.' : 'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.'}
+                        {webhookConfigured ? 'Test saves a delivery attempt without sending externally.' : 'Add an HTTPS Discord or webhook endpoint before testing customer delivery.'}
                     </p>
                 </div>
                 {lastRoute ? <RouteRunSummary route={lastRoute} organizationId={organizationId} /> : null}
