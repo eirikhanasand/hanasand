@@ -8,6 +8,7 @@ const enterpriseFacingSources = [
     'src/app/trust/page.tsx',
     'src/app/pricing/page.tsx',
     'src/app/developers/page.tsx',
+    'src/app/solutions/page.tsx',
     'src/app/solutions/dwm/pageClient.tsx',
 ] as const
 
@@ -20,6 +21,7 @@ const bannedVisibleTone = [
     /bulk scraped-row/i,
     /raw leaked-data bloat/i,
     /vague claims/i,
+    /launch-readiness/i,
 ] as const
 
 test('public enterprise pages avoid casual competitive and procurement copy', async () => {
