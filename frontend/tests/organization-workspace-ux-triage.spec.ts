@@ -193,6 +193,7 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('<details id=\'settings\' open')
     expect(page).toContain('Organization settings')
     expect(page).toContain('data-org-members-disclosure')
+    expect(page).toContain('<details id=\'members\' open')
     expect(page).toContain('data-org-member-mobile-list=\'true\'')
     expect(page).toContain('data-org-member-mobile-row=\'true\'')
     expect(page).toContain('data-org-member-desktop-table=\'true\'')
@@ -205,6 +206,7 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('function memberSearchText')
     expect(page).toContain('Adjust filters to see matching team members.')
     expect(page).toContain('data-org-destinations-disclosure')
+    expect(page).toContain('<details id=\'destinations\' open')
     expect(page).toContain('Saved destinations')
     expect(page).toContain('data-org-destination-filter-strip')
     expect(page).toContain('data-org-destination-filter-count')
@@ -403,7 +405,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
         { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: '127.0.0.1', path: '/' },
     ])
 
-    await page.route(/\/api\/organizations(?:\?.*)?$/, async route => {
+    await page.route(url => new URL(url).pathname === '/api/organizations', async route => {
         await route.fulfill({ json: { organizations: [fixtureOrganization, fixtureViewerOrganization] } })
     })
     await page.route('**/api/organizations/org_acme/settings', async route => {
@@ -559,8 +561,8 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(page.locator('#delivery-history')).toContainText('audit acme extra 0')
     await expect(page.locator('#audit')).toContainText(/Owner\s*Acme Owner/)
     await expect(page.locator('#audit')).not.toContainText('Owner: analyst_acme')
-    await page.locator('[data-org-members-disclosure] summary').click()
     await expect(page.locator('[data-org-member-filter-strip="true"]')).toBeVisible()
+    await expect(page.locator('[data-org-destination-filter-strip="true"]')).toBeVisible()
     await expect(page.locator('[data-org-member-filter-count="true"]')).toContainText('3/3 shown')
     await page.getByLabel('Find member').fill('analyst')
     await expect(page.locator('[data-org-member-filter-count="true"]')).toContainText('1/3 shown')
