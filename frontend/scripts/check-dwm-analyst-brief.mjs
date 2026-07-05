@@ -37,6 +37,8 @@ for (const token of [
     'test delivery before sending',
     'redacted source record',
     'redacted source',
+    'Actor intel intake',
+    'Actor intel handoff',
 ]) {
     assert.ok(source.includes(token), `DWM analyst portal missing brief token: ${token}`)
 }
@@ -44,6 +46,8 @@ for (const token of [
 for (const blockedCopy of [
     'metadata-only record',
     'metadata only',
+    'Public TI intake',
+    'Public TI handoff',
 ]) {
     assert.ok(!source.includes(blockedCopy), `DWM analyst portal should not render implementation-shaped copy: ${blockedCopy}`)
 }

@@ -9069,7 +9069,7 @@ function enrichmentGapWorkbenchRowsFor({
             entity: task.sourceFamily ? formatLabel(task.sourceFamily) : task.ownerLane ? readinessOwnerLabel(task.ownerLane) : taskStatusLabel(task.status),
             state: task.status === 'ready' ? 'ready' : task.status === 'needs_api' ? 'blocked' : 'review',
             newestAt: newestDate([...evidenceItems.map(item => item.timestamp), actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt]),
-            source: task.sourceFamily ? formatLabel(task.sourceFamily) : 'Public TI',
+            source: task.sourceFamily ? formatLabel(task.sourceFamily) : 'Analyst review',
             impact: task.detail,
             route: task.route,
             evidenceItems,
@@ -10072,7 +10072,7 @@ function SourceActivationPanel({ activation }: { activation: NonNullable<TiSearc
     const approvalCount = activation.actions.filter(action => action.execution === 'human_approval_required').length
     const state: DecisionStep['status'] = blockedCount ? 'blocked' : approvalCount || activation.dryRunOnly ? 'review' : 'ready'
     return (
-        <Panel title='Source Activation' description='Source actions from collection policy. Public TI can stage review, but source changes require authenticated approval.' icon={<ShieldAlert className='h-4 w-4' />}>
+        <Panel title='Source Activation' description='Source actions from collection policy. Analysts can stage review, but source changes require authenticated approval.' icon={<ShieldAlert className='h-4 w-4' />}>
             <div data-ti-source-activation='true' className='grid min-w-0 gap-3'>
                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                     <div className='min-w-0'>
