@@ -4,6 +4,7 @@ import { Activity, ArrowRight, Bot, DatabaseZap, ExternalLink, ListChecks, Radar
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { getTiEnrichmentOverview, type TiEnrichedActor, type TiPipelineOverview } from '@/utils/tiAdmin/enrichment'
 import { formatTiDate } from '@/utils/tiAdmin/ops'
+import { evidenceStrengthLabel } from '@/utils/dwm/display'
 
 export const dynamic = 'force-dynamic'
 
@@ -147,7 +148,7 @@ export default async function TiEnrichmentPage() {
                     <SectionHeader icon={<Bot className='h-4 w-4' />} title='Current actor profile' subtitle={targetName} />
                     <div className='grid gap-3 p-4 md:grid-cols-2'>
                         <Info label='Actor' value={targetName} />
-                        <Info label='Confidence' value={targetActor ? `${targetActor.confidence}%` : 'Calculating'} />
+                        <Info label='Evidence strength' value={targetActor ? evidenceStrengthLabel(targetActor.confidence) : 'Calculating'} />
                         <Info label='Aliases' value={targetActor?.aliases.length ? targetActor.aliases.join(', ') : 'Scanning aliases'} />
                         <Info label='Evidence' value={`${snapshot?.activity_count ?? targetActor?.automationEvidence.length ?? 0} activity rows`} />
                         <Info label='Targets' value={`${snapshot?.target_count ?? 0} targets`} />
@@ -180,7 +181,7 @@ function ActorQueue({ actors, runs }: { actors: TiEnrichedActor[], runs: TiPipel
                 <div className='grid grid-cols-[1.35fr_0.8fr_0.75fr_0.8fr_1fr_0.7fr] gap-2 border-b border-ui-border bg-ui-canvas px-4 py-2 text-[11px] font-semibold uppercase text-ui-muted'>
                     <span>Actor</span>
                     <span>Status</span>
-                    <span>Confidence</span>
+                    <span>Evidence strength</span>
                     <span>Sources</span>
                     <span>Last update</span>
                     <span>Open</span>
@@ -194,7 +195,7 @@ function ActorQueue({ actors, runs }: { actors: TiEnrichedActor[], runs: TiPipel
                                 <p className='mt-0.5 truncate text-xs text-ui-muted'>{actor.aliases.length ? actor.aliases.join(', ') : 'alias scan running'}</p>
                             </div>
                             <StatusPill label={operationalStateLabel(run?.status || actor.status)} tone={run?.status === 'failed' ? 'bad' : run?.status === 'running' ? 'watch' : actor.status === 'queued' ? 'neutral' : 'ok'} />
-                            <p className='font-semibold text-ui-text'>{actor.confidence}%</p>
+                            <p className='font-semibold text-ui-text'>{evidenceStrengthLabel(actor.confidence)}</p>
                             <p className='text-ui-muted'>{actor.sourceLinks.length}</p>
                             <p className='text-ui-muted'>{formatTiDate(actor.lastUpdatedAt)}</p>
                             <Link href={`/ti/${encodeURIComponent(actor.id)}`} className='inline-flex h-8 w-fit items-center rounded-md border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text hover:bg-ui-raised'>Open</Link>
@@ -328,7 +329,7 @@ function beforeFactsFor(actor: TiEnrichedActor | undefined, snapshot: TiPipeline
         { label: 'Sources', value: String(sourceCount) },
         { label: 'Activity rows', value: String(activityCount) },
         { label: 'Targets', value: String(Math.max(0, (snapshot?.target_count ?? 0) - 1)) },
-        { label: 'Confidence', value: actor ? `${Math.max(0, actor.confidence - 8)}%` : 'Calculating' },
+        { label: 'Evidence strength', value: actor ? evidenceStrengthLabel(Math.max(0, actor.confidence - 8)) : 'Calculating' },
     ]
 }
 
@@ -337,7 +338,7 @@ function afterFactsFor(actor: TiEnrichedActor | undefined, snapshot: TiPipelineO
         { label: 'Sources', value: String(snapshot?.source_count ?? actor?.sourceLinks.length ?? 0) },
         { label: 'Activity rows', value: String(snapshot?.activity_count ?? actor?.automationEvidence.length ?? additions.length) },
         { label: 'Targets', value: String(snapshot?.target_count ?? 0) },
-        { label: 'Confidence', value: actor ? `${actor.confidence}%` : 'Calculating' },
+        { label: 'Evidence strength', value: actor ? evidenceStrengthLabel(actor.confidence) : 'Calculating' },
     ]
 }
 

@@ -4,6 +4,7 @@ import { Activity, AlertTriangle, ArrowRight, Camera, Clock3, DatabaseZap, Exter
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { getTiEnrichmentOverview } from '@/utils/tiAdmin/enrichment'
 import { formatTiDate, getTiAdminOverview, sourceById } from '@/utils/tiAdmin/ops'
+import { evidenceStrengthLabel } from '@/utils/dwm/display'
 import ManualRunButton from './manualRunButton'
 
 export const dynamic = 'force-dynamic'
@@ -256,7 +257,7 @@ export default async function TiAdminPage() {
                             <tr>
                                 <th className='px-4 py-3'>Actor</th>
                                 <th className='px-4 py-3'>Status</th>
-                                <th className='px-4 py-3'>Confidence</th>
+                                <th className='px-4 py-3'>Evidence strength</th>
                                 <th className='px-4 py-3'>Sources</th>
                                 <th className='px-4 py-3'>Last update</th>
                                 <th className='px-4 py-3'>Next refresh</th>
@@ -270,7 +271,7 @@ export default async function TiAdminPage() {
                                         <p className='mt-1 text-xs text-ui-muted'>{actor.changedFields.length ? actor.changedFields.join(', ') : 'queued'}</p>
                                     </td>
                                     <td className='px-4 py-4'><StatusPill label={operationalStateLabel(actor.status)} tone={actor.status === 'queued' ? 'neutral' : actor.status === 'review' ? 'watch' : 'ok'} /></td>
-                                    <td className='px-4 py-3 font-semibold text-ui-text'>{actor.confidence}%</td>
+                                    <td className='px-4 py-3 font-semibold text-ui-text'>{evidenceStrengthLabel(actor.confidence)}</td>
                                     <td className='px-4 py-3 text-ui-muted'>{actor.sourceLinks.length}</td>
                                     <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatTiDate(actor.lastUpdatedAt)}</td>
                                     <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatTiDate(actor.nextRefreshAt)}</td>
