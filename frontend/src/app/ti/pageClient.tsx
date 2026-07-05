@@ -399,7 +399,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 <div className='min-w-0'>
                                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Geography</p>
                                     <p className='mt-0.5 wrap-break-word text-xs text-ui-muted dark:text-ui-muted'>
-                                        {actorIntel.geographies.length ? `${actorIntel.geographies.slice(0, 3).join(', ')}${actorIntel.geographies.length > 3 ? ` +${actorIntel.geographies.length - 3}` : ''}` : 'Country coverage needs source detail.'}
+                                        {actorIntel.geographies.length ? actorIntel.geographies.join(', ') : 'Country coverage needs source detail.'}
                                     </p>
                                 </div>
                                 <button
@@ -6963,7 +6963,7 @@ function MobileEvidenceWorkbar({
                     <span>{selected.timestamp}</span>
                     <span>{selected.source}</span>
                     <span>{sourceBasisLabel(selected.confidence)}</span>
-                    <a href='#ti-selected-evidence' className='text-ui-primary dark:text-ui-primary'>Open detail</a>
+                    <a href='#ti-selected-evidence' className='inline-flex min-h-6 items-center rounded-md px-1 text-ui-primary dark:text-ui-primary'>Detail</a>
                 </div>
             </div>
 
@@ -8739,6 +8739,8 @@ function selectedSourceDrilldownFor(
             sourceName: source.name,
             provenance: source.url || source.provenance || selected.provenance,
             href: source.url || linkFromText(source.provenance),
+            captureId: source.captureId,
+            reportDate: source.reportDate,
             confidence: selected.confidence,
             handoff: 'Open the listed source and attach capture evidence before case replay if no capture reference is present.',
         })),
