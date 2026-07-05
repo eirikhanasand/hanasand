@@ -138,6 +138,7 @@ type QueueFilter = 'active' | 'ready' | 'critical' | 'source' | 'high_confidence
 type InvestigationTab = 'evidence' | 'entities' | 'sources' | 'delivery'
 type EvidenceDispositionState = 'reviewed' | 'escalated' | 'suppressed' | 'false_positive'
 const DWM_QUEUE_PREVIEW_ROWS = 8
+const DWM_TIMELINE_PREVIEW_ROWS = 5
 
 export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operations, alerts, deliveries, dataHealth, initialAlertId, publicTiHandoff }: PortalProps) {
     const router = useRouter()
@@ -1681,7 +1682,7 @@ function DeliveryCaseActivityRail({ alert, deliveries, timeline, workflowContext
                             </tr>
                         </thead>
                         <tbody className='divide-y divide-ui-border'>
-                            {timeline.slice(0, 8).map(item => (
+                            {timeline.slice(0, DWM_TIMELINE_PREVIEW_ROWS).map(item => (
                                 <tr key={item.id} className='align-top'>
                                     <td className='px-3 py-2 font-semibold text-ui-muted'>{relativeTimeLabel(item.at)}</td>
                                     <td className='px-3 py-2 font-semibold text-ui-text'>{item.title}</td>

@@ -80,6 +80,9 @@ const tabsIndex = source.indexOf('<InvestigationTabs')
 assert.ok(briefIndex >= 0, 'DWM analyst brief should render in the selected case workspace.')
 assert.ok(actionIndex > briefIndex, 'DWM analyst brief should appear before action controls.')
 assert.ok(tabsIndex > briefIndex, 'DWM analyst brief should appear before dense investigation tables.')
+assert.ok(source.includes('const DWM_TIMELINE_PREVIEW_ROWS = 5'), 'DWM delivery and case activity timeline should stay compact by default.')
+assert.ok(source.includes('timeline.slice(0, DWM_TIMELINE_PREVIEW_ROWS)'), 'DWM timeline should use the named preview cap.')
+assert.ok(!source.includes('timeline.slice(0, 8)'), 'DWM timeline should not render a long event wall by default.')
 
 for (const token of [
     'data-dwm-workflow-runbook',
