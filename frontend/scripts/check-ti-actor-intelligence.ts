@@ -800,6 +800,7 @@ assert(pageClientSource.includes('alert candidates'), 'Public TI alert summaries
 assert(pageClientSource.includes('case candidates'), 'Public TI case summaries should show case candidate workflow state when no case is linked.')
 assert(pageClientSource.includes('data-ti-selected-console-links'), 'Public TI selected action rail should expose selected evidence links into authenticated workflows.')
 assert(!pageClientSource.includes('data-ti-actor-action-strip'), 'Public TI should not duplicate selected evidence actions in a separate desktop strip.')
+assert(pageClientSource.includes('data-ti-selected-source-inline'), 'Public TI selected evidence rail should use first-viewport space for source context instead of blank summary area.')
 assert(pageClientSource.includes('data-ti-mobile-console-links'), 'Public TI mobile workbar should expose selected evidence links into authenticated workflows.')
 assert(pageClientSource.includes('selectedConsoleLinksFor(result, selected'), 'Public TI selected action links should be derived from the selected evidence context.')
 assert(pageClientSource.includes('selectedArtifactHandoffs'), 'Public TI authenticated action links should carry selected artifact handoff payloads.')

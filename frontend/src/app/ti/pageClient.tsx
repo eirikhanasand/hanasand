@@ -840,6 +840,25 @@ function SelectedEvidenceRail({
                         <EvidenceMetric label='First seen' value={selected.timestamp} />
                         <EvidenceMetric label='Source rows' value={sourceCount ? String(sourceCount) : 'source needed'} />
                     </div>
+                    {sourceDrilldown?.rows.length ? (
+                        <div data-ti-selected-source-inline='true' className='mt-3 hidden border-t border-ui-border pt-3 dark:border-ui-border lg:block'>
+                            <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
+                                <span className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source context</span>
+                                {sourceDrilldown.rows.slice(0, 3).map(row => (
+                                    <button
+                                        key={`${row.sourceName}-${row.sourceId || row.provenance}`}
+                                        type='button'
+                                        title={row.provenance}
+                                        className='inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border border-ui-border bg-ui-panel px-1.5 py-1 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'
+                                    >
+                                        <span className='max-w-40 truncate'>{row.sourceName}</span>
+                                        <span className={row.captureId ? 'text-ui-success' : 'text-ui-warning'}>{row.captureId ? 'capture' : 'capture needed'}</span>
+                                    </button>
+                                ))}
+                                {sourceDrilldown.rows.length > 3 ? <span className='text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>+{sourceDrilldown.rows.length - 3}</span> : null}
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
                 <div data-ti-selected-action-rail='true' className='order-0 grid min-w-0 content-start gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised lg:order-none'>
                     <div className='flex min-w-0 items-center justify-between gap-2 border-b border-ui-border pb-2 dark:border-ui-border'>
@@ -855,21 +874,27 @@ function SelectedEvidenceRail({
                         ))}
                     </div>
                     <div data-ti-auth-continuity-refs='true' className='flex min-w-0 flex-wrap gap-1'>
-                        {continuityRefs.map(ref => (
+                        {continuityRefs.slice(0, 3).map(ref => (
                             <ContinuityRefChip key={ref.label} refItem={ref} />
                         ))}
+                        {continuityRefs.length > 3 ? (
+                            <span className='inline-flex max-w-full items-center rounded-md bg-ui-raised px-1.5 py-1 text-[10px] font-semibold leading-4 text-ui-muted dark:bg-ui-panel dark:text-ui-muted'>+{continuityRefs.length - 3} refs</span>
+                        ) : null}
                     </div>
                     {continuityGaps.length ? (
-                        <div data-ti-continuity-gaps='true' className='grid min-w-0 gap-1 rounded-md border border-ui-warning/25 bg-ui-warning/10 p-1.5'>
-                            <p className='text-[10px] font-semibold uppercase text-ui-warning dark:text-ui-warning'>Missing links</p>
-                            <div className='flex min-w-0 flex-wrap gap-1'>
+                        <details data-ti-continuity-gaps='true' className='group rounded-md border border-ui-warning/25 bg-ui-warning/10 p-1.5'>
+                            <summary className='flex min-h-7 cursor-pointer list-none items-center justify-between gap-2 text-[10px] font-semibold uppercase text-ui-warning [&::-webkit-details-marker]:hidden dark:text-ui-warning'>
+                                <span>Missing links</span>
+                                <span>{continuityGaps.length}</span>
+                            </summary>
+                            <div className='mt-1 flex min-w-0 flex-wrap gap-1'>
                                 {continuityGaps.map(gap => (
                                     <span key={gap} className='max-w-full wrap-break-word rounded-md border border-ui-warning/25 bg-ui-panel px-1.5 py-1 text-[10px] font-semibold leading-4 text-ui-warning dark:bg-ui-panel dark:text-ui-warning'>
                                         {gap}
                                     </span>
                                 ))}
                             </div>
-                        </div>
+                        </details>
                     ) : null}
                     <div data-ti-selected-console-links='true' className='grid grid-cols-2 gap-1.5 sm:grid-cols-4'>
                         <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
