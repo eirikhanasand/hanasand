@@ -529,11 +529,15 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     sessionId,
                     message: `${tool.name || toolUrl} provider capture started.`,
                 })
-                await toolPage.goto(toolUrl, { waitUntil: 'domcontentloaded', timeout: 25_000 })
+                const navigationError = await toolPage.goto(toolUrl, { waitUntil: 'commit', timeout: 10_000 })
+                    .then(() => '')
+                    .catch(error => error instanceof Error ? error.message : String(error))
+                await toolPage.waitForLoadState('domcontentloaded', { timeout: 6000 }).catch(() => undefined)
                 await dismissCookieOverlays(toolPage).catch(() => undefined)
                 await toolPage.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => undefined)
                 const initialEvidence = await collectPageEvidence(toolPage)
                 const initialImage = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
+                const initialAnalysis = analyzeToolEvidence(tool.name || toolUrl, initialEvidence)
                 send({
                     type: 'tool_capture',
                     sessionId,
@@ -544,8 +548,17 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     capturedAt: startedAt,
                     image: initialImage ? initialImage.toString('base64') : null,
                     evidence: initialEvidence,
-                    toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, initialEvidence),
+                    toolAnalysis: navigationError
+                        ? {
+                            ...initialAnalysis,
+                            extractedSignals: [
+                                ...((initialAnalysis.extractedSignals || []) as string[]),
+                                `Provider navigation incomplete: ${navigationError}`,
+                            ],
+                        }
+                        : initialAnalysis,
                     target,
+                    error: navigationError || undefined,
                 })
                 const readiness = await waitForProviderCaptureReadiness(toolPage, tool).catch(() => ({ ready: false, blocker: 'readiness-check-failed' }))
                 if (!readiness.ready) {
