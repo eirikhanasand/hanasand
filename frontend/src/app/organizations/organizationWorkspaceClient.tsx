@@ -3964,8 +3964,10 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
     const organizationId = encodeURIComponent(organization.id)
     if (subject.type === 'organization') {
         return [
+            { label: 'Settings', href: '#settings' },
+            { label: 'Invites', href: '#invites' },
             { label: 'Watchlists', href: '#watchlists' },
-            { label: 'Audit trail', href: '#audit' },
+            { label: 'Activity', href: '#audit' },
         ]
     }
     if (subject.type === 'invite') {
