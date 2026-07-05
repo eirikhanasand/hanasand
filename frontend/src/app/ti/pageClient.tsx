@@ -424,14 +424,11 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <div className='flex items-center justify-between gap-3'>
                                 <div>
                                     <h2 className='text-sm font-semibold text-ui-text dark:text-ui-text'>Latest activity</h2>
-                                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>Evidence ordered by severity, source strength, and recency.</p>
+                                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>
+                                        {queueCounts.open} open · {queueCounts.high} high · {queueCounts.closed} closed. Evidence ordered by severity, source strength, and recency.
+                                    </p>
                                 </div>
                                 <span className='rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary'>{workItems.length}</span>
-                            </div>
-                            <div className='mt-3 grid grid-cols-3 gap-2 text-center text-xs'>
-                                <QueueMetric label='Open' value={queueCounts.open} />
-                                <QueueMetric label='High' value={queueCounts.high} />
-                                <QueueMetric label='Closed' value={queueCounts.closed} />
                             </div>
                             <EvidenceQueueFilters
                                 kind={queueKindFilter}
@@ -6929,15 +6926,6 @@ function EvidenceMetric({ label, value }: { label: string; value: string }) {
         <div className='min-w-0 border-l border-ui-border py-1 pl-2 dark:border-ui-border'>
             <p className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>{label}</p>
             <p className='mt-0.5 wrap-break-word text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{value || 'Not stated'}</p>
-        </div>
-    )
-}
-
-function QueueMetric({ label, value }: { label: string; value: number }) {
-    return (
-        <div className='border-l border-ui-border py-1 pl-2 text-left dark:border-ui-border'>
-            <p className='text-base font-semibold leading-5 text-ui-text dark:text-ui-text'>{value}</p>
-            <p className='text-[11px] leading-4 text-ui-muted dark:text-ui-muted'>{label}</p>
         </div>
     )
 }
