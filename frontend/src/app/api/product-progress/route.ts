@@ -632,7 +632,13 @@ function publicTiProvenanceReadiness(input: {
         && Boolean(latestArtifactAt)
         && warningCodes.length === 0
     const actionabilityReady = Boolean(actionabilityLoaded && sourceProvenance.length > 0 && handoffRoutes.length >= 3 && sourceFamilyMatrixReady)
-    const statusReady = baseEvidenceReady
+    const actionabilityBlockers = [
+        actionabilityLoaded ? '' : 'Public TI search route did not return actionability.schemaVersion=ti.query.actionability.v1.',
+        sourceProvenance.length > 0 ? '' : 'Public TI actionability returned no source provenance.',
+        handoffRoutes.length >= 3 ? '' : 'Public TI actionability returned fewer than three backed workflow routes.',
+        sourceFamilyMatrixReady ? '' : 'Public TI actionability did not return ti.public_actor.source_family_coverage_matrix.v1.',
+    ].filter(Boolean)
+    const statusReady = baseEvidenceReady && actionabilityReady
     const blockers = [
         input.fetch.ok ? '' : input.fetch.error || `Public TI search route returned HTTP ${input.fetch.status}.`,
         payload?.publicTiAnswer ? '' : 'Public TI search route did not return publicTiAnswer.',
@@ -640,6 +646,7 @@ function publicTiProvenanceReadiness(input: {
         ledgerRefs.length > 0 ? '' : 'Public TI search route returned no evidence ledger references.',
         sourceIds.size > 0 ? '' : 'Public TI search route returned no source references.',
         latestArtifactAt ? '' : 'Public TI search route returned no freshness timestamp.',
+        ...actionabilityBlockers,
         ...warningCodes.map(code => `Public TI quality warning: ${code}.`),
     ].filter(Boolean)
 
