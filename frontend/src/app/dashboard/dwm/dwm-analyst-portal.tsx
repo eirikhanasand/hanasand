@@ -640,7 +640,7 @@ function PublicTiDwmIntake({ handoff, params, tenantId, organizationId, activeSo
             <section data-dwm-public-ti-handoff className='border-b border-ui-border bg-ui-panel px-4 py-3'>
                 <div className='flex flex-col gap-3 rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 sm:flex-row sm:items-center sm:justify-between'>
                     <div className='min-w-0'>
-                        <p className='text-[10px] font-semibold uppercase text-ui-warning'>Actor intel intake</p>
+                        <p className='text-[10px] font-semibold uppercase text-ui-warning'>Actor evidence handoff</p>
                         <p className='mt-1 wrap-break-word text-sm font-semibold text-ui-text'>Handoff needs a fresh export.</p>
                         <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{handoff.message}</p>
                     </div>
@@ -693,7 +693,7 @@ function PublicTiDwmIntake({ handoff, params, tenantId, organizationId, activeSo
         <section data-dwm-public-ti-handoff className='border-b border-ui-border bg-ui-panel px-4 py-3'>
             <div className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)_auto] xl:items-center'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Actor intel intake</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Actor evidence handoff</p>
                     <h2 className='mt-1 wrap-break-word text-sm font-semibold text-ui-text'>{payload.artifact.label || payload.query}</h2>
                     <p className='mt-1 wrap-break-word text-xs text-ui-muted'>
                         {publicTiActionLabel(handoff.action)} for {payload.query} · {payload.artifact.kind} · {payload.artifact.confidence}% confidence
@@ -741,7 +741,7 @@ function publicTiActionLabel(action: Extract<PublicTiHandoffDecodeResult, { ok: 
     if (action === 'rebuild_alerts') return 'Alert handoff'
     if (action === 'open_case') return 'Case handoff'
     if (action === 'queue_enrichment') return 'Source enrichment'
-    return 'Actor intel handoff'
+    return 'Actor evidence handoff'
 }
 
 function inferTermKind(value: string) {
