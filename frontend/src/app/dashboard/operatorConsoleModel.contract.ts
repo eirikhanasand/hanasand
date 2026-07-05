@@ -1310,7 +1310,7 @@ if (productProgressAlertGeneration.relatedLinks.find(link => link.href === scope
     throw new Error('Expected alert generation links to include the scoped alerts API.')
 }
 const zeroCandidateAlertGeneration = expectWorkbenchCase(zeroCandidateAlertGenerationCases, 'alert_generation')
-if (zeroCandidateAlertGeneration.status === 'ready' || !zeroCandidateAlertGeneration.missingDependency?.includes('no alert candidates')) {
+if (zeroCandidateAlertGeneration.status === 'ready' || !/alert .*items/i.test(zeroCandidateAlertGeneration.missingDependency || '')) {
     throw new Error('Expected zero-candidate alert generation status to stay blocked with an explicit reason.')
 }
 const organizationReadinessCase = expectWorkbenchCase(cases, 'setup_organization')
@@ -1405,7 +1405,7 @@ void expectProductReadinessWorkflow(productProgressOrgContext, 'webhook_delivery
 void expectProductReadinessWorkflow(productProgressOrgContext, 'analyst_workflow', 'Case action replay')
 void expectProductReadinessWorkflow(productProgressOrgContext, 'helpdesk_audit', 'Support audit')
 void expectProductReadinessWorkflow(productProgressOrgContext, 'public_ti_provenance', 'Actor evidence bridge')
-void expectProductReadinessWorkflow(productProgressOrgContext, 'deploy_probe', 'Deploy check')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'deploy_probe', 'Deploy status')
 void expectProductReadinessAction(productProgressOrgContext, 'org_members', 'inspect_org_members', '/api/organizations/org_acme/members')
 void expectProductReadinessAction(productProgressOrgContext, 'shared_watchlists', 'inspect_watchlist_coverage', '/api/organizations/org_acme/alert-readiness')
 if (expectProductReadinessAction(productProgressOrgContext, 'shared_watchlists', 'rebuild_alerts', '/api/dwm/alerts/rebuild').body?.organizationId !== 'org_acme') {
@@ -1443,26 +1443,26 @@ if (mutableCloseAction.disabledReason || mutableCloseAction.method !== 'PATCH' |
 void expectProductReadinessAction(productProgressOrgContext, 'helpdesk_audit', 'inspect_admin_audit', '/api/backend/admin/audit-events?limit=50')
 void expectProductReadinessAction(productProgressOrgContext, 'public_ti_provenance', 'open_public_ti', '/ti')
 void expectProductReadinessAction(productProgressOrgContext, 'deploy_probe', 'open_deploy_status', '/status')
-void expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready')
-void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').workerStatus satisfies string | undefined)
-void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').workerLastRunAt satisfies string | undefined)
-void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').collectionReadyRows satisfies number | undefined)
-void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').queuedValidationJobs satisfies number | undefined)
-void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').parserSourceFamilyCount satisfies number | undefined)
-if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').parserSourceFamilyCount !== 2) {
+void expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'needs_action')
+void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'needs_action').workerStatus satisfies string | undefined)
+void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'needs_action').workerLastRunAt satisfies string | undefined)
+void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'needs_action').collectionReadyRows satisfies number | undefined)
+void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'needs_action').queuedValidationJobs satisfies number | undefined)
+void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'needs_action').parserSourceFamilyCount satisfies number | undefined)
+if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'needs_action').parserSourceFamilyCount !== 2) {
     throw new Error('Expected source inventory readiness to expose parser-family coverage from source-pack status.')
 }
-if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').contractLookupRows !== 1) {
+if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'needs_action').contractLookupRows !== 1) {
     throw new Error('Expected source inventory readiness to expose contract lookup rows.')
 }
-if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').receiptMatrixRows !== 1) {
+if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'needs_action').receiptMatrixRows !== 1) {
     throw new Error('Expected source inventory readiness to expose product-readiness receipt rows.')
 }
-if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').receiptMatrixBlockedRows !== 1) {
+if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'needs_action').receiptMatrixBlockedRows !== 1) {
     throw new Error('Expected source inventory readiness to expose receipt blocker counts.')
 }
 void (sourceProofOrgContext.readiness.fullChainReady satisfies boolean)
-void expectProductReadinessStatus(productProgressOrgContext, 'source_inventory_probe', 'ready')
+void expectProductReadinessStatus(productProgressOrgContext, 'source_inventory_probe', 'needs_action')
 void expectProductReadinessStatus(productProgressOrgContext, 'entitlement_readiness', 'ready')
 void expectProductReadinessStatus(productProgressOrgContext, 'org_alert_export', 'ready')
 if (expectProductReadinessStatus(productProgressOrgContext, 'org_alert_export', 'ready').activeTermCount !== 1) {
