@@ -2,8 +2,7 @@ import crypto from 'node:crypto'
 import run from '#db'
 
 const IV_LENGTH = 12
-const keySource = process.env.AI_REPO_SECRET_KEY || process.env.MAIL_SERVICE_KEY || process.env.VM_API_TOKEN || process.env.DB_PASSWORD || 'hanasand-ai-repo-secret'
-const encryptionKey = crypto.createHash('sha256').update(keySource).digest()
+const keySourceEnvNames = ['AI_REPO_SECRET_KEY', 'MAIL_SERVICE_KEY', 'VM_API_TOKEN', 'DB_PASSWORD'] as const
 
 type RepoCredentialRow = {
     github_token_encrypted: string | null
@@ -24,7 +23,7 @@ export type RepoCredentialSummary = {
 
 export function encryptRepoSecret(value: string) {
     const iv = crypto.randomBytes(IV_LENGTH)
-    const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv)
+    const cipher = crypto.createCipheriv('aes-256-gcm', repoCredentialEncryptionKey(), iv)
     const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
     const tag = cipher.getAuthTag()
     return `${iv.toString('base64')}.${tag.toString('base64')}.${encrypted.toString('base64')}`
@@ -36,12 +35,32 @@ export function decryptRepoSecret(value: string) {
         return value
     }
 
-    const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey, Buffer.from(ivB64, 'base64'))
+    const decipher = crypto.createDecipheriv('aes-256-gcm', repoCredentialEncryptionKey(), Buffer.from(ivB64, 'base64'))
     decipher.setAuthTag(Buffer.from(tagB64, 'base64'))
     return Buffer.concat([
         decipher.update(Buffer.from(dataB64, 'base64')),
         decipher.final(),
     ]).toString('utf8')
+}
+
+function repoCredentialEncryptionKey() {
+    const source = repoCredentialKeySource()
+    if (!source) {
+        throw new Error('AI_REPO_SECRET_KEY or another server-side secret source is required for repository credentials.')
+    }
+
+    return crypto.createHash('sha256').update(source.value).digest()
+}
+
+function repoCredentialKeySource() {
+    for (const name of keySourceEnvNames) {
+        const value = process.env[name]?.trim()
+        if (value) {
+            return { name, value }
+        }
+    }
+
+    return null
 }
 
 export function buildTokenHint(token: string) {
