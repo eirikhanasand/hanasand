@@ -1813,7 +1813,7 @@ function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, has
         disabledReason: canManage ? undefined : 'Admin access is required to invite team members.',
     })
     actions.push({
-        href: '#destinations',
+        href: hasDestination ? '#destinations' : '#watchlists',
         icon: <Webhook className='h-4 w-4' />,
         label: 'Test destination',
         disabled: !canManage || !hasWatchlists,
@@ -1927,7 +1927,7 @@ function OrgSetupProgress({ organizationId, canManage, memberCount, inviteCount,
             title: 'Delivery destination',
             body: destinationCount ? `${destinationCount} destination${destinationCount === 1 ? '' : 's'} saved` : watchlistCount ? 'Test and save a destination' : 'Create a watchlist first',
             reason: !canManage ? 'Owner or admin access is required to test delivery.' : watchlistCount ? 'Test a Discord or webhook destination before customer delivery.' : 'Create a shared watchlist term before testing delivery.',
-            href: '#destinations',
+            href: destinationCount ? '#destinations' : '#watchlists',
             ready: destinationCount > 0,
             blocked: !watchlistCount || !canManage,
             action: destinationCount ? 'Review destination' : 'Test destination',
