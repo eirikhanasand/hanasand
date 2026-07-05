@@ -446,7 +446,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 onSortChange={setQueueSort}
                             />
                         </div>
-                        <div className='p-2 lg:max-h-[32rem] lg:overflow-y-auto'>
+                        <div className='lg:max-h-[32rem] lg:overflow-y-auto'>
                             {visibleQueueItems.map(item => {
                                 const decision = localDecisions[item.id]
                                 const active = selected?.id === item.id
@@ -455,16 +455,15 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         key={item.id}
                                         type='button'
                                         onClick={() => setSelectedId(item.id)}
-                                        className={`grid w-full gap-2 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${active ? 'border-ui-primary bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-primary/10' : 'border-transparent bg-transparent hover:border-ui-border hover:bg-ui-panel dark:hover:border-ui-border dark:hover:bg-ui-raised'}`}
+                                        className={`grid w-full gap-1 border-b border-ui-border px-3 py-2 text-left transition last:border-b-0 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border ${active ? 'bg-ui-primary/10 dark:bg-ui-primary/10' : 'bg-transparent hover:bg-ui-raised dark:hover:bg-ui-raised'}`}
                                     >
-                                        <div className='flex items-center justify-between gap-2'>
-                                            <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${severityClass(item.severity)}`}>{item.severity}</span>
-                                            <span className='text-[11px] text-ui-muted dark:text-ui-muted'>{decision ? decisionLabel(decision.status) : item.status}</span>
+                                        <div className='flex min-w-0 items-center justify-between gap-2'>
+                                            <span className='min-w-0 truncate text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{displayRequirementText(item.title)}</span>
+                                            <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-semibold ${severityClass(item.severity)}`}>{item.severity}</span>
                                         </div>
-                                        <span className='text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{displayRequirementText(item.title)}</span>
-                                        <span className='line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{item.subtitle}</span>
-                                        <span className='flex flex-wrap gap-2 text-[11px] text-ui-muted dark:text-ui-muted'>
-                                            <span>{item.timestamp}</span>
+                                        <span className='line-clamp-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{item.subtitle}</span>
+                                        <span className='flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-[11px] leading-4 text-ui-muted dark:text-ui-muted'>
+                                            <span>{decision ? decisionLabel(decision.status) : item.status}</span>
                                             <span>{item.source}</span>
                                             <span>{sourceBasisLabel(item.confidence)}</span>
                                             {item.priority ? <span>{item.priority.score}/100 priority</span> : null}
