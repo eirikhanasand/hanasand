@@ -1,11 +1,13 @@
 'use client'
 
 import { Check, Clipboard, Globe2, Hourglass, Play, Plus, RotateCcw, ShieldCheck, Square, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type MouseEvent, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
+import { getCookie } from '@/utils/cookies/cookies'
 
 type SessionState = 'prompt' | 'queued' | 'connecting' | 'live' | 'ended'
 type SocketState = 'closed' | 'connecting' | 'open' | 'error'
+type BrowserNetwork = 'regular' | 'tor'
 type SandboxCapacity = {
     activeSessions: number
     queuedSessions: number
@@ -31,6 +33,8 @@ type Capture = {
     capturedAt: string
     reason?: string
     image?: string | null
+    frameWidth?: number
+    frameHeight?: number
     error?: string
     evidence?: SandboxEvidence
     toolAnalysis?: SandboxToolAnalysis
@@ -78,6 +82,22 @@ type SandboxThreatAssociation = {
     evidence?: string
     source?: 'rendered_page' | 'tool_context' | 'decoded_script'
 }
+type BrowserRunHistory = {
+    id: string
+    target: string
+    network: BrowserNetwork
+    status: string
+    startedAt: string
+    title?: string
+}
+type BrowserQuota = {
+    plan: string
+    limit: number
+    used: number
+    remaining: number
+    resetsAt?: string | null
+    identityKind?: string
+}
 type SandboxEvidence = {
     url?: string
     textExcerpt?: string
@@ -108,9 +128,12 @@ type SandboxEvidence = {
     }>
 }
 
-const storageKey = 'hanasand:browser-sandbox:profiles:v1'
+const storageKey = 'hanasand:browser:profiles:v1'
+const historyStorageKey = 'hanasand:browser:history:v1'
+const clientIdStorageKey = 'hanasand:browser:client-id:v1'
 const profileApiPath = '/api/backend/browser-sandbox/profiles'
-const brokerBaseUrl = process.env.NEXT_PUBLIC_BROWSER_SANDBOX_WS || `${config.url.api_client_wss}/ws/browser-sandbox`
+const historyApiPath = '/api/backend/browser/runs'
+const brokerBaseUrl = process.env.NEXT_PUBLIC_BROWSER_WS || `${config.url.api_client_wss}/ws/browser`
 const defaultTools: SandboxTool[] = [
     { id: 'virustotal', name: 'VirusTotal', url: 'https://www.virustotal.com/gui/search/{url}' },
     { id: 'urlquery', name: 'urlquery', url: 'https://urlquery.net/search?q={url}' },
@@ -137,14 +160,17 @@ function brokerUrlForSession(baseUrl: string, id: string) {
     return `${baseUrl.replace(/\/$/, '')}/${encodeURIComponent(id)}`
 }
 
-export default function BrowserSandboxPageClient() {
+export default function BrowserPageClient() {
     const [target, setTarget] = useState('')
+    const [network, setNetwork] = useState<BrowserNetwork>('regular')
+    const [networkTouched, setNetworkTouched] = useState(false)
     const [sessionState, setSessionState] = useState<SessionState>('prompt')
     const [socketState, setSocketState] = useState<SocketState>('closed')
     const [profiles, setProfiles] = useState<SandboxProfile[]>(defaultProfiles)
     const [selectedProfileId, setSelectedProfileId] = useState(defaultProfiles[0].id)
     const [captures, setCaptures] = useState<Capture[]>([])
     const [activeImage, setActiveImage] = useState<string | null>(null)
+    const [activeFrame, setActiveFrame] = useState<{ width: number; height: number }>({ width: 1280, height: 760 })
     const [activeUrl, setActiveUrl] = useState('')
     const [events, setEvents] = useState<string[]>(['Sandbox ready.'])
     const [customProfileName, setCustomProfileName] = useState('')
@@ -154,9 +180,14 @@ export default function BrowserSandboxPageClient() {
     const [profileSyncEnabled, setProfileSyncEnabled] = useState(false)
     const [profileSyncState, setProfileSyncState] = useState<'local' | 'loading' | 'synced' | 'saving' | 'error'>('loading')
     const [capacity, setCapacity] = useState<SandboxCapacity | null>(null)
+    const [history, setHistory] = useState<BrowserRunHistory[]>([])
+    const [quota, setQuota] = useState<BrowserQuota | null>(null)
     const socketRef = useRef<WebSocket | null>(null)
+    const imageRef = useRef<HTMLImageElement | null>(null)
 
     const normalizedTarget = useMemo(() => normalizeTarget(target), [target])
+    const inferredNetwork = useMemo(() => inferNetwork(normalizedTarget), [normalizedTarget])
+    const selectedNetwork = networkTouched ? network : inferredNetwork
     const selectedProfile = useMemo(() => profiles.find(profile => profile.id === selectedProfileId) || profiles[0], [profiles, selectedProfileId])
     const summary = useMemo(() => buildAnalystSummary(normalizedTarget, captures, selectedProfile), [captures, normalizedTarget, selectedProfile])
 
@@ -236,6 +267,32 @@ export default function BrowserSandboxPageClient() {
         }
     }, [profileSyncEnabled, profiles, profilesLoaded])
 
+    useEffect(() => {
+        if (!networkTouched) setNetwork(inferredNetwork)
+    }, [inferredNetwork, networkTouched])
+
+    useEffect(() => {
+        try {
+            const stored = JSON.parse(window.localStorage.getItem(historyStorageKey) || '[]')
+            if (Array.isArray(stored)) setHistory(sanitizeHistory(stored))
+        } catch {
+            setHistory([])
+        }
+        fetch(`${historyApiPath}?clientId=${encodeURIComponent(getOrCreateBrowserClientId())}`, { credentials: 'include', cache: 'no-store' })
+            .then(async response => {
+                if (!response.ok) throw new Error('history unavailable')
+                const payload = await response.json() as { runs?: unknown; quota?: unknown }
+                const runs = sanitizeHistory(payload.runs)
+                if (runs.length) {
+                    setHistory(runs)
+                    window.localStorage.setItem(historyStorageKey, JSON.stringify(runs.slice(0, 12)))
+                }
+                const nextQuota = quotaValue(payload.quota)
+                if (nextQuota) setQuota(nextQuota)
+            })
+            .catch(() => undefined)
+    }, [])
+
     useEffect(() => () => {
         socketRef.current?.close()
         socketRef.current = null
@@ -261,10 +318,13 @@ export default function BrowserSandboxPageClient() {
             socket.send(JSON.stringify({
                 type: 'start',
                 sessionId: id,
-                network: 'regular',
+                network: selectedNetwork,
                 target: url,
                 durationMinutes: 15,
                 profileTools: selectedProfile.tools,
+                clientId: getOrCreateBrowserClientId(),
+                userId: getCookie('id') || undefined,
+                sessionToken: getCookie('token') || undefined,
             }))
         }
         socket.onclose = () => {
@@ -282,15 +342,29 @@ export default function BrowserSandboxPageClient() {
             if (!payload) return
             if (payload.type === 'ready') {
                 setCapacity(capacityValue(payload.capacity) || null)
+                const runRecord = runHistoryValue(payload.run) || {
+                    id,
+                    target: url,
+                    network: selectedNetwork,
+                    status: 'running',
+                    startedAt: new Date().toISOString(),
+                    title: '',
+                }
+                setHistory(current => persistHistory([runRecord, ...current]))
+                const nextQuota = quotaValue(payload.quota)
+                if (nextQuota) setQuota(nextQuota)
                 setSessionState('live')
-                pushEvent('Regular-web sandbox is live.')
+                pushEvent(`${selectedNetwork === 'tor' ? 'Tor' : 'Regular'} browser is live.`)
                 return
             }
             if (payload.type === 'frame' && typeof payload.image === 'string') {
                 const image = `data:image/jpeg;base64,${payload.image}`
                 setActiveImage(image)
                 const urlValue = String(payload.url || url)
+                const frameWidth = finiteNumber(payload.width) || 1280
+                const frameHeight = finiteNumber(payload.height) || 760
                 setActiveUrl(urlValue)
+                setActiveFrame({ width: frameWidth, height: frameHeight })
                 const reason = stringValue(payload.reason)
                 setCaptures(current => addCapture(current, {
                     id: `page-${payload.capturedAt || Date.now()}-${current.length}`,
@@ -301,6 +375,8 @@ export default function BrowserSandboxPageClient() {
                     capturedAt: stringValue(payload.capturedAt) || new Date().toISOString(),
                     reason,
                     image,
+                    frameWidth,
+                    frameHeight,
                     evidence: evidenceValue(payload.evidence),
                     networkSummary: networkSummaryValue(payload.networkSummary),
                 }))
@@ -328,20 +404,28 @@ export default function BrowserSandboxPageClient() {
                 const statusState = stringValue(payload.state)
                 const nextCapacity = capacityValue(payload.capacity)
                 if (nextCapacity) setCapacity(nextCapacity)
+                const nextQuota = quotaValue(payload.quota)
+                if (nextQuota) setQuota(nextQuota)
                 if (statusState === 'capacity_busy' || statusState === 'capacity_queue_position') {
                     setSessionState('queued')
                 } else if (statusState === 'capacity_admitted' || statusState === 'launching') {
                     setSessionState('connecting')
+                } else if (statusState === 'quota_exhausted') {
+                    setSessionState('ended')
                 }
                 if (payload.url) setActiveUrl(String(payload.url))
                 pushEvent(String(payload.message || payload.state || 'Browser status updated.'))
+                return
+            }
+            if (payload.type === 'console') {
+                pushEvent(`Remote console: ${stringValue(payload.text)}`)
                 return
             }
             if (payload.type === 'navigation_error' || payload.type === 'error') {
                 pushEvent(String(payload.message || 'Sandbox navigation failed.'))
             }
         }
-    }, [pushEvent, selectedProfile.tools, target])
+    }, [pushEvent, selectedNetwork, selectedProfile.tools, target])
 
     const stopRun = useCallback(() => {
         socketRef.current?.send(JSON.stringify({ type: 'end' }))
@@ -362,6 +446,65 @@ export default function BrowserSandboxPageClient() {
         setCapacity(null)
         pushEvent('Sandbox reset.')
     }, [pushEvent])
+
+    const selectNetwork = useCallback((value: BrowserNetwork) => {
+        setNetworkTouched(true)
+        setNetwork(value)
+    }, [])
+
+    const sendBrowserInput = useCallback((payload: Record<string, unknown>) => {
+        const socket = socketRef.current
+        if (!socket || socket.readyState !== WebSocket.OPEN) return
+        socket.send(JSON.stringify(payload))
+    }, [])
+
+    const browserPoint = useCallback((clientX: number, clientY: number) => {
+        const image = imageRef.current
+        if (!image) return null
+        const rect = image.getBoundingClientRect()
+        if (!rect.width || !rect.height) return null
+        const x = Math.max(0, Math.min(activeFrame.width, Math.round(((clientX - rect.left) / rect.width) * activeFrame.width)))
+        const y = Math.max(0, Math.min(activeFrame.height, Math.round(((clientY - rect.top) / rect.height) * activeFrame.height)))
+        return { x, y }
+    }, [activeFrame.height, activeFrame.width])
+
+    const clickBrowserFrame = useCallback((event: MouseEvent<HTMLImageElement>) => {
+        const point = browserPoint(event.clientX, event.clientY)
+        if (!point) return
+        sendBrowserInput({ type: 'click', ...point, button: 0 })
+    }, [browserPoint, sendBrowserInput])
+
+    const wheelBrowserFrame = useCallback((event: WheelEvent<HTMLImageElement>) => {
+        const point = browserPoint(event.clientX, event.clientY)
+        if (!point) return
+        event.preventDefault()
+        sendBrowserInput({ type: 'wheel', ...point, deltaX: event.deltaX, deltaY: event.deltaY })
+    }, [browserPoint, sendBrowserInput])
+
+    const keyBrowserFrame = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+        const keyPayload = {
+            type: 'key',
+            key: event.key,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            altKey: event.altKey,
+            shiftKey: event.shiftKey,
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
+            event.preventDefault()
+            void navigator.clipboard?.readText?.()
+                .then(text => {
+                    sendBrowserInput({ type: 'clipboard', direction: 'browser-to-remote', text })
+                    sendBrowserInput(keyPayload)
+                })
+                .catch(() => sendBrowserInput(keyPayload))
+            return
+        }
+        if (event.metaKey || event.ctrlKey || event.altKey || event.key.length === 1 || ['Enter', 'Tab', 'Backspace', 'Delete', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+            sendBrowserInput(keyPayload)
+            if (event.key !== 'Tab') event.preventDefault()
+        }
+    }, [sendBrowserInput])
 
     const saveProfile = useCallback(() => {
         const name = customProfileName.trim()
@@ -407,9 +550,9 @@ export default function BrowserSandboxPageClient() {
                             <div className='mx-auto grid h-12 w-12 place-items-center rounded-lg border border-ui-border bg-ui-panel text-ui-primary'>
                                 <Globe2 className='h-6 w-6' />
                             </div>
-                            <h1 className='text-3xl font-semibold tracking-normal text-ui-text md:text-5xl'>Regular Website Sandbox</h1>
+                            <h1 className='text-3xl font-semibold tracking-normal text-ui-text md:text-5xl'>Browser Sandbox</h1>
                             <p className='mx-auto max-w-2xl text-base leading-7 text-ui-muted'>
-                                Open an untrusted regular-web URL in a remote browser, capture URL changes as screenshots, and run saved investigation profiles for SOC triage context.
+                                Detonate an untrusted URL in a remote browser, auto-route onion targets through Tor, capture every redirect state, and run saved SOC profiles without exposing the analyst workstation.
                             </p>
                         </div>
                         <form
@@ -420,6 +563,7 @@ export default function BrowserSandboxPageClient() {
                             }}
                         >
                             <label className='text-sm font-semibold text-ui-text' htmlFor='sandbox-url'>URL to investigate</label>
+                            <NetworkSegment network={selectedNetwork} inferred={inferredNetwork} onSelect={selectNetwork} />
                             <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]'>
                                 <input
                                     id='sandbox-url'
@@ -435,9 +579,9 @@ export default function BrowserSandboxPageClient() {
                             </div>
                             <ProfilePicker profiles={profiles} selectedProfileId={selectedProfileId} onSelect={setSelectedProfileId} onDelete={deleteProfile} />
                             <div className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-3 text-xs text-ui-muted md:grid-cols-3'>
-                                <span><strong className='text-ui-text'>10 active sandboxes by default</strong></span>
+                                <span><strong className='text-ui-text'>10 active browsers by default</strong></span>
                                 <span><strong className='text-ui-text'>Queued</strong> when capacity is full</span>
-                                <span><strong className='text-ui-text'>Isolated</strong> browser context per run</span>
+                                <span><strong className='text-ui-text'>Auto-routed</strong> by URL type</span>
                             </div>
                         </form>
                         <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'>
@@ -465,6 +609,7 @@ export default function BrowserSandboxPageClient() {
                                 onRemoveTool={removeToolFromSelectedProfile}
                             />
                         </div>
+                        <HistoryPanel history={history} quota={quota} />
                     </div>
                 </section>
             </main>
@@ -477,12 +622,13 @@ export default function BrowserSandboxPageClient() {
                 <header className='border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div className='mx-auto flex max-w-[96rem] flex-wrap items-center justify-between gap-3'>
                         <div className='min-w-0'>
-                            <p className='text-xs font-semibold uppercase text-ui-primary'>Regular website sandbox</p>
+                            <p className='text-xs font-semibold uppercase text-ui-primary'>{selectedNetwork === 'tor' ? 'Tor browser' : 'Regular browser'}</p>
                             <h1 className='truncate text-lg font-semibold text-ui-text'>{activeUrl || normalizedTarget}</h1>
                         </div>
                         <div className='flex flex-wrap items-center gap-2'>
                             <StatusPill label='Session' value={sessionState} good={sessionState === 'live'} />
                             <StatusPill label='Broker' value={socketState} good={socketState === 'open'} />
+                            <StatusPill label='Network' value={selectedNetwork} good />
                             {capacity ? <StatusPill label='Capacity' value={capacity.queuePosition ? `${capacity.queuePosition}/${capacity.queuedSessions} queued` : `${capacity.activeSessions}/${capacity.maxSessions} active`} good={!capacity.queuePosition} /> : null}
                             <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
                                 <Square className='h-4 w-4' />
@@ -502,9 +648,22 @@ export default function BrowserSandboxPageClient() {
                             <span className='h-3 w-3 rounded-full bg-ui-success' />
                             <div className='min-w-0 flex-1 truncate rounded-md border border-ui-border bg-ui-canvas px-3 py-2 font-mono text-xs text-ui-muted'>{activeUrl || normalizedTarget}</div>
                         </div>
-                        <div className='grid min-h-0 place-items-center bg-ui-canvas p-2'>
+                        <div
+                            className='grid min-h-0 place-items-center bg-ui-canvas p-2 outline-none focus:ring-2 focus:ring-ui-primary/30'
+                            tabIndex={0}
+                            role='application'
+                            aria-label='Interactive isolated browser viewport'
+                            onKeyDown={keyBrowserFrame}
+                        >
                             {activeImage ? (
-                                <img src={activeImage} alt='Live regular website sandbox frame' className='max-h-full w-full rounded-md object-contain' />
+                                <img
+                                    ref={imageRef}
+                                    src={activeImage}
+                                    alt='Live browser sandbox frame'
+                                    className='max-h-full w-full rounded-md object-contain'
+                                    onClick={clickBrowserFrame}
+                                    onWheel={wheelBrowserFrame}
+                                />
                             ) : (
                                 <div className='grid max-w-md gap-2 text-center'>
                                     <ShieldCheck className='mx-auto h-8 w-8 text-ui-primary' />
@@ -617,6 +776,52 @@ function ProfilePicker({ profiles, selectedProfileId, onSelect, onDelete }: { pr
     )
 }
 
+function NetworkSegment({ network, inferred, onSelect }: { network: BrowserNetwork; inferred: BrowserNetwork; onSelect: (network: BrowserNetwork) => void }) {
+    return (
+        <div className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-2'>
+            <div className='inline-grid grid-cols-2 rounded-md border border-ui-border bg-ui-panel p-1' role='group' aria-label='Choose browser network'>
+                {(['regular', 'tor'] as BrowserNetwork[]).map(item => (
+                    <button
+                        key={item}
+                        type='button'
+                        onClick={() => onSelect(item)}
+                        className={`h-9 rounded px-3 text-sm font-semibold capitalize transition ${network === item ? 'bg-ui-primary text-ui-canvas' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}
+                    >
+                        {item === 'regular' ? 'Regular' : 'Tor'}
+                    </button>
+                ))}
+            </div>
+            <p className='text-xs text-ui-muted'>Auto-detected route: <span className='font-semibold text-ui-text'>{inferred === 'tor' ? 'Tor' : 'Regular'}</span>. Onion URLs default to Tor; normal web URLs default to Regular.</p>
+        </div>
+    )
+}
+
+function HistoryPanel({ history, quota }: { history: BrowserRunHistory[]; quota: BrowserQuota | null }) {
+    const used = quota?.used ?? history.length
+    const limit = quota?.limit ?? 3
+    return (
+        <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div>
+                    <h2 className='text-sm font-semibold text-ui-text'>Recent browser runs</h2>
+                    <p className='mt-1 text-xs text-ui-muted'>{quota ? `${used}/${limit} ${quota.plan} run${limit === 1 ? '' : 's'} used${quota.resetsAt ? ` · resets ${new Date(quota.resetsAt).toLocaleDateString()}` : ''}.` : 'Anonymous history is saved to this browser and synced when available.'}</p>
+                </div>
+                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'>{quota?.identityKind === 'user' ? 'account' : 'browser id'}</span>
+            </div>
+            <div className='grid gap-2'>
+                {history.slice(0, 5).map(run => (
+                    <div key={run.id} className='grid gap-1 rounded-md border border-ui-border bg-ui-raised p-2 text-xs md:grid-cols-[6rem_minmax(0,1fr)_auto] md:items-center'>
+                        <span className='font-semibold uppercase text-ui-primary'>{run.network}</span>
+                        <span className='min-w-0 truncate font-mono text-ui-text'>{run.target}</span>
+                        <span className='text-ui-muted'>{new Date(run.startedAt).toLocaleString()}</span>
+                    </div>
+                ))}
+                {!history.length ? <div className='rounded-md border border-dashed border-ui-border p-3 text-xs text-ui-muted'>No browser runs recorded yet.</div> : null}
+            </div>
+        </section>
+    )
+}
+
 function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity | null; sessionState: SessionState }) {
     const active = capacity?.activeSessions ?? 0
     const max = capacity?.maxSessions ?? 10
@@ -632,7 +837,7 @@ function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity |
                 </div>
                 <div className='min-w-0 flex-1'>
                     <p className='text-sm font-semibold text-ui-text'>{busy ? 'Queued for isolated capacity' : 'Sandbox capacity'}</p>
-                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{busy ? queueCopy(capacity) : `${active}/${max} regular sandbox slots are active. Overflow runs queue instead of failing silently.`}</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{busy ? queueCopy(capacity) : `${active}/${max} browser slots are active across Regular and Tor. Overflow runs queue instead of failing silently.`}</p>
                 </div>
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'>
                     {position ? `#${position}` : `${active}/${max}`}
@@ -1033,6 +1238,72 @@ function capacityValue(value: unknown): SandboxCapacity | null {
     }
 }
 
+function quotaValue(value: unknown): BrowserQuota | null {
+    if (!value || typeof value !== 'object') return null
+    const record = value as Record<string, unknown>
+    const limit = finiteNumber(record.limit)
+    const used = finiteNumber(record.used)
+    const remaining = finiteNumber(record.remaining)
+    if (limit === null || used === null || remaining === null) return null
+    return {
+        plan: stringValue(record.plan) || 'anonymous',
+        limit,
+        used,
+        remaining,
+        resetsAt: stringValue(record.resetsAt) || null,
+        identityKind: stringValue(record.identityKind) || 'anonymous',
+    }
+}
+
+function runHistoryValue(value: unknown): BrowserRunHistory | null {
+    if (!value || typeof value !== 'object') return null
+    const record = value as Record<string, unknown>
+    const id = stringValue(record.id)
+    const target = stringValue(record.target)
+    const runNetwork = stringValue(record.network) === 'tor' ? 'tor' : 'regular'
+    const startedAt = stringValue(record.startedAt) || stringValue(record.started_at) || new Date().toISOString()
+    if (!id || !target) return null
+    return {
+        id,
+        target,
+        network: runNetwork,
+        status: stringValue(record.status) || 'running',
+        startedAt,
+        title: stringValue(record.title),
+    }
+}
+
+function sanitizeHistory(value: unknown): BrowserRunHistory[] {
+    if (!Array.isArray(value)) return []
+    return value.map(runHistoryValue).filter(Boolean).slice(0, 12) as BrowserRunHistory[]
+}
+
+function persistHistory(next: BrowserRunHistory[]) {
+    const deduped = Array.from(new Map(next.map(item => [item.id, item])).values()).slice(0, 12)
+    try {
+        window.localStorage.setItem(historyStorageKey, JSON.stringify(deduped))
+    } catch {
+        // Local history is best effort; backend history is authoritative for authenticated users.
+    }
+    return deduped
+}
+
+function getOrCreateBrowserClientId() {
+    try {
+        const existing = window.localStorage.getItem(clientIdStorageKey)
+        if (existing) return existing
+        const next = crypto.randomUUID()
+        window.localStorage.setItem(clientIdStorageKey, next)
+        return next
+    } catch {
+        return 'browser-storage-unavailable'
+    }
+}
+
+function inferNetwork(target: string): BrowserNetwork {
+    return /\.onion(?::\d+)?(?:\/|$)/i.test(target) ? 'tor' : 'regular'
+}
+
 function finiteNumber(value: unknown) {
     const numeric = Number(value)
     if (!Number.isFinite(numeric)) return null
@@ -1041,7 +1312,7 @@ function finiteNumber(value: unknown) {
 
 function queueCopy(capacity: SandboxCapacity | null) {
     if (!capacity?.queuePosition) return 'All browser slots are busy. This run will start automatically when a slot is released.'
-    return `All ${capacity.maxSessions} regular browser slots are busy. This run is position ${capacity.queuePosition} of ${capacity.queuedSessions} and will start automatically.`
+    return `All ${capacity.maxSessions} browser slots are busy. This run is position ${capacity.queuePosition} of ${capacity.queuedSessions} and will start automatically.`
 }
 
 function mergeProfiles(input: SandboxProfile[]) {

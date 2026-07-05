@@ -169,6 +169,11 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         })
     })
 
+    // unified browser session
+    fastify.get<{ Params: { id: string } }>('/api/ws/browser/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
+        handleOnionSessionSocket(connection, req.params.id, 'regular')
+    })
+
     // remote onion browser session
     fastify.get<{ Params: { id: string } }>('/api/ws/onion-session/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
         handleOnionSessionSocket(connection, req.params.id)

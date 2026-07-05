@@ -17,7 +17,7 @@ const publicRoutes = [
     '/privacy',
     '/solutions',
     '/solutions/dwm',
-    '/solutions/onion-session',
+    '/solutions/browser',
     '/status',
     '/terms',
     '/ti',

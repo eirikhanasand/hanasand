@@ -1,6 +1,7 @@
 import WebSocket, { type RawData } from 'ws'
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
 import recordLog from '#utils/logs/recordLog.ts'
+import { finishBrowserRun, prepareBrowserRun } from '../browserSandboxRuns.ts'
 import {
     extractIndicators,
     extractThreatAssociations,
@@ -16,6 +17,9 @@ type BrokerMessage = {
     target?: string
     durationMinutes?: number
     profileTools?: Array<{ id?: string; name?: string; url?: string }>
+    clientId?: string
+    userId?: string
+    sessionToken?: string
     width?: number
     height?: number
     x?: number
@@ -62,7 +66,7 @@ const DEFAULT_WIDTH = 1280
 const DEFAULT_HEIGHT = 760
 const MAX_DURATION_MS = 60 * 60 * 1000
 const FRAME_INTERVAL_MS = 900
-const DEFAULT_REGULAR_SANDBOX_MAX_SESSIONS = 10
+const DEFAULT_BROWSER_MAX_SESSIONS = 10
 
 type SandboxAdmissionStatus = {
     activeSessions: number
@@ -81,36 +85,36 @@ type SandboxAdmissionRequest = {
     cancelled: boolean
 }
 
-let activeRegularSandboxSessions = 0
-const regularSandboxQueue: SandboxAdmissionRequest[] = []
+let activeBrowserSessions = 0
+const browserSessionQueue: SandboxAdmissionRequest[] = []
 
 function allowLocalSandboxTargets() {
     return process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS === '1'
 }
 
-function regularSandboxMaxSessions() {
+function browserMaxSessions() {
     const configured = Number(process.env.BROWSER_SANDBOX_MAX_SESSIONS)
-    if (!Number.isFinite(configured)) return DEFAULT_REGULAR_SANDBOX_MAX_SESSIONS
+    if (!Number.isFinite(configured)) return DEFAULT_BROWSER_MAX_SESSIONS
     return Math.max(1, Math.min(100, Math.floor(configured)))
 }
 
-function currentRegularSandboxAdmissionStatus(queuePosition?: number): SandboxAdmissionStatus {
+function currentBrowserAdmissionStatus(queuePosition?: number): SandboxAdmissionStatus {
     return {
-        activeSessions: activeRegularSandboxSessions,
-        queuedSessions: regularSandboxQueue.length,
-        maxSessions: regularSandboxMaxSessions(),
+        activeSessions: activeBrowserSessions,
+        queuedSessions: browserSessionQueue.length,
+        maxSessions: browserMaxSessions(),
         queuePosition,
     }
 }
 
-function requestRegularSandboxAdmission(sessionId: string, send: (payload: Record<string, unknown>) => void) {
-    const maxSessions = regularSandboxMaxSessions()
-    if (activeRegularSandboxSessions < maxSessions) {
-        activeRegularSandboxSessions += 1
+function requestBrowserAdmission(sessionId: string, send: (payload: Record<string, unknown>) => void) {
+    const maxSessions = browserMaxSessions()
+    if (activeBrowserSessions < maxSessions) {
+        activeBrowserSessions += 1
         return {
             promise: Promise.resolve({
-                release: releaseRegularSandboxAdmission(),
-                status: currentRegularSandboxAdmissionStatus(),
+                release: releaseBrowserAdmission(),
+                status: currentBrowserAdmissionStatus(),
             }),
             cancel: () => undefined,
         }
@@ -119,41 +123,41 @@ function requestRegularSandboxAdmission(sessionId: string, send: (payload: Recor
     let entry: SandboxAdmissionRequest
     const promise = new Promise<SandboxAdmissionRelease>((resolve) => {
         entry = { sessionId, send, resolve, cancelled: false }
-        regularSandboxQueue.push(entry)
-        sendRegularSandboxQueueStatus(entry)
-        broadcastRegularSandboxQueuePositions()
+        browserSessionQueue.push(entry)
+        sendBrowserQueueStatus(entry)
+        broadcastBrowserQueuePositions()
     })
 
     return {
         promise,
         cancel: () => {
             entry.cancelled = true
-            const index = regularSandboxQueue.indexOf(entry)
+            const index = browserSessionQueue.indexOf(entry)
             if (index >= 0) {
-                regularSandboxQueue.splice(index, 1)
-                broadcastRegularSandboxQueuePositions()
+                browserSessionQueue.splice(index, 1)
+                broadcastBrowserQueuePositions()
             }
         },
     }
 }
 
-function releaseRegularSandboxAdmission() {
+function releaseBrowserAdmission() {
     let released = false
     return () => {
         if (released) return
         released = true
-        activeRegularSandboxSessions = Math.max(0, activeRegularSandboxSessions - 1)
-        drainRegularSandboxQueue()
+        activeBrowserSessions = Math.max(0, activeBrowserSessions - 1)
+        drainBrowserQueue()
     }
 }
 
-function drainRegularSandboxQueue() {
-    const maxSessions = regularSandboxMaxSessions()
-    while (activeRegularSandboxSessions < maxSessions && regularSandboxQueue.length) {
-        const entry = regularSandboxQueue.shift()
+function drainBrowserQueue() {
+    const maxSessions = browserMaxSessions()
+    while (activeBrowserSessions < maxSessions && browserSessionQueue.length) {
+        const entry = browserSessionQueue.shift()
         if (!entry || entry.cancelled) continue
-        activeRegularSandboxSessions += 1
-        const status = currentRegularSandboxAdmissionStatus()
+        activeBrowserSessions += 1
+        const status = currentBrowserAdmissionStatus()
         entry.send({
             type: 'status',
             state: 'capacity_admitted',
@@ -162,16 +166,16 @@ function drainRegularSandboxQueue() {
             message: 'Sandbox capacity is available. Starting this queued browser now.',
         })
         entry.resolve({
-            release: releaseRegularSandboxAdmission(),
+            release: releaseBrowserAdmission(),
             status,
         })
     }
-    broadcastRegularSandboxQueuePositions()
+    broadcastBrowserQueuePositions()
 }
 
-function sendRegularSandboxQueueStatus(entry: SandboxAdmissionRequest) {
-    const position = regularSandboxQueue.indexOf(entry) + 1
-    const status = currentRegularSandboxAdmissionStatus(position > 0 ? position : undefined)
+function sendBrowserQueueStatus(entry: SandboxAdmissionRequest) {
+    const position = browserSessionQueue.indexOf(entry) + 1
+    const status = currentBrowserAdmissionStatus(position > 0 ? position : undefined)
     entry.send({
         type: 'status',
         state: 'capacity_busy',
@@ -181,10 +185,10 @@ function sendRegularSandboxQueueStatus(entry: SandboxAdmissionRequest) {
     })
 }
 
-function broadcastRegularSandboxQueuePositions() {
-    for (const [index, entry] of regularSandboxQueue.entries()) {
+function broadcastBrowserQueuePositions() {
+    for (const [index, entry] of browserSessionQueue.entries()) {
         if (entry.cancelled) continue
-        const status = currentRegularSandboxAdmissionStatus(index + 1)
+        const status = currentBrowserAdmissionStatus(index + 1)
         entry.send({
             type: 'status',
             state: 'capacity_queue_position',
@@ -202,6 +206,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let closeTimer: NodeJS.Timeout | null = null
     let cancelAdmission: (() => void) | null = null
     let releaseAdmission: (() => void) | null = null
+    let currentRunId: string | null = null
     let closed = false
     let lastFrame = ''
     let remoteClipboard = ''
@@ -225,6 +230,12 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         if (closeTimer) clearTimeout(closeTimer)
         frameTimer = null
         closeTimer = null
+        const runId = currentRunId
+        currentRunId = null
+        if (runId) {
+            const title = page ? await page.title().catch(() => '') : ''
+            await finishBrowserRun(runId, 'ended', title).catch(() => undefined)
+        }
         await browser?.close().catch(() => undefined)
         browser = null
         page = null
@@ -320,10 +331,32 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         remoteClipboard = ''
         networkEvents = []
         const target = normalizeTarget(message.target || DEFAULT_TARGET)
-        const network = message.network === 'regular' ? 'regular' : defaultNetwork
+        const network = message.network === 'regular' || message.network === 'tor' ? message.network : defaultNetwork
         const proxy = network === 'tor' ? process.env.ONION_SESSION_PROXY || process.env.TOR_SOCKS_PROXY || '' : ''
         const durationMs = Math.min(MAX_DURATION_MS, Math.max(60_000, (message.durationMinutes || 15) * 60_000))
-        const admission = network === 'regular' ? requestRegularSandboxAdmission(sessionId, send) : null
+        const browserRun = await prepareBrowserRun({
+            id: sessionId,
+            target,
+            network,
+            clientId: message.clientId,
+            userId: message.userId,
+            sessionToken: message.sessionToken,
+        })
+        if (!browserRun.allowed) {
+            send({
+                type: 'status',
+                state: 'quota_exhausted',
+                sessionId,
+                network,
+                quota: browserRun.quota,
+                message: `Browser run limit reached for ${browserRun.quota.plan}.`,
+            })
+            send({ type: 'ended', reason: 'quota_exhausted', sessionId })
+            connection.close()
+            return
+        }
+        currentRunId = browserRun.run?.id || null
+        const admission = requestBrowserAdmission(sessionId, send)
         cancelAdmission = admission?.cancel || null
 
         try {
@@ -454,7 +487,16 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             frameTimer = setInterval(() => {
                 void sendFrame(false)
             }, FRAME_INTERVAL_MS)
-            send({ type: 'ready', sessionId, target, network, torProxyConfigured: Boolean(proxy), capacity: currentRegularSandboxAdmissionStatus() })
+            send({
+                type: 'ready',
+                sessionId,
+                target,
+                network,
+                torProxyConfigured: Boolean(proxy),
+                capacity: currentBrowserAdmissionStatus(),
+                run: browserRun.run,
+                quota: browserRun.quota,
+            })
         } catch (error) {
             await cleanup()
             throw error

@@ -49,9 +49,9 @@ const solutions = [
         href: '/ti',
     },
     {
-        title: 'Onion Sessions',
-        detail: 'Short-lived isolated onion workspaces with remote controls, notes, and source tracking.',
-        href: '/solutions/onion-session',
+        title: 'Browser Sandbox',
+        detail: 'Short-lived isolated Regular and Tor browser workspaces with capture, profiles, and source tracking.',
+        href: '/solutions/browser',
     },
     {
         title: 'Trust and Procurement',

@@ -46,6 +46,33 @@ export default async function ensureSchema() {
         )
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_browser_sandbox_profiles_owner_updated ON browser_sandbox_profiles(owner_id, updated_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS browser_subscriptions (
+            owner_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'starter', 'team', 'business', 'volume')),
+            active BOOLEAN NOT NULL DEFAULT FALSE,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run(`
+        CREATE TABLE IF NOT EXISTS browser_runs (
+            id TEXT PRIMARY KEY,
+            owner_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+            quota_identity TEXT NOT NULL,
+            quota_plan TEXT NOT NULL DEFAULT 'anonymous',
+            client_id_hash TEXT,
+            target TEXT NOT NULL,
+            network TEXT NOT NULL CHECK (network IN ('regular', 'tor')),
+            status TEXT NOT NULL DEFAULT 'running',
+            title TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_owner_created ON browser_runs(owner_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_quota_created ON browser_runs(quota_identity, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_client_created ON browser_runs(client_id_hash, created_at DESC)')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_by TEXT')

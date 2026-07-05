@@ -55,7 +55,7 @@ const clients = await Promise.all(Array.from({ length: 11 }, async (_item, index
     socket.send(JSON.stringify({
         type: 'start',
         sessionId: id,
-        network: 'regular',
+        network: index === 10 ? 'tor' : 'regular',
         target,
         durationMinutes: 1,
         width: 800,
@@ -70,7 +70,7 @@ const queued = await waitForPayload(clients[10].payloads, payload => payload.typ
 
 assert.equal(queued.capacity?.maxSessions, 10, 'capacity status should advertise the configured ten-slot limit')
 assert.equal(queued.capacity?.queuePosition, 1, 'the eleventh sandbox should queue behind the ten active runs')
-assert.equal(queued.capacity?.activeSessions, 10, 'ten regular sandboxes should be active before queueing overflow')
+assert.equal(queued.capacity?.activeSessions, 10, 'ten browser sandboxes should be active before queueing overflow')
 
 clients[0].socket.send(JSON.stringify({ type: 'end' }))
 await waitForPayload(clients[10].payloads, payload => payload.type === 'status' && payload.state === 'capacity_admitted', 30_000)
@@ -91,6 +91,7 @@ console.log(JSON.stringify({
     activeLimit: 10,
     admittedInitially: 10,
     queuedOverflow: clients[10].id,
+    queuedOverflowNetwork: 'tor',
     target,
 }, null, 2))
 

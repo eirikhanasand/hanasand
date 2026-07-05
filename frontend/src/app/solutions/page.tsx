@@ -5,7 +5,7 @@ import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Solutions',
-    description: 'Threat monitoring, onion session workspaces, dark web monitoring, and private exposure-checking solutions from Hanasand.',
+    description: 'Threat monitoring, browser sandbox workspaces, dark web monitoring, and private exposure-checking solutions from Hanasand.',
     path: '/solutions',
     keywords: ['onion session workspace', 'dark web monitoring', 'ransomware monitoring', 'company exposure alerts', 'threat intelligence API'],
 })
@@ -21,21 +21,12 @@ const primarySolutions = [
         price: 'From $49/mo',
     },
     {
-        title: 'Onion Session Workspace',
-        eyebrow: 'Controlled review',
-        detail: 'Open short-lived remote sessions for source validation, safe context capture, analyst notes, and evidence-safe handoff.',
-        href: '/solutions/onion-session',
-        icon: Network,
-        points: ['10-60 minute isolated sessions', 'Read-only and fresh-circuit controls', 'Evidence packet instead of local raw-content handling'],
-        price: 'Bundled with monitoring',
-    },
-    {
-        title: 'Regular Website Sandbox',
+        title: 'Browser Sandbox',
         eyebrow: 'URL analysis',
-        detail: 'Open untrusted regular-web URLs in an isolated browser, capture redirect screenshots, and run saved SOC triage profiles.',
-        href: '/solutions/browser-sandbox',
+        detail: 'Open untrusted regular-web and onion URLs in one isolated browser workspace with automatic routing, redirect capture, and saved SOC triage profiles.',
+        href: '/solutions/browser',
         icon: Globe2,
-        points: ['URL-first remote browser launch', 'Saved VirusTotal, urlquery, and WebCrack profiles', 'Screenshot timeline with analyst summary'],
+        points: ['Regular and Tor modes under one queue', 'Saved VirusTotal, urlquery, and WebCrack profiles', 'Screenshot timeline with analyst summary'],
         price: 'Bundled with monitoring',
     },
     {
