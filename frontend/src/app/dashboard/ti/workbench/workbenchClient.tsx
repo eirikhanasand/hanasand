@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { Activity, AlertTriangle, Clock3, ExternalLink, Filter, Inbox, MessageSquareText, Search, ShieldCheck, UserRound } from 'lucide-react'
-import { safeEvidenceExcerpt } from '@/utils/dwm/display'
+import { evidenceStrengthLabel, safeEvidenceExcerpt } from '@/utils/dwm/display'
 
 export type WorkbenchEvidence = {
     id: string
@@ -1001,7 +1001,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                         <p className='mt-2 line-clamp-2 wrap-break-word text-xs leading-5 text-ui-muted'>{item.subtitle}</p>
                                         <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-ui-muted'>
                                             <span className='rounded-full border border-ui-border bg-ui-canvas px-2 py-0.5 text-ui-muted'>{label(item.status)}</span>
-                                            <span>{item.confidence}%</span>
+                                            <span>{evidenceStrengthLabel(item.confidence)} evidence</span>
                                             <span>{relativeTime(item.updatedAt)}</span>
                                         </div>
                                     </button>
@@ -2956,7 +2956,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 <div className='min-w-0'>
                     <div className='flex flex-wrap items-center gap-2'>
                         <span className={severityClass(item.severity)}>{item.severity}</span>
-                        <span className='rounded-full bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-primary'>{item.confidence}% confidence</span>
+                        <span className='rounded-full bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-primary'>{evidenceStrengthLabel(item.confidence)} evidence</span>
                         <span className='rounded-full bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-muted'>{label(item.kind)}</span>
                         <span className='rounded-full bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-muted'>{label(effectiveStatus)}</span>
                         {item.persistent && <span className='rounded-full bg-ui-success/10 px-2 py-0.5 text-xs font-semibold text-ui-success'>persistent workflow</span>}

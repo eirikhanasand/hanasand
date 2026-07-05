@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { CheckCircle2, Loader2, RotateCcw, Send, XCircle } from 'lucide-react'
 import type { DwmAlert } from '@/utils/dwm/product'
-import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
+import { evidenceStrengthLabel, safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 
 type InboxAlert = DwmAlert & {
     deliveryState?: string
@@ -139,7 +139,7 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
                                 <h3 className='font-semibold text-ui-text'>{alert.company}</h3>
                                 {alert.actor && <span className='rounded-full border border-ui-primary/35 bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-primary'>{alert.actor}</span>}
                                 <span className={severityClass(alert.severity)}>{alert.severity}</span>
-                                <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-text'>{alert.confidence}% confidence</span>
+                                <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-text'>{evidenceStrengthLabel(alert.confidence)} evidence</span>
                                 <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-muted'>{(alert.deliveryState || 'pending_review').replaceAll('_', ' ')}</span>
                                 <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-muted'>{alert.workflowEvents?.length || 0} events</span>
                             </div>

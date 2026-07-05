@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { demoDwmProductSnapshot, dwmWebhookPayload } from '@/utils/dwm/product'
+import { evidenceStrengthLabel } from '@/utils/dwm/display'
 import {
     ArrowRight,
     Bot,
@@ -98,7 +99,7 @@ const plainLanguageTerms = [
 const sampleAlertSummary = [
     ['What happened', 'A monitored company or supplier was named in a new leak or extortion post.'],
     ['Why it matters', 'The claim may affect incident response, vendor risk, legal review, or customer communications.'],
-    ['Source context', 'Source name, first-seen time, matched term, claim summary, confidence, and redacted context.'],
+    ['Source context', 'Source name, first-seen time, matched term, claim summary, evidence strength, and redacted context.'],
     ['What to do next', 'Confirm the match, check identity/session exposure, open a case, and route the alert to the owner.'],
 ]
 
@@ -115,7 +116,7 @@ const workflow = [
     },
     {
         title: 'Act',
-        detail: 'Ship a small alert with the artifact, source, confidence, recommended action, and handoff path.',
+        detail: 'Ship a small alert with the artifact, source, evidence strength, recommended action, and handoff path.',
         icon: TicketCheck,
     },
     {
@@ -141,7 +142,7 @@ const pricingTiers = [
 const faqItems = [
     {
         question: 'What is dark web monitoring?',
-        answer: 'Dark web monitoring scans cybercrime sources for external threats linked to your organization, vendors, domains, brands, employees, and products. Hanasand keeps the output small: source, timing, match reason, confidence, and the next action.',
+        answer: 'Dark web monitoring scans cybercrime sources for external threats linked to your organization, vendors, domains, brands, employees, and products. Hanasand keeps the output small: source, timing, match reason, evidence strength, and the next action.',
     },
     {
         question: 'Why is Telegram part of dark web monitoring?',
@@ -310,7 +311,7 @@ export default function DarkWebMonitoringPage() {
                         <p className='text-sm font-semibold uppercase tracking-[0.18em] text-ui-primary'>For non-specialist buyers</p>
                         <h2 className='text-4xl font-semibold tracking-normal md:text-5xl'>A dark web alert should read like a decision brief.</h2>
                         <p className='text-base leading-7 text-ui-muted'>
-                            The useful output is not a giant feed. It is a short explanation of the company mention, the safe source context, the risk level, and who should review it.
+                            The useful output is not a giant feed. It is a short explanation of the company mention, the safe source context, the review priority, and who should review it.
                         </p>
                         <div className='grid gap-3'>
                             {plainLanguageTerms.map(item => (
@@ -477,7 +478,7 @@ export default function DarkWebMonitoringPage() {
                         <p className='text-sm font-semibold uppercase tracking-[0.18em] text-ui-primary'>API and webhook delivery</p>
                         <h2 className='text-4xl font-semibold md:text-5xl'>Attach monitoring to the system your team already uses.</h2>
                         <p className='text-base leading-7 text-ui-muted'>
-                            The API turns scattered observations into stable fields: company, actor, source family, date, artifact type, claim summary, confidence, review state, and recommended action.
+                            The API turns scattered observations into stable fields: company, actor, source family, date, artifact type, claim summary, evidence strength, review state, and recommended action.
                         </p>
                         <div className='grid gap-3'>
                             {apiUseCases.map(useCase => (
@@ -493,7 +494,7 @@ export default function DarkWebMonitoringPage() {
                         <div className='flex items-start justify-between gap-4'>
                             <div>
                                 <h2 className='text-xl font-semibold'>Webhook payload preview</h2>
-                                <p className='mt-1 text-sm text-ui-muted'>Inspect the alert shape and validate the sample receiver here. Customer endpoint delivery is created inside the authenticated console.</p>
+                                <p className='mt-1 text-sm text-ui-muted'>Inspect the alert shape and validate the delivery preview here. Customer endpoint delivery is created inside the authenticated console.</p>
                             </div>
                             <Webhook className='h-5 w-5 text-ui-primary' />
                         </div>
@@ -629,7 +630,7 @@ function ThreatConsole({ payload }: { payload: ReturnType<typeof samplePayload> 
                 <span className='rounded-full bg-ui-warning/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-ui-warning'>Example</span>
             </div>
             <div className='grid gap-3 py-5'>
-                <AlertRow dot='bg-ui-primary' title={`${alert.artifactType.replaceAll('_', ' ')} · ${alert.actor || 'Actor'}`} detail={`${alert.sourceCount} sources · ${alert.confidence}% confidence · ${alert.reviewState.replaceAll('_', ' ')}`} time='02:14' />
+                <AlertRow dot='bg-ui-primary' title={`${alert.artifactType.replaceAll('_', ' ')} · ${alert.actor || 'Actor'}`} detail={`${alert.sourceCount} sources · ${evidenceStrengthLabel(alert.confidence)} evidence · ${alert.reviewState.replaceAll('_', ' ')}`} time='02:14' />
                 <AlertRow dot='bg-ui-primary' title='Session-artifact example · Okta' detail='Example shape · verify in tenant alerts before action' time='02:12' />
                 <AlertRow dot='bg-ui-primary' title='API-key example · AWS IAM' detail='Example shape · source approval required' time='02:03' />
                 <AlertRow dot='bg-ui-success' title='Leak-site claim · Akira' detail={`${payload.company} · ${payload.matchedTerm} · needs review`} time='01:58' />
@@ -640,7 +641,7 @@ function ThreatConsole({ payload }: { payload: ReturnType<typeof samplePayload> 
                         <span className='grid h-11 w-11 place-items-center rounded-full bg-ui-primary font-semibold'>HS</span>
                         <div>
                             <h3 className='font-semibold'>{payload.company}</h3>
-                            <p className='text-sm text-ui-muted'>{payload.reviewState} · {payload.confidence}% confidence</p>
+                            <p className='text-sm text-ui-muted'>{payload.reviewState} · {evidenceStrengthLabel(payload.confidence)} evidence</p>
                         </div>
                     </div>
                     <span className='rounded-lg border border-ui-primary/40 px-2 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-ui-primary'>VIP</span>

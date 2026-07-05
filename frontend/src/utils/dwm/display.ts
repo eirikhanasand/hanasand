@@ -43,6 +43,15 @@ export function safeEvidenceExcerpt(value: string) {
     return truncateDisplayText(clean.replace(/[{}[\]"]/g, ' ').replace(/\s+/g, ' ').trim())
 }
 
+export function evidenceStrengthLabel(value: number | undefined) {
+    if (typeof value !== 'number' || Number.isNaN(value)) return 'Not scored'
+    const normalized = value > 1 ? value / 100 : value
+    if (normalized >= 0.8) return 'Strong'
+    if (normalized >= 0.6) return 'Moderate'
+    if (normalized >= 0.4) return 'Limited'
+    return 'Needs review'
+}
+
 function buildClaimSentence(alert: Omit<AlertDisplayInput, 'claimSummary'>, fields: FlatFields) {
     const actor = pickField(fields, ['actorName', 'actor', 'sourceName', 'source']) || alert.actor || stateLabel(alert.sourceFamily)
     const victim = pickField(fields, ['victimName', 'company', 'domain', 'organization', 'matchedTerm', 'term']) || alert.company || alert.matchedTerm.value
