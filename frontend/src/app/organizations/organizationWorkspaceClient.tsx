@@ -3769,36 +3769,50 @@ function visibilityRows(payload: Record<string, unknown> | null) {
 
 function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, organizationId?: string) {
     const localRows = organizationId ? local.filter(item => item.organizationId === organizationId) : []
-    const alertRows: ActivityItem[] = bundle.alerts.map(alert => ({
-        id: `alert-${alert.id}`,
-        at: alert.updatedAt || new Date(0).toISOString(),
-        title: 'Alert',
-        detail: `${alert.title || compactReference(alert.id, 'alert')} · ${alert.severity || 'severity'} · ${alert.status || 'status'}`,
-        ok: alert.status?.toLowerCase() !== 'failed' && alert.status?.toLowerCase() !== 'suppressed',
-        subjectType: 'alert',
-        subjectId: alert.id,
-        relatedSubjectIds: [alert.watchlistItemId, ...(alert.watchlistItemIds || []), ...(alert.watchlistIds || [])].filter(Boolean) as string[],
-        metadata: compactMetadata([
-            ['Alert', compactReference(alert.id, 'alert')],
-            ['Severity', alert.severity],
-            ['Status', alert.status],
-            ['Watchlist', compactReference(alert.watchlistItemId || alert.watchlistItemIds?.[0] || alert.watchlistIds?.[0], 'watchlist')],
-        ]),
-    }))
-    const caseRows: ActivityItem[] = bundle.cases.map(item => ({
-        id: `case-${item.id}`,
-        at: item.updatedAt || new Date(0).toISOString(),
-        title: 'Case',
-        detail: `${item.title || compactReference(item.id, 'case')} · ${item.status || 'status'}${item.assignedOwner ? ` · ${organizationMemberLabel(item.assignedOwner, bundle.members)}` : ''}`,
-        ok: item.status?.toLowerCase() !== 'failed' && item.status?.toLowerCase() !== 'blocked',
-        subjectType: 'case',
-        subjectId: item.id,
-        metadata: compactMetadata([
-            ['Case', compactReference(item.id, 'case')],
-            ['Status', item.status],
-            ['Owner', organizationMemberLabel(item.assignedOwner, bundle.members)],
-        ]),
-    }))
+    const alertRows: ActivityItem[] = bundle.alerts.map(alert => {
+        const delivery = bundle.deliveries.find(item => item.alertId === alert.id)
+        const watchlistId = alert.watchlistItemId || alert.watchlistItemIds?.[0] || alert.watchlistIds?.[0] || delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0]
+        const destinationIds = delivery ? deliveryDestinationIds(delivery, bundle.webhooks) : []
+        return {
+            id: `alert-${alert.id}`,
+            at: alert.updatedAt || new Date(0).toISOString(),
+            title: 'Alert',
+            detail: `${alert.title || compactReference(alert.id, 'alert')} · ${alert.severity || 'severity'} · ${alert.status || 'status'}`,
+            ok: alert.status?.toLowerCase() !== 'failed' && alert.status?.toLowerCase() !== 'suppressed',
+            subjectType: 'alert',
+            subjectId: alert.id,
+            relatedSubjectIds: [watchlistId, ...destinationIds, alert.watchlistItemId, ...(alert.watchlistItemIds || []), ...(alert.watchlistIds || [])].filter(Boolean) as string[],
+            metadata: compactMetadata([
+                ['Alert', compactReference(alert.id, 'alert')],
+                ['Severity', alert.severity],
+                ['Status', alert.status],
+                ['Watchlist', compactReference(watchlistId, 'watchlist')],
+                ['Destination', compactReference(destinationIds[0], 'dest')],
+            ]),
+        }
+    })
+    const caseRows: ActivityItem[] = bundle.cases.map(item => {
+        const delivery = bundle.deliveries.find(row => row.caseId === item.id)
+        const watchlistId = delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0]
+        const destinationIds = delivery ? deliveryDestinationIds(delivery, bundle.webhooks) : []
+        return {
+            id: `case-${item.id}`,
+            at: item.updatedAt || new Date(0).toISOString(),
+            title: 'Case',
+            detail: `${item.title || compactReference(item.id, 'case')} · ${item.status || 'status'}${item.assignedOwner ? ` · ${organizationMemberLabel(item.assignedOwner, bundle.members)}` : ''}`,
+            ok: item.status?.toLowerCase() !== 'failed' && item.status?.toLowerCase() !== 'blocked',
+            subjectType: 'case',
+            subjectId: item.id,
+            relatedSubjectIds: [watchlistId, ...destinationIds, delivery?.alertId].filter(Boolean) as string[],
+            metadata: compactMetadata([
+                ['Case', compactReference(item.id, 'case')],
+                ['Status', item.status],
+                ['Owner', organizationMemberLabel(item.assignedOwner, bundle.members)],
+                ['Watchlist', compactReference(watchlistId, 'watchlist')],
+                ['Destination', compactReference(destinationIds[0], 'dest')],
+            ]),
+        }
+    })
     const deliveryRows: ActivityItem[] = bundle.deliveries.map(delivery => {
         const destinationIds = deliveryDestinationIds(delivery, bundle.webhooks)
         return {
