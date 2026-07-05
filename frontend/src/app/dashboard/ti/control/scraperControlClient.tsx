@@ -898,9 +898,9 @@ function actionSummary(result: ActionResult) {
     if (result.error?.message) return result.error.message
     const payload = asRecord(result.payload)
     const run = asRecord(payload.run)
-    if (run.id) return `Run ${String(run.id)} returned with ${String(run.taskCount ?? 'metering')} task(s).`
+    if (run.id) return `Run ${String(run.id)} completed with ${String(run.taskCount ?? 'metering')} task(s).`
     if (Array.isArray(payload.warmed)) return `Enrichment warmed ${payload.warmed.length} actor profile(s).`
-    if (payload.applyPlan || payload.contract) return 'Source plan returned. Review affected sources before applying changes.'
+    if (payload.applyPlan || payload.contract) return 'Source plan is ready. Review affected sources before applying changes.'
     return result.ok ? 'The scraper responded.' : 'The action did not complete.'
 }
 
