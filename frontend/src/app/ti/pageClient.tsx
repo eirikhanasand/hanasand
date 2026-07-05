@@ -845,15 +845,14 @@ function SelectedEvidenceRail({
                             <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
                                 <span className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source context</span>
                                 {sourceDrilldown.rows.slice(0, 3).map(row => (
-                                    <button
+                                    <span
                                         key={`${row.sourceName}-${row.sourceId || row.provenance}`}
-                                        type='button'
                                         title={row.provenance}
-                                        className='inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border border-ui-border bg-ui-panel px-1.5 py-1 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'
+                                        className='inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border border-ui-border bg-ui-panel px-1.5 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'
                                     >
                                         <span className='max-w-40 truncate'>{row.sourceName}</span>
                                         <span className={row.captureId ? 'text-ui-success' : 'text-ui-warning'}>{row.captureId ? 'capture' : 'capture needed'}</span>
-                                    </button>
+                                    </span>
                                 ))}
                                 {sourceDrilldown.rows.length > 3 ? <span className='text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>+{sourceDrilldown.rows.length - 3}</span> : null}
                             </div>
