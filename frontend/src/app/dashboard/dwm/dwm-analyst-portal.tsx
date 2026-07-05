@@ -1999,7 +1999,7 @@ function SourcePosture({ snapshot, operations }: { snapshot: DwmProductSnapshot,
                                     <tr key={source.sourceId} className='bg-ui-panel align-top'>
                                         <td className='px-3 py-2'>
                                             <p className='max-w-[150px] truncate font-semibold text-ui-text' title={source.sourceName}>{source.sourceName}</p>
-                                            <p className='mt-0.5 text-[11px] text-ui-muted'>{stateLabel(source.family)} · {source.approvedMetadataOnly ? 'metadata only' : 'message capture'}</p>
+                                            <p className='mt-0.5 text-[11px] text-ui-muted'>{stateLabel(source.family)} · {source.approvedMetadataOnly ? 'redacted source' : 'message capture'}</p>
                                         </td>
                                         <td className='px-3 py-2'>
                                             <span className={source.status === 'active' ? 'rounded-full bg-ui-success/10 px-2 py-0.5 font-semibold text-ui-success' : 'rounded-full bg-ui-warning/10 px-2 py-0.5 font-semibold text-ui-warning'}>
@@ -2317,7 +2317,7 @@ function buildAnalystBrief(
         .join(', ')
     const visibleCounts = [
         evidenceSummary.publicSafeCount ? `${evidenceSummary.publicSafeCount} redacted excerpt${evidenceSummary.publicSafeCount === 1 ? '' : 's'}` : '',
-        evidenceSummary.metadataOnlyCount ? `${evidenceSummary.metadataOnlyCount} metadata-only record${evidenceSummary.metadataOnlyCount === 1 ? '' : 's'}` : '',
+        evidenceSummary.metadataOnlyCount ? `${evidenceSummary.metadataOnlyCount} redacted source record${evidenceSummary.metadataOnlyCount === 1 ? '' : 's'}` : '',
     ].filter(Boolean).join(', ') || 'safe source records'
     const freshness = relativeTimeLabel(evidenceSummary.lastObservedAt || alert.lastSeenAt || alert.firstSeenAt)
     const readyForCustomer = Boolean(

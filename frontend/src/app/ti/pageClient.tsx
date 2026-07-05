@@ -6546,7 +6546,7 @@ function CaseActionTrailPanel({ trail }: { trail: CaseActionTrailPayload }) {
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Case action trail</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        Metadata-only trail for local decisions, selected evidence, and case replay state.
+                        Source-safe trail for local decisions, selected evidence, and case replay state.
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -9315,7 +9315,7 @@ function selectedTriageBriefFor(
                 ? 'Source reference is present, but the public result does not yet include a capture reference. Verify before customer-facing escalation.'
                 : 'Verify source evidence before customer-facing escalation.',
         evidenceTone,
-        safetyBoundary: 'Public TI results are metadata-only. This view does not expose source files, credential values, or webhook secrets.',
+        safetyBoundary: 'Public TI results show source-safe summaries. This view does not expose source files, credential values, or webhook secrets.',
         labels: [
             { label: 'Severity', value: formatLabel(selected.severity) },
             { label: 'Evidence strength', value: sourceBasis },

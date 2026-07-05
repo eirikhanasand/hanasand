@@ -35,8 +35,17 @@ for (const token of [
     'safeAlertSummary(alert)',
     'keep sensitive file contents and secrets out of the customer update',
     'test delivery before sending',
+    'redacted source record',
+    'redacted source',
 ]) {
     assert.ok(source.includes(token), `DWM analyst portal missing brief token: ${token}`)
+}
+
+for (const blockedCopy of [
+    'metadata-only record',
+    'metadata only',
+]) {
+    assert.ok(!source.includes(blockedCopy), `DWM analyst portal should not render implementation-shaped copy: ${blockedCopy}`)
 }
 
 for (const [label, targetSource] of [
