@@ -2579,6 +2579,8 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
 function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], members: OrganizationMember[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const [watchlistQuery, setWatchlistQuery] = useState('')
     const [watchlistStatusFilter, setWatchlistStatusFilter] = useState('all')
+    const activeCount = watchlists.filter(item => item.status.toLowerCase() === 'active').length
+    const pausedCount = watchlists.filter(item => item.status.toLowerCase() === 'paused').length
     const archivedCount = watchlists.filter(item => item.status.toLowerCase() === 'archived').length
     const busyLabel = watchlistBusyLabel(busy)
     const normalizedWatchlistQuery = normalizeWatchlistValue(watchlistQuery)
@@ -2598,6 +2600,13 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                     Cleanup archived
                 </button>
             </div>
+            {watchlists.length > 0 && (
+                <div className='mt-3 flex flex-wrap gap-2' data-org-watchlist-status-counts='true'>
+                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Active: {activeCount}</span>
+                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Paused: {pausedCount}</span>
+                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Archived: {archivedCount}</span>
+                </div>
+            )}
             {busyLabel && <InlineBusy label={busyLabel} marker='data-org-watchlist-busy' />}
             <div className='mt-2'><RowStatus message={rowMessages['watchlists-cleanup']} /></div>
             <details className='mt-4 overflow-hidden rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-canvas' data-org-watchlist-starter='true' data-org-watchlist-add-disclosure='true' open={watchlists.length === 0 ? true : undefined}>
