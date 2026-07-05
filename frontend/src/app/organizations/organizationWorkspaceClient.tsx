@@ -4347,7 +4347,7 @@ function inviteActionAllowed(invite: OrganizationInvite, action: 'copy' | 'resen
     const status = invite.status.toLowerCase()
     if (action === 'copy') return status === 'pending'
     if (action === 'resend') return status !== 'accepted'
-    return status !== 'accepted' && status !== 'revoked'
+    return status === 'pending'
 }
 
 function memberCanMutate(member: OrganizationMember) {
