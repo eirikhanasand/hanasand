@@ -1305,7 +1305,12 @@ export default function OrganizationWorkspaceClient() {
                             Organizations
                         </div>
                         <h1 className='text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text sm:text-4xl'>Organization settings</h1>
-                        <p className='mt-3 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>Team access, shared watchlists, destinations, and alert handling.</p>
+                        <div className='mt-3 flex flex-wrap gap-2 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                            <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Team</span>
+                            <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Watchlists</span>
+                            <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Destinations</span>
+                            <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Alerts and cases</span>
+                        </div>
                     </div>
                     <button
                         type='button'
@@ -2727,9 +2732,11 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                     </div>
                 )}
                 {watchlists.length === 0 && (
-                    <div className='rounded-lg border border-dashed border-ui-primary/35 bg-ui-panel p-4 text-sm leading-6 text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>
-                        <p className='font-semibold text-ui-text dark:text-ui-text'>Create first watchlist term.</p>
-                        <p className='mt-1'>Add a company, domain, vendor, or actor term.</p>
+                    <div className='flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-ui-primary/35 bg-ui-panel p-4 text-sm dark:border-ui-border dark:bg-ui-panel' data-org-watchlist-empty='true'>
+                        <span className='font-semibold text-ui-text dark:text-ui-text'>No shared terms</span>
+                        {watchlistKinds.slice(0, 4).map(kind => (
+                            <span key={kind} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{kind}</span>
+                        ))}
                     </div>
                 )}
                 {watchlists.length > 0 && visibleWatchlists.length === 0 && (
