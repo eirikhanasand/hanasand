@@ -67,6 +67,7 @@ test.describe('public threat actor profile', () => {
         expect(profileSummaryIndex).toBeGreaterThan(mobileWorkbarIndex)
         expect(desktopActionsIndex).toBeGreaterThan(profileSummaryIndex)
         expect(source).toContain('const TI_EVIDENCE_QUEUE_PREVIEW_ROWS = 2')
+        expect(source).toContain('const TI_ENRICHMENT_GAP_PREVIEW_ROWS = 2')
         expect(source).toContain('filteredWorkItems.slice(0, TI_EVIDENCE_QUEUE_PREVIEW_ROWS)')
         expect(source).toContain('filteredWorkItems.length > visibleQueueItems.length')
         expect(source).toContain('showFullQueue && filteredWorkItems.length > TI_EVIDENCE_QUEUE_PREVIEW_ROWS')

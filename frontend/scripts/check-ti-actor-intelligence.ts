@@ -698,7 +698,7 @@ assert(pageClientSource.includes('data-ti-source-count-summary=\'true\''), 'Publ
 assert(pageClientSource.includes('const TI_MOBILE_SOURCE_FILTER_OPTIONS = 5'), 'Public TI mobile source filters should stay compact.')
 assert(pageClientSource.includes('const TI_ACTIVITY_TIMELINE_ROWS = 3'), 'Public TI activity timeline should stay compact before expansion.')
 assert(pageClientSource.includes('const TI_SOURCE_REFERENCE_ROWS = 4'), 'Public TI source reference panel should stay compact.')
-assert(pageClientSource.includes('const TI_ENRICHMENT_GAP_PREVIEW_ROWS = 4'), 'Public TI enrichment gap workbench should stay compact.')
+assert(pageClientSource.includes('const TI_ENRICHMENT_GAP_PREVIEW_ROWS = 2'), 'Public TI enrichment gap workbench should stay compact.')
 assert(pageClientSource.includes('const TI_DOSSIER_REASON_ROWS = 3'), 'Public TI actor dossier should cap confidence reasons.')
 assert(pageClientSource.includes('const TI_DOSSIER_SOURCE_FAMILY_ROWS = 4'), 'Public TI actor dossier should cap source-family chips.')
 assert(pageClientSource.includes('actor.confidenceReasoning.slice(0, TI_DOSSIER_REASON_ROWS).map'), 'Public TI actor dossier confidence reasons should use the named preview cap.')
