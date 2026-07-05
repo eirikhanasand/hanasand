@@ -885,7 +885,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         setInviteEmails('')
-        return `${emails.length} ${role} invite${emails.length === 1 ? '' : 's'} sent.`
+        return `${emails.length} ${inviteRole} invite${emails.length === 1 ? '' : 's'} sent.`
     })
 
     const inviteAction = (invite: OrganizationInvite, action: 'revoke' | 'resend') => selectedOrganization && runAction(`${action}-invite`, async () => {
