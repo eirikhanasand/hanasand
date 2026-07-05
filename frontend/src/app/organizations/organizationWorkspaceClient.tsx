@@ -2989,6 +2989,8 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
     const scopedDeliveries = matchingDeliveries
         .slice(0, showAll ? matchingDeliveries.length : 8)
     const totalFailures = matchingDeliveries.filter(delivery => delivery.status === 'failed' || delivery.error).length
+    const dryRunCount = matchingDeliveries.filter(delivery => delivery.dryRun).length
+    const liveDeliveryCount = matchingDeliveries.length - dryRunCount
     const retryCount = matchingDeliveries.filter(delivery => Boolean(delivery.nextRetryAt)).length
     const hiddenDeliveryCount = Math.max(0, matchingDeliveries.length - scopedDeliveries.length)
     return (
@@ -2997,6 +2999,8 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                 <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Delivery history' detail='Recent tests, replays, failures, and retry state for the selected workspace.' />
                 <div className='flex flex-wrap gap-2'>
                     <StatusPill status={`${matchingDeliveries.length} total`} />
+                    {dryRunCount > 0 && <StatusPill status={`${dryRunCount} test`} />}
+                    {liveDeliveryCount > 0 && <StatusPill status={`${liveDeliveryCount} live`} />}
                     {hiddenDeliveryCount > 0 && <StatusPill status={`${hiddenDeliveryCount} older`} />}
                     {totalFailures > 0 && <StatusPill status={`${totalFailures} failed`} />}
                     {retryCount > 0 && <StatusPill status={`${retryCount} retry`} />}
