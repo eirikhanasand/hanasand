@@ -159,6 +159,7 @@ type DeliveryRow = {
     watchlistId?: string
     watchlistName?: string
     watchlistItemId?: string
+    watchlistIds?: string[]
     watchlistItemIds?: string[]
     destinationId?: string
     webhookDestinationId?: string
