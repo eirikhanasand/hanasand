@@ -2085,11 +2085,13 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                             data-readiness-state={operationalState}
                             data-readiness-blocker-count={item.blockerCount ?? (item.status === 'ready' ? 0 : 1)}
                             data-readiness-deep-link-target={item.deepLinkTarget || item.href || ''}
+                            data-readiness-checked-at={item.checkedAt || item.proofTimestamp || ''}
                             data-readiness-proof-timestamp={item.proofTimestamp || item.checkedAt || ''}
                             data-readiness-unavailable-reason={item.unavailableReason || (item.status === 'unavailable' ? item.source : '')}
                             data-readiness-stale-after-seconds={item.staleAfterSeconds ?? ''}
                             data-readiness-expected-dashboard-row-id={item.expectedDashboardRowId || ''}
                             data-readiness-integration-probe-hint={item.integrationProbeHint || ''}
+                            data-readiness-backend-contract-version={customerOperationalText(item.backendProofContractVersion || '')}
                             data-readiness-backend-proof-contract-version={customerOperationalText(item.backendProofContractVersion || '')}
                             data-readiness-owner-lane={item.ownerLane || ''}
                             data-readiness-operator-action={item.operatorAction || ''}

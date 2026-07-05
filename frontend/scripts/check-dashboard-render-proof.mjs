@@ -168,9 +168,8 @@ for (const attr of [
 }
 
 for (const requiredClass of [
-    'border-[#27364f]',
-    'bg-[#0f1726]',
-    'hover:bg-[#162033]',
+    'dark:border-ui-border',
+    'dark:hover:border-ui-border',
     'wrap-break-word text-xs font-semibold',
     'wrap-break-word text-[11px]',
     'wrap-break-word text-[10px]',
@@ -197,7 +196,7 @@ for (const bannedUiCopy of ['APT29', 'LockBit', 'dashboard slop', 'how this feed
     assert.equal(sourceOpsSource.includes(bannedUiCopy) || pageSource.includes(bannedUiCopy) || modelSource.includes(bannedUiCopy), false, `Dashboard visible source includes prompt/example copy: ${bannedUiCopy}`)
 }
 
-for (const sourceOpsGuard of ['source-ops-workbench grid gap-2', 'border-[#2a3d5c]', 'bg-[#111827]', 'bg-[#0f172a]', 'grid gap-2 sm:grid-cols-2', 'min-h-9 min-w-0 px-2.5 py-1.5', 'whitespace-normal sm:whitespace-nowrap']) {
+for (const sourceOpsGuard of ['source-ops-workbench grid gap-2', 'border-ui-border', 'bg-ui-panel', 'hover:bg-ui-raised', 'grid gap-2 sm:grid-cols-2', 'min-h-9 min-w-0 px-2.5 py-1.5', 'whitespace-normal sm:whitespace-nowrap']) {
     assert.ok(sourceOpsSource.includes(sourceOpsGuard), `Source operations action guard missing: ${sourceOpsGuard}`)
 }
 
