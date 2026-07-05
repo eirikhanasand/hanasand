@@ -775,7 +775,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
     const candidates = normalizeCandidates(contract?.watchlistCandidates, result, actor, victimObservations)
     const matches = contract?.watchlistMatches ?? []
     const relatedAlerts = contract?.relatedAlerts ?? []
-    const relatedCases = contract?.relatedCases ?? []
+    const relatedCases = normalizeRelatedCases(contract?.relatedCases, relatedAlerts)
     const sourceProvenance = normalizeSourceProvenance(contract?.sourceProvenance, result)
     const enrichmentGaps = normalizeEnrichmentGaps(contract?.enrichmentGaps, result, actor, sourceProvenance)
     const geographyHandoffs = buildGeographyHandoffs(result, victimObservations, candidates)
@@ -3257,6 +3257,26 @@ function normalizeEnrichmentGaps(contractGaps: TiActionabilityContract['enrichme
         })
     }
     return uniqueBy(gaps, gap => gap.id).slice(0, 8)
+}
+
+function normalizeRelatedCases(
+    contractCases: TiActionabilityContract['relatedCases'],
+    relatedAlerts: NonNullable<TiActionabilityContract['relatedAlerts']>,
+): NonNullable<TiActionabilityContract['relatedCases']> {
+    const alertCases = relatedAlerts
+        .flatMap(alert => {
+            const path = alert.casePath ?? alert.deliveryReadinessContext?.casePath
+            const id = alert.caseIdCandidate ?? caseIdFromPath(path)
+            if (!id && !path) return []
+            return [{
+                id: id ?? path!,
+                title: alert.title,
+                status: alert.status,
+                ...(alert.severity ? { priority: alert.severity } : {}),
+                ...(path ? { path } : {}),
+            }]
+        })
+    return uniqueBy([...(contractCases ?? []), ...alertCases], item => item.path ?? item.id)
 }
 
 function routeForGap(gap: NonNullable<TiActionabilityContract['enrichmentGaps']>[number]) {

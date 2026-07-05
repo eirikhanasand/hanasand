@@ -44,6 +44,19 @@ assert(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRel
 assert(readArray(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRelevance).sourceCoverage).some(item => readObject(item).status === 'capture_ready'), 'Analyst handoff bundle should include source coverage readiness.')
 assert(readArray(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRelevance).watchlistIntersections).some(item => readObject(item).recommendedAction === 'open_case'), 'Analyst handoff bundle should include org watchlist intersections.')
 
+const alertOnlyCaseContinuity = (() => {
+    const result = apt29Result()
+    result.actionability!.relatedCases = []
+    const victims = victimObservationsFor(result)
+    const actor = buildActorIntelligence(result, victims)
+    return buildTiActionability(result, actor, victims)
+})()
+assert(alertOnlyCaseContinuity.relatedCases.some(item =>
+    item.id === 'case_apt29_microsoft'
+    && item.path === '/dashboard/dwm/cases/case_apt29_microsoft'
+), 'Actionability should derive related cases from related alert case context.')
+assert(alertOnlyCaseContinuity.readiness.backedIds.casePaths.includes('/dashboard/dwm/cases/case_apt29_microsoft'), 'Derived related cases should feed readiness case paths.')
+
 const apt29WithHostedCopyResidue = apt29Result()
 apt29WithHostedCopyResidue.ttps[0]!.detail = 'Tradecraft aligns with returned ATT&CK techniques for credential and cloud activity.'
 apt29WithHostedCopyResidue.actionability!.watchlistCandidates![0]!.reason = 'Public reporting and returned actor profile include Microsoft email intrusion context.'
