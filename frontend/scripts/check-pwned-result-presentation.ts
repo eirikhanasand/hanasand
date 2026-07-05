@@ -11,7 +11,7 @@ const markup = renderToStaticMarkup(React.createElement(PwnedSearch, {
 
 assert.match(markup, /Exact match found/)
 assert.match(markup, /5BAA6/)
-assert.match(markup, /without sending the full hash or underlying secret to Hanasand/i)
+assert.match(markup, /The full hash and underlying secret were not sent to Hanasand/i)
 assert.doesNotMatch(markup, /password123|all_in_one_sorted|byte\s+\d+/i)
 assert.match(markup, /bg-ui-danger\/10/)
 assert.match(markup, /text-ui-danger/)
