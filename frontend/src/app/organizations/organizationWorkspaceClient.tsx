@@ -3939,6 +3939,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
             ['Type', destination.kind || destination.type || 'webhook'],
             ['Status', destination.status || (destination.deliveryReady ? 'active' : 'configured')],
             ['Destination', destinationDisplayState(destination)],
+            ['Endpoint', sanitizeOrganizationDisplayCopy(destination.endpointHint) || compactReference(destination.endpointHash, 'route')],
             ['Ref', compactReference(destination.id, 'dest')],
             ['Last delivery', delivery?.status],
         ])
@@ -3953,6 +3954,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
         ['Status', item?.status],
         ['Owner', organizationMemberLabel(item?.updatedBy || item?.createdBy, bundle.members)],
         ['Destination', item ? destinationDisplayState(item) : destinationDisplayState(delivery)],
+        ['Endpoint', sanitizeOrganizationDisplayCopy(item?.webhookEndpointHint) || compactReference(item?.webhookEndpointHash, 'route')],
         ['Match', matchReason],
         ['Ref', compactReference(item?.alertGenerationRef || item?.id || subject.id, 'watch')],
         ['Last delivery', delivery?.status],
