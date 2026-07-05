@@ -121,6 +121,8 @@ test('automation delivery templates do not ship developer-local destinations', a
     expect(pageClient).toContain('status: \'paused\'')
     expect(pageClient).toContain('activeRouteSaveBlocker(draft)')
     expect(pageClient).toContain('Add a delivery destination or keep the route paused before saving.')
+    expect(pageClient).toContain('matched watchlist term, alert summary, claim time, source label, source link, source count, review state, recommended action, and investigation pivots')
+    expect(pageClient).not.toContain('matchedTerm, claimSummary, claimedAt, sourceName, sourceUrl, sourceCount, reviewState, recommendedAction, and pivots')
     expect(automationUtils).toContain('status === \'active\' && actionType === \'system_alert\' && !modelName')
     expect(automationUtils).toContain('status === \'active\' && actionType === \'mail_health_check\' && notifyOn !== \'never\' && !modelName')
 })
