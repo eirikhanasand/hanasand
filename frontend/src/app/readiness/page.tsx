@@ -45,7 +45,7 @@ export default async function Page({
                             <SummaryBox label='Checked' value={formatChecked(scoreboard.generatedAt)} />
                             <SummaryBox label='Live feed' value={stateLabel(scoreboard.progressSource.state)} />
                             <div className={`rounded-lg border px-3 py-2 ${stateTone}`}>
-                                <p className='text-[11px] font-semibold uppercase'>Release gate</p>
+                                <p className='text-[11px] font-semibold uppercase'>Lane state</p>
                                 <p className='mt-1 text-sm font-semibold'>{scoreboard.fullChainReady ? 'ready' : 'syncing'}</p>
                             </div>
                         </div>
@@ -167,21 +167,15 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                             <p className='mt-1 wrap-break-word'>{publicOpsText(row.blockers.join(', ') || row.requiredNextAction)}</p>
                             <dl className='mt-3 grid gap-2 rounded-lg border border-ui-warning/30 bg-ui-panel/55 px-3 py-2 text-[11px] leading-4'>
                                 <Fact label='Source' value={publicOpsText(row.proofArtifactSchemaVersion)} />
-                                <Fact label='Run id' value={publicOpsText(row.proofArtifactId)} />
+                                <Fact label='Update id' value={publicOpsText(row.proofArtifactId)} />
                                 <Fact label='Check' value={row.probeId || 'checking'} />
                                 <Fact label='Risk' value={row.deployRisk || 'checking'} />
                                 <Fact label='Checked' value={formatChecked(row.lastCheckedAt)} />
                                 <Fact label='Row age' value={formatDuration(row.lastCheckedAgeSeconds)} />
                                 <Fact label='Stale' value={row.lastCheckedStale ? 'yes' : 'no'} />
-                                <Fact label='UI signal' value={row.uiQualityProofExists ? 'present' : 'checking'} />
+                                <Fact label='UI state' value={row.uiQualityProofExists ? 'present' : 'checking'} />
                                 <Fact label='Adapter' value={row.workflowExpectedAdapter || 'checking'} />
                             </dl>
-                            {(row.workflowTestName || row.workflowProofCommand) && (
-                                <dl className='mt-2 grid gap-2 rounded-lg border border-ui-warning/30 bg-ui-panel/55 px-3 py-2 text-[11px] leading-4'>
-                                    <Fact label='Test' value={row.workflowTestName || 'checking'} />
-                                    <Fact label='Command' value={row.workflowProofCommand || 'checking'} />
-                                </dl>
-                            )}
                             <div className='mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
                                 <p className='min-w-0 wrap-break-word text-[11px] leading-4'>{row.workflowRoute || row.route || 'Route is reconnecting.'}</p>
                                 {localRoute(row.route) ? (
@@ -261,22 +255,22 @@ function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboar
         >
             <div className='flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between'>
                 <div>
-                    <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary'>Release gates</p>
-                    <h2 className='mt-2 text-xl font-semibold text-ui-text'>Live gates holding release</h2>
+                    <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary'>Operating holds</p>
+                    <h2 className='mt-2 text-xl font-semibold text-ui-text'>Live lanes needing action</h2>
                 </div>
                 <p className='max-w-2xl text-sm leading-6 text-ui-muted'>
-                    A hold clears when the live operating lane is fresh and linked to an action the console can run.
+                    A hold clears when the live operating lane is fresh and linked to an action the console can open.
                 </p>
             </div>
             <div className='mt-4 grid gap-2 sm:grid-cols-3'>
-                <SummaryBox label='Gate links' value={String(scoreboard.deployGate.proofDrilldownCount)} />
+                <SummaryBox label='Status links' value={String(scoreboard.deployGate.proofDrilldownCount)} />
                 <SummaryBox label='Linked routes' value={String(scoreboard.deployGate.linkableProofDrilldownCount)} />
                 <SummaryBox label='Probe routes' value={String(scoreboard.deployGate.probeRouteCount)} />
             </div>
             <div className='mt-3 grid gap-2 lg:grid-cols-3'>
                 <RouteTargetList label='Workflows' routes={scoreboard.deployGate.workflowRoutes} />
                 <RouteTargetList label='Live APIs' routes={scoreboard.deployGate.proofApiRoutes} />
-                <RouteTargetList label='Probes' routes={scoreboard.deployGate.probeRoutes} />
+                <RouteTargetList label='Checks' routes={scoreboard.deployGate.probeRoutes} />
             </div>
             {scoreboard.deployGate.blockingOwnerLanes.length > 0 && (
                 <div className='mt-3 grid gap-2 lg:grid-cols-3'>
@@ -542,7 +536,7 @@ function SourceDrilldowns({
                     data-north-star-source-drilldown-value={publicOpsText(item.value)}
                     data-north-star-source-drilldown-href={item.href}
                 >
-                    <dt className='font-semibold text-ui-muted'>{item.label}</dt>
+                    <dt className='font-semibold text-ui-muted'>{publicOpsText(item.label)}</dt>
                     <dd className='min-w-0 wrap-break-word font-medium text-ui-text '>
                         {item.href ? (
                             <Link href={item.href} className='inline-flex min-h-8 min-w-11 items-center justify-center rounded-md px-1 text-ui-primary underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
