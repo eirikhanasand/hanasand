@@ -1500,17 +1500,14 @@ function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, se
 }) {
     const workflowQueue = stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)
     const watchlist = workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} watchlists` : stateLabel(alert.matchedTerm.kind)
+    const entityContext = selectedEntity?.name || alert.matchedTerm.value
+    const caseContext = workflowContext.caseId ? `case ${workflowContext.caseId}` : 'case candidate'
     return (
         <section className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
             <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
                 <div>
                     <h3 className='text-sm font-semibold text-ui-text'>Evidence decisions</h3>
-                    <p className='mt-0.5 text-xs text-ui-muted'>{visibleEvidence.length} row{visibleEvidence.length === 1 ? '' : 's'} · {workflowQueue} · {watchlist}</p>
-                </div>
-                <div className='flex flex-wrap gap-2'>
-                    <ImpactChip label='Entity' value={selectedEntity?.name || alert.matchedTerm.value} />
-                    <ImpactChip label='Queue' value={workflowQueue} />
-                    <ImpactChip label='Case' value={workflowContext.caseId || 'candidate'} />
+                    <p className='mt-0.5 text-xs text-ui-muted'>{visibleEvidence.length} row{visibleEvidence.length === 1 ? '' : 's'} · {workflowQueue} · {watchlist} · {entityContext} · {caseContext}</p>
                 </div>
             </div>
             <div className='overflow-x-auto'>
