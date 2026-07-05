@@ -17,6 +17,8 @@ import { humanizeSlug } from '../seo'
 const TI_WORKBENCH_PREVIEW_ROWS = 1
 const TI_EVIDENCE_QUEUE_PREVIEW_ROWS = 2
 const TI_SELECTED_CONTEXT_ROWS = 3
+const TI_SELECTED_DETAIL_LIST_ROWS = 3
+const TI_SELECTED_SOURCE_REQUEST_ROWS = 2
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const router = useRouter()
@@ -3395,10 +3397,10 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
             <div className='mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='grid gap-3 md:grid-cols-2'>
                     <EvidencePanel title='Evidence'>
-                        {artifact.evidence.length ? artifact.evidence.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Review source evidence before case work.</li>}
+                        {artifact.evidence.length ? artifact.evidence.slice(0, TI_SELECTED_DETAIL_LIST_ROWS).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Review source evidence before case work.</li>}
                     </EvidencePanel>
                     <EvidencePanel title='Source details'>
-                        {artifact.provenance.length ? artifact.provenance.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Source details are missing for this detail.</li>}
+                        {artifact.provenance.length ? artifact.provenance.slice(0, TI_SELECTED_DETAIL_LIST_ROWS).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Source details are missing for this detail.</li>}
                     </EvidencePanel>
                     <EvidencePanel title='Watchlist relevance'>
                         {artifact.watchlistTerms.length ? artifact.watchlistTerms.map(term => <li key={`${term.kind}-${term.value}`}>{term.kind}: {term.value}. {displayRequirementText(term.notes)}</li>) : <li>Attach customer watchlist term.</li>}
@@ -3426,7 +3428,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                         </div>
                         <div data-ti-artifact-source-requests='true' className='mt-3 grid min-w-0 w-full max-w-[calc(100vw-7rem)] gap-2 overflow-hidden sm:max-w-full'>
                             <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source requests</p>
-                            {bridge.payload.sourceRequests.length ? bridge.payload.sourceRequests.slice(0, 3).map(request => (
+                            {bridge.payload.sourceRequests.length ? bridge.payload.sourceRequests.slice(0, TI_SELECTED_SOURCE_REQUEST_ROWS).map(request => (
                                 <div key={`${request.sourceName}-${request.provenance}-${request.captureId ?? 'missing'}`} className='min-w-0 w-full max-w-full overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised'>
                                     <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between'>
                                         <p className='min-w-0 wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{request.sourceName}</p>
@@ -3455,7 +3457,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                         </div>
                         {bridge.missing.length ? (
                             <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-ui-warning'>
-                                {bridge.missing.slice(0, 4).map(item => <li key={item}>{displayRequirementText(item)}</li>)}
+                                {bridge.missing.slice(0, TI_SELECTED_SOURCE_REQUEST_ROWS).map(item => <li key={item}>{displayRequirementText(item)}</li>)}
                             </ul>
                         ) : null}
                         {bridge.payload.evidenceRefs ? (
