@@ -4212,7 +4212,8 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
 function selectedSubjectWatchlistId(subject: ActivitySubject, bundle: OrgBundle) {
     if (subject.type === 'alert') {
         const alert = bundle.alerts.find(item => item.id === subject.id)
-        return alert?.watchlistItemId || alert?.watchlistItemIds?.[0] || alert?.watchlistIds?.[0] || ''
+        const delivery = bundle.deliveries.find(item => item.alertId === subject.id && (item.watchlistItemId || item.watchlistId || item.watchlistItemIds?.[0]))
+        return alert?.watchlistItemId || alert?.watchlistItemIds?.[0] || alert?.watchlistIds?.[0] || delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0] || ''
     }
     if (subject.type === 'case') {
         const delivery = bundle.deliveries.find(item => item.caseId === subject.id && (item.watchlistItemId || item.watchlistId || item.watchlistItemIds?.[0]))
