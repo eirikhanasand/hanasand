@@ -189,8 +189,8 @@ async function handleResult(result) {
         const sent = await trySendDiscord({
             status: 'RECOVERED',
             color: 0x22c55e,
-            title: 'Hanasand database dashboard recovered',
-            description: result.detail,
+            title: 'Database dashboard recovered',
+            description: `${result.detail} Alerts resume only if the monitor sees a fresh outage.`,
             fields: resultFields(result),
         })
         if (sent) next.lastAlertAt = now.toISOString()
@@ -203,8 +203,8 @@ async function handleResult(result) {
             const sent = await trySendDiscord({
                 status: 'DOWN',
                 color: 0xef4444,
-                title: 'Hanasand database dashboard failed',
-                description: result.detail,
+                title: `Database dashboard unavailable: ${reasonLabel(result.reason)}`,
+                description: `${failureImpact(result.reason)} ${result.detail}`,
                 fields: resultFields(result),
             })
             if (sent) next.lastAlertAt = now.toISOString()
@@ -230,19 +230,11 @@ async function sendDiscord({ status, color, title, description, fields }) {
         throw new Error(`DISCORD_WEBHOOK_URL is required to alert database dashboard monitor status=${status}`)
     }
 
+    const payload = buildDiscordPayload({ status, color, title, description, fields })
     const response = await fetch(discordWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            content: status === 'DOWN' ? `${discordMention} Hanasand database dashboard check failed.` : undefined,
-            embeds: [{
-                title,
-                description: truncate(description, 900),
-                color,
-                timestamp: now.toISOString(),
-                fields,
-            }],
-        }),
+        body: JSON.stringify(payload),
     })
 
     if (!response.ok) {
@@ -251,17 +243,55 @@ async function sendDiscord({ status, color, title, description, fields }) {
     }
 }
 
+function buildDiscordPayload({ status, color, title, description, fields }) {
+    return {
+        content: status === 'DOWN' ? `${discordMention} ${title}. ${truncate(description, 180)}` : undefined,
+        embeds: [{
+            title,
+            description: truncate(description, 900),
+            color,
+            timestamp: now.toISOString(),
+            fields,
+        }],
+    }
+}
+
 function resultFields(result) {
     const metrics = result.metrics || {}
     return [
         { name: 'URL', value: `${baseUrl}${dashboardPath}`, inline: true },
-        { name: 'User', value: username, inline: true },
+        { name: 'Monitor user', value: username || 'not configured', inline: true },
         { name: 'Latency', value: `${result.latencyMs}ms`, inline: true },
-        { name: 'Reason', value: result.reason, inline: true },
+        { name: 'What failed', value: reasonLabel(result.reason), inline: true },
+        { name: 'Operator action', value: operatorAction(result.reason), inline: false },
         { name: 'Clusters', value: String(metrics.clusters ?? 'unknown'), inline: true },
         { name: 'Databases', value: String(metrics.databases ?? 'unknown'), inline: true },
         ...(result.ok ? [] : [{ name: 'Failure screenshot', value: failureScreenshotPath, inline: false }]),
     ]
+}
+
+function reasonLabel(reason) {
+    return String(reason || 'monitor failure')
+        .replace(/^db_dashboard_/, '')
+        .replace(/_/g, ' ')
+}
+
+function failureImpact(reason) {
+    if (reason === 'missing_credentials') return 'The monitor cannot sign in because credentials are not configured.'
+    if (reason === 'db_dashboard_unavailable') return 'The dashboard rendered an unavailable or reconnecting telemetry state.'
+    if (reason === 'db_dashboard_missing_clusters') return 'The dashboard did not show a PostgreSQL cluster.'
+    if (reason === 'db_dashboard_missing_databases') return 'The dashboard did not show a database.'
+    if (reason === 'db_dashboard_missing_storage') return 'The dashboard did not show non-zero storage telemetry.'
+    if (reason === 'db_dashboard_missing_query_state') return 'The dashboard did not show query-health state.'
+    return 'The monitor could not verify the database dashboard.'
+}
+
+function operatorAction(reason) {
+    if (reason === 'missing_credentials') return 'Restore HANASAND_DB_MONITOR_USER and HANASAND_DB_MONITOR_PASSWORD, then run the monitor once.'
+    if (reason === 'db_dashboard_unavailable') return 'Check API auth, PostgreSQL telemetry views, and the dashboard screenshot.'
+    if (reason === 'db_dashboard_missing_clusters' || reason === 'db_dashboard_missing_databases' || reason === 'db_dashboard_missing_storage') return 'Check the database telemetry collector and dashboard API response.'
+    if (reason === 'db_dashboard_missing_query_state') return 'Check the query telemetry block and dashboard render.'
+    return 'Open the failure screenshot and rerun the monitor after the dependency is fixed.'
 }
 
 async function readState() {
@@ -390,6 +420,18 @@ function runSelfTest() {
     `)
     assert.equal(unavailable.ok, false)
     assert.equal(unavailable.reason, 'db_dashboard_unavailable')
+
+    const discordPayload = buildDiscordPayload({
+        status: 'DOWN',
+        color: 0xef4444,
+        title: `Database dashboard unavailable: ${reasonLabel(unavailable.reason)}`,
+        description: `${failureImpact(unavailable.reason)} ${unavailable.detail}`,
+        fields: resultFields({ ...unavailable, latencyMs: 123 }),
+    })
+    assert.match(discordPayload.content, /Database dashboard unavailable: unavailable/)
+    assert.match(discordPayload.content, /unavailable or reconnecting telemetry state/)
+    assert.doesNotMatch(discordPayload.content, /check failed/i)
+    assert.ok(discordPayload.embeds[0].fields.some(field => field.name === 'Operator action' && /API auth|PostgreSQL telemetry/.test(field.value)))
 
     const shell = evaluateDashboardText(`
         Operations

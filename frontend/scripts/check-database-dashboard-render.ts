@@ -53,6 +53,7 @@ const healthyOverview: DatabaseOverview = {
 const healthyMarkup = renderToStaticMarkup(React.createElement(DatabaseDashboard, { overview: healthyOverview }))
 assert.match(healthyMarkup, /Active and long-running queries/)
 assert.match(healthyMarkup, /No long-running queries right now/)
+assert.match(healthyMarkup, /data-db-monitor-metrics/)
 assert.match(healthyMarkup, /hanasand/)
 assert.match(healthyMarkup, /42/)
 assert.match(healthyMarkup, /Backups/)

@@ -15,6 +15,13 @@ test('database overview focuses operator triage without removing telemetry actio
     expect(page).toContain('data-db-primary-action')
     expect(page).toContain('data-db-long-running-state')
     expect(page).toContain('Long-running query state: no long-running queries right now.')
+    expect(page).toContain('const monitorMetrics = [')
+    expect(page).toContain('data-db-monitor-metrics')
+    expect(page).toMatch(/label: 'Clusters', value: formatNumberMetric\(overview\.clusterCount\)/)
+    expect(page).toMatch(/label: 'Databases', value: formatNumberMetric\(overview\.databaseCount\)/)
+    expect(page).toMatch(/label: 'Storage', value: overview\.totalSizeBytes === null \? 'Metering' : formatBytes\(overview\.totalSizeBytes\)/)
+    expect(page).toMatch(/label: 'Active queries', value: String\(activeQueryCount\)/)
+    expect(page).toMatch(/label: 'Long-running', value: String\(longRunningQueries\.length\)/)
 
     expect(page).toContain('data-db-telemetry-disclosure')
     expect(page).toContain('data-db-operation-lanes')
