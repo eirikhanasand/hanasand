@@ -487,7 +487,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
 
             await navigate(target)
             await dismissCookieOverlays(page).catch(() => undefined)
-            await sendFrame(true, 'initial_target')
             send({
                 type: 'ready',
                 sessionId,
@@ -501,6 +500,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             frameTimer = setInterval(() => {
                 void sendFrame(false)
             }, FRAME_INTERVAL_MS)
+            void sendFrame(true, 'initial_target')
             const primaryEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
             await captureProfileTools(context, message.profileTools || [], target, primaryEvidence?.deobfuscationTasks || [])
         } catch (error) {
