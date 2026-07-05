@@ -519,20 +519,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <EvidenceMetric label='Source reference' value={displayRequirementText(selected.provenance)} />
                                     </div>
 
-                                    <div data-ti-selected-evidence-command-strip='true' className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-2 text-xs dark:border-ui-border dark:bg-ui-raised sm:grid-cols-[minmax(0,1fr)_auto]'>
-                                        <p className='min-w-0 wrap-break-word leading-5 text-ui-muted dark:text-ui-muted'>
-                                            Case link: {selectedCaseDraft && selectedCaseOwnership ? 'Case draft ready' : selectedSourceDrilldown?.rows.length ? 'Add capture references' : 'Add source rows'} · {selectedSourceDrilldown?.rows.length ?? 0} source row{(selectedSourceDrilldown?.rows.length ?? 0) === 1 ? '' : 's'} linked.
-                                        </p>
-                                        <span className='flex flex-wrap gap-2'>
-                                            <a href='#ti-selected-evidence' className='inline-flex min-h-8 items-center justify-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                                Inspect evidence
-                                            </a>
-                                            <a href='#ti-actions' className='inline-flex min-h-8 items-center justify-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                                                Review actions
-                                            </a>
-                                        </span>
-                                    </div>
-
                                     {selectedSourceDrilldown ? <SelectedEvidenceContextTable drilldown={selectedSourceDrilldown} /> : null}
                                     {showMoreAnalysis ? (
                                         <>
