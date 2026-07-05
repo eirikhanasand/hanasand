@@ -23,10 +23,10 @@ const TI_SELECTED_DETAIL_LIST_ROWS = 3
 const TI_SELECTED_SOURCE_REQUEST_ROWS = 2
 const TI_MOBILE_SOURCE_FILTER_OPTIONS = 5
 const TI_ACTIVITY_TIMELINE_ROWS = 3
-const TI_SOURCE_REFERENCE_ROWS = 4
+const TI_SOURCE_REFERENCE_ROWS = 2
 const TI_ENRICHMENT_GAP_PREVIEW_ROWS = 2
 const TI_DOSSIER_REASON_ROWS = 3
-const TI_DOSSIER_SOURCE_FAMILY_ROWS = 4
+const TI_DOSSIER_SOURCE_FAMILY_ROWS = 3
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const router = useRouter()
