@@ -933,7 +933,7 @@ export default function OrganizationWorkspaceClient() {
                 ...setupWarnings,
             ].filter(Boolean).join(', ') + '.',
         }
-    })
+    }, 'organization-create')
 
     const saveSettings = () => selectedOrganization && runAction('save-settings', async () => {
         requireManage()
@@ -1279,6 +1279,7 @@ export default function OrganizationWorkspaceClient() {
                 <Building2 className='h-4 w-4' />
                 Create organization
             </button>
+            <RowStatus message={rowMessages['organization-create']} />
         </div>
     )
     const createOrganizationPanel = organizations.length > 0 ? (
