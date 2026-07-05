@@ -38,6 +38,7 @@ const coreTasks: TestTask[] = [
     scriptTask('ai-runtime-contract', 'AI runtime contract', 'validate-ai-runtime-contract.ts'),
     scriptTask('lxd-lifecycle', 'LXD lifecycle contract', 'test-lxd-lifecycle.ts'),
     scriptTask('browser-sandbox-profiles', 'Browser sandbox profile persistence contract', 'smoke-browser-sandbox-profiles.ts'),
+    scriptTask('browser-sandbox-analysis', 'Browser sandbox analysis contract', 'smoke-browser-sandbox-analysis.ts'),
 ]
 
 const environmentTasks: TestTask[] = [
