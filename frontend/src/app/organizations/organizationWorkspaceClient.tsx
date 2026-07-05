@@ -3199,7 +3199,7 @@ function DeliveryReference({ delivery, organizationId }: { delivery: DeliveryRow
             {!delivery.caseId && !delivery.alertId ? <span className='truncate text-ui-muted dark:text-ui-muted'>Attach alert after replay</span> : null}
             {watchlistId
                 ? <a href={`#watchlist-${encodeURIComponent(watchlistId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(watchlistId, 'Watchlist')}</a>
-                : <span className='truncate text-ui-muted dark:text-ui-muted'>{compactReference(delivery.actionId, 'Watchlist') || 'Watchlist pending'}</span>}
+                : <span className='truncate text-ui-muted dark:text-ui-muted'>{compactReference(delivery.actionId, 'Action') || 'Route context pending'}</span>}
         </div>
     )
 }
