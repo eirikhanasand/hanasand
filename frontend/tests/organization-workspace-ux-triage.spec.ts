@@ -258,8 +258,12 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('Org: {organizationDisplayName(organization)}')
     expect(page).toContain('Owner: {organizationMemberLabel(item.updatedBy || item.createdBy, members)}')
     expect(page).toContain('Ref: {compactReference(item.alertGenerationRef || item.id, \'watch\')}')
+    expect(page).toContain('Alert: {compactReference(selectedAlertId, \'alert\')}')
+    expect(page).toContain('Scope: {organizationDisplayName(organization)}')
     expect(page).toContain('compactReference(item?.alertGenerationRef || item?.id || subject.id, \'watch\')')
     expect(page).not.toContain('Org: {sanitizeOrganizationDisplayCopy(item.organizationId || organization.id)}')
+    expect(page).not.toContain('Selected alert: {selectedAlertId}')
+    expect(page).not.toContain('Tenant: {sanitizeOrganizationDisplayCopy(item.tenantId || organization.tenantId || \'default\')}')
     expect(page).toContain('auditAction?: string')
     expect(page).toContain('function shortTraceId')
     expect(page).toContain('return `${action}audit ${shortTraceId(delivery.auditEventId)}`')
@@ -428,8 +432,11 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(retiredVendorRow).toContainText('Org: Acme Security')
     await expect(retiredVendorRow).toContainText('Owner: Acme Owner')
     await expect(page.locator('#audit')).toContainText('Owner: Acme Owner')
+    await expect(retiredVendorRow).toContainText('Scope: Acme Security')
+    await expect(retiredVendorRow).toContainText('Alert: alert')
     await expect(retiredVendorRow).not.toContainText('Org: org_acme')
     await expect(retiredVendorRow).not.toContainText('Owner: owner_acme')
+    await expect(retiredVendorRow).not.toContainText('Tenant: tenant_acme')
 
     await testInfo.attach('organizations-watchlist-filter-desktop', {
         body: await page.screenshot({ path: '/tmp/organizations-watchlist-filter-desktop.png', fullPage: true }),

@@ -2748,9 +2748,9 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                 </label>
             </div>
             <div className='grid gap-2 text-xs text-ui-muted dark:text-ui-muted sm:grid-cols-3'>
-                <span className='truncate'>Selected alert: {selectedAlertId}</span>
+                <span className='truncate'>Alert: {compactReference(selectedAlertId, 'alert')}</span>
                 <span className='truncate'>Last delivery: {deliveryStatus}</span>
-                <span className='truncate'>Tenant: {sanitizeOrganizationDisplayCopy(item.tenantId || organization.tenantId || 'default')}</span>
+                <span className='truncate'>Scope: {organizationDisplayName(organization)}</span>
             </div>
             {delivery?.error && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{deliveryFailureSummary(delivery)}</p>}
             {delivery && <DeliveryPayloadPreview delivery={delivery} compact />}
