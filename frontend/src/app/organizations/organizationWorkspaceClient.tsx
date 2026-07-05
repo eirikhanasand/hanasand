@@ -323,8 +323,8 @@ function sanitizeOrganizationDisplayCopy(value: unknown) {
     return String(value)
         .replace(new RegExp('hanasand-live-' + 'pr' + 'oof-\\d+', 'gi'), 'Hanasand live org')
         .replace(new RegExp('hanasand-live-' + 'pr' + 'oof', 'gi'), 'Hanasand live org')
-        .replace(/Route not found/gi, 'Endpoint unavailable')
-        .replace(/not_found/gi, 'endpoint unavailable')
+        .replace(/Route not found/gi, 'Action unavailable')
+        .replace(/not_found/gi, 'action unavailable')
         .replace(new RegExp('rec' + 'eipt', 'gi'), 'delivery')
         .replace(new RegExp('pro' + 'of', 'gi'), 'status')
         .replace(new RegExp('read' + 'iness', 'gi'), 'status')
@@ -3185,7 +3185,7 @@ function errorMessage(error: unknown) {
 
 function endpointErrorMessage(error: unknown) {
     const message = errorMessage(error)
-    if (/route not found|not_found|404/i.test(message)) return 'Endpoint unavailable'
+    if (/route not found|not_found|404/i.test(message)) return 'Action unavailable'
     return sanitizeOrganizationDisplayCopy(message) || message
 }
 
