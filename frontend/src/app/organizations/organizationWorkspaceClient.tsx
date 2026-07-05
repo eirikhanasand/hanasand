@@ -333,6 +333,8 @@ function sanitizeOrganizationDisplayCopy(value: unknown) {
         .replace(new RegExp('rec' + 'eipt', 'gi'), 'delivery')
         .replace(new RegExp('pro' + 'of', 'gi'), 'status')
         .replace(new RegExp('read' + 'iness', 'gi'), 'status')
+        .replace(/https:\/\/[^\s"'<>]*(?:webhook|hooks)[^\s"'<>]*/gi, 'redacted endpoint')
+        .replace(/\b(?:token|inviteToken|webhookUrl|endpointUrl)=['"]?[^\s"'&<>]+/gi, 'secret=redacted')
 }
 
 function organizationDeliveryErrorText(value: unknown) {
