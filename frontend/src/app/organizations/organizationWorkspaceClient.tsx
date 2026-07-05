@@ -541,6 +541,7 @@ export default function OrganizationWorkspaceClient() {
     const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
     const activityRows = useMemo(() => organizationActivityRows(activity, bundle), [activity, bundle])
     const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedInviteId || requestedMemberId || requestedFocus)
+    const hasScopeRecords = Boolean(bundle.alertTerms.length || bundle.alerts.length || bundle.cases.length || bundle.webhooks.length || bundle.alertCaseVisibility.length)
     const settingsDirty = useMemo(() => !settingsEqual(settingsDraft, bundle.settings || {}), [settingsDraft, bundle.settings])
     const normalizedCreateName = normalizeOrganizationName(createName)
     const createNameInUse = normalizedCreateName ? organizationNameInUse(organizations, normalizedCreateName) : false
@@ -1278,7 +1279,7 @@ export default function OrganizationWorkspaceClient() {
                                         rowMessages={rowMessages}
                                         onReplay={delivery => void replayDelivery(delivery)}
                                     />
-                                    <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
+                                    {hasScopeRecords && <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />}
                                 </section>
                             </div>
                         ) : (
