@@ -1629,7 +1629,7 @@ function DwmHandoffBanner({ organization, bundle, selectedSubject, alertId, case
                         DWM actions for this organization
                     </h2>
                     <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>
-                        Manage {sanitizeOrganizationDisplayCopy(selectedLabel) || selectedLabel}, delivery destination, and team access from one scoped view.
+                        Manage {sanitizeOrganizationDisplayCopy(selectedLabel) || selectedLabel}, delivery destination, and team access from one workspace view.
                     </p>
                     <div className='mt-3 flex flex-wrap gap-2'>
                         {scopedValues.map(([label, value]) => (
@@ -3020,6 +3020,14 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
             setCopyStatus({ ok: false, text: 'Copy failed.' })
         }
     }
+    const copySelectedLink = async () => {
+        try {
+            await navigator.clipboard.writeText(window.location.href)
+            setCopyStatus({ ok: true, text: 'Link copied.' })
+        } catch {
+            setCopyStatus({ ok: false, text: 'Copy failed.' })
+        }
+    }
     return (
         <section id='audit' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <SectionTitle icon={<CheckCircle2 className='h-4 w-4' />} title='Activity' detail='Selected row, delivery, and team actions.' />
@@ -3039,6 +3047,10 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                         <button type='button' className={secondaryButtonClass} onClick={() => void copySelectedActivity()} data-org-activity-copy='true'>
                             <Copy className='h-4 w-4' />
                             Copy
+                        </button>
+                        <button type='button' className={secondaryButtonClass} onClick={() => void copySelectedLink()} data-org-activity-copy-link='true'>
+                            <Copy className='h-4 w-4' />
+                            Copy link
                         </button>
                         <button type='button' className={secondaryButtonClass} onClick={() => onSelectSubject({ type: 'organization', id: organization.id })}>
                             All
