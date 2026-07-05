@@ -1590,7 +1590,7 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
         ['Alert', compactReference(alertId, 'Alert')],
         ['Watchlist', compactReference(watchlistId, 'Watchlist')],
         ['Destination', compactReference(destinationId, 'Destination')],
-        ['Delivery', compactReference(deliveryId, 'Delivery')],
+        ['Delivery', deliveryId],
     ].filter(([, value]) => Boolean(value))
     const caseHref = caseId
         ? `/dashboard/dwm/cases/${encodeURIComponent(caseId)}?organizationId=${encodeURIComponent(organization.id)}${alertId ? `&alertId=${encodeURIComponent(alertId)}` : ''}`
