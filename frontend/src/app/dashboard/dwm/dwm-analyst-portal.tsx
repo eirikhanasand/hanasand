@@ -1310,25 +1310,25 @@ function SourceCoverageStrip({ evidenceSummary, sourceCoverage, sourceHealth, so
                     All sources
                 </button>
             </div>
-            <div className='grid gap-2 p-3 md:grid-cols-2 xl:grid-cols-5'>
+            <div className='divide-y divide-ui-border'>
                 {rows.map(row => (
                     <button
                         key={row.family}
                         type='button'
                         onClick={() => onSourceFilter(row.family)}
-                        className={`min-w-0 rounded-lg border p-3 text-left transition ${sourceFilter === row.family ? 'border-ui-primary bg-ui-raised' : 'border-ui-border bg-ui-raised hover:border-ui-border'}`}
+                        className={`grid w-full min-w-0 gap-1 px-4 py-2 text-left transition sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${sourceFilter === row.family ? 'bg-ui-primary/10' : 'bg-ui-panel hover:bg-ui-raised'}`}
                     >
-                        <div className='flex items-center justify-between gap-2'>
+                        <div className='flex min-w-0 items-center gap-2'>
                             <span className='truncate text-sm font-semibold text-ui-text' title={row.label}>{row.label}</span>
                             <span className={row.health === 'healthy' ? 'rounded-full bg-ui-success/10 px-2 py-0.5 text-[11px] font-semibold text-ui-success' : 'rounded-full bg-ui-warning/10 px-2 py-0.5 text-[11px] font-semibold text-ui-warning'}>
                                 {stateLabel(row.health)}
                             </span>
                         </div>
-                        <div className='mt-3 grid grid-cols-3 gap-2 text-[11px]'>
-                            <QueueCell label='active' value={`${row.activeCount}/${row.sourceCount}`} />
-                            <QueueCell label='evidence' value={`${row.evidenceCount}`} />
-                            <QueueCell label='newest' value={row.newest ? relativeTimeLabel(row.newest) : 'none'} />
-                        </div>
+                        <span className='flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-[11px] leading-4 text-ui-muted'>
+                            <span>{row.activeCount}/{row.sourceCount} active</span>
+                            <span>{row.evidenceCount} evidence</span>
+                            <span>{row.newest ? relativeTimeLabel(row.newest) : 'none'}</span>
+                        </span>
                     </button>
                 ))}
             </div>
