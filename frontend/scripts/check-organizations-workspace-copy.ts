@@ -9,6 +9,8 @@ function assert(condition: unknown, message: string) {
 assert(source.includes('label: \'Alert flow\''), 'Organization health strip should frame setup as alert flow, not internal case scope.')
 assert(source.includes('activeTerms.length ? \'Listening for matches\' : \'Add watch term\''), 'Organization health strip should guide empty alert state to watchlist setup.')
 assert(!source.includes('`Tenant ${organization.tenantId}`'), 'Organization health strip must not render raw tenant ids as setup copy.')
+assert(!source.includes('{organization.tenantId || \'default tenant\'}'), 'Organization summary must not render raw tenant ids or default-tenant copy.')
+assert(source.includes('const workspaceMeta = sanitizeOrganizationDisplayCopy(organization.tenantId || organization.slug || organization.id) || \'Default workspace\''), 'Organization summary should sanitize workspace metadata before rendering.')
 assert(source.includes('const showRecordActions = !route.startsWith(\'/api/\')'), 'Organization scope panels should hide endpoint copy/open controls for API-backed routes.')
 assert(source.includes('Action unavailable'), 'Organization route misses should render as action availability copy.')
 assert(!source.includes('Endpoint unavailable'), 'Organization UI should not expose endpoint-shaped error copy.')

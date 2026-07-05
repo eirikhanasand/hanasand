@@ -1518,6 +1518,7 @@ function EmptyWorkspacePreview() {
 }
 
 function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, archivedWatchlists, memberCount, inviteCount, webhookCount }: { organization: OrganizationSummary, activeWatchlists: number, pausedWatchlists: number, archivedWatchlists: number, memberCount: number, inviteCount: number, webhookCount: number }) {
+    const workspaceMeta = sanitizeOrganizationDisplayCopy(organization.tenantId || organization.slug || organization.id) || 'Default workspace'
     const rows = [
         { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organization.role || 'member', detail: organization.status || 'active' },
         { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount || organization.memberCount || organization.activeMemberCount || 0), detail: `${inviteCount || organization.pendingInviteCount || 0} pending` },
@@ -1531,7 +1532,7 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
                     <ShieldCheck className='h-4 w-4 shrink-0 text-ui-primary' />
                     <span className='truncate'>{organizationDisplayName(organization)}</span>
                 </p>
-                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayId(organization)} · {organization.tenantId || 'default tenant'}</p>
+                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayId(organization)} · {workspaceMeta}</p>
             </div>
             <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:flex xl:flex-wrap xl:justify-end' data-org-summary-chip-list='true'>
                 {rows.map(row => (
@@ -1713,6 +1714,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
             id: 'team',
             title: 'Team access',
             body: memberCount ? `${memberCount} active member${memberCount === 1 ? '' : 's'}` : inviteCount ? `${inviteCount} invite${inviteCount === 1 ? '' : 's'} pending` : 'Invite analysts or admins',
+            reason: canManage ? 'Invite an analyst or admin to share review work.' : 'Owner or admin access is required to invite members.',
             href: '#invites',
             ready: memberCount > 0,
             blocked: !canManage,
@@ -1722,6 +1724,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
             id: 'watchlists',
             title: 'Shared watchlists',
             body: watchlistCount ? `${watchlistCount} term${watchlistCount === 1 ? '' : 's'} active` : 'Add company, domain, supplier, actor, or keyword',
+            reason: canManage ? 'Add a monitored company, domain, vendor, actor, or keyword.' : 'Owner or admin access is required to create watchlists.',
             href: '#watchlists',
             ready: watchlistCount > 0,
             blocked: !canManage,
@@ -1731,6 +1734,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
             id: 'destinations',
             title: 'Delivery destination',
             body: destinationCount ? `${destinationCount} destination${destinationCount === 1 ? '' : 's'} saved` : watchlistCount ? 'Test and save a destination' : 'Create a watchlist first',
+            reason: !canManage ? 'Owner or admin access is required to test delivery.' : watchlistCount ? 'Test a Discord or webhook destination before customer delivery.' : 'Create a shared watchlist term before testing delivery.',
             href: '#destinations',
             ready: destinationCount > 0,
             blocked: !watchlistCount || !canManage,
@@ -1740,6 +1744,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
             id: 'activity',
             title: 'Alert and case context',
             body: alertCount || caseCount ? `${alertCount} alert${alertCount === 1 ? '' : 's'} · ${caseCount} case${caseCount === 1 ? '' : 's'}` : watchlistCount ? 'Open exposure monitoring after the first match' : 'Add watchlist first',
+            reason: watchlistCount ? 'Matched exposure records will appear here after collection.' : 'Add a shared watchlist term to create alert and case context.',
             href: '#audit',
             ready: alertCount > 0 || caseCount > 0,
             blocked: false,
@@ -1747,8 +1752,9 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
         },
     ]
 
-    const visibleRows = rows.filter(row => row.ready || !row.blocked)
+    const visibleRows = rows
     const completed = visibleRows.filter(row => row.ready).length
+    const lockedCount = visibleRows.filter(row => !row.ready && row.blocked).length
     const nextAction = rows.find(row => !row.ready && !row.blocked) || rows.find(row => row.ready) || rows[0]
     const openAlertHref = alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}` : ''
     return (
@@ -1763,17 +1769,23 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                         <span className='shrink-0 border-l border-ui-border pl-2 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-setup-progress-count='true'>
                             {completed}/{visibleRows.length} setup
                         </span>
+                        {lockedCount ? (
+                            <span className='shrink-0 rounded-md border border-ui-warning/30 bg-ui-warning/10 px-2 py-1 text-[11px] font-semibold text-ui-warning' data-org-setup-blocked-count='true'>
+                                {lockedCount} needs access
+                            </span>
+                        ) : null}
                     </div>
                     <div className='grid border-t border-ui-border dark:border-ui-border sm:grid-cols-2 xl:grid-cols-4'>
                         {visibleRows.map(row => {
-                            const rowClass = `grid min-h-14 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-b border-ui-border py-2 pr-3 text-left transition xl:border-b xl:border-r xl:last:border-r-0 dark:border-ui-border ${row.ready ? '' : row.blocked ? 'opacity-75' : 'hover:text-ui-primary'}`
+                            const rowClass = `grid min-h-20 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-2 border-b border-ui-border py-2 pr-3 text-left transition xl:border-b xl:border-r xl:last:border-r-0 dark:border-ui-border ${row.ready ? '' : row.blocked ? 'opacity-75' : 'hover:text-ui-primary'}`
                             const icon = row.ready ? <CheckCircle2 className='h-4 w-4 shrink-0 text-ui-success' /> : <CircleAlert className='h-4 w-4 shrink-0 text-ui-warning' />
                             const content = (
                                 <>
-                                    {icon}
+                                    <span className='mt-0.5'>{icon}</span>
                                     <span className='min-w-0'>
                                         <span className='block truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>{row.title}</span>
                                         <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.body}</span>
+                                        {!row.ready ? <span className='mt-0.5 block line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted' data-org-setup-step-reason='true'>{row.reason}</span> : null}
                                     </span>
                                 </>
                             )
