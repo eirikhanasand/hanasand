@@ -11,7 +11,8 @@ test('helpdesk audit keeps advanced controls behind explicit disclosures', async
     expect(page).toContain('<details className=\'group rounded-lg border border-ui-border bg-ui-raised\'>')
     expect(page).toContain('Show advanced')
     expect(page).toContain('aria-label=\'Active audit filters\'')
-    expect(page).toContain('href=\'#support-actions\'')
+    expect(page).toContain('href=\'/dashboard/system/impersonation?support=impersonation#support-actions\'')
+    expect(page).toContain('const supportMode = param(params, \'support\') === \'impersonation\' ? \'impersonation\' : \'inspect\'')
     expect(page).toContain('placeholder=\'Search audit events\'')
     expect(page).toContain('Audit snapshot')
     expect(page).toContain('auditSnapshotHeadline')
@@ -30,7 +31,8 @@ test('helpdesk audit keeps advanced controls behind explicit disclosures', async
     expect(page).toContain('key={action}>{label}</Link>')
 
     expect(supportForm).toContain('type SupportOperation = \'inspect\' | \'impersonation\' | \'recovery\' | \'decision\' | \'queue\'')
-    expect(supportForm).toContain('const [operation, setOperation] = useState<SupportOperation>(\'inspect\')')
+    expect(supportForm).toContain('export default function AccessRecoveryForm({ initialOperation = \'inspect\' }')
+    expect(supportForm).toContain('const [operation, setOperation] = useState<SupportOperation>(initialOperation)')
     expect(supportForm).toContain('minimumAuditReasonMessage')
     expect(supportForm).toContain('function supportReasonIsSpecific(reason: string)')
     expect(supportForm).toContain('if (!supportReasonIsSpecific(reason))')
@@ -58,7 +60,7 @@ test('helpdesk keeps search primary and collapses filters and support actions by
     expect(page.indexOf('placeholder=\'Search audit events\'')).toBeLessThan(page.indexOf('<span>Filters'))
     expect(page.indexOf('<span>Filters')).toBeLessThan(page.indexOf('placeholder=\'Organization\''))
     expect(page.indexOf('Use Focus to inspect a specific event')).toBeLessThan(page.indexOf('data-helpdesk-selected-detail'))
-    expect(page.indexOf('Start or manage support action')).toBeLessThan(page.indexOf('<AccessRecoveryForm />'))
+    expect(page.indexOf('Start or manage support action')).toBeLessThan(page.indexOf('<AccessRecoveryForm initialOperation={supportMode} />'))
     expect(page).toContain('group-open:hidden\'>Show controls</span>')
     expect(page).toContain('group-open:inline\'>Hide controls</span>')
     expect(page).not.toContain('support.organization.access_recovery</Link>')
@@ -116,4 +118,33 @@ test('helpdesk renders search first with filters and support actions collapsed',
     await page.getByText('Privileged support actions').click()
     await expect(page.getByRole('group', { name: 'Support operation' })).toBeVisible()
     await expect(page.getByRole('button', { name: /Session/ })).toBeVisible()
+})
+
+test('start session CTA opens the support panel on the scoped session flow', async ({ context, page, baseURL }) => {
+    const origin = baseURL || 'http://127.0.0.1:3000'
+    await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
+    await context.addCookies([
+        { name: 'name', value: 'Render Proof', url: origin },
+        { name: 'id', value: 'dashboard-render-proof-user', url: origin },
+        { name: 'access_token', value: 'local-dashboard-render-proof-token', url: origin },
+        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), url: origin },
+        { name: 'name', value: 'Render Proof', domain: 'localhost', path: '/' },
+        { name: 'id', value: 'dashboard-render-proof-user', domain: 'localhost', path: '/' },
+        { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: 'localhost', path: '/' },
+        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: 'localhost', path: '/' },
+        { name: 'name', value: 'Render Proof', domain: '127.0.0.1', path: '/' },
+        { name: 'id', value: 'dashboard-render-proof-user', domain: '127.0.0.1', path: '/' },
+        { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: '127.0.0.1', path: '/' },
+        { name: 'roles', value: encodeURIComponent(JSON.stringify(['system_admin'])), domain: '127.0.0.1', path: '/' },
+    ])
+
+    await page.goto('/dashboard/system/impersonation?support=impersonation#support-actions', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByText('Start or manage support action')).toBeVisible()
+    await expect(page.getByTestId('support-primary-operation')).toBeVisible()
+    await expect(page.getByRole('group', { name: 'Support operation' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Session/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByText('Scoped impersonation')).toBeVisible()
+    await expect(page.getByPlaceholder('Target user id')).toBeVisible()
+    await expect(page.getByText('Support inspection')).toBeHidden()
 })

@@ -43,6 +43,7 @@ type AuditSearchParams = {
     from?: string | string[]
     to?: string | string[]
     limit?: string | string[]
+    support?: string | string[]
 }
 
 const fieldClass = 'h-9 min-w-0 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
@@ -177,6 +178,7 @@ export default async function ImpersonationAuditPage({
     const filterEntries = activeFilterEntries(params)
     const primarySearch = param(params, 'q')
     const advancedFilterCount = filterEntries.filter(([key]) => key !== 'q').length
+    const supportMode = param(params, 'support') === 'impersonation' ? 'impersonation' : 'inspect'
     const responseError = response && !response.ok
         ? `Audit service reported ${response.status}.`
         : !response
@@ -192,7 +194,7 @@ export default async function ImpersonationAuditPage({
                 actions={(
                     <div className='flex flex-wrap gap-2'>
                         <Link className={quietButtonClass} href='/dashboard'>Dashboard</Link>
-                        <a className='grid h-9 place-items-center rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90' href='#support-actions'>Start session</a>
+                        <Link className='grid h-9 place-items-center rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90' href='/dashboard/system/impersonation?support=impersonation#support-actions'>Start session</Link>
                     </div>
                 )}
             />
@@ -358,14 +360,14 @@ export default async function ImpersonationAuditPage({
                             <h2 className='text-sm font-semibold text-ui-text'>Support actions</h2>
                             <p className='mt-1 text-xs leading-5 text-ui-muted'>Choose one task, complete the required audit fields, then return to the timeline.</p>
                         </div>
-                        <details className='group'>
+                        <details className='group' open={supportMode === 'impersonation'}>
                             <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
                                 <span>Start or manage support action</span>
                                 <span className='text-xs font-medium text-ui-muted group-open:hidden'>Show controls</span>
                                 <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide controls</span>
                             </summary>
                             <div className='border-t border-ui-border p-4'>
-                                <AccessRecoveryForm />
+                                <AccessRecoveryForm initialOperation={supportMode} />
                             </div>
                         </details>
                     </DashboardPanel>

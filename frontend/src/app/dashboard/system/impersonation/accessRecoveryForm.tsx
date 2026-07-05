@@ -161,8 +161,8 @@ function supportReasonIsSpecific(reason: string) {
     return reason.trim().length >= 10
 }
 
-export default function AccessRecoveryForm() {
-    const [operation, setOperation] = useState<SupportOperation>('inspect')
+export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { initialOperation?: SupportOperation }) {
+    const [operation, setOperation] = useState<SupportOperation>(initialOperation)
     const [inspectionResult, setInspectionResult] = useState<InspectionPayload | null>(null)
     const [recoveryResult, setRecoveryResult] = useState<RecoveryPayload | null>(null)
     const [decisionResult, setDecisionResult] = useState<DecisionPayload | null>(null)
@@ -412,7 +412,7 @@ export default function AccessRecoveryForm() {
                 </div>
             </div>
 
-            <details data-testid='support-secondary-operations' className='group rounded-md border border-ui-border bg-ui-canvas'>
+            <details data-testid='support-secondary-operations' className='group rounded-md border border-ui-border bg-ui-canvas' open={operation !== 'inspect'}>
                 <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
                     <span>Privileged support actions</span>
                     <span className='text-xs font-medium text-ui-muted group-open:hidden'>Session, recovery, review</span>
