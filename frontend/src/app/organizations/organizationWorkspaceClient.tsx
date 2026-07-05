@@ -1292,7 +1292,7 @@ export default function OrganizationWorkspaceClient() {
                         {organizations.length > 0 && createOrganizationPanel}
                     </aside>
 
-                    {(selectedOrganization || organizations.length > 0) && <main className='min-w-0'>
+                    {(selectedOrganization || organizations.length > 0 || (!loading && organizations.length === 0)) && <main className='min-w-0'>
                         {selectedOrganization ? (
                             <div className='grid gap-5'>
                                 <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={bundle.members.length} inviteCount={bundle.invites.length} webhookCount={bundle.webhooks.length} />

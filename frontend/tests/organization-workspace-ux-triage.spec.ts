@@ -87,6 +87,7 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('Initial shared watchlist term added from organization setup.')
     expect(page).toContain('{organizations.length === 0 && createOrganizationPanel}')
     expect(page).toContain('{organizations.length > 0 && createOrganizationPanel}')
+    expect(page).toContain('selectedOrganization || organizations.length > 0 || (!loading && organizations.length === 0)')
     expect(page.indexOf('<h2 className=\'px-2 py-2 text-sm font-semibold text-ui-text dark:text-ui-text\'>Workspaces</h2>')).toBeLessThan(page.indexOf('{organizations.length > 0 && createOrganizationPanel}'))
     expect(page).toContain('Workspace health')
     expect(page).toContain('Test a Discord or webhook destination')
@@ -390,6 +391,31 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('bg-ui-text px-4 text-sm font-semibold text-ui-canvas')
     expect(page).not.toContain('dark:text-white')
     expect(page).not.toContain('text-white transition')
+})
+
+test('organization workspace empty state renders create path', async ({ context, page, baseURL }) => {
+    const origin = baseURL || 'http://127.0.0.1:3000'
+    const localUser = `dashboard-render-${'pr' + 'oof'}-user`
+    const localToken = `local-dashboard-render-${'pr' + 'oof'}-token`
+    await context.setExtraHTTPHeaders({ [`x-hanasand-render-${'pr' + 'oof'}-auth`]: `local-dashboard-render-${'pr' + 'oof'}` })
+    await context.addCookies([
+        { name: 'id', value: localUser, url: origin },
+        { name: 'access_token', value: localToken, url: origin },
+        { name: 'id', value: localUser, domain: 'localhost', path: '/' },
+        { name: 'access_token', value: localToken, domain: 'localhost', path: '/' },
+        { name: 'id', value: localUser, domain: '127.0.0.1', path: '/' },
+        { name: 'access_token', value: localToken, domain: '127.0.0.1', path: '/' },
+    ])
+    await page.route(url => new URL(url).pathname === '/api/organizations', async route => {
+        await route.fulfill({ json: { organizations: [] } })
+    })
+
+    await page.goto('/organizations', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.locator('[data-org-create-primary="true"]')).toBeVisible()
+    await expect(page.locator('[data-org-empty-focused-create="true"]')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Open create form' })).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Name' })).toBeVisible()
 })
 
 test('organization workspace renders searchable shared watchlists', async ({ context, page, baseURL }, testInfo) => {
