@@ -42,8 +42,8 @@ const footerGroups = [
         links: [
             { label: 'About', href: '/about', icon: BookOpen },
             { label: 'Trust Center', href: '/trust', icon: FileText },
-            { label: 'Eirik', href: '/eirik', icon: BookOpen },
-            { label: 'Articles', href: '/articles', icon: BookOpen },
+            { label: 'Contact', href: '/contact', icon: ArrowUpRight },
+            { label: 'Pricing', href: '/pricing', icon: Gauge },
         ],
     },
     {

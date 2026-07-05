@@ -66,3 +66,16 @@ test('pricing keeps endpoint checks secondary to exposure monitoring', async () 
     expect(pricing).not.toContain('Team checks')
     expect(pricing.indexOf('Common buying scenarios')).toBeLessThan(pricing.indexOf('Utility tool'))
 })
+
+test('global footer keeps enterprise diligence ahead of personal notebook links', async () => {
+    const footer = await readFile(path.join(root, 'src/components/footer/footer.tsx'), 'utf8')
+    const companyGroup = footer.slice(footer.indexOf('title: \'Company\''), footer.indexOf('title: \'Legal\''))
+
+    expect(companyGroup).toContain('label: \'About\'')
+    expect(companyGroup).toContain('label: \'Trust Center\'')
+    expect(companyGroup).toContain('label: \'Contact\'')
+    expect(companyGroup).toContain('label: \'Pricing\'')
+    expect(companyGroup).not.toContain('label: \'Eirik\'')
+    expect(companyGroup).not.toContain('label: \'Articles\'')
+    expect(companyGroup).not.toContain('label: \'Readiness\'')
+})
