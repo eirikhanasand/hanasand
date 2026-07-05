@@ -1396,7 +1396,7 @@ export default function OrganizationWorkspaceClient() {
                     {(selectedOrganization || organizations.length > 0 || (!loading && organizations.length === 0)) && <main className='min-w-0'>
                         {selectedOrganization ? (
                             <div className='grid gap-5'>
-                                <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={activeMembers.length} inviteCount={pendingInvites.length} webhookCount={bundle.webhooks.length} />
+                                <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={activeMembers.length} inviteCount={pendingInvites.length} webhookCount={configuredDestinationCount} />
                                 {hasDwmContext && (
                                     <DwmHandoffBanner
                                         organization={selectedOrganization}
@@ -1508,7 +1508,8 @@ function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organi
     const activeTeammates = activeMembers.filter(member => member.role.toLowerCase() !== 'owner')
     const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
     const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active').toLowerCase() === 'active')
-    const activeDestinations = bundle.webhooks.filter(destination => destination.deliveryReady || ['active', 'configured'].includes((destination.status || '').toLowerCase()))
+    const activeDestinations = organizationConfiguredDestinationCount(bundle)
+    const watchlistDestinations = bundle.watchlists.filter(destinationConfigured).length
     const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error))
     const rows = [
         {
@@ -1535,11 +1536,11 @@ function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organi
             id: 'destinations',
             href: '#destinations',
             label: 'Destinations',
-            value: `${activeDestinations.length} configured`,
-            detail: `${bundle.webhooks.length} saved`,
+            value: `${activeDestinations} configured`,
+            detail: watchlistDestinations ? `${bundle.webhooks.length} saved · ${watchlistDestinations} watchlist` : `${bundle.webhooks.length} saved`,
             icon: <Webhook className='h-4 w-4' />,
             active: selectedSubject.type === 'destination',
-            tone: activeDestinations.length ? 'ready' : 'review',
+            tone: activeDestinations ? 'ready' : 'review',
         },
         {
             id: 'delivery',
@@ -1594,7 +1595,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
     const adminMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active' && ['owner', 'admin'].includes(member.role.toLowerCase()))
     const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
     const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active').toLowerCase() === 'active')
-    const configuredDestinations = bundle.webhooks.filter(destination => destination.deliveryReady || ['active', 'configured'].includes((destination.status || '').toLowerCase()))
+    const configuredDestinations = organizationConfiguredDestinationCount(bundle)
     const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error))
     const routedCases = bundle.cases.filter(item => item.status?.toLowerCase() !== 'closed')
     const hasAlertOrCaseActivity = Boolean(bundle.alerts.length || routedCases.length)
@@ -1620,10 +1621,10 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
         {
             id: 'delivery',
             label: 'Delivery',
-            value: configuredDestinations.length ? `${configuredDestinations.length} destination${configuredDestinations.length === 1 ? '' : 's'}` : 'Set delivery',
+            value: configuredDestinations ? `${configuredDestinations} destination${configuredDestinations === 1 ? '' : 's'}` : 'Set delivery',
             detail: failedDeliveries.length ? `${failedDeliveries.length} failed delivery` : bundle.deliveries.length ? `${bundle.deliveries.length} delivery event${bundle.deliveries.length === 1 ? '' : 's'}` : 'Test a Discord or webhook destination',
             href: '#destinations',
-            tone: failedDeliveries.length ? 'warning' : configuredDestinations.length ? 'ready' : 'blocked',
+            tone: failedDeliveries.length ? 'warning' : configuredDestinations ? 'ready' : 'blocked',
         },
         {
             id: 'cases',
