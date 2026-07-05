@@ -2758,9 +2758,9 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                         {watchlistKinds.slice(0, 4).map(kind => (
                             <span key={kind} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{kind}</span>
                         ))}
-                        <a href='#org-watchlist-create' className={canManage ? secondaryButtonClass : `${secondaryButtonClass} pointer-events-none opacity-55`} aria-disabled={!canManage}>
-                            Add term
-                        </a>
+                        {canManage
+                            ? <a href='#org-watchlist-create' className={secondaryButtonClass}>Add term</a>
+                            : <span className={`${secondaryButtonClass} opacity-55`} aria-disabled='true'>Add term</span>}
                     </div>
                 )}
                 {watchlists.length > 0 && visibleWatchlists.length === 0 && (
