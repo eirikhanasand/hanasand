@@ -140,6 +140,7 @@ type EvidenceDispositionState = 'reviewed' | 'escalated' | 'suppressed' | 'false
 const DWM_QUEUE_PREVIEW_ROWS = 8
 const DWM_TIMELINE_PREVIEW_ROWS = 5
 const DWM_RECOVERY_PREVIEW_ROWS = 4
+const DWM_DELIVERY_PREVIEW_ROWS = 4
 
 export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operations, alerts, deliveries, dataHealth, initialAlertId, publicTiHandoff }: PortalProps) {
     const router = useRouter()
@@ -2097,7 +2098,7 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
                         </div>
                     )}
                 </div>
-                {visible.slice(0, 6).map(delivery => {
+                {visible.slice(0, DWM_DELIVERY_PREVIEW_ROWS).map(delivery => {
                     const deliveryOrgHref = organizationDeliveryWorkspaceHref({ organizationId: orgId, alertId: alert?.id, caseId, delivery })
                     return (
                         <div key={delivery.id} className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3'>
