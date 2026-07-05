@@ -436,6 +436,17 @@ function activitySourceLabel(item: ActivityItem) {
     return item.source === 'session' ? 'This session' : 'Saved history'
 }
 
+function trimActivityRows(rows: ActivityItem[]) {
+    const counts = new Map<string, number>()
+    return rows.filter(item => {
+        const key = item.organizationId || 'workspace'
+        const count = counts.get(key) || 0
+        if (count >= ORG_ACTIVITY_PREVIEW_ROWS) return false
+        counts.set(key, count + 1)
+        return true
+    })
+}
+
 function organizationWorkspaceMeta(organization: OrganizationSummary) {
     const parts = [
         sanitizeOrganizationDisplayCopy(organization.status || organization.slug || organization.id),
@@ -810,7 +821,7 @@ export default function OrganizationWorkspaceClient() {
             if (actionSubject) {
                 selectActivitySubject(actionSubject)
             }
-            setActivity(current => [{
+            setActivity(current => trimActivityRows([{
                 id: `${label}-${Date.now()}`,
                 at: new Date().toISOString(),
                 title: actionLabel(label),
@@ -819,7 +830,7 @@ export default function OrganizationWorkspaceClient() {
                 organizationId: activityOrganizationId,
                 source: 'session',
                 ...activityItemSubject(actionSubject),
-            }, ...current].slice(0, 8))
+            }, ...current]))
             if (reloadOrganizationId || selectedOrganization?.id) {
                 const organizationId = reloadOrganizationId || selectedOrganization?.id || ''
                 await loadOrganizationBundle(organizationId)
@@ -836,7 +847,7 @@ export default function OrganizationWorkspaceClient() {
             if (actionSubject) {
                 selectActivitySubject(actionSubject)
             }
-            setActivity(current => [{
+            setActivity(current => trimActivityRows([{
                 id: `${label}-${Date.now()}`,
                 at: new Date().toISOString(),
                 title: actionLabel(label),
@@ -845,7 +856,7 @@ export default function OrganizationWorkspaceClient() {
                 organizationId: selectedOrganization?.id,
                 source: 'session',
                 ...activityItemSubject(actionSubject),
-            }, ...current].slice(0, 8))
+            }, ...current]))
         } finally {
             setBusy('')
         }
