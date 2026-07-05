@@ -585,6 +585,8 @@ export default function OrganizationWorkspaceClient() {
     const [createName, setCreateName] = useState('')
     const [workspaceQuery, setWorkspaceQuery] = useState('')
     const [createFirstWatchlist, setCreateFirstWatchlist] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
+    const [createInviteEmails, setCreateInviteEmails] = useState('')
+    const [createInviteRole, setCreateInviteRole] = useState<OrganizationRole>('member')
     const [inviteEmails, setInviteEmails] = useState('')
     const [inviteRole, setInviteRole] = useState<OrganizationRole>('member')
     const [watchlistDraft, setWatchlistDraft] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
@@ -834,8 +836,11 @@ export default function OrganizationWorkspaceClient() {
     const createOrganization = () => runAction('create-org', async () => {
         const name = normalizeOrganizationName(createName)
         const firstWatchlistValue = createFirstWatchlist.value.trim()
+        const firstInviteEmails = parseInviteEmails(createInviteEmails)
+        const invalidFirstInvites = invalidInviteEmails(createInviteEmails)
         if (!name) throw new Error('Enter an organization name.')
         if (organizationNameInUse(organizations, name)) throw new Error('An organization with this name already exists.')
+        if (invalidFirstInvites.length) throw new Error(`Invalid email: ${invalidFirstInvites[0]}`)
         const payload = await requestJson<{ organization?: OrganizationSummary }>('/api/organizations', {
             method: 'POST',
             body: JSON.stringify({ name }),
@@ -854,14 +859,30 @@ export default function OrganizationWorkspaceClient() {
                     }),
                 })
             }
+            if (firstInviteEmails.length) {
+                await requestJson(`/api/organizations/${encodeURIComponent(organizationId)}/invites`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        emails: firstInviteEmails,
+                        role: createInviteRole,
+                        requestId: `org-ui-create-invite-${Date.now()}`,
+                    }),
+                })
+            }
             setSelectedId(organizationId)
             replaceOrganizationWorkspaceSelectionUrl(organizationId, { type: 'organization', id: organizationId })
         }
         setCreateName('')
         setCreateFirstWatchlist({ kind: 'domain', value: '', notes: '' })
+        setCreateInviteEmails('')
+        setCreateInviteRole('member')
         return {
             organizationId,
-            message: firstWatchlistValue ? 'Organization and first shared term created.' : 'Organization created.',
+            message: [
+                'Organization created',
+                firstWatchlistValue ? 'shared term added' : '',
+                firstInviteEmails.length ? `${firstInviteEmails.length} invite${firstInviteEmails.length === 1 ? '' : 's'} sent` : '',
+            ].filter(Boolean).join(', ') + '.',
         }
     })
 
@@ -1160,6 +1181,8 @@ export default function OrganizationWorkspaceClient() {
         return `${destination.name || destination.id} destination removed.`
     }, `destination-${destination.id}`)
 
+    const createInviteParsedEmails = parseInviteEmails(createInviteEmails)
+    const createInviteInvalidEmails = invalidInviteEmails(createInviteEmails)
     const createOrganizationForm = (
         <div className='grid gap-3'>
             <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
@@ -1183,10 +1206,19 @@ export default function OrganizationWorkspaceClient() {
                     <input value={createFirstWatchlist.notes} disabled={Boolean(busy)} onChange={event => setCreateFirstWatchlist({ ...createFirstWatchlist, notes: event.target.value })} className={inputClass} placeholder='Initial monitoring reason' />
                 </label>
             </div>
+            <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' data-org-create-first-invites='true'>
+                <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
+                    First invites
+                    <textarea value={createInviteEmails} disabled={Boolean(busy)} onChange={event => setCreateInviteEmails(event.target.value)} className={`${inputClass} min-h-20 resize-y`} placeholder='analyst@company.com, admin@company.com' />
+                    {createInviteInvalidEmails.length > 0 && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Invalid: {createInviteInvalidEmails[0]}</span>}
+                    {createInviteInvalidEmails.length === 0 && createInviteParsedEmails.length > 0 && <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>{createInviteParsedEmails.length} recipient{createInviteParsedEmails.length === 1 ? '' : 's'}</span>}
+                </label>
+                <SelectField label='Invite role' value={createInviteRole} options={roleOptions} disabled={Boolean(busy)} onChange={value => setCreateInviteRole(value as OrganizationRole)} />
+            </div>
             <button
                 type='button'
                 onClick={() => void createOrganization()}
-                disabled={!normalizedCreateName || createNameInUse || Boolean(busy)}
+                disabled={!normalizedCreateName || createNameInUse || createInviteInvalidEmails.length > 0 || Boolean(busy)}
                 className={primaryButtonClass}
             >
                 <Building2 className='h-4 w-4' />

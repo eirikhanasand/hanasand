@@ -78,7 +78,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('sanitizeOrganizationDisplayCopy(organization.status || organization.slug || organization.id)')
     expect(page).not.toContain('sanitizeOrganizationDisplayCopy(organization.tenantId || organization.slug || organization.id)')
     expect(page).toContain('function organizationSearchText')
-    expect(page).toContain('Organization and first shared term created.')
+    expect(page).toContain('Organization created')
+    expect(page).toContain('data-org-create-first-invites')
     expect(page).toContain('const reloadOrganizationId = typeof actionResult === \'object\' ? actionResult?.organizationId : undefined')
     expect(page).toContain('organizationId,')
     expect(page).toContain('replaceOrganizationWorkspaceSelectionUrl(organizationId, { type: \'organization\', id: organizationId })')
@@ -432,6 +433,7 @@ test('organization workspace empty state renders create path', async ({ context,
     }
     const createdOrganizations: Array<{ name?: string }> = []
     const createdWatchlists: Array<{ kind?: string, value?: string, notes?: string }> = []
+    const createdInvites: Array<{ emails?: string[], role?: string }> = []
     await context.setExtraHTTPHeaders({ [`x-hanasand-render-${'pr' + 'oof'}-auth`]: `local-dashboard-render-${'pr' + 'oof'}` })
     await context.addCookies([
         { name: 'id', value: localUser, url: origin },
@@ -457,6 +459,12 @@ test('organization workspace empty state renders create path', async ({ context,
         await route.fulfill({ json: { members: [{ userId: localUser, email: 'owner@new.test', name: 'New Owner', role: 'owner', status: 'active', joinedAt: '2026-07-05T10:00:00.000Z' }] } })
     })
     await page.route(url => new URL(url).pathname === '/api/organizations/org_new/invites', async route => {
+        if (route.request().method() === 'POST') {
+            const body = await route.request().postDataJSON() as { emails?: string[], role?: string }
+            createdInvites.push({ emails: body.emails, role: body.role })
+            await route.fulfill({ json: { ok: true, invites: [] } })
+            return
+        }
         await route.fulfill({ json: { invites: [] } })
     })
     await page.route(url => new URL(url).pathname === '/api/organizations/org_new/watchlists', async route => {
@@ -507,14 +515,17 @@ test('organization workspace empty state renders create path', async ({ context,
     await page.locator('[data-org-create-primary="true"]').getByRole('textbox', { name: 'Name' }).fill('New Security')
     await page.locator('[data-org-create-primary="true"]').getByRole('textbox', { name: 'Value' }).fill('newco.com')
     await page.locator('[data-org-create-primary="true"]').getByRole('textbox', { name: 'Notes' }).fill('Initial domain')
+    await page.locator('[data-org-create-primary="true"]').getByRole('textbox', { name: 'First invites' }).fill('analyst@new.test, admin@new.test')
+    await page.locator('[data-org-create-primary="true"]').getByLabel('Invite role').selectOption('admin')
     await page.locator('[data-org-create-primary="true"]').getByRole('button', { name: 'Create organization' }).click()
     expect(createdOrganizations).toContainEqual({ name: 'New Security' })
     await expect.poll(() => createdWatchlists.length).toBe(1)
     expect(createdWatchlists).toContainEqual({ kind: 'domain', value: 'newco.com', notes: 'Initial domain' })
+    expect(createdInvites).toContainEqual({ emails: ['analyst@new.test', 'admin@new.test'], role: 'admin' })
     await expect(page).toHaveURL(/organizationId=org_new/)
     await expect(page.getByRole('button', { name: /New Security owner/ })).toBeVisible()
     await expect(page.locator('#watchlists')).toContainText('newco.com')
-    await expect(page.getByRole('status').filter({ hasText: 'Organization and first shared term created.' })).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: 'Organization created, shared term added, 2 invites sent.' })).toBeVisible()
 })
 
 test('organization workspace renders searchable shared watchlists', async ({ context, page, baseURL }, testInfo) => {
