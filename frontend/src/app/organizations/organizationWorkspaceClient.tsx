@@ -2246,6 +2246,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                         role='button'
                                         tabIndex={0}
                                         aria-pressed={selected}
+                                        id={`member-${encodeURIComponent(member.userId)}`}
                                         className={`grid gap-3 rounded-lg border p-3 transition ${selected ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-raised' : 'border-ui-border bg-ui-panel hover:bg-ui-raised dark:border-ui-border dark:bg-ui-canvas dark:hover:bg-ui-panel'}`}
                                         data-org-member-mobile-row='true'
                                         onClick={() => onSelectSubject({ type: 'member', id: member.userId })}
@@ -4101,8 +4102,9 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         ]
     }
     if (subject.type === 'member') {
+        const memberId = encodeURIComponent(subject.id)
         return [
-            { label: 'Members', href: '#members' },
+            { label: 'Member', href: `#member-${memberId}` },
             { label: 'Audit trail', href: '#audit' },
         ]
     }
