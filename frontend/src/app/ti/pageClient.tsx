@@ -636,7 +636,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                     </main>
 
                     <aside className='order-3 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-hidden border-t border-ui-border bg-ui-panel p-4 lg:order-none lg:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
-                        {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
+                        {showMoreAnalysis && alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <div id='ti-actions' data-ti-actions='true'>
                             {showMoreAnalysis ? (
                                 secondaryView === 'actions' ? (
