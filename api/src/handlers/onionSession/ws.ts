@@ -501,8 +501,12 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 void sendFrame(false)
             }, FRAME_INTERVAL_MS)
             void sendFrame(true, 'initial_target')
-            const primaryEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
-            await captureProfileTools(context, message.profileTools || [], target, primaryEvidence?.deobfuscationTasks || [])
+            void captureProfileTools(context, message.profileTools || [], target)
+                .catch((error) => send({
+                    type: 'status',
+                    state: 'profile_tools_failed',
+                    message: error instanceof Error ? error.message : String(error),
+                }))
         } catch (error) {
             await cleanup()
             throw error
@@ -622,7 +626,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 25_000 }).catch((error) => {
             send({ type: 'navigation_error', target, message: error instanceof Error ? error.message : String(error) })
         })
-        await sendFrame(true)
+        void sendFrame(true)
     }
 
     async function handlePointer(message: BrokerMessage) {

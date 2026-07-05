@@ -1282,7 +1282,7 @@ function buildAnalystBrief(input: {
     const vtFlagged = input.virusTotal?.vendorFlagged || 0
     const urlqueryAlerts = input.urlquery?.alertCount || 0
     const highSignal = Boolean(vtFlagged || urlqueryAlerts || input.suspiciousCaptureCount || input.suspiciousDeobfuscationCount)
-    const mediumSignal = Boolean(input.redirected || input.obfuscatedScriptCount || input.threatAssociations.length || input.failedRequests)
+    const mediumSignal = Boolean(input.redirected || input.obfuscatedScriptCount || input.threatAssociations.length)
     const verdict = highSignal
         ? 'Review required - detection source present'
         : mediumSignal
