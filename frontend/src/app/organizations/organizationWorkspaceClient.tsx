@@ -4119,8 +4119,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
     }
     const destination = subject.type === 'destination' ? bundle.webhooks.find(row => row.id === subject.id) : undefined
     if (destination) {
-        const delivery = bundle.deliveries
-            .filter(row => row.webhookDestinationId === destination.id)
+        const delivery = deliveriesForDestination(destination, bundle.deliveries)
             .sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
         return compactMetadata([
             ['Name', destination.name],
