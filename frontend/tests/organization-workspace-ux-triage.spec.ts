@@ -194,6 +194,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('data-org-settings-disclosure')
     expect(page).toContain('<details id=\'settings\' open')
     expect(page).toContain('Organization settings')
+    expect(page).toContain('rowMessage={rowMessages.settings}')
+    expect(page).toContain('<RowStatus message={rowMessage} />')
     expect(page).toContain('data-org-members-disclosure')
     expect(page).toContain('<details id=\'members\' open')
     expect(page).toContain('data-org-member-mobile-list=\'true\'')
@@ -448,6 +450,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     const watchlistUpdates: Array<{ itemId: string, value: string }> = []
     const watchlistArchives: string[] = []
     const destinationTests: Array<{ destinationId: string, dryRun: boolean }> = []
+    const settingsUpdates: Array<{ name?: string }> = []
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
     await context.addCookies([
         { name: 'id', value: 'dashboard-render-proof-user', url: origin },
@@ -472,6 +475,12 @@ test('organization workspace renders searchable shared watchlists', async ({ con
         await route.fulfill({ json: { organizations: [fixtureOrganization, fixtureViewerOrganization] } })
     })
     await page.route('**/api/organizations/org_acme/settings', async route => {
+        if (route.request().method() === 'PUT') {
+            const body = await route.request().postDataJSON() as { name?: string }
+            settingsUpdates.push({ name: body.name })
+            await route.fulfill({ json: { ok: true, settings: { name: body.name || 'Acme Security', slug: 'acme-security', defaultWebhookPolicy: 'active_destinations', alertVisibilityPolicy: 'members', lifecycleStatus: 'active', retentionDays: 365 } } })
+            return
+        }
         await route.fulfill({ json: { settings: { name: 'Acme Security', slug: 'acme-security', defaultWebhookPolicy: 'active_destinations', alertVisibilityPolicy: 'members', lifecycleStatus: 'active', retentionDays: 365 } } })
     })
     await page.route('**/api/organizations/org_acme/members', async route => {
@@ -586,6 +595,10 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(page.locator('[data-org-setup-step="destinations"]')).toContainText('2 destinations')
     await expect(page.locator('[data-org-setup-step="team"]')).toContainText('3 active members')
     await expect(page.locator('[data-org-setup-next="true"]')).toContainText('Review invites')
+    await page.locator('#settings').getByLabel('Name').fill('Acme Security Ops')
+    await page.locator('#settings').getByRole('button', { name: 'Save settings' }).click()
+    expect(settingsUpdates).toContainEqual({ name: 'Acme Security Ops' })
+    await expect(page.locator('#settings')).toContainText('Organization settings updated.')
     await expect(page.locator('[data-org-workspace-filter="true"]')).toBeVisible()
     await expect(page.locator('[data-org-workspace-count="true"]')).toContainText('2/2')
     await expect(page.getByRole('button', { name: /Contoso viewer/ })).toBeVisible()

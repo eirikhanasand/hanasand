@@ -875,7 +875,7 @@ export default function OrganizationWorkspaceClient() {
             body: JSON.stringify(settingsDraft),
         })
         return 'Organization settings updated.'
-    })
+    }, 'settings')
 
     const sendInvite = () => selectedOrganization && runAction('send-invite', async () => {
         requireManage()
@@ -1345,7 +1345,7 @@ export default function OrganizationWorkspaceClient() {
 
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
                                     <div className='grid gap-5'>
-                                        <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
+                                        <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} rowMessage={rowMessages.settings} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
                                         <WatchlistPanel
                                             watchlists={bundle.watchlists}
                                             activeTerms={bundle.alertTerms}
@@ -1885,7 +1885,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
     )
 }
 
-function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canManage, busy, onSave, onReset }: { settingsDraft: OrganizationSettings, setSettingsDraft: (next: OrganizationSettings) => void, settingsDirty: boolean, canManage: boolean, busy: string, onSave: () => void, onReset: () => void }) {
+function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canManage, busy, rowMessage, onSave, onReset }: { settingsDraft: OrganizationSettings, setSettingsDraft: (next: OrganizationSettings) => void, settingsDirty: boolean, canManage: boolean, busy: string, rowMessage?: RowMessage, onSave: () => void, onReset: () => void }) {
     const validationMessage = settingsValidationMessage(settingsDraft)
     const saving = busy === 'save-settings'
     return (
@@ -1907,6 +1907,7 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
             </div>
             <div className='flex flex-wrap items-center justify-end gap-2 border-t border-ui-border px-4 py-3 dark:border-ui-border'>
                 {saving && <InlineBusy label='Saving settings' marker='data-org-settings-busy' />}
+                <RowStatus message={rowMessage} />
                 {settingsDirty && <span className='mr-auto rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>Unsaved changes</span>}
                 <button type='button' className={secondaryButtonClass} disabled={!canManage || !settingsDirty || Boolean(busy)} onClick={onReset}>
                     Reset
