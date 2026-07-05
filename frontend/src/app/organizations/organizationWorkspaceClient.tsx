@@ -3891,7 +3891,7 @@ function requestedSubjectFromSearch(input: {
 }, bundle: OrgBundle): ActivitySubject {
     const delivery = requestedDeliveryFromSearch(bundle.deliveries, input.deliveryId)
     if (delivery) {
-        const deliveryDestinationId = delivery.webhookDestinationId || delivery.destinationId
+        const deliveryDestinationId = deliveryDestinationIds(delivery, bundle.webhooks)[0]
         if (deliveryDestinationId && bundle.webhooks.some(item => item.id === deliveryDestinationId)) return { type: 'destination', id: deliveryDestinationId }
         const deliveryCaseId = delivery.caseId
         if (deliveryCaseId && bundle.cases.some(item => item.id === deliveryCaseId)) return { type: 'case', id: deliveryCaseId }
