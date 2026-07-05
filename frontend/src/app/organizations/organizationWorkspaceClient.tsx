@@ -1983,6 +1983,9 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                             const canCopy = canManage && Boolean(inviteLink(invite)) && inviteActionAllowed(invite, 'copy') && !busy
                             const canResend = canManage && inviteActionAllowed(invite, 'resend') && !busy
                             const canRevoke = canManage && inviteActionAllowed(invite, 'revoke') && !busy
+                            const copyReason = !canManage ? 'Owner or admin required' : !inviteLink(invite) ? 'Invite link unavailable' : !inviteActionAllowed(invite, 'copy') ? 'Pending invite required' : ''
+                            const resendReason = !canManage ? 'Owner or admin required' : !inviteActionAllowed(invite, 'resend') ? 'Invite already accepted' : ''
+                            const revokeReason = !canManage ? 'Owner or admin required' : !inviteActionAllowed(invite, 'revoke') ? 'Invite already closed' : ''
                             const selected = selectedSubject.type === 'invite' && selectedSubject.id === invite.id
                             return (
                                 <div
@@ -2009,9 +2012,9 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                                             <RowStatus message={rowMessages[`invite-${invite.id}`]} />
                                         </span>
                                         <span className='flex gap-1 sm:justify-end' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
-                                            <button type='button' aria-label='Copy invite link' className={iconButtonClass} disabled={!canCopy} onClick={event => { event.stopPropagation(); onCopyInvite(invite) }}><Copy className='h-4 w-4' /></button>
-                                            <button type='button' aria-label='Resend invite' className={iconButtonClass} disabled={!canResend} onClick={event => { event.stopPropagation(); onInviteAction(invite, 'resend') }}><RefreshCw className='h-4 w-4' /></button>
-                                            <ConfirmActionButton ariaLabel='Revoke invite' disabled={!canRevoke} onConfirm={() => onInviteAction(invite, 'revoke')} icon={<Trash2 className='h-4 w-4' />} />
+                                            <button type='button' aria-label={copyReason ? `Copy invite link: ${copyReason}` : 'Copy invite link'} title={copyReason || 'Copy invite link'} className={iconButtonClass} disabled={!canCopy} onClick={event => { event.stopPropagation(); onCopyInvite(invite) }}><Copy className='h-4 w-4' /></button>
+                                            <button type='button' aria-label={resendReason ? `Resend invite: ${resendReason}` : 'Resend invite'} title={resendReason || 'Resend invite'} className={iconButtonClass} disabled={!canResend} onClick={event => { event.stopPropagation(); onInviteAction(invite, 'resend') }}><RefreshCw className='h-4 w-4' /></button>
+                                            <ConfirmActionButton ariaLabel='Revoke invite' title={revokeReason || 'Revoke invite'} disabled={!canRevoke} onConfirm={() => onInviteAction(invite, 'revoke')} icon={<Trash2 className='h-4 w-4' />} />
                                         </span>
                                     </span>
                                 </div>
@@ -3256,7 +3259,7 @@ function InlineBusy({ label, marker }: { label: string, marker: string }) {
     )
 }
 
-function ConfirmActionButton({ ariaLabel, disabled, onConfirm, icon }: { ariaLabel: string, disabled?: boolean, onConfirm: () => void, icon: ReactNode }) {
+function ConfirmActionButton({ ariaLabel, title, disabled, onConfirm, icon }: { ariaLabel: string, title?: string, disabled?: boolean, onConfirm: () => void, icon: ReactNode }) {
     const [confirming, setConfirming] = useState(false)
     return (
         <button
@@ -3265,7 +3268,7 @@ function ConfirmActionButton({ ariaLabel, disabled, onConfirm, icon }: { ariaLab
             disabled={disabled}
             aria-label={confirming ? `Confirm ${ariaLabel.toLowerCase()}` : ariaLabel}
             aria-pressed={confirming}
-            title={confirming ? 'Press again to confirm, or Escape to cancel.' : ariaLabel}
+            title={confirming ? 'Press again to confirm, or Escape to cancel.' : title || ariaLabel}
             data-org-confirm-action={confirming ? 'confirming' : 'idle'}
             onBlur={() => setConfirming(false)}
             onKeyDown={event => {

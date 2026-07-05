@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { proxyTiRequest } from '../../_tiProxy'
+import { proxyOrganizationApiRequest } from '@/app/api/organizations/_organizationApiProxy'
 import { loadProductWebhookDeliveryProofLedger, webhookDeliveryPayloadFromLedger } from '@/utils/productProgress/webhookDeliveryProofSource'
 
 export const dynamic = 'force-dynamic'
@@ -12,6 +13,10 @@ export async function GET(request: NextRequest) {
         if (proofLedger) {
             return NextResponse.json(webhookDeliveryPayloadFromLedger(proofLedger), { headers: { 'cache-control': 'no-store' } })
         }
+    }
+
+    if (organizationId) {
+        return proxyOrganizationApiRequest(request, '/dwm/webhook-deliveries', { method: 'GET' })
     }
 
     return proxyTiRequest(request, '/v1/dwm/webhooks/deliveries', { method: 'GET' })

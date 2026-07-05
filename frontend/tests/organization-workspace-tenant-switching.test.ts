@@ -7,6 +7,7 @@ const root = process.cwd()
 
 test('organization workspace scopes alert workflow by selected tenant and role', async () => {
     const source = await readFile(path.join(root, 'src/app/organizations/organizationWorkspaceClient.tsx'), 'utf8')
+    const deliveriesRoute = await readFile(path.join(root, 'src/app/api/dwm/webhooks/deliveries/route.ts'), 'utf8')
 
     assert.match(source, /const \[selectedId, setSelectedId\] = useState\(''\)/)
     assert.match(source, /requestedOrganizationId \|\| selectedId/)
@@ -53,4 +54,7 @@ test('organization workspace scopes alert workflow by selected tenant and role',
     ]) {
         assert.ok(source.includes(scopedRoute), `Expected organization workspace to load ${scopedRoute}`)
     }
+
+    assert.match(deliveriesRoute, /if \(organizationId\) \{[\s\S]*proxyOrganizationApiRequest\(request, '\/dwm\/webhook-deliveries'/)
+    assert.match(deliveriesRoute, /proxyTiRequest\(request, '\/v1\/dwm\/webhooks\/deliveries'/)
 })
