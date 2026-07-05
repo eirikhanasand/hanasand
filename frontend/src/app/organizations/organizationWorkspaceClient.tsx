@@ -381,8 +381,9 @@ function deliveryRetryText(delivery: DeliveryRow) {
 }
 
 function replayBlockedReason(delivery: DeliveryRow, destinations: WebhookDestination[] = []) {
-    if (!deliveryDestinationIds(delivery, destinations)[0]) return 'Replay needs a saved destination.'
-    if (!(delivery.alertId || delivery.caseId || deliveryWatchlistId(delivery) || delivery.actionId)) return 'Replay needs alert, case, or watchlist context.'
+    const watchlistId = deliveryWatchlistId(delivery)
+    if (!(deliveryDestinationIds(delivery, destinations)[0] || watchlistId)) return 'Replay needs a destination or saved watchlist route.'
+    if (!(delivery.alertId || delivery.caseId || watchlistId || delivery.actionId)) return 'Replay needs alert, case, or watchlist context.'
     return 'Replay is not available for this delivery row.'
 }
 
