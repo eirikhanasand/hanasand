@@ -330,7 +330,7 @@ export default function BrowserPageClient() {
                 profileTools: selectedProfile.tools,
                 clientId: getOrCreateBrowserClientId(),
                 userId: getCookie('id') || undefined,
-                sessionToken: getCookie('token') || undefined,
+                sessionToken: getCookie('access_token') || undefined,
             }))
         }
         socket.onclose = () => {
