@@ -3766,32 +3766,35 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
             ['Owner', organizationMemberLabel(item.assignedOwner, bundle.members)],
         ]),
     }))
-    const deliveryRows: ActivityItem[] = bundle.deliveries.map(delivery => ({
-        id: `delivery-${delivery.id}`,
-        at: delivery.attemptedAt || delivery.updatedAt || delivery.createdAt || new Date(0).toISOString(),
-        title: delivery.dryRun ? 'Destination tested' : 'Alert delivery recorded',
-        detail: `${delivery.status || 'delivery'} · ${compactReference(delivery.watchlistId || delivery.watchlistItemId || delivery.alertId, 'watchlist') || 'Watchlist pending'}`,
-        ok: !delivery.error && delivery.status?.toLowerCase() !== 'failed',
-        subjectType: 'destination',
-        subjectId: delivery.webhookDestinationId || delivery.watchlistItemId || delivery.watchlistId || delivery.alertId,
-        relatedSubjectIds: [
-            delivery.webhookDestinationId,
-            delivery.watchlistItemId,
-            delivery.watchlistId,
-            delivery.alertId,
-            delivery.caseId,
-            delivery.actionId,
-            ...(delivery.watchlistItemIds || []),
-        ].filter(Boolean) as string[],
-        metadata: compactMetadata([
-            ['Destination', destinationDisplayState(delivery)],
-            ['Saved route', delivery.webhookDestinationId ? 'Available' : undefined],
-            ['Alert', compactReference(delivery.alertId, 'alert')],
-            ['Case', compactReference(delivery.caseId, 'case')],
-            ['Watchlist', compactReference(delivery.watchlistItemId || delivery.watchlistId, 'watchlist')],
-            ['Kind', delivery.deliveryKind],
-        ]),
-    }))
+    const deliveryRows: ActivityItem[] = bundle.deliveries.map(delivery => {
+        const destinationIds = deliveryDestinationIds(delivery, bundle.webhooks)
+        return {
+            id: `delivery-${delivery.id}`,
+            at: delivery.attemptedAt || delivery.updatedAt || delivery.createdAt || new Date(0).toISOString(),
+            title: delivery.dryRun ? 'Destination tested' : 'Alert delivery recorded',
+            detail: `${delivery.status || 'delivery'} · ${compactReference(delivery.watchlistId || delivery.watchlistItemId || delivery.alertId, 'watchlist') || 'Watchlist pending'}`,
+            ok: !delivery.error && delivery.status?.toLowerCase() !== 'failed',
+            subjectType: 'destination',
+            subjectId: destinationIds[0] || delivery.watchlistItemId || delivery.watchlistId || delivery.alertId,
+            relatedSubjectIds: [
+                ...destinationIds,
+                delivery.watchlistItemId,
+                delivery.watchlistId,
+                delivery.alertId,
+                delivery.caseId,
+                delivery.actionId,
+                ...(delivery.watchlistItemIds || []),
+            ].filter(Boolean) as string[],
+            metadata: compactMetadata([
+                ['Destination', destinationDisplayState(delivery)],
+                ['Saved route', destinationIds.length ? 'Available' : undefined],
+                ['Alert', compactReference(delivery.alertId, 'alert')],
+                ['Case', compactReference(delivery.caseId, 'case')],
+                ['Watchlist', compactReference(delivery.watchlistItemId || delivery.watchlistId, 'watchlist')],
+                ['Kind', delivery.deliveryKind],
+            ]),
+        }
+    })
     const inviteRows: ActivityItem[] = bundle.invites.map(invite => ({
         id: `invite-${invite.id}`,
         at: invite.createdAt || new Date(0).toISOString(),
@@ -4427,11 +4430,17 @@ function latestDeliveryForWatchlist(item: WatchlistItem, deliveries: DeliveryRow
 }
 
 function deliveriesForDestination(destination: WebhookDestination, deliveries: DeliveryRow[]) {
-    return deliveries.filter(delivery => {
-        if ((delivery.webhookDestinationId || delivery.destinationId) === destination.id) return true
-        if (destination.endpointHash && delivery.endpointHash === destination.endpointHash) return true
-        return false
-    })
+    return deliveries.filter(delivery => deliveryDestinationIds(delivery, [destination]).includes(destination.id))
+}
+
+function deliveryDestinationIds(delivery: DeliveryRow, destinations: WebhookDestination[]) {
+    return [
+        delivery.webhookDestinationId,
+        delivery.destinationId,
+        ...destinations
+            .filter(destination => (destination.endpointHash && destination.endpointHash === delivery.endpointHash) || (destination.endpointHint && destination.endpointHint === delivery.endpointHint))
+            .map(destination => destination.id),
+    ].filter(Boolean) as string[]
 }
 
 function deliveryMatchesSubject(delivery: DeliveryRow, subject: ActivitySubject) {
