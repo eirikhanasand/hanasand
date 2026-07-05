@@ -798,7 +798,7 @@ function schedulerKpis(snapshot: ControlSnapshot | null) {
         dailyAttempted: numberFrom(coverage.dailyAttemptedCount) ?? 0,
         dailyCovered: numberFrom(coverage.dailyCoveredCount) ?? 0,
         aiReady,
-        aiStatus: aiReady ? 'Connected' : aiConfigured ? 'Blocked' : 'Fallback',
+        aiStatus: aiReady ? 'Connected' : aiConfigured ? 'Needs setup' : 'Fallback',
         aiDetail: blocker || `${acceptedExposureCount} accepted, ${reviewExposureCount} review${latency !== undefined ? `, ${latency}ms` : ''}`,
         acceptedExposureCount,
         reviewExposureCount,
