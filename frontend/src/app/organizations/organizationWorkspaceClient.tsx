@@ -3242,9 +3242,11 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, 
 
 function ActivityPanel({ organization, bundle, activity, selectedSubject, onSelectSubject }: { organization: OrganizationSummary, bundle: OrgBundle, activity: ActivityItem[], selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
+    const [showAll, setShowAll] = useState(false)
     const selectedRows = activityRowsForSubject(activity, selectedSubject)
     const contextRows = selectedContextRows(selectedSubject, organization, bundle)
-    const visibleRows = selectedSubject.type === 'organization' ? activity.slice(0, ORG_ACTIVITY_PREVIEW_ROWS) : selectedRows.slice(0, ORG_ACTIVITY_PREVIEW_ROWS)
+    const sourceRows = selectedSubject.type === 'organization' ? activity : selectedRows
+    const visibleRows = showAll ? sourceRows : sourceRows.slice(0, ORG_ACTIVITY_PREVIEW_ROWS)
     const totalRows = selectedSubject.type === 'organization' ? activity.length : selectedRows.length
     const hiddenRows = Math.max(0, totalRows - visibleRows.length)
     const sessionRows = selectedRows.filter(item => item.source === 'session').length
@@ -3351,7 +3353,15 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                         </div>
                     )
                 })}
-                {hiddenRows > 0 && <span className='rounded-md bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted'>{hiddenRows} more</span>}
+                {totalRows > ORG_ACTIVITY_PREVIEW_ROWS && (
+                    <button
+                        type='button'
+                        className='w-fit rounded-md bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted transition hover:text-ui-text dark:bg-ui-canvas dark:text-ui-muted dark:hover:text-ui-text'
+                        onClick={() => setShowAll(current => !current)}
+                    >
+                        {showAll ? 'Show latest' : `${hiddenRows} more`}
+                    </button>
+                )}
             </div>
         </section>
     )
