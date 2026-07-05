@@ -377,8 +377,8 @@ function deliveryRetryText(delivery: DeliveryRow) {
     return `${attempts} attempt${attempts === 1 ? '' : 's'}`
 }
 
-function replayBlockedReason(delivery: DeliveryRow) {
-    if (!delivery.webhookDestinationId && !delivery.destinationId) return 'Replay needs a saved destination.'
+function replayBlockedReason(delivery: DeliveryRow, destinations: WebhookDestination[] = []) {
+    if (!deliveryDestinationIds(delivery, destinations)[0]) return 'Replay needs a saved destination.'
     if (!(delivery.alertId || delivery.caseId || delivery.watchlistId || delivery.watchlistItemId || delivery.actionId)) return 'Replay needs alert, case, or watchlist context.'
     return 'Replay is not available for this delivery row.'
 }
@@ -1144,14 +1144,15 @@ export default function OrganizationWorkspaceClient() {
 
     const replayDelivery = (delivery: DeliveryRow) => selectedOrganization && runAction('replay-delivery', async () => {
         requireManage()
-        if (!canReplayDelivery(delivery)) throw new Error('Delivery replay needs a destination and alert, case, or watchlist reference.')
+        const destinationId = deliveryDestinationIds(delivery, bundle.webhooks)[0]
+        if (!canReplayDelivery(delivery, bundle.webhooks)) throw new Error('Delivery replay needs a destination and alert, case, or watchlist reference.')
         const result = await requestJson<DeliveryResult>('/api/dwm/webhooks/deliver', {
             method: 'POST',
             body: JSON.stringify({
                 organizationId: selectedOrganization.id,
                 orgId: selectedOrganization.id,
                 tenantId: delivery.tenantId || selectedOrganization.tenantId || 'default',
-                destinationId: delivery.webhookDestinationId,
+                destinationId,
                 alertId: delivery.alertId,
                 caseId: delivery.caseId,
                 actionId: delivery.actionId,
@@ -3089,7 +3090,7 @@ function DeliveryHistoryPanel({ organization, deliveries, destinations, selected
                             </thead>
                             <tbody>
                                 {scopedDeliveries.map(delivery => {
-                                    const replayable = canReplayDelivery(delivery)
+                                    const replayable = canReplayDelivery(delivery, destinations)
                                     const replayLabel = delivery.status === 'failed' || delivery.nextRetryAt ? 'Retry' : 'Replay'
                                     const destinationId = deliveryDestinationIds(delivery, destinations)[0]
                                     return (
@@ -3130,7 +3131,7 @@ function DeliveryHistoryPanel({ organization, deliveries, destinations, selected
                                                         <RefreshCw className='h-4 w-4' />
                                                         {replayLabel}
                                                     </button>
-                                                    {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>{replayBlockedReason(delivery)}</span>}
+                                                    {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>{replayBlockedReason(delivery, destinations)}</span>}
                                                     <RowStatus message={rowMessages[`delivery-${delivery.id}`]} />
                                                 </div>
                                             </td>
@@ -3155,7 +3156,7 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, destinations, canM
     rowMessage?: RowMessage
     onReplay: (delivery: DeliveryRow) => void
 }) {
-    const replayable = canReplayDelivery(delivery)
+    const replayable = canReplayDelivery(delivery, destinations)
     const replayLabel = delivery.status === 'failed' || delivery.nextRetryAt ? 'Retry' : 'Replay'
     const destinationId = deliveryDestinationIds(delivery, destinations)[0]
     return (
@@ -3186,7 +3187,7 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, destinations, canM
                     <RefreshCw className='h-4 w-4' />
                     {replayLabel}
                 </button>
-                {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>{replayBlockedReason(delivery)}</span>}
+                {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>{replayBlockedReason(delivery, destinations)}</span>}
                 <RowStatus message={rowMessage} />
             </div>
         </article>
@@ -4524,9 +4525,9 @@ function escapeRegExp(value: string) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function canReplayDelivery(delivery: DeliveryRow) {
+function canReplayDelivery(delivery: DeliveryRow, destinations: WebhookDestination[] = []) {
     return Boolean(
-        delivery.webhookDestinationId
+        deliveryDestinationIds(delivery, destinations)[0]
         && (delivery.alertId || delivery.caseId || delivery.watchlistId || delivery.watchlistItemId || delivery.actionId)
     )
 }
