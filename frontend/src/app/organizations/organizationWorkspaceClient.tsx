@@ -923,9 +923,11 @@ export default function OrganizationWorkspaceClient() {
         setSelectedId(organizationId)
         replaceOrganizationWorkspaceSelectionUrl(organizationId, { type: 'organization', id: organizationId })
         setCreateName('')
-        setCreateFirstWatchlist({ kind: 'domain', value: '', notes: '' })
-        setCreateInviteEmails('')
-        setCreateInviteRole('member')
+        if (!firstWatchlistValue || firstWatchlistAdded) setCreateFirstWatchlist({ kind: 'domain', value: '', notes: '' })
+        if (!firstInviteEmails.length || firstInviteCount) {
+            setCreateInviteEmails('')
+            setCreateInviteRole('member')
+        }
         return {
             organizationId,
             warning: setupWarnings.length > 0,
