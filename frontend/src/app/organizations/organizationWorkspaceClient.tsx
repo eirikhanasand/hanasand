@@ -308,7 +308,7 @@ const initialBundle: OrgBundle = {
     loadErrors: [],
 }
 
-const roleOptions: OrganizationRole[] = ['admin', 'member', 'viewer']
+const roleOptions: OrganizationRole[] = ['admin', 'member', 'viewer', 'support']
 const watchlistKinds: WatchlistKind[] = ['company', 'domain', 'vendor', 'actor', 'keyword']
 const watchlistTemplates: Array<{ label: string, kind: WatchlistKind, notes: string }> = [
     { label: 'Corporate domain', kind: 'domain', notes: 'Primary company domain monitored for exposure mentions.' },
@@ -2190,7 +2190,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                             <SelectField
                                 label='Role'
                                 value={memberRoleFilter}
-                                options={['all', 'owner', ...roleOptions, 'support']}
+                                options={['all', 'owner', ...roleOptions]}
                                 disabled={Boolean(busy)}
                                 onChange={setMemberRoleFilter}
                             />
