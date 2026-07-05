@@ -54,7 +54,7 @@ export const trustArtifacts: TrustArtifact[] = [
             },
             {
                 title: 'Operational controls',
-                body: 'The product exposes status, delivery history, admin/support flows, and readiness checks where the backing services are enabled. Security reviewers should verify the exact controls in the target deployment before relying on them for policy.',
+                body: 'The product exposes status, delivery history, admin/support flows, and operational checks where the backing services are enabled. Security reviewers should verify the exact controls in the target deployment before relying on them for policy.',
             },
         ],
         table: {

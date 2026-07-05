@@ -6,6 +6,7 @@ const root = process.cwd()
 
 const enterpriseFacingSources = [
     'src/app/trust/page.tsx',
+    'src/app/trust/trustArtifacts.ts',
     'src/app/pricing/page.tsx',
     'src/app/developers/page.tsx',
     'src/app/solutions/page.tsx',
@@ -22,6 +23,7 @@ const bannedVisibleTone = [
     /raw leaked-data bloat/i,
     /vague claims/i,
     /launch-readiness/i,
+    /readiness checks/i,
 ] as const
 
 test('public enterprise pages avoid casual competitive and procurement copy', async () => {
