@@ -2571,19 +2571,19 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                 <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem_8rem]' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                     <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                                         Name
-                                        <input value={draft.name} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, name: event.target.value } }))} className={inputClass} />
+                                        <input value={draft.name} disabled={!canManage || Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, name: event.target.value } }))} className={inputClass} />
                                         {draftNameDuplicate && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Name already in use.</span>}
                                     </label>
-                                    <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, kind: value as DestinationEditDraft['kind'] } }))} />
-                                    <SelectField label='Status' value={draft.status} options={['active', 'paused']} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, status: value } }))} />
+                                    <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={!canManage || Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, kind: value as DestinationEditDraft['kind'] } }))} />
+                                    <SelectField label='Status' value={draft.status} options={['active', 'paused']} disabled={!canManage || Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, status: value } }))} />
                                     <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted md:col-span-3'>
                                         Rotate URL
-                                        <input value={draft.url} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, url: event.target.value } }))} className={inputClass} placeholder='Leave blank to keep the stored redacted endpoint' />
+                                        <input value={draft.url} disabled={!canManage || Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, url: event.target.value } }))} className={inputClass} placeholder='Leave blank to keep the stored redacted endpoint' />
                                         {draftUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
                                     </label>
                                     {!draftUrlInvalid && !draftNameDuplicate && !draftChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-3'>Destination settings are current.</p>}
                                     <div className='flex flex-wrap gap-2 md:col-span-3' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
-                                        <button type='button' className={primaryButtonClass} disabled={draftUrlInvalid || draftNameDuplicate || !draftChanged || Boolean(busy)} onClick={() => onUpdate(destination, draft)}>
+                                        <button type='button' className={primaryButtonClass} disabled={!canManage || draftUrlInvalid || draftNameDuplicate || !draftChanged || Boolean(busy)} onClick={() => onUpdate(destination, draft)}>
                                             <CheckCircle2 className='h-4 w-4' />
                                             Save
                                         </button>
@@ -2806,16 +2806,16 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                         >
                             {edit ? (
                                 <div className='grid gap-3 md:grid-cols-[9rem_1fr]' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
-                                    <SelectField label='Type' value={edit.kind} options={watchlistKinds} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [item.id]: { ...edit, kind: value as WatchlistKind } }))} />
-                                    <Field label='Term' value={edit.value} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [item.id]: { ...edit, value } }))} />
+                                    <SelectField label='Type' value={edit.kind} options={watchlistKinds} disabled={!canManage || Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [item.id]: { ...edit, kind: value as WatchlistKind } }))} />
+                                    <Field label='Term' value={edit.value} disabled={!canManage || Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [item.id]: { ...edit, value } }))} />
                                     <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted md:col-span-2'>
                                         Notes
-                                        <textarea value={edit.notes} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [item.id]: { ...edit, notes: event.target.value } }))} className={`${inputClass} min-h-20 resize-y`} />
+                                        <textarea value={edit.notes} disabled={!canManage || Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [item.id]: { ...edit, notes: event.target.value } }))} className={`${inputClass} min-h-20 resize-y`} />
                                     </label>
                                     {editDuplicate && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning md:col-span-2'>This term already exists in this organization.</p>}
                                     {!editDuplicate && !editChanged && <p className='rounded-md bg-ui-raised px-3 py-2 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted md:col-span-2'>Watchlist term is current.</p>}
                                     <div className='flex flex-wrap gap-2 md:col-span-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
-                                        <button type='button' className={primaryButtonClass} disabled={!edit.value.trim() || editDuplicate || !editChanged || Boolean(busy)} onClick={() => onSave(item)}>
+                                        <button type='button' className={primaryButtonClass} disabled={!canManage || !edit.value.trim() || editDuplicate || !editChanged || Boolean(busy)} onClick={() => onSave(item)}>
                                             <CheckCircle2 className='h-4 w-4' />
                                             Save
                                         </button>
