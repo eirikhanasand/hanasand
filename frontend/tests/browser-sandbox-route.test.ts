@@ -115,6 +115,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(brokerSource.includes('tool_capture'), 'broker should emit profile tool captures.')
     assert(brokerSource.includes('provider capture started'), 'broker should emit provider progress before long external-tool waits.')
     assert(brokerSource.includes('BROWSER_SANDBOX_PROVIDER_TABS'), 'broker should keep unstable external provider tabs opt-in.')
+    assert(brokerSource.includes('clickExactConsentAction') && brokerSource.includes('godta alle'), 'broker should explicitly click common consent accept buttons before hiding cookie overlays.')
     assert(brokerSource.includes('const initialEvidence = await collectPageEvidence(toolPage)'), 'broker should emit provider DOM-ready captures before deeper readiness parsing.')
     assert(brokerSource.includes('await captureProfileTools(context, message.profileTools || [], target)'), 'broker should capture provider tools before the start handler can close.')
     assert(brokerSource.includes('capturedAt'), 'broker should emit screenshot timestamps.')

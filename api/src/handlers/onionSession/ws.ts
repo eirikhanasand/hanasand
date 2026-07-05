@@ -962,6 +962,31 @@ async function dismissCookieOverlays(page: Page) {
     const cookiePromptText = (value: string) => /(cookie|consent|privacy|gdpr|tracking|analytics|preferences|cookie settings|cookie preferences|cookie notice|cookie popup|cookie wall|accept all|I agree)/i.test(value)
     const passLimit = 12
 
+    const clickExactConsentAction = async (frame: Frame) => frame.evaluate(() => {
+        const wanted = [
+            'godta alle',
+            'accept all',
+            'accept all cookies',
+            'allow all',
+            'allow all cookies',
+            'i agree',
+        ]
+        const candidates = Array.from(document.querySelectorAll<HTMLElement>('button, [role="button"], input[type="button"], input[type="submit"]'))
+        const target = candidates.find(candidate => {
+            const text = `${candidate.textContent || ''} ${(candidate as HTMLInputElement).value || ''} ${candidate.getAttribute('aria-label') || ''}`.trim().toLowerCase()
+            if (!wanted.some(value => text.includes(value))) return false
+            const style = window.getComputedStyle(candidate)
+            const rect = candidate.getBoundingClientRect()
+            return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
+        })
+        if (!target) return false
+        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+            target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }))
+        }
+        target.click()
+        return true
+    }).catch(() => false)
+
     const clickInFrame = async (frame: Frame) => {
         for (const selector of selectors) {
             try {
@@ -1189,6 +1214,7 @@ async function dismissCookieOverlays(page: Page) {
         let touched = false
         const frames = [page.mainFrame(), ...page.frames()]
         for (const frame of frames) {
+            touched ||= await clickExactConsentAction(frame)
             touched ||= await clickInFrame(frame)
             touched ||= await clickTextButtonInFrame(frame)
             touched ||= await clickShadowCookieElements(frame)
