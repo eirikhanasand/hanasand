@@ -879,45 +879,44 @@ export default function OrganizationWorkspaceClient() {
             body: JSON.stringify({ name }),
         })
         const organizationId = payload.organization?.id
+        if (!organizationId) throw new Error('Organization was created, but the API did not return an organization id.')
         let firstWatchlistAdded = false
         let firstInviteCount = 0
         const setupWarnings: string[] = []
-        if (organizationId) {
-            if (firstWatchlistValue) {
-                try {
-                    await requestJson(`/api/organizations/${encodeURIComponent(organizationId)}/watchlists`, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            kind: createFirstWatchlist.kind,
-                            value: firstWatchlistValue,
-                            notes: createFirstWatchlist.notes.trim() || 'Initial shared watchlist term from organization setup.',
-                            reason: 'Initial shared watchlist term added from organization setup.',
-                            requestId: `org-ui-create-${Date.now()}`,
-                        }),
-                    })
-                    firstWatchlistAdded = true
-                } catch (err) {
-                    setupWarnings.push(`shared term failed: ${endpointErrorMessage(err)}`)
-                }
+        if (firstWatchlistValue) {
+            try {
+                await requestJson(`/api/organizations/${encodeURIComponent(organizationId)}/watchlists`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        kind: createFirstWatchlist.kind,
+                        value: firstWatchlistValue,
+                        notes: createFirstWatchlist.notes.trim() || 'Initial shared watchlist term from organization setup.',
+                        reason: 'Initial shared watchlist term added from organization setup.',
+                        requestId: `org-ui-create-${Date.now()}`,
+                    }),
+                })
+                firstWatchlistAdded = true
+            } catch (err) {
+                setupWarnings.push(`shared term failed: ${endpointErrorMessage(err)}`)
             }
-            if (firstInviteEmails.length) {
-                try {
-                    await requestJson(`/api/organizations/${encodeURIComponent(organizationId)}/invites`, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            emails: firstInviteEmails,
-                            role: createInviteRole,
-                            requestId: `org-ui-create-invite-${Date.now()}`,
-                        }),
-                    })
-                    firstInviteCount = firstInviteEmails.length
-                } catch (err) {
-                    setupWarnings.push(`invites failed: ${endpointErrorMessage(err)}`)
-                }
-            }
-            setSelectedId(organizationId)
-            replaceOrganizationWorkspaceSelectionUrl(organizationId, { type: 'organization', id: organizationId })
         }
+        if (firstInviteEmails.length) {
+            try {
+                await requestJson(`/api/organizations/${encodeURIComponent(organizationId)}/invites`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        emails: firstInviteEmails,
+                        role: createInviteRole,
+                        requestId: `org-ui-create-invite-${Date.now()}`,
+                    }),
+                })
+                firstInviteCount = firstInviteEmails.length
+            } catch (err) {
+                setupWarnings.push(`invites failed: ${endpointErrorMessage(err)}`)
+            }
+        }
+        setSelectedId(organizationId)
+        replaceOrganizationWorkspaceSelectionUrl(organizationId, { type: 'organization', id: organizationId })
         setCreateName('')
         setCreateFirstWatchlist({ kind: 'domain', value: '', notes: '' })
         setCreateInviteEmails('')
