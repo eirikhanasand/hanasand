@@ -637,6 +637,7 @@ export default function OrganizationWorkspaceClient() {
     const activeWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'active')
     const pausedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'paused')
     const archivedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'archived')
+    const activeTeammates = bundle.members.filter(member => member.role.toLowerCase() !== 'owner' && !['removed', 'revoked', 'inactive'].includes(member.status.toLowerCase()))
     const configuredDestinationCount = organizationConfiguredDestinationCount(bundle)
     const hasConfiguredDestination = configuredDestinationCount > 0
     const watchlistDraftDuplicate = isDuplicateWatchlistTerm(bundle.watchlists, watchlistDraft.kind, watchlistDraft.value)
@@ -1425,7 +1426,7 @@ export default function OrganizationWorkspaceClient() {
                                 <OrgSetupProgress
                                     organizationId={selectedOrganization.id}
                                     canManage={canManage}
-                                    memberCount={bundle.members.length}
+                                    memberCount={activeTeammates.length}
                                     inviteCount={bundle.invites.length}
                                     watchlistCount={bundle.watchlists.length}
                                     destinationCount={configuredDestinationCount}
