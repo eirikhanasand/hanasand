@@ -1804,12 +1804,9 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                     </button>
                 )}
             </div>
-            <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4'>
-                <ActionStatus label='Owner' value={assignee} />
-                <ActionStatus label='Work state' value={stateLabel(alert.reviewState)} />
-                <ActionStatus label='Delivery' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'destination configured' : 'destination needed'} tone={latestDelivery?.status === 'failed' || !hasDeliveryRoute ? 'warn' : 'neutral'} />
-                <ActionStatus label='Case' value={alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || 'case is being prepared'} />
-            </div>
+            <p className='wrap-break-word text-xs font-semibold text-ui-muted'>
+                Owner {assignee} · {stateLabel(alert.reviewState)} · {latestDelivery ? `${stateLabel(latestDelivery.status)} ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'destination configured' : 'destination needed'} · {alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || 'case is being prepared'}
+            </p>
             <div className='grid gap-2'>
                 <div className='flex flex-wrap gap-1.5'>
                     <ActionAvailability label='Case actions' ready={transitionReady} />
