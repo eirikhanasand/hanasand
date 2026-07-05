@@ -2256,8 +2256,8 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                 const selectedRole = pendingRoles[member.userId] || member.role
                                 const roleChanged = selectedRole !== member.role
                                 const canMutateMember = canManage && memberCanMutate(member)
-                                const memberMutationReason = !canManage ? 'Owner or admin required' : !memberCanMutate(member) ? 'Owner role cannot be changed here' : ''
-                                const memberAccess = canMutateMember ? 'Role editable' : member.role.toLowerCase() === 'owner' ? 'Owner locked' : 'Read-only'
+                                const memberMutationReason = memberMutationDisabledReason(canManage, member)
+                                const memberAccess = memberAccessState(canMutateMember, member)
                                 const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                 return (
                                     <article
@@ -2330,8 +2330,8 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                     const selectedRole = pendingRoles[member.userId] || member.role
                                     const roleChanged = selectedRole !== member.role
                                     const canMutateMember = canManage && memberCanMutate(member)
-                                    const memberMutationReason = !canManage ? 'Owner or admin required' : !memberCanMutate(member) ? 'Owner role cannot be changed here' : ''
-                                    const memberAccess = canMutateMember ? 'Role editable' : member.role.toLowerCase() === 'owner' ? 'Owner locked' : 'Read-only'
+                                    const memberMutationReason = memberMutationDisabledReason(canManage, member)
+                                    const memberAccess = memberAccessState(canMutateMember, member)
                                     const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                     return (
                                         <tr
@@ -4394,6 +4394,20 @@ function inviteActionAllowed(invite: OrganizationInvite, action: 'copy' | 'resen
 function memberCanMutate(member: OrganizationMember) {
     const status = member.status.toLowerCase()
     return member.role.toLowerCase() !== 'owner' && status !== 'removed' && status !== 'revoked' && status !== 'inactive'
+}
+
+function memberMutationDisabledReason(canManage: boolean, member: OrganizationMember) {
+    if (!canManage) return 'Owner or admin required'
+    if (member.role.toLowerCase() === 'owner') return 'Owner role cannot be changed here'
+    if (['removed', 'revoked', 'inactive'].includes(member.status.toLowerCase())) return 'Access is closed'
+    return ''
+}
+
+function memberAccessState(canMutateMember: boolean, member: OrganizationMember) {
+    if (canMutateMember) return 'Role editable'
+    if (member.role.toLowerCase() === 'owner') return 'Owner locked'
+    if (['removed', 'revoked', 'inactive'].includes(member.status.toLowerCase())) return 'Access closed'
+    return 'Read-only'
 }
 
 function validDestinationUrl(value: string) {
