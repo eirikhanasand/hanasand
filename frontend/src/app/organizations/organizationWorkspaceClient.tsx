@@ -536,6 +536,7 @@ export default function OrganizationWorkspaceClient() {
     const requestedOrganizationId = searchParams.get('organizationId')?.trim() || ''
     const requestedWatchlistId = searchParams.get('watchlistItemId')?.trim() || searchParams.get('watchlistId')?.trim() || ''
     const requestedDestinationId = searchParams.get('destinationId')?.trim() || ''
+    const requestedDeliveryId = searchParams.get('deliveryId')?.trim() || ''
     const requestedAlertId = searchParams.get('alertId')?.trim() || searchParams.get('alert')?.trim() || ''
     const requestedCaseId = searchParams.get('caseId')?.trim() || ''
     const requestedInviteId = searchParams.get('inviteId')?.trim() || ''
@@ -581,7 +582,7 @@ export default function OrganizationWorkspaceClient() {
     const watchlistSuggestions = selectedOrganization ? starterWatchlistSuggestions(selectedOrganization, bundle.watchlists) : []
     const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
     const activityRows = useMemo(() => organizationActivityRows(activity, bundle), [activity, bundle])
-    const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedInviteId || requestedMemberId || requestedFocus)
+    const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedDeliveryId || requestedInviteId || requestedMemberId || requestedFocus)
     const hasScopeRecords = Boolean(bundle.alertTerms.length || bundle.alerts.length || bundle.cases.length || bundle.webhooks.length || Object.keys(bundle.alertCaseVisibility || {}).length)
     const settingsDirty = useMemo(() => !settingsEqual(settingsDraft, bundle.settings || {}), [settingsDraft, bundle.settings])
     const normalizedCreateName = normalizeOrganizationName(createName)
@@ -699,11 +700,12 @@ export default function OrganizationWorkspaceClient() {
             memberId: requestedMemberId,
             watchlistId: requestedWatchlistId,
             destinationId: requestedDestinationId,
+            deliveryId: requestedDeliveryId,
             alertId: requestedAlertId,
             caseId: requestedCaseId,
         }, nextBundle))
         setBusy('')
-    }, [requestedAlertId, requestedCaseId, requestedDestinationId, requestedFocus, requestedInviteId, requestedMemberId, requestedWatchlistId])
+    }, [requestedAlertId, requestedCaseId, requestedDeliveryId, requestedDestinationId, requestedFocus, requestedInviteId, requestedMemberId, requestedWatchlistId])
 
     const selectOrganization = useCallback((organizationId: string) => {
         setSelectedId(organizationId)
@@ -1241,6 +1243,7 @@ export default function OrganizationWorkspaceClient() {
                                         caseId={requestedCaseId}
                                         watchlistId={requestedWatchlistId}
                                         destinationId={requestedDestinationId}
+                                        deliveryId={requestedDeliveryId}
                                         focus={requestedFocus}
                                     />
                                 )}
@@ -1551,13 +1554,14 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
     )
 }
 
-function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watchlistId, destinationId, focus }: {
+function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watchlistId, destinationId, deliveryId, focus }: {
     organization: OrganizationSummary
     selectedSubject: ActivitySubject
     alertId: string
     caseId: string
     watchlistId: string
     destinationId: string
+    deliveryId: string
     focus: string
 }) {
     const scopedValues = [
@@ -1567,6 +1571,7 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
         ['Alert', alertId],
         ['Watchlist', watchlistId],
         ['Destination', destinationId],
+        ['Delivery', deliveryId],
     ].filter(([, value]) => Boolean(value))
     const caseHref = caseId
         ? `/dashboard/dwm/cases/${encodeURIComponent(caseId)}?organizationId=${encodeURIComponent(organization.id)}${alertId ? `&alertId=${encodeURIComponent(alertId)}` : ''}`
@@ -1574,7 +1579,7 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
     const alertHref = alertId
         ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organization.id)}`
         : ''
-    const deliveryHref = destinationId || focus === 'destinations' || focus === 'webhooks'
+    const deliveryHref = deliveryId || destinationId || focus === 'destinations' || focus === 'webhooks'
         ? '#delivery-history'
         : ''
     return (
@@ -3506,9 +3511,21 @@ function requestedSubjectFromSearch(input: {
     memberId: string
     watchlistId: string
     destinationId: string
+    deliveryId: string
     alertId: string
     caseId: string
 }, bundle: OrgBundle): ActivitySubject {
+    const delivery = requestedDeliveryFromSearch(bundle.deliveries, input.deliveryId)
+    if (delivery) {
+        const deliveryDestinationId = delivery.webhookDestinationId || delivery.destinationId
+        if (deliveryDestinationId && bundle.webhooks.some(item => item.id === deliveryDestinationId)) return { type: 'destination', id: deliveryDestinationId }
+        const deliveryCaseId = delivery.caseId
+        if (deliveryCaseId && bundle.cases.some(item => item.id === deliveryCaseId)) return { type: 'case', id: deliveryCaseId }
+        const deliveryAlertId = delivery.alertId
+        if (deliveryAlertId && bundle.alerts.some(item => item.id === deliveryAlertId)) return { type: 'alert', id: deliveryAlertId }
+        const deliveryWatchlistId = delivery.watchlistItemId || delivery.watchlistId
+        if (deliveryWatchlistId && bundle.watchlists.some(item => item.id === deliveryWatchlistId)) return { type: 'watchlist', id: deliveryWatchlistId }
+    }
     if (input.caseId && bundle.cases.some(item => item.id === input.caseId)) return { type: 'case', id: input.caseId }
     if (input.alertId && bundle.alerts.some(item => item.id === input.alertId)) return { type: 'alert', id: input.alertId }
     if (input.inviteId && bundle.invites.some(item => item.id === input.inviteId)) return { type: 'invite', id: input.inviteId }
@@ -3524,11 +3541,19 @@ function requestedSubjectFromSearch(input: {
     return { type: 'organization', id: input.organizationId }
 }
 
+function requestedDeliveryFromSearch(deliveries: DeliveryRow[], deliveryId: string) {
+    if (!deliveryId) return undefined
+    return deliveries.find(delivery => delivery.id === deliveryId
+        || delivery.requestId === deliveryId
+        || delivery.auditEventId === deliveryId
+        || delivery.dedupeKey === deliveryId)
+}
+
 function replaceOrganizationWorkspaceSelectionUrl(organizationId: string, subject: ActivitySubject) {
     if (typeof window === 'undefined' || !organizationId) return
     const url = new URL(window.location.href)
     url.searchParams.set('organizationId', organizationId)
-    for (const key of ['inviteId', 'memberId', 'watchlistId', 'watchlistItemId', 'destinationId', 'alertId', 'alert', 'caseId']) {
+    for (const key of ['inviteId', 'memberId', 'watchlistId', 'watchlistItemId', 'destinationId', 'deliveryId', 'alertId', 'alert', 'caseId']) {
         url.searchParams.delete(key)
     }
     if (subject.type === 'invite') {
@@ -3918,6 +3943,7 @@ function deliveryMatchesSubject(delivery: DeliveryRow, subject: ActivitySubject)
     if (subject.type === 'organization') return true
     if (subject.type === 'destination') {
         return delivery.webhookDestinationId === subject.id
+            || delivery.destinationId === subject.id
             || delivery.watchlistId === subject.id
             || delivery.watchlistItemId === subject.id
             || delivery.watchlistItemIds?.includes(subject.id)
