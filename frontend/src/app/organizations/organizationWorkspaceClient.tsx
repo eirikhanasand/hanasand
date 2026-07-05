@@ -4497,7 +4497,7 @@ function alertForWatchlist(item: WatchlistItem, alerts: ScopedAlert[]) {
 
 function latestDeliveryForWatchlist(item: WatchlistItem, deliveries: DeliveryRow[]) {
     return deliveries
-        .filter(delivery => delivery.watchlistId === item.id || delivery.watchlistItemId === item.id || delivery.watchlistItemIds?.includes(item.id))
+        .filter(delivery => delivery.watchlistId === item.id || delivery.watchlistItemId === item.id || delivery.watchlistItemIds?.includes(item.id) || delivery.watchlistIds?.includes(item.id))
         .sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
 }
 
@@ -4528,6 +4528,7 @@ function deliveryMatchesSubject(delivery: DeliveryRow, subject: ActivitySubject,
         return delivery.watchlistId === subject.id
             || delivery.watchlistItemId === subject.id
             || delivery.watchlistItemIds?.includes(subject.id)
+            || delivery.watchlistIds?.includes(subject.id)
     }
     if (subject.type === 'alert') return delivery.alertId === subject.id
     if (subject.type === 'case') return delivery.caseId === subject.id
