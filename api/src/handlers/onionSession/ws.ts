@@ -1019,7 +1019,7 @@ async function dismissCookieOverlays(page: Page) {
                 const text = (candidate.textContent || '').toLowerCase()
                 const computedStyle = window.getComputedStyle(candidate)
                 const containsCookieCopy = /cookie|consent|gdpr|privacy|tracking|preferences|analytics|essential|data collection/i.test(text)
-            const isFixedOrSticky = ['fixed', 'sticky'].includes(computedStyle.position)
+                const isFixedOrSticky = ['fixed', 'sticky'].includes(computedStyle.position)
                 const fillsView = candidate.getBoundingClientRect().width >= window.innerWidth * 0.5 && candidate.getBoundingClientRect().height >= window.innerHeight * 0.15
                 if ((containsCookieCopy || isFixedOrSticky) && candidate.style.display !== 'none') {
                     candidate.style.setProperty('display', 'none', 'important')
@@ -1129,12 +1129,12 @@ async function dismissCookieOverlays(page: Page) {
         const frames = [page.mainFrame(), ...page.frames()]
         for (const frame of frames) {
             touched ||= await clickInFrame(frame)
-        touched ||= await clickTextButtonInFrame(frame)
-        touched ||= await clickShadowCookieElements(frame)
-        touched ||= await clickConsentButtonsByText(frame)
-        await hideCandidateOverlays(frame)
-        await aggressivelyHideConsentShims(frame)
-    }
+            touched ||= await clickTextButtonInFrame(frame)
+            touched ||= await clickShadowCookieElements(frame)
+            touched ||= await clickConsentButtonsByText(frame)
+            await hideCandidateOverlays(frame)
+            await aggressivelyHideConsentShims(frame)
+        }
         const bodyStillHasCookieText = await hasCookieCopy(page.mainFrame())
         const visibleConsentWidgets = await page.locator('iframe, [role="dialog"]').count().catch(() => 0)
         await hideTopLevelConsentFrame(page).catch(() => undefined)
@@ -1331,14 +1331,12 @@ async function waitForProviderCaptureReadiness(page: Page, tool: { id?: string; 
     const hasReadyEvidence = (text: string) => markerText.some(item => text.includes(item))
     const hasResultLikeSignal = (text: string) => hasProviderTextSignal(text, readyTokens)
     let cookieGateAttempts = 0
-    let meaningfulContentObserved = false
     while (Date.now() < deadline) {
         const text = await snapshotText()
         await dismissCookieOverlays(page).catch(() => undefined)
         const likelyCookieOverlay = await hasCookieOverlay()
         const inProviderDomain = await hasExpectedProviderDomain()
         const hasMeaningful = hasMeaningfulContent(text)
-        if (hasMeaningful) meaningfulContentObserved = true
         const hasProviderResultText = hasProviderTextSignal(text, providerResultTokens)
         const hasProviderResultLikeSignal = hasProviderResultText || hasResultLikeSignal(text)
         const isLikelyCookiePath = /consent|cookie|privacy|gdpr/i.test(page.url())
@@ -1538,7 +1536,7 @@ async function waitForProviderCaptureReadiness(page: Page, tool: { id?: string; 
     return {
         ready: false,
         blocker: `provider-result-timeout-${provider}`,
-        statusText: `provider result not ready after timeout`,
+        statusText: 'provider result not ready after timeout',
     }
 }
 
