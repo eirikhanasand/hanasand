@@ -320,8 +320,9 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
     async function sendWebhook(dryRun: boolean) {
         const targetAlertId = resolvedAlertId(caseRecord, alertContext, alertId)
-        if (!targetAlertId) {
-            setMessage({ ok: false, text: 'This case is missing an alert id.' })
+        const blockedReason = webhookActionBlockedReason(state.detail, targetAlertId)
+        if (blockedReason) {
+            setMessage({ ok: false, text: blockedReason })
             return
         }
         setBusy(dryRun ? 'webhook-test' : 'webhook-send')
@@ -382,7 +383,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
         ? `/organizations${queryString({ organizationId: scopedOrganizationId, caseId: caseRecord.id, alertId: scopedAlertId, destinationId: latestDelivery?.webhookDestinationId || latestDelivery?.destinationId, focus: 'destinations' })}`
         : '/organizations?focus=destinations'
     const actionBlockers = actionUnavailableReasons(actions, readOnly)
-    const webhookBlockedReason = !scopedAlertId ? 'Webhook delivery needs a linked alert before it can be tested or sent.' : undefined
+    const webhookBlockedReason = webhookActionBlockedReason(state.detail, scopedAlertId)
+    const webhookActionDisabled = Boolean(readOnly || busy !== null || webhookBlockedReason)
 
     return (
         <main className='grid min-w-0 gap-3 text-ui-text'>
@@ -543,10 +545,10 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                 <CommandLink href={deliveryHistoryHref}>Delivery history</CommandLink>
                             </div>
                             <div className='mt-3 grid gap-2 sm:grid-cols-2'>
-                                <button type='button' onClick={() => sendWebhook(true)} disabled={readOnly || busy !== null || !scopedAlertId} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
+                                <button type='button' onClick={() => sendWebhook(true)} disabled={webhookActionDisabled} title={webhookBlockedReason || undefined} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
                                     {busy === 'webhook-test' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}Test
                                 </button>
-                                <button type='button' onClick={() => sendWebhook(false)} disabled={readOnly || busy !== null || !scopedAlertId} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
+                                <button type='button' onClick={() => sendWebhook(false)} disabled={webhookActionDisabled} title={webhookBlockedReason || undefined} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
                                     {busy === 'webhook-send' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}Send
                                 </button>
                             </div>
@@ -992,6 +994,17 @@ function deliveryDestinationState(row: DeliveryRow) {
     if (row.endpointHint || row.endpointHash) return 'configured destination'
     if (row.webhookDestinationId || row.destinationId) return 'saved destination'
     return 'destination pending'
+}
+
+function webhookActionBlockedReason(detail: CaseDetail | null | undefined, alertId?: string) {
+    if (!alertId) return 'Webhook delivery needs a linked alert before it can be tested or sent.'
+    if (detail?.customerNotificationContext?.ready === false) {
+        const blockers = uniqueStrings(detail.customerNotificationContext.blockers ?? [])
+        return blockers.length
+            ? blockers.map(stateLabel).join(', ')
+            : 'Webhook delivery needs an active customer destination before it can be tested or sent.'
+    }
+    return undefined
 }
 
 function timelineActorLabel(value?: string) {
