@@ -2726,6 +2726,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
     const selectedAlertId = alert?.id || liveDwmAlertId
     const deliveryStatus = delivery?.status || (configured ? 'Configured' : 'None')
     const replayLabel = delivery?.status === 'failed' || delivery?.status === 'skipped' ? 'Retry' : 'Replay'
+    const replayDisabledReason = !canManage ? 'Owner or admin required' : !configured ? 'Save a destination before replay.' : ''
     const destinationUrl = draft.url.trim()
     const destinationUrlInvalid = Boolean(destinationUrl) && !validDestinationUrl(destinationUrl)
     return (
@@ -2743,7 +2744,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                     <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{destinationState}</p>
                 </div>
                 <div className='grid grid-cols-2 gap-2 sm:flex'>
-                    <button type='button' className={secondaryButtonClass} disabled={!configured || Boolean(busy)} onClick={() => onTest('replay')}>
+                    <button type='button' className={secondaryButtonClass} disabled={!canManage || !configured || Boolean(busy)} title={replayDisabledReason || undefined} aria-label={replayDisabledReason ? `${replayLabel}: ${replayDisabledReason}` : replayLabel} onClick={() => onTest('replay')}>
                         <Play className='h-4 w-4' />
                         {replayLabel}
                     </button>
