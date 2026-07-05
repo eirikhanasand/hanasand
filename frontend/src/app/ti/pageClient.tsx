@@ -3285,10 +3285,12 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                         {artifact.provenance.length ? artifact.provenance.slice(0, TI_SELECTED_DETAIL_LIST_ROWS).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Source details are missing for this detail.</li>}
                     </EvidencePanel>
                     <EvidencePanel title='Watchlist relevance'>
-                        {artifact.watchlistTerms.length ? artifact.watchlistTerms.map(term => <li key={`${term.kind}-${term.value}`}>{term.kind}: {term.value}. {displayRequirementText(term.notes)}</li>) : <li>Attach customer watchlist term.</li>}
+                        {artifact.watchlistTerms.length ? artifact.watchlistTerms.slice(0, TI_SELECTED_DETAIL_LIST_ROWS).map(term => <li key={`${term.kind}-${term.value}`}>{term.kind}: {term.value}. {displayRequirementText(term.notes)}</li>) : <li>Attach customer watchlist term.</li>}
+                        {artifact.watchlistTerms.length > TI_SELECTED_DETAIL_LIST_ROWS ? <li className='text-ui-muted'>+{artifact.watchlistTerms.length - TI_SELECTED_DETAIL_LIST_ROWS} more watch terms in workbenches</li> : null}
                     </EvidencePanel>
                     <EvidencePanel title='Open source questions'>
-                        {artifact.enrichmentTasks.length ? artifact.enrichmentTasks.map(task => <li key={task}>{displayRequirementText(task)}</li>) : <li>Source questions are clear.</li>}
+                        {artifact.enrichmentTasks.length ? artifact.enrichmentTasks.slice(0, TI_SELECTED_DETAIL_LIST_ROWS).map(task => <li key={task}>{displayRequirementText(task)}</li>) : <li>Source questions are clear.</li>}
+                        {artifact.enrichmentTasks.length > TI_SELECTED_DETAIL_LIST_ROWS ? <li className='text-ui-muted'>+{artifact.enrichmentTasks.length - TI_SELECTED_DETAIL_LIST_ROWS} more source questions in workbenches</li> : null}
                     </EvidencePanel>
                 </div>
                 <div className='grid min-w-0 max-w-full content-start gap-2 overflow-hidden'>
