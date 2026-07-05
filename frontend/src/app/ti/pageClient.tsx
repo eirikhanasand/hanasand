@@ -272,7 +272,7 @@ function Results({ result }: { result: TiSearchResponse }) {
         { href: '#ti-activity', label: 'Latest activity', value: `${filteredWorkItems.length}/${workItems.length} results`, icon: Inbox },
         { href: '#ti-selected-evidence', label: 'Evidence', value: selected ? selected.source : 'select result', icon: Eye },
         { href: '#ti-secondary-analysis', label: 'Workbenches', value: `${sources.length} sources`, icon: Database },
-        { href: '/dashboard', label: 'Console', value: `${actionability.relatedCases.length} cases`, icon: ShieldAlert },
+        { href: selectedConsoleLinks?.case ?? selectedConsoleLinks?.alert ?? selectedConsoleLinks?.watchlist ?? '/dashboard', label: 'Console', value: selectedCaseCreateRequest?.refs.casePaths.length ? `${selectedCaseCreateRequest.refs.casePaths.length} linked` : selectedAlertPlan?.sourceRefs.alertIds.length ? `${selectedAlertPlan.sourceRefs.alertIds.length} alerts` : `${actionability.relatedCases.length} cases`, icon: ShieldAlert },
         { href: '/dashboard/automations?setup=dwm', label: 'Delivery', value: `${actionability.readiness.backedIds.webhookDestinationIds.length} destinations`, icon: Send },
     ]
     const stagedHandoffItems = useMemo(() => Object.values(stagedHandoffs), [stagedHandoffs])

@@ -708,6 +708,7 @@ assert(!pageClientSource.includes('coverage.sourceFamilies.map(item =>'), 'Publi
 assert(pageClientSource.includes('const showRightRail = showMoreAnalysis || stagedHandoffItems.length > 0'), 'Public TI should not render the third analysis rail until workbenches or staged handoffs are active.')
 assert(pageClientSource.includes('data-ti-right-rail={showRightRail ? \'expanded\' : \'collapsed\'}'), 'Public TI should expose a stable right-rail density state for render checks.')
 assert(pageClientSource.includes('{showRightRail ? <aside'), 'Public TI default actor page should collapse the secondary right rail instead of rendering an empty third pane.')
+assert(pageClientSource.includes('selectedConsoleLinks?.case ?? selectedConsoleLinks?.alert ?? selectedConsoleLinks?.watchlist ?? \'/dashboard\''), 'Public TI console command should preserve selected evidence handoff context before falling back to the generic dashboard.')
 assert(pageClientSource.includes('request {selectedRow.sourceRequestId ? \'queued\' : \'not queued\'}'), 'Public TI selected source state should avoid dead none labels.')
 assert(pageClientSource.includes('Linked records'), 'Public TI page should expose consumer workflow state as linked records.')
 assert(pageClientSource.includes('data-ti-consumer-readiness'), 'Public TI page should expose consumer readiness rows for render checks.')
