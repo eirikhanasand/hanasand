@@ -1222,8 +1222,9 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     const threatNarrative = threatAssociations.length
         ? `Observed threat context in captured evidence: ${threatAssociations.slice(0, 4).map(item => `${item.name} (${item.category || 'context'}, ${item.confidence || 'low'})`).join('; ')}.`
         : 'No named actor, malware family, or tool label was extracted from the captured evidence yet.'
-    const providerNarrative = toolAnalyses.length
-        ? `Parsed provider evidence is available from ${toolAnalyses.map(item => item.toolKind || 'profile tool').join(', ')}.`
+    const parsedToolAnalyses = toolAnalyses.filter(hasParsedProviderResult)
+    const providerNarrative = parsedToolAnalyses.length
+        ? `Parsed provider evidence is available from ${parsedToolAnalyses.map(item => item.toolKind || 'profile tool').join(', ')}.`
         : toolCaptures.length
             ? 'Profile tools produced captures, but no parsed provider verdict was returned.'
             : 'No external provider result has been parsed yet; provider panels show configured tools and blockers.'
@@ -1375,8 +1376,14 @@ function matchesTool(capture: Capture, tool: SandboxTool) {
 function providerStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (!capture) return 'Unavailable'
     if (capture.error) return 'Provider error'
-    if (analysis?.vendorFlagged !== undefined || analysis?.alertCount !== undefined || analysis?.verdict) return 'Result captured'
+    if (hasParsedProviderResult(analysis)) return 'Result captured'
     return 'Result unavailable'
+}
+
+function hasParsedProviderResult(analysis?: SandboxToolAnalysis) {
+    return analysis?.vendorFlagged !== undefined
+        || analysis?.alertCount !== undefined
+        || Boolean(analysis?.verdict && analysis.verdict !== 'unknown')
 }
 
 function extractIndicators(value: string) {
