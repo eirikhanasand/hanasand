@@ -1,6 +1,9 @@
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 
 const apiBase = process.env.PLAYWRIGHT_API_BASE || 'http://127.0.0.1:8080/api'
+const root = process.cwd()
 const password = `Aa11!!${Date.now()}Bb22!!`
 const adminId = process.env.PLAYWRIGHT_ADMIN_ID || ''
 const adminPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD || ''
@@ -26,6 +29,14 @@ const normalSidebarLinks = [
 ]
 
 const privilegedSidebarLinks = [
+    'Collection',
+    'Recent attacks',
+    'Latest activity',
+    'Actor profiles',
+    'Sources',
+    'Watched entities',
+    'Collection runs',
+    'Audit log',
     'VMs',
     'Projects',
     'Shares',
@@ -74,6 +85,19 @@ const privilegedDashboardRoutes = [
 test.describe('dashboard resource routes', () => {
     test.describe.configure({ mode: 'serial' })
     test.setTimeout(180_000)
+
+    test('sidebar keeps admin controls internal and out of normal customer navigation', async () => {
+        const sidebar = await readFile(path.join(root, 'src/components/dashboard/dashboardSidebar.tsx'), 'utf8')
+        const smoke = await readFile(path.join(root, 'tests/dashboard-resource-smoke.spec.ts'), 'utf8')
+
+        for (const name of privilegedSidebarLinks) {
+            expect(sidebar, `Dashboard sidebar should expose ${name} only through privileged sections`).toContain(`label: '${name}'`)
+            expect(smoke, `Normal-user sidebar guard should block ${name}`).toContain(`'${name}'`)
+        }
+
+        expect(smoke).toContain('expectNormalUserSidebar')
+        expect(smoke).toContain('toHaveCount(0)')
+    })
 
     test('authenticated dashboard resource routes load without auth or server errors', async ({ browser, request, baseURL }, testInfo) => {
         const userId = `pdr${Date.now().toString().slice(-8)}`
