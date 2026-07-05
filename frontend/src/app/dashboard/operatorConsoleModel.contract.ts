@@ -1396,7 +1396,7 @@ void expectProductReadinessWorkflow(productProgressOrgContext, 'dashboard_eviden
 void expectProductReadinessWorkflow(productProgressOrgContext, 'webhook_delivery', 'Webhook delivery')
 void expectProductReadinessWorkflow(productProgressOrgContext, 'analyst_workflow', 'Case action replay')
 void expectProductReadinessWorkflow(productProgressOrgContext, 'helpdesk_audit', 'Support audit')
-void expectProductReadinessWorkflow(productProgressOrgContext, 'public_ti_provenance', 'Public TI handoff')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'public_ti_provenance', 'Actor evidence bridge')
 void expectProductReadinessWorkflow(productProgressOrgContext, 'deploy_probe', 'Deploy check')
 void expectProductReadinessAction(productProgressOrgContext, 'org_members', 'inspect_org_members', '/api/organizations/org_acme/members')
 void expectProductReadinessAction(productProgressOrgContext, 'shared_watchlists', 'inspect_watchlist_coverage', '/api/organizations/org_acme/alert-readiness')

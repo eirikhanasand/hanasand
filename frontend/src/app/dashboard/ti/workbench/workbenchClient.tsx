@@ -1835,7 +1835,7 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
     if (handoff.decodeStatus === 'blocked') {
         return [{
             id: 'malformed_public_ti_handoff',
-            label: 'Public TI handoff syncing',
+            label: 'Actor evidence bridge syncing',
             detail: handoff.decodeError || 'The handoff payload could not be decoded.',
             tone: 'blocked',
             copyPayload: handoff,
@@ -1853,7 +1853,7 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
     const watchlistPayload = handoff.actionPayloads?.watchlist || handoff.selectedPayload
     const watchTerms = handoffTerms(handoff)
     const watchlistDisabledReason = readinessDisabledReason(watchlistReadiness)
-        || (orgMissing ? 'Select an organization before saving Public TI handoff actions.' : !watchTerms.length ? 'Public TI handoff has no watchlist term yet.' : undefined)
+        || (orgMissing ? 'Select an organization before saving actor evidence actions.' : !watchTerms.length ? 'Actor evidence has no watchlist term yet.' : undefined)
     rows.push({
         id: 'handoff_watchlist',
         label: 'Add org watchlist term',

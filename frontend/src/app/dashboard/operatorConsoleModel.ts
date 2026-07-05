@@ -1426,7 +1426,7 @@ export function buildPublicTiHandoffCase(input: {
                 blockers: [{ code: input.decode.code, detail: input.decode.message }],
                 sourceRequests: [],
             },
-            title: 'Public TI handoff blocked',
+            title: 'Actor evidence bridge blocked',
             subtitle: input.decode.message,
             severity: 'high',
             status: input.decode.code,
@@ -1435,7 +1435,7 @@ export function buildPublicTiHandoffCase(input: {
             updatedAt: now,
             evidence: [{
                 id: 'ev_public_ti_decode',
-                sourceName: 'Public TI handoff decoder',
+                sourceName: 'Actor evidence bridge decoder',
                 sourceFamily: 'authenticated bridge',
                 captureMode: 'url payload',
                 redactionState: 'customer safe',
@@ -1493,7 +1493,7 @@ export function buildPublicTiHandoffCase(input: {
         updatedAt,
         evidence: publicTiEvidence(payload, now),
         timeline: [
-            { id: 'public_ti_generated', at: payload.generatedAt || now, title: 'Public TI handoff generated', body: `${payload.query} exported ${actionLabel(input.decode.action)}.` },
+            { id: 'public_ti_generated', at: payload.generatedAt || now, title: 'Actor evidence bridge generated', body: `${payload.query} exported ${actionLabel(input.decode.action)}.` },
             { id: 'public_ti_org_gate', at: now, title: organization ? 'Organization context live' : 'Organization context syncing', body: organization ? `${organization.name} (${organization.id}) is available for explicit mutations.` : 'Organization context is syncing before persisted mutations unlock.' },
             { id: 'public_ti_alert_state', at: input.operations?.latestRun?.updatedAt || now, title: input.liveAlertCount ? 'Alert generation live' : 'Alert generation checking', body: input.liveAlertCount ? `${input.liveAlertCount} live DWM alert(s) loaded for this workspace.` : input.operations ? 'Source state is live; alert state is updating for DWM alerts.' : 'Collection state is loading.' },
         ],
@@ -1979,8 +1979,8 @@ function buildProductReadiness(input: {
             status: publicTiProvenance?.status || 'needs_action',
             detail: publicTiProvenance
                 ? publicTiProvenance.detail || publicTiProvenanceDetail(publicTiProvenance)
-                : 'Public TI handoff provenance is checked from the selected artifact.',
-            source: publicTiProvenance?.source || 'Public TI handoff data',
+                : 'Actor evidence provenance is checked from the selected artifact.',
+            source: publicTiProvenance?.source || 'Actor evidence bridge data',
             href: '/ti',
             checkedAt: publicTiProvenance?.checkedAt || publicTiProvenance?.latestArtifactAt,
             staleAfterSeconds: publicTiProvenance?.staleAfterSeconds,
@@ -2368,7 +2368,7 @@ function productReadinessBlockerMetadata(item: WorkbenchProductReadinessItem): {
             }
         case 'public_ti_provenance':
             return {
-                workflowBlocker: 'Public TI handoff',
+                workflowBlocker: 'Actor evidence bridge',
                 customerImpact: item.status === 'ready'
                     ? 'Public TI artifacts can hand off into watchlist, alert, case, and source workflows.'
                     : 'Public TI artifacts need provenance and action readiness before they can drive customer operations.',
@@ -2740,7 +2740,7 @@ function publicTiHandoffCase(input: {
     return {
         id: `public_ti_${input.handoff.artifactId || input.status}`,
         kind: 'public_ti_handoff',
-        queue: 'Public TI handoff',
+        queue: 'Actor evidence bridge',
         title: input.title,
         subtitle: input.subtitle,
         severity: input.severity,
@@ -2794,7 +2794,7 @@ function publicTiEvidence(payload: Extract<PublicTiHandoffDecodeResult, { ok: tr
     }))
     return [...artifactEvidence, ...sourceEvidence].length ? [...artifactEvidence, ...sourceEvidence] : [{
         id: 'ev_public_ti_payload',
-        sourceName: 'Public TI handoff',
+        sourceName: 'Actor evidence bridge',
         sourceFamily: 'authenticated bridge',
         captureMode: 'url payload',
         redactionState: 'customer safe',
