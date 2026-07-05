@@ -535,7 +535,8 @@ export default function OrganizationWorkspaceClient() {
     const activeWatchlists = bundle.watchlists.filter(item => item.status === 'active')
     const pausedWatchlists = bundle.watchlists.filter(item => item.status === 'paused')
     const archivedWatchlists = bundle.watchlists.filter(item => item.status === 'archived')
-    const hasConfiguredDestination = bundle.watchlists.some(destinationConfigured)
+    const configuredDestinationCount = organizationConfiguredDestinationCount(bundle)
+    const hasConfiguredDestination = configuredDestinationCount > 0
     const watchlistDraftDuplicate = isDuplicateWatchlistTerm(bundle.watchlists, watchlistDraft.kind, watchlistDraft.value)
     const watchlistSuggestions = selectedOrganization ? starterWatchlistSuggestions(selectedOrganization, bundle.watchlists) : []
     const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
@@ -1222,7 +1223,7 @@ export default function OrganizationWorkspaceClient() {
                                     memberCount={bundle.members.length}
                                     inviteCount={bundle.invites.length}
                                     watchlistCount={bundle.watchlists.length}
-                                    destinationCount={hasConfiguredDestination ? 1 : 0}
+                                    destinationCount={configuredDestinationCount}
                                     alertCount={bundle.alerts.length}
                                     caseCount={bundle.cases.length}
                                     alertId={selectedAlertId}
@@ -1690,7 +1691,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
         {
             id: 'destinations',
             title: 'Delivery destination',
-            body: destinationCount ? 'Destination saved' : watchlistCount ? 'Test and save a destination' : 'Create a watchlist first',
+            body: destinationCount ? `${destinationCount} destination${destinationCount === 1 ? '' : 's'} saved` : watchlistCount ? 'Test and save a destination' : 'Create a watchlist first',
             href: '#destinations',
             ready: destinationCount > 0,
             blocked: !watchlistCount || !canManage,
@@ -3761,6 +3762,16 @@ function destinationEditChanged(destination: WebhookDestination, draft: Destinat
 
 function destinationConfigured(item: WatchlistItem) {
     return Boolean(item.webhookUrlConfigured || item.webhookDestinationId || item.webhookEndpointHash || item.webhookEndpointHint)
+}
+
+function organizationDestinationConfigured(destination: WebhookDestination) {
+    return Boolean(destination.deliveryReady || destination.status === 'active' || destination.status === 'configured' || destination.endpointHash || destination.endpointHint)
+}
+
+function organizationConfiguredDestinationCount(bundle: OrgBundle) {
+    const savedDestinations = bundle.webhooks.filter(organizationDestinationConfigured).length
+    if (savedDestinations > 0) return savedDestinations
+    return bundle.watchlists.filter(destinationConfigured).length
 }
 
 function isDuplicateWatchlistTerm(watchlists: WatchlistItem[], kind: WatchlistKind, value: string, excludeId = '') {

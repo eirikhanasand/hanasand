@@ -1573,6 +1573,11 @@ function RouteWatchlistImpactRail({ alert, selectedEvidence, selectedEntity, wor
 }) {
     const workedCount = Object.keys(dispositions).length
     const selectedDisposition = selectedEvidence ? dispositions[selectedEvidence.id] : undefined
+    const evidenceStatus = selectedDisposition ? stateLabel(selectedDisposition.state) : 'unworked'
+    const recommendedAction = stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)
+    const urgency = stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))
+    const watchlistScope = workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} scoped` : 'default scope'
+    const destinationState = workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} configured` : workflowContext.hasWebhookRoute ? 'delivery available' : 'checking delivery'
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel'>
             <div className='flex items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
@@ -1582,15 +1587,9 @@ function RouteWatchlistImpactRail({ alert, selectedEvidence, selectedEntity, wor
                 </div>
                 <ShieldCheck className='h-4 w-4 text-ui-primary' />
             </div>
-            <div className='grid gap-2 p-4 sm:grid-cols-2'>
-                <ActionStatus label='Customer term' value={alert.matchedTerm.value} />
-                <ActionStatus label='Term kind' value={stateLabel(alert.matchedTerm.kind)} />
-                <ActionStatus label='Current entity' value={selectedEntity?.name || alert.company} />
-                <ActionStatus label='Evidence status' value={selectedDisposition ? stateLabel(selectedDisposition.state) : 'unworked'} tone={selectedDisposition?.state === 'false_positive' || selectedDisposition?.state === 'suppressed' ? 'warn' : 'neutral'} />
-                <ActionStatus label='Recommended action' value={stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)} />
-                <ActionStatus label='Urgency' value={stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))} tone={alert.severity === 'critical' ? 'warn' : 'neutral'} />
-                <ActionStatus label='Watchlists' value={workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} scoped` : 'default scope'} />
-                <ActionStatus label='Destination' value={workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} configured` : workflowContext.hasWebhookRoute ? 'delivery available' : 'checking delivery'} tone={workflowContext.hasWebhookRoute ? 'neutral' : 'warn'} />
+            <div className='grid gap-1 px-4 py-3 text-xs font-semibold text-ui-muted'>
+                <p className='wrap-break-word text-ui-text'>{alert.matchedTerm.value} · {stateLabel(alert.matchedTerm.kind)} · {selectedEntity?.name || alert.company} · {evidenceStatus}</p>
+                <p className='wrap-break-word'>{recommendedAction} · {urgency} urgency · {watchlistScope} · {destinationState}</p>
             </div>
         </section>
     )
