@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import getDomains from '@/utils/traffic/getDomains'
 import getMetrics from '@/utils/traffic/getMetrics'
 import getStatus from '@/utils/status/getStatus'
-import { toPublicServiceStatus } from '@/utils/status/publicStatus'
+import { publicStatusCoverageCheck, toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { getTrafficMetrics } from '@/utils/monitoring/data'
 import { normalizeDomainName } from '@/utils/monitoring/domain'
 import { buildRouteMetadata } from '../seo'
@@ -94,9 +94,10 @@ async function withFallback<T>(promise: Promise<T>, fallback: T, timeoutMs = 350
 }
 
 function getFallbackServiceStatus() {
+    const generatedAt = new Date().toISOString()
     return {
         overall: 'degraded' as const,
-        generated_at: new Date().toISOString(),
-        checks: [],
+        generated_at: generatedAt,
+        checks: [publicStatusCoverageCheck(generatedAt)],
     }
 }

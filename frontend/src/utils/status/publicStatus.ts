@@ -5,14 +5,34 @@ export function toPublicServiceStatus(status: ServiceStatus): ServiceStatus {
         .filter(isCurrentPublicCheck)
         .map(toPublicServiceCheck)
 
+    if (!checks.length) {
+        return {
+            overall: 'degraded',
+            generated_at: status.generated_at,
+            checks: [publicStatusCoverageCheck(status.generated_at)],
+        }
+    }
+
     return {
         overall: checks.some((check) => check.status === 'down')
             ? 'down'
             : checks.some((check) => check.status === 'degraded')
                 ? 'degraded'
-                : checks.length > 0 ? 'up' : status.overall,
+                : 'up',
         generated_at: status.generated_at,
         checks,
+    }
+}
+
+export function publicStatusCoverageCheck(generatedAt = new Date().toISOString()): ServiceCheck {
+    return {
+        service: 'Status coverage',
+        check_name: 'Public monitor freshness',
+        status: 'degraded',
+        latency_ms: 0,
+        message: 'No current public monitor checks are available. Treat status as unverified until fresh checks are present.',
+        checked_at: generatedAt,
+        uptime_30d: 'unverified',
     }
 }
 
@@ -59,6 +79,7 @@ function publicStatusLabel(value: string) {
 
     return value
         .replace(/api[-_\s]*index/gi, 'API')
+        .replace(/\bapi\b/gi, 'API')
         .replace(/share[-_\s]*page/gi, 'workspace links')
         .replace(/delete[-_\s]*account/gi, 'account deletion')
         .replace(/user[-_\s]*creation/gi, 'account creation')
@@ -66,6 +87,7 @@ function publicStatusLabel(value: string) {
         .replace(/\s+/g, ' ')
         .trim()
         .replace(/\b\w/g, (char) => char.toUpperCase())
+        .replace(/\bApi\b/g, 'API')
 }
 
 function publicStatusMessage(message: string | null) {
