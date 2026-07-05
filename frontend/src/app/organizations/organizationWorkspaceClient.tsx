@@ -2748,7 +2748,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                         <Play className='h-4 w-4' />
                         {replayLabel}
                     </button>
-                    <a href={`/api/dwm/webhooks/deliveries?organizationId=${encodeURIComponent(organization.id)}`} className={secondaryButtonClass}>
+                    <a href='#delivery-history' className={secondaryButtonClass}>
                         <ExternalLink className='h-4 w-4' />
                         History
                     </a>
@@ -3022,7 +3022,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     }
     const copySelectedLink = async () => {
         try {
-            await navigator.clipboard.writeText(window.location.href)
+            await navigator.clipboard.writeText(organizationWorkspaceSelectionHref(organization.id, selectedSubject) || window.location.href)
             setCopyStatus({ ok: true, text: 'Link copied.' })
         } catch {
             setCopyStatus({ ok: false, text: 'Copy failed.' })
@@ -3599,7 +3599,14 @@ function requestedDeliveryFromSearch(deliveries: DeliveryRow[], deliveryId: stri
 }
 
 function replaceOrganizationWorkspaceSelectionUrl(organizationId: string, subject: ActivitySubject) {
-    if (typeof window === 'undefined' || !organizationId) return
+    const href = organizationWorkspaceSelectionHref(organizationId, subject)
+    if (!href) return
+    const url = new URL(href)
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+}
+
+function organizationWorkspaceSelectionHref(organizationId: string, subject: ActivitySubject) {
+    if (typeof window === 'undefined' || !organizationId) return ''
     const url = new URL(window.location.href)
     url.searchParams.set('organizationId', organizationId)
     for (const key of ['inviteId', 'memberId', 'watchlistId', 'watchlistItemId', 'destinationId', 'deliveryId', 'alertId', 'alert', 'caseId']) {
@@ -3626,7 +3633,7 @@ function replaceOrganizationWorkspaceSelectionUrl(organizationId: string, subjec
     } else {
         url.searchParams.delete('focus')
     }
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+    return url.href
 }
 
 function activitySubjectFromRowKey(rowKey: string | undefined, organizationId: string | undefined): ActivitySubject | null {
