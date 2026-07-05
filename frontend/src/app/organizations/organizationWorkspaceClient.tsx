@@ -965,7 +965,7 @@ export default function OrganizationWorkspaceClient() {
         })
         setInviteEmails('')
         return `${emails.length} ${inviteRole} invite${emails.length === 1 ? '' : 's'} sent.`
-    })
+    }, 'invite-create')
 
     const inviteAction = (invite: OrganizationInvite, action: 'revoke' | 'resend') => selectedOrganization && runAction(`${action}-invite`, async () => {
         requireManage()
@@ -2077,6 +2077,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                     <UserPlus className='h-4 w-4' />
                     Send invites
                 </button>
+                <RowStatus message={rowMessages['invite-create']} />
             </div>
             <div className='mt-5 grid gap-2'>
                 {invites.length === 0 && <EmptyLine text='Send invites from the form above. Pending access requests appear here with copy, resend, and revoke actions.' />}
