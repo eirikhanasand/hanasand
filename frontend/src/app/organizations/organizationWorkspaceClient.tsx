@@ -3246,6 +3246,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     const contextRows = selectedContextRows(selectedSubject, organization, bundle)
     const visibleRows = selectedSubject.type === 'organization' ? activity.slice(0, ORG_ACTIVITY_PREVIEW_ROWS) : selectedRows.slice(0, ORG_ACTIVITY_PREVIEW_ROWS)
     const totalRows = selectedSubject.type === 'organization' ? activity.length : selectedRows.length
+    const hiddenRows = Math.max(0, totalRows - visibleRows.length)
     const sessionRows = selectedRows.filter(item => item.source === 'session').length
     const savedRows = totalRows - sessionRows
     const contextActions = selectedSubjectActions(selectedSubject, organization)
@@ -3350,6 +3351,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                         </div>
                     )
                 })}
+                {hiddenRows > 0 && <span className='rounded-md bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted'>{hiddenRows} more</span>}
             </div>
         </section>
     )
