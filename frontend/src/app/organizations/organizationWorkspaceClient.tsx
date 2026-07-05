@@ -3249,6 +3249,10 @@ function actionLabel(value: string) {
     return value.split('-').map(sentenceCase).join(' ')
 }
 
+function stateLabel(value: string) {
+    return value.split(/[-_]+/).filter(Boolean).map(sentenceCase).join(' ')
+}
+
 function inviteBusyLabel(value: string) {
     if (value === 'send-invite') return 'Sending invites'
     if (value === 'resend-invite') return 'Resending invite'
