@@ -223,6 +223,12 @@ export interface TiSource {
     type: string
     provenance: string
     url?: string
+    captureId?: string
+    sourceRequestId?: string
+    sourceFamily?: NonNullable<NonNullable<TiActionabilityContract['sourceProvenance']>[number]['sourceFamily']>
+    parserStatus?: NonNullable<NonNullable<TiActionabilityContract['sourceProvenance']>[number]['parserStatus']>
+    reportDate?: string
+    lastCollectedAt?: string
 }
 
 export interface TiCollectionStrategy {
@@ -827,9 +833,12 @@ async function tryScraperSearch(scraperBase: string, query: string): Promise<TiS
 interface ScraperEvidenceRow {
     id?: string
     sourceId?: string
+    sourceName?: string
+    sourceFamily?: string
     title?: string
     summary?: string
     collectedAt?: string
+    url?: string
     provenanceHash?: string
 }
 
@@ -852,17 +861,26 @@ function mergeScraperEvidence(query: string, result: TiSearchResponse, rows: Scr
     if (!activity.length) return result
     const sources = rows.map((row, index) => ({
         id: row.sourceId ?? `capture_${index}`,
-        name: row.title ?? row.sourceId ?? 'Captured public source',
-        type: 'captured_public_source',
-        provenance: row.provenanceHash ?? row.id ?? row.sourceId ?? 'captured evidence'
+        name: row.sourceName ?? row.title ?? row.sourceId ?? 'Captured public source',
+        type: row.sourceFamily ?? 'captured_public_source',
+        provenance: row.url ?? row.provenanceHash ?? row.id ?? row.sourceId ?? 'captured evidence',
+        url: row.url,
+        captureId: row.id,
+        sourceRequestId: row.sourceId,
+        sourceFamily: 'source_capture' as const,
+        parserStatus: 'parsed' as const,
+        reportDate: row.collectedAt,
+        lastCollectedAt: row.collectedAt
     }))
+    const mergedSources = [...sources, ...result.sources].slice(0, 12)
     return {
         ...result,
         status: 'partial',
         confidence: Math.max(result.confidence, 0.68),
         lastSeen: activity[0]?.lastReportedAt ?? result.lastSeen,
         recentActivity: [...activity, ...result.recentActivity].slice(0, 8),
-        sources: [...sources, ...result.sources].slice(0, 12),
+        sources: mergedSources,
+        actionability: actionabilityForQuery(query, knownActorProfile(query), mergedSources),
         notes: ['Captured public-source evidence is available for this query.', ...result.notes]
     }
 }
@@ -1563,10 +1581,12 @@ function actionabilityForQuery(query: string, known?: KnownActorContext | null, 
         sourceId: source.id,
         sourceName: source.name,
         provenance: source.url || source.provenance,
-        sourceFamily: actionabilitySourceFamily(source),
-        parserStatus: 'public_reference' as const,
-        reportDate: known?.lastSeen,
-        lastCollectedAt: known?.lastSeen,
+        captureId: source.captureId,
+        sourceRequestId: source.sourceRequestId,
+        sourceFamily: source.sourceFamily ?? actionabilitySourceFamily(source),
+        parserStatus: source.parserStatus ?? 'public_reference' as const,
+        reportDate: source.reportDate ?? known?.lastSeen,
+        lastCollectedAt: source.lastCollectedAt ?? known?.lastSeen,
         confidence: known?.confidence ?? 0.58
     })).filter(source => source.provenance)
     const watchlistCandidates = known ? watchlistCandidatesForKnownActor(query, known) : watchlistCandidatesForQuery(query)
