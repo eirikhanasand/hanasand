@@ -2009,7 +2009,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
     const busyLabel = inviteBusyLabel(busy)
     const normalizedInviteQuery = inviteQuery.trim().toLowerCase()
     const visibleInvites = invites.filter(invite => {
-        const statusMatches = inviteStatusFilter === 'all' || invite.status === inviteStatusFilter
+        const statusMatches = inviteStatusFilter === 'all' || invite.status.toLowerCase() === inviteStatusFilter
         if (!statusMatches) return false
         if (!normalizedInviteQuery) return true
         return inviteSearchText(invite).includes(normalizedInviteQuery)
@@ -2132,7 +2132,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
     const busyLabel = memberBusyLabel(busy)
     const normalizedMemberQuery = memberQuery.trim().toLowerCase()
     const visibleMembers = members.filter(member => {
-        const roleMatches = memberRoleFilter === 'all' || member.role === memberRoleFilter
+        const roleMatches = memberRoleFilter === 'all' || member.role.toLowerCase() === memberRoleFilter
         if (!roleMatches) return false
         if (!normalizedMemberQuery) return true
         return memberSearchText(member).includes(normalizedMemberQuery)
@@ -2353,11 +2353,11 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
     const busyLabel = destinationBusyLabel(busy)
     const normalizedDestinationQuery = destinationQuery.trim().toLowerCase()
     const visibleDestinations = destinations.filter(destination => {
-        const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
+        const destinationStatus = (destination.status || (destination.deliveryReady ? 'active' : 'configured')).toLowerCase()
         const destinationDeliveries = deliveriesForDestination(destination, deliveries)
         const statusMatches = destinationStatusFilter === 'all' || destinationStatus === destinationStatusFilter
         if (!statusMatches) return false
-        const destinationKind = destination.kind || destination.type || 'webhook'
+        const destinationKind = (destination.kind || destination.type || 'webhook').toLowerCase()
         const kindMatches = destinationKindFilter === 'all' || destinationKind === destinationKindFilter
         if (!kindMatches) return false
         if (!normalizedDestinationQuery) return true
@@ -2559,7 +2559,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
     const busyLabel = watchlistBusyLabel(busy)
     const normalizedWatchlistQuery = normalizeWatchlistValue(watchlistQuery)
     const visibleWatchlists = watchlists.filter(item => {
-        const statusMatches = watchlistStatusFilter === 'all' || item.status === watchlistStatusFilter
+        const statusMatches = watchlistStatusFilter === 'all' || item.status.toLowerCase() === watchlistStatusFilter
         if (!statusMatches) return false
         if (!normalizedWatchlistQuery) return true
         return watchlistSearchText(item, organization).includes(normalizedWatchlistQuery)
