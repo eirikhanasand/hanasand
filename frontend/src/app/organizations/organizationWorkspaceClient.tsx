@@ -1467,6 +1467,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
     const routedCases = bundle.cases.filter(item => item.status !== 'closed')
     const hasAlertOrCaseActivity = Boolean(bundle.alerts.length || routedCases.length)
     const lastActivityAt = organizationLastActivityAt(organization, bundle)
+    const accessMode = canManage ? 'admin controls enabled' : organization.role === 'support' ? 'support inspection only' : 'read-only access'
     const rows = [
         {
             id: 'access',
@@ -1510,7 +1511,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
                         <ShieldCheck className='h-4 w-4 text-ui-primary' />
                         Workspace health
                     </h2>
-                    <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayName(organization)} · {canManage ? 'admin controls enabled' : 'read-only access'} · Last activity {lastActivityAt ? formatDate(lastActivityAt) : 'pending'}</p>
+                    <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayName(organization)} · {accessMode} · Last activity {lastActivityAt ? formatDate(lastActivityAt) : 'pending'}</p>
                 </div>
                 <a href='#audit' className={secondaryButtonClass} data-org-health-activity='true'>
                     <ExternalLink className='h-4 w-4' />
@@ -1710,10 +1711,12 @@ function ActionAnchor({ href, icon, label, disabled, disabledReason }: { href: s
 }
 
 function PermissionStrip({ role, canManage, hasWatchlists, hasDestination }: { role: OrganizationRole, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
+    const supportAccess = role === 'support'
+    const readOnlyReason = supportAccess ? 'Support inspection only' : 'Owner or admin required'
     const rows = [
-        { id: 'team', label: 'Team', value: canManage ? 'Manage' : 'View', ready: canManage, reason: canManage ? 'Invite and update roles' : 'Owner or admin required' },
-        { id: 'watchlists', label: 'Watchlists', value: canManage ? 'Manage' : 'View', ready: canManage, reason: canManage ? 'Create, edit, archive' : 'Owner or admin required' },
-        { id: 'destinations', label: 'Destinations', value: canManage && hasWatchlists ? 'Test' : hasDestination ? 'View' : 'Add watchlist', ready: canManage && hasWatchlists, reason: hasWatchlists ? (canManage ? 'Save and replay routes' : 'Owner or admin required') : 'Add watchlist first' },
+        { id: 'team', label: 'Team', value: canManage ? 'Manage' : supportAccess ? 'Inspect' : 'View', ready: canManage, reason: canManage ? 'Invite and update roles' : readOnlyReason },
+        { id: 'watchlists', label: 'Watchlists', value: canManage ? 'Manage' : supportAccess ? 'Inspect' : 'View', ready: canManage, reason: canManage ? 'Create, edit, archive' : readOnlyReason },
+        { id: 'destinations', label: 'Destinations', value: canManage && hasWatchlists ? 'Test' : hasDestination ? (supportAccess ? 'Inspect' : 'View') : 'Add watchlist', ready: canManage && hasWatchlists, reason: hasWatchlists ? (canManage ? 'Save and replay routes' : readOnlyReason) : 'Add watchlist first' },
         { id: 'alerts', label: 'Alerts and cases', value: hasWatchlists ? 'Scoped' : 'Waiting', ready: hasWatchlists, reason: hasWatchlists ? 'Org watchlist context available' : 'Add watchlist first' },
     ] as const
     const actionCount = rows.filter(row => row.ready).length
