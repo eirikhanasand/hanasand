@@ -1674,7 +1674,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
         {
             id: 'activity',
             title: 'Alert and case context',
-            body: alertCount || caseCount ? `${alertCount} alert${alertCount === 1 ? '' : 's'} · ${caseCount} case${caseCount === 1 ? '' : 's'}` : watchlistCount ? 'Open DWM workspace after the first match' : 'Add watchlist first',
+            body: alertCount || caseCount ? `${alertCount} alert${alertCount === 1 ? '' : 's'} · ${caseCount} case${caseCount === 1 ? '' : 's'}` : watchlistCount ? 'Open exposure monitoring after the first match' : 'Add watchlist first',
             href: '#audit',
             ready: alertCount > 0 || caseCount > 0,
             blocked: false,
@@ -2870,7 +2870,7 @@ function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, 
                     id: item.id,
                     primary: item.title || item.id,
                     secondary: `${item.status || 'status'}${item.assignedOwner ? ` · ${item.assignedOwner}` : ''}`,
-                }))} empty='Cases appear after an alert is opened from the DWM workspace.' />
+                }))} empty='Cases appear after an alert is opened from exposure monitoring.' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibility} empty='Visibility decisions appear after alerts are reviewed or opened as cases.' />
                 <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={webhooks.map(destination => ({
                     id: destination.id,
