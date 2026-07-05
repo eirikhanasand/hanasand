@@ -3230,6 +3230,8 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     const contextRows = selectedContextRows(selectedSubject, organization, bundle)
     const visibleRows = selectedSubject.type === 'organization' ? activity.slice(0, ORG_ACTIVITY_PREVIEW_ROWS) : selectedRows.slice(0, ORG_ACTIVITY_PREVIEW_ROWS)
     const totalRows = selectedSubject.type === 'organization' ? activity.length : selectedRows.length
+    const sessionRows = selectedRows.filter(item => item.source === 'session').length
+    const savedRows = totalRows - sessionRows
     const contextActions = selectedSubjectActions(selectedSubject, organization)
     const subjectTypeLabel = activitySubjectTypeLabel(selectedSubject.type)
     const copySelectedActivity = async () => {
@@ -3258,7 +3260,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
                         <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(selectedSubjectLabel(selectedSubject, organization, bundle))}</p>
-                        <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{subjectTypeLabel} · {totalRows} event{totalRows === 1 ? '' : 's'}</p>
+                        <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{subjectTypeLabel} · {totalRows} event{totalRows === 1 ? '' : 's'} · {savedRows} saved · {sessionRows} session</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         {contextActions.map(action => (
