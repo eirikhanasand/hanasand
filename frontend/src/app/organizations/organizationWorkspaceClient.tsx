@@ -387,7 +387,7 @@ function replayBlockedReason(delivery: DeliveryRow, destinations: WebhookDestina
     return 'Replay is not available for this delivery row.'
 }
 
-function destinationDisplayState(input?: Pick<WebhookDestination, 'endpointHash' | 'endpointHint' | 'deliveryReady' | 'status'> | Pick<WatchlistItem, 'webhookEndpointHash' | 'webhookEndpointHint' | 'webhookUrlConfigured'> | Pick<DeliveryRow, 'endpointHash' | 'endpointHint' | 'webhookDestinationId'> | null) {
+function destinationDisplayState(input?: Pick<WebhookDestination, 'endpointHash' | 'endpointHint' | 'deliveryReady' | 'status'> | Pick<WatchlistItem, 'webhookEndpointHash' | 'webhookEndpointHint' | 'webhookUrlConfigured'> | Pick<DeliveryRow, 'endpointHash' | 'endpointHint' | 'webhookDestinationId' | 'watchlistId' | 'watchlistItemId' | 'watchlistIds' | 'watchlistItemIds'> | null) {
     if (!input) return 'Destination pending'
     if ('deliveryReady' in input && input.deliveryReady) return 'Destination configured'
     if ('webhookUrlConfigured' in input && input.webhookUrlConfigured) return 'Destination configured'
@@ -396,6 +396,7 @@ function destinationDisplayState(input?: Pick<WebhookDestination, 'endpointHash'
     if ('webhookEndpointHint' in input && input.webhookEndpointHint) return 'Destination configured'
     if ('webhookEndpointHash' in input && input.webhookEndpointHash) return 'Destination configured'
     if ('webhookDestinationId' in input && input.webhookDestinationId) return 'Saved destination'
+    if ('watchlistId' in input && (input.watchlistId || input.watchlistItemId || input.watchlistIds?.[0] || input.watchlistItemIds?.[0])) return 'Saved watchlist route'
     return 'Destination pending'
 }
 
