@@ -1511,7 +1511,7 @@ function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organi
     const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
     const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active').toLowerCase() === 'active')
     const activeDestinations = organizationConfiguredDestinationCount(bundle)
-    const watchlistDestinations = bundle.watchlists.filter(destinationConfigured).length
+    const watchlistDestinations = watchlistsWithOwnDestination(bundle.watchlists, bundle.webhooks).length
     const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error))
     const rows = [
         {
@@ -3233,7 +3233,7 @@ function DeliveryReference({ delivery, organizationId, destinations }: { deliver
 function ScopePanel({ alertTerms, alerts, cases, deliveries, members, watchlists, webhooks, alertCaseVisibility, organizationId }: { alertTerms: AlertTerm[], alerts: ScopedAlert[], cases: ScopedCase[], deliveries: DeliveryRow[], members: OrganizationMember[], watchlists: WatchlistItem[], webhooks: WebhookDestination[], alertCaseVisibility: Record<string, unknown> | null, organizationId: string }) {
     const route = `/api/organizations/${encodeURIComponent(organizationId)}`
     const visibility = visibilityRows(alertCaseVisibility)
-    const watchlistDestinationRows = watchlists.filter(item => destinationConfigured(item) && !destinationForWatchlist(item, webhooks))
+    const watchlistDestinationRows = watchlistsWithOwnDestination(watchlists, webhooks)
     const hasScopeRows = Boolean(alertTerms.length || alerts.length || cases.length || webhooks.length || watchlistDestinationRows.length || visibility.length)
     const failedDeliveries = deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error)).length
     if (!hasScopeRows) {
@@ -3965,6 +3965,10 @@ function requestedSubjectFromSearch(input: {
     if (input.focus === 'cases' && bundle.cases[0]?.id) return { type: 'case', id: bundle.cases[0].id }
     if (input.focus === 'alerts' && bundle.alerts[0]?.id) return { type: 'alert', id: bundle.alerts[0].id }
     if ((input.focus === 'destinations' || input.focus === 'webhooks') && bundle.webhooks[0]?.id) return { type: 'destination', id: bundle.webhooks[0].id }
+    if (input.focus === 'destinations' || input.focus === 'webhooks') {
+        const watchlistRoute = watchlistsWithOwnDestination(bundle.watchlists, bundle.webhooks)[0]
+        if (watchlistRoute) return { type: 'watchlist', id: watchlistRoute.id }
+    }
     if (input.focus === 'watchlists' && bundle.watchlists[0]?.id) return { type: 'watchlist', id: bundle.watchlists[0].id }
     return { type: 'organization', id: input.organizationId }
 }
@@ -4475,10 +4479,13 @@ function organizationDestinationConfigured(destination: WebhookDestination) {
     return Boolean(destination.deliveryReady || ['active', 'configured'].includes((destination.status || '').toLowerCase()) || destination.endpointHash || destination.endpointHint)
 }
 
+function watchlistsWithOwnDestination(watchlists: WatchlistItem[], destinations: WebhookDestination[]) {
+    return watchlists.filter(item => destinationConfigured(item) && !destinationForWatchlist(item, destinations))
+}
+
 function organizationConfiguredDestinationCount(bundle: OrgBundle) {
     const savedDestinations = bundle.webhooks.filter(organizationDestinationConfigured).length
-    const watchlistDestinations = bundle.watchlists.filter(item => destinationConfigured(item) && !destinationForWatchlist(item, bundle.webhooks)).length
-    return savedDestinations + watchlistDestinations
+    return savedDestinations + watchlistsWithOwnDestination(bundle.watchlists, bundle.webhooks).length
 }
 
 function isDuplicateWatchlistTerm(watchlists: WatchlistItem[], kind: WatchlistKind, value: string, excludeId = '') {
