@@ -4010,16 +4010,16 @@ function deliveryHistoryHref(baseHref: string, subject: ActivitySubject) {
 function deliveryTraceLabel(delivery: DeliveryRow) {
     if (delivery.auditEventId) {
         const action = delivery.auditAction ? `${stateLabel(delivery.auditAction)} ` : ''
-        return `${action}audit ${shortTraceId(delivery.auditEventId)}`
+        return `${action}${compactReference(delivery.auditEventId, 'audit')}`
     }
-    if (delivery.requestId) return `Request ${shortTraceId(delivery.requestId)}`
-    if (delivery.id) return `Delivery ${shortTraceId(delivery.id)}`
+    if (delivery.requestId) return compactReference(delivery.requestId, 'Request') || 'Request pending'
+    if (delivery.id) return compactReference(delivery.id, 'Delivery') || 'Delivery pending'
     return 'Delivery pending'
 }
 
 function shortTraceId(value: string) {
     const cleaned = value.trim()
-    if (cleaned.length <= 16) return cleaned
+    if (cleaned.length <= 24) return cleaned
     return cleaned.slice(-12).replace(/^[:_-]+/, '') || cleaned.slice(-12)
 }
 
@@ -4029,7 +4029,8 @@ function compactReference(value: string | undefined | null, label = 'ref') {
     const labelText = label.trim() || 'ref'
     const prefix = labelText.toLowerCase()
     const normalized = clean.replace(new RegExp(`^(?:dwm[_:-]+)?${escapeRegExp(prefix)}[_:-]+`, 'i'), '')
-    return `${labelText} ${shortTraceId(normalized || clean)}`
+    const compact = shortTraceId(normalized || clean).replace(/[_:]+/g, ' ').replace(/\s+/g, ' ').trim()
+    return `${labelText} ${compact || shortTraceId(normalized || clean)}`
 }
 
 function escapeRegExp(value: string) {
