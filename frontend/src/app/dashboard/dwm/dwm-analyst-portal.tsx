@@ -2112,7 +2112,17 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
                         </div>
                     )
                 })}
-                {!visible.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Test or send this alert to start delivery history.</p>}
+                {!visible.length && (
+                    <div className='grid gap-3 rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center' data-dwm-delivery-empty='true'>
+                        <div className='min-w-0'>
+                            <p className='text-sm font-semibold text-ui-text'>No delivery attempt yet</p>
+                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Configure or test a destination before sending this alert to a customer workflow.</p>
+                        </div>
+                        <a href={orgHref} className='inline-flex min-h-9 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas'>
+                            Configure delivery
+                        </a>
+                    </div>
+                )}
             </div>
         </section>
     )
