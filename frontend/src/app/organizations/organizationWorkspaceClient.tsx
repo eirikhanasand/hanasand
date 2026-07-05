@@ -1395,7 +1395,7 @@ export default function OrganizationWorkspaceClient() {
                                         rowMessages={rowMessages}
                                         onReplay={delivery => void replayDelivery(delivery)}
                                     />
-                                    {hasScopeRecords && <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} members={bundle.members} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />}
+                                    {hasScopeRecords && <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} deliveries={bundle.deliveries} members={bundle.members} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />}
                                 </section>
                             </div>
                         ) : (
@@ -3019,7 +3019,7 @@ function DeliveryReference({ delivery, organizationId }: { delivery: DeliveryRow
     )
 }
 
-function ScopePanel({ alertTerms, alerts, cases, members, webhooks, alertCaseVisibility, organizationId }: { alertTerms: AlertTerm[], alerts: ScopedAlert[], cases: ScopedCase[], members: OrganizationMember[], webhooks: WebhookDestination[], alertCaseVisibility: Record<string, unknown> | null, organizationId: string }) {
+function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, alertCaseVisibility, organizationId }: { alertTerms: AlertTerm[], alerts: ScopedAlert[], cases: ScopedCase[], deliveries: DeliveryRow[], members: OrganizationMember[], webhooks: WebhookDestination[], alertCaseVisibility: Record<string, unknown> | null, organizationId: string }) {
     const route = `/api/organizations/${encodeURIComponent(organizationId)}`
     const visibility = visibilityRows(alertCaseVisibility)
     const hasScopeRows = Boolean(alertTerms.length || alerts.length || cases.length || webhooks.length || visibility.length)
@@ -3045,7 +3045,7 @@ function ScopePanel({ alertTerms, alerts, cases, members, webhooks, alertCaseVis
         )
     }
     return (
-        <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-scope-records='true'>
             <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination records' detail='Matched records for this organization.' />
             <div className='mt-4 grid gap-3 lg:grid-cols-2'>
                 <ScopeColumn icon={<BellRing className='h-4 w-4' />} title='Alert terms' route={`${route}/watchlists/alert-terms`} rows={alertTerms.map(term => ({
@@ -3053,16 +3053,22 @@ function ScopePanel({ alertTerms, alerts, cases, members, webhooks, alertCaseVis
                     primary: term.term || term.value || 'Watchlist term',
                     secondary: term.matchReason || compactReference(term.alertGenerationRef, 'watch') || term.kind || term.family || 'Shared watchlist match',
                 }))} empty='Add an active shared watchlist term to create organization alert terms.' />
-                <ScopeColumn icon={<CircleAlert className='h-4 w-4' />} title='Alerts' route={`/api/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`} rows={alerts.map(alert => ({
-                    id: alert.id,
-                    primary: alert.title || compactReference(alert.id, 'alert') || 'Alert',
-                    secondary: `${alert.severity || 'severity'} · ${alert.status || 'status'}${alert.watchlistItemId ? ` · ${compactReference(alert.watchlistItemId, 'watchlist')}` : ''}`,
-                }))} empty='Alerts appear after a live capture matches an active org watchlist term.' />
-                <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Cases' route={`/api/cases?organizationId=${encodeURIComponent(organizationId)}`} rows={cases.map(item => ({
-                    id: item.id,
-                    primary: item.title || compactReference(item.id, 'case') || 'Case',
-                    secondary: `${item.status || 'status'}${item.assignedOwner ? ` · ${organizationMemberLabel(item.assignedOwner, members)}` : ''}`,
-                }))} empty='Cases appear after an alert is opened from exposure monitoring.' />
+                <ScopeColumn icon={<CircleAlert className='h-4 w-4' />} title='Alerts' route={`/api/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`} rows={alerts.map(alert => {
+                    const matchReason = matchReasonForRecord(alert.id, deliveries)
+                    return {
+                        id: alert.id,
+                        primary: alert.title || compactReference(alert.id, 'alert') || 'Alert',
+                        secondary: [alert.severity || 'severity', alert.status || 'status', compactReference(alert.watchlistItemId || alert.watchlistItemIds?.[0] || alert.watchlistIds?.[0], 'watchlist'), matchReason ? `Match: ${matchReason}` : undefined].filter(Boolean).join(' · '),
+                    }
+                })} empty='Alerts appear after a live capture matches an active org watchlist term.' />
+                <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Cases' route={`/api/cases?organizationId=${encodeURIComponent(organizationId)}`} rows={cases.map(item => {
+                    const matchReason = matchReasonForRecord(item.id, deliveries)
+                    return {
+                        id: item.id,
+                        primary: item.title || compactReference(item.id, 'case') || 'Case',
+                        secondary: [item.status || 'status', organizationMemberLabel(item.assignedOwner, members), matchReason ? `Match: ${matchReason}` : undefined].filter(Boolean).join(' · '),
+                    }
+                })} empty='Cases appear after an alert is opened from exposure monitoring.' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibility} empty='Visibility decisions appear after alerts are reviewed or opened as cases.' />
                 <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={webhooks.map(destination => ({
                     id: destination.id,
@@ -4108,6 +4114,11 @@ function deliveryMatchesSubject(delivery: DeliveryRow, subject: ActivitySubject)
     if (subject.type === 'alert') return delivery.alertId === subject.id
     if (subject.type === 'case') return delivery.caseId === subject.id
     return false
+}
+
+function matchReasonForRecord(id: string, deliveries: DeliveryRow[]) {
+    const delivery = deliveries.find(item => item.alertId === id || item.caseId === id)
+    return sanitizeOrganizationDisplayCopy(delivery ? payloadPreviewForDelivery(delivery)?.context?.matchReason : undefined)
 }
 
 function deliveryTraceLabel(delivery: DeliveryRow) {
