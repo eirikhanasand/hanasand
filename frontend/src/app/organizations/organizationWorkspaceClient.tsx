@@ -1490,7 +1490,7 @@ export default function OrganizationWorkspaceClient() {
                                         rowMessages={rowMessages}
                                         onReplay={delivery => void replayDelivery(delivery)}
                                     />
-                                    <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} deliveries={bundle.deliveries} members={bundle.members} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
+                                    <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} deliveries={bundle.deliveries} members={bundle.members} watchlists={bundle.watchlists} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
                                 </section>
                             </div>
                         ) : (
@@ -3226,10 +3226,11 @@ function DeliveryReference({ delivery, organizationId, destinations }: { deliver
     )
 }
 
-function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, alertCaseVisibility, organizationId }: { alertTerms: AlertTerm[], alerts: ScopedAlert[], cases: ScopedCase[], deliveries: DeliveryRow[], members: OrganizationMember[], webhooks: WebhookDestination[], alertCaseVisibility: Record<string, unknown> | null, organizationId: string }) {
+function ScopePanel({ alertTerms, alerts, cases, deliveries, members, watchlists, webhooks, alertCaseVisibility, organizationId }: { alertTerms: AlertTerm[], alerts: ScopedAlert[], cases: ScopedCase[], deliveries: DeliveryRow[], members: OrganizationMember[], watchlists: WatchlistItem[], webhooks: WebhookDestination[], alertCaseVisibility: Record<string, unknown> | null, organizationId: string }) {
     const route = `/api/organizations/${encodeURIComponent(organizationId)}`
     const visibility = visibilityRows(alertCaseVisibility)
-    const hasScopeRows = Boolean(alertTerms.length || alerts.length || cases.length || webhooks.length || visibility.length)
+    const watchlistDestinationRows = watchlists.filter(destinationConfigured)
+    const hasScopeRows = Boolean(alertTerms.length || alerts.length || cases.length || webhooks.length || watchlistDestinationRows.length || visibility.length)
     const failedDeliveries = deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error)).length
     if (!hasScopeRows) {
         return (
@@ -3259,7 +3260,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, 
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Terms: {alertTerms.length}</span>
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Alerts: {alerts.length}</span>
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Cases: {cases.length}</span>
-                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Destinations: {webhooks.length}</span>
+                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Destinations: {webhooks.length + watchlistDestinationRows.length}</span>
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Failures: {failedDeliveries}</span>
             </div>
             <div className='mt-4 grid gap-3 lg:grid-cols-2'>
@@ -3288,12 +3289,20 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, 
                     }
                 })} empty='Cases appear after an alert is opened from exposure monitoring.' rowPrefix='case-record' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibility} empty='Visibility decisions appear after alerts are reviewed or opened as cases.' />
-                <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={webhooks.map(destination => ({
-                    id: destination.id,
-                    primary: destination.name || compactReference(destination.id, 'destination') || 'Destination',
-                    secondary: `${destination.status || 'unknown'} · ${destinationDisplayState(destination)}`,
-                    href: `#destination-${encodeURIComponent(destination.id)}`,
-                }))} empty='Save a watchlist destination to make customer delivery available here.' />
+                <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={[
+                    ...webhooks.map(destination => ({
+                        id: destination.id,
+                        primary: destination.name || compactReference(destination.id, 'destination') || 'Destination',
+                        secondary: `${destination.status || 'unknown'} · ${destinationDisplayState(destination)}`,
+                        href: `#destination-${encodeURIComponent(destination.id)}`,
+                    })),
+                    ...watchlistDestinationRows.map(item => ({
+                        id: `watchlist-${item.id}`,
+                        primary: item.value || compactReference(item.id, 'watchlist') || 'Watchlist route',
+                        secondary: `${item.status || 'active'} · ${destinationDisplayState(item)}`,
+                        href: `#watchlist-${encodeURIComponent(item.id)}`,
+                    })),
+                ]} empty='Save a watchlist destination to make customer delivery available here.' />
             </div>
         </section>
     )
