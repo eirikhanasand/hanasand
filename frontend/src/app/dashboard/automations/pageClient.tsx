@@ -407,7 +407,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 
                     <details data-testid='automation-schedule-settings' className={disclosureClass}>
                         <summary className={disclosureSummaryClass}>
-                            <span>Schedule and notification policy</span>
+                            <span>Advanced schedule and notification policy</span>
                             <span className='text-xs font-medium text-ui-muted'>{scheduleShort(draft)} · {draft.notifyOn || 'failure'}</span>
                         </summary>
                         <div className='grid gap-3 border-t border-ui-border p-3 md:grid-cols-2 2xl:grid-cols-5'>
@@ -450,7 +450,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 
                     <details data-testid='automation-matching-rules' className={disclosureClass}>
                         <summary className={disclosureSummaryClass}>
-                            <span>Matching rules</span>
+                            <span>Advanced matching rules</span>
                             <span className='min-w-0 truncate text-right text-xs font-medium text-ui-muted'>{extractRuleTerms(draft.prompt)}</span>
                         </summary>
                         <div className='grid gap-3 border-t border-ui-border p-3 lg:grid-cols-[1fr_0.55fr]'>
@@ -488,7 +488,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     {selected && (
                         <details className={disclosureClass}>
                             <summary className={disclosureSummaryClass}>
-                                <span>More route actions</span>
+                                <span>Advanced route actions</span>
                                 <span className='text-xs font-medium text-ui-muted'>Secondary</span>
                             </summary>
                             <div className='flex flex-wrap items-center justify-between gap-3 border-t border-ui-border p-3'>

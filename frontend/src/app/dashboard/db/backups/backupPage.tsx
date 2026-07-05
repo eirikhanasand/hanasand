@@ -47,6 +47,7 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
     const nextBackup = backups.find(backup => backup.nextBackup)?.nextBackup
     const lastBackup = backups.find(backup => backup.lastBackup)?.lastBackup
     const firstRestoreReady = presentations.find(({ presentation }) => presentation.restoreReady)
+    const hasRestoreTargets = presentations.length > 0
     const primaryTitle = loadBlocker
         ? 'Fix backup configuration first'
         : !backups.length
@@ -55,7 +56,9 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                 ? `Review ${attentionTarget.backup.name}`
                 : restoreReadyCount
                     ? 'Restore files are ready'
-                    : 'Run backup to create a restore point'
+                    : hasRestoreTargets
+                        ? 'Run backup to create a verified restore point'
+                        : 'Run backup to create a restore point'
     const primaryDetail = loadBlocker
         ? loadBlocker.safeError
         : !backups.length
@@ -64,7 +67,7 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                 ? attentionTarget.presentation.safeError || attentionTarget.presentation.restoreDisabledReason || attentionTarget.presentation.summary
                 : restoreReadyCount
                     ? `${restoreReadyCount} target${restoreReadyCount === 1 ? '' : 's'} can open restore files. Last backup: ${formatRelative(lastBackup)}.`
-                    : 'Backup targets are visible, but no restore file is indexed yet.'
+                    : 'Backup targets are visible, but no verified restore file is indexed yet. Run a backup first, then return for restore validation.'
     const primaryRestoreHref = firstRestoreReady ? `/dashboard/db/restore?service=${encodeURIComponent(backupServiceSlug(firstRestoreReady.backup))}` : ''
 
     function handleRun() {
@@ -196,7 +199,10 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                         </div>
 
                         {presentation.restoreDisabledReason && (
-                            <p className='mt-3 text-sm text-ui-muted'>{presentation.restoreDisabledReason}</p>
+                            <div className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>
+                                <p>{presentation.restoreDisabledReason}</p>
+                                <p className='mt-1'>If no verified backup exists yet, run backup for this target, then validate restore points here.</p>
+                            </div>
                         )}
 
                         <RestoreProof proof={presentation.restoreProof} />
@@ -233,7 +239,7 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                                     Backup targets stay on watch while the service connection is checked.
                                 </p>
                                 <p className='mt-3 text-sm text-ui-muted'>
-                                    Restore unlocks when the first verified backup file is indexed.
+                                    Restore unlocks when the first verified backup file is indexed. Use Run backup now to create one.
                                 </p>
                             </div>
                             <button

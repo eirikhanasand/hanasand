@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react'
 import { RotateCcw, Search, X } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { restoreBackupAction } from '../actions'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
 import type { BackupFile } from '@/utils/db/internal'
@@ -57,7 +58,7 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
         ? `${groupedBackups.length} restore point${groupedBackups.length === 1 ? '' : 's'} across ${serviceCount} service${serviceCount === 1 ? '' : 's'}. Newest file: ${newestBackup?.file || 'syncing'}.`
         : activeFilterCount
             ? 'Clear filters or adjust the service/date search to widen the restore set.'
-            : 'Restore files appear here after the backup service indexes a verified file.'
+            : 'Restore files appear here after the backup service indexes a verified file. If none exist, return to Backup and create one.'
     const primaryHref = groupedBackups.length ? '#restore-points' : activeFilterCount ? '#restore-filters' : '/dashboard/db/backups'
     const primaryActionLabel = groupedBackups.length ? 'Review restore points' : activeFilterCount ? 'Adjust filters' : 'Open backup health'
 
@@ -196,8 +197,32 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                     )
                 })}
                 {!groupedBackups.length && (
-                    <article className={`${dashboardPanelClass} p-5 text-sm text-ui-muted`}>
-                        Restore file stream is clear for the current filters.
+                    <article className={`${dashboardPanelClass} p-5`} data-restore-empty-state>
+                        <h2 className='text-lg font-semibold text-ui-text'>No restore files yet</h2>
+                        <p className='mt-2 text-sm text-ui-muted'>No restore files are indexed for this filter set.</p>
+                        {activeFilterCount > 0 ? (
+                            <p className='mt-1 text-sm text-ui-muted'>No matches found. Clear filters or return to Backup to create a verified restore point.</p>
+                        ) : (
+                            <p className='mt-1 text-sm text-ui-muted'>No verified files are available. Run a backup first, then come back to restore from it.</p>
+                        )}
+
+                        {activeFilterCount > 0 ? (
+                            <button
+                                type='button'
+                                onClick={clearFilters}
+                                className='mt-3 inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'
+                            >
+                                <X className='h-4 w-4' />
+                                Clear filters
+                            </button>
+                        ) : (
+                            <Link
+                                href='/dashboard/db/backups'
+                                className='mt-3 inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'
+                            >
+                                Open backup health
+                            </Link>
+                        )}
                     </article>
                 )}
             </div>

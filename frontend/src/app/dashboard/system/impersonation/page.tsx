@@ -28,6 +28,8 @@ type AdminAuditEvent = {
     created_at: string
 }
 
+type SupportMode = 'inspect' | 'impersonation' | 'recovery' | 'decision' | 'queue'
+
 type AuditSearchParams = {
     q?: string | string[]
     org?: string | string[]
@@ -149,6 +151,13 @@ function auditSnapshotHeadline(eventCount: number, eventStats: ReturnType<typeof
     return `${eventCount} event${eventCount === 1 ? '' : 's'} matching filters`
 }
 
+function resolveSupportMode(value: string): SupportMode {
+    const normalized = value.trim().toLowerCase()
+    return normalized === 'impersonation' || normalized === 'recovery' || normalized === 'decision' || normalized === 'queue'
+        ? normalized
+        : 'inspect'
+}
+
 export default async function ImpersonationAuditPage({
     searchParams,
 }: {
@@ -178,7 +187,7 @@ export default async function ImpersonationAuditPage({
     const filterEntries = activeFilterEntries(params)
     const primarySearch = param(params, 'q')
     const advancedFilterCount = filterEntries.filter(([key]) => key !== 'q').length
-    const supportMode = param(params, 'support') === 'impersonation' ? 'impersonation' : 'inspect'
+    const supportMode = resolveSupportMode(param(params, 'support'))
     const responseError = response && !response.ok
         ? `Audit service reported ${response.status}.`
         : !response
@@ -360,11 +369,11 @@ export default async function ImpersonationAuditPage({
                             <h2 className='text-sm font-semibold text-ui-text'>Support actions</h2>
                             <p className='mt-1 text-xs leading-5 text-ui-muted'>Choose one task, complete the required audit fields, then return to the timeline.</p>
                         </div>
-                        <details className='group' open={supportMode === 'impersonation'}>
+                        <details className='group' open={supportMode !== 'inspect'}>
                             <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
-                                <span>Start or manage support action</span>
-                                <span className='text-xs font-medium text-ui-muted group-open:hidden'>Show controls</span>
-                                <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide controls</span>
+                                <span>Secondary support actions</span>
+                                <span className='text-xs font-medium text-ui-muted group-open:hidden'>Open when needed</span>
+                                <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide secondary actions</span>
                             </summary>
                             <div className='border-t border-ui-border p-4'>
                                 <AccessRecoveryForm initialOperation={supportMode} />

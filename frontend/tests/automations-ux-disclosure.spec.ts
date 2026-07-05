@@ -67,15 +67,15 @@ test('automations keeps the primary alert route workflow calm and wired', async 
     await expect(page.getByRole('button', { name: 'Mail health' })).toBeHidden()
     await expect(page.getByRole('button', { name: 'Delete' })).toBeHidden()
 
-    await expect(page.getByText('Schedule and notification policy')).toBeVisible()
-    await expect(page.getByText('Matching rules')).toBeVisible()
+    await expect(page.getByText('Advanced schedule and notification policy')).toBeVisible()
+    await expect(page.getByText('Advanced matching rules')).toBeVisible()
     await expect(page.getByText('Run history')).toBeVisible()
     await expect(page.getByText('Prompt and match policy')).toBeHidden()
 
     await page.getByText('Templates').click()
     await expect(page.getByRole('button', { name: 'Mail health' })).toBeVisible()
 
-    await page.getByText('Matching rules').click()
+    await page.getByText('Advanced matching rules').click()
     await expect(page.getByText('Prompt and match policy')).toBeVisible()
 
     await page.getByRole('button', { name: 'Check now' }).click()
@@ -86,7 +86,7 @@ test('automations keeps the primary alert route workflow calm and wired', async 
     expect(saveRequests[0]).toMatchObject({ name: 'Mail delivery route', actionType: 'mail_health_check' })
 
     await expect(page.getByRole('button', { name: 'Delete' })).toBeHidden()
-    await page.getByText('More route actions').click()
+    await page.getByText('Advanced route actions').click()
     await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible()
 
     if (!await page.getByRole('button', { name: 'Mail health' }).isVisible()) {
@@ -95,7 +95,7 @@ test('automations keeps the primary alert route workflow calm and wired', async 
     await page.getByRole('button', { name: 'Mail health' }).click()
     await expect(page.getByRole('heading', { name: 'New alert' })).toBeVisible()
     await expect(page.getByText('Route is paused; reactivate to resume checks.')).toBeVisible()
-    await page.getByText('Schedule and notification policy').click()
+    await page.getByText('Advanced schedule and notification policy').click()
     await page.getByTestId('automation-schedule-settings').getByLabel('Status').selectOption('active')
     await expect(page.getByText('Add a Discord webhook-file destination before activating this alert.')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Create alert' })).toBeDisabled()
