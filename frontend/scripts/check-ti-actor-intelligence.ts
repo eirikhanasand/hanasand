@@ -685,6 +685,8 @@ assert(pageClientSource.includes('const TI_SELECTED_DETAIL_LIST_ROWS = 3'), 'Pub
 assert(pageClientSource.includes('const TI_SELECTED_SOURCE_REQUEST_ROWS = 2'), 'Public TI selected detail source requests should stay compact before expansion.')
 assert(pageClientSource.includes('const TI_DESKTOP_SOURCE_FILTER_CHIPS = 4'), 'Public TI desktop source filters should stay compact.')
 assert(pageClientSource.includes('const TI_MOBILE_SOURCE_FILTER_CHIPS = 3'), 'Public TI mobile source filters should stay compact.')
+assert(pageClientSource.includes('const TI_ACTIVITY_TIMELINE_ROWS = 5'), 'Public TI activity timeline should stay compact before expansion.')
+assert(pageClientSource.includes('const TI_SOURCE_REFERENCE_ROWS = 4'), 'Public TI source reference panel should stay compact.')
 assert(pageClientSource.includes('Linked records'), 'Public TI page should expose consumer workflow state as linked records.')
 assert(pageClientSource.includes('data-ti-consumer-readiness'), 'Public TI page should expose consumer readiness rows for render checks.')
 assert(pageClientSource.includes('data-ti-consumer-field-readiness'), 'Public TI consumer readiness should expose required field readiness chips.')

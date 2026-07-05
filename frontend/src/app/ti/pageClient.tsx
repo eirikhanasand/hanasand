@@ -21,6 +21,8 @@ const TI_SELECTED_DETAIL_LIST_ROWS = 3
 const TI_SELECTED_SOURCE_REQUEST_ROWS = 2
 const TI_DESKTOP_SOURCE_FILTER_CHIPS = 4
 const TI_MOBILE_SOURCE_FILTER_CHIPS = 3
+const TI_ACTIVITY_TIMELINE_ROWS = 5
+const TI_SOURCE_REFERENCE_ROWS = 4
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const router = useRouter()
@@ -678,7 +680,7 @@ function Results({ result }: { result: TiSearchResponse }) {
 
                                 {secondaryView === 'profile' ? <Panel title='Activity timeline' description='Source timestamps plus review decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
                                     <div className='grid gap-3'>
-                                        {[...timelineFor(result, selected), ...sessionEvents, ...relevanceEvents].slice(0, 8).map(event => (
+                                        {[...timelineFor(result, selected), ...sessionEvents, ...relevanceEvents].slice(0, TI_ACTIVITY_TIMELINE_ROWS).map(event => (
                                             <div key={event.id} className='border-l-2 border-ui-border pl-3'>
                                                 <p className='text-xs font-semibold text-ui-text'>{event.label}</p>
                                                 <p className='mt-1 text-[11px] text-ui-muted'>{formatDate(event.at)}</p>
@@ -2877,7 +2879,7 @@ function StructuredProvenancePanel({ rows, actor, actionability, query }: { rows
         <div className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
             <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source references</p>
             <div className='mt-2 grid gap-2'>
-                {rows.length ? rows.slice(0, 6).map(row => {
+                {rows.length ? rows.slice(0, TI_SOURCE_REFERENCE_ROWS).map(row => {
                     const href = linkFromText(row.provenance)
                     return (
                         <div key={`${row.sourceName}-${row.provenance}`} data-ti-provenance-artifact-export='true' className='rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-panel'>
