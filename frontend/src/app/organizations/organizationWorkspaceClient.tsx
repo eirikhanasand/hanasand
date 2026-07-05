@@ -1590,7 +1590,7 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
         ['Alert', compactReference(alertId, 'Alert')],
         ['Watchlist', compactReference(watchlistId, 'Watchlist')],
         ['Destination', compactReference(destinationId, 'Destination')],
-        ['Delivery', deliveryId],
+        ['Delivery', compactReference(deliveryId, 'Delivery')],
     ].filter(([, value]) => Boolean(value))
     const caseHref = caseId
         ? `/dashboard/dwm/cases/${encodeURIComponent(caseId)}?organizationId=${encodeURIComponent(organization.id)}${alertId ? `&alertId=${encodeURIComponent(alertId)}` : ''}`
@@ -2294,11 +2294,13 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                 {destinations.length > 0 && visibleDestinations.length === 0 && <EmptyLine text='Adjust filters to see matching destinations.' />}
                 {visibleDestinations.map(destination => {
                     const draft = editing[destination.id]
+                    const currentKind = (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook'
+                    const destinationName = normalizeDestinationName(destination.name || '') || defaultDestinationName(currentKind)
                     const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
                     const latestDelivery = latestDeliveryForDestination(destination, deliveries)
                     const draftUrl = draft?.url.trim() || ''
                     const draftUrlInvalid = Boolean(draftUrl) && !validDestinationUrl(draftUrl)
-                    const draftNameDuplicate = draft ? destinationNameInUse(destinations, normalizeDestinationName(draft.name) || destination.name || destination.id, destination.id) : false
+                    const draftNameDuplicate = draft ? destinationNameInUse(destinations, normalizeDestinationName(draft.name) || destinationName, destination.id) : false
                     const draftChanged = draft ? destinationEditChanged(destination, draft) : false
                     const selected = selectedSubject.type === 'destination' && selectedSubject.id === destination.id
                     return (
@@ -2319,7 +2321,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                         >
                             <span className='flex min-w-0 items-start justify-between gap-2'>
                                 <span className='min-w-0'>
-                                    <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(destination.name || destination.id)}</span>
+                                    <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(destinationName)}</span>
                                     <span className='mt-1 block truncate text-xs text-ui-muted dark:text-ui-muted'>{destinationDisplayState(destination)}</span>
                                 </span>
                                 <StatusPill status={destinationStatus} />
@@ -2365,17 +2367,17 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                             <RefreshCw className='h-4 w-4' />
                                             Test
                                         </button>
-                                        <button type='button' aria-label='Edit destination' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [destination.id]: { name: destination.name || destination.id, kind: (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook', url: '', status: destination.status || 'active' } }))}>
+                                        <button type='button' aria-label='Edit destination' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [destination.id]: { name: destinationName, kind: currentKind, url: '', status: destination.status || 'active' } }))}>
                                             <Pencil className='h-4 w-4' />
                                             Edit
                                         </button>
                                         {destinationStatus === 'active' ? (
-                                            <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onUpdate(destination, { name: destination.name || destination.id, kind: (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook', url: '', status: 'paused' })}>
+                                            <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onUpdate(destination, { name: destinationName, kind: currentKind, url: '', status: 'paused' })}>
                                                 <Pause className='h-4 w-4' />
                                                 Disable
                                             </button>
                                         ) : (
-                                            <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onUpdate(destination, { name: destination.name || destination.id, kind: (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook', url: '', status: 'active' })}>
+                                            <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onUpdate(destination, { name: destinationName, kind: currentKind, url: '', status: 'active' })}>
                                                 <Play className='h-4 w-4' />
                                                 Enable
                                             </button>
@@ -2956,22 +2958,22 @@ function ScopePanel({ alertTerms, alerts, cases, members, webhooks, alertCaseVis
                 <ScopeColumn icon={<BellRing className='h-4 w-4' />} title='Alert terms' route={`${route}/watchlists/alert-terms`} rows={alertTerms.map(term => ({
                     id: term.watchlistItemId || term.watchlistId || term.alertGenerationRef || term.term || term.value || 'term',
                     primary: term.term || term.value || 'Watchlist term',
-                    secondary: term.matchReason || term.alertGenerationRef || term.kind || term.family || 'Org-scoped match',
+                    secondary: term.matchReason || compactReference(term.alertGenerationRef, 'watch') || term.kind || term.family || 'Org-scoped match',
                 }))} empty='Add an active shared watchlist term to create organization alert terms.' />
                 <ScopeColumn icon={<CircleAlert className='h-4 w-4' />} title='Alerts' route={`/api/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`} rows={alerts.map(alert => ({
                     id: alert.id,
-                    primary: alert.title || alert.id,
-                    secondary: `${alert.severity || 'severity'} · ${alert.status || 'status'}${alert.watchlistItemId ? ` · ${alert.watchlistItemId}` : ''}`,
+                    primary: alert.title || compactReference(alert.id, 'alert') || 'Alert',
+                    secondary: `${alert.severity || 'severity'} · ${alert.status || 'status'}${alert.watchlistItemId ? ` · ${compactReference(alert.watchlistItemId, 'watchlist')}` : ''}`,
                 }))} empty='Alerts appear after a live capture matches an active org watchlist term.' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Cases' route={`/api/cases?organizationId=${encodeURIComponent(organizationId)}`} rows={cases.map(item => ({
                     id: item.id,
-                    primary: item.title || item.id,
+                    primary: item.title || compactReference(item.id, 'case') || 'Case',
                     secondary: `${item.status || 'status'}${item.assignedOwner ? ` · ${organizationMemberLabel(item.assignedOwner, members)}` : ''}`,
                 }))} empty='Cases appear after an alert is opened from exposure monitoring.' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibility} empty='Visibility decisions appear after alerts are reviewed or opened as cases.' />
                 <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={webhooks.map(destination => ({
                     id: destination.id,
-                    primary: destination.name || destination.id,
+                    primary: destination.name || compactReference(destination.id, 'destination') || 'Destination',
                     secondary: `${destination.status || 'unknown'} · ${destinationDisplayState(destination)}`,
                 }))} empty='Save a watchlist destination to make customer delivery available here.' />
             </div>
@@ -2988,7 +2990,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     const contextActions = selectedSubjectActions(selectedSubject, organization)
     const copySelectedActivity = async () => {
         try {
-            const heading = `${organization.name || organization.id} · ${selectedSubject.type}`
+            const heading = `${organizationDisplayName(organization)} · ${selectedSubject.type}`
             const context = contextRows.map(row => `${row.label}: ${row.value}`)
             const rows = visibleRows.slice(0, 8).map(item => `${formatDate(item.at)} · ${item.title} · ${item.detail}`)
             await navigator.clipboard.writeText([heading, ...context, ...rows].filter(Boolean).join('\n'))
@@ -3407,7 +3409,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         id: `alert-${alert.id}`,
         at: alert.updatedAt || new Date(0).toISOString(),
         title: 'Alert',
-        detail: `${alert.title || alert.id} · ${alert.severity || 'severity'} · ${alert.status || 'status'}`,
+        detail: `${alert.title || compactReference(alert.id, 'alert')} · ${alert.severity || 'severity'} · ${alert.status || 'status'}`,
         ok: alert.status !== 'failed' && alert.status !== 'suppressed',
         subjectType: 'alert',
         subjectId: alert.id,
@@ -3423,7 +3425,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         id: `case-${item.id}`,
         at: item.updatedAt || new Date(0).toISOString(),
         title: 'Case',
-        detail: `${item.title || item.id} · ${item.status || 'status'}${item.assignedOwner ? ` · ${organizationMemberLabel(item.assignedOwner, bundle.members)}` : ''}`,
+        detail: `${item.title || compactReference(item.id, 'case')} · ${item.status || 'status'}${item.assignedOwner ? ` · ${organizationMemberLabel(item.assignedOwner, bundle.members)}` : ''}`,
         ok: item.status !== 'failed' && item.status !== 'blocked',
         subjectType: 'case',
         subjectId: item.id,
@@ -3437,7 +3439,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         id: `delivery-${delivery.id}`,
         at: delivery.attemptedAt || delivery.updatedAt || delivery.createdAt || new Date(0).toISOString(),
         title: delivery.dryRun ? 'Destination tested' : 'Alert delivery recorded',
-        detail: `${delivery.status || 'delivery'} · ${delivery.watchlistId || delivery.alertId || 'watchlist'}`,
+        detail: `${delivery.status || 'delivery'} · ${compactReference(delivery.watchlistId || delivery.watchlistItemId || delivery.alertId, 'watchlist') || 'Watchlist pending'}`,
         ok: !delivery.error && delivery.status !== 'failed',
         subjectType: 'destination',
         subjectId: delivery.webhookDestinationId || delivery.watchlistItemId || delivery.watchlistId || delivery.alertId,
@@ -3476,7 +3478,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         id: `member-${member.userId}`,
         at: member.joinedAt || new Date(0).toISOString(),
         title: 'Member role',
-        detail: `${member.name || member.email || member.userId} · ${member.role} · ${member.status}`,
+        detail: `${organizationMemberLabel(member.userId, bundle.members)} · ${member.role} · ${member.status}`,
         ok: member.status !== 'removed' && member.status !== 'revoked',
         subjectType: 'member',
         subjectId: member.userId,
@@ -3624,32 +3626,32 @@ function selectedSubjectLabel(subject: ActivitySubject, organization: Organizati
     if (subject.type === 'organization') return organizationDisplayName(organization)
     if (subject.type === 'invite') {
         const invite = bundle.invites.find(item => item.id === subject.id)
-        return invite?.email || subject.id
+        return invite?.email || compactReference(subject.id, 'invite') || 'Invite'
     }
     if (subject.type === 'member') {
         const member = bundle.members.find(item => item.userId === subject.id)
-        return member?.name || member?.email || member?.userId || subject.id
+        return member?.name || member?.email || organizationMemberLabel(subject.id, bundle.members) || 'Member'
     }
     if (subject.type === 'alert') {
         const alert = bundle.alerts.find(item => item.id === subject.id)
-        return alert?.title || alert?.id || subject.id
+        return alert?.title || compactReference(alert?.id || subject.id, 'alert') || 'Alert'
     }
     if (subject.type === 'case') {
         const item = bundle.cases.find(row => row.id === subject.id)
-        return item?.title || item?.id || subject.id
+        return item?.title || compactReference(item?.id || subject.id, 'case') || 'Case'
     }
     const watchlist = bundle.watchlists.find(item => item.id === subject.id)
     const destination = bundle.webhooks.find(item => item.id === subject.id)
-    if (destination) return destination.name || destination.id
-    if (subject.type === 'destination') return watchlist ? `Destination · ${watchlist.value}` : subject.id
-    return watchlist?.value || subject.id
+    if (destination) return destination.name || compactReference(destination.id, 'destination') || 'Destination'
+    if (subject.type === 'destination') return watchlist ? `Destination · ${watchlist.value}` : compactReference(subject.id, 'destination') || 'Destination'
+    return watchlist?.value || compactReference(subject.id, 'watchlist') || 'Watchlist'
 }
 
 function selectedContextRows(subject: ActivitySubject, organization: OrganizationSummary, bundle: OrgBundle) {
     if (subject.type === 'organization') {
         return compactMetadata([
             ['Org', organizationDisplayId(organization)],
-            ['Tenant', compactReference(organization.tenantId || 'default', 'tenant')],
+            ['Workspace', sanitizeOrganizationDisplayCopy(organization.status || organization.slug || organization.id) || 'Active workspace'],
             ['Role', organization.role || 'member'],
             ['Members', String(bundle.members.length)],
             ['Watchlists', String(bundle.watchlists.length)],
@@ -3870,7 +3872,8 @@ function destinationNameInUse(destinations: WebhookDestination[], name: string, 
 function destinationEditChanged(destination: WebhookDestination, draft: DestinationEditDraft) {
     const currentKind = (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook'
     const currentStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
-    return (normalizeDestinationName(draft.name) || destination.name || destination.id) !== (destination.name || destination.id)
+    const currentName = normalizeDestinationName(destination.name || '') || defaultDestinationName(currentKind)
+    return (normalizeDestinationName(draft.name) || currentName) !== currentName
         || draft.kind !== currentKind
         || draft.status !== currentStatus
         || Boolean(draft.url.trim())
