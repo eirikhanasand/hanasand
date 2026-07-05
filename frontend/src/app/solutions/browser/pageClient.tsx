@@ -1354,7 +1354,7 @@ function matchesTool(capture: Capture, tool: SandboxTool) {
 
 function providerStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (!capture) return 'Unavailable'
-    if (capture.error) return 'Blocked'
+    if (capture.error) return 'Provider error'
     if (analysis?.vendorFlagged !== undefined || analysis?.alertCount !== undefined || analysis?.verdict) return 'Result captured'
     return 'Result unavailable'
 }
