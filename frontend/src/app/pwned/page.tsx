@@ -4,9 +4,9 @@ import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Bloom Hash Exposure Lookup',
-    description: 'Check exact exposure using a SHA-1 hash and prefix-only range lookup.',
+    description: 'Check Bloom-index exposure using a SHA-1 hash and prefix-only range lookup.',
     path: '/pwned',
-    keywords: ['bloom hash lookup', 'hash prefix', 'breach check'],
+    keywords: ['bloom hash lookup', 'sha-1 hash prefix', 'exposure lookup'],
 })
 
 export default async function Page() {
@@ -15,9 +15,9 @@ export default async function Page() {
             <div className='grid w-full max-w-5xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center'>
                 <div className='grid gap-4'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Bloom exposure lookup</p>
-                    <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>Exact-match checks from a hash, not a password.</h1>
+                    <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>Bloom-index checks from a SHA-1 hash.</h1>
                     <p className='max-w-xl text-base leading-7 text-ui-muted'>
-                        Paste a complete SHA-1 hash. The browser sends only a five-character prefix and compares the returned range on this device.
+                        Paste a complete SHA-1 hash. Hanasand requests only the five-character prefix, then compares the returned range in your browser.
                     </p>
                 </div>
                 <PwnedPageClient />

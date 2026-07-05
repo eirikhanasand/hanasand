@@ -36,10 +36,10 @@ export async function POST(request: NextRequest) {
 
     const range = await response.text().catch(() => '')
     return NextResponse.json({
-        schemaVersion: 'pwned.range_proxy.v1',
+        schemaVersion: 'bloom_hash.range_proxy.v1',
         prefix,
         range,
-        privacy: 'Only the first five SHA-1 characters were sent to the range service. The full hash and underlying secret stay outside the request.',
+        privacy: 'Only the first five SHA-1 characters were sent to the range service. The full hash and underlying secret were not sent to Hanasand.',
     }, {
         headers: { 'cache-control': 'no-store' },
     })

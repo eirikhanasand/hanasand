@@ -9,7 +9,7 @@ test('Bloom hash lookup checks exposure without collecting a raw password', asyn
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-                schemaVersion: 'pwned.range_proxy.v1',
+                schemaVersion: 'bloom_hash.range_proxy.v1',
                 prefix: '5BAA6',
                 range: '1E4C9B93F3F0682250B6CF8331B7EE68FD8:3303003',
             }),
@@ -18,14 +18,14 @@ test('Bloom hash lookup checks exposure without collecting a raw password', asyn
 
     await page.goto('/pwned')
 
-    await expect(page.getByRole('heading', { name: /Exact-match checks from a hash/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Bloom-index checks from a SHA-1 hash/i })).toBeVisible()
     await expect(page.locator('input[type="password"]')).toHaveCount(0)
-    await expect(page.getByText('This page does not ask for the underlying secret.')).toBeVisible()
+    await expect(page.getByText('This lookup does not ask for, derive, or transmit the underlying secret.')).toBeVisible()
 
     await page.getByLabel('SHA-1 hash').fill('5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8')
-    await page.getByRole('button', { name: 'Check hash' }).click()
+    await page.getByRole('button', { name: 'Run Bloom lookup' }).click()
 
     await expect(page.getByText('Exact match found')).toBeVisible()
-    await expect(page.getByText('This hash appears 3,303,003 times in known breach data.')).toBeVisible()
-    await expect(page.getByText(/without sending the full hash or underlying secret/i)).toBeVisible()
+    await expect(page.getByText('This hash appears 3,303,003 times in the Bloom exposure index.')).toBeVisible()
+    await expect(page.getByText(/The full hash and underlying secret were not sent to Hanasand/i)).toBeVisible()
 })

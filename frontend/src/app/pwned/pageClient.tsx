@@ -3,7 +3,7 @@
 import ErrorNotice from '@/components/error/errorNotice'
 import PwnedSearch from '@/components/pwned/pwnedSearch'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import postPwned from '@/utils/pwned/checkHash'
+import postBloomHashLookup from '@/utils/pwned/checkHash'
 import { ArrowLeft, Eye, Search, ShieldCheck, ShieldX } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 
@@ -15,7 +15,6 @@ export default function PwnedPageClient() {
     const [checkedPrefix, setCheckedPrefix] = useState('')
     const [busy, setBusy] = useState(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
-    const canSubmit = hashInput.trim().length > 0 && !busy
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         e.preventDefault()
@@ -27,7 +26,7 @@ export default function PwnedPageClient() {
 
         setBusy(true)
         try {
-            const result = await postPwned(hashInput)
+            const result = await postBloomHashLookup(hashInput)
             setBreached(!result.ok)
             setBreachCount(result.count)
             setCheckedPrefix(result.checkedPrefix || '')
@@ -60,8 +59,8 @@ export default function PwnedPageClient() {
                         </div>
                         <p className='text-sm leading-6 text-ui-muted'>
                             {didSearch
-                                ? breached ? 'The submitted hash matched known exposure data.' : 'No exact hash match was found in the indexed breach data.'
-                                : 'Submit a complete SHA-1 hash. Hanasand sends only the first five characters to the range lookup.'}
+                                ? breached ? 'The submitted hash matched the Bloom-indexed exposure range.' : 'No exact hash match was found in the checked Bloom range.'
+                                : 'Submit a complete SHA-1 hash. Only the first five characters leave this page.'}
                         </p>
                     </div>
                     {didSearch ? (
@@ -79,10 +78,10 @@ export default function PwnedPageClient() {
                         <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 text-xs leading-5 text-ui-muted' data-bloom-hash-safety-boundary>
                             <div className='flex items-center gap-2 font-semibold text-ui-text'>
                                 <ShieldCheck className='h-4 w-4 text-ui-success' />
-                                Hash-only safety boundary
+                                Bloom prefix boundary
                             </div>
                             <p>
-                                Use a SHA-1 hash generated in your own trusted local tool. This page does not ask for the underlying secret.
+                                Generate the SHA-1 hash in a trusted local tool. This lookup does not ask for, derive, or transmit the underlying secret.
                             </p>
                         </div>
                         <label className='grid gap-2'>
@@ -93,7 +92,7 @@ export default function PwnedPageClient() {
                                 spellCheck={false}
                                 autoCapitalize='characters'
                                 placeholder='40-character SHA-1 hash'
-                                onChange={(e) => setHashInput(e.target.value)}
+                                onChange={(e) => setHashInput(e.target.value.toUpperCase())}
                                 value={hashInput}
                                 required
                                 autoComplete='off'
@@ -103,11 +102,11 @@ export default function PwnedPageClient() {
                         </label>
                         <button
                             type='submit'
-                            disabled={!canSubmit}
+                            disabled={busy}
                             className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:bg-ui-primary/90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
                         >
                             <Search className='h-4 w-4' />
-                            {busy ? 'Checking...' : 'Check hash'}
+                            {busy ? 'Checking...' : 'Run Bloom lookup'}
                         </button>
                     </form>
                 )}
@@ -120,12 +119,12 @@ export default function PwnedPageClient() {
                             className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'
                         >
                             <ArrowLeft className='h-4 w-4' />
-                            Check another hash
+                            Check another SHA-1 hash
                         </button>
                     </div>
                 ) : (
                     <p className='text-xs leading-5 text-ui-muted'>
-                        Exact matches only. The browser sends only the first five SHA-1 characters and compares the returned range on this device.
+                        Exact matches only. The full hash stays in the browser; the API receives only the prefix needed for the range query.
                     </p>
                 )}
             </div>
