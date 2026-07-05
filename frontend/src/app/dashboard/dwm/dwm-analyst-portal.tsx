@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
 import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import { dwmNextOperatorAction, type DwmNextOperatorActionKind } from '@/utils/dwm/nextOperatorAction'
@@ -502,7 +502,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                     <aside className='order-3 min-w-0 border-t border-ui-border bg-ui-raised xl:col-span-2 xl:order-none 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         <div className='grid gap-4 p-4'>
                             <SourcePosture snapshot={snapshot} operations={operations} />
-                            <DeliveryPanel alert={selectedAlert} deliveries={localDeliveries} />
+                            <DeliveryPanel alert={selectedAlert} deliveries={localDeliveries} busyAction={busyAction} onTest={testDelivery} onSend={sendAlert} />
                             <ActorPanel snapshot={snapshot} />
                         </div>
                     </aside>
@@ -2042,7 +2042,7 @@ function SourcePosture({ snapshot, operations }: { snapshot: DwmProductSnapshot,
     )
 }
 
-function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries: DeliveryItem[] }) {
+function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { alert?: PortalAlert, deliveries: DeliveryItem[], busyAction: string | null, onTest: (alertId: string) => Promise<void>, onSend: (alertId: string) => Promise<void> }) {
     const visible = orderDeliveries(alert ? deliveries.filter(delivery => delivery.alertId === alert.id || delivery.alertId === 'webhook_test') : deliveries)
     const orgId = alert ? alertOrganizationId(alert) : undefined
     const caseId = alert?.caseId || alert?.caseIdCandidate || alert?.workflowContext?.caseIdCandidate || alert?.webhookContext?.caseIdCandidate
@@ -2051,14 +2051,25 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
     const lastFailedDelivery = visible.find(delivery => delivery.status === 'failed')
     const lastSuccessfulDelivery = visible.find(delivery => delivery.status === 'delivered' || delivery.status === 'dry_run')
     const orgHref = organizationDeliveryWorkspaceHref({ organizationId: orgId, alertId: alert?.id, caseId, delivery: latestDelivery })
+    const testBusy = alert ? busyAction === `test:${alert.id}` : false
+    const sendBusy = alert ? busyAction === `send:${alert.id}` : false
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel'>
-            <div className='flex items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
-                <div>
+            <div className='flex flex-col gap-3 border-b border-ui-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
+                <div className='min-w-0'>
                     <h3 className='text-sm font-semibold text-ui-text'>Customer delivery</h3>
                     <p className='mt-0.5 text-xs text-ui-muted'>Webhook attempts, retry state, and linked case context.</p>
                 </div>
-                <Webhook className='h-4 w-4 text-ui-primary' />
+                <div className='flex shrink-0 flex-wrap gap-2' data-dwm-delivery-panel-actions='true'>
+                    <button type='button' disabled={!alert || testBusy || sendBusy} onClick={() => alert ? void onTest(alert.id) : undefined} className='inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas disabled:cursor-not-allowed disabled:opacity-60'>
+                        {testBusy ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}
+                        Test
+                    </button>
+                    <button type='button' disabled={!alert || testBusy || sendBusy} onClick={() => alert ? void onSend(alert.id) : undefined} className='inline-flex min-h-8 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
+                        {sendBusy ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
+                        Send
+                    </button>
+                </div>
             </div>
             <div className='grid gap-2 p-3'>
                 <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 text-xs sm:grid-cols-3' data-dwm-delivery-latest='true'>
