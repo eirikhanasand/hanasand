@@ -1179,7 +1179,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     const suspiciousDeobfuscationTasks = deobfuscationTasks.filter(task => task.assessment === 'suspicious')
     const webcrackLoads = captures.flatMap(capture => capture.webcrackLoad ? [capture.webcrackLoad] : [])
     const webcrackLoaded = webcrackLoads.filter(load => load.loaded).length
-    const comments = captures.flatMap(capture => capture.evidence?.comments || []).slice(0, 4)
+    const comments = captures.flatMap(capture => capture.evidence?.comments || []).map(cleanEvidenceComment).filter(Boolean).slice(0, 4) as string[]
     const confidence = Math.max(0, ...captures.map(capture => capture.evidence?.confidence || 0))
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
     const networkDomains = captures.flatMap(capture => capture.networkSummary?.domains || [])
@@ -1337,6 +1337,12 @@ function cleanEvidenceExcerpt(value?: string) {
     const cleaned = value?.replace(/\s+/g, ' ').trim() || ''
     if (!cleaned || /^(ads do fetching\.?\s*){2,}/i.test(cleaned)) return ''
     return cleaned.length > 260 ? `${cleaned.slice(0, 257)}...` : cleaned
+}
+
+function cleanEvidenceComment(value?: string) {
+    const cleaned = cleanEvidenceExcerpt(value)
+    if (!cleaned || /^ads do fetching/i.test(cleaned)) return ''
+    return cleaned
 }
 
 function formatConfidencePercent(value: number) {
