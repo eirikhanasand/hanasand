@@ -3233,7 +3233,7 @@ function DeliveryReference({ delivery, organizationId, destinations }: { deliver
 function ScopePanel({ alertTerms, alerts, cases, deliveries, members, watchlists, webhooks, alertCaseVisibility, organizationId }: { alertTerms: AlertTerm[], alerts: ScopedAlert[], cases: ScopedCase[], deliveries: DeliveryRow[], members: OrganizationMember[], watchlists: WatchlistItem[], webhooks: WebhookDestination[], alertCaseVisibility: Record<string, unknown> | null, organizationId: string }) {
     const route = `/api/organizations/${encodeURIComponent(organizationId)}`
     const visibility = visibilityRows(alertCaseVisibility)
-    const watchlistDestinationRows = watchlists.filter(destinationConfigured)
+    const watchlistDestinationRows = watchlists.filter(item => destinationConfigured(item) && !destinationForWatchlist(item, webhooks))
     const hasScopeRows = Boolean(alertTerms.length || alerts.length || cases.length || webhooks.length || watchlistDestinationRows.length || visibility.length)
     const failedDeliveries = deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error)).length
     if (!hasScopeRows) {
@@ -4477,8 +4477,8 @@ function organizationDestinationConfigured(destination: WebhookDestination) {
 
 function organizationConfiguredDestinationCount(bundle: OrgBundle) {
     const savedDestinations = bundle.webhooks.filter(organizationDestinationConfigured).length
-    if (savedDestinations > 0) return savedDestinations
-    return bundle.watchlists.filter(destinationConfigured).length
+    const watchlistDestinations = bundle.watchlists.filter(item => destinationConfigured(item) && !destinationForWatchlist(item, bundle.webhooks)).length
+    return savedDestinations + watchlistDestinations
 }
 
 function isDuplicateWatchlistTerm(watchlists: WatchlistItem[], kind: WatchlistKind, value: string, excludeId = '') {
