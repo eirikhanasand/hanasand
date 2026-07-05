@@ -885,7 +885,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         setInviteEmails('')
-        return 'Invite request sent.'
+        return `${emails.length} ${role} invite${emails.length === 1 ? '' : 's'} sent.`
     })
 
     const inviteAction = (invite: OrganizationInvite, action: 'revoke' | 'resend') => selectedOrganization && runAction(`${action}-invite`, async () => {
@@ -898,7 +898,7 @@ export default function OrganizationWorkspaceClient() {
                 requestId: `org-ui-${Date.now()}`,
             }),
         })
-        return action === 'revoke' ? 'Invite revoked.' : 'Invite resent.'
+        return action === 'revoke' ? `Invite revoked for ${invite.email}.` : `Invite resent to ${invite.email}.`
     }, `invite-${invite.id}`)
 
     const copyInvite = (invite: OrganizationInvite) => runAction('copy-invite', async () => {
@@ -919,7 +919,7 @@ export default function OrganizationWorkspaceClient() {
                 requestId: `org-ui-${Date.now()}`,
             }),
         })
-        return 'Member role updated.'
+        return `${organizationMemberLabel(member.userId, bundle.members)} changed to ${role}.`
     }, `member-${member.userId}`)
 
     const removeMember = (member: OrganizationMember) => selectedOrganization && runAction('remove-member', async () => {
@@ -931,7 +931,7 @@ export default function OrganizationWorkspaceClient() {
                 requestId: `org-ui-${Date.now()}`,
             }),
         })
-        return 'Member removed.'
+        return `${organizationMemberLabel(member.userId, bundle.members)} removed.`
     }, `member-${member.userId}`)
 
     const createWatchlist = () => selectedOrganization && runAction('create-watchlist', async () => {
@@ -948,7 +948,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         setWatchlistDraft({ kind: 'domain', value: '', notes: '' })
-        return watchlistMutationMessage(payload.dwmAlertBridge, 'Shared watchlist term saved.')
+        return watchlistMutationMessage(payload.dwmAlertBridge, `${watchlistDraft.value.trim()} saved.`)
     })
 
     const saveWatchlistEdit = (item: WatchlistItem) => selectedOrganization && runAction('save-watchlist', async () => {
@@ -974,7 +974,7 @@ export default function OrganizationWorkspaceClient() {
             delete next[item.id]
             return next
         })
-        return watchlistMutationMessage(payload.dwmAlertBridge, 'Watchlist term updated.')
+        return watchlistMutationMessage(payload.dwmAlertBridge, `${draft.value.trim()} updated.`)
     }, `watchlist-${item.id}`)
 
     const watchlistAction = (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => selectedOrganization && runAction(`${action}-watchlist`, async () => {
@@ -987,7 +987,7 @@ export default function OrganizationWorkspaceClient() {
                 requestId: `org-ui-${Date.now()}`,
             }),
         })
-        return `Watchlist ${action}d.`
+        return `${item.value} ${action}d.`
     }, `watchlist-${item.id}`)
 
     const deleteWatchlist = (item: WatchlistItem) => selectedOrganization && runAction('delete-watchlist', async () => {
@@ -999,7 +999,7 @@ export default function OrganizationWorkspaceClient() {
                 requestId: `org-ui-${Date.now()}`,
             }),
         })
-        return 'Watchlist term archived.'
+        return `${item.value} archived.`
     }, `watchlist-${item.id}`)
 
     const cleanupWatchlists = () => selectedOrganization && runAction('cleanup-watchlists', async () => {
@@ -1067,7 +1067,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         const delivery = firstDelivery(result)
-        return deliveryActionResultSummary(delivery, 'Destination test requested.')
+        return deliveryActionResultSummary(delivery, `${destination.name || destination.id} tested.`)
     }, `destination-${destination.id}`)
 
     const replayDelivery = (delivery: DeliveryRow) => selectedOrganization && runAction('replay-delivery', async () => {
@@ -1114,7 +1114,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         setDestinationCreateDraft({ name: '', kind: 'discord', url: '' })
-        return 'Destination added.'
+        return `${name} destination added.`
     }, 'destination-create')
 
     const updateSavedDestination = (destination: WebhookDestination, draft: DestinationEditDraft) => selectedOrganization && runAction('update-destination', async () => {
@@ -1140,7 +1140,7 @@ export default function OrganizationWorkspaceClient() {
             delete next[destination.id]
             return next
         })
-        return draft.status === 'active' ? 'Destination updated.' : 'Destination disabled.'
+        return draft.status === 'active' ? `${name} destination updated.` : `${name} destination disabled.`
     }, `destination-${destination.id}`)
 
     const deleteSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('delete-destination', async () => {
@@ -1148,7 +1148,7 @@ export default function OrganizationWorkspaceClient() {
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
             method: 'DELETE',
         })
-        return 'Destination removed.'
+        return `${destination.name || destination.id} destination removed.`
     }, `destination-${destination.id}`)
 
     const createOrganizationForm = (
