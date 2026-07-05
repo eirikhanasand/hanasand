@@ -332,7 +332,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
 
             setTerms(nextTerms)
             setLastRoute({
-                label: 'Full workflow',
+                label: 'Full route',
                 at: new Date().toISOString(),
                 watchTerms: countTerms(nextTerms),
                 sourceCount: telegramCount + darkwebCount + advisoryCount,
@@ -615,7 +615,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const routeQueue = [
         {
             id: 'full_route',
-            label: 'Run full workflow',
+            label: 'Run full route',
             state: !termCount ? 'watchlist needed' : alertCount ? `${alertCount} alerts ready` : captureCount ? `${captureCount} captures ready` : 'source pack ready',
             detail: 'Enable sources, collect captures, rebuild alerts, open a case, and dry-run delivery when a webhook is staged.',
             tone: alertCount ? 'ok' : captureCount ? 'warn' : 'neutral',
@@ -664,7 +664,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         <div data-dwm-workflow-runbook className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 text-ui-text sm:p-4'>
             <section className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.62fr)] lg:items-start'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Monitoring workflow</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Route controls</p>
                     <h2 className='mt-1 text-lg font-semibold tracking-normal text-ui-text'>Watchlist to case</h2>
                     <div className='mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5'>
                         <RouteStateCard label='Terms' value={String(effectiveTermCount)} detail={termCount ? 'ready' : 'needed'} tone={termCount ? 'ok' : 'warn'} />
@@ -676,7 +676,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 </div>
                 {result ? (
                     <div data-dwm-workflow-result className={`rounded-lg border px-3 py-2 text-sm leading-5 ${result.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>
-                        <p className='font-semibold'>{result.ok ? 'Workflow updated' : 'Action blocked'}</p>
+                        <p className='font-semibold'>{result.ok ? 'Route updated' : 'Action blocked'}</p>
                         <p className='mt-1 text-xs leading-5'>{result.message}</p>
                         {result.actionHref && result.actionLabel ? (
                             <Link href={result.actionHref} className='mt-2 inline-flex min-h-8 items-center rounded-lg border border-current px-3 text-xs font-semibold transition hover:opacity-80' data-dwm-workflow-result-action='true'>
@@ -972,7 +972,7 @@ function RouteRunSummary({ route, organizationId }: { route: WorkflowRouteSummar
         <section data-dwm-route-run-summary className='mt-3 rounded-lg border border-ui-border bg-ui-raised p-3'>
             <div className='flex flex-wrap items-center justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Last workflow run</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Last route run</p>
                     <h4 className='mt-1 text-sm font-semibold text-ui-text'>{route.label} · {relativeTime(route.at)}</h4>
                 </div>
                 <div className='flex flex-wrap gap-2'>
