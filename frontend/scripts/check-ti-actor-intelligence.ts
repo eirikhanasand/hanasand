@@ -683,6 +683,8 @@ assert(pageClientSource.includes('const TI_EVIDENCE_QUEUE_PREVIEW_ROWS = 2'), 'P
 assert(pageClientSource.includes('const TI_SELECTED_CONTEXT_ROWS = 3'), 'Public TI selected source context should stay capped before expansion.')
 assert(pageClientSource.includes('const TI_SELECTED_DETAIL_LIST_ROWS = 3'), 'Public TI selected detail panels should cap visible evidence and source details.')
 assert(pageClientSource.includes('const TI_SELECTED_SOURCE_REQUEST_ROWS = 2'), 'Public TI selected detail source requests should stay compact before expansion.')
+assert(pageClientSource.includes('const TI_DESKTOP_SOURCE_FILTER_CHIPS = 4'), 'Public TI desktop source filters should stay compact.')
+assert(pageClientSource.includes('const TI_MOBILE_SOURCE_FILTER_CHIPS = 3'), 'Public TI mobile source filters should stay compact.')
 assert(pageClientSource.includes('Linked records'), 'Public TI page should expose consumer workflow state as linked records.')
 assert(pageClientSource.includes('data-ti-consumer-readiness'), 'Public TI page should expose consumer readiness rows for render checks.')
 assert(pageClientSource.includes('data-ti-consumer-field-readiness'), 'Public TI consumer readiness should expose required field readiness chips.')

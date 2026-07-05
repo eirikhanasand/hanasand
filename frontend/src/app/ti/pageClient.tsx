@@ -19,6 +19,8 @@ const TI_EVIDENCE_QUEUE_PREVIEW_ROWS = 2
 const TI_SELECTED_CONTEXT_ROWS = 3
 const TI_SELECTED_DETAIL_LIST_ROWS = 3
 const TI_SELECTED_SOURCE_REQUEST_ROWS = 2
+const TI_DESKTOP_SOURCE_FILTER_CHIPS = 4
+const TI_MOBILE_SOURCE_FILTER_CHIPS = 3
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const router = useRouter()
@@ -7013,7 +7015,7 @@ function EvidenceQueueFilters({
             </div>
             {sourceCounts.length ? (
                 <div className='flex min-w-0 flex-wrap gap-1.5 pb-1'>
-                    {sourceCounts.slice(0, 5).map(item => (
+                    {sourceCounts.slice(0, TI_DESKTOP_SOURCE_FILTER_CHIPS).map(item => (
                         <button
                             key={item.source}
                             type='button'
@@ -7114,7 +7116,7 @@ function MobileEvidenceWorkbar({
 
             {sourceCounts.length ? (
                 <div className='flex min-w-0 flex-wrap gap-1.5 pb-1'>
-                    {sourceCounts.slice(0, 6).map(item => (
+                    {sourceCounts.slice(0, TI_MOBILE_SOURCE_FILTER_CHIPS).map(item => (
                         <button
                             key={item.source}
                             type='button'
