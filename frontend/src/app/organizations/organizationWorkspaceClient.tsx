@@ -414,6 +414,16 @@ function organizationDisplayId(organization: Pick<OrganizationSummary, 'slug' | 
     return sanitizeOrganizationDisplayCopy(organization?.slug || organization?.id) || 'organization'
 }
 
+function organizationFocusLabel(value: string) {
+    if (value === 'watchlists') return 'Watchlists'
+    if (value === 'destinations' || value === 'webhooks') return 'Delivery destinations'
+    if (value === 'invites') return 'Invites'
+    if (value === 'members') return 'Members'
+    if (value === 'alerts') return 'Alerts'
+    if (value === 'cases') return 'Cases'
+    return stateLabel(value)
+}
+
 function organizationWorkspaceMeta(organization: OrganizationSummary) {
     const parts = [
         sanitizeOrganizationDisplayCopy(organization.tenantId || organization.slug || organization.id),
@@ -1256,6 +1266,7 @@ export default function OrganizationWorkspaceClient() {
                                 {hasDwmContext && (
                                     <DwmHandoffBanner
                                         organization={selectedOrganization}
+                                        bundle={bundle}
                                         selectedSubject={selectedActivitySubject}
                                         alertId={requestedAlertId || selectedAlertId}
                                         caseId={requestedCaseId}
@@ -1573,8 +1584,9 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
     )
 }
 
-function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watchlistId, destinationId, deliveryId, focus }: {
+function DwmHandoffBanner({ organization, bundle, selectedSubject, alertId, caseId, watchlistId, destinationId, deliveryId, focus }: {
     organization: OrganizationSummary
+    bundle: OrgBundle
     selectedSubject: ActivitySubject
     alertId: string
     caseId: string
@@ -1583,9 +1595,10 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
     deliveryId: string
     focus: string
 }) {
+    const selectedLabel = selectedSubjectLabel(selectedSubject, organization, bundle)
     const scopedValues = [
         ['Org', organizationDisplayId(organization)],
-        ['Selected', selectedSubject.type],
+        ['Selected', selectedLabel],
         ['Case', compactReference(caseId, 'Case')],
         ['Alert', compactReference(alertId, 'Alert')],
         ['Watchlist', compactReference(watchlistId, 'Watchlist')],
@@ -1610,7 +1623,7 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
                         DWM actions for this organization
                     </h2>
                     <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>
-                        Manage the selected {selectedSubject.type}, delivery destination, and team access from one scoped view.
+                        Manage {sanitizeOrganizationDisplayCopy(selectedLabel) || selectedLabel}, delivery destination, and team access from one scoped view.
                     </p>
                     <div className='mt-3 flex flex-wrap gap-2'>
                         {scopedValues.map(([label, value]) => (
@@ -1618,7 +1631,7 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
                                 {label}: {sanitizeOrganizationDisplayCopy(value) || value}
                             </span>
                         ))}
-                        {focus && <span className='rounded-md border border-ui-primary/35 bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-text dark:border-ui-primary/35 dark:bg-ui-canvas dark:text-ui-primary'>Focus: {focus}</span>}
+                        {focus && <span className='rounded-md border border-ui-primary/35 bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-text dark:border-ui-primary/35 dark:bg-ui-canvas dark:text-ui-primary'>Focus: {organizationFocusLabel(focus)}</span>}
                     </div>
                 </div>
                 <div className='grid gap-2 sm:grid-cols-2 lg:flex'>
