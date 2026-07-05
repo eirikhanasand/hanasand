@@ -17,7 +17,7 @@ type ControlSnapshot = {
     frontier?: { queued?: number; tasks?: unknown[] }
     resources?: { queue?: Record<string, unknown>; workers?: unknown[] }
     productSlo?: Record<string, unknown>
-    canary?: Record<string, unknown>
+    scheduler?: Record<string, unknown>
     quality?: Record<string, unknown>
     publicChannel?: Record<string, unknown>
     restricted?: Record<string, unknown>
@@ -125,13 +125,13 @@ export default function TiScraperControlClient() {
     const timeline = useMemo(() => timelineFor(snapshot, actionResult, localControl.decisions), [snapshot, actionResult, localControl.decisions])
     const endpointRows = Object.entries(snapshot?.endpoints ?? {})
     const queueCount = numberFrom(snapshot?.frontier?.queued) ?? numberFrom(snapshot?.resources?.queue?.queued) ?? frontierTasks.length
-    const sourceNeedsReview = sources.filter(source => source.status !== 'active').length
     const healthyEndpoints = endpointRows.filter(([, state]) => state.ok).length
     const sourceGrowth = sourceGrowthKpis(snapshot, sources)
+    const scheduler = schedulerKpis(snapshot)
     const selectedNote = selected ? localControl.notes[selected.id] ?? '' : ''
     const selectedDecision = selected ? localControl.decisions[selected.id] : undefined
 
-    async function runAction(action: 'run_query' | 'source_apply_plan' | 'canary_run' | 'public_channel_status' | 'request_source' | 'request_restricted_source' | 'create_watchlist' | 'rebuild_alerts') {
+    async function runAction(action: 'run_query' | 'source_apply_plan' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'public_channel_status' | 'request_source' | 'request_restricted_source' | 'create_watchlist' | 'rebuild_alerts') {
         setBusyAction(action)
         setActionResult(null)
         try {
@@ -214,8 +214,8 @@ export default function TiScraperControlClient() {
                 <div className='grid gap-2 border-b border-ui-border bg-ui-panel p-2 text-ui-text xl:grid-cols-[auto_minmax(0,1fr)_auto] xl:items-center'>
                     <div className='flex flex-wrap items-center gap-2'>
                         <MiniMetric label='Queue' value={String(queueCount)} />
-                        <MiniMetric label='Tasks' value={String(frontierTasks.length)} />
-                        <MiniMetric label='Review' value={String(sourceNeedsReview)} />
+                        <MiniMetric label='Daily' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} />
+                        <MiniMetric label='Sources' value={String(scheduler.totalSources || sources.length)} />
                         <MiniMetric label='Alerts' value={String(sourceGrowth.alertsGenerated)} />
                     </div>
                     <form onSubmit={submit} className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]'>
@@ -234,7 +234,7 @@ export default function TiScraperControlClient() {
                         </button>
                     </form>
                     <div className='grid gap-1.5'>
-                        <ActionButton compact busy={busyAction === 'run_query'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('run_query')}>Run</ActionButton>
+                        <ActionButton compact busy={busyAction === 'scheduler_run_now'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_run_now')}>Run due</ActionButton>
                     </div>
                 </div>
 
@@ -243,10 +243,12 @@ export default function TiScraperControlClient() {
                         <details className='border-b border-ui-border bg-ui-panel' data-ti-control-secondary-actions>
                             <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-2 py-2 text-xs font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/35 [&::-webkit-details-marker]:hidden'>
                                 <span>Advanced source controls</span>
-                                <span className='text-[11px] font-medium text-ui-muted'>canary, enrich, plan</span>
+                                <span className='text-[11px] font-medium text-ui-muted'>daily, enrich, plan</span>
                             </summary>
                             <div className='grid grid-cols-2 gap-1.5 border-t border-ui-border p-2'>
-                                <ActionButton compact busy={busyAction === 'canary_run'} icon={<Activity className='h-4 w-4' />} onClick={() => runAction('canary_run')}>Canary</ActionButton>
+                                <ActionButton compact busy={busyAction === 'scheduler_run_now'} icon={<Activity className='h-4 w-4' />} onClick={() => runAction('scheduler_run_now')}>Run due</ActionButton>
+                                <ActionButton compact busy={busyAction === 'scheduler_pause'} icon={<PauseCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_pause')}>Pause</ActionButton>
+                                <ActionButton compact busy={busyAction === 'scheduler_resume'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_resume')}>Resume</ActionButton>
                                 <ActionButton compact busy={busyAction === 'enrichment_run'} icon={<ListChecks className='h-4 w-4' />} onClick={runEnrichment}>Enrich</ActionButton>
                                 <ActionButton compact busy={busyAction === 'source_apply_plan'} icon={<FileSearch className='h-4 w-4' />} onClick={() => runAction('source_apply_plan')}>Plan</ActionButton>
                                 <ActionButton compact busy={busyAction === 'rebuild_alerts'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Alerts</ActionButton>
@@ -327,7 +329,7 @@ export default function TiScraperControlClient() {
                                             Actions
                                         </div>
                                         <div className='mt-2 grid gap-1.5 sm:grid-cols-2 2xl:grid-cols-1'>
-                                            <ActionButton busy={busyAction === 'run_query'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('run_query')}>Queue run</ActionButton>
+                                            <ActionButton busy={busyAction === 'scheduler_run_now'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('scheduler_run_now')}>Run due sources</ActionButton>
                                             <ActionButton busy={busyAction === 'source_apply_plan'} icon={<FileSearch className='h-4 w-4' />} onClick={() => runAction('source_apply_plan')}>Preview plan</ActionButton>
                                             <ActionButton busy={busyAction === 'public_channel_status'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('public_channel_status')}>Channels</ActionButton>
                                             <ActionButton busy={busyAction === 'rebuild_alerts'} icon={<Activity className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild alerts</ActionButton>
@@ -388,6 +390,8 @@ export default function TiScraperControlClient() {
                             <SidePanel title='Coverage' icon={<GitBranch className='h-4 w-4' />}>
                                 <div className='grid grid-cols-2 gap-2'>
                                     <Info label='Candidates' value={String(sourceGrowth.candidates)} />
+                                    <Info label='Daily covered' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} />
+                                    <Info label='AI parser' value={scheduler.aiConfigured ? 'connected' : 'fallback'} />
                                     <Info label='Active Telegram' value={String(sourceGrowth.activeTelegram)} />
                                     <Info label='Darkweb/onion' value={String(sourceGrowth.activeDarkweb)} />
                                     <Info label='Matches' value={String(sourceGrowth.watchlistMatches)} />
@@ -445,7 +449,7 @@ export default function TiScraperControlClient() {
                         Operations telemetry
                     </span>
                     <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
-                        {healthyEndpoints}/{Math.max(endpointRows.length, 1)} checks healthy · {queueCount} queued · {sourceGrowth.alertsGenerated} alerts
+                        {healthyEndpoints}/{Math.max(endpointRows.length, 1)} checks healthy · {scheduler.dailyCovered}/{scheduler.dailySources} daily · {sourceGrowth.alertsGenerated} alerts
                         <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
                     </span>
                 </summary>
@@ -453,8 +457,8 @@ export default function TiScraperControlClient() {
                     <section className='grid gap-2 sm:grid-cols-2 xl:grid-cols-5'>
                         <Metric title='Scraper' value={snapshot?.health ? 'Reachable' : loading ? 'Loading' : 'Connecting'} detail={`${healthyEndpoints}/${Math.max(endpointRows.length, 1)} checks healthy`} icon={<Gauge className='h-4 w-4' />} tone={snapshot?.health ? 'ok' : 'bad'} />
                         <Metric title='Queue' value={String(queueCount)} detail='frontier tasks visible to workers' icon={<Workflow className='h-4 w-4' />} tone={queueCount > 200 ? 'warn' : 'ok'} />
-                        <Metric title='Active Telegram' value={String(sourceGrowth.activeTelegram)} detail='public source coverage' icon={<UserRound className='h-4 w-4' />} tone={sourceGrowth.activeTelegram ? 'ok' : 'warn'} />
-                        <Metric title='Darkweb/onion' value={String(sourceGrowth.activeDarkweb)} detail={`${sourceGrowth.candidates} candidates total`} icon={<DatabaseZap className='h-4 w-4' />} tone={sourceGrowth.activeDarkweb ? 'ok' : 'warn'} />
+                        <Metric title='Daily coverage' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} detail={`${scheduler.dailyAttempted} attempted, ${scheduler.shortfall} source shortfall`} icon={<UserRound className='h-4 w-4' />} tone={scheduler.dailySources && scheduler.dailyCovered < scheduler.dailySources ? 'warn' : 'ok'} />
+                        <Metric title='AI parser' value={scheduler.aiConfigured ? 'Connected' : 'Fallback'} detail={`${scheduler.acceptedExposureCount} accepted, ${scheduler.reviewExposureCount} review`} icon={<DatabaseZap className='h-4 w-4' />} tone={scheduler.aiConfigured ? 'ok' : 'warn'} />
                         <Metric title='Alerts' value={String(sourceGrowth.alertsGenerated)} detail={`${sourceGrowth.watchlistMatches} matches, ${sourceGrowth.webhookDeliveries} deliveries`} icon={<Clock3 className='h-4 w-4' />} tone={sourceGrowth.alertsGenerated ? 'ok' : 'hold'} />
                     </section>
 
@@ -472,10 +476,10 @@ export default function TiScraperControlClient() {
                         </Panel>
                         <Panel title='Output feed' icon={<FileSearch className='h-4 w-4' />}>
                             <div className='grid gap-2 md:grid-cols-2'>
-                                <Info label='Runs' value='collection feed' />
+                                <Info label='Runs' value={scheduler.lastRunStatus || 'collection feed'} />
                                 <Info label='Queue' value={`${queueCount} frontier tasks`} />
                                 <Info label='Quality' value={qualitySummary(snapshot)} />
-                                <Info label='TI page' value={`${query} coverage`} />
+                                <Info label='Next run' value={scheduler.nextRunAt ? formatTime(scheduler.nextRunAt) : 'checking'} />
                             </div>
                         </Panel>
                     </section>
@@ -486,7 +490,7 @@ export default function TiScraperControlClient() {
 
 }
 
-function actionBody(action: 'run_query' | 'source_apply_plan' | 'canary_run' | 'public_channel_status' | 'request_source' | 'request_restricted_source' | 'create_watchlist' | 'rebuild_alerts', query: string, source: SourceRow | undefined, input: { sourceTarget: string; watchTerms: string }) {
+function actionBody(action: 'run_query' | 'source_apply_plan' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'public_channel_status' | 'request_source' | 'request_restricted_source' | 'create_watchlist' | 'rebuild_alerts', query: string, source: SourceRow | undefined, input: { sourceTarget: string; watchTerms: string }) {
     if (action === 'source_apply_plan') {
         return { action, query, sourceId: source?.id, actions: ['approve', 'quarantine', 'request_legal_notes', 'leave_unchanged'] }
     }
@@ -627,7 +631,7 @@ function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], ta
             status: 'queued',
             timestamp: generatedAt,
             evidence: [{ label: 'Queued', value: String(queued) }, { label: 'Stream', value: 'frontier' }],
-            nextActions: ['Check resource feed.', 'Avoid adding broad searches until queue age is healthy.', 'Run canary only if worker pressure is acceptable.'],
+            nextActions: ['Check resource feed.', 'Avoid adding broad searches until queue age is healthy.', 'Run due sources only if worker pressure is acceptable.'],
         })
     }
 
@@ -665,7 +669,7 @@ function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], ta
                 { label: 'Darkweb/onion', value: String(growth.activeDarkweb) },
                 { label: 'Failing sources', value: String(growth.failingSources) },
             ],
-            nextActions: ['Add a safe public Telegram candidate.', 'Request sensitive actor/onion coverage.', 'Run canary and source apply-plan before promotion.'],
+            nextActions: ['Add a safe public Telegram candidate.', 'Request sensitive actor/onion coverage.', 'Run the daily scheduler and source apply-plan before promotion.'],
         })
     }
 
@@ -716,7 +720,7 @@ function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], ta
             status: 'steady',
             timestamp: generatedAt,
             evidence: [{ label: 'Query', value: snapshot.query || defaultQuery }, { label: 'Sources', value: String(sources.length) }],
-            nextActions: ['Run a targeted canary.', 'Refresh actor profiles.', 'Inspect public-page quality for the selected query.'],
+            nextActions: ['Run due sources.', 'Refresh actor profiles.', 'Inspect public-page quality for the selected query.'],
         })
     }
 
@@ -770,6 +774,26 @@ function policySummary(item: WorkItem, source: SourceRow | undefined, snapshot: 
     const restricted = asRecord(snapshot?.restricted?.status)
     const status = stringValue(restricted.state) || stringValue(restricted.status)
     return status ? `Sensitive-source state: ${status}.` : 'Sensitive-source rules are clear.'
+}
+
+function schedulerKpis(snapshot: ControlSnapshot | null) {
+    const schedulerRoot = asRecord(snapshot?.scheduler)
+    const scheduler = asRecord(schedulerRoot.scheduler)
+    const coverage = asRecord(schedulerRoot.sourceCoverage)
+    const parser = asRecord(schedulerRoot.parser)
+    const lastRun = asRecord(scheduler.lastRun)
+    return {
+        totalSources: numberFrom(coverage.totalSourceCount) ?? 0,
+        shortfall: numberFrom(coverage.sourceShortfall) ?? 0,
+        dailySources: numberFrom(coverage.dailySourceCount) ?? 0,
+        dailyAttempted: numberFrom(coverage.dailyAttemptedCount) ?? 0,
+        dailyCovered: numberFrom(coverage.dailyCoveredCount) ?? 0,
+        aiConfigured: Boolean(parser.aiEndpointConfigured),
+        acceptedExposureCount: numberFrom(parser.acceptedExposureCount) ?? 0,
+        reviewExposureCount: numberFrom(parser.reviewExposureCount) ?? 0,
+        nextRunAt: stringValue(scheduler.nextRunAt),
+        lastRunStatus: stringValue(lastRun.status),
+    }
 }
 
 function sourceGrowthKpis(snapshot: ControlSnapshot | null, sources: SourceRow[]) {

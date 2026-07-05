@@ -4,7 +4,7 @@ import { loadProductSourceProxyProofLedger, sourceProxyFromLedger } from '@/util
 export const dynamic = 'force-dynamic'
 
 type ControlActionBody = {
-    action?: 'run_query' | 'source_apply_plan' | 'public_channel_status' | 'canary_run' | 'request_source' | 'source_candidate_action' | 'create_watchlist' | 'rebuild_alerts'
+    action?: 'run_query' | 'source_apply_plan' | 'public_channel_status' | 'scheduler_run_now' | 'scheduler_pause' | 'scheduler_resume' | 'request_source' | 'source_candidate_action' | 'create_watchlist' | 'rebuild_alerts'
     query?: string
     sourceId?: string
     candidateId?: string
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         frontier,
         resources,
         productSlo,
-        canary,
+        scheduler,
         quality,
         publicChannel,
         restricted,
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
         fetchJson(base, '/v1/frontier'),
         fetchJson(base, '/v1/ops/resource-snapshot'),
         fetchJson(base, '/v1/ops/product-slo'),
-        fetchJson(base, '/v1/ops/canary'),
+        fetchJson(base, '/v1/ops/collection-scheduler'),
         fetchJson(base, `/v1/quality/evaluate?q=${encodeURIComponent(query)}`),
         fetchJson(base, `/v1/public-channels/status?query=${encodeURIComponent(query)}&tenantId=${encodeURIComponent(tenantId)}`),
         fetchJson(base, `/v1/restricted-metadata/status?q=${encodeURIComponent(query)}`),
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
             frontier: endpointResult(frontier),
             resources: endpointResult(resources),
             productSlo: endpointResult(productSlo),
-            canary: endpointResult(canary),
+            scheduler: endpointResult(scheduler),
             quality: endpointResult(quality),
             publicChannel: endpointResult(publicChannel),
             restricted: endpointResult(restricted),
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
         frontier: frontier.json,
         resources: resources.json,
         productSlo: productSlo.json,
-        canary: canary.json,
+        scheduler: scheduler.json,
         quality: quality.json,
         publicChannel: publicChannel.json,
         restricted: restricted.json,
@@ -149,13 +149,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: result.ok, status: result.status, payload: result.json, error: result.error }, { status: result.ok ? 200 : 502 })
     }
 
-    if (body.action === 'canary_run') {
-        return forward(base, '/v1/ops/canary/run', {
-            operatorApproval: true,
+    if (body.action === 'scheduler_run_now' || body.action === 'scheduler_pause' || body.action === 'scheduler_resume') {
+        return forward(base, '/v1/ops/collection-scheduler', {
+            action: body.action === 'scheduler_run_now' ? 'run_now' : body.action === 'scheduler_pause' ? 'pause' : 'resume',
             approvedBy: 'dashboard/ti/control',
-            maxSources: 8,
-            maxTasks: 12,
-            generatedAt: new Date().toISOString(),
+            reason: 'operator source scheduler control',
         })
     }
 
@@ -258,7 +256,9 @@ function localSchedulerFallback(body: ControlActionBody) {
         'run_query',
         'source_apply_plan',
         'public_channel_status',
-        'canary_run',
+        'scheduler_run_now',
+        'scheduler_pause',
+        'scheduler_resume',
         'request_source',
         'source_candidate_action',
         'create_watchlist',
