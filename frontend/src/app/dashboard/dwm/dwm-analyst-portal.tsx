@@ -1833,9 +1833,19 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                         ))}
                     </div>
                 ) : null}
-                <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap' data-dwm-available-actions='true'>
-                    {availableActions.map(action => <Fragment key={action.id}>{action.element}</Fragment>)}
-                </div>
+                {availableActions.length ? (
+                    <details className='group rounded-lg border border-ui-border bg-ui-panel p-2' data-dwm-available-actions='true'>
+                        <summary className='flex min-h-9 cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>
+                            <span>More route actions</span>
+                            <span className='rounded-full border border-ui-border px-2 py-0.5 text-[10px] uppercase text-ui-muted'>
+                                {availableActions.length} available
+                            </span>
+                        </summary>
+                        <div className='mt-2 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap'>
+                            {availableActions.map(action => <Fragment key={action.id}>{action.element}</Fragment>)}
+                        </div>
+                    </details>
+                ) : null}
                 {actionMessage && (
                     <p className={`justify-self-start rounded-lg border px-3 py-2 text-xs font-semibold xl:justify-self-end ${actionMessage.ok ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'}`}>
                         {actionMessage.text}
