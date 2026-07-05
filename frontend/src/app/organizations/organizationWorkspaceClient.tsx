@@ -1252,7 +1252,7 @@ export default function OrganizationWorkspaceClient() {
                     <input value={createFirstWatchlist.notes} disabled={Boolean(busy)} onChange={event => setCreateFirstWatchlist({ ...createFirstWatchlist, notes: event.target.value })} className={inputClass} placeholder='Initial monitoring reason' />
                 </label>
             </div>
-            <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' data-org-create-first-invites='true'>
+            <div id='org-create-invites' className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' data-org-create-first-invites='true'>
                 <label className='grid gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                     First invites
                     <textarea value={createInviteEmails} disabled={Boolean(busy)} onChange={event => setCreateInviteEmails(event.target.value)} className={`${inputClass} min-h-20 resize-y`} placeholder='analyst@company.com, admin@company.com' />
@@ -1666,9 +1666,14 @@ function EmptyWorkspacePreview() {
                         <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Shared watchlists</span>
                         <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Team invites</span>
                     </div>
-                    <a href='#org-create-primary' className='mt-3 inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text'>
-                        Open create form
-                    </a>
+                    <div className='mt-3 flex flex-wrap gap-2'>
+                        <a href='#org-create-primary' className='inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text'>
+                            Create organization
+                        </a>
+                        <a href='#org-create-invites' className='inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text'>
+                            Add first invites
+                        </a>
+                    </div>
                 </div>
             </div>
         </section>
