@@ -632,9 +632,9 @@ export default function OrganizationWorkspaceClient() {
     const requireManage = () => {
         if (!canManage) throw new Error('Owner or admin required.')
     }
-    const activeWatchlists = bundle.watchlists.filter(item => item.status === 'active')
-    const pausedWatchlists = bundle.watchlists.filter(item => item.status === 'paused')
-    const archivedWatchlists = bundle.watchlists.filter(item => item.status === 'archived')
+    const activeWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'active')
+    const pausedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'paused')
+    const archivedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'archived')
     const configuredDestinationCount = organizationConfiguredDestinationCount(bundle)
     const hasConfiguredDestination = configuredDestinationCount > 0
     const watchlistDraftDuplicate = isDuplicateWatchlistTerm(bundle.watchlists, watchlistDraft.kind, watchlistDraft.value)
@@ -2557,7 +2557,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
 function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], members: OrganizationMember[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const [watchlistQuery, setWatchlistQuery] = useState('')
     const [watchlistStatusFilter, setWatchlistStatusFilter] = useState('all')
-    const archivedCount = watchlists.filter(item => item.status === 'archived').length
+    const archivedCount = watchlists.filter(item => item.status.toLowerCase() === 'archived').length
     const busyLabel = watchlistBusyLabel(busy)
     const normalizedWatchlistQuery = normalizeWatchlistValue(watchlistQuery)
     const visibleWatchlists = watchlists.filter(item => {
@@ -3614,7 +3614,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
         at: alert.updatedAt || new Date(0).toISOString(),
         title: 'Alert',
         detail: `${alert.title || compactReference(alert.id, 'alert')} · ${alert.severity || 'severity'} · ${alert.status || 'status'}`,
-        ok: alert.status !== 'failed' && alert.status !== 'suppressed',
+        ok: alert.status?.toLowerCase() !== 'failed' && alert.status?.toLowerCase() !== 'suppressed',
         subjectType: 'alert',
         subjectId: alert.id,
         relatedSubjectIds: [alert.watchlistItemId, ...(alert.watchlistItemIds || []), ...(alert.watchlistIds || [])].filter(Boolean) as string[],
@@ -3630,7 +3630,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
         at: item.updatedAt || new Date(0).toISOString(),
         title: 'Case',
         detail: `${item.title || compactReference(item.id, 'case')} · ${item.status || 'status'}${item.assignedOwner ? ` · ${organizationMemberLabel(item.assignedOwner, bundle.members)}` : ''}`,
-        ok: item.status !== 'failed' && item.status !== 'blocked',
+        ok: item.status?.toLowerCase() !== 'failed' && item.status?.toLowerCase() !== 'blocked',
         subjectType: 'case',
         subjectId: item.id,
         metadata: compactMetadata([
@@ -3644,7 +3644,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
         at: delivery.attemptedAt || delivery.updatedAt || delivery.createdAt || new Date(0).toISOString(),
         title: delivery.dryRun ? 'Destination tested' : 'Alert delivery recorded',
         detail: `${delivery.status || 'delivery'} · ${compactReference(delivery.watchlistId || delivery.watchlistItemId || delivery.alertId, 'watchlist') || 'Watchlist pending'}`,
-        ok: !delivery.error && delivery.status !== 'failed',
+        ok: !delivery.error && delivery.status?.toLowerCase() !== 'failed',
         subjectType: 'destination',
         subjectId: delivery.webhookDestinationId || delivery.watchlistItemId || delivery.watchlistId || delivery.alertId,
         relatedSubjectIds: [
@@ -3670,7 +3670,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
         at: invite.createdAt || new Date(0).toISOString(),
         title: 'Invite',
         detail: `${invite.email} · ${invite.role} · ${invite.status}`,
-        ok: invite.status !== 'revoked' && invite.status !== 'expired',
+        ok: invite.status.toLowerCase() !== 'revoked' && invite.status.toLowerCase() !== 'expired',
         subjectType: 'invite',
         subjectId: invite.id,
         metadata: compactMetadata([
@@ -3683,7 +3683,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
         at: member.joinedAt || new Date(0).toISOString(),
         title: 'Member role',
         detail: `${organizationMemberLabel(member.userId, bundle.members)} · ${member.role} · ${member.status}`,
-        ok: member.status !== 'removed' && member.status !== 'revoked',
+        ok: member.status.toLowerCase() !== 'removed' && member.status.toLowerCase() !== 'revoked',
         subjectType: 'member',
         subjectId: member.userId,
         metadata: compactMetadata([
@@ -3697,7 +3697,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
         at: item.updatedAt || item.archivedAt || item.createdAt || new Date(0).toISOString(),
         title: 'Watchlist term',
         detail: `${item.kind} · ${item.value} · ${item.status}`,
-        ok: item.status !== 'archived',
+        ok: item.status.toLowerCase() !== 'archived',
         subjectType: 'watchlist',
         subjectId: item.id,
         metadata: compactMetadata([
@@ -3884,7 +3884,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
             ['Closed access', closedMemberCount ? String(closedMemberCount) : undefined],
             ['Pending invites', String(bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending').length)],
             ['Watchlists', String(bundle.watchlists.length)],
-            ['Active terms', String(bundle.watchlists.filter(item => item.status === 'active').length)],
+            ['Active terms', String(bundle.watchlists.filter(item => item.status.toLowerCase() === 'active').length)],
             ['Destinations', String(bundle.webhooks.length)],
         ])
     }
@@ -4130,7 +4130,7 @@ function destinationConfigured(item: WatchlistItem) {
 }
 
 function organizationDestinationConfigured(destination: WebhookDestination) {
-    return Boolean(destination.deliveryReady || destination.status === 'active' || destination.status === 'configured' || destination.endpointHash || destination.endpointHint)
+    return Boolean(destination.deliveryReady || ['active', 'configured'].includes((destination.status || '').toLowerCase()) || destination.endpointHash || destination.endpointHint)
 }
 
 function organizationConfiguredDestinationCount(bundle: OrgBundle) {
@@ -4142,7 +4142,7 @@ function organizationConfiguredDestinationCount(bundle: OrgBundle) {
 function isDuplicateWatchlistTerm(watchlists: WatchlistItem[], kind: WatchlistKind, value: string, excludeId = '') {
     const normalizedValue = normalizeWatchlistValue(value)
     if (!normalizedValue) return false
-    return watchlists.some(item => item.id !== excludeId && item.status !== 'archived' && item.kind === kind && normalizeWatchlistValue(item.value) === normalizedValue)
+    return watchlists.some(item => item.id !== excludeId && item.status.toLowerCase() !== 'archived' && item.kind === kind && normalizeWatchlistValue(item.value) === normalizedValue)
 }
 
 function watchlistDraftChanged(item: WatchlistItem, draft: { kind: WatchlistKind, value: string, notes: string }) {
