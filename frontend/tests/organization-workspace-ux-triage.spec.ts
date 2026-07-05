@@ -32,7 +32,7 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).not.toContain('Start with a scope template, enter a real customer-owned term, then save it to generate org-scoped alert terms and delivery context.')
     expect(page).toContain('const requireManage = () => {')
     expect(page).toContain('requireManage()')
-    expect(page).toContain('const canCopy = canManage && Boolean(inviteLink(invite))')
+    expect(page).toContain('const canCopy = canManage && linkAvailable && !busy')
     expect(page).toContain('firstDomainCandidate')
     expect(page).toContain('data-org-health-strip')
     expect(page).toContain('Workspace health')
@@ -290,6 +290,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('inviteSearchText(invite).includes(normalizedInviteQuery)')
     expect(page).toContain('function inviteSearchText')
     expect(page).toContain('const copyReason = !canManage ? \'Owner or admin required\'')
+    expect(page).toContain('data-org-invite-link-state=\'true\'')
+    expect(page).toContain('Link {linkAvailable ? \'available\' : \'closed\'}')
     expect(page).toContain('aria-label={copyReason ? `Copy invite link: ${copyReason}` : \'Copy invite link\'}')
     expect(page).toContain('title={resendReason || \'Resend invite\'}')
     expect(page).toContain('title={revokeReason || \'Revoke invite\'}')
@@ -443,6 +445,16 @@ test('organization workspace renders searchable shared watchlists', async ({ con
         { name: 'id', value: 'dashboard-render-proof-user', domain: '127.0.0.1', path: '/' },
         { name: 'access_token', value: 'local-dashboard-render-proof-token', domain: '127.0.0.1', path: '/' },
     ])
+    await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: {
+                writeText: async (value: string) => {
+                    ;(window as Window & { __copiedInvite?: string }).__copiedInvite = value
+                },
+            },
+        })
+    })
 
     await page.route(url => new URL(url).pathname === '/api/organizations', async route => {
         await route.fulfill({ json: { organizations: [fixtureOrganization, fixtureViewerOrganization] } })
@@ -577,6 +589,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.getByLabel('Find invite').fill('revoked')
     await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('1/2 shown')
     await expect(page.locator('#invites')).toContainText('former@acme.test')
+    await expect(page.locator('#invites')).toContainText('Link closed')
     await expect(page.locator('#invites')).not.toContainText('admin@acme.test')
     await page.locator('[data-org-invite-filter-strip="true"]').getByLabel('Status').selectOption('pending')
     await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('0/2 shown')
@@ -585,6 +598,10 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.locator('[data-org-invite-filter-strip="true"]').getByLabel('Status').selectOption('pending')
     await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('1/2 shown')
     await expect(page.locator('#invites')).toContainText('admin@acme.test')
+    await expect(page.locator('#invites')).toContainText('Link available')
+    await page.locator('#invites').getByLabel('Copy invite link').click()
+    await expect.poll(() => page.evaluate(() => (window as Window & { __copiedInvite?: string }).__copiedInvite)).toBe('/organizations/invites/invite_acme_admin')
+    await expect(page.locator('#invites')).toContainText('Invite link copied.')
     await page.locator('#invites').getByLabel('Resend invite').click()
     expect(inviteActions).toContainEqual({ inviteId: 'invite_acme_admin', action: 'resend' })
     await expect(page.locator('#audit')).toContainText('Invite resent to admin@acme.test.')

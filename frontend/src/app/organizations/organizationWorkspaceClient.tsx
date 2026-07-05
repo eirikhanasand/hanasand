@@ -1995,7 +1995,8 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                         </div>
                         {visibleInvites.length === 0 && <EmptyLine text='Adjust filters to see pending access requests.' />}
                         {visibleInvites.map(invite => {
-                            const canCopy = canManage && Boolean(inviteLink(invite)) && inviteActionAllowed(invite, 'copy') && !busy
+                            const linkAvailable = Boolean(inviteLink(invite)) && inviteActionAllowed(invite, 'copy')
+                            const canCopy = canManage && linkAvailable && !busy
                             const canResend = canManage && inviteActionAllowed(invite, 'resend') && !busy
                             const canRevoke = canManage && inviteActionAllowed(invite, 'revoke') && !busy
                             const copyReason = !canManage ? 'Owner or admin required' : !inviteLink(invite) ? 'Invite link unavailable' : !inviteActionAllowed(invite, 'copy') ? 'Pending invite required' : ''
@@ -2023,6 +2024,9 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                                             <span className='mt-1 flex flex-wrap gap-2'>
                                                 <RoleBadge role={invite.role} />
                                                 <StatusPill status={invite.status} />
+                                                <span className='rounded-full border border-ui-border px-2 py-0.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-invite-link-state='true'>
+                                                    Link {linkAvailable ? 'available' : 'closed'}
+                                                </span>
                                             </span>
                                             <RowStatus message={rowMessages[`invite-${invite.id}`]} />
                                         </span>
