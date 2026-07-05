@@ -4097,7 +4097,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
             ['Pending invites', String(bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending').length)],
             ['Watchlists', String(bundle.watchlists.length)],
             ['Active terms', String(bundle.watchlists.filter(item => item.status.toLowerCase() === 'active').length)],
-            ['Destinations', String(bundle.webhooks.length)],
+            ['Destinations', String(organizationConfiguredDestinationCount(bundle))],
         ])
     }
     if (subject.type === 'invite') {
