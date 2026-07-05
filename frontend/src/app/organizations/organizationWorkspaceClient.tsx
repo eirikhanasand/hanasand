@@ -1606,30 +1606,32 @@ function PermissionStrip({ role, canManage, hasWatchlists, hasDestination }: { r
         { id: 'destinations', label: 'Destinations', value: canManage && hasWatchlists ? 'Test' : hasDestination ? 'View' : 'Add watchlist', ready: canManage && hasWatchlists, reason: hasWatchlists ? (canManage ? 'Save and replay routes' : 'Owner or admin required') : 'Add watchlist first' },
         { id: 'alerts', label: 'Alerts and cases', value: hasWatchlists ? 'Scoped' : 'Waiting', ready: hasWatchlists, reason: hasWatchlists ? 'Org watchlist context available' : 'Add watchlist first' },
     ] as const
+    const actionCount = rows.filter(row => row.ready).length
     return (
-        <section className='rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-permission-strip='true' aria-label='Organization permission summary'>
-            <div className='grid gap-2 lg:grid-cols-[minmax(9rem,0.45fr)_minmax(0,1fr)] lg:items-center'>
-                <div className='flex min-w-0 items-center gap-2'>
+        <details className='group rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-permission-strip='true' aria-label='Organization permission summary'>
+            <summary className='flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/30 dark:text-ui-text dark:hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
+                <span className='inline-flex min-w-0 items-center gap-2'>
                     <ShieldCheck className='h-4 w-4 shrink-0 text-ui-primary' />
-                    <span className='min-w-0'>
-                        <span className='block truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted dark:text-ui-muted'>Current role</span>
-                        <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{role}</span>
-                    </span>
-                </div>
-                <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
-                    {rows.map(row => (
-                        <div key={row.id} className='grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas' data-org-permission-row={row.id}>
-                            <span className='min-w-0'>
-                                <span className='block truncate text-xs font-semibold text-ui-muted dark:text-ui-muted'>{row.label}</span>
-                                <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
-                                <span className='block truncate text-[11px] text-ui-muted dark:text-ui-muted'>{row.reason}</span>
-                            </span>
-                            <StatusPill status={row.ready ? 'ready' : 'review'} />
-                        </div>
-                    ))}
-                </div>
+                    <span className='truncate'>Access rules</span>
+                    <span className='hidden text-xs font-medium text-ui-muted dark:text-ui-muted sm:inline'>Current role: {role}</span>
+                </span>
+                <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
+                    {actionCount}/{rows.length} available
+                </span>
+            </summary>
+            <div className='grid gap-2 border-t border-ui-border px-2 pb-2 pt-3 dark:border-ui-border sm:grid-cols-2 xl:grid-cols-4'>
+                {rows.map(row => (
+                    <div key={row.id} className='grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 dark:border-ui-border dark:bg-ui-canvas' data-org-permission-row={row.id}>
+                        <span className='min-w-0'>
+                            <span className='block truncate text-xs font-semibold text-ui-muted dark:text-ui-muted'>{row.label}</span>
+                            <span className='block truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{row.value}</span>
+                            <span className='block truncate text-[11px] text-ui-muted dark:text-ui-muted'>{row.reason}</span>
+                        </span>
+                        <StatusPill status={row.ready ? 'ready' : 'review'} />
+                    </div>
+                ))}
             </div>
-        </section>
+        </details>
     )
 }
 
