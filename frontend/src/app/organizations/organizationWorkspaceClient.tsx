@@ -2450,6 +2450,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                     const currentKind = (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook'
                     const destinationName = normalizeDestinationName(destination.name || '') || defaultDestinationName(currentKind)
                     const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
+                    const destinationEnabled = destinationStatus === 'active' || destinationStatus === 'configured'
                     const latestDelivery = latestDeliveryForDestination(destination, deliveries)
                     const draftUrl = draft?.url.trim() || ''
                     const draftUrlInvalid = Boolean(draftUrl) && !validDestinationUrl(draftUrl)
@@ -2524,11 +2525,11 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                             <RefreshCw className='h-4 w-4' />
                                             Test
                                         </button>
-                                        <button type='button' aria-label={destinationManageReason ? `Edit destination: ${destinationManageReason}` : 'Edit destination'} title={destinationManageReason || 'Edit destination'} className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [destination.id]: { name: destinationName, kind: currentKind, url: '', status: destination.status || 'active' } }))}>
+                                        <button type='button' aria-label={destinationManageReason ? `Edit destination: ${destinationManageReason}` : 'Edit destination'} title={destinationManageReason || 'Edit destination'} className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [destination.id]: { name: destinationName, kind: currentKind, url: '', status: destinationEnabled ? 'active' : 'paused' } }))}>
                                             <Pencil className='h-4 w-4' />
                                             Edit
                                         </button>
-                                        {destinationStatus === 'active' ? (
+                                        {destinationEnabled ? (
                                             <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} title={destinationManageReason || 'Disable destination'} aria-label={destinationManageReason ? `Disable destination: ${destinationManageReason}` : 'Disable destination'} onClick={() => onUpdate(destination, { name: destinationName, kind: currentKind, url: '', status: 'paused' })}>
                                                 <Pause className='h-4 w-4' />
                                                 Disable
