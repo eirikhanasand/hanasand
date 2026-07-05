@@ -84,6 +84,10 @@ export interface TiActionabilityContract {
         sourceName: string
         provenance: string
         captureId?: string
+        sourceFamily?: 'actor_profile' | 'source_capture' | 'watchlist' | 'alert' | 'case' | 'geography' | 'indicator' | 'vendor_disclosure' | 'webhook' | 'public_ti'
+        parserStatus?: 'parsed' | 'partial' | 'queued' | 'failed' | 'missing_capture' | 'public_reference'
+        reportDate?: string
+        lastCollectedAt?: string
         confidence?: number
     }>
     enrichmentGaps?: Array<{
@@ -1559,6 +1563,10 @@ function actionabilityForQuery(query: string, known?: KnownActorContext | null, 
         sourceId: source.id,
         sourceName: source.name,
         provenance: source.url || source.provenance,
+        sourceFamily: actionabilitySourceFamily(source),
+        parserStatus: 'public_reference' as const,
+        reportDate: known?.lastSeen,
+        lastCollectedAt: known?.lastSeen,
         confidence: known?.confidence ?? 0.58
     })).filter(source => source.provenance)
     const watchlistCandidates = known ? watchlistCandidatesForKnownActor(query, known) : watchlistCandidatesForQuery(query)
@@ -1625,6 +1633,13 @@ function actionabilityForQuery(query: string, known?: KnownActorContext | null, 
             }
         }
     }
+}
+
+function actionabilitySourceFamily(source: TiSource): NonNullable<NonNullable<TiActionabilityContract['sourceProvenance']>[number]['sourceFamily']> {
+    if (/advisory|vendor|actor_directory/i.test(source.type)) return 'vendor_disclosure'
+    if (/capture|scraper|clear_web|live/i.test(source.type)) return 'source_capture'
+    if (/indicator|ioc/i.test(source.type)) return 'indicator'
+    return 'public_ti'
 }
 
 function watchlistCandidatesForKnownActor(query: string, known: KnownActorContext): NonNullable<TiActionabilityContract['watchlistCandidates']> {
@@ -1800,6 +1815,130 @@ function knownActorProfile(query: string): KnownActorContext | null {
                 }
             ]
         }, 'APT42', 0.72)
+    }
+    if (normalized === 'lockbit' || normalized.includes('lockbit 3.0') || normalized.includes('lockbitsupp')) {
+        return withAutomaticProfileDefaults({
+            summary: 'LockBit is a ransomware-as-a-service and extortion operation associated with affiliate intrusions, data theft, encryption, leak-site pressure, and broad enterprise victim claims across sectors and regions.',
+            aliases: ['LockBit 3.0', 'LockBitSupp'],
+            targets: [
+                {
+                    sector: 'Enterprise company exposure',
+                    regions: ['Global'],
+                    rationale: 'Affiliate-driven ransomware and extortion activity creates broad exposure for organizations with public victim claims, leaked-data pressure, or encryption incidents.',
+                    confidence: 0.72
+                },
+                {
+                    sector: 'Healthcare, public sector, and services',
+                    regions: ['North America', 'Europe'],
+                    rationale: 'Public disruption and victim-claim reporting repeatedly place service-heavy and public-facing organizations in scope for ransomware response monitoring.',
+                    confidence: 0.62
+                },
+                {
+                    sector: 'Technology and managed service providers',
+                    regions: ['Global'],
+                    rationale: 'Remote access, tooling, and third-party operations make technology and service providers useful pivots for affiliate activity.',
+                    confidence: 0.58
+                }
+            ],
+            ttps: [
+                {
+                    name: 'External Remote Services',
+                    attackId: 'T1133',
+                    tactic: 'Initial Access',
+                    detail: 'Ransomware affiliate activity commonly depends on exposed remote access, compromised credentials, or service-provider access paths.',
+                    confidence: 0.62
+                },
+                {
+                    name: 'Data Encrypted for Impact',
+                    attackId: 'T1486',
+                    tactic: 'Impact',
+                    detail: 'Encryption remains a core impact pattern for LockBit-style ransomware incidents.',
+                    confidence: 0.68
+                },
+                {
+                    name: 'Exfiltration Over Web Service',
+                    attackId: 'T1567',
+                    tactic: 'Exfiltration',
+                    detail: 'Extortion pressure relies on moving stolen data to leak or negotiation infrastructure before disclosure threats.',
+                    confidence: 0.6
+                },
+                {
+                    name: 'Data from Local System',
+                    attackId: 'T1005',
+                    tactic: 'Collection',
+                    detail: 'Data theft context is needed before an analyst can triage victim claims or case evidence.',
+                    confidence: 0.58
+                }
+            ],
+            recentActivity: [
+                {
+                    date: '2024-02-19',
+                    title: 'Operation Cronos disrupted LockBit infrastructure',
+                    detail: 'International law-enforcement action disrupted LockBit infrastructure and produced public reporting on affiliates, infrastructure, and decryption support. Treat this as strategic actor context, not customer-specific evidence.',
+                    confidence: 0.74,
+                    sourceIds: ['cisa-advisories', 'live-news-lockbit'],
+                    claimType: 'infrastructure_activity',
+                    affectedSectors: ['Enterprise company exposure', 'Public sector', 'Healthcare and services'],
+                    countries: ['Global'],
+                    impact: 'Infrastructure disruption changes source freshness expectations and makes current capture evidence important before alert or case creation.',
+                    firstReportedAt: '2024-02-19T00:00:00.000Z',
+                    lastReportedAt: '2024-02-19T00:00:00.000Z',
+                    publisherCount: 2
+                },
+                {
+                    date: '2024-05-07',
+                    title: 'LockBit operator sanctions and charges updated attribution context',
+                    detail: 'Public sanctions and charges against alleged LockBit administration strengthened attribution and operator context while affiliate-driven victim activity continued to require fresh source capture.',
+                    confidence: 0.68,
+                    sourceIds: ['cisa-advisories', 'live-news-lockbit'],
+                    claimType: 'campaign',
+                    affectedSectors: ['Enterprise company exposure'],
+                    countries: ['United States', 'Europe'],
+                    impact: 'Operator context helps case notes, but current victim or watchlist action still needs capture-backed evidence.',
+                    firstReportedAt: '2024-05-07T00:00:00.000Z',
+                    lastReportedAt: '2024-05-07T00:00:00.000Z',
+                    publisherCount: 2
+                }
+            ],
+            actorIntelligence: {
+                actorClass: 'Financially motivated ransomware and extortion operation',
+                attribution: 'Affiliate-driven LockBit ransomware-as-a-service activity in public law-enforcement, vendor, and incident reporting',
+                firstSeen: '2019 public reporting',
+                motivation: [
+                    'Financial extortion',
+                    'Data theft and leak-site pressure',
+                    'Affiliate-driven intrusion monetization',
+                    'Ransomware deployment and negotiation'
+                ],
+                malwareTools: ['LockBit ransomware', 'LockBit 3.0 builder lineage', 'remote access tooling used by affiliates', 'data exfiltration tooling'],
+                campaigns: [
+                    'LockBit 3.0 affiliate intrusions',
+                    'Leak-site victim extortion',
+                    'Operation Cronos disruption and post-disruption monitoring',
+                    'Enterprise ransomware incident reporting'
+                ],
+                infrastructure: [
+                    'Leak-site and negotiation infrastructure',
+                    'Affiliate-controlled access paths',
+                    'Remote access services',
+                    'Data staging and exfiltration paths'
+                ],
+                targetSectors: ['Enterprise company exposure', 'Healthcare, public sector, and services', 'Technology and managed service providers'],
+                geographies: ['Global', 'North America', 'Europe'],
+                confidence: 0.72,
+                confidenceReasoning: [
+                    'Ransomware-as-a-service behavior is corroborated across public law-enforcement and vendor reporting.',
+                    'Recent activity rows distinguish strategic actor context from customer-specific capture evidence.',
+                    'Tradecraft maps to initial access, collection, exfiltration, and impact-oriented ATT&CK techniques.'
+                ],
+                sourceProvenance: [
+                    'CISA and law-enforcement ransomware advisories',
+                    'Public Operation Cronos reporting',
+                    'MITRE ATT&CK ransomware and impact mappings',
+                    'Vendor reporting on LockBit 3.0 activity'
+                ]
+            }
+        }, 'LockBit', 0.72)
     }
     if (
         normalized === 'apt49'
