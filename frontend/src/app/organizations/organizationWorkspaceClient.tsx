@@ -2149,6 +2149,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
         return memberSearchText(member).includes(normalizedMemberQuery)
     })
     const memberFiltersActive = Boolean(memberQuery.trim()) || memberRoleFilter !== 'all'
+    const memberCounts = memberStatusCounts(members)
     return (
         <details id='members' open className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-members-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
@@ -2162,6 +2163,13 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                 {members.length === 0 && <EmptyLine text='Invite teammates to populate this access table.' />}
                 {members.length > 0 && (
                     <>
+                        <div className='mb-3 flex flex-wrap gap-2' data-org-member-status-counts='true'>
+                            {memberCounts.map(item => (
+                                <span key={item.status} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
+                                    {item.label}: {item.count}
+                                </span>
+                            ))}
+                        </div>
                         <div className='mb-3 grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas md:grid-cols-[minmax(0,1fr)_9rem_auto]' data-org-member-filter-strip='true'>
                             <label className='grid min-w-0 gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
                                 Find member
@@ -4227,11 +4235,6 @@ function alertForWatchlist(item: WatchlistItem, alerts: ScopedAlert[]) {
 function latestDeliveryForWatchlist(item: WatchlistItem, deliveries: DeliveryRow[]) {
     return deliveries
         .filter(delivery => delivery.watchlistId === item.id || delivery.watchlistItemId === item.id || delivery.watchlistItemIds?.includes(item.id))
-        .sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
-}
-
-function latestDeliveryForDestination(destination: WebhookDestination, deliveries: DeliveryRow[]) {
-    return deliveriesForDestination(destination, deliveries)
         .sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
 }
 
