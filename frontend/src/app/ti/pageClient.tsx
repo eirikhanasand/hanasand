@@ -4542,7 +4542,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                     </p>
                                     <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{source.captureId ? 'capture linked' : compactSourceReferenceLabel(source.provenance)}</p>
                                 </div>
-                                {typeof source.confidence === 'number' ? <span className='shrink-0 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{Math.round(source.confidence * 100)}%</span> : null}
+                                {typeof source.confidence === 'number' ? <span className='shrink-0 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{sourceBasisLabel(source.confidence)}</span> : null}
                             </div>
                         </div>
                     )) : (
