@@ -24,6 +24,7 @@ const TI_SELECTED_SOURCE_REQUEST_ROWS = 2
 const TI_MOBILE_SOURCE_FILTER_OPTIONS = 5
 const TI_ACTIVITY_TIMELINE_ROWS = 3
 const TI_SOURCE_REFERENCE_ROWS = 4
+const TI_ENRICHMENT_GAP_PREVIEW_ROWS = 4
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const router = useRouter()
@@ -8932,7 +8933,7 @@ function enrichmentGapWorkbenchRowsFor({
         }))
     }
 
-    for (const row of actionability.sourceHealthQueue.rows.filter(item => item.state !== 'ready')) {
+    for (const row of actionability.sourceHealthQueue.rows.filter(item => item.state !== 'ready').slice(0, TI_ENRICHMENT_GAP_PREVIEW_ROWS)) {
         const evidenceItems = matchingWorkItemsForGap(workItems, row.sourceName, row.provenance)
         rows.push(enrichmentGapRow({
             id: `source-health:${row.id}`,
@@ -8958,7 +8959,7 @@ function enrichmentGapWorkbenchRowsFor({
         }))
     }
 
-    for (const item of workItems.filter(item => item.confidence < 0.55 || !item.href || isDateStale(item.timestamp, result.generatedAt)).slice(0, 8)) {
+    for (const item of workItems.filter(item => item.confidence < 0.55 || !item.href || isDateStale(item.timestamp, result.generatedAt)).slice(0, TI_ENRICHMENT_GAP_PREVIEW_ROWS)) {
         const missing = [
             item.confidence < 0.55 ? 'confidence' : '',
             item.href ? '' : 'sourceProvenance[].provenance',
@@ -8988,7 +8989,7 @@ function enrichmentGapWorkbenchRowsFor({
         }))
     }
 
-    for (const artifact of artifacts.filter(item => item.readiness.blockers.length || item.enrichmentTasks.length).slice(0, 8)) {
+    for (const artifact of artifacts.filter(item => item.readiness.blockers.length || item.enrichmentTasks.length).slice(0, TI_ENRICHMENT_GAP_PREVIEW_ROWS)) {
         const evidenceItems = matchingWorkItemsForGap(workItems, artifact.label, artifact.evidence.join(' '))
         rows.push(enrichmentGapRow({
             id: `artifact:${artifact.id}`,
