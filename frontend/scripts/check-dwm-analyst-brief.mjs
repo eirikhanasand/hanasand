@@ -83,6 +83,11 @@ assert.ok(tabsIndex > briefIndex, 'DWM analyst brief should appear before dense 
 assert.ok(source.includes('const DWM_TIMELINE_PREVIEW_ROWS = 5'), 'DWM delivery and case activity timeline should stay compact by default.')
 assert.ok(source.includes('timeline.slice(0, DWM_TIMELINE_PREVIEW_ROWS)'), 'DWM timeline should use the named preview cap.')
 assert.ok(!source.includes('timeline.slice(0, 8)'), 'DWM timeline should not render a long event wall by default.')
+assert.ok(source.includes('const DWM_RECOVERY_PREVIEW_ROWS = 4'), 'DWM recovery panels should keep source and capture rows compact by default.')
+assert.ok(source.includes('latestCaptures.slice(0, DWM_RECOVERY_PREVIEW_ROWS)'), 'DWM capture recovery rows should use the named preview cap.')
+assert.ok(source.includes('sourceRows.slice(0, DWM_RECOVERY_PREVIEW_ROWS)'), 'DWM source recovery rows should use the named preview cap.')
+assert.ok(!source.includes('latestCaptures.slice(0, 8)'), 'DWM recovery should not render a long capture wall by default.')
+assert.ok(!source.includes('sourceRows.slice(0, 8)'), 'DWM source posture should not render a long source wall by default.')
 
 for (const token of [
     'data-dwm-workflow-runbook',

@@ -139,6 +139,7 @@ type InvestigationTab = 'evidence' | 'entities' | 'sources' | 'delivery'
 type EvidenceDispositionState = 'reviewed' | 'escalated' | 'suppressed' | 'false_positive'
 const DWM_QUEUE_PREVIEW_ROWS = 8
 const DWM_TIMELINE_PREVIEW_ROWS = 5
+const DWM_RECOVERY_PREVIEW_ROWS = 4
 
 export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operations, alerts, deliveries, dataHealth, initialAlertId, publicTiHandoff }: PortalProps) {
     const router = useRouter()
@@ -1969,7 +1970,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions }: { latestCaptures: 
                     <p className='mt-0.5 text-xs text-ui-muted'>Useful for tuning watchlist terms without exposing full source rows.</p>
                 </div>
                 <div className='grid gap-2 p-4'>
-                    {latestCaptures.slice(0, 8).map(capture => (
+                    {latestCaptures.slice(0, DWM_RECOVERY_PREVIEW_ROWS).map(capture => (
                         <div key={capture.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                             <div className='flex flex-wrap items-center gap-2'>
                                 <span className='text-xs font-semibold text-ui-text'>{capture.sourceName}</span>
@@ -2009,7 +2010,7 @@ function SourcePosture({ snapshot, operations }: { snapshot: DwmProductSnapshot,
                                 </tr>
                             </thead>
                             <tbody className='divide-y divide-ui-border'>
-                                {sourceRows.slice(0, 8).map(source => (
+                                {sourceRows.slice(0, DWM_RECOVERY_PREVIEW_ROWS).map(source => (
                                     <tr key={source.sourceId} className='bg-ui-panel align-top'>
                                         <td className='px-3 py-2'>
                                             <p className='max-w-[150px] truncate font-semibold text-ui-text' title={source.sourceName}>{source.sourceName}</p>
