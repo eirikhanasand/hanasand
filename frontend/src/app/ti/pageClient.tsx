@@ -269,10 +269,15 @@ function Results({ result }: { result: TiSearchResponse }) {
     ]
     const hasStableActorProfile = Boolean(actorIntel.attribution || actorIntel.motivation.length || victimObservations.length || actorIntel.sourceProvenance.length)
     const actorProfileStatus = hasStableActorProfile ? 'Current profile' : humanResultStatus(result.status)
+    const heroVictimContext = victimObservations
+        .filter(item => /democratic national committee|solarwinds|microsoft|government and policy/i.test(item.victim))
+        .map(item => item.victim)
+        .slice(0, 4)
     const actorProfileSummary = hasStableActorProfile
         ? displayRequirementText([
             actorIntel.attribution,
             actorIntel.motivation.length ? `Motivation: ${actorIntel.motivation.slice(0, 2).join('; ')}.` : '',
+            heroVictimContext.length ? `Victim context: ${heroVictimContext.join('; ')}.` : '',
         ].filter(Boolean).join(' '))
         : displayRequirementText(result.summary)
     const sectionOverview = sectionOverviewFor({ result, actorIntel, actionability, workItems, victimObservations, watchlist })
@@ -399,7 +404,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 <div className='min-w-0'>
                                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Geography</p>
                                     <p className='mt-0.5 wrap-break-word text-xs text-ui-muted dark:text-ui-muted'>
-                                        {actorIntel.geographies.length ? actorIntel.geographies.join(', ') : 'Country coverage needs source detail.'}
+                                        {actorIntel.geographies.length ? `${actorIntel.geographies.slice(0, 3).join(', ')}${actorIntel.geographies.length > 3 ? ` +${actorIntel.geographies.length - 3}` : ''}` : 'Country coverage needs source detail.'}
                                     </p>
                                 </div>
                                 <button
