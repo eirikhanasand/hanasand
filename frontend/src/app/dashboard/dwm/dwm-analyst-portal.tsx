@@ -359,7 +359,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <div className='min-w-0 flex-1 border-l border-ui-border pl-3 dark:border-ui-border'>
                             <p className='wrap-break-word text-sm font-semibold text-ui-text'>
-                                {alerts.length} cases · {activeCount} active · {criticalCount} critical · {readyCount} ready
+                                {alerts.length} cases · {activeCount} active · {criticalCount} critical · {readyCount} sendable
                             </p>
                             <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted'>
                                 {freshCount} fresh · {highConfidenceCount} at 80%+ confidence · {watchTermCount} watchlist terms · webhook {webhookState} · run {latestRunLabel} · {apiProblemCount ? `${apiProblemCount} data issue${apiProblemCount === 1 ? '' : 's'}` : 'data live'}
@@ -1858,7 +1858,7 @@ function nextOperatorActionBusy(kind: DwmNextOperatorActionKind, alertId: string
 function ActionAvailability({ label, ready }: { label: string, ready: boolean }) {
     return (
         <span className={`min-w-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${ready ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'}`}>
-            {label}: {ready ? 'ready' : 'syncing'}
+            {label}: {ready ? 'available' : 'blocked'}
         </span>
     )
 }
@@ -1886,7 +1886,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions }: { latestCaptures: 
     const operatorRows = [
         {
             stage: 'Scope',
-            state: 'Watchlist controls are ready',
+            state: 'Watchlist controls are available',
             action: 'Edit watchlist',
             detail: 'Companies, domains, suppliers, brands, and products define match scope.',
         },
