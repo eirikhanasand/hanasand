@@ -2699,7 +2699,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                     <p className='flex flex-wrap items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
                         <Webhook className='h-4 w-4 text-ui-primary' />
                         Destination
-                        <StatusPill status={configured ? 'configured' : 'not configured'} />
+                        <StatusPill status={configured ? 'configured' : 'route needed'} />
                     </p>
                     <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{destinationState}</p>
                 </div>
