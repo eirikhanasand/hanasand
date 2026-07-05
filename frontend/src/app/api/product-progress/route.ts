@@ -634,7 +634,7 @@ function publicTiProvenanceReadiness(input: {
     const actionabilityReady = Boolean(actionabilityLoaded && sourceProvenance.length > 0 && handoffRoutes.length >= 3 && sourceFamilyMatrixReady)
     const actionabilityBlockers = [
         actionabilityLoaded ? '' : 'Public TI search route did not return actionability.schemaVersion=ti.query.actionability.v1.',
-        sourceProvenance.length > 0 ? '' : 'Public TI actionability returned no source provenance.',
+        sourceProvenance.length > 0 ? '' : 'Public TI actionability returned no source lineage.',
         handoffRoutes.length >= 3 ? '' : 'Public TI actionability returned fewer than three backed workflow routes.',
         sourceFamilyMatrixReady ? '' : 'Public TI actionability did not return ti.public_actor.source_family_coverage_matrix.v1.',
     ].filter(Boolean)
