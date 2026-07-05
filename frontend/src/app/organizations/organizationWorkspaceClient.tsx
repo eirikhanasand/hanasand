@@ -424,6 +424,12 @@ function organizationFocusLabel(value: string) {
     return stateLabel(value)
 }
 
+function activitySubjectTypeLabel(value: ActivitySubjectType) {
+    if (value === 'organization') return 'Organization'
+    if (value === 'destination') return 'Delivery destination'
+    return stateLabel(value)
+}
+
 function organizationWorkspaceMeta(organization: OrganizationSummary) {
     const parts = [
         sanitizeOrganizationDisplayCopy(organization.tenantId || organization.slug || organization.id),
@@ -1228,7 +1234,7 @@ export default function OrganizationWorkspaceClient() {
                                             disabled={Boolean(loading)}
                                             onChange={event => setWorkspaceQuery(event.target.value)}
                                             className={inputClass}
-                                            placeholder='Name, tenant, role'
+                                            placeholder='Name, status, role'
                                         />
                                     </label>
                                 )}
@@ -1418,7 +1424,7 @@ function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organi
             href: '#audit',
             label: 'Activity',
             value: selectedSubjectLabel(selectedSubject, organization, bundle),
-            detail: selectedSubject.type,
+            detail: activitySubjectTypeLabel(selectedSubject.type),
             icon: <CheckCircle2 className='h-4 w-4' />,
             active: selectedSubject.type === 'organization',
             tone: 'neutral',
@@ -3001,9 +3007,10 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     const visibleRows = selectedSubject.type === 'organization' ? activity.slice(0, ORG_ACTIVITY_PREVIEW_ROWS) : selectedRows.slice(0, ORG_ACTIVITY_PREVIEW_ROWS)
     const totalRows = selectedSubject.type === 'organization' ? activity.length : selectedRows.length
     const contextActions = selectedSubjectActions(selectedSubject, organization)
+    const subjectTypeLabel = activitySubjectTypeLabel(selectedSubject.type)
     const copySelectedActivity = async () => {
         try {
-            const heading = `${organizationDisplayName(organization)} · ${selectedSubject.type}`
+            const heading = `${organizationDisplayName(organization)} · ${subjectTypeLabel}`
             const context = contextRows.map(row => `${row.label}: ${row.value}`)
             const rows = visibleRows.slice(0, 8).map(item => `${formatDate(item.at)} · ${item.title} · ${item.detail}`)
             await navigator.clipboard.writeText([heading, ...context, ...rows].filter(Boolean).join('\n'))
@@ -3019,7 +3026,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
                         <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(selectedSubjectLabel(selectedSubject, organization, bundle))}</p>
-                        <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{selectedSubject.type} · {totalRows} event{totalRows === 1 ? '' : 's'}</p>
+                        <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{subjectTypeLabel} · {totalRows} event{totalRows === 1 ? '' : 's'}</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         {contextActions.map(action => (
