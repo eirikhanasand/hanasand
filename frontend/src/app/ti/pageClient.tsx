@@ -19,7 +19,6 @@ const TI_EVIDENCE_QUEUE_PREVIEW_ROWS = 2
 const TI_SELECTED_CONTEXT_ROWS = 3
 const TI_SELECTED_DETAIL_LIST_ROWS = 3
 const TI_SELECTED_SOURCE_REQUEST_ROWS = 2
-const TI_DESKTOP_SOURCE_FILTER_CHIPS = 4
 const TI_MOBILE_SOURCE_FILTER_OPTIONS = 5
 const TI_ACTIVITY_TIMELINE_ROWS = 5
 const TI_SOURCE_REFERENCE_ROWS = 4
@@ -6866,19 +6865,10 @@ function EvidenceQueueFilters({
                 </label>
             </div>
             {sourceCounts.length ? (
-                <div className='flex min-w-0 flex-wrap gap-1.5 pb-1'>
-                    {sourceCounts.slice(0, TI_DESKTOP_SOURCE_FILTER_CHIPS).map(item => (
-                        <button
-                            key={item.source}
-                            type='button'
-                            onClick={() => onSourceChange(source === item.source ? 'all' : item.source)}
-                            className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${source === item.source ? 'border-ui-primary bg-ui-primary/10 text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-muted hover:bg-ui-raised dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted dark:hover:bg-ui-raised'}`}
-                        >
-                            <span>{item.source}</span>
-                            <span className='rounded bg-ui-raised px-1 text-[10px] text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>{item.count}</span>
-                        </button>
-                    ))}
-                </div>
+                <p data-ti-source-count-summary='true' className='line-clamp-2 text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
+                    {sourceCounts.slice(0, 3).map(item => `${item.source} ${item.count}`).join(' · ')}
+                    {sourceCounts.length > 3 ? ` · +${sourceCounts.length - 3} more` : ''}
+                </p>
             ) : null}
         </div>
     )
