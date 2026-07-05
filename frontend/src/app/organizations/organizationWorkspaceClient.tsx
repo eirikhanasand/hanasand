@@ -2661,7 +2661,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
             )}
             {busyLabel && <InlineBusy label={busyLabel} marker='data-org-watchlist-busy' />}
             <div className='mt-2'><RowStatus message={rowMessages['watchlists-cleanup']} /></div>
-            <details className='mt-4 overflow-hidden rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-canvas' data-org-watchlist-starter='true' data-org-watchlist-add-disclosure='true' open={watchlists.length === 0 ? true : undefined}>
+            <details id='org-watchlist-create' className='mt-4 overflow-hidden rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-canvas' data-org-watchlist-starter='true' data-org-watchlist-add-disclosure='true' open={watchlists.length === 0 ? true : undefined}>
                 <summary className='flex min-h-12 cursor-pointer list-none flex-col gap-2 px-3 py-2 outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                     <span className='flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
                         <span>Add shared term</span>
@@ -2758,6 +2758,9 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                         {watchlistKinds.slice(0, 4).map(kind => (
                             <span key={kind} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>{kind}</span>
                         ))}
+                        <a href='#org-watchlist-create' className={canManage ? secondaryButtonClass : `${secondaryButtonClass} pointer-events-none opacity-55`} aria-disabled={!canManage}>
+                            Add term
+                        </a>
                     </div>
                 )}
                 {watchlists.length > 0 && visibleWatchlists.length === 0 && (
