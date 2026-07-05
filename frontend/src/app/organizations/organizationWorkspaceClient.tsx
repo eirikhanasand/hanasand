@@ -1386,6 +1386,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
     const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status === 'failed' || Boolean(delivery.error))
     const routedCases = bundle.cases.filter(item => item.status !== 'closed')
     const hasAlertOrCaseActivity = Boolean(bundle.alerts.length || routedCases.length)
+    const lastActivityAt = organizationLastActivityAt(organization, bundle)
     const rows = [
         {
             id: 'access',
@@ -1429,7 +1430,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
                         <ShieldCheck className='h-4 w-4 text-ui-primary' />
                         Workspace health
                     </h2>
-                    <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayName(organization)} · {canManage ? 'admin controls enabled' : 'read-only access'}</p>
+                    <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{organizationDisplayName(organization)} · {canManage ? 'admin controls enabled' : 'read-only access'} · Last activity {lastActivityAt ? formatDate(lastActivityAt) : 'pending'}</p>
                 </div>
                 <a href='#audit' className={secondaryButtonClass} data-org-health-activity='true'>
                     <ExternalLink className='h-4 w-4' />
@@ -3291,6 +3292,25 @@ function formatDate(value: string | undefined) {
     } catch {
         return value
     }
+}
+
+function organizationLastActivityAt(organization: OrganizationSummary, bundle: OrgBundle) {
+    const timestamps = [
+        organization.updatedAt,
+        ...bundle.members.map(member => member.joinedAt),
+        ...bundle.invites.map(invite => invite.createdAt),
+        ...bundle.watchlists.flatMap(item => [item.updatedAt, item.archivedAt || undefined, item.createdAt]),
+        ...bundle.webhooks.flatMap(destination => [destination.updatedAt, destination.createdAt]),
+        ...bundle.alerts.map(alert => alert.updatedAt),
+        ...bundle.cases.map(item => item.updatedAt),
+        ...bundle.deliveries.flatMap(delivery => [delivery.attemptedAt, delivery.updatedAt, delivery.createdAt]),
+    ]
+        .filter((value): value is string => Boolean(value))
+        .map(value => ({ value, time: Date.parse(value) }))
+        .filter(item => Number.isFinite(item.time))
+        .sort((left, right) => right.time - left.time)
+
+    return timestamps[0]?.value
 }
 
 function visibilityRows(payload: Record<string, unknown> | null) {
