@@ -233,6 +233,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         <p className='text-[10px] uppercase tracking-[0.24em] text-ui-muted'>Workspace</p>
                         <p className='truncate text-[11px] text-ui-muted'>{overview?.mailboxAddress || 'Communication'}</p>
                     </div>
+                    <MailSyncStatus lastSuccessAt={lastSuccessAt} now={now} issue={backgroundIssue || error} />
 
                     {overview?.actor.canAccessAnyMailbox && (
                         <select
@@ -662,6 +663,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     </div>
                                     {overview.health && (
                                         <div className='mt-3'>
+                                            <MailSyncStatus lastSuccessAt={lastSuccessAt} now={now} issue={backgroundIssue} full />
                                             <div className='flex flex-wrap items-center justify-between gap-2 text-[11px] text-ui-muted'>
                                                 <span className='inline-flex items-center gap-1.5'>
                                                     <Radar className='h-3.5 w-3.5' />
@@ -762,6 +764,27 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </div>
             )}
         </DashboardPage>
+    )
+}
+
+function MailSyncStatus({
+    lastSuccessAt,
+    now,
+    issue,
+    full = false,
+}: {
+    lastSuccessAt: number | null
+    now: number
+    issue?: string
+    full?: boolean
+}) {
+    const label = lastSuccessAt ? `Last sync ${formatRelativeTime(lastSuccessAt, now)} ago` : 'Waiting for first sync'
+    const tone = issue ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning' : 'border-ui-border bg-ui-raised text-ui-muted'
+    return (
+        <div className={`${full ? 'mb-3 flex' : 'hidden sm:flex'} min-w-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] ${tone}`} data-mail-sync-status>
+            <Clock3 className='h-3.5 w-3.5 shrink-0' />
+            <span className='truncate'>{issue ? `Reconnecting; ${label.toLowerCase()}` : label}</span>
+        </div>
     )
 }
 
