@@ -2150,6 +2150,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
     })
     const memberFiltersActive = Boolean(memberQuery.trim()) || memberRoleFilter !== 'all'
     const memberCounts = memberStatusCounts(members)
+    const memberRoleCounts = memberRoleStatusCounts(members)
     return (
         <details id='members' open className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-members-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
@@ -2166,6 +2167,11 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                         <div className='mb-3 flex flex-wrap gap-2' data-org-member-status-counts='true'>
                             {memberCounts.map(item => (
                                 <span key={item.status} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
+                                    {item.label}: {item.count}
+                                </span>
+                            ))}
+                            {memberRoleCounts.map(item => (
+                                <span key={item.role} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
                                     {item.label}: {item.count}
                                 </span>
                             ))}
@@ -4154,6 +4160,14 @@ function memberStatusCounts(members: OrganizationMember[]) {
         status,
         label: sentenceCase(status),
         count: members.filter(member => member.status.toLowerCase() === status).length,
+    }))
+}
+
+function memberRoleStatusCounts(members: OrganizationMember[]) {
+    return ['owner', 'admin', 'member', 'viewer'].map(role => ({
+        role,
+        label: sentenceCase(role),
+        count: members.filter(member => member.role.toLowerCase() === role).length,
     }))
 }
 
