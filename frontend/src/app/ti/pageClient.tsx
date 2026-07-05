@@ -586,7 +586,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                                                     actor={actorIntel}
                                                     victimObservations={victimObservations}
                                                     selectedArtifactId={selectedArtifact?.id}
-                                                    onSelectArtifact={setSelectedArtifactId}
                                                     onSelectArtifactBy={selectArtifactBy}
                                                     onEscalate={() => applyDecision('escalated')}
                                                     onReview={() => applyDecision('reviewing')}
@@ -2303,7 +2302,6 @@ function ActorOperationsMatrix({
     actor,
     victimObservations,
     selectedArtifactId,
-    onSelectArtifact,
     onSelectArtifactBy,
     onEscalate,
     onReview,
@@ -2312,7 +2310,6 @@ function ActorOperationsMatrix({
     actor: TiActorIntelligenceProfile
     victimObservations: ReturnType<typeof victimObservationsFor>
     selectedArtifactId?: string
-    onSelectArtifact: (artifactId: string) => void
     onSelectArtifactBy: (kind: ActorArtifactKind, value: string) => void
     onEscalate: () => void
     onReview: () => void
@@ -2390,7 +2387,6 @@ function ActorOperationsMatrix({
                                         <td className='px-3 py-2 font-semibold text-ui-text dark:text-ui-text'>{sourceBasisLabel(row.confidence)}</td>
                                         <td className='px-3 py-2'>
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
-                                                <button type='button' onClick={() => row.artifactKind && row.artifactLookup ? onSelectArtifactBy(row.artifactKind, row.artifactLookup) : onSelectArtifact(row.id)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Inspect</button>
                                                 <CopyPayloadButton label='Copy' payload={row.payload} />
                                             </div>
                                         </td>
@@ -2552,7 +2548,6 @@ function SourceCoverageWorkbench({
                                         </td>
                                         <td className='px-3 py-2'>
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
-                                                <button type='button' onClick={() => setSelectedRowId(row.id)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Inspect</button>
                                                 {row.evidenceItems[0] ? (
                                                     <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Open result</button>
                                                 ) : null}
@@ -3271,7 +3266,6 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                         </td>
                                         <td className='px-3 py-2'>
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
-                                                <button type='button' onClick={() => onSelectArtifact(artifact.id)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Inspect</button>
                                                 <CopyPayloadButton label='Copy' payload={artifactWorklistPayloadFor(artifact)} />
                                             </div>
                                         </td>
@@ -4050,7 +4044,6 @@ function WatchlistRelevanceWorkbench({
                                         </td>
                                         <td className='px-3 py-2'>
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
-                                                <button type='button' onClick={() => setSelectedRowId(row.id)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Inspect</button>
                                                 {row.evidenceItems[0] ? <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Open result</button> : null}
                                                 {row.artifactIds[0] ? <button type='button' onClick={() => onSelectArtifact(row.artifactIds[0]!)} className='inline-flex min-h-8 items-center rounded-md border border-ui-border bg-ui-panel px-2 text-[11px] font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Detail</button> : null}
                                                 <CopyPayloadButton label='Watchlist term request' payload={row.payload} />
