@@ -1380,6 +1380,7 @@ export default function OrganizationWorkspaceClient() {
                                             type='button'
                                             key={organization.id}
                                             onClick={() => selectOrganization(organization.id)}
+                                            aria-current={selectedOrganization?.id === organization.id ? 'true' : undefined}
                                             className={`grid gap-1 rounded-lg px-3 py-3 text-left transition ${selectedOrganization?.id === organization.id ? 'bg-ui-primary/10 text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary' : 'hover:bg-ui-raised dark:hover:bg-ui-panel/6'}`}
                                         >
                                             <span className='flex items-center justify-between gap-2 text-sm font-semibold'>
