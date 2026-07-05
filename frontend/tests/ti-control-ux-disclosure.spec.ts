@@ -10,7 +10,7 @@ test('ti control keeps search and work queue primary while telemetry is disclose
     expect(source).toContain('data-ti-control-telemetry-disclosure')
     expect(source).toContain('data-ti-control-telemetry-panels')
     expect(source).toContain('data-ti-control-secondary-actions')
-    expect(source).toContain('Secondary controls')
+    expect(source).toContain('Advanced source controls')
     expect(source).toContain('Operations telemetry')
     expect(source).toContain('ChevronDown')
     expect(source).toContain('group-open:rotate-180')

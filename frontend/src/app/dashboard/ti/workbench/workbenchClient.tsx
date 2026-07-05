@@ -2255,7 +2255,7 @@ function readinessDetailMetrics(item: WorkbenchProductReadinessItem) {
             typeof item.sourceFamilyCount === 'number' ? { label: 'Source families', value: String(item.sourceFamilyCount) } : undefined,
             typeof item.parserSourceFamilyCount === 'number' ? { label: 'Parser families', value: String(item.parserSourceFamilyCount) } : undefined,
             typeof item.contractLookupRows === 'number' ? { label: 'Contract rows', value: String(item.contractLookupRows) } : undefined,
-            typeof item.receiptMatrixRows === 'number' ? { label: 'Receipt rows', value: String(item.receiptMatrixRows) } : undefined,
+            typeof item.receiptMatrixRows === 'number' ? { label: 'Delivery rows', value: String(item.receiptMatrixRows) } : undefined,
             typeof item.receiptMatrixBlockedRows === 'number' ? { label: 'Delivery checks', value: String(item.receiptMatrixBlockedRows) } : undefined,
             item.workerLastRunAt ? { label: 'Worker run', value: relativeTime(item.workerLastRunAt) } : undefined,
         ].filter((metric): metric is { label: string, value: string } => Boolean(metric))

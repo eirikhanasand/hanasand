@@ -242,7 +242,7 @@ export default function TiScraperControlClient() {
                     <aside className='border-b border-ui-border bg-ui-canvas xl:border-b-0 xl:border-r'>
                         <details className='border-b border-ui-border bg-ui-panel' data-ti-control-secondary-actions>
                             <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-2 py-2 text-xs font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/35 [&::-webkit-details-marker]:hidden'>
-                                <span>Secondary controls</span>
+                                <span>Advanced source controls</span>
                                 <span className='text-[11px] font-medium text-ui-muted'>canary, enrich, plan</span>
                             </summary>
                             <div className='grid grid-cols-2 gap-1.5 border-t border-ui-border p-2'>
