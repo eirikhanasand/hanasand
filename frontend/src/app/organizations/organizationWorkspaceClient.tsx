@@ -3904,20 +3904,24 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
     }
     if (subject.type === 'alert') {
         const alert = bundle.alerts.find(item => item.id === subject.id)
+        const matchReason = matchReasonForRecord(subject.id, bundle.deliveries)
         return compactMetadata([
             ['Alert', alert?.title || compactReference(alert?.id || subject.id, 'alert')],
             ['Severity', alert?.severity],
             ['Status', alert?.status],
             ['Watchlist', compactReference(alert?.watchlistItemId || alert?.watchlistItemIds?.[0] || alert?.watchlistIds?.[0], 'watchlist')],
+            ['Match', matchReason],
             ['Updated', alert?.updatedAt ? formatDate(alert.updatedAt) : undefined],
         ])
     }
     if (subject.type === 'case') {
         const item = bundle.cases.find(row => row.id === subject.id)
+        const matchReason = matchReasonForRecord(subject.id, bundle.deliveries)
         return compactMetadata([
             ['Case', item?.title || compactReference(item?.id || subject.id, 'case')],
             ['Status', item?.status],
             ['Owner', organizationMemberLabel(item?.assignedOwner, bundle.members)],
+            ['Match', matchReason],
             ['Updated', item?.updatedAt ? formatDate(item.updatedAt) : undefined],
         ])
     }
@@ -3938,12 +3942,14 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
     const item = bundle.watchlists.find(row => row.id === subject.id)
     const delivery = item ? latestDeliveryForWatchlist(item, bundle.deliveries) : null
     const alertCount = item ? alertsForWatchlist(item, bundle.alerts).length : 0
+    const matchReason = item ? matchReasonForRecord(item.id, bundle.deliveries) : ''
     return compactMetadata([
         ['Watchlist', item?.value || compactReference(item?.id || subject.id, 'watchlist')],
         ['Term', item?.value],
         ['Status', item?.status],
         ['Owner', organizationMemberLabel(item?.updatedBy || item?.createdBy, bundle.members)],
         ['Destination', item ? destinationDisplayState(item) : destinationDisplayState(delivery)],
+        ['Match', matchReason],
         ['Ref', compactReference(item?.alertGenerationRef || item?.id || subject.id, 'watch')],
         ['Last delivery', delivery?.status],
         ['Alerts', String(alertCount)],
