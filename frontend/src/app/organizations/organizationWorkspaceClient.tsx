@@ -2379,6 +2379,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                     const selected = selectedSubject.type === 'destination' && selectedSubject.id === destination.id
                     const testDisabledReason = !canManage ? 'Owner or admin required' : ''
                     const destinationManageReason = !canManage ? 'Owner or admin required' : ''
+                    const routeLabel = sanitizeOrganizationDisplayCopy(destination.endpointHint) || compactReference(destination.endpointHash, 'route') || (destination.deliveryReady ? 'Saved route' : 'Route pending')
                     return (
                         <div
                             role='button'
@@ -2435,6 +2436,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                     <span className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
                                         <span className='truncate'>Type: {destination.kind || destination.type || 'webhook'}</span>
                                         <span className='truncate'>Destination: {destinationDisplayState(destination)}</span>
+                                        <span className='truncate' data-org-destination-route='true'>Route: {routeLabel}</span>
                                     </span>
                                     <DestinationDeliverySummary delivery={latestDelivery} />
                                     {latestDelivery && <DeliveryPayloadPreview delivery={latestDelivery} compact />}
