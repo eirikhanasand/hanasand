@@ -530,6 +530,13 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     const blockerEvidence = await collectPageEvidence(toolPage)
                     const blockerImage = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
                     const blockerSummary = analyzeToolEvidence(tool.name || toolUrl, blockerEvidence)
+                    const hasParsedProviderResult = blockerSummary.vendorFlagged !== undefined
+                        || blockerSummary.alertCount !== undefined
+                        || blockerSummary.verdict === 'suspicious'
+                        || blockerSummary.verdict === 'clean'
+                    const blocker = `${readiness.blocker || 'provider-capture-blocked'}`
+                    const isBlockerWithNoData = /provider-blocked-(?:urlquery|virustotal|generic)|provider-result-timeout/.test(blocker) && !hasParsedProviderResult
+                    const isHardBlocker = blocker === 'anti-bot-challenge' || /cloudflare-or-challenge/.test(blocker)
                     send({
                         type: 'tool_capture',
                         sessionId,
@@ -545,13 +552,15 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                             verdict: blockerSummary.verdict ?? 'unknown',
                             extractedSignals: [
                                 ...((blockerSummary.extractedSignals || []) as string[]),
-                                `Provider not ready: ${readiness.blocker || 'no parsed completion signal found'}`,
+                                `Provider not ready: ${blocker}`,
                             ].filter(Boolean),
                         },
                         target,
-                        error: readiness.blocker || 'Provider capture blocked',
+                        error: isHardBlocker || isBlockerWithNoData ? blocker : undefined,
                     })
-                    continue
+                    if (isHardBlocker || isBlockerWithNoData) {
+                        continue
+                    }
                 }
                 await toolPage.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined)
                 await toolPage.waitForTimeout(450).catch(() => undefined)
@@ -824,6 +833,15 @@ async function dismissCookieOverlays(page: Page) {
         'button:has-text("OK")',
         'button:has-text("Ok")',
         'button:has-text("Continue")',
+        'button:has-text("Cookie settings")',
+        'button:has-text("Cookie Settings")',
+        'button:has-text("Manage options")',
+        'button:has-text("Manage preferences")',
+        'button:has-text("Manage Cookies")',
+        'button:has-text("Cookie preferences")',
+        'button:has-text("Customize")',
+        'button:has-text("Essential only")',
+        'button:has-text("Essential only cookies")',
         '[role="button"]:has-text("Allow")',
         '[role="button"]:has-text("Agree")',
         '[role="button"]:has-text("Accept")',
@@ -907,7 +925,7 @@ async function dismissCookieOverlays(page: Page) {
             }
             return candidate.textContent || ''
         }
-        const isCookieAction = (value: string) => /^(accept|agree|allow|got it|continue|ok|understand|close|dismiss|not now|reject|decline|godta|accepter|enable|essential|required|manage|save|save and continue|proceed)/.test(value)
+        const isCookieAction = (value: string) => /^(accept|agree|allow|got it|continue|ok|understand|close|dismiss|not now|reject|decline|godta|accepter|enable|essential|required|manage|customize|settings|preference|configure|save|save and continue|proceed|i agree)/.test(value)
             && /(cookie|consent|privacy|gdpr|tracking|marketing|analytics|preferences)/.test(value)
         const isCookieLabel = (value: string) => /(cookie|consent|privacy|gdpr|tracking|analytics|preferences|opt.?out|data collection|essential)/.test(value)
         const target = candidates.find(candidate => {
@@ -943,6 +961,29 @@ async function dismissCookieOverlays(page: Page) {
         }
 
         return false
+    }).catch(() => false)
+
+    const clickConsentButtonsByText = async (frame: Frame) => frame.evaluate(() => {
+        const nodes = Array.from(document.querySelectorAll<HTMLElement>(
+            'button, a, input[type="button"], input[type="submit"], [role="button"]',
+        ))
+        const toFlatText = (value: string | null | undefined) => (value || '').trim().toLowerCase()
+        const hasCookieContext = (value: string) => /(cookie|consent|privacy|gdpr|tracking|analytics|preferences|data collection)/i.test(value)
+        const hasCookieAction = (value: string) => /^(accept|agree|allow|got it|continue|ok|understand|close|dismiss|not now|reject|decline|godta|accepter|enable|save|save and continue|proceed|i agree)/i.test(value)
+
+        const candidate = nodes.find((node) => {
+            const text = toFlatText(node.textContent)
+            const title = toFlatText(node.getAttribute('title'))
+            const value = toFlatText((node as HTMLInputElement).getAttribute('value') || '')
+            const aria = toFlatText(node.getAttribute('aria-label'))
+            const parentText = toFlatText(node.closest('[role="dialog"], [class*="cookie" i], [id*="cookie" i], [class*="consent" i], [id*="consent" i]')?.textContent)
+            const sourceText = [text, title, value, aria, parentText].join(' ')
+            return hasCookieAction(text) && hasCookieContext(sourceText)
+        })
+
+        if (!candidate) return false
+        candidate.click()
+        return true
     }).catch(() => false)
 
     const hideCandidateOverlays = async (frame: Frame) => frame.evaluate(() => {
@@ -988,7 +1029,14 @@ async function dismissCookieOverlays(page: Page) {
             }
         }
 
-        const iframes = Array.from(document.querySelectorAll('iframe')).filter(node => /consent|cookie|gdpr|privacy|trust|onetrust|cmp|civic|quantcast|cookiebot/i.test((node.src || '').toLowerCase()))
+        const iframes = Array.from(document.querySelectorAll('iframe')).filter(node => {
+            const source = (node.getAttribute('src') || '').toLowerCase()
+            const text = (node.textContent || node.getAttribute('title') || '').toLowerCase()
+            const style = window.getComputedStyle(node)
+            const rect = node.getBoundingClientRect()
+            const textLooksLikeConsent = /cookie|consent|gdpr|privacy|trust|onetrust|cmp|civic|quantcast|cookiebot/i.test(source + ' ' + text)
+            return textLooksLikeConsent || (['fixed', 'sticky'].includes(style.position) && rect.width >= window.innerWidth * 0.35 && rect.height >= window.innerHeight * 0.35)
+        })
         for (const iframe of iframes) {
             iframe.style.setProperty('display', 'none', 'important')
             iframe.setAttribute('data-hanasand-cookie-dismissed', '1')
@@ -1033,6 +1081,36 @@ async function dismissCookieOverlays(page: Page) {
         }
     }
 
+    const aggressivelyHideConsentShims = async (frame: Frame) => frame.evaluate(() => {
+        const blockedWords = /cookie|consent|privacy|gdpr|tracking|preferences|data collection|essentials|onetrust|truste/i
+        const isLikelyModal = (node: Element) => {
+            const style = window.getComputedStyle(node)
+            const rect = node.getBoundingClientRect()
+            const role = (node.getAttribute('role') || '').toLowerCase()
+            const text = (node.textContent || '').toLowerCase()
+            const isDialog = role === 'dialog' || node.matches('[role="dialog"]')
+            const isOverlay = ['fixed', 'absolute', 'sticky'].includes(style.position)
+            const highZ = Number.parseInt(style.zIndex || '0', 10)
+            return (isDialog || isOverlay || /modal|overlay|backdrop/i.test(node.tagName.toLowerCase()) || /dialog|consent|cookie/i.test(node.className || node.id || ''))
+                && (highZ >= 1000 || rect.width >= window.innerWidth * 0.35 || rect.height >= window.innerHeight * 0.35)
+                && blockedWords.test(text)
+        }
+
+        for (const element of Array.from(document.querySelectorAll('*'))) {
+            if (!isLikelyModal(element)) continue
+            const node = element as HTMLElement
+            node.style.setProperty('display', 'none', 'important')
+            node.setAttribute('data-hanasand-cookie-dismissed', '1')
+        }
+
+        const forms = Array.from(document.querySelectorAll('iframe')).filter(node => blockedWords.test((node.src || '').toLowerCase()) || blockedWords.test(node.className || node.id || ''))
+        for (const iframe of forms) {
+            const frame = iframe as HTMLIFrameElement
+            frame.style.setProperty('display', 'none', 'important')
+            frame.style.setProperty('opacity', '0', 'important')
+        }
+    }).catch(() => undefined)
+
     const pressCookieShortcuts = async () => {
         await page.keyboard.press('Escape').catch(() => undefined)
         await page.keyboard.press('Tab').catch(() => undefined)
@@ -1045,10 +1123,12 @@ async function dismissCookieOverlays(page: Page) {
         const frames = [page.mainFrame(), ...page.frames()]
         for (const frame of frames) {
             touched ||= await clickInFrame(frame)
-            touched ||= await clickTextButtonInFrame(frame)
-            touched ||= await clickShadowCookieElements(frame)
-            await hideCandidateOverlays(frame)
-        }
+        touched ||= await clickTextButtonInFrame(frame)
+        touched ||= await clickShadowCookieElements(frame)
+        touched ||= await clickConsentButtonsByText(frame)
+        await hideCandidateOverlays(frame)
+        await aggressivelyHideConsentShims(frame)
+    }
         const bodyStillHasCookieText = await hasCookieCopy(page.mainFrame())
         const visibleConsentWidgets = await page.locator('iframe, [role="dialog"]').count().catch(() => 0)
         await hideTopLevelConsentFrame(page).catch(() => undefined)
@@ -1198,7 +1278,7 @@ async function waitForProviderCaptureReadiness(page: Page, tool: { id?: string; 
         return true
     }
     const hasProviderTextSignal = (text: string, tokens: RegExp[]) => tokens.some(token => token.test(text))
-    const hasMeaningfulContent = (text: string) => text.length > 500 && /[a-z]{2,}/i.test(text)
+    const hasMeaningfulContent = (text: string) => text.length > 220 && /[a-z]{2,}/i.test(text)
     const readyTokens = isVirusTotal
         ? [
             /\b(vendor|vendors|engine|engines)\b/i,
@@ -1217,6 +1297,27 @@ async function waitForProviderCaptureReadiness(page: Page, tool: { id?: string; 
             /\b(no alerts|0 alerts|no results|undetected|not malicious|malicious)\b/i,
             /\bsearch results\b/i,
         ]
+    const providerResultTokens = isVirusTotal
+        ? [
+            /\b\d+\s*\/\s*\d+\b/i,
+            /\bsecurity\s+vendors\b/i,
+            /\bdetection ratio\b/i,
+            /\bno detections\b/i,
+            /\bfile info\b/i,
+            /\breport\b/i,
+            /\b(analysis|scan)\b.*(?:result|report|summary)/i,
+        ]
+        : [
+            /\b(\d+)\s+(?:alerts?|detections?)\b/i,
+            /\bno alerts?\b/i,
+            /\bno results\b/i,
+            /\bnot malicious\b/i,
+            /\bresults?\b/i,
+            /\b(unblocked|malicious|community|query)\b/i,
+            /\bcommunity comments?\b/i,
+            /\b(\d+)\s*(?:security alerts?|detection|hits?)\b/i,
+            /\bsearch results\b/i,
+        ]
     const snapshotText = async () => {
         const result = await page.evaluate(() => `${document.title} ${document.body?.innerText || ''}`.toLowerCase()).catch(() => '')
         return `${result || ''}`
@@ -1232,47 +1333,57 @@ async function waitForProviderCaptureReadiness(page: Page, tool: { id?: string; 
         const inProviderDomain = await hasExpectedProviderDomain()
         const hasMeaningful = hasMeaningfulContent(text)
         if (hasMeaningful) meaningfulContentObserved = true
-        const isLikelyBlockedPath = /consent|cookie|privacy|gdpr/i.test(page.url())
+        const hasProviderResultText = hasProviderTextSignal(text, providerResultTokens)
+        const hasProviderResultLikeSignal = hasProviderResultText || hasResultLikeSignal(text)
+        const isLikelyCookiePath = /consent|cookie|privacy|gdpr/i.test(page.url())
 
-        const hardBlockMatch = hardBlockers.find(item => item.test(text))
-        if (hardBlockMatch) {
-            const isCookieGate = cookieGateText.test(text) && hardBlockMatch === cookieGateText
-            if (isCookieGate && cookieGateAttempts < cookieAttemptLimit && likelyCookieOverlay) {
-                cookieGateAttempts += 1
-                await page.waitForTimeout(500).catch(() => undefined)
-                continue
-            }
-            if (isCookieGate && (inProviderDomain && meaningfulContentObserved && !isLikelyBlockedPath)) {
-                return {
-                    ready: true,
-                    statusText: `cookie-overlay-ignored-${provider}`,
-                }
-            }
-            if (!isCookieGate) {
-                const blocker = antiBotText.test(text) ? 'anti-bot-challenge' : 'cloudflare-or-challenge'
-                return {
-                    ready: false,
-                    blocker: `${blocker}-${provider}`,
-                    statusText: antiBotText.test(text) ? 'Anti-bot challenge detected.' : 'Cloudflare or challenge gate detected.',
-                }
-            }
+        if ((isVirusTotal || isUrlQuery) && inProviderDomain && hasProviderResultLikeSignal && !antiBotText.test(text)) {
             return {
-                ready: false,
-                blocker: `blocked-by-${provider}-consent-or-cookie-gate`,
-                statusText: likelyCookieOverlay
-                    ? `Detected persistent cookie-consent blocker UI on ${provider}.`
-                    : `Detected cookie-consent keyword while waiting for ${provider}.`,
+                ready: true,
+                statusText: `content-ready-${provider}`,
+            }
+        }
+        if (!isVirusTotal && !isUrlQuery && hasProviderResultLikeSignal && inProviderDomain && Date.now() > settledDeadline) {
+            return {
+                ready: true,
+                statusText: `content-ready-${provider}`,
             }
         }
 
-        if (isVirusTotal || isUrlQuery) {
-            if (isLikelyBlockedPath && cookieGateAttempts < cookieAttemptLimit) {
-                cookieGateAttempts += 1
-                await dismissCookieOverlays(page).catch(() => undefined)
-                await page.waitForTimeout(450).catch(() => undefined)
-                continue
+        if ((isVirusTotal || isUrlQuery) && likelyCookieOverlay && cookieGateAttempts < cookieAttemptLimit) {
+            cookieGateAttempts += 1
+            await dismissCookieOverlays(page).catch(() => undefined)
+            await page.waitForTimeout(450).catch(() => undefined)
+            continue
+        }
+        if (
+            isVirusTotal
+            && hasMeaningful
+            && inProviderDomain
+            && Date.now() > settledDeadline
+            && !antiBotText.test(text)
+            && !/access denied|challenge|captcha|cloudflare|just a moment/i.test(text)
+        ) {
+            return {
+                ready: true,
+                statusText: `stabilized-content-${provider}`,
             }
         }
+
+        if (
+            isUrlQuery
+            && hasMeaningful
+            && inProviderDomain
+            && Date.now() > settledDeadline
+            && !antiBotText.test(text)
+            && !/access denied|challenge|captcha|cloudflare|just a moment/i.test(text)
+        ) {
+            return {
+                ready: true,
+                statusText: `stabilized-content-${provider}`,
+            }
+        }
+
         if (hasNoProviderSignal(text)) {
             return {
                 ready: false,
@@ -1311,14 +1422,13 @@ async function waitForProviderCaptureReadiness(page: Page, tool: { id?: string; 
             }
         }
 
-        if (inProviderDomain && Date.now() > settledDeadline && hasMeaningful) {
+        if ((isVirusTotal || isUrlQuery) && hasProviderResultText && hasMeaningful && inProviderDomain) {
             return {
                 ready: true,
-                statusText: `stabilized-content-${provider}`,
+                statusText: `content-ready-${provider}`,
             }
         }
-
-        if (markerText.some(item => text.includes(item)) && hasResultLikeSignal(text)) {
+        if (hasProviderResultText) {
             return {
                 ready: true,
                 statusText: `content-ready-${provider}`,
@@ -1326,11 +1436,84 @@ async function waitForProviderCaptureReadiness(page: Page, tool: { id?: string; 
         }
 
         const cookieGate = cookieGateText.test(text)
+        if (!isVirusTotal && !isUrlQuery && hasResultLikeSignal(text) && inProviderDomain && Date.now() > settledDeadline && hasMeaningful) {
+            return {
+                ready: true,
+                statusText: `stabilized-content-${provider}`,
+            }
+        }
+        if (!isVirusTotal && !isUrlQuery && hasResultLikeSignal(text) && hasMeaningful && hasProviderResultText && Date.now() > stableDeadline) {
+            return {
+                ready: true,
+                statusText: `stabilized-content-${provider}`,
+            }
+        }
         if (cookieGate && likelyCookieOverlay && cookieGateAttempts < cookieAttemptLimit) {
             cookieGateAttempts += 1
             await dismissCookieOverlays(page).catch(() => undefined)
             await page.waitForTimeout(500).catch(() => undefined)
             continue
+        }
+        if (cookieGate && !likelyCookieOverlay && !isLikelyCookiePath && hasMeaningful && inProviderDomain && Date.now() > settledDeadline) {
+            return {
+                ready: true,
+                statusText: `stabilized-content-${provider}`,
+            }
+        }
+        if (cookieGate && !likelyCookieOverlay && !isLikelyCookiePath && hasResultLikeSignal(text) && Date.now() > settledDeadline) {
+            return {
+                ready: true,
+                statusText: `stabilized-content-${provider}`,
+            }
+        }
+        if (cookieGate && !likelyCookieOverlay && !isLikelyCookiePath && hasMeaningful && inProviderDomain) {
+            // Non-overlay cookie vocabulary on the same result page may be benign footer text.
+            if (Date.now() > settledDeadline && hasResultLikeSignal(text)) {
+                return {
+                    ready: true,
+                    statusText: `stabilized-content-${provider}`,
+                }
+            }
+        }
+
+        if (cookieGate && !likelyCookieOverlay && inProviderDomain && hasMeaningful && Date.now() > stableDeadline) {
+            return {
+                ready: true,
+                statusText: `stabilized-content-${provider}`,
+            }
+        }
+
+        const hardBlockMatch = hardBlockers.find(item => item.test(text))
+        if (hardBlockMatch) {
+            const isCookieGate = cookieGateText.test(text) && hardBlockMatch === cookieGateText
+            if (isCookieGate && likelyCookieOverlay && cookieGateAttempts < cookieAttemptLimit) {
+                cookieGateAttempts += 1
+                await dismissCookieOverlays(page).catch(() => undefined)
+                await page.waitForTimeout(500).catch(() => undefined)
+                continue
+            }
+            if (isCookieGate && !(hasMeaningful && inProviderDomain)) {
+                return {
+                    ready: false,
+                    blocker: `blocked-by-${provider}-consent-or-cookie-gate`,
+                    statusText: likelyCookieOverlay
+                        ? `Detected persistent cookie-consent blocker UI on ${provider}.`
+                        : `Detected cookie-consent keyword while waiting for ${provider}.`,
+                }
+            }
+            const blocker = antiBotText.test(text) ? 'anti-bot-challenge' : 'cloudflare-or-challenge'
+            return {
+                ready: false,
+                blocker: `${blocker}-${provider}`,
+                statusText: antiBotText.test(text) ? 'Anti-bot challenge detected.' : 'Cloudflare or challenge gate detected.',
+            }
+        }
+
+        if (inProviderDomain && Date.now() > settledDeadline && hasMeaningful && hasResultLikeSignal(text)) {
+            return {
+                ready: true,
+                statusText: `stabilized-content-${provider}`,
+            }
         }
 
         if (softWaitText.some(item => item.test(text)) && Date.now() < settledDeadline) {
@@ -1534,39 +1717,43 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         || text.match(/(\d{1,3})\s+(?:security\s*)?(?:vendors?|engines?)\s+(?:flagged|detected|marked)/i)
         || text.match(/(\d{1,3})\s+(?:of)\s+(\d{1,3})\s+security engines?/i)
         || text.match(/(\d{1,3})\s+out of\s+(\d{1,3})\s+engines?/i)
+    const urlqueryNoAlertText = /no\s+(?:alerts?|detections?|results?|matches?|hits?)\s+(?:were|was)?\s*(?:found|detected)?/i.test(text) || /0\s+alerts?/i.test(text)
+    const vtNoDetectionsText = /\b(?:no\s+detections?|0\s*\/\s*\d+\s+security\s+vendors?|no detections|undetected|clean)\b/i.test(text)
     const alertMatch = text.match(/(\d{1,3})\s+(?:alerts?|detections?|blacklists?|malicious requests?)/i)
         || text.match(/Found\s+(\d{1,3})\s+(?:alert|alerts)/i)
-        || text.match(/No\s+(?:alerts|detections)\s+(?:found)?/i)
     const communityMatch = text.match(/(\d{1,3})\s+(?:community\s*)?(?:comments?|votes?|reviews?)/i)
     const isVirusTotal = /virus\s*total|virustotal/.test(tool) || /virustotal\.com/i.test(text)
     const isUrlQuery = /urlquery|urlquery\.net/.test(tool) || /urlquery\.net/i.test(text)
-    const flagged = vendorMatch ? Number(vendorMatch[1]) : undefined
+    const rawFlagged = vendorMatch ? Number(vendorMatch[1]) : undefined
+    const flagged = Number.isFinite(rawFlagged) ? rawFlagged : vtNoDetectionsText ? 0 : undefined
     const total = vendorMatch?.[2] ? Number(vendorMatch[2]) : undefined
-    const alertCount = alertMatch ? Number(alertMatch[1]) : undefined
+    const alertCount = alertMatch ? Number(alertMatch[1]) : urlqueryNoAlertText ? 0 : undefined
     const communityCommentCount = communityMatch ? Number(communityMatch[1]) : evidence.comments?.length || undefined
-    const hasProviderNoDetectionText = /no\s+(?:detections|alerts?|results?|matches?|issues)\s+(?:found)?/i.test(text) || /undetected|clean|harmless/i.test(text)
+    const hasProviderNoDetectionText = /(?:no\s+(?:detections|alerts?|results?|matches?|issues)\s+(?:found)?|undetected|clean|harmless)/i.test(text)
     const hasVendorDetections = flagged !== undefined && Number.isFinite(flagged) && flagged > 0
     const hasUrlQueryAlerts = alertCount !== undefined && Number.isFinite(alertCount) && alertCount > 0
-    const hasUrlQueryNoResult = /no\s+(?:alerts|detections|results?|matches?)\s+found/i.test(text)
+    const hasUrlQueryNoResult = /no\s+(?:alerts?|detections?|results?|matches?)\s+found/i.test(text) || /0\s+alerts?/i.test(text)
+    const hasExplicitMaliciousIndicator = /malicious|phishing|blacklist|detected/i.test(text)
+    const hasExplicitBenignIndicator = hasProviderNoDetectionText
+    const hasParsedProviderSignal = vendorMatch !== null || alertMatch !== null || communityMatch !== null
+
     const verdict = isVirusTotal
-        ? hasVendorDetections
-            ? 'suspicious'
-            : hasProviderNoDetectionText
+        ? vendorMatch
+            ? (hasVendorDetections ? 'suspicious' : hasExplicitBenignIndicator ? 'clean' : 'clean')
+            : vtNoDetectionsText
                 ? 'clean'
-                : vendorMatch
+                : hasProviderNoDetectionText
                     ? 'clean'
-                    : /malicious|suspicious|phishing|blacklist|detected/i.test(text) && !/no detections|no alerts|undetected/i.test(text)
-                    ? 'suspicious'
                     : 'unknown'
         : isUrlQuery
-            ? hasUrlQueryAlerts
-                ? 'suspicious'
-                : hasUrlQueryNoResult || /no result|0 alerts|undetected|not malicious/i.test(text) || Number.isFinite(alertCount) && alertCount === 0
+            ? alertCount !== undefined
+                ? (hasUrlQueryAlerts ? 'suspicious' : 'clean')
+                : hasUrlQueryNoResult
                     ? 'clean'
                     : 'unknown'
-            : /malicious|phishing|suspicious|blacklist|detected/i.test(text)
+            : hasExplicitMaliciousIndicator && hasParsedProviderSignal && !hasExplicitBenignIndicator
                 ? 'suspicious'
-                : /clean|harmless|undetected|no security vendors/i.test(text)
+                : hasExplicitBenignIndicator || /no(?:t|) malicious/i.test(text)
                     ? 'clean'
                     : 'unknown'
 
