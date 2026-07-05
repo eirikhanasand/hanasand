@@ -1342,7 +1342,7 @@ export default function OrganizationWorkspaceClient() {
                                         rowMessages={rowMessages}
                                         onReplay={delivery => void replayDelivery(delivery)}
                                     />
-                                    {hasScopeRecords && <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />}
+                                    {hasScopeRecords && <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} members={bundle.members} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />}
                                 </section>
                             </div>
                         ) : (
@@ -2920,15 +2920,15 @@ function DeliveryReference({ delivery, organizationId }: { delivery: DeliveryRow
     const alertHref = delivery.alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(delivery.alertId)}&organizationId=${encodeURIComponent(organizationId)}` : ''
     return (
         <div className='grid gap-1 text-xs'>
-            {delivery.caseId ? <a href={caseHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>Case {delivery.caseId}</a> : null}
-            {delivery.alertId ? <a href={alertHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>Alert {delivery.alertId}</a> : null}
+            {delivery.caseId ? <a href={caseHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(delivery.caseId, 'Case')}</a> : null}
+            {delivery.alertId ? <a href={alertHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(delivery.alertId, 'Alert')}</a> : null}
             {!delivery.caseId && !delivery.alertId ? <span className='truncate text-ui-muted dark:text-ui-muted'>Attach alert after replay</span> : null}
-            <span className='truncate text-ui-muted dark:text-ui-muted'>{delivery.watchlistItemId || delivery.watchlistId || delivery.actionId || 'watchlist pending'}</span>
+            <span className='truncate text-ui-muted dark:text-ui-muted'>{compactReference(delivery.watchlistItemId || delivery.watchlistId || delivery.actionId, 'Watchlist') || 'Watchlist pending'}</span>
         </div>
     )
 }
 
-function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, organizationId }: { alertTerms: AlertTerm[], alerts: ScopedAlert[], cases: ScopedCase[], webhooks: WebhookDestination[], alertCaseVisibility: Record<string, unknown> | null, organizationId: string }) {
+function ScopePanel({ alertTerms, alerts, cases, members, webhooks, alertCaseVisibility, organizationId }: { alertTerms: AlertTerm[], alerts: ScopedAlert[], cases: ScopedCase[], members: OrganizationMember[], webhooks: WebhookDestination[], alertCaseVisibility: Record<string, unknown> | null, organizationId: string }) {
     const route = `/api/organizations/${encodeURIComponent(organizationId)}`
     const visibility = visibilityRows(alertCaseVisibility)
     const hasScopeRows = Boolean(alertTerms.length || alerts.length || cases.length || webhooks.length || visibility.length)
@@ -2966,7 +2966,7 @@ function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, 
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Cases' route={`/api/cases?organizationId=${encodeURIComponent(organizationId)}`} rows={cases.map(item => ({
                     id: item.id,
                     primary: item.title || item.id,
-                    secondary: `${item.status || 'status'}${item.assignedOwner ? ` · ${item.assignedOwner}` : ''}`,
+                    secondary: `${item.status || 'status'}${item.assignedOwner ? ` · ${organizationMemberLabel(item.assignedOwner, members)}` : ''}`,
                 }))} empty='Cases appear after an alert is opened from exposure monitoring.' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibility} empty='Visibility decisions appear after alerts are reviewed or opened as cases.' />
                 <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={webhooks.map(destination => ({
@@ -3423,14 +3423,14 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         id: `case-${item.id}`,
         at: item.updatedAt || new Date(0).toISOString(),
         title: 'Case',
-        detail: `${item.title || item.id} · ${item.status || 'status'}${item.assignedOwner ? ` · ${item.assignedOwner}` : ''}`,
+        detail: `${item.title || item.id} · ${item.status || 'status'}${item.assignedOwner ? ` · ${organizationMemberLabel(item.assignedOwner, bundle.members)}` : ''}`,
         ok: item.status !== 'failed' && item.status !== 'blocked',
         subjectType: 'case',
         subjectId: item.id,
         metadata: compactMetadata([
             ['Case', compactReference(item.id, 'case')],
             ['Status', item.status],
-            ['Owner', item.assignedOwner],
+            ['Owner', organizationMemberLabel(item.assignedOwner, bundle.members)],
         ]),
     }))
     const deliveryRows: ActivityItem[] = bundle.deliveries.map(delivery => ({
@@ -3690,7 +3690,7 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
         return compactMetadata([
             ['Case', item?.title || compactReference(item?.id || subject.id, 'case')],
             ['Status', item?.status],
-            ['Owner', item?.assignedOwner],
+            ['Owner', organizationMemberLabel(item?.assignedOwner, bundle.members)],
             ['Updated', item?.updatedAt ? formatDate(item.updatedAt) : undefined],
         ])
     }
@@ -4003,7 +4003,14 @@ function shortTraceId(value: string) {
 function compactReference(value: string | undefined | null, label = 'ref') {
     if (!value) return undefined
     const clean = sanitizeOrganizationDisplayCopy(value) || value
-    return `${label} ${shortTraceId(clean)}`
+    const labelText = label.trim() || 'ref'
+    const prefix = labelText.toLowerCase()
+    const normalized = clean.replace(new RegExp(`^(?:dwm[_:-]+)?${escapeRegExp(prefix)}[_:-]+`, 'i'), '')
+    return `${labelText} ${shortTraceId(normalized || clean)}`
+}
+
+function escapeRegExp(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function canReplayDelivery(delivery: DeliveryRow) {
