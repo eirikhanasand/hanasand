@@ -2017,6 +2017,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
     })
     const inviteFiltersActive = Boolean(inviteQuery.trim()) || inviteStatusFilter !== 'all'
     const inviteCounts = inviteStatusCounts(invites)
+    const inviteRoleCounts = inviteRoleStatusCounts(invites)
     return (
         <section id='invites' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
             <SectionTitle icon={<UserPlus className='h-4 w-4' />} title='Invite queue' detail={canManage ? 'Send, resend, revoke, copy.' : 'Owner or admin required.'} />
@@ -2025,6 +2026,11 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                 <div className='mt-3 flex flex-wrap gap-2' data-org-invite-status-counts='true'>
                     {inviteCounts.map(item => (
                         <span key={item.status} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
+                            {item.label}: {item.count}
+                        </span>
+                    ))}
+                    {inviteRoleCounts.map(item => (
+                        <span key={item.role} className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
                             {item.label}: {item.count}
                         </span>
                     ))}
@@ -4152,6 +4158,14 @@ function inviteStatusCounts(invites: OrganizationInvite[]) {
         status,
         label: sentenceCase(status),
         count: invites.filter(invite => invite.status.toLowerCase() === status).length,
+    }))
+}
+
+function inviteRoleStatusCounts(invites: OrganizationInvite[]) {
+    return roleOptions.map(role => ({
+        role,
+        label: sentenceCase(role),
+        count: invites.filter(invite => invite.role.toLowerCase() === role).length,
     }))
 }
 
