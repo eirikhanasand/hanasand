@@ -17,7 +17,7 @@ assert(browserRoute.includes('<BrowserPageClient />'))
 assert(legacyOnionRoute.includes("redirect('/solutions/browser')"))
 assert(legacyRegularRoute.includes("redirect('/solutions/browser')"))
 
-assert(browserClient.includes('Browser Sandbox'))
+assert(browserClient.includes('Browser'))
 assert(browserClient.includes('NetworkSegment'))
 assert(browserClient.includes('Auto-detected route'))
 assert(browserClient.includes('Interactive isolated browser viewport'))

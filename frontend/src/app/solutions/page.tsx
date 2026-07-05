@@ -21,7 +21,7 @@ const primarySolutions = [
         price: 'From $49/mo',
     },
     {
-        title: 'Browser Sandbox',
+        title: 'Browser',
         eyebrow: 'URL analysis',
         detail: 'Open untrusted regular-web and onion URLs in one isolated browser workspace with automatic routing, redirect capture, and saved SOC triage profiles.',
         href: '/solutions/browser',

@@ -27,7 +27,7 @@ const solutionItems = [
     { title: 'All Solutions', detail: 'Company exposure monitoring, API delivery, and review workflows.', href: '/solutions', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'Company and vendor alerts from watched exposure sources.', href: '/solutions/dwm', icon: BellRing },
     { title: 'Threat Search', detail: 'Open the public intelligence workspace for companies and actors.', href: '/ti', icon: Radar },
-    { title: 'Browser Sandbox', detail: 'Regular and Tor browser runs with isolated capture, profiles, and queueing.', href: '/solutions/browser', icon: Network },
+    { title: 'Browser', detail: 'Regular and Tor browser runs with isolated capture, profiles, and queueing.', href: '/solutions/browser', icon: Network },
 ]
 
 const resourceItems = [
@@ -74,7 +74,7 @@ const mobilePublicLinks = [
     { label: 'Pricing', href: '/pricing' },
     { label: 'Trust center', href: '/trust' },
     { label: 'Developers', href: '/developers' },
-    { label: 'Browser sandbox', href: '/solutions/browser' },
+    { label: 'Browser', href: '/solutions/browser' },
     { label: 'Hash exposure lookup', href: '/pwned' },
     { label: 'Status', href: '/status' },
     { label: 'Service checks', href: '/test' },
@@ -180,7 +180,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                                 <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Console</Link>
                             ) : null}
                             <Link href='/ti' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Threat search</Link>
-                            <Link href='/solutions/browser' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Browser sandbox</Link>
+                            <Link href='/solutions/browser' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Browser</Link>
                             <Link href={darkWebHref} className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Dark web</Link>
                             <Link href='/developers' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>API docs</Link>
                             <Link href={pricingHref} className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Pricing</Link>

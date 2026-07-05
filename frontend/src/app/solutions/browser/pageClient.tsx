@@ -131,7 +131,7 @@ type SandboxEvidence = {
 const storageKey = 'hanasand:browser:profiles:v1'
 const historyStorageKey = 'hanasand:browser:history:v1'
 const clientIdStorageKey = 'hanasand:browser:client-id:v1'
-const profileApiPath = '/api/backend/browser-sandbox/profiles'
+const profileApiPath = '/api/backend/browser/profiles'
 const historyApiPath = '/api/backend/browser/runs'
 const brokerBaseUrl = process.env.NEXT_PUBLIC_BROWSER_WS || `${config.url.api_client_wss}/ws/browser`
 const defaultTools: SandboxTool[] = [
@@ -550,7 +550,7 @@ export default function BrowserPageClient() {
                             <div className='mx-auto grid h-12 w-12 place-items-center rounded-lg border border-ui-border bg-ui-panel text-ui-primary'>
                                 <Globe2 className='h-6 w-6' />
                             </div>
-                            <h1 className='text-3xl font-semibold tracking-normal text-ui-text md:text-5xl'>Browser Sandbox</h1>
+                            <h1 className='text-3xl font-semibold tracking-normal text-ui-text md:text-5xl'>Browser</h1>
                             <p className='mx-auto max-w-2xl text-base leading-7 text-ui-muted'>
                                 Detonate an untrusted URL in a remote browser, auto-route onion targets through Tor, capture every redirect state, and run saved SOC profiles without exposing the analyst workstation.
                             </p>

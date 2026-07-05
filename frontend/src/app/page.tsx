@@ -49,7 +49,7 @@ const solutions = [
         href: '/ti',
     },
     {
-        title: 'Browser Sandbox',
+        title: 'Browser',
         detail: 'Short-lived isolated Regular and Tor browser workspaces with capture, profiles, and source tracking.',
         href: '/solutions/browser',
     },

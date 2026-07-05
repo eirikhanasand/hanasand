@@ -307,7 +307,9 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/dwm/webhook-deliveries', getDwmWebhookDeliveries)
     fastify.post('/dwm/webhook-deliveries', postDwmWebhookDelivery)
 
-    // Browser sandbox profiles
+    // Browser profiles
+    fastify.get('/browser/profiles', getBrowserSandboxProfiles)
+    fastify.put('/browser/profiles', putBrowserSandboxProfiles)
     fastify.get('/browser-sandbox/profiles', getBrowserSandboxProfiles)
     fastify.put('/browser-sandbox/profiles', putBrowserSandboxProfiles)
     fastify.get('/browser/runs', getBrowserRuns)

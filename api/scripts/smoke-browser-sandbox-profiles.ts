@@ -11,8 +11,9 @@ assert(schema.includes('CREATE TABLE IF NOT EXISTS browser_sandbox_profiles'), '
 assert(schema.includes('PRIMARY KEY (owner_id, id)'), 'profiles should be scoped by owner and profile id.')
 assert(schema.includes('idx_browser_sandbox_profiles_owner_updated'), 'profiles should have an owner lookup index.')
 
-assert(routes.includes('/browser-sandbox/profiles') && routes.includes('fastify.get'), 'API should expose the profile read route.')
-assert(routes.includes('/browser-sandbox/profiles') && routes.includes('fastify.put'), 'API should expose the profile save route.')
+assert(routes.includes('/browser/profiles') && routes.includes('fastify.get'), 'API should expose the canonical browser profile read route.')
+assert(routes.includes('/browser/profiles') && routes.includes('fastify.put'), 'API should expose the canonical browser profile save route.')
+assert(routes.includes('/browser-sandbox/profiles'), 'API should keep the legacy profile route for compatibility.')
 assert(routes.includes('getBrowserSandboxProfiles'), 'routes should register the read handler.')
 assert(routes.includes('putBrowserSandboxProfiles'), 'routes should register the save handler.')
 
@@ -24,4 +25,4 @@ assert(handler.includes('maxProfiles = 16'), 'profile saves should cap total pro
 assert(handler.includes('maxToolsPerProfile = 8'), 'profile saves should cap tools per profile.')
 assert(handler.includes('/^https?:\\/\\//i'), 'profile tools should only accept http/https URLs.')
 
-console.log('Browser sandbox profile persistence contract passed.')
+console.log('Browser profile persistence contract passed.')
