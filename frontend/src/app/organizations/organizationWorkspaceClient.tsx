@@ -3317,6 +3317,12 @@ function apiErrorMessage(payload: unknown, status: number) {
 }
 
 function errorMessage(error: unknown) {
+    if (error && typeof error === 'object' && 'status' in error && (error.status === 401 || error.status === 403)) {
+        return 'Sign in with an organization account to manage organizations.'
+    }
+    if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number' && error.status >= 500) {
+        return 'Organization service is temporarily unavailable.'
+    }
     return error instanceof Error ? error.message : String(error)
 }
 

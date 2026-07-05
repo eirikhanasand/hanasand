@@ -110,6 +110,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('const supportAccess = role === \'support\'')
     expect(page).toContain('const readOnlyReason = supportAccess ? \'Support inspection only\' : \'Owner or admin required\'')
     expect(page).toContain('supportAccess ? \'Inspect\' : \'View\'')
+    expect(page).toContain('Sign in with an organization account to manage organizations.')
+    expect(page).toContain('Organization service is temporarily unavailable.')
     expect(page).toContain('Owner or admin required')
     expect(page).toContain('const replayDisabledReason = !canManage ? \'Owner or admin required\' : !configured ? \'Save a destination before replay.\' : \'\'')
     expect(page).toContain('disabled={!canManage || !configured || Boolean(busy)}')
