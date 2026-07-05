@@ -2450,7 +2450,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                     const currentKind = (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook'
                     const destinationName = normalizeDestinationName(destination.name || '') || defaultDestinationName(currentKind)
                     const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
-                    const destinationEnabled = destinationStatus === 'active' || destinationStatus === 'configured'
+                    const destinationEnabled = ['active', 'configured'].includes(destinationStatus.toLowerCase())
                     const latestDelivery = latestDeliveryForDestination(destination, deliveries)
                     const draftUrl = draft?.url.trim() || ''
                     const draftUrlInvalid = Boolean(draftUrl) && !validDestinationUrl(draftUrl)
