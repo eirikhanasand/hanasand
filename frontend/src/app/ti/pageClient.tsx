@@ -2416,10 +2416,9 @@ function ActorOperationsMatrix({
                                 <h3 className='mt-1 wrap-break-word text-sm font-semibold text-ui-text dark:text-ui-text'>{selectedRow.label}</h3>
                                 <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selectedRow.detail)}</p>
                             </div>
-                            <div className='grid grid-cols-2 gap-2 text-xs'>
-                                <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(selectedRow.confidence)} />
-                                <EvidenceMetric label='Source' value={selectedRow.source} />
-                            </div>
+                            <p className='wrap-break-word text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                                {sourceBasisLabel(selectedRow.confidence)} · {selectedRow.source}
+                            </p>
                             <div className='grid grid-cols-2 gap-1.5'>
                                 <StripActionButton icon={<Eye className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
                                 <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate}>Escalate</StripActionButton>
@@ -3288,12 +3287,9 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                 <h3 className='mt-1 wrap-break-word text-sm font-semibold text-ui-text dark:text-ui-text'>{selectedArtifact.label}</h3>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{selectedArtifact.subtitle}</p>
                             </div>
-                            <div className='grid grid-cols-2 gap-2 text-xs'>
-                                <EvidenceMetric label='Type' value={formatLabel(selectedArtifact.kind)} />
-                                <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(selectedArtifact.confidence)} />
-                                <EvidenceMetric label='Watch' value={String(selectedArtifact.watchlistTerms.length)} />
-                                <EvidenceMetric label='Open questions' value={String(selectedArtifact.enrichmentTasks.length)} />
-                            </div>
+                            <p className='wrap-break-word text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                                {formatLabel(selectedArtifact.kind)} · {sourceBasisLabel(selectedArtifact.confidence)} · {selectedArtifact.watchlistTerms.length} watch · {selectedArtifact.enrichmentTasks.length} open questions
+                            </p>
                             <div className='grid grid-cols-2 gap-1.5'>
                                 <button type='button' onClick={() => onSelectArtifact(selectedArtifact.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Review</button>
                                 <CopyPayloadButton label='Export' payload={artifactWorklistPayloadFor(selectedArtifact)} showLabel />
@@ -4069,12 +4065,9 @@ function WatchlistRelevanceWorkbench({
                                 <h3 className='mt-1 wrap-break-word text-sm font-semibold text-ui-text dark:text-ui-text'>{selectedRow.kind}: {selectedRow.value}</h3>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selectedRow.detail)}</p>
                             </div>
-                            <div className='grid grid-cols-2 gap-2 text-xs'>
-                                <EvidenceMetric label='Results' value={String(selectedRow.evidenceItems.length)} />
-                                <EvidenceMetric label='Details' value={String(selectedRow.artifactIds.length)} />
-                                <EvidenceMetric label='Sources' value={String(selectedRow.sourceCount)} />
-                                <EvidenceMetric label='Status' value={selectedRow.matched ? 'Matched' : publicStateLabel(selectedRow.state)} />
-                            </div>
+                            <p className='wrap-break-word text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                                {selectedRow.evidenceItems.length} results · {selectedRow.artifactIds.length} details · {selectedRow.sourceCount} sources · {selectedRow.matched ? 'Matched' : publicStateLabel(selectedRow.state)}
+                            </p>
                             <div className='grid grid-cols-2 gap-1.5'>
                                 <button type='button' onClick={onMarkRelevant} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Watch</button>
                                 {selectedEvidence ? <button type='button' onClick={() => onSelectEvidence(selectedEvidence.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>Review result</button> : null}
