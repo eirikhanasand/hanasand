@@ -3359,8 +3359,10 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
 
 function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, title: string, route: string, rows: Array<{ id: string, primary: string, secondary: string }>, empty: string }) {
     const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
+    const [showAll, setShowAll] = useState(false)
     const showRecordActions = !route.startsWith('/api/')
-    const hiddenRows = Math.max(0, rows.length - 5)
+    const visibleRows = showAll ? rows : rows.slice(0, 5)
+    const hiddenRows = Math.max(0, rows.length - visibleRows.length)
     const copyRoute = async () => {
         try {
             await navigator.clipboard.writeText(route)
@@ -3386,13 +3388,21 @@ function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, tit
             </div>
             <div className='mt-3 grid gap-2'>
                 {rows.length === 0 && <EmptyLine text={empty} />}
-                {rows.slice(0, 5).map(row => (
+                {visibleRows.map(row => (
                     <div key={row.id} className='rounded-md bg-ui-raised p-2 dark:bg-ui-canvas'>
                         <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(row.primary) || row.primary}</p>
                         <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(row.secondary) || row.secondary}</p>
                     </div>
                 ))}
-                {hiddenRows > 0 && <span className='rounded-md bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:bg-ui-canvas dark:text-ui-muted'>{hiddenRows} more</span>}
+                {rows.length > 5 && (
+                    <button
+                        type='button'
+                        className='w-fit rounded-md bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted transition hover:text-ui-text dark:bg-ui-canvas dark:text-ui-muted dark:hover:text-ui-text'
+                        onClick={() => setShowAll(current => !current)}
+                    >
+                        {showAll ? 'Show latest' : `${hiddenRows} more`}
+                    </button>
+                )}
             </div>
             <div className='mt-3'><RowStatus message={copyStatus} /></div>
         </div>
