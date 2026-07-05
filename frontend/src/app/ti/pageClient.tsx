@@ -271,7 +271,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const actorProfileStatus = hasStableActorProfile ? 'Current profile' : humanResultStatus(result.status)
     const heroVictimContext = victimObservations
         .filter(item => /democratic national committee|solarwinds|microsoft|government and policy/i.test(item.victim))
-        .map(item => item.victim)
+        .map(item => `${item.victim} (${item.country})`)
         .slice(0, 4)
     const actorProfileSummary = hasStableActorProfile
         ? displayRequirementText([
@@ -8738,6 +8738,9 @@ function selectedSourceDrilldownFor(
         selected.provenance.toLowerCase().includes(row.sourceName.toLowerCase())
         || selected.evidence.some(line => line.toLowerCase().includes(row.sourceName.toLowerCase()))
     )
+    const fallbackCaptureRows = [...actorRows, ...sourceRows, ...clusterRows].some(row => row.captureId)
+        ? []
+        : actionability.sourceProvenance.filter(row => row.captureId).slice(0, 2)
     const candidates: SelectedSourceDrilldownRow[] = [
         ...selectedSources.map(source => drilldownRow({
             sourceId: source.id,
@@ -8776,6 +8779,15 @@ function selectedSourceDrilldownFor(
             confidence: row.confidence,
             handoff: row.enrichmentTask,
         })),
+        ...fallbackCaptureRows.map(row => drilldownRow({
+            sourceId: row.sourceId,
+            sourceName: row.sourceName,
+            provenance: row.provenance,
+            href: linkFromText(row.provenance),
+            captureId: row.captureId,
+            confidence: row.confidence,
+            handoff: 'Use linked capture reference as replayable case evidence.',
+        })),
     ]
     if (!candidates.length) {
         candidates.push(drilldownRow({
@@ -8786,7 +8798,9 @@ function selectedSourceDrilldownFor(
             handoff: 'Attach source reference, source URL, capture reference, or source hash before this result can support stronger follow-up.',
         }))
     }
-    const rows = uniqueBy(candidates, row => `${row.sourceId ?? row.sourceName}:${row.provenance}:${row.captureId ?? ''}`).slice(0, 6)
+    const rows = uniqueBy(candidates, row => `${row.sourceId ?? row.sourceName}:${row.provenance}:${row.captureId ?? ''}`)
+        .sort((a, b) => Number(Boolean(b.captureId)) - Number(Boolean(a.captureId)))
+        .slice(0, 6)
     const blockers = unique([
         ...rows.flatMap(row => row.missing),
         ...actionability.readiness.blockers

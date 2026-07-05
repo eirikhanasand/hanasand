@@ -27,7 +27,7 @@ test.describe('public threat actor profile', () => {
         await expect(body).toContainText('SolarWinds Orion customers and U.S. federal agencies')
         await expect(body).toContainText('Microsoft corporate email accounts')
         await expect(body).toContainText('Government and policy organizations')
-        await expect(body).toContainText('Public reporting attributes APT29 to Russia-linked SVR activity.')
+        await expect(body).toContainText('Russia-linked SVR/APT29 activity in public government, vendor, and incident reporting')
         await expect(body).toContainText('Latest activity')
         await expect(body).toContainText('Sources used')
 
