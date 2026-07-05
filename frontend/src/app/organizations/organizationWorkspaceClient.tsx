@@ -645,6 +645,7 @@ export default function OrganizationWorkspaceClient() {
     const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
     const configuredDestinationCount = organizationConfiguredDestinationCount(bundle)
     const hasConfiguredDestination = configuredDestinationCount > 0
+    const hasSavedDestination = bundle.webhooks.some(organizationDestinationConfigured)
     const watchlistDraftDuplicate = isDuplicateWatchlistTerm(bundle.watchlists, watchlistDraft.kind, watchlistDraft.value)
     const watchlistSuggestions = selectedOrganization ? starterWatchlistSuggestions(selectedOrganization, bundle.watchlists) : []
     const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
@@ -1422,6 +1423,7 @@ export default function OrganizationWorkspaceClient() {
                                     canManage={canManage}
                                     hasWatchlists={bundle.watchlists.length > 0}
                                     hasDestination={hasConfiguredDestination}
+                                    hasSavedDestination={hasSavedDestination}
                                 />
                                 <PermissionStrip
                                     role={selectedOrganization.role || 'member'}
@@ -1436,6 +1438,7 @@ export default function OrganizationWorkspaceClient() {
                                     inviteCount={pendingInvites.length}
                                     watchlistCount={bundle.watchlists.length}
                                     destinationCount={configuredDestinationCount}
+                                    hasSavedDestination={hasSavedDestination}
                                     alertCount={bundle.alerts.length}
                                     caseCount={bundle.cases.length}
                                     alertId={selectedAlertId}
@@ -1798,7 +1801,7 @@ function DwmHandoffBanner({ organization, bundle, selectedSubject, alertId, case
     )
 }
 
-function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, hasDestination }: { organizationId: string, alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
+function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, hasDestination, hasSavedDestination }: { organizationId: string, alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean, hasSavedDestination: boolean }) {
     const actions: Array<{ href: string, icon: ReactNode, label: string, disabled?: boolean, disabledReason?: string }> = []
     actions.push({
         href: '#watchlists',
@@ -1815,7 +1818,7 @@ function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, has
         disabledReason: canManage ? undefined : 'Admin access is required to invite team members.',
     })
     actions.push({
-        href: hasDestination ? '#destinations' : '#watchlists',
+        href: hasSavedDestination ? '#destinations' : '#watchlists',
         icon: <Webhook className='h-4 w-4' />,
         label: 'Test destination',
         disabled: !canManage || !hasWatchlists,
@@ -1892,13 +1895,14 @@ function PermissionStrip({ role, canManage, hasWatchlists, hasDestination }: { r
     )
 }
 
-function OrgSetupProgress({ organizationId, canManage, memberCount, inviteCount, watchlistCount, destinationCount, alertCount, caseCount, alertId }: {
+function OrgSetupProgress({ organizationId, canManage, memberCount, inviteCount, watchlistCount, destinationCount, hasSavedDestination, alertCount, caseCount, alertId }: {
     organizationId: string
     canManage: boolean
     memberCount: number
     inviteCount: number
     watchlistCount: number
     destinationCount: number
+    hasSavedDestination: boolean
     alertCount: number
     caseCount: number
     alertId: string
@@ -1929,7 +1933,7 @@ function OrgSetupProgress({ organizationId, canManage, memberCount, inviteCount,
             title: 'Delivery destination',
             body: destinationCount ? `${destinationCount} destination${destinationCount === 1 ? '' : 's'} saved` : watchlistCount ? 'Test and save a destination' : 'Create a watchlist first',
             reason: !canManage ? 'Owner or admin access is required to test delivery.' : watchlistCount ? 'Test a Discord or webhook destination before customer delivery.' : 'Create a shared watchlist term before testing delivery.',
-            href: destinationCount ? '#destinations' : '#watchlists',
+            href: hasSavedDestination ? '#destinations' : '#watchlists',
             ready: destinationCount > 0,
             blocked: !watchlistCount || !canManage,
             action: destinationCount ? 'Review destination' : 'Test destination',
