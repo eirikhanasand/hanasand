@@ -385,6 +385,11 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const actionBlockers = actionUnavailableReasons(actions, readOnly)
     const webhookBlockedReason = webhookActionBlockedReason(state.detail, scopedAlertId)
     const webhookActionDisabled = Boolean(readOnly || busy !== null || webhookBlockedReason)
+    const caseMeta = [
+        compactCaseReference(caseRecord.id, 'Case'),
+        compactCaseReference(scopedOrganizationId, 'Org') || 'Org pending',
+        compactCaseReference(scopedAlertId, 'Alert') || 'Alert pending',
+    ].join(' · ')
 
     return (
         <main className='grid min-w-0 gap-3 text-ui-text'>
@@ -393,7 +398,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                     <div className='min-w-0 flex-1'>
                         <Link href='/dashboard/dwm' className='inline-flex items-center gap-2 text-[11px] font-semibold uppercase text-ui-primary'><ArrowLeft className='h-3.5 w-3.5' />DWM cases</Link>
                         <h1 className='mt-2 min-w-0 wrap-break-word text-xl font-semibold text-ui-text'>{caseRecord.title || caseRecord.id}</h1>
-                        <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{caseRecord.id} · {caseRecord.organizationId || organizationId || 'organization pending'} · alert {caseRecord.alertId || alertContext?.id || alertId || 'pending'}</p>
+                        <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{caseMeta}</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         <CasePill label='Status' value={caseRecord.status || 'open'} tone={caseRecord.status === 'closed' ? 'neutral' : 'ready'} />
@@ -707,7 +712,7 @@ function WorkflowStrip({ detail, exportPayload }: { detail: CaseDetail, exportPa
     const deliveryCount = detail.deliveries?.length ?? exportPayload?.summary?.deliveryCount ?? 0
     const steps = [
         { label: 'Watchlist', value: terms[0] || 'term pending', state: terms.length ? 'ready' : 'blocked' },
-        { label: 'Alert', value: detail.alert?.id || detail.case?.alertId || 'alert pending', state: detail.alert ? 'ready' : 'blocked' },
+        { label: 'Alert', value: compactCaseReference(detail.alert?.id || detail.case?.alertId, 'Alert') || 'Alert pending', state: detail.alert ? 'ready' : 'blocked' },
         { label: 'Case', value: detail.case?.status || 'open', state: 'ready' },
         { label: 'Evidence', value: `${evidenceCount} rows`, state: evidenceCount ? 'ready' : 'blocked' },
         { label: 'Webhook', value: deliveryCount ? `${deliveryCount} attempts` : 'not sent', state: detail.deliveryContext?.delivered ? 'ready' : deliveryCount ? 'action' : 'blocked' },
@@ -753,8 +758,8 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
                 <div className='min-w-0'>
                     <p className='text-[10px] font-semibold uppercase text-ui-primary'>Case command</p>
                     <div className='mt-2 grid gap-2 text-xs sm:grid-cols-4'>
-                        <CommandFact label='Scope' value={organizationId || tenantId} />
-                        <CommandFact label='Alert' value={alertId ? 'alert linked' : 'pending'} />
+                        <CommandFact label='Scope' value={compactCaseReference(organizationId, 'Org') || compactCaseReference(tenantId, 'Tenant') || 'Scope pending'} />
+                        <CommandFact label='Alert' value={compactCaseReference(alertId, 'Alert') || 'Pending'} />
                         <CommandFact label='Export' value={exportReady ? 'ready' : 'pending'} tone={exportReady ? 'ready' : 'warn'} />
                         <CommandFact label='Delivery' value={lastDelivery} tone={latestDelivery?.status === 'failed' ? 'warn' : 'neutral'} />
                     </div>
@@ -973,6 +978,14 @@ function relativeTime(value?: string) {
 
 function stateLabel(value?: string) {
     return (value || 'pending').replace(/[_-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+}
+
+function compactCaseReference(value: string | undefined, label: string) {
+    if (!value) return undefined
+    const cleaned = value.trim()
+    const normalized = cleaned.replace(/^(?:dwm[_:-]+)?(?:case|alert|org|organization|tenant)[_:-]+/i, '')
+    const compact = normalized.length > 18 ? normalized.slice(-14).replace(/^[:_-]+/, '') : normalized
+    return `${label} ${compact || cleaned}`
 }
 
 function evidenceReferenceState(row: EvidenceRow) {
