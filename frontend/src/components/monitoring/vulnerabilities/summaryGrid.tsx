@@ -33,7 +33,7 @@ export default function SummaryGrid({
             <details className='rounded-lg border border-ui-border bg-ui-panel lg:col-span-2' data-testid='vulnerability-scan-telemetry'>
                 <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/30'>
                     <span>Scan telemetry</span>
-                    <span className='text-xs font-medium text-ui-muted'>{scanStatus.failureCount ? `${scanStatus.failureCount} failures` : 'Healthy counters'}</span>
+                    <span className='text-xs font-medium text-ui-muted'>{reliabilityLabel(scanStatus)}</span>
                 </summary>
                 <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-6'>
                     <SummaryCard
@@ -92,6 +92,12 @@ function targetLabel(data: GetVulnerabilities | null, scanStatus: GetVulnerabili
     if (data?.imageCount) return `${data.imageCount} images`
     if (scanStatus.blocker || scanStatus.lastError) return 'Unavailable'
     return 'Discovering'
+}
+
+function reliabilityLabel(scanStatus: GetVulnerabilities['scanStatus']) {
+    if (scanStatus.failureCount) return `${scanStatus.failureCount} failures`
+    const lastSuccess = scanStatus.lastSuccessAt || scanStatus.finishedAt
+    return lastSuccess ? `Last success ${timeLabel(lastSuccess, '')}` : 'No failures reported'
 }
 
 function timeLabel(value: string | null | undefined, fallback: string) {

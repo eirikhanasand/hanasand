@@ -16,7 +16,9 @@ test('vulnerability scanner starts with triage and collapses telemetry', async (
     expect(summaryGrid).toContain('<summary className=')
     expect(summaryGrid).toContain('Scan telemetry')
     expect(summaryGrid).toContain('TriageFact')
-    expect(summaryGrid).toContain('Healthy counters')
+    expect(summaryGrid).toContain('reliabilityLabel')
+    expect(summaryGrid).toContain('Last success')
+    expect(summaryGrid).toContain('No failures reported')
     expect(summaryGrid).toContain('SummaryCard')
 
     expect(header).toContain('Continuous scanner')
