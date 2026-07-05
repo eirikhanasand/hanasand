@@ -273,6 +273,8 @@ function Results({ result }: { result: TiSearchResponse }) {
         { href: '/dashboard', label: 'Console', value: `${actionability.relatedCases.length} cases`, icon: ShieldAlert },
         { href: '/dashboard/automations?setup=dwm', label: 'Delivery', value: `${actionability.readiness.backedIds.webhookDestinationIds.length} destinations`, icon: Send },
     ]
+    const stagedHandoffItems = useMemo(() => Object.values(stagedHandoffs), [stagedHandoffs])
+    const showRightRail = showMoreAnalysis || stagedHandoffItems.length > 0
     const mobileEvidenceWorkbar = selected ? (
         <MobileEvidenceWorkbar
             selected={selected}
@@ -403,7 +405,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         </section>
                     </div>
                 </div>
-                <div className='grid min-h-[44rem] min-w-0 lg:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]'>
+                <div className={`grid min-h-[44rem] min-w-0 lg:grid-cols-[300px_minmax(0,1fr)] ${showRightRail ? '2xl:grid-cols-[320px_minmax(0,1fr)_340px]' : ''}`} data-ti-right-rail={showRightRail ? 'expanded' : 'collapsed'}>
                     <aside id='ti-activity' data-ti-queue='true' className='order-2 min-w-0 border-b border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-canvas lg:order-none lg:border-b-0 lg:border-r'>
                         <div className='border-b border-ui-border p-4 dark:border-ui-border'>
                             <div className='flex items-center justify-between gap-3'>
@@ -601,7 +603,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         )}
                     </main>
 
-                    <aside className='order-3 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-hidden border-t border-ui-border bg-ui-panel p-4 lg:order-none lg:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
+                    {showRightRail ? <aside className='order-3 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-hidden border-t border-ui-border bg-ui-panel p-4 lg:order-none lg:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         {showMoreAnalysis && alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <div id='ti-actions' data-ti-actions='true'>
                             {showMoreAnalysis ? (
@@ -627,9 +629,9 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 ) : null
                             ) : null}
                         </div>
-                        {Object.keys(stagedHandoffs).length ? (
+                        {stagedHandoffItems.length ? (
                             <StagedHandoffQueuePanel
-                                items={Object.values(stagedHandoffs)}
+                                items={stagedHandoffItems}
                                 onClear={() => setStagedHandoffs({})}
                             />
                         ) : null}
@@ -677,7 +679,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 ) : null}
                             </>
                         ) : null}
-                    </aside>
+                    </aside> : null}
                 </div>
             </section>
 
