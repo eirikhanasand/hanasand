@@ -664,7 +664,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         <div data-dwm-workflow-runbook className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 text-ui-text sm:p-4'>
             <section className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.62fr)] lg:items-start'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Route controls</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Monitoring workflow</p>
                     <h2 className='mt-1 text-lg font-semibold tracking-normal text-ui-text'>Watchlist to case</h2>
                     <div className='mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5'>
                         <RouteStateCard label='Terms' value={String(effectiveTermCount)} detail={termCount ? 'ready' : 'needed'} tone={termCount ? 'ok' : 'warn'} />
@@ -676,7 +676,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 </div>
                 {result ? (
                     <div data-dwm-workflow-result className={`rounded-lg border px-3 py-2 text-sm leading-5 ${result.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>
-                        <p className='font-semibold'>{result.ok ? 'Route updated' : 'Action blocked'}</p>
+                        <p className='font-semibold'>{result.ok ? 'Workflow updated' : 'Action blocked'}</p>
                         <p className='mt-1 text-xs leading-5'>{result.message}</p>
                         {result.actionHref && result.actionLabel ? (
                             <Link href={result.actionHref} className='mt-2 inline-flex min-h-8 items-center rounded-lg border border-current px-3 text-xs font-semibold transition hover:opacity-80' data-dwm-workflow-result-action='true'>
@@ -756,7 +756,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         <WorkflowButton busy={busyAction === 'collection'} disabled={busy} icon={<RefreshCw className='h-4 w-4' />} onClick={runCollection}>Run Telegram collection</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'telegram-pack'} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={expandTelegramCoverage}>Expand Telegram</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'darkweb'} disabled={busy} icon={<ShieldCheck className='h-4 w-4' />} onClick={approveDarkwebMetadata}>Approve metadata</WorkflowButton>
-                        <WorkflowButton busy={busyAction === 'source-case'} disabled={busy || Boolean(watchlistDisabledReason)} disabledReason={watchlistDisabledReason || undefined} icon={<ShieldCheck className='h-4 w-4' />} onClick={runSourcePackToCase}>Run to case</WorkflowButton>
+                        <WorkflowButton busy={busyAction === 'source-case'} disabled={busy || Boolean(watchlistDisabledReason)} disabledReason={watchlistDisabledReason || undefined} icon={<ShieldCheck className='h-4 w-4' />} onClick={runSourcePackToCase}>Run full workflow</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'delivery'} disabled={busy || Boolean(webhookSendDisabledReason)} disabledReason={webhookSendDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
                         {starterTermsActive ? <WorkflowButton busy={false} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={seedStarterWatchlist}>Prepare starter list</WorkflowButton> : null}
