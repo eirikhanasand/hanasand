@@ -1215,9 +1215,6 @@ export default function OrganizationWorkspaceClient() {
             requestId: `org-ui-${Date.now()}`,
         }
         if (url) body.endpointUrl = url
-        if (url) {
-            setEditingDestinations(current => ({ ...current, [destination.id]: { ...draft, url: '' } }))
-        }
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
             method: 'PATCH',
             body: JSON.stringify(body),
