@@ -38,7 +38,7 @@ export default async function DashboardDwmPage({
         operations: operationsResult,
         alerts: alertsResult,
         deliveries: deliveriesResult,
-        usingFallbackAlerts: false
+        usingFallbackAlerts: !savedAlerts.length && snapshot.alerts.length > 0
     }
 
     return (
