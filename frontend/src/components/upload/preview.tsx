@@ -102,8 +102,8 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
             </div>
             <div className='grid gap-4 p-4 sm:p-6'>
                 <div className='grid gap-1'>
-                    <h1 className='text-lg font-semibold text-ui-text'>Review upload</h1>
-                    <p className='text-sm leading-6 text-ui-muted'>Name it, choose an optional public path, then publish.</p>
+                    <h1 className='text-lg font-semibold text-ui-text'>Review public media</h1>
+                    <p className='text-sm leading-6 text-ui-muted'>Name it, choose an optional public path, then publish only if this can be shared outside your organization.</p>
                 </div>
 
                 <label className='grid gap-2'>

@@ -101,8 +101,8 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                         <UploadCloud className='h-5 w-5' />
                     </span>
                     <span className='grid gap-1'>
-                        <span className='text-sm font-semibold text-ui-text'>Drop media here</span>
-                        <span className='text-xs leading-5 text-ui-muted'>Images and videos are supported.</span>
+                        <span className='text-sm font-semibold text-ui-text'>Drop public media here</span>
+                        <span className='text-xs leading-5 text-ui-muted'>Images and videos only. Do not upload secrets or customer evidence.</span>
                     </span>
                     <input
                         id='fileInputDesktop'
@@ -115,8 +115,8 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
             </div>
             <div className='grid gap-5 p-4 sm:p-6'>
                 <div className='grid gap-1'>
-                    <h2 className='text-lg font-semibold text-ui-text'>Upload media</h2>
-                    <p className='text-sm leading-6 text-ui-muted'>Choose a file or paste a fetchable media URL.</p>
+                    <h2 className='text-lg font-semibold text-ui-text'>Upload shareable media</h2>
+                    <p className='text-sm leading-6 text-ui-muted'>Choose a public-safe file or paste a direct public image/video URL.</p>
                 </div>
 
                 <div className='grid gap-3'>
@@ -125,7 +125,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                         className='flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'
                     >
                         <ImageIcon className='h-4 w-4' />
-                        Choose photo or video
+                        Choose public photo or video
                         <input
                             id='fileInputMobile'
                             type='file'
