@@ -81,6 +81,8 @@ test.describe('public threat actor profile', () => {
         expect(source).toContain('data-ti-selected-action-rail')
         expect(source).toContain('data-ti-geo-subordinate')
         expect(source).toContain('data-ti-actor-evidence-spotlight')
+        expect(source).toContain('{sourceBasisLabel(source.confidence)}</span>')
+        expect(source).not.toContain('{Math.round(source.confidence * 100)}%</span>')
         expect(source).toContain('No intelligence is available for that search yet.')
         expect(source).toContain('summary: \'Checking sources\'')
         expect(source).not.toContain('The TI service did not return results.')
