@@ -2781,29 +2781,29 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
 }
 
 function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canManage, busy, rowMessages, onReplay }: { organization: OrganizationSummary, deliveries: DeliveryRow[], selectedSubject: ActivitySubject, canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, onReplay: (delivery: DeliveryRow) => void }) {
+    const [showAll, setShowAll] = useState(false)
     const matchingDeliveries = deliveries
         .filter(delivery => deliveryMatchesSubject(delivery, selectedSubject))
         .sort((left, right) => deliveryTime(right) - deliveryTime(left))
     const scopedDeliveries = matchingDeliveries
-        .slice(0, 8)
-    const allHref = `/api/dwm/webhooks/deliveries?organizationId=${encodeURIComponent(organization.id)}`
-    const selectedHref = deliveryHistoryHref(allHref, selectedSubject)
+        .slice(0, showAll ? matchingDeliveries.length : 8)
     const totalFailures = matchingDeliveries.filter(delivery => delivery.status === 'failed' || delivery.error).length
     const retryCount = matchingDeliveries.filter(delivery => Boolean(delivery.nextRetryAt)).length
     const hiddenDeliveryCount = Math.max(0, matchingDeliveries.length - scopedDeliveries.length)
     return (
         <section id='delivery-history' className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-delivery-history='true'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Delivery history' detail='Recent tests, replays, failures, and retry state for the selected organization scope.' />
+                <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Delivery history' detail='Recent tests, replays, failures, and retry state for the selected workspace.' />
                 <div className='flex flex-wrap gap-2'>
                     <StatusPill status={`${matchingDeliveries.length} total`} />
                     {hiddenDeliveryCount > 0 && <StatusPill status={`${hiddenDeliveryCount} older`} />}
                     {totalFailures > 0 && <StatusPill status={`${totalFailures} failed`} />}
                     {retryCount > 0 && <StatusPill status={`${retryCount} retry`} />}
-                    <a href={selectedHref} className={secondaryButtonClass}>
-                        <ExternalLink className='h-4 w-4' />
-                        Open delivery log
-                    </a>
+                    {matchingDeliveries.length > 8 && (
+                        <button type='button' className={secondaryButtonClass} onClick={() => setShowAll(current => !current)} data-org-delivery-show-all='true'>
+                            {showAll ? 'Show latest' : 'Show all'}
+                        </button>
+                    )}
                 </div>
             </div>
             <div className='mt-4 overflow-x-auto rounded-lg border border-ui-border dark:border-ui-border'>
@@ -4014,17 +4014,6 @@ function deliveryMatchesSubject(delivery: DeliveryRow, subject: ActivitySubject)
     if (subject.type === 'alert') return delivery.alertId === subject.id
     if (subject.type === 'case') return delivery.caseId === subject.id
     return false
-}
-
-function deliveryHistoryHref(baseHref: string, subject: ActivitySubject) {
-    if (subject.type === 'organization') return baseHref
-    const params = new URLSearchParams()
-    if (subject.type === 'destination') params.set('destinationId', subject.id)
-    if (subject.type === 'watchlist') params.set('watchlistId', subject.id)
-    if (subject.type === 'alert') params.set('alertId', subject.id)
-    if (subject.type === 'case') params.set('caseId', subject.id)
-    const suffix = params.toString()
-    return suffix ? `${baseHref}&${suffix}` : baseHref
 }
 
 function deliveryTraceLabel(delivery: DeliveryRow) {
