@@ -2344,7 +2344,7 @@ function ActorOperationsMatrix({
             </div>
             <div className='grid min-w-0 lg:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='min-w-0 overflow-x-auto'>
-                    <table className='min-w-[760px] w-full border-collapse text-left text-xs'>
+                    <table className='min-w-[680px] w-full border-collapse text-left text-xs'>
                         <thead className='bg-ui-panel text-[11px] uppercase text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>
                             <tr>
                                 <th className='px-3 py-2 font-semibold'>Type</th>
@@ -2352,7 +2352,6 @@ function ActorOperationsMatrix({
                                 <th className='px-3 py-2 font-semibold'>Source</th>
                                 <th className='px-3 py-2 font-semibold'>Freshness</th>
                                 <th className='px-3 py-2 font-semibold'>Basis</th>
-                                <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
                         <tbody className='divide-y divide-ui-border'>
@@ -2385,11 +2384,6 @@ function ActorOperationsMatrix({
                                             <p className='mt-1 text-[11px] text-ui-muted dark:text-ui-muted'>{formatDate(row.timestamp)}</p>
                                         </td>
                                         <td className='px-3 py-2 font-semibold text-ui-text dark:text-ui-text'>{sourceBasisLabel(row.confidence)}</td>
-                                        <td className='px-3 py-2'>
-                                            <div className='flex min-w-0 flex-wrap gap-1.5'>
-                                                <CopyPayloadButton label='Copy' payload={row.payload} />
-                                            </div>
-                                        </td>
                                     </tr>
                                 )
                             })}
@@ -3229,7 +3223,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
             </div>
             <div className='grid min-w-0 xl:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='min-w-0 overflow-x-auto'>
-                    <table className='min-w-[780px] w-full border-collapse text-left text-xs'>
+                    <table className='min-w-[700px] w-full border-collapse text-left text-xs'>
                         <thead className='bg-ui-panel text-[11px] uppercase text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>
                             <tr>
                                 <th className='px-3 py-2 font-semibold'>Detail</th>
@@ -3237,7 +3231,6 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                 <th className='px-3 py-2 font-semibold'>Freshness</th>
                                 <th className='px-3 py-2 font-semibold'>Basis</th>
                                 <th className='px-3 py-2 font-semibold'>Workflow state</th>
-                                <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
                         <tbody className='divide-y divide-ui-border'>
@@ -3263,11 +3256,6 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                             <p className='mt-1 text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                                 {artifact.watchlistTerms.length} watch · {artifact.enrichmentTasks.length} source questions
                                             </p>
-                                        </td>
-                                        <td className='px-3 py-2'>
-                                            <div className='flex min-w-0 flex-wrap gap-1.5'>
-                                                <CopyPayloadButton label='Copy' payload={artifactWorklistPayloadFor(artifact)} />
-                                            </div>
                                         </td>
                                     </tr>
                                 )
