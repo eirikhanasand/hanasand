@@ -25,6 +25,8 @@ const TI_MOBILE_SOURCE_FILTER_OPTIONS = 5
 const TI_ACTIVITY_TIMELINE_ROWS = 3
 const TI_SOURCE_REFERENCE_ROWS = 4
 const TI_ENRICHMENT_GAP_PREVIEW_ROWS = 4
+const TI_DOSSIER_REASON_ROWS = 3
+const TI_DOSSIER_SOURCE_FAMILY_ROWS = 4
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const router = useRouter()
@@ -2583,7 +2585,8 @@ function ActorIntelligenceDossier({ actor, actionability, result, artifacts, sel
 
             <div className='mt-4 grid gap-3 xl:grid-cols-3'>
                 <EvidencePanel title='Why this profile is trusted'>
-                    {actor.confidenceReasoning.map(item => <li key={item}>{item}</li>)}
+                    {actor.confidenceReasoning.slice(0, TI_DOSSIER_REASON_ROWS).map(item => <li key={item}>{item}</li>)}
+                    {actor.confidenceReasoning.length > TI_DOSSIER_REASON_ROWS ? <li className='text-ui-muted'>+{actor.confidenceReasoning.length - TI_DOSSIER_REASON_ROWS} more reasons in source workbench</li> : null}
                 </EvidencePanel>
                 <SourceCoveragePanel coverage={actor.sourceCoverage} />
                 <StructuredProvenancePanel rows={actor.provenanceRows} actor={actor} actionability={actionability} query={result.query} />
@@ -2893,11 +2896,12 @@ function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfil
                 ))}
             </div>
             <div className='mt-3 flex flex-wrap gap-1.5'>
-                {coverage.sourceFamilies.length ? coverage.sourceFamilies.map(item => (
+                {coverage.sourceFamilies.length ? coverage.sourceFamilies.slice(0, TI_DOSSIER_SOURCE_FAMILY_ROWS).map(item => (
                     <span key={item.family} className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
                         {formatLabel(item.family)} · {item.count}
                     </span>
                 )) : <span className='text-xs text-ui-muted dark:text-ui-muted'>Source family coverage is not mapped yet.</span>}
+                {coverage.sourceFamilies.length > TI_DOSSIER_SOURCE_FAMILY_ROWS ? <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>+{coverage.sourceFamilies.length - TI_DOSSIER_SOURCE_FAMILY_ROWS} more</span> : null}
             </div>
             {coverage.missing.length ? (
                 <div className='mt-3 rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>
