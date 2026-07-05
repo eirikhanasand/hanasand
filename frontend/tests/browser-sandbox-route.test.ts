@@ -138,6 +138,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(brokerSource.includes('loadWebCrackSample'), 'broker should load extracted obfuscated script samples into WebCrack.')
     assert(brokerSource.includes('webcrackLoad'), 'broker should emit WebCrack load results.')
     assert(clientSource.includes('capturedToolCount'), 'client should count unique configured profile tools instead of duplicate provider update captures.')
+    assert(clientSource.includes('isUsefulFrameImage') && clientSource.includes('image.length > 24_000'), 'client should not promote tiny blank frames over useful browser captures.')
     assert(analysisSource.includes('decodedPreview'), 'analysis helpers should include decoded previews for obfuscated scripts.')
     assert(analysisSource.includes('decoded network indicators'), 'analysis helpers should assess decoded network indicators.')
     assert(brokerSource.includes('extractIndicators'), 'broker should extract domains, IPs, and URLs for later-stage analysis.')

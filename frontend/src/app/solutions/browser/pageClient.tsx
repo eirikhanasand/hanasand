@@ -368,7 +368,7 @@ export default function BrowserPageClient() {
             }
             if (payload.type === 'frame' && typeof payload.image === 'string') {
                 const image = `data:image/jpeg;base64,${payload.image}`
-                setActiveImage(image)
+                if (isUsefulFrameImage(image)) setActiveImage(image)
                 const urlValue = String(payload.url || url)
                 const frameWidth = finiteNumber(payload.width) || 1280
                 const frameHeight = finiteNumber(payload.height) || 760
@@ -1160,6 +1160,11 @@ function captureLabel(reason: string) {
     if (reason === 'initial_target') return 'Initial target capture'
     if (reason === 'interval') return 'Interval capture'
     return 'Page capture'
+}
+
+function isUsefulFrameImage(image: string) {
+    // ponytail: tiny JPEGs here are blank white Chromium frames; decode pixels if this becomes noisy.
+    return image.length > 24_000
 }
 
 function buildAnalystSummary(target: string, captures: Capture[], profile: SandboxProfile) {
