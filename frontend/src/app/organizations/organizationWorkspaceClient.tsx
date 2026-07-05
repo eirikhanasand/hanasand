@@ -3328,8 +3328,8 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     const copySelectedActivity = async () => {
         try {
             const heading = `${organizationDisplayName(organization)} · ${subjectTypeLabel}`
-            const context = contextRows.map(row => `${row.label}: ${row.value}`)
-            const rows = visibleRows.slice(0, 8).map(item => `${formatDate(item.at)} · ${activitySourceLabel(item)} · ${item.title} · ${item.detail}`)
+            const context = contextRows.map(row => `${row.label}: ${sanitizeOrganizationDisplayCopy(row.value) || 'redacted'}`)
+            const rows = visibleRows.slice(0, 8).map(item => `${formatDate(item.at)} · ${activitySourceLabel(item)} · ${sanitizeOrganizationDisplayCopy(item.title) || 'Activity'} · ${sanitizeOrganizationDisplayCopy(item.detail) || 'redacted'}`)
             await navigator.clipboard.writeText([heading, ...context, ...rows].filter(Boolean).join('\n'))
             setCopyStatus({ ok: true, text: 'Activity copied.' })
         } catch {
