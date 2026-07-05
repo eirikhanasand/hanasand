@@ -1,5 +1,5 @@
 import WebSocket, { type RawData } from 'ws'
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
+import { chromium, type Browser, type BrowserContext, type Frame, type Page } from 'playwright'
 import recordLog from '#utils/logs/recordLog.ts'
 import { finishBrowserRun, prepareBrowserRun } from '../browserSandboxRuns.ts'
 import {
@@ -60,6 +60,11 @@ type WebCrackLoadResult = {
     sampleBytes?: number
     action?: string
     reason?: string
+}
+type ProviderCaptureReadiness = {
+    ready: boolean
+    blocker?: string
+    statusText?: string
 }
 const DEFAULT_TARGET = 'http://sample-intel-source.onion'
 const DEFAULT_WIDTH = 1280
@@ -481,6 +486,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             }, durationMs)
 
             await navigate(target)
+            await dismissCookieOverlays(page).catch(() => undefined)
             await sendFrame(true, 'initial_target')
             const primaryEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
             await captureProfileTools(context, message.profileTools || [], target, primaryEvidence?.deobfuscationTasks || [])
@@ -517,7 +523,38 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const toolUrl = tool.url.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
             try {
                 await toolPage.goto(toolUrl, { waitUntil: 'domcontentloaded', timeout: 25_000 })
+                await dismissCookieOverlays(toolPage).catch(() => undefined)
                 await toolPage.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined)
+                const readiness = await waitForProviderCaptureReadiness(toolPage, tool).catch(() => ({ ready: false, blocker: 'readiness-check-failed' }))
+                if (!readiness.ready) {
+                    const blockerEvidence = await collectPageEvidence(toolPage)
+                    const blockerImage = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
+                    const blockerSummary = analyzeToolEvidence(tool.name || toolUrl, blockerEvidence)
+                    send({
+                        type: 'tool_capture',
+                        sessionId,
+                        id: tool.id || safeToolId(tool.name || toolUrl),
+                        name: tool.name || toolUrl,
+                        url: toolPage.url(),
+                        title: await toolPage.title().catch(() => ''),
+                        capturedAt: startedAt,
+                        image: blockerImage ? blockerImage.toString('base64') : null,
+                        evidence: blockerEvidence,
+                        toolAnalysis: {
+                            ...blockerSummary,
+                            verdict: blockerSummary.verdict ?? 'unknown',
+                            extractedSignals: [
+                                ...((blockerSummary.extractedSignals || []) as string[]),
+                                `Provider not ready: ${readiness.blocker || 'no parsed completion signal found'}`,
+                            ].filter(Boolean),
+                        },
+                        target,
+                        error: readiness.blocker || 'Provider capture blocked',
+                    })
+                    continue
+                }
+                await toolPage.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined)
+                await toolPage.waitForTimeout(450).catch(() => undefined)
                 const webcrackLoad = isWebCrackTool(tool, toolUrl)
                     ? await loadWebCrackSample(toolPage, deobfuscationTasks)
                     : undefined
@@ -744,6 +781,578 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
     }
 }
 
+async function dismissCookieOverlays(page: Page) {
+    const selectors = [
+        'button:has-text("Accept all")',
+        'button:has-text("Accept all cookies")',
+        'button:has-text("Accept")',
+        'button:has-text("Accept All")',
+        'button:has-text("Accept all Cookies")',
+        'button:has-text("I Accept")',
+        'button:has-text("I ACCEPT")',
+        'button:has-text("I AGREE")',
+        'button:has-text("Allow all cookies and continue")',
+        'button:has-text("Allow all and continue")',
+        'button:has-text("Accept all")',
+        'button:has-text("Allow all cookies")',
+        'button:has-text("Allow all")',
+        'button:has-text("Allow")',
+        'button:has-text("I agree")',
+        'button:has-text("I agree and close")',
+        'button:has-text("I Agree")',
+        'button:has-text("I Consent")',
+        'button:has-text("Got it")',
+        'button:has-text("I understand")',
+        'button:has-text("Continue")',
+        'button:has-text("Skip")',
+        'button:has-text("Close")',
+        'button:has-text("Godta")',
+        'button:has-text("Godta alle")',
+        'button:has-text("Accepter")',
+        'button:has-text("Tout accepter")',
+        'button:has-text("Only Essential")',
+        'button:has-text("No thanks")',
+        'button:has-text("Reject all")',
+        'button:has-text("I’m Okay with That")',
+        'button:has-text("I Accept")',
+        'button:has-text("I am okay with that")',
+        'button:has-text("Only Essential Cookies")',
+        'button:has-text("Use Required Cookies")',
+        'button:has-text("Enable All Cookies")',
+        'button:has-text("Allow all cookies and continue")',
+        'button:has-text("Gotcha")',
+        'button:has-text("OK")',
+        'button:has-text("Ok")',
+        'button:has-text("Continue")',
+        '[role="button"]:has-text("Allow")',
+        '[role="button"]:has-text("Agree")',
+        '[role="button"]:has-text("Accept")',
+        '[role="button"]:has-text("Continue")',
+        '[role="button"]:has-text("Close")',
+        '[role="button"]:has-text("Dismiss")',
+        'a:has-text("Accept")',
+        'a:has-text("Accept all")',
+        'a:has-text("Continue")',
+        'a:has-text("Close")',
+        '#CybotCookiebotDialogBodyButtonAccept',
+        '#CybotCookiebotDialogBodyLevelButtonAcceptAll',
+        '#didomi-notice-agree-button',
+        '#didomi-notice-accept-button',
+        '#onetrust-accept-btn-handler',
+        '#onetrust-accept-all-handler',
+        '#onetrust-accept-all',
+        '#truste-consent-button',
+        'button[data-testid="accept"]',
+        '.didomi-continue-without-agreeing',
+        '[data-testid="accept-button"]',
+        '[data-testid*="accept" i]',
+        '[data-testid*="consent" i]',
+        '[data-testid*="cookies" i]',
+        '[data-testid*="cookie" i]',
+        '[data-cc-action="accept-all"]',
+        '[data-cc-action="accept"]',
+        '[id*="onetrust" i]',
+        '[class*="onetrust" i]',
+        '[aria-label*="Accept" i]',
+        '[aria-label*="accept all" i]',
+        '[aria-label*="Godta" i]',
+        '[aria-label*="Accepter" i]',
+        '[aria-label*="cookie settings" i]',
+        '[aria-label*="cookie preferences" i]',
+        '[aria-label*="consent" i]',
+        '[id*="cookie-banner" i]',
+        '[class*="cookie-banner" i]',
+        '[role="dialog"][aria-label*="cookie" i]',
+        '[role="dialog"][aria-label*="consent" i]',
+        '[id*="consent" i][role="dialog"]',
+        '[id*="cookie-consent" i]',
+        '[class*="cookie-consent" i]',
+        '[id*="consent-banner" i]',
+        '[class*="consent-banner" i]',
+        '[id*="truste" i]',
+        '[class*="truste" i]',
+        '[id*="gdpr" i]',
+        '[class*="gdpr" i]',
+    ]
+    const cookiePromptText = (value: string) => /(cookie|consent|privacy|gdpr|tracking|analytics|preferences|cookie settings|cookie preferences|cookie notice|cookie popup|cookie wall|accept all|I agree)/i.test(value)
+    const passLimit = 12
+
+    const clickInFrame = async (frame: Frame) => {
+        for (const selector of selectors) {
+            try {
+                const locator = frame.locator(selector).first()
+                if (await locator.isVisible().catch(() => false)) {
+                    await locator.click({ timeout: 1200 }).catch(() => undefined)
+                    await frame.waitForTimeout(120).catch(() => undefined)
+                    return true
+                }
+            } catch {
+                // Continue trying other selectors.
+            }
+        }
+        return false
+    }
+
+    const clickTextButtonInFrame = async (frame: Frame) => frame.evaluate(() => {
+        const candidates = Array.from(
+            document.querySelectorAll<HTMLElement>(
+                'button, a, input[type="button"], input[type="submit"], [role="button"]',
+            ),
+        )
+        const normalize = (candidate: string) => (candidate || '').trim().toLowerCase()
+        const aroundCandidateText = (candidate: HTMLElement) => {
+            const target = candidate.closest('[role="dialog"], [class*="cookie" i], [id*="cookie" i], [class*="consent" i], [id*="consent" i]')
+            if (target) {
+                return `${target.textContent || ''} ${candidate.textContent || ''}`
+            }
+            return candidate.textContent || ''
+        }
+        const isCookieAction = (value: string) => /^(accept|agree|allow|got it|continue|ok|understand|close|dismiss|not now|reject|decline|godta|accepter|enable|essential|required|manage|save|save and continue|proceed)/.test(value)
+            && /(cookie|consent|privacy|gdpr|tracking|marketing|analytics|preferences)/.test(value)
+        const isCookieLabel = (value: string) => /(cookie|consent|privacy|gdpr|tracking|analytics|preferences|opt.?out|data collection|essential)/.test(value)
+        const target = candidates.find(candidate => {
+            const value = normalize(candidate.textContent || '')
+            const contextValue = normalize(aroundCandidateText(candidate))
+            return isCookieAction(value) && isCookieLabel(contextValue) && candidate.offsetParent !== null
+        })
+        if (!target) return false
+        target.click()
+        return true
+    }).catch(() => false)
+
+    const clickShadowCookieElements = async (frame: Frame) => frame.evaluate(() => {
+        const walk = (root: ParentNode): Element[] => {
+            const nodes = Array.from(root.querySelectorAll<HTMLElement>('*'))
+            const shadowHosts = Array.from(root.querySelectorAll<HTMLElement>('*')).filter(node => node.shadowRoot)
+            const fromShadow: Element[] = shadowHosts.flatMap(node => walk(node.shadowRoot as unknown as ParentNode))
+            return [...nodes, ...fromShadow]
+        }
+
+        const candidates = walk(document)
+            .filter((candidate): candidate is HTMLElement => candidate instanceof HTMLButtonElement || candidate.getAttribute('role') === 'button' || candidate.tagName === 'A')
+            .filter(candidate => {
+                const value = (candidate.textContent || '').toLowerCase()
+                const hasCookieAction = /^(accept|agree|allow|got it|continue|ok|understand|close|dismiss|not now|godta|accepter|enable|acceptall|only|essential|required|all|save|save and close|yes|proceed)/.test(value)
+                const hasCookieContext = /(cookie|consent|privacy|gdpr|tracking|analytics|preferences|data collection|essential)/.test(value)
+                return hasCookieAction && hasCookieContext && candidate.getAttribute('aria-hidden') !== 'true'
+            })
+
+        for (const candidate of candidates) {
+            candidate.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+            return true
+        }
+
+        return false
+    }).catch(() => false)
+
+    const hideCandidateOverlays = async (frame: Frame) => frame.evaluate(() => {
+        const selectors = [
+            '[id*="cookie" i]',
+            '[class*="cookie" i]',
+            '[id*="consent" i]',
+            '[class*="consent" i]',
+            '[id*="onetrust" i]',
+            '[class*="onetrust" i]',
+            '[id*="gdpr" i]',
+            '[class*="gdpr" i]',
+            '[id*="cc-" i]',
+            '[class*="cc-" i]',
+            '[id*="cookie-banner" i]',
+            '[class*="cookie-banner" i]',
+            '[id*="sp_message" i]',
+            '[class*="sp_message" i]',
+            '[id*="cookie-consent" i]',
+            '[class*="cookie-consent" i]',
+            '[role="dialog"][aria-label*="cookie" i]',
+            '[role="dialog"][aria-label*="consent" i]',
+        ]
+        for (const selector of selectors) {
+            for (const node of Array.from(document.querySelectorAll(selector))) {
+                const candidate = node as HTMLElement
+                const text = (candidate.textContent || '').toLowerCase()
+                const computedStyle = window.getComputedStyle(candidate)
+                const containsCookieCopy = /cookie|consent|gdpr|privacy|tracking|preferences|analytics|essential|data collection/i.test(text)
+            const isFixedOrSticky = ['fixed', 'sticky'].includes(computedStyle.position)
+                const fillsView = candidate.getBoundingClientRect().width >= window.innerWidth * 0.5 && candidate.getBoundingClientRect().height >= window.innerHeight * 0.15
+                if ((containsCookieCopy || isFixedOrSticky) && candidate.style.display !== 'none') {
+                    candidate.style.setProperty('display', 'none', 'important')
+                    candidate.setAttribute('data-hanasand-cookie-dismissed', '1')
+                }
+                const hasHighZ = Number(computedStyle.zIndex || 0) >= 2000
+                const fixedOverlay = ['fixed', 'sticky', 'absolute'].includes(computedStyle.position)
+                const fillsViewport = candidate.getBoundingClientRect().width >= window.innerWidth * 0.7 && candidate.getBoundingClientRect().height >= window.innerHeight * 0.25
+                if ((hasHighZ && fixedOverlay && fillsViewport) || (containsCookieCopy && fillsView)) {
+                    candidate.style.setProperty('display', 'none', 'important')
+                    candidate.style.setProperty('pointer-events', 'none', 'important')
+                }
+            }
+        }
+
+        const iframes = Array.from(document.querySelectorAll('iframe')).filter(node => /consent|cookie|gdpr|privacy|trust|onetrust|cmp|civic|quantcast|cookiebot/i.test((node.src || '').toLowerCase()))
+        for (const iframe of iframes) {
+            iframe.style.setProperty('display', 'none', 'important')
+            iframe.setAttribute('data-hanasand-cookie-dismissed', '1')
+        }
+        const shadowContainers = Array.from(document.querySelectorAll('[id*="sp_message" i], [class*="sp_message" i], [class*="cookie-banner" i], [id*="cookie-banner" i], [id*="cmp" i], [class*="cmp" i]'))
+            .filter(node => {
+                const text = (node.textContent || '').toLowerCase()
+                const rect = node.getBoundingClientRect()
+                return /cookie|consent|privacy|gdpr|tracking|preferences|notice/i.test(text) || rect.top < 120 || rect.height > 120
+            })
+        for (const node of shadowContainers) {
+            const candidate = node as HTMLElement
+            candidate.style.setProperty('display', 'none', 'important')
+            candidate.setAttribute('data-hanasand-cookie-dismissed', '1')
+        }
+    }).catch(() => undefined)
+
+    const hideTopLevelConsentFrame = async (frame: Page | Frame) => {
+        await frame.evaluate(() => {
+            const overlays = Array.from(document.querySelectorAll('iframe')).filter((iframe) => {
+                const style = window.getComputedStyle(iframe)
+                const rect = iframe.getBoundingClientRect()
+                const src = (iframe.getAttribute('src') || '').toLowerCase()
+                const isLargeFixedOverlay = ['fixed', 'absolute'].includes(style.position) && rect.height >= window.innerHeight * 0.35 && rect.width >= window.innerWidth * 0.35
+                const hints = /consent|cookie|gdpr|privacy|trust|onetrust|cmp|civic|quantcast|cookiebot|otnotice|ot-banner|euconsent|banner|overlay/i
+                return (hints.test(src) || isLargeFixedOverlay) && style.zIndex ? Number.parseInt(style.zIndex, 10) >= 1 : false
+            })
+
+            for (const iframe of overlays) {
+                iframe.style.setProperty('display', 'none', 'important')
+                iframe.setAttribute('data-hanasand-cookie-dismissed', '1')
+            }
+        }).catch(() => undefined)
+    }
+
+    const hasCookieCopy = async (frame: Frame) => {
+        try {
+            const text = await frame.locator('body').innerText().catch(() => '')
+            return cookiePromptText(text)
+        } catch {
+            return false
+        }
+    }
+
+    const pressCookieShortcuts = async () => {
+        await page.keyboard.press('Escape').catch(() => undefined)
+        await page.keyboard.press('Tab').catch(() => undefined)
+        await page.keyboard.press('Enter').catch(() => undefined)
+        await page.mouse.click(8, 8).catch(() => undefined)
+    }
+
+    for (let attempt = 0; attempt < passLimit; attempt++) {
+        let touched = false
+        const frames = [page.mainFrame(), ...page.frames()]
+        for (const frame of frames) {
+            touched ||= await clickInFrame(frame)
+            touched ||= await clickTextButtonInFrame(frame)
+            touched ||= await clickShadowCookieElements(frame)
+            await hideCandidateOverlays(frame)
+        }
+        const bodyStillHasCookieText = await hasCookieCopy(page.mainFrame())
+        const visibleConsentWidgets = await page.locator('iframe, [role="dialog"]').count().catch(() => 0)
+        await hideTopLevelConsentFrame(page).catch(() => undefined)
+        if (attempt % 2 === 0) {
+            await pressCookieShortcuts()
+        }
+        if (!touched && !bodyStillHasCookieText && visibleConsentWidgets === 0) break
+        await page.waitForTimeout(420).catch(() => undefined)
+    }
+}
+
+async function waitForProviderCaptureReadiness(page: Page, tool: { id?: string; name?: string; url?: string }): Promise<ProviderCaptureReadiness> {
+    const normalized = `${tool.id || ''} ${tool.name || ''} ${tool.url || ''}`.toLowerCase()
+    const isVirusTotal = /virustotal|virus total/.test(normalized)
+    const isUrlQuery = /urlquery/.test(normalized)
+    const provider = isVirusTotal ? 'virustotal' : isUrlQuery ? 'urlquery' : 'generic'
+    const markerSelectors = isVirusTotal
+        ? [
+            'text=/results/i',
+            'text=/security vendors/i',
+            'text=/harmless/i',
+            'text=/undetected/i',
+            'text=/malicious/i',
+            'text=/no detections/i',
+            'text=/detection ratio/i',
+            'text=/analysis/i',
+            'text=/threats?/i',
+            'text=/suspicious/i',
+            'text=/clean/i',
+            'text=/vendors?/i',
+            'text=/last analysis/i',
+            'text=/detection/i',
+            'text=/scanner/i',
+            'text=/sha256/i',
+            'text=/permalink/i',
+            'text=/reports?/i',
+            'text=/file info/i',
+            'text=/community/i',
+        ]
+        : isUrlQuery
+            ? [
+                'text=/no results/i',
+                'text=/0 alerts/i',
+                'text=/alerts?/i',
+                'text=/results?/i',
+                'text=/search results/i',
+                'text=/community/i',
+                'text=/query/i',
+                'text=/urlquery/i',
+                'text=/malicious/i',
+                'text=/detected/i',
+                'text=/analysis/i',
+                'text=/not malicious/i',
+                'text=/clean/i',
+            ]
+            : [
+                'text=/search/i',
+                'text=/analysis/i',
+                'text=/result/i',
+            ]
+
+    const cookieGateText = /cookie|consent|privacy|gdpr|opt.?out|data collection/i
+    const hasCookieOverlay = async () => page.evaluate(() => {
+        const selectors = [
+            '[id*="cookie" i]',
+            '[class*="cookie" i]',
+            '[id*="consent" i]',
+            '[class*="consent" i]',
+            '[role="dialog"][aria-label*="cookie" i]',
+            '[role="dialog"][aria-label*="consent" i]',
+            '[id*="onetrust" i]',
+            '[class*="onetrust" i]',
+            '[id*="sp_message" i]',
+            '[class*="sp_message" i]',
+            'iframe[src*="cookie" i]',
+            'iframe[src*="consent" i]',
+            'iframe[src*="gdpr" i]',
+            'iframe[src*="onetrust" i]',
+        ]
+
+        const hasVisible = (element: Element | null) => {
+            if (!element) return false
+            const style = window.getComputedStyle(element)
+            if (style.display === 'none' || style.visibility === 'hidden' || Number.parseFloat(style.opacity || '1') <= 0.05) return false
+            const rect = element.getBoundingClientRect()
+            return rect.width > 0 && rect.height > 0
+        }
+
+        const topMatch = (text: string) => /cookie|consent|privacy|gdpr|tracking|analytics|preferences|data collection/i.test(text)
+
+        for (const selector of selectors) {
+            for (const node of Array.from(document.querySelectorAll(selector))) {
+                if (!hasVisible(node)) continue
+                const text = (node.textContent || '').toLowerCase()
+                if (topMatch(text)) return true
+                const z = Number.parseInt(window.getComputedStyle(node as Element).zIndex || '0', 10)
+                const bounds = (node as Element).getBoundingClientRect()
+                if ((Number.isFinite(z) && z >= 2000) || (bounds.height > 120 && bounds.width > 300)) {
+                    return true
+                }
+            }
+        }
+
+        const buttons = Array.from(document.querySelectorAll('button, a, input'))
+        const likelyActions = buttons.filter((button) => {
+            const text = (button.textContent || '').toLowerCase()
+            const value = (button as HTMLInputElement).getAttribute('value')?.toLowerCase() || ''
+            const combined = `${text} ${value}`
+            return /accept|allow|ok|continue|agree|godta|accepter|proceed|got it|close|dismiss|manage/.test(combined)
+        })
+
+        return likelyActions.some((button) => {
+            if (!hasVisible(button)) return false
+            const parentText = ((button.closest('[role="dialog"], [class*="cookie" i], [id*="cookie" i], [class*="consent" i], [id*="consent" i]')?.textContent || '').toLowerCase())
+            return /cookie|consent|privacy|gdpr|tracking/.test(parentText)
+        })
+    }).catch(() => false)
+
+    const hasNoProviderSignal = (text: string) => /access denied|not authorized|403|rate limit|too many requests|error/i.test(text)
+    const hardBlockers = [
+        cookieGateText,
+        /cloudflare|just a moment|bot check|enable javascript|challenge/i,
+    ]
+    const softWaitText = [
+        /loading/i,
+        /please wait/i,
+        /analyzing/i,
+        /preparing/i,
+        /running/i,
+        /searching/i,
+        /redirecting/i,
+    ]
+    const antiBotText = /turnstile|captcha|human verification|anti.?bot/i
+    const markerText = markerSelectors.map(item => item.replace(/^text=\/|\/$/g, '').replace(/\\i$/g, '').toLowerCase())
+    const providerTimeoutMs = (isVirusTotal || isUrlQuery) ? 28_000 : 16_000
+    const settledMs = (isVirusTotal || isUrlQuery) ? 14_000 : 7_000
+    const stableMs = (isVirusTotal || isUrlQuery) ? 9_000 : 4_000
+    const cookieAttemptLimit = (isVirusTotal || isUrlQuery) ? 12 : 4
+    const deadline = Date.now() + providerTimeoutMs
+    const settledDeadline = Date.now() + settledMs
+    const stableDeadline = Date.now() + stableMs
+
+    const hasExpectedProviderDomain = async () => {
+        const current = page.url().toLowerCase()
+        if (isVirusTotal) return /virustotal\.com/i.test(current)
+        if (isUrlQuery) return /urlquery\.net/i.test(current) || /urlquery\.io/i.test(current) || /urlquery/i.test(current)
+        return true
+    }
+    const hasProviderTextSignal = (text: string, tokens: RegExp[]) => tokens.some(token => token.test(text))
+    const hasMeaningfulContent = (text: string) => text.length > 500 && /[a-z]{2,}/i.test(text)
+    const readyTokens = isVirusTotal
+        ? [
+            /\b(vendor|vendors|engine|engines)\b/i,
+            /\b(\d+\s*\/\s*\d+)\b/i,
+            /\bdetection ratio\b/i,
+            /\b(no detections|undetected|harmless|suspicious|malicious)\b/i,
+            /\bsecurity\s+vendors\b/i,
+            /\bcommunity\b/i,
+            /\bpermalink\b/i,
+            /\blast analysis\b/i,
+        ]
+        : [
+            /\b(\d+)\s+(?:alerts?|detections?)\b/i,
+            /\burlquery\b/i,
+            /\b(community|security|threat)\b/i,
+            /\b(no alerts|0 alerts|no results|undetected|not malicious|malicious)\b/i,
+            /\bsearch results\b/i,
+        ]
+    const snapshotText = async () => {
+        const result = await page.evaluate(() => `${document.title} ${document.body?.innerText || ''}`.toLowerCase()).catch(() => '')
+        return `${result || ''}`
+    }
+    const hasReadyEvidence = (text: string) => markerText.some(item => text.includes(item))
+    const hasResultLikeSignal = (text: string) => hasProviderTextSignal(text, readyTokens)
+    let cookieGateAttempts = 0
+    let meaningfulContentObserved = false
+    while (Date.now() < deadline) {
+        const text = await snapshotText()
+        await dismissCookieOverlays(page).catch(() => undefined)
+        const likelyCookieOverlay = await hasCookieOverlay()
+        const inProviderDomain = await hasExpectedProviderDomain()
+        const hasMeaningful = hasMeaningfulContent(text)
+        if (hasMeaningful) meaningfulContentObserved = true
+        const isLikelyBlockedPath = /consent|cookie|privacy|gdpr/i.test(page.url())
+
+        const hardBlockMatch = hardBlockers.find(item => item.test(text))
+        if (hardBlockMatch) {
+            const isCookieGate = cookieGateText.test(text) && hardBlockMatch === cookieGateText
+            if (isCookieGate && cookieGateAttempts < cookieAttemptLimit && likelyCookieOverlay) {
+                cookieGateAttempts += 1
+                await page.waitForTimeout(500).catch(() => undefined)
+                continue
+            }
+            if (isCookieGate && (inProviderDomain && meaningfulContentObserved && !isLikelyBlockedPath)) {
+                return {
+                    ready: true,
+                    statusText: `cookie-overlay-ignored-${provider}`,
+                }
+            }
+            if (!isCookieGate) {
+                const blocker = antiBotText.test(text) ? 'anti-bot-challenge' : 'cloudflare-or-challenge'
+                return {
+                    ready: false,
+                    blocker: `${blocker}-${provider}`,
+                    statusText: antiBotText.test(text) ? 'Anti-bot challenge detected.' : 'Cloudflare or challenge gate detected.',
+                }
+            }
+            return {
+                ready: false,
+                blocker: `blocked-by-${provider}-consent-or-cookie-gate`,
+                statusText: likelyCookieOverlay
+                    ? `Detected persistent cookie-consent blocker UI on ${provider}.`
+                    : `Detected cookie-consent keyword while waiting for ${provider}.`,
+            }
+        }
+
+        if (isVirusTotal || isUrlQuery) {
+            if (isLikelyBlockedPath && cookieGateAttempts < cookieAttemptLimit) {
+                cookieGateAttempts += 1
+                await dismissCookieOverlays(page).catch(() => undefined)
+                await page.waitForTimeout(450).catch(() => undefined)
+                continue
+            }
+        }
+        if (hasNoProviderSignal(text)) {
+            return {
+                ready: false,
+                blocker: `provider-blocked-${provider}`,
+                statusText: 'Provider returned access denial or error text.',
+            }
+        }
+        if (!inProviderDomain && !isVirusTotal && !isUrlQuery) {
+            // Unknown provider page is not a usable provider result.
+            return {
+                ready: false,
+                blocker: `provider-domain-mismatch-${provider}`,
+                statusText: `Expected provider domain context not reached yet (${tool.name || tool.id || provider}).`,
+            }
+        }
+        if ((isVirusTotal || isUrlQuery) && !inProviderDomain) {
+            if (cookieGateAttempts < cookieAttemptLimit) {
+                cookieGateAttempts += 1
+                await dismissCookieOverlays(page).catch(() => undefined)
+                await page.waitForTimeout(500).catch(() => undefined)
+                continue
+            }
+            return {
+                ready: false,
+                blocker: `provider-domain-mismatch-${provider}`,
+                statusText: `Could not reach ${provider} provider page after consent handling.`,
+            }
+        }
+
+        for (const selector of markerSelectors) {
+            if (await page.locator(selector).first().isVisible({ timeout: 100 }).catch(() => false)) {
+                return {
+                    ready: true,
+                    statusText: `selector-ready-${provider}`,
+                }
+            }
+        }
+
+        if (inProviderDomain && Date.now() > settledDeadline && hasMeaningful) {
+            return {
+                ready: true,
+                statusText: `stabilized-content-${provider}`,
+            }
+        }
+
+        if (markerText.some(item => text.includes(item)) && hasResultLikeSignal(text)) {
+            return {
+                ready: true,
+                statusText: `content-ready-${provider}`,
+            }
+        }
+
+        const cookieGate = cookieGateText.test(text)
+        if (cookieGate && likelyCookieOverlay && cookieGateAttempts < cookieAttemptLimit) {
+            cookieGateAttempts += 1
+            await dismissCookieOverlays(page).catch(() => undefined)
+            await page.waitForTimeout(500).catch(() => undefined)
+            continue
+        }
+
+        if (softWaitText.some(item => item.test(text)) && Date.now() < settledDeadline) {
+            await page.waitForTimeout(350).catch(() => undefined)
+            continue
+        }
+        if (Date.now() > stableDeadline && hasReadyEvidence(text) && hasResultLikeSignal(text)) {
+            return {
+                ready: true,
+                statusText: `content-ready-${provider}`,
+            }
+        }
+        await page.waitForTimeout(250).catch(() => undefined)
+    }
+
+    return {
+        ready: false,
+        blocker: `provider-result-timeout-${provider}`,
+        statusText: `provider result not ready after timeout`,
+    }
+}
+
 function domainFromUrl(value: string) {
     try {
         return new URL(value).hostname.toLowerCase()
@@ -894,7 +1503,7 @@ async function collectPageEvidence(page: Page) {
         obfuscatedScripts.length ? `${obfuscatedScripts.length} obfuscated script candidate${obfuscatedScripts.length === 1 ? '' : 's'}` : '',
         indicators.ips.length ? `${indicators.ips.length} IP indicator${indicators.ips.length === 1 ? '' : 's'}` : '',
         forms.some(form => form.sensitiveInputCount > 0) ? 'sensitive form fields present' : '',
-        /wallet|seed phrase|connect wallet|password|invoice|captcha|download|verify account/i.test(snapshot.text) ? 'social-engineering language present' : '',
+        /wallet|seed phrase|connect wallet|verify account|install extension|wallet connect/i.test(snapshot.text) ? 'social-engineering language present' : '',
     ].filter(Boolean)
 
     return {
@@ -905,7 +1514,7 @@ async function collectPageEvidence(page: Page) {
         forms,
         scripts,
         obfuscatedScripts,
-        verdict: suspiciousReasons.length >= 2 || obfuscatedScripts.length ? 'suspicious' : 'unknown',
+        verdict: suspiciousReasons.length >= 2 || obfuscatedScripts.length >= 1 ? 'suspicious' : 'unknown',
         confidence: Math.min(95, 35 + suspiciousReasons.length * 15 + obfuscatedScripts.length * 10),
         reasons: suspiciousReasons.length ? suspiciousReasons : ['No high-signal malicious pattern was extracted from the rendered page yet.'],
         threatAssociations: extractThreatAssociations(joined, 'rendered_page'),
@@ -923,7 +1532,11 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
     ].join('\n')
     const vendorMatch = text.match(/(\d{1,3})\s*\/\s*(\d{1,3})\s*(?:security\s*)?(?:vendors?|engines?)/i)
         || text.match(/(\d{1,3})\s+(?:security\s*)?(?:vendors?|engines?)\s+(?:flagged|detected|marked)/i)
+        || text.match(/(\d{1,3})\s+(?:of)\s+(\d{1,3})\s+security engines?/i)
+        || text.match(/(\d{1,3})\s+out of\s+(\d{1,3})\s+engines?/i)
     const alertMatch = text.match(/(\d{1,3})\s+(?:alerts?|detections?|blacklists?|malicious requests?)/i)
+        || text.match(/Found\s+(\d{1,3})\s+(?:alert|alerts)/i)
+        || text.match(/No\s+(?:alerts|detections)\s+(?:found)?/i)
     const communityMatch = text.match(/(\d{1,3})\s+(?:community\s*)?(?:comments?|votes?|reviews?)/i)
     const isVirusTotal = /virus\s*total|virustotal/.test(tool) || /virustotal\.com/i.test(text)
     const isUrlQuery = /urlquery|urlquery\.net/.test(tool) || /urlquery\.net/i.test(text)
@@ -931,11 +1544,31 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
     const total = vendorMatch?.[2] ? Number(vendorMatch[2]) : undefined
     const alertCount = alertMatch ? Number(alertMatch[1]) : undefined
     const communityCommentCount = communityMatch ? Number(communityMatch[1]) : evidence.comments?.length || undefined
-    const verdict = /malicious|phishing|suspicious|blacklist|detected/i.test(text)
-        ? 'suspicious'
-        : /clean|harmless|undetected|no security vendors/i.test(text)
-            ? 'clean'
-            : 'unknown'
+    const hasProviderNoDetectionText = /no\s+(?:detections|alerts?|results?|matches?|issues)\s+(?:found)?/i.test(text) || /undetected|clean|harmless/i.test(text)
+    const hasVendorDetections = flagged !== undefined && Number.isFinite(flagged) && flagged > 0
+    const hasUrlQueryAlerts = alertCount !== undefined && Number.isFinite(alertCount) && alertCount > 0
+    const hasUrlQueryNoResult = /no\s+(?:alerts|detections|results?|matches?)\s+found/i.test(text)
+    const verdict = isVirusTotal
+        ? hasVendorDetections
+            ? 'suspicious'
+            : hasProviderNoDetectionText
+                ? 'clean'
+                : vendorMatch
+                    ? 'clean'
+                    : /malicious|suspicious|phishing|blacklist|detected/i.test(text) && !/no detections|no alerts|undetected/i.test(text)
+                    ? 'suspicious'
+                    : 'unknown'
+        : isUrlQuery
+            ? hasUrlQueryAlerts
+                ? 'suspicious'
+                : hasUrlQueryNoResult || /no result|0 alerts|undetected|not malicious/i.test(text) || Number.isFinite(alertCount) && alertCount === 0
+                    ? 'clean'
+                    : 'unknown'
+            : /malicious|phishing|suspicious|blacklist|detected/i.test(text)
+                ? 'suspicious'
+                : /clean|harmless|undetected|no security vendors/i.test(text)
+                    ? 'clean'
+                    : 'unknown'
 
     return {
         toolKind: isVirusTotal ? 'virustotal' : isUrlQuery ? 'urlquery' : /webcrack/i.test(tool) ? 'webcrack' : 'generic',
