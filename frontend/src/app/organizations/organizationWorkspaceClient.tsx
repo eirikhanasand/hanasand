@@ -1730,24 +1730,27 @@ function DwmHandoffBanner({ organization, bundle, selectedSubject, alertId, case
     focus: string
 }) {
     const selectedLabel = selectedSubjectLabel(selectedSubject, organization, bundle)
+    const effectiveAlertId = alertId || (selectedSubject.type === 'alert' ? selectedSubject.id : '')
+    const effectiveCaseId = caseId || (selectedSubject.type === 'case' ? selectedSubject.id : '')
+    const effectiveWatchlistId = watchlistId || (selectedSubject.type === 'watchlist' ? selectedSubject.id : selectedSubjectWatchlistId(selectedSubject, bundle))
+    const effectiveDestinationId = destinationId || (selectedSubject.type === 'destination' ? selectedSubject.id : selectedSubjectDestinationId(selectedSubject, bundle))
+    const effectiveDeliveryId = deliveryId || selectedSubjectDeliveryId(selectedSubject, bundle)
     const scopedValues = [
         ['Org', organizationDisplayId(organization)],
         ['Selected', selectedLabel],
-        ['Case', compactReference(caseId, 'Case')],
-        ['Alert', compactReference(alertId, 'Alert')],
-        ['Watchlist', compactReference(watchlistId, 'Watchlist')],
-        ['Destination', compactReference(destinationId, 'Destination')],
-        ['Delivery', compactReference(deliveryId, 'Delivery')],
+        ['Case', compactReference(effectiveCaseId, 'Case')],
+        ['Alert', compactReference(effectiveAlertId, 'Alert')],
+        ['Watchlist', compactReference(effectiveWatchlistId, 'Watchlist')],
+        ['Destination', compactReference(effectiveDestinationId, 'Destination')],
+        ['Delivery', compactReference(effectiveDeliveryId, 'Delivery')],
     ].filter(([, value]) => Boolean(value))
-    const caseHref = caseId
-        ? `/dashboard/dwm/cases/${encodeURIComponent(caseId)}?organizationId=${encodeURIComponent(organization.id)}${alertId ? `&alertId=${encodeURIComponent(alertId)}` : ''}`
+    const caseHref = effectiveCaseId
+        ? `/dashboard/dwm/cases/${encodeURIComponent(effectiveCaseId)}?organizationId=${encodeURIComponent(organization.id)}${effectiveAlertId ? `&alertId=${encodeURIComponent(effectiveAlertId)}` : ''}`
         : ''
-    const alertHref = alertId
-        ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organization.id)}`
+    const alertHref = effectiveAlertId
+        ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(effectiveAlertId)}&organizationId=${encodeURIComponent(organization.id)}`
         : ''
-    const deliveryHref = deliveryId || destinationId || focus === 'destinations' || focus === 'webhooks'
-        ? '#delivery-history'
-        : ''
+    const deliveryHref = effectiveDeliveryId || effectiveDestinationId || focus === 'destinations' || focus === 'webhooks' ? '#delivery-history' : ''
     return (
         <section className='rounded-lg border border-ui-primary/35 bg-ui-primary/10 p-4 shadow-sm dark:border-ui-primary/35 dark:bg-ui-panel' data-dwm-handoff='true'>
             <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
