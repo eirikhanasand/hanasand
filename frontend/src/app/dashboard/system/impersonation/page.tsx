@@ -220,8 +220,8 @@ export default async function ImpersonationAuditPage({
                             <details className='group rounded-lg border border-ui-border bg-ui-raised'>
                                 <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
                                     <span>Filters{advancedFilterCount ? ` (${advancedFilterCount})` : ''}</span>
-                                    <span className='text-xs font-medium text-ui-muted group-open:hidden'>Show advanced</span>
-                                    <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide advanced</span>
+                                    <span className='text-xs font-medium text-ui-muted group-open:hidden'>Show filters</span>
+                                    <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide filters</span>
                                 </summary>
                                 <div className='grid gap-3 border-t border-ui-border p-3'>
                                     <div className='grid gap-2 lg:grid-cols-4'>
@@ -371,9 +371,9 @@ export default async function ImpersonationAuditPage({
                         </div>
                         <details className='group' open={supportMode !== 'inspect'}>
                             <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
-                                <span>Secondary support actions</span>
-                                <span className='text-xs font-medium text-ui-muted group-open:hidden'>Open when needed</span>
-                                <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide secondary actions</span>
+                                <span>Advanced support actions</span>
+                                <span className='text-xs font-medium text-ui-muted group-open:hidden'>Open optional tasks</span>
+                                <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide optional tasks</span>
                             </summary>
                             <div className='border-t border-ui-border p-4'>
                                 <AccessRecoveryForm initialOperation={supportMode} />

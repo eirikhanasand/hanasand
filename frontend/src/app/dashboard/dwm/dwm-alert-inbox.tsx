@@ -185,7 +185,7 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
 
                         <details className='rounded-lg border border-ui-border bg-ui-raised' data-dwm-alert-secondary-actions>
                             <summary className='flex cursor-pointer list-none flex-col gap-1 px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                                <span>Secondary actions</span>
+                                <span>Advanced alert actions</span>
                                 <span className='font-medium text-ui-muted'>Replay evidence or mute as false positive</span>
                             </summary>
                             <div className='flex flex-wrap gap-2 border-t border-ui-border p-3'>

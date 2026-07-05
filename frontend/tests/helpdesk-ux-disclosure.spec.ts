@@ -9,7 +9,7 @@ test('helpdesk audit keeps advanced controls behind explicit disclosures', async
     const supportForm = await readFile(path.join(root, 'src/app/dashboard/system/impersonation/accessRecoveryForm.tsx'), 'utf8')
 
     expect(page).toContain('<details className=\'group rounded-lg border border-ui-border bg-ui-raised\'>')
-    expect(page).toContain('Show advanced')
+    expect(page).toContain('Show filters')
     expect(page).toContain('aria-label=\'Active audit filters\'')
     expect(page).toContain('href=\'/dashboard/system/impersonation?support=impersonation#support-actions\'')
     expect(page).toContain('const supportMode = resolveSupportMode(param(params, \'support\'))')
@@ -25,8 +25,8 @@ test('helpdesk audit keeps advanced controls behind explicit disclosures', async
     expect(page).toContain('SnapshotFact')
     expect(page).toContain('Audit service reported')
     expect(page).not.toContain('Audit API returned')
-    expect(page).toContain('Secondary support actions')
-    expect(page).toContain('Open when needed')
+    expect(page).toContain('Advanced support actions')
+    expect(page).toContain('Open optional tasks')
     expect(page).toContain('{ action: \'support.organization.access_recovery\', label: \'Access recovery\' }')
     expect(page).toContain('key={action}>{label}</Link>')
 
@@ -60,9 +60,9 @@ test('helpdesk keeps search primary and collapses filters and support actions by
     expect(page.indexOf('placeholder=\'Search audit events\'')).toBeLessThan(page.indexOf('<span>Filters'))
     expect(page.indexOf('<span>Filters')).toBeLessThan(page.indexOf('placeholder=\'Organization\''))
     expect(page.indexOf('Use Focus to inspect a specific event')).toBeLessThan(page.indexOf('data-helpdesk-selected-detail'))
-    expect(page.indexOf('Secondary support actions')).toBeLessThan(page.indexOf('<AccessRecoveryForm initialOperation={supportMode} />'))
-    expect(page).toContain('group-open:hidden\'>Open when needed</span>')
-    expect(page).toContain('group-open:inline\'>Hide secondary actions</span>')
+    expect(page.indexOf('Advanced support actions')).toBeLessThan(page.indexOf('<AccessRecoveryForm initialOperation={supportMode} />'))
+    expect(page).toContain('group-open:hidden\'>Open optional tasks</span>')
+    expect(page).toContain('group-open:inline\'>Hide optional tasks</span>')
     expect(page).not.toContain('support.organization.access_recovery</Link>')
 
     expect(supportForm.indexOf('data-testid=\'support-primary-operation\'')).toBeLessThan(supportForm.indexOf('data-testid=\'support-secondary-operations\''))
@@ -96,7 +96,7 @@ test('helpdesk renders search first with filters and support actions collapsed',
     await expect(page.getByPlaceholder('Search audit events')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Search' })).toBeVisible()
     await expect(page.getByText('Filters', { exact: true })).toBeVisible()
-    await expect(page.getByText('Secondary support actions')).toBeVisible()
+    await expect(page.getByText('Advanced support actions')).toBeVisible()
 
     await expect(page.getByPlaceholder('Organization', { exact: true })).toBeHidden()
     await expect(page.getByRole('group', { name: 'Support operation' })).toBeHidden()
@@ -108,7 +108,7 @@ test('helpdesk renders search first with filters and support actions collapsed',
     await expect(page.getByPlaceholder('Organization', { exact: true })).toBeVisible()
     await expect(page.getByPlaceholder('Actor')).toBeVisible()
 
-    await page.getByText('Secondary support actions').click()
+    await page.getByText('Advanced support actions').click()
     await expect(page.getByTestId('support-primary-operation')).toBeVisible()
     await expect(page.getByText('Support inspection')).toBeVisible()
     await expect(page.getByText('Privileged support actions')).toBeVisible()
@@ -140,7 +140,7 @@ test('start session CTA opens the support panel on the scoped session flow', asy
 
     await page.goto('/dashboard/system/impersonation?support=impersonation#support-actions', { waitUntil: 'domcontentloaded' })
 
-    await expect(page.getByText('Secondary support actions')).toBeVisible()
+    await expect(page.getByText('Advanced support actions')).toBeVisible()
     await expect(page.getByTestId('support-primary-operation')).toBeVisible()
     await expect(page.getByRole('group', { name: 'Support operation' })).toBeVisible()
     await expect(page.getByRole('button', { name: /Session/ })).toHaveAttribute('aria-pressed', 'true')

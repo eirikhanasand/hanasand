@@ -25,6 +25,7 @@ test('DWM alert inbox keeps triage actions primary and collapses evidence noise'
     expect(page).toContain('replayAlert(alert.id)')
     expect(page).toContain('updateAlert(alert.id, \'false_positive\', \'muted\'')
     expect(page).toContain('safeEvidenceExcerpt(item.excerpt)')
+    expect(page).toContain('Advanced alert actions')
     expect(page).not.toContain('No delivery has been sent for this alert.')
     expect(page).not.toContain('What returned')
 })
