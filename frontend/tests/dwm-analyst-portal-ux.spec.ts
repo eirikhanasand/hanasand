@@ -11,6 +11,11 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
 
     expect(page).toContain('Recent attacks')
     expect(page).toContain('Search company, actor, term, or status')
+    expect(page).toContain('const DWM_QUEUE_PREVIEW_ROWS = 8')
+    expect(page).toContain('const limit = DWM_QUEUE_PREVIEW_ROWS')
+    expect(page).toContain('max-h-[480px] overflow-auto')
+    expect(page).not.toContain('const limit = 12')
+    expect(page).not.toContain('max-h-[610px] overflow-auto')
     expect(page).toContain('SelectedActionBar')
     expect(page).toContain('data-dwm-next-action=\'true\'')
     expect(page).toContain('const blockedActions = [')

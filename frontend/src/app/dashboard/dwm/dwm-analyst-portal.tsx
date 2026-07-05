@@ -137,6 +137,7 @@ type DataHealthItem = {
 type QueueFilter = 'active' | 'ready' | 'critical' | 'source' | 'high_confidence' | 'fresh' | 'pending_delivery' | 'reviewing' | 'delivered' | 'muted' | 'all'
 type InvestigationTab = 'evidence' | 'entities' | 'sources' | 'delivery'
 type EvidenceDispositionState = 'reviewed' | 'escalated' | 'suppressed' | 'false_positive'
+const DWM_QUEUE_PREVIEW_ROWS = 8
 
 export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operations, alerts, deliveries, dataHealth, initialAlertId, publicTiHandoff }: PortalProps) {
     const router = useRouter()
@@ -440,7 +441,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                                 )}
                             </div>
                         </div>
-                        <div className='max-h-[610px] overflow-auto'>
+                        <div className='max-h-[480px] overflow-auto'>
                             {queue.length ? visibleQueue.map(alert => (
                                 <button
                                     key={alert.id}
@@ -2448,7 +2449,7 @@ function orderAlerts(alerts: PortalAlert[]) {
 }
 
 function visibleQueueAlerts(queue: PortalAlert[], selectedId?: string) {
-    const limit = 12
+    const limit = DWM_QUEUE_PREVIEW_ROWS
     const firstPage = queue.slice(0, limit)
     if (!selectedId || firstPage.some(alert => alert.id === selectedId)) return firstPage
     const selected = queue.find(alert => alert.id === selectedId)
