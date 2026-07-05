@@ -114,6 +114,11 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                                         }
                                     </span>
                                 </div>
+                                <StatusEvidenceCard
+                                    label='Availability'
+                                    status={check.status}
+                                    value={formatUptime(check.uptime_30d)}
+                                />
                                 <p className='mt-5 text-xs font-semibold uppercase text-ui-muted'>{serviceLabel}</p>
                                 <h3 className='mt-2 text-lg font-semibold text-ui-text'>{checkLabel}</h3>
                                 <div className='mt-4 grid gap-2 text-sm text-ui-muted'>
@@ -188,6 +193,19 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
     )
 }
 
+function StatusEvidenceCard({ label, status, value }: { label: string, status: ServiceStatus['checks'][number]['status'], value: string }) {
+    return (
+        <div className='mt-5 rounded-lg border border-ui-border bg-ui-raised p-3'>
+            <div className='flex items-center gap-2'>
+                <p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p>
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase ${statusToneClass(status)}`}>{status}</span>
+            </div>
+            <p className='mt-2 text-xl font-semibold text-ui-text'>{value}</p>
+            <p className='mt-1 text-xs leading-5 text-ui-muted'>Reported by the latest public monitor check.</p>
+        </div>
+    )
+}
+
 function latestCheckedAt(status: ServiceStatus) {
     const newestCheck = status.checks
         .map(check => check.checked_at)
@@ -214,6 +232,12 @@ function formatUptime(value: string) {
 
 function isCoverageFallbackCheck(check: ServiceStatus['checks'][number]) {
     return check.service === 'Status coverage' && check.check_name === 'Public monitor freshness'
+}
+
+function statusToneClass(status: ServiceStatus['checks'][number]['status']) {
+    if (status === 'up') return 'border-ui-success/35 bg-ui-success/10 text-ui-success'
+    if (status === 'degraded') return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
+    return 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
 }
 
 function SummaryCard({ icon, label, title, body }: { icon: React.ReactNode, label: string, title: string, body: string }) {
