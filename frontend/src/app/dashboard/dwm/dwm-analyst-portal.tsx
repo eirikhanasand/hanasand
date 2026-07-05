@@ -138,9 +138,9 @@ type QueueFilter = 'active' | 'ready' | 'critical' | 'source' | 'high_confidence
 type InvestigationTab = 'evidence' | 'entities' | 'sources' | 'delivery'
 type EvidenceDispositionState = 'reviewed' | 'escalated' | 'suppressed' | 'false_positive'
 const DWM_QUEUE_PREVIEW_ROWS = 5
-const DWM_TIMELINE_PREVIEW_ROWS = 5
-const DWM_RECOVERY_PREVIEW_ROWS = 4
-const DWM_DELIVERY_PREVIEW_ROWS = 4
+const DWM_TIMELINE_PREVIEW_ROWS = 4
+const DWM_RECOVERY_PREVIEW_ROWS = 3
+const DWM_DELIVERY_PREVIEW_ROWS = 3
 
 export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operations, alerts, deliveries, dataHealth, initialAlertId, publicTiHandoff }: PortalProps) {
     const router = useRouter()
