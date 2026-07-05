@@ -432,7 +432,7 @@ function activitySubjectTypeLabel(value: ActivitySubjectType) {
 
 function organizationWorkspaceMeta(organization: OrganizationSummary) {
     const parts = [
-        sanitizeOrganizationDisplayCopy(organization.tenantId || organization.slug || organization.id),
+        sanitizeOrganizationDisplayCopy(organization.status || organization.slug || organization.id),
         organization.status || 'active',
         organization.memberCount !== undefined ? `${organization.memberCount} member${organization.memberCount === 1 ? '' : 's'}` : undefined,
     ].filter(Boolean)
@@ -1564,7 +1564,7 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
         { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organization.role || 'member', detail: organization.status || 'active' },
         { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount || organization.memberCount || organization.activeMemberCount || 0), detail: `${inviteCount || organization.pendingInviteCount || 0} pending` },
         { id: 'watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Watchlists', value: String(activeWatchlists || organization.sharedWatchlistCount || 0), detail: `${pausedWatchlists} paused · ${archivedWatchlists} archived` },
-        { id: 'destinations', icon: <Webhook className='h-4 w-4' />, label: 'Destinations', value: String(webhookCount), detail: 'Org-scoped' },
+        { id: 'destinations', icon: <Webhook className='h-4 w-4' />, label: 'Destinations', value: String(webhookCount), detail: 'Workspace routes' },
     ]
     return (
         <section className='flex min-w-0 flex-col gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm dark:border-ui-border dark:bg-ui-panel xl:flex-row xl:items-center xl:justify-between' data-org-workspace-summary='true'>
@@ -2959,7 +2959,7 @@ function ScopePanel({ alertTerms, alerts, cases, members, webhooks, alertCaseVis
                 <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Monitoring scope' detail='Shared watchlists create the alert, case, and delivery context shown here.' />
                 <div className='mt-4 grid gap-3 rounded-lg border border-dashed border-ui-border bg-ui-raised p-4 dark:border-ui-border dark:bg-ui-canvas sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
                     <div className='min-w-0'>
-                        <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>No scoped monitoring records yet</p>
+                        <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>No monitoring records yet</p>
                         <p className='mt-1 text-sm leading-6 text-ui-muted dark:text-ui-muted'>Add a shared watchlist term first. Matching alerts, cases, and saved delivery destinations will appear after the first routed event.</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
@@ -2972,12 +2972,12 @@ function ScopePanel({ alertTerms, alerts, cases, members, webhooks, alertCaseVis
     }
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-            <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination scope' detail='Org-scoped watchlist, case, and delivery records used by monitoring flows.' />
+            <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination scope' detail='Shared watchlist, case, and delivery records used by monitoring flows.' />
             <div className='mt-4 grid gap-3 lg:grid-cols-2'>
                 <ScopeColumn icon={<BellRing className='h-4 w-4' />} title='Alert terms' route={`${route}/watchlists/alert-terms`} rows={alertTerms.map(term => ({
                     id: term.watchlistItemId || term.watchlistId || term.alertGenerationRef || term.term || term.value || 'term',
                     primary: term.term || term.value || 'Watchlist term',
-                    secondary: term.matchReason || compactReference(term.alertGenerationRef, 'watch') || term.kind || term.family || 'Org-scoped match',
+                    secondary: term.matchReason || compactReference(term.alertGenerationRef, 'watch') || term.kind || term.family || 'Shared watchlist match',
                 }))} empty='Add an active shared watchlist term to create organization alert terms.' />
                 <ScopeColumn icon={<CircleAlert className='h-4 w-4' />} title='Alerts' route={`/api/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`} rows={alerts.map(alert => ({
                     id: alert.id,
