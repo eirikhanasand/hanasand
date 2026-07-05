@@ -3,9 +3,11 @@
 import config from '@/config'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { Activity, ArrowUpRight, BellRing, BookOpen, Code2, FileText, Gauge, Globe, LockKeyhole, Network, Radar, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
 import isSharePath from '@/utils/routes/isSharePath'
 import BrandLogo from '@/components/brand/brandLogo'
+import type { ServiceStatus } from '@/utils/status/getStatus'
 
 const footerGroups = [
     {
@@ -30,7 +32,7 @@ const footerGroups = [
         title: 'Developers',
         links: [
             { label: 'Support', href: '/support', icon: ArrowUpRight },
-            { label: 'Status', href: '/status', icon: Activity, status: true },
+            { label: 'Status', href: '/status', icon: Activity },
             { label: 'Service Checks', href: '/test', icon: Gauge },
             { label: 'Hash Exposure Lookup', href: '/pwned', icon: LockKeyhole },
         ],
@@ -59,6 +61,33 @@ export default function Footer() {
     const pathname = usePathname()
     const isShare = isSharePath(pathname)
     const year = new Date().getFullYear()
+    const [publicStatus, setPublicStatus] = useState<ServiceStatus['overall'] | 'unknown'>('unknown')
+
+    useEffect(() => {
+        let mounted = true
+        const refreshStatus = async() => {
+            try {
+                const response = await fetch('/api/status', { cache: 'no-store' })
+                if (!response.ok) {
+                    if (mounted) setPublicStatus('degraded')
+                    return
+                }
+                const status = await response.json() as ServiceStatus
+                if (mounted) setPublicStatus(status.overall)
+            } catch {
+                if (mounted) setPublicStatus('degraded')
+            }
+        }
+
+        void refreshStatus()
+        const refresh = window.setInterval(refreshStatus, 60000)
+        return () => {
+            mounted = false
+            window.clearInterval(refresh)
+        }
+    }, [])
+
+    const statusCopy = footerStatusCopy(publicStatus)
 
     return (
         <footer className={`${isShare ? 'hidden' : ''} w-full border-t border-ui-border bg-ui-canvas px-4 pb-8 pt-12 text-sm text-ui-muted md:px-8`}>
@@ -93,7 +122,7 @@ export default function Footer() {
                                             href={link.href}
                                             className='inline-flex w-fit items-center gap-1.5 py-1.5 text-sm font-medium text-ui-muted transition-colors hover:text-ui-text'
                                         >
-                                            {Icon ? <Icon className={`h-3.5 w-3.5 ${link.status ? 'text-ui-success' : 'text-ui-muted'}`} /> : null}
+                                            {Icon ? <Icon className='h-3.5 w-3.5 text-ui-muted' /> : null}
                                             {link.label}
                                         </Link>
                                     )
@@ -106,8 +135,8 @@ export default function Footer() {
 
             <section className='mx-auto mt-10 flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 border-t border-ui-border pt-6 text-sm text-ui-muted'>
                 <Link href='/status' className='inline-flex min-h-9 items-center gap-2 font-semibold text-ui-text'>
-                    <span className='h-2.5 w-2.5 rounded-full bg-ui-success shadow-sm' />
-                    All systems operational
+                    <span className={`h-2.5 w-2.5 rounded-full shadow-sm ${statusCopy.dotClass}`} />
+                    {statusCopy.label}
                 </Link>
                 <div className='flex flex-wrap items-center gap-x-6 gap-y-2'>
                     <Link href='/terms' className='inline-flex min-h-9 items-center hover:text-ui-text'>Terms of use</Link>
@@ -120,4 +149,18 @@ export default function Footer() {
             </section>
         </footer>
     )
+}
+
+function footerStatusCopy(status: ServiceStatus['overall'] | 'unknown') {
+    if (status === 'up') {
+        return { label: 'All systems operational', dotClass: 'bg-ui-success' }
+    }
+    if (status === 'down') {
+        return { label: 'Service interruption', dotClass: 'bg-ui-danger' }
+    }
+    if (status === 'degraded') {
+        return { label: 'Status degraded', dotClass: 'bg-ui-warning' }
+    }
+
+    return { label: 'Checking status', dotClass: 'bg-ui-muted' }
 }

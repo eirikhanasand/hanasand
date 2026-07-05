@@ -64,3 +64,12 @@ test('public status page renders unverified coverage without fake uptime', async
     expect(source).toContain('function isCoverageFallbackCheck')
     expect(source).not.toContain('{check.uptime_30d}%')
 })
+
+test('public footer does not hardcode operational status', async () => {
+    const footer = await readFile(path.join(root, 'src/components/footer/footer.tsx'), 'utf8')
+
+    expect(footer).toContain('fetch(\'/api/status\'')
+    expect(footer).toContain('useState<ServiceStatus[\'overall\'] | \'unknown\'>(\'unknown\')')
+    expect(footer).toContain('return { label: \'Checking status\', dotClass: \'bg-ui-muted\' }')
+    expect(footer).not.toContain('<span className=\'h-2.5 w-2.5 rounded-full bg-ui-success shadow-sm\' />')
+})
