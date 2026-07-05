@@ -2601,6 +2601,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                     const edit = editing[item.id]
                     const editDuplicate = edit ? isDuplicateWatchlistTerm(watchlists, edit.kind, edit.value, item.id) : false
                     const editChanged = edit ? watchlistDraftChanged(item, edit) : false
+                    const lifecycleLabel = item.status === 'active' ? 'Active routes' : item.status === 'paused' ? 'Paused excluded' : item.status === 'archived' ? 'Archived closed' : `${item.status} state`
                     const selected = selectedSubject.type === 'watchlist' && selectedSubject.id === item.id
                     return (
                         <div
@@ -2646,6 +2647,9 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                                             <div className='flex flex-wrap items-center gap-2'>
                                                 <span className='rounded-md bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:bg-ui-primary/10 dark:text-ui-primary'>{item.kind}</span>
                                                 <StatusPill status={item.status} />
+                                                <span className='rounded-full border border-ui-border px-2 py-0.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-watchlist-lifecycle='true'>
+                                                    {lifecycleLabel}
+                                                </span>
                                             </div>
                                             <p className='mt-2 line-clamp-2 wrap-break-word text-base font-semibold text-ui-text dark:text-ui-text'>{item.value}</p>
                                             <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{item.notes || 'Add delivery context.'}</p>
