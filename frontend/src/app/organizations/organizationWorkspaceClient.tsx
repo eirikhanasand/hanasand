@@ -846,6 +846,7 @@ export default function OrganizationWorkspaceClient() {
                 })
             }
             setSelectedId(organizationId)
+            replaceOrganizationWorkspaceSelectionUrl(organizationId, { type: 'organization', id: organizationId })
         }
         setCreateName('')
         setCreateFirstWatchlist({ kind: 'domain', value: '', notes: '' })
@@ -1180,7 +1181,7 @@ export default function OrganizationWorkspaceClient() {
                 className={primaryButtonClass}
             >
                 <Building2 className='h-4 w-4' />
-                Create org
+                Create organization
             </button>
         </div>
     )
