@@ -46,15 +46,11 @@ export default function DashboardSidebar({
         { href: '/dashboard', label: 'Console', icon: <LayoutDashboard className='h-4 w-4' /> },
         { href: '/ti', label: 'Threat search', icon: <Radar className='h-4 w-4' /> },
         { href: '/dashboard/dwm', label: 'Dark web', icon: <ShieldCheck className='h-4 w-4' /> },
-        { href: '/dashboard/automations', label: 'Alerts', icon: <AlarmClockCheck className='h-4 w-4' /> },
-        { href: '/dashboard/load-testing', label: 'Load testing', icon: <Zap className='h-4 w-4' /> },
         { href: '/developers', label: 'API docs', icon: <Code2 className='h-4 w-4' /> },
         { href: '/dashboard/subscription', label: 'Subscription', icon: <ScanSearch className='h-4 w-4' /> },
     ]
 
     const workspaceItems: Item[] = [
-        { href: '/dashboard/projects', label: 'Workspaces', icon: <FolderKanban className='h-4 w-4' /> },
-        { href: '/dashboard/shares', label: 'Code shares', icon: <FileCode2 className='h-4 w-4' /> },
         { href: `/profile/${id}`, label: 'Profile', icon: <UserRound className='h-4 w-4' /> },
     ]
 
@@ -70,15 +66,13 @@ export default function DashboardSidebar({
             { href: '/dashboard/system', label: 'System', icon: <Settings2 className='h-4 w-4' /> },
             { href: '/dashboard/system/ai', label: 'AI Metrics', icon: <Sparkles className='h-4 w-4' /> },
             { href: '/dashboard/vulnerabilities', label: 'Vulnerabilities', icon: <ScanSearch className='h-4 w-4' /> },
+            { href: '/dashboard/load-testing', label: 'Load testing', icon: <Zap className='h-4 w-4' /> },
         )
     }
 
-    contentItems.push(
-        { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
-    )
-
     if (canManageContent) {
         contentItems.push(
+            { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
             { href: '/dashboard/articles', label: 'Articles', icon: <BookOpen className='h-4 w-4' /> },
             { href: '/dashboard/thoughts', label: 'Thoughts', icon: <BrainCircuit className='h-4 w-4' /> },
         )
@@ -97,6 +91,9 @@ export default function DashboardSidebar({
         )
 
         adminItems.push(
+            { href: '/dashboard/automations', label: 'Automations', icon: <AlarmClockCheck className='h-4 w-4' /> },
+            { href: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className='h-4 w-4' /> },
+            { href: '/dashboard/shares', label: 'Shares', icon: <FileCode2 className='h-4 w-4' /> },
             { href: '/dashboard/logs', label: 'Logs', icon: <FileWarning className='h-4 w-4' /> },
             { href: '/dashboard/mail', label: 'Mail', icon: <Inbox className='h-4 w-4' /> },
             { href: '/dashboard/db', label: 'Database', icon: <Database className='h-4 w-4' /> },
