@@ -801,12 +801,12 @@ export default function OrganizationWorkspaceClient() {
         }
     }, [selectedOrganization?.id, loadOrganizationBundle])
 
-    async function runAction(label: string, action: () => Promise<string | { message?: string, organizationId?: string, warning?: boolean } | void>, rowKey?: string) {
+    async function runAction(label: string, action: () => Promise<string | { message?: string, organizationId?: string, warning?: boolean } | void>, rowKey?: string, subjectOverride?: ActivitySubject | null) {
         setBusy(label)
         setError('')
         setMessage('')
         setMessageTone('success')
-        const actionSubject = activitySubjectFromRowKey(rowKey, selectedOrganization?.id)
+        const actionSubject = subjectOverride ?? activitySubjectFromRowKey(rowKey, selectedOrganization?.id)
         if (rowKey) {
             setRowMessages(current => {
                 const next = { ...current }
@@ -1175,7 +1175,7 @@ export default function OrganizationWorkspaceClient() {
         })
         const nextDelivery = firstDelivery(result)
         return deliveryActionResultSummary(nextDelivery, 'Delivery replay requested.')
-    }, `delivery-${delivery.id}`)
+    }, `delivery-${delivery.id}`, activitySubjectForDelivery(delivery, bundle.webhooks))
 
     const createSavedDestination = () => selectedOrganization && runAction('create-destination', async () => {
         requireManage()
@@ -4604,6 +4604,15 @@ function deliveryTargetLabel(delivery: DeliveryRow, destinations: WebhookDestina
     const watchlistId = deliveryWatchlistId(delivery)
     if (watchlistId) return compactReference(watchlistId, 'Watchlist route') || 'Saved watchlist route'
     return 'Delivery destination redacted'
+}
+
+function activitySubjectForDelivery(delivery: DeliveryRow, destinations: WebhookDestination[]): ActivitySubject {
+    const destinationId = deliveryDestinationIds(delivery, destinations)[0]
+    const watchlistId = deliveryWatchlistId(delivery)
+    if (watchlistId) return { type: 'watchlist', id: watchlistId }
+    if (destinationId) return { type: 'destination', id: destinationId }
+    if (delivery.caseId) return { type: 'case', id: delivery.caseId }
+    return { type: 'alert', id: delivery.alertId || delivery.id }
 }
 
 function shortTraceId(value: string) {
