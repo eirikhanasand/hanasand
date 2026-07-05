@@ -321,13 +321,16 @@ export default function BrowserPageClient() {
 
         socket.onopen = () => {
             setSocketState('open')
+            const profileTools = selectedProfileId === 'browser-only'
+                ? []
+                : selectedProfile.tools.length ? selectedProfile.tools : defaultTools
             socket.send(JSON.stringify({
                 type: 'start',
                 sessionId: id,
                 network: runNetwork,
                 target: url,
                 durationMinutes: 15,
-                profileTools: selectedProfile.tools,
+                profileTools,
                 clientId: getOrCreateBrowserClientId(),
                 userId: getCookie('id') || undefined,
                 sessionToken: getCookie('access_token') || undefined,
@@ -431,7 +434,7 @@ export default function BrowserPageClient() {
                 pushEvent(String(payload.message || 'Sandbox navigation failed.'))
             }
         }
-    }, [pushEvent, selectedNetwork, selectedProfile.tools, target])
+    }, [pushEvent, selectedNetwork, selectedProfile.tools, selectedProfileId, target])
 
     const stopRun = useCallback(() => {
         socketRef.current?.send(JSON.stringify({ type: 'end' }))
