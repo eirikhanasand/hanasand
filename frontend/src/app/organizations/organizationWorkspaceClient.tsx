@@ -3068,6 +3068,7 @@ function DeliveryHistoryPanel({ organization, deliveries, destinations, selected
                                     key={delivery.id}
                                     delivery={delivery}
                                     organizationId={organization.id}
+                                    destinations={destinations}
                                     canManage={canManage}
                                     busy={busy}
                                     rowMessage={rowMessages[`delivery-${delivery.id}`]}
@@ -3105,7 +3106,7 @@ function DeliveryHistoryPanel({ organization, deliveries, destinations, selected
                                                 <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
                                             </td>
                                             <td className='max-w-64 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
-                                                <DeliveryReference delivery={delivery} organizationId={organization.id} />
+                                                <DeliveryReference delivery={delivery} organizationId={organization.id} destinations={destinations} />
                                                 {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{deliveryFailureSummary(delivery)}</p>}
                                                 {!delivery.error && delivery.responseSummary && <p className='mt-1 line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
                                                 <div className='mt-2'>
@@ -3144,9 +3145,10 @@ function DeliveryHistoryPanel({ organization, deliveries, destinations, selected
     )
 }
 
-function DeliveryHistoryMobileRow({ delivery, organizationId, canManage, busy, rowMessage, onReplay }: {
+function DeliveryHistoryMobileRow({ delivery, organizationId, destinations, canManage, busy, rowMessage, onReplay }: {
     delivery: DeliveryRow
     organizationId: string
+    destinations: WebhookDestination[]
     canManage: boolean
     busy: string
     rowMessage?: RowMessage
@@ -3164,7 +3166,7 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, canManage, busy, r
                 <p className='truncate text-xs font-semibold text-ui-text dark:text-ui-text'>{destinationDisplayState(delivery)}</p>
                 <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
                 <div className='mt-2'>
-                    <DeliveryReference delivery={delivery} organizationId={organizationId} />
+                    <DeliveryReference delivery={delivery} organizationId={organizationId} destinations={destinations} />
                 </div>
             </div>
             <div className='grid grid-cols-2 gap-2 text-xs text-ui-muted dark:text-ui-muted'>
@@ -3188,14 +3190,16 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, canManage, busy, r
     )
 }
 
-function DeliveryReference({ delivery, organizationId }: { delivery: DeliveryRow, organizationId: string }) {
+function DeliveryReference({ delivery, organizationId, destinations }: { delivery: DeliveryRow, organizationId: string, destinations: WebhookDestination[] }) {
     const caseHref = delivery.caseId ? `/dashboard/dwm/cases/${encodeURIComponent(delivery.caseId)}?organizationId=${encodeURIComponent(organizationId)}${delivery.alertId ? `&alertId=${encodeURIComponent(delivery.alertId)}` : ''}` : ''
     const alertHref = delivery.alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(delivery.alertId)}&organizationId=${encodeURIComponent(organizationId)}` : ''
     const watchlistId = delivery.watchlistItemId || delivery.watchlistId || ''
+    const destinationId = deliveryDestinationIds(delivery, destinations)[0]
     return (
         <div className='grid gap-1 text-xs'>
             {delivery.caseId ? <a href={caseHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(delivery.caseId, 'Case')}</a> : null}
             {delivery.alertId ? <a href={alertHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(delivery.alertId, 'Alert')}</a> : null}
+            {destinationId ? <a href={`#destination-${encodeURIComponent(destinationId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(destinationId, 'Destination')}</a> : null}
             {!delivery.caseId && !delivery.alertId ? <span className='truncate text-ui-muted dark:text-ui-muted'>Attach alert after replay</span> : null}
             {watchlistId
                 ? <a href={`#watchlist-${encodeURIComponent(watchlistId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(watchlistId, 'Watchlist')}</a>
