@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json(watchlistPayloadFromLedger(proofLedger), { headers: { 'cache-control': 'no-store' } })
         }
         if (hasWatchlistProofLedgerEnv()) {
-            return NextResponse.json({ error: { code: 'dwm_watchlist_proof_unavailable', message: 'DWM watchlist proof ledger did not match this request.' } }, { status: 503, headers: { 'cache-control': 'no-store' } })
+            return NextResponse.json({ error: { code: 'dwm_watchlist_source_unavailable', message: 'DWM watchlist data is unavailable for this request.' } }, { status: 503, headers: { 'cache-control': 'no-store' } })
         }
     }
 

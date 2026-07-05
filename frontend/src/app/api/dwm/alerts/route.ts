@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json(dwmAlertPayloadFromLedger(proofLedger), { headers: { 'cache-control': 'no-store' } })
         }
         if (hasAlertProofLedgerEnv()) {
-            return NextResponse.json({ error: { code: 'dwm_alert_proof_unavailable', message: 'DWM alert proof ledger did not match this request.' } }, { status: 503, headers: { 'cache-control': 'no-store' } })
+            return NextResponse.json({ error: { code: 'dwm_alert_source_unavailable', message: 'DWM alert data is unavailable for this request.' } }, { status: 503, headers: { 'cache-control': 'no-store' } })
         }
     }
 
