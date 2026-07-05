@@ -1404,6 +1404,7 @@ export default function OrganizationWorkspaceClient() {
                                 <WorkspaceSectionNav organization={selectedOrganization} bundle={bundle} selectedSubject={selectedActivitySubject} />
                                 <WorkspaceHealthStrip organization={selectedOrganization} bundle={bundle} canManage={canManage} />
                                 <OrgActionStrip
+                                    organizationId={selectedOrganization.id}
                                     alertId={selectedAlertId}
                                     canManage={canManage}
                                     hasWatchlists={bundle.watchlists.length > 0}
@@ -1416,6 +1417,7 @@ export default function OrganizationWorkspaceClient() {
                                     hasDestination={hasConfiguredDestination}
                                 />
                                 <OrgSetupProgress
+                                    organizationId={selectedOrganization.id}
                                     canManage={canManage}
                                     memberCount={bundle.members.length}
                                     inviteCount={bundle.invites.length}
@@ -1780,7 +1782,7 @@ function DwmHandoffBanner({ organization, bundle, selectedSubject, alertId, case
     )
 }
 
-function OrgActionStrip({ alertId, canManage, hasWatchlists, hasDestination }: { alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
+function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, hasDestination }: { organizationId: string, alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
     const actions: Array<{ href: string, icon: ReactNode, label: string, disabled?: boolean, disabledReason?: string }> = []
     actions.push({
         href: '#watchlists',
@@ -1807,7 +1809,7 @@ function OrgActionStrip({ alertId, canManage, hasWatchlists, hasDestination }: {
                 ? 'Add a watchlist term before testing delivery.'
                 : undefined,
     })
-    if (alertId) actions.push({ href: `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}`, icon: <CircleAlert className='h-4 w-4' />, label: 'Open DWM alert' })
+    if (alertId) actions.push({ href: `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organizationId)}`, icon: <CircleAlert className='h-4 w-4' />, label: 'Open DWM alert' })
     if (hasDestination || hasWatchlists) actions.push({ href: '#audit', icon: <CheckCircle2 className='h-4 w-4' />, label: 'Audit' })
     const nextStep = !canManage
         ? 'Owner or admin access unlocks setup actions.'
@@ -1874,7 +1876,8 @@ function PermissionStrip({ role, canManage, hasWatchlists, hasDestination }: { r
     )
 }
 
-function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount, destinationCount, alertCount, caseCount, alertId }: {
+function OrgSetupProgress({ organizationId, canManage, memberCount, inviteCount, watchlistCount, destinationCount, alertCount, caseCount, alertId }: {
+    organizationId: string
     canManage: boolean
     memberCount: number
     inviteCount: number
@@ -1930,7 +1933,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
     const visibleRows = rows
     const completed = visibleRows.filter(row => row.ready).length
     const nextAction = rows.find(row => !row.ready && !row.blocked) || rows.find(row => row.ready) || rows[0]
-    const openAlertHref = alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}` : ''
+    const openAlertHref = alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organizationId)}` : ''
     return (
         <section className='border-t border-ui-border pt-3 dark:border-ui-border' data-org-setup-progress='true'>
             <div className='grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center'>
