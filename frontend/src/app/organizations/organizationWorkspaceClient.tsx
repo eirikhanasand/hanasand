@@ -2113,6 +2113,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                                     role='button'
                                     tabIndex={0}
                                     aria-pressed={selected}
+                                    id={`invite-${encodeURIComponent(invite.id)}`}
                                     key={invite.id}
                                     className={`grid min-w-0 gap-3 rounded-lg border border-ui-border p-3 text-left transition dark:border-ui-border ${selected ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
                                     onClick={() => onSelectSubject({ type: 'invite', id: invite.id })}
@@ -2759,6 +2760,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                             role='button'
                             tabIndex={0}
                             aria-pressed={selected}
+                            id={`watchlist-${encodeURIComponent(item.id)}`}
                             className={`rounded-lg border p-3 transition ${selected ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-panel' : 'border-ui-border dark:border-ui-border'}`}
                             onClick={() => onSelectSubject({ type: 'watchlist', id: item.id })}
                             onKeyDown={event => {
@@ -4092,8 +4094,9 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         ]
     }
     if (subject.type === 'invite') {
+        const inviteId = encodeURIComponent(subject.id)
         return [
-            { label: 'Invites', href: '#invites' },
+            { label: 'Invite', href: `#invite-${inviteId}` },
             { label: 'Audit trail', href: '#audit' },
         ]
     }
@@ -4106,14 +4109,15 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
     if (subject.type === 'watchlist') {
         const watchlistId = encodeURIComponent(subject.id)
         return [
-            { label: 'Watchlist', href: '#watchlists' },
+            { label: 'Watchlist', href: `#watchlist-${watchlistId}` },
             { label: 'Delivery activity', href: '#delivery-history' },
             { label: 'Open alert workspace', href: `/dashboard/ti/workbench?organizationId=${organizationId}&watchlistId=${watchlistId}` },
         ]
     }
     if (subject.type === 'destination') {
+        const destinationId = encodeURIComponent(subject.id)
         return [
-            { label: 'Destinations', href: '#destinations' },
+            { label: 'Destination', href: `#destination-${destinationId}` },
             { label: 'Delivery activity', href: '#delivery-history' },
         ]
     }
