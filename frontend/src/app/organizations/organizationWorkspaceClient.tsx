@@ -1413,7 +1413,7 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
             id: 'cases',
             label: 'Alert flow',
             value: hasAlertOrCaseActivity ? `${bundle.alerts.length} alert${bundle.alerts.length === 1 ? '' : 's'} · ${routedCases.length} case${routedCases.length === 1 ? '' : 's'}` : activeTerms.length ? 'Listening for matches' : 'Add watch term',
-            detail: hasAlertOrCaseActivity ? 'Open DWM workspace' : activeTerms.length ? 'Matched captures will open alert and case rows' : 'Start with a shared watchlist term',
+            detail: hasAlertOrCaseActivity ? 'Open exposure monitoring workspace' : activeTerms.length ? 'Matched captures will open alert and case rows' : 'Start with a shared watchlist term',
             href: '#delivery-history',
             tone: hasAlertOrCaseActivity ? 'ready' : activeTerms.length ? 'neutral' : 'blocked',
         },
