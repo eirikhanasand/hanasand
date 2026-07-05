@@ -3840,14 +3840,15 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
     })
     const deliveryRows: ActivityItem[] = bundle.deliveries.map(delivery => {
         const destinationIds = deliveryDestinationIds(delivery, bundle.webhooks)
+        const watchlistId = deliveryWatchlistId(delivery)
         return {
             id: `delivery-${delivery.id}`,
             at: delivery.attemptedAt || delivery.updatedAt || delivery.createdAt || new Date(0).toISOString(),
             title: delivery.dryRun ? 'Destination tested' : 'Alert delivery recorded',
-            detail: `${delivery.status || 'delivery'} · ${compactReference(deliveryWatchlistId(delivery) || delivery.alertId, 'watchlist') || 'Watchlist pending'}`,
+            detail: `${delivery.status || 'delivery'} · ${compactReference(watchlistId || delivery.alertId, 'watchlist') || 'Watchlist pending'}`,
             ok: !delivery.error && delivery.status?.toLowerCase() !== 'failed',
-            subjectType: 'destination',
-            subjectId: destinationIds[0] || deliveryWatchlistId(delivery) || delivery.alertId,
+            subjectType: destinationIds[0] ? 'destination' : watchlistId ? 'watchlist' : 'alert',
+            subjectId: destinationIds[0] || watchlistId || delivery.alertId,
             relatedSubjectIds: [
                 ...destinationIds,
                 delivery.watchlistItemId,
@@ -3860,10 +3861,10 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
             ].filter(Boolean) as string[],
             metadata: compactMetadata([
                 ['Destination', destinationDisplayState(delivery)],
-                ['Saved route', destinationIds.length ? 'Available' : undefined],
+                ['Saved route', destinationIds.length || watchlistId ? 'Available' : undefined],
                 ['Alert', compactReference(delivery.alertId, 'alert')],
                 ['Case', compactReference(delivery.caseId, 'case')],
-                ['Watchlist', compactReference(deliveryWatchlistId(delivery), 'watchlist')],
+                ['Watchlist', compactReference(watchlistId, 'watchlist')],
                 ['Kind', delivery.deliveryKind],
             ]),
         }
