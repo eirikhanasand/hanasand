@@ -638,7 +638,8 @@ export default function OrganizationWorkspaceClient() {
     const activeWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'active')
     const pausedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'paused')
     const archivedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'archived')
-    const activeTeammates = bundle.members.filter(member => member.role.toLowerCase() !== 'owner' && !['removed', 'revoked', 'inactive'].includes(member.status.toLowerCase()))
+    const activeMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active')
+    const activeTeammates = activeMembers.filter(member => member.role.toLowerCase() !== 'owner')
     const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
     const configuredDestinationCount = organizationConfiguredDestinationCount(bundle)
     const hasConfiguredDestination = configuredDestinationCount > 0
@@ -1395,7 +1396,7 @@ export default function OrganizationWorkspaceClient() {
                     {(selectedOrganization || organizations.length > 0 || (!loading && organizations.length === 0)) && <main className='min-w-0'>
                         {selectedOrganization ? (
                             <div className='grid gap-5'>
-                                <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={bundle.members.length} inviteCount={pendingInvites.length} webhookCount={bundle.webhooks.length} />
+                                <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={activeMembers.length} inviteCount={pendingInvites.length} webhookCount={bundle.webhooks.length} />
                                 {hasDwmContext && (
                                     <DwmHandoffBanner
                                         organization={selectedOrganization}
@@ -1504,6 +1505,7 @@ export default function OrganizationWorkspaceClient() {
 
 function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organization: OrganizationSummary, bundle: OrgBundle, selectedSubject: ActivitySubject }) {
     const activeMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active')
+    const activeTeammates = activeMembers.filter(member => member.role.toLowerCase() !== 'owner')
     const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
     const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active').toLowerCase() === 'active')
     const activeDestinations = bundle.webhooks.filter(destination => destination.deliveryReady || ['active', 'configured'].includes((destination.status || '').toLowerCase()))
@@ -1513,11 +1515,11 @@ function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organi
             id: 'team',
             href: '#members',
             label: 'Team',
-            value: `${activeMembers.length} active`,
+            value: activeTeammates.length ? `${activeTeammates.length} teammate${activeTeammates.length === 1 ? '' : 's'}` : pendingInvites.length ? 'Invite pending' : 'Invite team',
             detail: `${pendingInvites.length} pending`,
             icon: <Users className='h-4 w-4' />,
             active: selectedSubject.type === 'member' || selectedSubject.type === 'invite',
-            tone: pendingInvites.length ? 'review' : 'ready',
+            tone: activeTeammates.length ? 'ready' : pendingInvites.length ? 'review' : 'blocked',
         },
         {
             id: 'watchlists',
