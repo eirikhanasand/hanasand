@@ -112,7 +112,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(brokerSource.includes('capacity_admitted'), 'broker should admit queued sessions when capacity frees.')
     assert(brokerSource.includes('profileTools'), 'broker should accept saved-profile tool URLs.')
     assert(brokerSource.includes('tool_capture'), 'broker should emit profile tool captures.')
-    assert(brokerSource.includes('void captureProfileTools(context, message.profileTools || [], target)'), 'broker should start provider tools without waiting on page evidence extraction.')
+    assert(brokerSource.includes('await captureProfileTools(context, message.profileTools || [], target)'), 'broker should capture provider tools before the start handler can close.')
     assert(brokerSource.includes('capturedAt'), 'broker should emit screenshot timestamps.')
     assert(brokerSource.includes('page.on(\'framenavigated\''), 'broker should capture active URL changes and redirects.')
     assert(brokerSource.includes('page.on(\'domcontentloaded\''), 'broker should capture DOM-ready state changes.')
