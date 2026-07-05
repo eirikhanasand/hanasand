@@ -1699,8 +1699,8 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
     const workspaceMeta = sanitizeOrganizationDisplayCopy(organization.status || organization.slug || organization.id) || 'Active workspace'
     const rows = [
         { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organization.role || 'member', detail: organization.status || 'active' },
-        { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount || organization.memberCount || organization.activeMemberCount || 0), detail: `${inviteCount || organization.pendingInviteCount || 0} pending` },
-        { id: 'watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Watchlists', value: String(activeWatchlists || organization.sharedWatchlistCount || 0), detail: `${pausedWatchlists} paused · ${archivedWatchlists} archived` },
+        { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount ?? organization.memberCount ?? organization.activeMemberCount ?? 0), detail: `${inviteCount ?? organization.pendingInviteCount ?? 0} pending` },
+        { id: 'watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Watchlists', value: String(activeWatchlists ?? organization.sharedWatchlistCount ?? 0), detail: `${pausedWatchlists} paused · ${archivedWatchlists} archived` },
         { id: 'destinations', icon: <Webhook className='h-4 w-4' />, label: 'Destinations', value: String(webhookCount), detail: 'Workspace routes' },
     ]
     return (
