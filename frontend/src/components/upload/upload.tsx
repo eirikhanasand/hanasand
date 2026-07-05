@@ -5,6 +5,8 @@ import { Camera, GalleryHorizontalEnd, ImageIcon, LinkIcon, UploadCloud } from '
 import Link from 'next/link'
 import { Dispatch, SetStateAction, useCallback, useState } from 'react'
 
+const MAX_PUBLIC_MEDIA_BYTES = 20 * 1024 * 1024
+
 type UploadProps = {
     url: string
     setUrl: Dispatch<SetStateAction<string>>
@@ -20,6 +22,14 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
 
     const handleFile = useCallback((file: File) => {
         setMessage(null)
+        const validationError = validatePublicMediaFile(file)
+        if (validationError) {
+            setFile(null)
+            setPreview(null)
+            setMessage(validationError)
+            return
+        }
+
         setFile(file)
         const url = URL.createObjectURL(file)
         setPreview(url)
@@ -61,8 +71,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
             const file = await fetchImageAsFile(value, fileName)
             handleFile(file)
         } catch (error) {
-            console.log(`Not a valid URL or failed to fetch image: ${error}`)
-            setMessage('Paste a direct image or video URL, or choose a local file.')
+            setMessage(error instanceof Error ? error.message : 'Paste a direct image or video URL, or choose a local file.')
         } finally {
             setIsFetching(false)
         }
@@ -76,8 +85,16 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
             signal: controller.signal
         })
         clearTimeout(timeout)
+        if (!response.ok) {
+            const payload = await response.json().catch(() => ({})) as { error?: string }
+            throw new Error(payload.error || 'Remote media could not be fetched.')
+        }
         const blob = await response.blob()
         const type = blob.type || 'image/png'
+        const validationError = validatePublicMediaFile(new File([blob], fileName, { type }))
+        if (validationError) {
+            throw new Error(validationError)
+        }
         return new File([blob], fileName, { type })
     }
 
@@ -177,4 +194,16 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
             </div>
         </div>
     )
+}
+
+function validatePublicMediaFile(file: File) {
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+        return 'Only public image or video files can be uploaded here.'
+    }
+
+    if (file.size > MAX_PUBLIC_MEDIA_BYTES) {
+        return 'Public media must be 20 MB or smaller.'
+    }
+
+    return null
 }

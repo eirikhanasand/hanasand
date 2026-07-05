@@ -15,6 +15,11 @@ test('upload utility is framed as public media and blocks unsafe proxy targets',
     expect(uploadPage).toContain('Do not upload credentials, customer data, leaked material, or confidential evidence.')
     expect(uploadForm).toContain('Choose public photo or video')
     expect(uploadForm).toContain('direct public image/video URL')
+    expect(uploadForm).toContain('MAX_PUBLIC_MEDIA_BYTES')
+    expect(uploadForm).toContain('validatePublicMediaFile(file)')
+    expect(uploadForm).toContain('Only public image or video files can be uploaded here.')
+    expect(uploadForm).toContain('Public media must be 20 MB or smaller.')
+    expect(uploadForm).toContain('payload.error || \'Remote media could not be fetched.\'')
     expect(preview).toContain('publish only if this can be shared outside your organization')
 
     expect(imageRoute).toContain('MAX_PROXY_BYTES')
