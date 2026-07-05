@@ -606,6 +606,9 @@ export default function OrganizationWorkspaceClient() {
         [organizations, selectedId],
     )
     const canManage = selectedOrganization?.role === 'owner' || selectedOrganization?.role === 'admin'
+    const requireManage = () => {
+        if (!canManage) throw new Error('Owner or admin required.')
+    }
     const activeWatchlists = bundle.watchlists.filter(item => item.status === 'active')
     const pausedWatchlists = bundle.watchlists.filter(item => item.status === 'paused')
     const archivedWatchlists = bundle.watchlists.filter(item => item.status === 'archived')
@@ -847,6 +850,7 @@ export default function OrganizationWorkspaceClient() {
     })
 
     const saveSettings = () => selectedOrganization && runAction('save-settings', async () => {
+        requireManage()
         if (!settingsDirty) return 'No settings changes.'
         const validationMessage = settingsValidationMessage(settingsDraft)
         if (validationMessage) throw new Error(validationMessage)
@@ -858,6 +862,7 @@ export default function OrganizationWorkspaceClient() {
     })
 
     const sendInvite = () => selectedOrganization && runAction('send-invite', async () => {
+        requireManage()
         const emails = parseInviteEmails(inviteEmails)
         const invalidEmails = invalidInviteEmails(inviteEmails)
         const conflicts = inviteEmailConflicts(emails, bundle.invites, bundle.members)
@@ -877,6 +882,7 @@ export default function OrganizationWorkspaceClient() {
     })
 
     const inviteAction = (invite: OrganizationInvite, action: 'revoke' | 'resend') => selectedOrganization && runAction(`${action}-invite`, async () => {
+        requireManage()
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/invites/${encodeURIComponent(invite.id)}/actions`, {
             method: 'POST',
             body: JSON.stringify({
@@ -889,7 +895,7 @@ export default function OrganizationWorkspaceClient() {
     }, `invite-${invite.id}`)
 
     const copyInvite = (invite: OrganizationInvite) => runAction('copy-invite', async () => {
-        if (!canManage) throw new Error('Owner or admin required.')
+        requireManage()
         const value = invite.acceptanceUrl || invite.acceptancePath || invite.token
         if (!value) throw new Error('Invite link is not available.')
         await navigator.clipboard.writeText(value)
@@ -897,6 +903,7 @@ export default function OrganizationWorkspaceClient() {
     }, `invite-${invite.id}`)
 
     const changeMemberRole = (member: OrganizationMember, role: OrganizationRole) => selectedOrganization && runAction('change-role', async () => {
+        requireManage()
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/members/${encodeURIComponent(member.userId)}/role`, {
             method: 'PATCH',
             body: JSON.stringify({
@@ -909,6 +916,7 @@ export default function OrganizationWorkspaceClient() {
     }, `member-${member.userId}`)
 
     const removeMember = (member: OrganizationMember) => selectedOrganization && runAction('remove-member', async () => {
+        requireManage()
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/members/${encodeURIComponent(member.userId)}`, {
             method: 'DELETE',
             body: JSON.stringify({
@@ -920,6 +928,7 @@ export default function OrganizationWorkspaceClient() {
     }, `member-${member.userId}`)
 
     const createWatchlist = () => selectedOrganization && runAction('create-watchlist', async () => {
+        requireManage()
         if (watchlistDraftDuplicate) {
             throw new Error('This watchlist term already exists in this organization.')
         }
@@ -936,6 +945,7 @@ export default function OrganizationWorkspaceClient() {
     })
 
     const saveWatchlistEdit = (item: WatchlistItem) => selectedOrganization && runAction('save-watchlist', async () => {
+        requireManage()
         const draft = editingWatchlist[item.id]
         if (!draft) throw new Error('Open the watchlist term before saving.')
         if (isDuplicateWatchlistTerm(bundle.watchlists, draft.kind, draft.value, item.id)) {
@@ -961,6 +971,7 @@ export default function OrganizationWorkspaceClient() {
     }, `watchlist-${item.id}`)
 
     const watchlistAction = (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => selectedOrganization && runAction(`${action}-watchlist`, async () => {
+        requireManage()
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/${encodeURIComponent(item.id)}/actions`, {
             method: 'POST',
             body: JSON.stringify({
@@ -973,6 +984,7 @@ export default function OrganizationWorkspaceClient() {
     }, `watchlist-${item.id}`)
 
     const deleteWatchlist = (item: WatchlistItem) => selectedOrganization && runAction('delete-watchlist', async () => {
+        requireManage()
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/${encodeURIComponent(item.id)}`, {
             method: 'DELETE',
             body: JSON.stringify({
@@ -984,6 +996,7 @@ export default function OrganizationWorkspaceClient() {
     }, `watchlist-${item.id}`)
 
     const cleanupWatchlists = () => selectedOrganization && runAction('cleanup-watchlists', async () => {
+        requireManage()
         const payload = await requestJson<{ archivedCount?: number, cleanupCount?: number, disabledCount?: number }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/cleanup`, {
             method: 'POST',
             body: JSON.stringify({
@@ -996,6 +1009,7 @@ export default function OrganizationWorkspaceClient() {
     }, 'watchlists-cleanup')
 
     const testWatchlistDestination = (item: WatchlistItem, mode: 'save' | 'replay') => selectedOrganization && runAction(mode === 'save' ? 'save-destination' : 'replay-destination', async () => {
+        requireManage()
         const draft = destinationDrafts[item.id] || { kind: 'discord', url: '' }
         const withUrl = mode === 'save'
         const url = draft.url.trim()
@@ -1033,6 +1047,7 @@ export default function OrganizationWorkspaceClient() {
     }, `watchlist-${item.id}`)
 
     const testSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('test-destination', async () => {
+        requireManage()
         const result = await requestJson<DeliveryResult>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/test`, {
             method: 'POST',
             body: JSON.stringify({
@@ -1049,6 +1064,7 @@ export default function OrganizationWorkspaceClient() {
     }, `destination-${destination.id}`)
 
     const replayDelivery = (delivery: DeliveryRow) => selectedOrganization && runAction('replay-delivery', async () => {
+        requireManage()
         if (!canReplayDelivery(delivery)) throw new Error('Delivery replay needs a destination and alert, case, or watchlist reference.')
         const result = await requestJson<DeliveryResult>('/api/dwm/webhooks/deliver', {
             method: 'POST',
@@ -1073,6 +1089,7 @@ export default function OrganizationWorkspaceClient() {
     }, `delivery-${delivery.id}`)
 
     const createSavedDestination = () => selectedOrganization && runAction('create-destination', async () => {
+        requireManage()
         const url = destinationCreateDraft.url.trim()
         if (!validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
         const kind = destinationCreateDraft.kind
@@ -1094,6 +1111,7 @@ export default function OrganizationWorkspaceClient() {
     }, 'destination-create')
 
     const updateSavedDestination = (destination: WebhookDestination, draft: DestinationEditDraft) => selectedOrganization && runAction('update-destination', async () => {
+        requireManage()
         const url = draft.url.trim()
         if (url && !validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
         if (!destinationEditChanged(destination, draft)) return 'No destination changes.'
@@ -1119,6 +1137,7 @@ export default function OrganizationWorkspaceClient() {
     }, `destination-${destination.id}`)
 
     const deleteSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('delete-destination', async () => {
+        requireManage()
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
             method: 'DELETE',
         })
