@@ -263,6 +263,7 @@ type ActivityItem = {
     title: string
     detail: string
     ok: boolean
+    organizationId?: string
     source?: 'session'
     subjectType?: ActivitySubjectType
     subjectId?: string
@@ -627,7 +628,7 @@ export default function OrganizationWorkspaceClient() {
     const watchlistDraftDuplicate = isDuplicateWatchlistTerm(bundle.watchlists, watchlistDraft.kind, watchlistDraft.value)
     const watchlistSuggestions = selectedOrganization ? starterWatchlistSuggestions(selectedOrganization, bundle.watchlists) : []
     const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
-    const activityRows = useMemo(() => organizationActivityRows(activity, bundle), [activity, bundle])
+    const activityRows = useMemo(() => organizationActivityRows(activity, bundle, selectedOrganization?.id), [activity, bundle, selectedOrganization?.id])
     const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedDeliveryId || requestedInviteId || requestedMemberId || requestedFocus)
     const hasScopeRecords = Boolean(bundle.alertTerms.length || bundle.alerts.length || bundle.cases.length || bundle.webhooks.length || Object.keys(bundle.alertCaseVisibility || {}).length)
     const settingsDirty = useMemo(() => !settingsEqual(settingsDraft, bundle.settings || {}), [settingsDraft, bundle.settings])
@@ -799,6 +800,7 @@ export default function OrganizationWorkspaceClient() {
             const actionResult = await action()
             const nextMessage = typeof actionResult === 'string' ? actionResult : actionResult?.message
             const reloadOrganizationId = typeof actionResult === 'object' ? actionResult?.organizationId : undefined
+            const activityOrganizationId = reloadOrganizationId || selectedOrganization?.id
             const warning = typeof actionResult === 'object' && Boolean(actionResult?.warning)
             setMessage(nextMessage || 'Saved.')
             setMessageTone(warning ? 'warning' : 'success')
@@ -814,6 +816,7 @@ export default function OrganizationWorkspaceClient() {
                 title: actionLabel(label),
                 detail: nextMessage || 'Saved.',
                 ok: !warning,
+                organizationId: activityOrganizationId,
                 source: 'session',
                 ...activityItemSubject(actionSubject),
             }, ...current].slice(0, 8))
@@ -839,6 +842,7 @@ export default function OrganizationWorkspaceClient() {
                 title: actionLabel(label),
                 detail,
                 ok: false,
+                organizationId: selectedOrganization?.id,
                 source: 'session',
                 ...activityItemSubject(actionSubject),
             }, ...current].slice(0, 8))
@@ -3587,7 +3591,8 @@ function visibilityRows(payload: Record<string, unknown> | null) {
     }))
 }
 
-function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
+function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, organizationId?: string) {
+    const localRows = organizationId ? local.filter(item => item.organizationId === organizationId) : []
     const alertRows: ActivityItem[] = bundle.alerts.map(alert => ({
         id: `alert-${alert.id}`,
         at: alert.updatedAt || new Date(0).toISOString(),
@@ -3699,7 +3704,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
             ['Ref', compactReference(destination.id, 'dest')],
         ]),
     }))
-    return [...local, ...alertRows, ...caseRows, ...deliveryRows, ...inviteRows, ...memberRows, ...watchlistRows, ...destinationRows]
+    return [...localRows, ...alertRows, ...caseRows, ...deliveryRows, ...inviteRows, ...memberRows, ...watchlistRows, ...destinationRows]
         .sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
 }
 
