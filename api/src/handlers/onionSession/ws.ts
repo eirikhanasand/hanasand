@@ -538,6 +538,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 error: 'provider_navigation_pending',
             })
         }
+        if (process.env.BROWSER_SANDBOX_PROVIDER_TABS !== '1') return
         for (const tool of plannedTools) {
             const toolPage = await context.newPage().catch(() => null)
             if (!toolPage) continue
