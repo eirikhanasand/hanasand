@@ -2191,13 +2191,14 @@ function normalizedAuthenticatedRoute(route: string | undefined) {
     return '/dashboard/dwm'
 }
 
-function StripActionButton({ icon, children, onClick, href, disabled = false }: { icon: React.ReactNode; children: string; onClick: () => void; href?: string; disabled?: boolean }) {
-    const className = 'inline-flex min-h-8 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised dark:disabled:bg-ui-raised dark:disabled:text-ui-muted'
+function StripActionButton({ icon, children, onClick, href, disabled = false, iconOnly = false }: { icon: React.ReactNode; children: string; onClick: () => void; href?: string; disabled?: boolean; iconOnly?: boolean }) {
+    const className = `inline-flex min-h-8 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised dark:disabled:bg-ui-raised dark:disabled:text-ui-muted ${iconOnly ? 'px-1.5' : 'px-2.5'}`
+    const label = iconOnly ? <span className='sr-only'>{children}</span> : children
     if (href && !disabled) {
         return (
-            <a href={href} onClick={onClick} className={className}>
+            <a href={href} onClick={onClick} className={className} aria-label={iconOnly ? children : undefined} title={iconOnly ? children : undefined}>
                 {icon}
-                {children}
+                {label}
             </a>
         )
     }
@@ -2207,9 +2208,11 @@ function StripActionButton({ icon, children, onClick, href, disabled = false }: 
             onClick={onClick}
             disabled={disabled}
             className={className}
+            aria-label={iconOnly ? children : undefined}
+            title={iconOnly ? children : undefined}
         >
             {icon}
-            {children}
+            {label}
         </button>
     )
 }
@@ -6965,10 +6968,10 @@ function MobileEvidenceWorkbar({
             </div>
 
             <div data-ti-mobile-console-links='true' className='grid grid-cols-4 gap-1.5'>
-                <StripActionButton icon={<BellRing className='h-3 w-3' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
-                <StripActionButton icon={<ClipboardList className='h-3 w-3' />} onClick={onCase} href={caseHref} disabled={!caseHref && !caseAvailable}>Case</StripActionButton>
-                <StripActionButton icon={<Send className='h-3 w-3' />} onClick={onEscalate} href={alertHref}>Escalate</StripActionButton>
-                <StripActionButton icon={<CheckCircle2 className='h-3 w-3' />} onClick={onMarkReviewed}>Review</StripActionButton>
+                <StripActionButton icon={<BellRing className='h-3 w-3' />} onClick={onWatchlist} href={watchlistHref} iconOnly>Watch</StripActionButton>
+                <StripActionButton icon={<ClipboardList className='h-3 w-3' />} onClick={onCase} href={caseHref} disabled={!caseHref && !caseAvailable} iconOnly>Case</StripActionButton>
+                <StripActionButton icon={<Send className='h-3 w-3' />} onClick={onEscalate} href={alertHref} iconOnly>Escalate</StripActionButton>
+                <StripActionButton icon={<CheckCircle2 className='h-3 w-3' />} onClick={onMarkReviewed} iconOnly>Review</StripActionButton>
             </div>
         </section>
     )

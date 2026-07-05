@@ -806,6 +806,7 @@ assert(!/data-ti-selected-source-inline[\s\S]{0,900}<button/.test(pageClientSour
 assert(pageClientSource.includes('data-ti-mobile-console-links'), 'Public TI mobile workbar should expose selected evidence links into authenticated workflows.')
 assert(pageClientSource.includes('data-ti-mobile-filter-controls'), 'Public TI mobile workbar should collapse filter choices into compact controls.')
 assert(!/data-ti-mobile-filter-controls[\s\S]{0,1600}<button/.test(pageClientSource), 'Public TI mobile filter controls should not render chip-button walls.')
+assert(/data-ti-mobile-console-links[\s\S]{0,900}iconOnly[\s\S]{0,900}iconOnly[\s\S]{0,900}iconOnly[\s\S]{0,900}iconOnly/.test(pageClientSource), 'Public TI mobile selected-evidence actions should stay icon-only to avoid narrow text clutter.')
 assert(pageClientSource.includes('selectedConsoleLinksFor(result, selected'), 'Public TI selected action links should be derived from the selected evidence context.')
 assert(pageClientSource.includes('selectedArtifactHandoffs'), 'Public TI authenticated action links should carry selected artifact handoff payloads.')
 assert(pageClientSource.includes('compactPublicTiHandoffPayload(payload)'), 'Public TI authenticated action links should compact rich payloads before putting them in the URL.')
