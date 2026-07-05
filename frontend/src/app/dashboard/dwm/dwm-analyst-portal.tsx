@@ -2487,7 +2487,7 @@ function filterAlerts(alerts: PortalAlert[], filter: QueueFilter, query: string)
             alert.deliveryState,
             alert.routingContext?.queue,
             alert.routingContext?.urgency,
-            alert.claimSummary,
+            safeAlertSummary(alert),
         ].filter(Boolean).join(' ').toLowerCase()
         return haystack.includes(normalizedQuery)
     })
