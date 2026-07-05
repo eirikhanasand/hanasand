@@ -18,6 +18,7 @@ type ControlSnapshot = {
     resources?: { queue?: Record<string, unknown>; workers?: unknown[] }
     productSlo?: Record<string, unknown>
     scheduler?: Record<string, unknown>
+    exposureParser?: Record<string, unknown>
     quality?: Record<string, unknown>
     publicChannel?: Record<string, unknown>
     restricted?: Record<string, unknown>
@@ -391,7 +392,7 @@ export default function TiScraperControlClient() {
                                 <div className='grid grid-cols-2 gap-2'>
                                     <Info label='Candidates' value={String(sourceGrowth.candidates)} />
                                     <Info label='Daily covered' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} />
-                                    <Info label='AI parser' value={scheduler.aiConfigured ? 'connected' : 'fallback'} />
+                                    <Info label='AI parser' value={scheduler.aiStatus} />
                                     <Info label='Active Telegram' value={String(sourceGrowth.activeTelegram)} />
                                     <Info label='Darkweb/onion' value={String(sourceGrowth.activeDarkweb)} />
                                     <Info label='Matches' value={String(sourceGrowth.watchlistMatches)} />
@@ -458,7 +459,7 @@ export default function TiScraperControlClient() {
                         <Metric title='Scraper' value={snapshot?.health ? 'Reachable' : loading ? 'Loading' : 'Connecting'} detail={`${healthyEndpoints}/${Math.max(endpointRows.length, 1)} checks healthy`} icon={<Gauge className='h-4 w-4' />} tone={snapshot?.health ? 'ok' : 'bad'} />
                         <Metric title='Queue' value={String(queueCount)} detail='frontier tasks visible to workers' icon={<Workflow className='h-4 w-4' />} tone={queueCount > 200 ? 'warn' : 'ok'} />
                         <Metric title='Daily coverage' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} detail={`${scheduler.dailyAttempted} attempted, ${scheduler.shortfall} source shortfall`} icon={<UserRound className='h-4 w-4' />} tone={scheduler.dailySources && scheduler.dailyCovered < scheduler.dailySources ? 'warn' : 'ok'} />
-                        <Metric title='AI parser' value={scheduler.aiConfigured ? 'Connected' : 'Fallback'} detail={`${scheduler.acceptedExposureCount} accepted, ${scheduler.reviewExposureCount} review`} icon={<DatabaseZap className='h-4 w-4' />} tone={scheduler.aiConfigured ? 'ok' : 'warn'} />
+                        <Metric title='AI parser' value={scheduler.aiStatus} detail={scheduler.aiDetail} icon={<DatabaseZap className='h-4 w-4' />} tone={scheduler.aiReady ? 'ok' : 'warn'} />
                         <Metric title='Alerts' value={String(sourceGrowth.alertsGenerated)} detail={`${sourceGrowth.watchlistMatches} matches, ${sourceGrowth.webhookDeliveries} deliveries`} icon={<Clock3 className='h-4 w-4' />} tone={sourceGrowth.alertsGenerated ? 'ok' : 'hold'} />
                     </section>
 
@@ -781,16 +782,26 @@ function schedulerKpis(snapshot: ControlSnapshot | null) {
     const scheduler = asRecord(schedulerRoot.scheduler)
     const coverage = asRecord(schedulerRoot.sourceCoverage)
     const parser = asRecord(schedulerRoot.parser)
+    const parserHealth = asRecord(snapshot?.exposureParser)
     const lastRun = asRecord(scheduler.lastRun)
+    const healthStatus = stringValue(parserHealth.status)
+    const aiConfigured = Boolean(parser.aiEndpointConfigured) || Boolean(parserHealth.endpoint)
+    const aiReady = healthStatus === 'ready' || (aiConfigured && !healthStatus)
+    const latency = numberFrom(parserHealth.latencyMs)
+    const blocker = stringValue(parserHealth.blocker)
+    const acceptedExposureCount = numberFrom(parser.acceptedExposureCount) ?? 0
+    const reviewExposureCount = numberFrom(parser.reviewExposureCount) ?? 0
     return {
         totalSources: numberFrom(coverage.totalSourceCount) ?? 0,
         shortfall: numberFrom(coverage.sourceShortfall) ?? 0,
         dailySources: numberFrom(coverage.dailySourceCount) ?? 0,
         dailyAttempted: numberFrom(coverage.dailyAttemptedCount) ?? 0,
         dailyCovered: numberFrom(coverage.dailyCoveredCount) ?? 0,
-        aiConfigured: Boolean(parser.aiEndpointConfigured),
-        acceptedExposureCount: numberFrom(parser.acceptedExposureCount) ?? 0,
-        reviewExposureCount: numberFrom(parser.reviewExposureCount) ?? 0,
+        aiReady,
+        aiStatus: aiReady ? 'Connected' : aiConfigured ? 'Blocked' : 'Fallback',
+        aiDetail: blocker || `${acceptedExposureCount} accepted, ${reviewExposureCount} review${latency !== undefined ? `, ${latency}ms` : ''}`,
+        acceptedExposureCount,
+        reviewExposureCount,
         nextRunAt: stringValue(scheduler.nextRunAt),
         lastRunStatus: stringValue(lastRun.status),
     }
