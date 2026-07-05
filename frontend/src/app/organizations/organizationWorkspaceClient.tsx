@@ -2000,7 +2000,7 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
             </summary>
             <div className='grid gap-3 border-t border-ui-border p-4 dark:border-ui-border md:grid-cols-2'>
                 <Field label='Name' value={settingsDraft.name || ''} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, name: value })} />
-                <Field label='Slug' value={settingsDraft.slug || ''} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, slug: value })} />
+                <Field label='Slug' value={settingsDraft.slug || ''} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, slug: slugifyOrganizationName(value) })} />
                 <SelectField label='Webhook policy' value={settingsDraft.defaultWebhookPolicy || 'active_destinations'} options={webhookPolicies} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, defaultWebhookPolicy: value })} />
                 <SelectField label='Alert visibility' value={settingsDraft.alertVisibilityPolicy || 'members'} options={alertPolicies} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, alertVisibilityPolicy: value })} />
                 <SelectField label='Lifecycle' value={settingsDraft.lifecycleStatus || 'active'} options={lifecycleStatuses} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, lifecycleStatus: value })} />
