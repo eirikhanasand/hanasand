@@ -5,7 +5,7 @@ import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'About Hanasand',
-    description: 'Hanasand builds company exposure monitoring and ransomware actor intelligence from recent, reviewable records.',
+    description: 'Hanasand builds company exposure monitoring and threat intelligence from recent, reviewable records.',
     path: '/about',
     keywords: ['hanasand about', 'threat intelligence company', 'ransomware monitoring'],
 })
@@ -18,7 +18,7 @@ const principles = [
     },
     {
         title: 'Clean fields make alerts usable',
-        detail: 'Every alert should tell the buyer the actor, company, data mentioned, timing, source, sector, country, review status, and delivery history.',
+        detail: 'Every alert should tell the buyer the group, company, data mentioned, timing, source, sector, country, review status, and delivery history.',
         icon: Waypoints,
     },
     {
@@ -31,7 +31,7 @@ const principles = [
 const focus = [
     'Recent ransomware attacks and leak-site changes',
     'Company, domain, brand, subsidiary, and supplier watchlists',
-    'Actor overviews shaped for UI navigation and analyst review',
+    'Group overviews shaped for UI navigation and analyst review',
     'Separate Bloom hash exposure checks where sensitive values stay out of dashboards',
 ]
 
@@ -42,9 +42,9 @@ export default function AboutPage() {
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-14 md:px-8 md:py-20 lg:grid-cols-[0.9fr_1.1fr] lg:items-center'>
                     <div className='grid gap-5'>
                         <p className='text-sm font-semibold uppercase text-ui-primary'>Company</p>
-                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Hanasand monitors company exposure across leak sites and recent claims.</h1>
+                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Hanasand monitors company exposure across leak sites and source changes.</h1>
                         <p className='max-w-2xl text-lg leading-8 text-ui-muted'>
-                            The product centers on high-speed, reviewable threat intelligence: recent mentions, actor context, company matching, and clean delivery.
+                            The product centers on high-speed, reviewable threat intelligence: recent mentions, group context, company matching, and clean delivery.
                         </p>
                         <div className='flex flex-wrap gap-3'>
                             <Link href='/ti' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>

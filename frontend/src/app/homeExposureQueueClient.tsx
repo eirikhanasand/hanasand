@@ -143,7 +143,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
             <div className='max-h-[34rem] min-w-0 overflow-auto'>
                 <div className='min-w-[48rem]'>
                     <div className='landing-surface-divider sticky top-0 z-10 grid grid-cols-[7rem_minmax(12rem,1fr)_10rem_11rem_5rem] gap-3 border-b border-ui-border bg-ui-panel px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted' data-home-exposure-panel-table-header='true'>
-                        <span>Actor</span>
+                        <span>Group</span>
                         <span>Company</span>
                         <span>Data mentioned</span>
                         <span>Seen</span>

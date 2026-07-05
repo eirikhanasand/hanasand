@@ -150,7 +150,7 @@ const faqItems = [
     },
     {
         question: 'What information is tracked?',
-        answer: 'Credential leaks, infostealer logs, session cookies, API keys, OAuth tokens, phishing-kit drops, vendor claims, ransomware victim posts, data-type descriptions, actor aliases, source changes, and corroborating public reports.',
+        answer: 'Credential leaks, infostealer logs, session cookies, API keys, OAuth tokens, phishing-kit drops, vendor mentions, ransomware listings, data-type descriptions, group aliases, source changes, and corroborating public reports.',
     },
     {
         question: 'Do you store stolen data?',
@@ -344,7 +344,7 @@ export default function DarkWebMonitoringPage() {
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-16 md:px-8 lg:grid-cols-[0.86fr_1.14fr] lg:items-center'>
                     <div className='grid min-w-0 gap-5'>
                         <p className='text-sm font-semibold uppercase tracking-[0.18em] text-ui-primary'>Telegram is the new dark web</p>
-                        <h2 className='text-4xl font-semibold tracking-normal md:text-5xl'>Telegram coverage has to be tied to source health, not unqualified claims.</h2>
+                        <h2 className='text-4xl font-semibold tracking-normal md:text-5xl'>Telegram coverage has to be tied to source health, not unqualified signals.</h2>
                         <p className='text-base leading-7 text-ui-muted'>
                             Criminal groups and access sellers often post in public or semi-public channels before the same claim reaches a broader leak site. Hanasand tracks those sources, checks whether they are healthy, and shows when a finding needs review.
                         </p>

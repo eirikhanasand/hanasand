@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Hanasand Threat Intelligence',
-    description: 'Monitor recent ransomware attacks, actor infrastructure, and company exposure with live threat intelligence built for security teams.',
+    description: 'Monitor company exposure, source changes, and risk signals with live threat intelligence built for security teams.',
     path: '/',
     keywords: ['hanasand', 'threat intelligence', 'ransomware monitoring', 'dark web monitoring', 'company exposure alerts'],
 })
@@ -35,9 +35,9 @@ const examples = [
     {
         title: 'Dark web exposure index',
         slug: 'Searches leak and extortion records',
-        detail: 'Search company names, domains, vendor names, actor names, source notes, claims, and timing from monitored public records.',
+        detail: 'Search company names, domains, vendor names, group names, source notes, risk signals, and timing from monitored public records.',
         badge: 'Searchable records',
-        action: 'Find a company or actor',
+        action: 'Find a company or group',
         icon: ShieldCheck,
     },
 ]
@@ -67,13 +67,13 @@ const solutions = [
 
 const stats = [
     ['Alert target', 'Company, vendor, domain, and brand mentions'],
-    ['What gets sent', 'Actor, company, data mentioned, source, time, review status'],
+    ['What gets sent', 'Group, company, data mentioned, source, time, review status'],
     ['Freshness basis', 'New and changed leak-site posts'],
     ['Where it goes', 'Webhook, case workflow, and analyst console'],
 ]
 
 const workflowShortcuts = [
-    { label: 'Search actor intel', href: '/ti/apt29', detail: 'Evidence, sources, and action rows' },
+    { label: 'Search group intel', href: '/ti/apt29', detail: 'Evidence, sources, and action rows' },
     { label: 'Inspect DWM queue', href: '/dashboard/dwm', detail: 'Alerts, cases, delivery, and source context' },
     { label: 'Configure watchlists', href: '/organizations', detail: 'Org terms, members, and destinations' },
     { label: 'Route alerts', href: '/dashboard/automations?setup=dwm', detail: 'Delivery, replay, and webhook actions' },
@@ -89,13 +89,13 @@ const operatorPaths = [
     {
         label: 'Triage exposure',
         state: 'DWM queue',
-        value: 'Review matched source claims with evidence, freshness, confidence, and case context.',
+        value: 'Review matched source signals with evidence, freshness, confidence, and case context.',
         href: '/dashboard/dwm',
     },
     {
-        label: 'Search actor intel',
+        label: 'Search group intel',
         state: 'Threat intel',
-        value: 'Inspect actor activity, sources, artifacts, watchlist fit, and handoff actions.',
+        value: 'Inspect group activity, sources, artifacts, watchlist fit, and handoff actions.',
         href: '/ti/apt29',
     },
     {
@@ -207,7 +207,7 @@ export default async function Page({
                                 <input
                                     name='q'
                                     aria-label='Search threat intelligence'
-                                    placeholder='Search a company, vendor, domain, or actor'
+                                    placeholder='Search a company, vendor, domain, or group'
                                     className='landing-search-input h-14 min-w-0 flex-1 bg-transparent text-base font-medium text-ui-text outline-none placeholder:text-ui-muted'
                                 />
                             </label>

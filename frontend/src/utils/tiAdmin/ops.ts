@@ -247,7 +247,7 @@ const captures: TiAdminCapture[] = [
         pageType: 'actor ransomware listing',
         screenshotLabel: 'Leak-site listing with company name and data amount.',
         screenshotTakenAt: '2026-06-27T16:41:04.000Z',
-        resultSummary: 'Company name, actor name, claimed size, claim status, and page timing were extracted for review.',
+        resultSummary: 'Company name, group name, listed size, source status, and page timing were extracted for review.',
         metadata: [
             { label: 'Data mentioned', value: '62 GB listed' },
             { label: 'Status', value: 'current' },
@@ -267,7 +267,7 @@ const captures: TiAdminCapture[] = [
         owner: 'source-ops',
         pageUrl: 'sensitive leak-site reference',
         pageType: 'actor ransomware listing',
-        screenshotLabel: 'Actor listing row with company name, actor, and status.',
+        screenshotLabel: 'Listing row with company name, group, and status.',
         screenshotTakenAt: '2026-06-27T12:00:08.000Z',
         resultSummary: 'New ransomware listing was captured and routed to company watchlist review.',
         metadata: [

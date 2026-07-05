@@ -17,7 +17,7 @@ const primarySolutions = [
         detail: 'Watch companies, domains, executives, brands, and vendors across leak-site updates, public indexes, advisories, and approved source records.',
         href: '/solutions/dwm',
         icon: ShieldCheck,
-        points: ['Mapped source coverage with active health checks', 'Company, vendor, actor, and criminal-group claims', 'Alert packet with confidence, source context, and next action'],
+        points: ['Mapped source coverage with active health checks', 'Company, vendor, group, and source-change signals', 'Alert packet with confidence, source context, and next action'],
         price: 'From $49/mo',
     },
     {
@@ -32,7 +32,7 @@ const primarySolutions = [
     {
         title: 'Threat Intelligence Search',
         eyebrow: 'Console',
-        detail: 'Search criminal groups, companies, CVEs, and monitored claims from one clean UI while preserving review state and alert context.',
+        detail: 'Search criminal groups, companies, CVEs, and monitored source changes from one clean UI while preserving review state and alert context.',
         href: '/ti',
         icon: Radar,
         points: ['Criminal-group overviews', 'Company exposure search', 'Alert context'],
@@ -63,7 +63,7 @@ const utilitySolutions = [
 
 const platformItems = [
     { title: 'Short-span access', detail: 'Session controls for short-lived onion review, with source safety boundaries built into the workspace.', icon: Network },
-    { title: 'API delivery', detail: 'Structured fields for criminal group, company, source, date, claim summary, and recommended action.', icon: Code2 },
+    { title: 'API delivery', detail: 'Structured fields for criminal group, company, source, date, exposure summary, and recommended action.', icon: Code2 },
     { title: 'Investigation pivots', detail: 'Jump between group, named company, sector, country, source, and CVE context without losing the alert.', icon: Waypoints },
     { title: 'Notification pipeline', detail: 'Small alert packets designed for Slack, incident queues, and vendor-risk workflows.', icon: BellRing },
     { title: 'Exposure index', detail: 'Searchable company and criminal-group records without exposing raw leaked material.', icon: Database },
