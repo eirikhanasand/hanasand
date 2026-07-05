@@ -263,6 +263,7 @@ type ActivityItem = {
     title: string
     detail: string
     ok: boolean
+    source?: 'session'
     subjectType?: ActivitySubjectType
     subjectId?: string
     relatedSubjectIds?: string[]
@@ -428,6 +429,10 @@ function activitySubjectTypeLabel(value: ActivitySubjectType) {
     if (value === 'organization') return 'Organization'
     if (value === 'destination') return 'Delivery destination'
     return stateLabel(value)
+}
+
+function activitySourceLabel(item: ActivityItem) {
+    return item.source === 'session' ? 'This session' : 'Saved history'
 }
 
 function organizationWorkspaceMeta(organization: OrganizationSummary) {
@@ -809,6 +814,7 @@ export default function OrganizationWorkspaceClient() {
                 title: actionLabel(label),
                 detail: nextMessage || 'Saved.',
                 ok: !warning,
+                source: 'session',
                 ...activityItemSubject(actionSubject),
             }, ...current].slice(0, 8))
             if (reloadOrganizationId || selectedOrganization?.id) {
@@ -830,6 +836,7 @@ export default function OrganizationWorkspaceClient() {
                 title: actionLabel(label),
                 detail,
                 ok: false,
+                source: 'session',
                 ...activityItemSubject(actionSubject),
             }, ...current].slice(0, 8))
         } finally {
@@ -3146,7 +3153,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
         try {
             const heading = `${organizationDisplayName(organization)} · ${subjectTypeLabel}`
             const context = contextRows.map(row => `${row.label}: ${row.value}`)
-            const rows = visibleRows.slice(0, 8).map(item => `${formatDate(item.at)} · ${item.title} · ${item.detail}`)
+            const rows = visibleRows.slice(0, 8).map(item => `${formatDate(item.at)} · ${activitySourceLabel(item)} · ${item.title} · ${item.detail}`)
             await navigator.clipboard.writeText([heading, ...context, ...rows].filter(Boolean).join('\n'))
             setCopyStatus({ ok: true, text: 'Activity copied.' })
         } catch {
@@ -3227,6 +3234,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                                 <div className='min-w-0 flex-1'>
                                     <div className='flex flex-wrap items-center gap-2'>
                                         <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(item.title) || item.title}</p>
+                                        <span className='rounded-md bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>{activitySourceLabel(item)}</span>
                                         {item.subjectType && <span className='rounded-md bg-ui-raised px-2 py-0.5 text-[11px] font-semibold text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>{item.subjectType}</span>}
                                     </div>
                                     <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(item.detail) || item.detail}</p>
