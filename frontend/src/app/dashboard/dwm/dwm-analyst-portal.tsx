@@ -249,7 +249,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                 router.push(caseDetailHref(caseId, alert.id, alertOrganizationId(alert, organizationId), 'alert_queue'))
                 return `Opening case ${caseId}.`
             }
-            return 'Case is ready.'
+            return 'Case route is available.'
         })
     }
 
@@ -1171,7 +1171,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
         {
             id: 'delivery',
             label: 'Webhook',
-            value: latestDelivery ? stateLabel(latestDelivery.status) : workflowContext.hasWebhookRoute ? 'ready to test' : 'not configured',
+            value: latestDelivery ? stateLabel(latestDelivery.status) : workflowContext.hasWebhookRoute ? 'test available' : 'not configured',
             detail: latestDelivery ? `${relativeTimeLabel(latestDelivery.attemptedAt)} · ${deliveryDestinationState(latestDelivery)}` : workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : 'Customer send blocked: add or test a destination before sending.',
             state: latestDelivery?.status === 'delivered' || latestDelivery?.status === 'dry_run' ? 'ready' : workflowContext.hasWebhookRoute ? 'action' : 'blocked',
         },
@@ -1813,7 +1813,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
             <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4'>
                 <ActionStatus label='Owner' value={assignee} />
                 <ActionStatus label='Work state' value={stateLabel(alert.reviewState)} />
-                <ActionStatus label='Delivery' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'delivery destination ready' : 'destination needed'} tone={latestDelivery?.status === 'failed' || !hasDeliveryRoute ? 'warn' : 'neutral'} />
+                <ActionStatus label='Delivery' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'destination configured' : 'destination needed'} tone={latestDelivery?.status === 'failed' || !hasDeliveryRoute ? 'warn' : 'neutral'} />
                 <ActionStatus label='Case' value={alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || 'case is being prepared'} />
             </div>
             <div className='grid gap-2'>
