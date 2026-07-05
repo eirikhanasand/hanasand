@@ -28,6 +28,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('open={watchlists.length === 0 ? true : undefined}')
     expect(page).not.toContain('Choose a term type, then enter the real company, domain, supplier, actor, or keyword value.')
     expect(page).not.toContain('Start with a scope template, enter a real customer-owned term, then save it to generate org-scoped alert terms and delivery context.')
+    expect(page).toContain('if (!canManage) throw new Error(\'Owner or admin required.\')')
+    expect(page).toContain('const canCopy = canManage && Boolean(inviteLink(invite))')
     expect(page).toContain('firstDomainCandidate')
     expect(page).toContain('data-org-health-strip')
     expect(page).toContain('Workspace health')

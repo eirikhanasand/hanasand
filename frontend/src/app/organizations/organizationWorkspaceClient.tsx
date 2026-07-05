@@ -889,6 +889,7 @@ export default function OrganizationWorkspaceClient() {
     }, `invite-${invite.id}`)
 
     const copyInvite = (invite: OrganizationInvite) => runAction('copy-invite', async () => {
+        if (!canManage) throw new Error('Owner or admin required.')
         const value = invite.acceptanceUrl || invite.acceptancePath || invite.token
         if (!value) throw new Error('Invite link is not available.')
         await navigator.clipboard.writeText(value)
@@ -1957,7 +1958,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                         </div>
                         {visibleInvites.length === 0 && <EmptyLine text='Adjust filters to see pending access requests.' />}
                         {visibleInvites.map(invite => {
-                            const canCopy = Boolean(inviteLink(invite)) && inviteActionAllowed(invite, 'copy') && !busy
+                            const canCopy = canManage && Boolean(inviteLink(invite)) && inviteActionAllowed(invite, 'copy') && !busy
                             const canResend = canManage && inviteActionAllowed(invite, 'resend') && !busy
                             const canRevoke = canManage && inviteActionAllowed(invite, 'revoke') && !busy
                             const selected = selectedSubject.type === 'invite' && selectedSubject.id === invite.id
