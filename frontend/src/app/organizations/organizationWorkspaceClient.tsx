@@ -1553,7 +1553,7 @@ function EmptyWorkspacePreview() {
 }
 
 function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, archivedWatchlists, memberCount, inviteCount, webhookCount }: { organization: OrganizationSummary, activeWatchlists: number, pausedWatchlists: number, archivedWatchlists: number, memberCount: number, inviteCount: number, webhookCount: number }) {
-    const workspaceMeta = sanitizeOrganizationDisplayCopy(organization.tenantId || organization.slug || organization.id) || 'Default workspace'
+    const workspaceMeta = sanitizeOrganizationDisplayCopy(organization.status || organization.slug || organization.id) || 'Active workspace'
     const rows = [
         { id: 'role', icon: <ShieldCheck className='h-4 w-4' />, label: 'Role', value: organization.role || 'member', detail: organization.status || 'active' },
         { id: 'members', icon: <Users className='h-4 w-4' />, label: 'Members', value: String(memberCount || organization.memberCount || organization.activeMemberCount || 0), detail: `${inviteCount || organization.pendingInviteCount || 0} pending` },
