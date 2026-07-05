@@ -298,11 +298,17 @@ export default function BrowserPageClient() {
         socketRef.current = null
     }, [])
 
-    const startRun = useCallback(() => {
-        const url = normalizeTarget(target)
+    const startRun = useCallback((override?: { target?: string; network?: BrowserNetwork }) => {
+        const url = normalizeTarget(override?.target ?? target)
         if (!url) return
         const id = sessionId()
         const socket = new WebSocket(brokerUrlForSession(brokerBaseUrl, id))
+        const runNetwork = override?.network || selectedNetwork
+        if (override?.target) setTarget(override.target)
+        if (override?.network) {
+            setNetwork(override.network)
+            setNetworkTouched(true)
+        }
         socketRef.current?.close()
         socketRef.current = socket
         setCaptures([])
@@ -318,7 +324,7 @@ export default function BrowserPageClient() {
             socket.send(JSON.stringify({
                 type: 'start',
                 sessionId: id,
-                network: selectedNetwork,
+                network: runNetwork,
                 target: url,
                 durationMinutes: 15,
                 profileTools: selectedProfile.tools,
@@ -345,7 +351,7 @@ export default function BrowserPageClient() {
                 const runRecord = runHistoryValue(payload.run) || {
                     id,
                     target: url,
-                    network: selectedNetwork,
+                    network: runNetwork,
                     status: 'running',
                     startedAt: new Date().toISOString(),
                     title: '',
@@ -354,7 +360,7 @@ export default function BrowserPageClient() {
                 const nextQuota = quotaValue(payload.quota)
                 if (nextQuota) setQuota(nextQuota)
                 setSessionState('live')
-                pushEvent(`${selectedNetwork === 'tor' ? 'Tor' : 'Regular'} browser is live.`)
+                pushEvent(`${runNetwork === 'tor' ? 'Tor' : 'Regular'} browser is live.`)
                 return
             }
             if (payload.type === 'frame' && typeof payload.image === 'string') {
@@ -609,7 +615,7 @@ export default function BrowserPageClient() {
                                 onRemoveTool={removeToolFromSelectedProfile}
                             />
                         </div>
-                        <HistoryPanel history={history} quota={quota} />
+                        <HistoryPanel history={history} quota={quota} onRerun={(run) => startRun({ target: run.target, network: run.network })} />
                     </div>
                 </section>
             </main>
@@ -796,7 +802,7 @@ function NetworkSegment({ network, inferred, onSelect }: { network: BrowserNetwo
     )
 }
 
-function HistoryPanel({ history, quota }: { history: BrowserRunHistory[]; quota: BrowserQuota | null }) {
+function HistoryPanel({ history, quota, onRerun }: { history: BrowserRunHistory[]; quota: BrowserQuota | null; onRerun: (run: BrowserRunHistory) => void }) {
     const used = quota?.used ?? history.length
     const limit = quota?.limit ?? 3
     return (
@@ -810,10 +816,18 @@ function HistoryPanel({ history, quota }: { history: BrowserRunHistory[]; quota:
             </div>
             <div className='grid gap-2'>
                 {history.slice(0, 5).map(run => (
-                    <div key={run.id} className='grid gap-1 rounded-md border border-ui-border bg-ui-raised p-2 text-xs md:grid-cols-[6rem_minmax(0,1fr)_auto] md:items-center'>
+                    <div key={run.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-2 text-xs md:grid-cols-[6rem_minmax(0,1fr)_auto_auto] md:items-center'>
                         <span className='font-semibold uppercase text-ui-primary'>{run.network}</span>
                         <span className='min-w-0 truncate font-mono text-ui-text'>{run.target}</span>
                         <span className='text-ui-muted'>{new Date(run.startedAt).toLocaleString()}</span>
+                        <button
+                            type='button'
+                            onClick={() => onRerun(run)}
+                            className='inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-ui-border bg-ui-panel px-2 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:text-ui-primary'
+                        >
+                            <RotateCcw className='h-3.5 w-3.5' />
+                            Run again
+                        </button>
                     </div>
                 ))}
                 {!history.length ? <div className='rounded-md border border-dashed border-ui-border p-3 text-xs text-ui-muted'>No browser runs recorded yet.</div> : null}

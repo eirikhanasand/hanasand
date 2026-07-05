@@ -67,6 +67,8 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(clientSource.includes('HistoryPanel'), 'client should expose recent run history and quota state.')
     assert(clientSource.includes('/api/backend/browser/runs'), 'client should load browser run history through the backend proxy.')
     assert(clientSource.includes('/api/backend/browser/profiles'), 'client should use the canonical browser profile API path.')
+    assert(clientSource.includes('Run again'), 'client should expose rerun controls for recent browser runs.')
+    assert(clientSource.includes('onRerun={(run) => startRun({ target: run.target, network: run.network })}'), 'recent run reruns should preserve target and network.')
     assert(clientSource.includes('Interactive isolated browser viewport'), 'client should expose one interactive viewport for Regular and Tor runs.')
     assert(clientSource.includes('type: \'click\''), 'client should forward frame clicks to the remote browser.')
     assert(clientSource.includes('type: \'wheel\''), 'client should forward frame wheel input to the remote browser.')
