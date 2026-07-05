@@ -4804,7 +4804,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
         <div data-public-ti-action-exports='true' className='min-w-0 w-full max-w-full overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Action exports</p>
+                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Action packages</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>Action packages for authenticated review. Copying does not change customer state.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
@@ -4814,7 +4814,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                     <button type='button' onClick={() => setShowPayloadDetails(value => !value)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
                         {showPayloadDetails ? 'Hide action links' : 'Show action links'}
                     </button>
-                    <CopyPayloadButton label='Action exports' payload={actionability.actionPayloads} />
+                    <CopyPayloadButton label='Action packages' payload={actionability.actionPayloads} />
                 </div>
             </div>
             {showPayloadDetails ? (
