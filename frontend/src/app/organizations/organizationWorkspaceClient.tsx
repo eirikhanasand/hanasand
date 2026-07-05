@@ -147,6 +147,7 @@ type DeliveryRow = {
     id: string
     requestId?: string
     auditEventId?: string
+    auditAction?: string
     organizationId?: string
     orgId?: string
     tenantId?: string
@@ -3888,8 +3889,19 @@ function deliveryHistoryHref(baseHref: string, subject: ActivitySubject) {
 }
 
 function deliveryTraceLabel(delivery: DeliveryRow) {
-    const trace = delivery.auditEventId || delivery.requestId || delivery.id
-    return trace ? 'Delivery tracked' : 'Delivery pending'
+    if (delivery.auditEventId) {
+        const action = delivery.auditAction ? `${stateLabel(delivery.auditAction)} ` : ''
+        return `${action}audit ${shortTraceId(delivery.auditEventId)}`
+    }
+    if (delivery.requestId) return `Request ${shortTraceId(delivery.requestId)}`
+    if (delivery.id) return `Delivery ${shortTraceId(delivery.id)}`
+    return 'Delivery pending'
+}
+
+function shortTraceId(value: string) {
+    const cleaned = value.trim()
+    if (cleaned.length <= 16) return cleaned
+    return cleaned.slice(-12)
 }
 
 function canReplayDelivery(delivery: DeliveryRow) {
@@ -3925,6 +3937,7 @@ function normalizedDeliveryRows(payload: Record<string, unknown>): DeliveryRow[]
             id: row.id || cleanString(enriched.deliveryId) || cleanString(enriched.requestId) || id,
             requestId: row.requestId || cleanString(enriched.requestId) || cleanString(enriched.deliveryId),
             auditEventId: row.auditEventId || cleanString(enriched.auditEventId),
+            auditAction: row.auditAction || cleanString(enriched.auditAction),
             organizationId: row.organizationId || row.orgId || cleanString(enriched.orgId),
             alertId: row.alertId || cleanString(enriched.alertId),
             caseId: row.caseId || cleanString(enriched.caseId),
