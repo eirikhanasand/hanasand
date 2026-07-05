@@ -627,7 +627,8 @@ export default function OrganizationWorkspaceClient() {
         () => organizations.find(organization => organization.id === selectedId) || organizations[0],
         [organizations, selectedId],
     )
-    const canManage = selectedOrganization?.role === 'owner' || selectedOrganization?.role === 'admin'
+    const selectedOrganizationRole = selectedOrganization?.role?.toLowerCase()
+    const canManage = selectedOrganizationRole === 'owner' || selectedOrganizationRole === 'admin'
     const requireManage = () => {
         if (!canManage) throw new Error('Owner or admin required.')
     }
@@ -1487,11 +1488,11 @@ export default function OrganizationWorkspaceClient() {
 }
 
 function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organization: OrganizationSummary, bundle: OrgBundle, selectedSubject: ActivitySubject }) {
-    const activeMembers = bundle.members.filter(member => member.status === 'active')
-    const pendingInvites = bundle.invites.filter(invite => invite.status === 'pending')
-    const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active') === 'active')
-    const activeDestinations = bundle.webhooks.filter(destination => destination.deliveryReady || destination.status === 'active' || destination.status === 'configured')
-    const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status === 'failed' || Boolean(delivery.error))
+    const activeMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active')
+    const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
+    const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active').toLowerCase() === 'active')
+    const activeDestinations = bundle.webhooks.filter(destination => destination.deliveryReady || ['active', 'configured'].includes((destination.status || '').toLowerCase()))
+    const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error))
     const rows = [
         {
             id: 'team',
@@ -1571,16 +1572,16 @@ function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organi
 }
 
 function WorkspaceHealthStrip({ organization, bundle, canManage }: { organization: OrganizationSummary, bundle: OrgBundle, canManage: boolean }) {
-    const activeMembers = bundle.members.filter(member => member.status === 'active')
-    const adminMembers = bundle.members.filter(member => member.status === 'active' && (member.role === 'owner' || member.role === 'admin'))
-    const pendingInvites = bundle.invites.filter(invite => invite.status === 'pending')
-    const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active') === 'active')
-    const configuredDestinations = bundle.webhooks.filter(destination => destination.deliveryReady || destination.status === 'active' || destination.status === 'configured')
-    const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status === 'failed' || Boolean(delivery.error))
-    const routedCases = bundle.cases.filter(item => item.status !== 'closed')
+    const activeMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active')
+    const adminMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active' && ['owner', 'admin'].includes(member.role.toLowerCase()))
+    const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
+    const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active').toLowerCase() === 'active')
+    const configuredDestinations = bundle.webhooks.filter(destination => destination.deliveryReady || ['active', 'configured'].includes((destination.status || '').toLowerCase()))
+    const failedDeliveries = bundle.deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error))
+    const routedCases = bundle.cases.filter(item => item.status?.toLowerCase() !== 'closed')
     const hasAlertOrCaseActivity = Boolean(bundle.alerts.length || routedCases.length)
     const lastActivityAt = organizationLastActivityAt(organization, bundle)
-    const accessMode = canManage ? 'admin controls enabled' : organization.role === 'support' ? 'support inspection only' : 'read-only access'
+    const accessMode = canManage ? 'admin controls enabled' : organization.role?.toLowerCase() === 'support' ? 'support inspection only' : 'read-only access'
     const rows = [
         {
             id: 'access',
@@ -1823,7 +1824,7 @@ function ActionAnchor({ href, icon, label, disabled, disabledReason }: { href: s
 }
 
 function PermissionStrip({ role, canManage, hasWatchlists, hasDestination }: { role: OrganizationRole, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
-    const supportAccess = role === 'support'
+    const supportAccess = role.toLowerCase() === 'support'
     const readOnlyReason = supportAccess ? 'Support inspection only' : 'Owner or admin required'
     const rows = [
         { id: 'team', label: 'Team', value: canManage ? 'Manage' : supportAccess ? 'Inspect' : 'View', ready: canManage, reason: canManage ? 'Invite and update roles' : readOnlyReason },
@@ -2197,7 +2198,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                 const roleChanged = selectedRole !== member.role
                                 const canMutateMember = canManage && memberCanMutate(member)
                                 const memberMutationReason = !canManage ? 'Owner or admin required' : !memberCanMutate(member) ? 'Owner role cannot be changed here' : ''
-                                const memberAccess = canMutateMember ? 'Role editable' : member.role === 'owner' ? 'Owner locked' : 'Read-only'
+                                const memberAccess = canMutateMember ? 'Role editable' : member.role.toLowerCase() === 'owner' ? 'Owner locked' : 'Read-only'
                                 const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                 return (
                                     <article
@@ -2271,7 +2272,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                     const roleChanged = selectedRole !== member.role
                                     const canMutateMember = canManage && memberCanMutate(member)
                                     const memberMutationReason = !canManage ? 'Owner or admin required' : !memberCanMutate(member) ? 'Owner role cannot be changed here' : ''
-                                    const memberAccess = canMutateMember ? 'Role editable' : member.role === 'owner' ? 'Owner locked' : 'Read-only'
+                                    const memberAccess = canMutateMember ? 'Role editable' : member.role.toLowerCase() === 'owner' ? 'Owner locked' : 'Read-only'
                                     const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                     return (
                                         <tr
@@ -4088,7 +4089,7 @@ function inviteActionAllowed(invite: OrganizationInvite, action: 'copy' | 'resen
 
 function memberCanMutate(member: OrganizationMember) {
     const status = member.status.toLowerCase()
-    return member.role !== 'owner' && status !== 'removed' && status !== 'revoked' && status !== 'inactive'
+    return member.role.toLowerCase() !== 'owner' && status !== 'removed' && status !== 'revoked' && status !== 'inactive'
 }
 
 function validDestinationUrl(value: string) {
