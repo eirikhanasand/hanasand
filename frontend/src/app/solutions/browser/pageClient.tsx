@@ -1,7 +1,7 @@
 'use client'
 
 import { Check, Clipboard, Globe2, Hourglass, Play, Plus, RotateCcw, ShieldCheck, Square, Trash2 } from 'lucide-react'
-import { type KeyboardEvent, type MouseEvent, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 
@@ -673,8 +673,8 @@ export default function BrowserPageClient() {
                             ) : (
                                 <div className='grid max-w-md gap-2 text-center'>
                                     <ShieldCheck className='mx-auto h-8 w-8 text-ui-primary' />
-                                    <p className='text-lg font-semibold text-ui-text'>{sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Launching isolated browser' : 'Waiting for first frame'}</p>
-                                    <p className='text-sm leading-6 text-ui-muted'>{sessionState === 'queued' ? queueCopy(capacity) : 'The browser runs remotely; screenshots appear when navigation or redirects update the active tab.'}</p>
+                                    <p className='text-lg font-semibold text-ui-text'>{sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
+                                    <p className='text-sm leading-6 text-ui-muted'>{sessionState === 'queued' ? queueCopy(capacity) : 'The remote browser has not sent a screenshot yet. If this persists, rerun the URL or check the broker and provider status below.'}</p>
                                 </div>
                             )}
                         </div>
@@ -682,6 +682,7 @@ export default function BrowserPageClient() {
                     <aside className='grid min-h-0 gap-4 xl:grid-rows-[auto_minmax(0,1fr)_auto]'>
                         <CapacityPanel capacity={capacity} sessionState={sessionState} />
                         <AnalystSummary summary={summary} />
+                        <EvidenceWorkspace captures={captures} profile={selectedProfile} summary={summary} events={events} />
                         <CaptureTimeline captures={captures} />
                         <div className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted'>
                             Latest event: {events[0]}
@@ -962,6 +963,136 @@ function AnalystSummary({ summary }: { summary: ReturnType<typeof buildAnalystSu
     )
 }
 
+function EvidenceWorkspace({
+    captures,
+    profile,
+    summary,
+    events,
+}: {
+    captures: Capture[]
+    profile: SandboxProfile
+    summary: ReturnType<typeof buildAnalystSummary>
+    events: string[]
+}) {
+    const pageCaptures = captures.filter(capture => capture.kind === 'page')
+    const toolCaptures = captures.filter(capture => capture.kind === 'tool')
+    const latestPage = pageCaptures[0]
+    const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
+
+    return (
+        <section className='min-h-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+            <div className='border-b border-ui-border px-4 py-3'>
+                <h2 className='text-sm font-semibold uppercase text-ui-primary'>Evidence workspace</h2>
+                <p className='mt-1 text-xs text-ui-muted'>Source-attributed capture, provider, network, script, and indicator status.</p>
+            </div>
+            <div className='grid max-h-[42rem] gap-3 overflow-auto p-3'>
+                <EvidencePanel title='Browser capture' status={latestPage ? 'Captured' : 'Awaiting frame'}>
+                    {latestPage ? (
+                        <div className='grid gap-2 text-xs text-ui-muted'>
+                            <p className='font-mono text-ui-text'>{latestPage.url}</p>
+                            <p>{latestPage.capturedAt}{latestPage.reason ? ` · ${latestPage.reason}` : ''}{latestPage.title ? ` · ${latestPage.title}` : ''}</p>
+                            {cleanEvidenceExcerpt(latestPage.evidence?.textExcerpt) ? <p className='leading-5'>{cleanEvidenceExcerpt(latestPage.evidence?.textExcerpt)}</p> : null}
+                        </div>
+                    ) : (
+                        <p className='text-xs leading-5 text-ui-muted'>No browser screenshot has arrived. The run is not treated as successful until a frame, provider result, or explicit failure is visible here.</p>
+                    )}
+                </EvidencePanel>
+
+                <div className='grid gap-3 md:grid-cols-3'>
+                    {profile.tools.map(tool => {
+                        const capture = toolCaptures.find(item => matchesTool(item, tool))
+                        const analysis = capture?.toolAnalysis
+                        return (
+                            <EvidencePanel key={tool.id} title={tool.name} status={providerStatus(capture, analysis)}>
+                                {capture ? (
+                                    <div className='grid gap-1 text-xs text-ui-muted'>
+                                        <p>{capture.capturedAt}</p>
+                                        <p className='truncate font-mono text-ui-text'>{capture.url || tool.url}</p>
+                                        {analysis?.vendorFlagged !== undefined ? <p>VirusTotal vendors: {analysis.vendorFlagged}/{analysis.vendorTotal || '?'}</p> : null}
+                                        {analysis?.alertCount !== undefined ? <p>urlquery alerts: {analysis.alertCount}</p> : null}
+                                        {analysis?.communityCommentCount !== undefined ? <p>Community comments: {analysis.communityCommentCount}</p> : null}
+                                        {analysis?.verdict ? <p>Provider verdict: {analysis.verdict}</p> : <p>Result unavailable: no parsed provider verdict was returned.</p>}
+                                        {capture.error ? <p>Error: {capture.error}</p> : null}
+                                    </div>
+                                ) : (
+                                    <p className='text-xs leading-5 text-ui-muted'>Provider unavailable: this profile tool has not returned a capture or parsed result for this run.</p>
+                                )}
+                            </EvidencePanel>
+                        )
+                    })}
+                </div>
+
+                <EvidencePanel title='WebCrack / decoded scripts' status={summary.webcrackLoaded ? 'Sample loaded' : 'No decoded result'}>
+                    {summary.deobfuscationTasks.length ? (
+                        <div className='grid gap-2 text-xs text-ui-muted'>
+                            {summary.deobfuscationTasks.slice(0, 4).map(task => (
+                                <div key={`${task.scriptId}-${task.source}`} className='rounded-md border border-ui-border bg-ui-panel p-2'>
+                                    <p className='font-semibold text-ui-text'>{task.scriptId || 'script sample'} · {task.assessment || 'review required'}</p>
+                                    <p className='mt-1 leading-5'>{task.summary || task.decodedPreview || 'Decoded summary unavailable.'}</p>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className='text-xs leading-5 text-ui-muted'>No obfuscated script sample was loaded into WebCrack for this run.</p>
+                    )}
+                </EvidencePanel>
+
+                <EvidencePanel title='Network / requests' status={latestNetwork ? 'Captured' : 'No network summary'}>
+                    {latestNetwork ? (
+                        <div className='grid gap-1 text-xs text-ui-muted'>
+                            <p>{latestNetwork.requestCount || 0} requests · {latestNetwork.responseCount || 0} responses · {latestNetwork.failedCount || 0} blocked/failed</p>
+                            {latestNetwork.domains?.length ? <p className='font-mono text-ui-text'>{latestNetwork.domains.slice(0, 8).join('\n')}</p> : null}
+                        </div>
+                    ) : (
+                        <p className='text-xs leading-5 text-ui-muted'>No request summary has been emitted by the browser broker yet.</p>
+                    )}
+                </EvidencePanel>
+
+                <EvidencePanel title='Page captures' status={`${pageCaptures.length} frame${pageCaptures.length === 1 ? '' : 's'}`}>
+                    {pageCaptures.length ? (
+                        <div className='grid gap-2 text-xs text-ui-muted'>
+                            {pageCaptures.slice(0, 6).map(capture => (
+                                <div key={capture.id} className='rounded-md border border-ui-border bg-ui-panel p-2'>
+                                    <p>{capture.capturedAt}{capture.reason ? ` · ${capture.reason}` : ''}</p>
+                                    <p className='truncate font-mono text-ui-text'>{capture.url}</p>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className='text-xs leading-5 text-ui-muted'>No page capture available yet.</p>
+                    )}
+                </EvidencePanel>
+
+                <EvidencePanel title='Console / logs' status={`${events.length} event${events.length === 1 ? '' : 's'}`}>
+                    <div className='grid gap-1 text-xs text-ui-muted'>
+                        {events.slice(0, 6).map(event => <p key={event}>{event}</p>)}
+                    </div>
+                </EvidencePanel>
+
+                <EvidencePanel title='Indicators' status={`${summary.indicators.length} copied-ready`}>
+                    {summary.indicators.length ? (
+                        <pre className='max-h-28 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-canvas p-2 text-xs text-ui-text'>{summary.indicators.join('\n')}</pre>
+                    ) : (
+                        <p className='text-xs leading-5 text-ui-muted'>No domains, IPs, or URLs beyond the submitted target have been extracted.</p>
+                    )}
+                </EvidencePanel>
+            </div>
+        </section>
+    )
+}
+
+function EvidencePanel({ title, status, children }: { title: string; status: string; children: ReactNode }) {
+    return (
+        <div className='rounded-md border border-ui-border bg-ui-raised p-3'>
+            <div className='mb-2 flex items-start justify-between gap-2'>
+                <h3 className='text-xs font-semibold uppercase text-ui-primary'>{title}</h3>
+                <span className='rounded border border-ui-border bg-ui-panel px-1.5 py-0.5 text-[10px] font-semibold text-ui-muted'>{status}</span>
+            </div>
+            {children}
+        </div>
+    )
+}
+
 function CaptureTimeline({ captures }: { captures: Capture[] }) {
     return (
         <section className='min-h-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
@@ -980,7 +1111,7 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
                             <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>{capture.kind}</span>
                         </div>
                         {capture.image ? <img src={capture.image} alt={`${capture.label} screenshot`} className='rounded border border-ui-border' /> : null}
-                        {capture.evidence?.textExcerpt ? <p className='line-clamp-3 text-xs leading-5 text-ui-muted'>{capture.evidence.textExcerpt}</p> : null}
+                        {cleanEvidenceExcerpt(capture.evidence?.textExcerpt) ? <p className='line-clamp-3 text-xs leading-5 text-ui-muted'>{cleanEvidenceExcerpt(capture.evidence?.textExcerpt)}</p> : null}
                         {capture.networkSummary ? (
                             <div className='grid gap-1 rounded-md border border-ui-border bg-ui-panel p-2 text-[11px] text-ui-muted'>
                                 <p>{capture.networkSummary.requestCount || 0} requests · {capture.networkSummary.uniqueDomainCount || 0} domains · {capture.networkSummary.failedCount || 0} blocked/failed</p>
@@ -1039,7 +1170,6 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         ...(capture.evidence?.indicators?.urls || []),
     ])
     const indicators = Array.from(new Set([...extracted, ...evidenceIndicators])).filter(indicator => !target.includes(indicator))
-    const toolNames = toolCaptures.map(capture => capture.label).join(', ') || 'none yet'
     const toolAnalyses = toolCaptures.map(capture => capture.toolAnalysis).filter(Boolean) as SandboxToolAnalysis[]
     const virusTotal = toolAnalyses.find(item => item.toolKind === 'virustotal')
     const urlquery = toolAnalyses.find(item => item.toolKind === 'urlquery')
@@ -1078,9 +1208,14 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     const threatNarrative = threatAssociations.length
         ? `Observed threat context in captured evidence: ${threatAssociations.slice(0, 4).map(item => `${item.name} (${item.category || 'context'}, ${item.confidence || 'low'})`).join('; ')}.`
         : 'No named actor, malware family, or tool label was extracted from the captured evidence yet.'
+    const providerNarrative = toolAnalyses.length
+        ? `Parsed provider evidence is available from ${toolAnalyses.map(item => item.toolKind || 'profile tool').join(', ')}.`
+        : toolCaptures.length
+            ? 'Profile tools produced captures, but no parsed provider verdict was returned.'
+            : 'No external provider result has been parsed yet; provider panels show configured tools and blockers.'
     const narrative = pageCaptures.length
-        ? `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. Profile "${profile.name}" produced tool context from ${toolNames}. ${toolAnalyses.length ? toolAnalyses.flatMap(item => item.extractedSignals || []).join('; ') || 'External tools loaded but did not expose a parsed detection count yet.' : 'External tool detections are still pending.'} ${suspiciousCaptures.length ? `The rendered evidence is suspicious: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'The rendered evidence is not conclusive yet.'} ${threatNarrative} ${comments.length ? `Community or page comments observed: ${comments.join(' ')}` : 'No community comments were extracted from the loaded pages yet.'}`
-        : `The sandbox is preparing ${target || 'the submitted URL'}. Profile "${profile.name}" will capture external tool context for ${toolNames || 'selected tools'} when available.`
+        ? `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. ${providerNarrative} ${suspiciousCaptures.length ? `Rendered evidence requires review: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'Rendered page evidence is neutral or inconclusive.'} ${threatNarrative} ${comments.length ? `Source comments observed: ${comments.join(' ')}` : 'No community comments were extracted from provider or page evidence.'}`
+        : `The sandbox is preparing ${target || 'the submitted URL'}. No success verdict is shown until a browser frame, provider result, or explicit blocker is captured for profile "${profile.name}".`
     const brief = buildAnalystBrief({
         target,
         pageCaptureCount: pageCaptures.length,
@@ -1122,7 +1257,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
             { label: 'URL states', value: String(urlTimeline.length) },
             { label: 'Obfuscated scripts', value: String(obfuscatedScripts.length) },
             { label: 'WebCrack loaded', value: String(webcrackLoaded) },
-            { label: 'Highest confidence', value: confidence ? `${confidence}%` : 'unknown' },
+            { label: 'Highest confidence', value: formatConfidencePercent(confidence) || 'unknown' },
             { label: 'Copyable indicators', value: String(allIndicators.length) },
         ],
     }
@@ -1149,12 +1284,12 @@ function buildAnalystBrief(input: {
     const highSignal = Boolean(vtFlagged || urlqueryAlerts || input.suspiciousCaptureCount || input.suspiciousDeobfuscationCount)
     const mediumSignal = Boolean(input.redirected || input.obfuscatedScriptCount || input.threatAssociations.length || input.failedRequests)
     const verdict = highSignal
-        ? 'Treat as suspicious until reviewed'
+        ? 'Review required - detection source present'
         : mediumSignal
-            ? 'Review required before allow-listing'
+            ? 'Review required'
             : input.pageCaptureCount
-                ? 'No confirmed malicious signal in captured evidence'
-                : 'Waiting for sandbox evidence'
+                ? 'No malicious verdict from available evidence'
+                : 'Insufficient external evidence'
     const impact = highSignal
         ? `External detections, suspicious rendered evidence, or decoded script indicators were observed for ${input.target || 'the submitted URL'}.`
         : mediumSignal
@@ -1163,14 +1298,14 @@ function buildAnalystBrief(input: {
                 ? 'Captured browser and tool evidence does not currently show a confirmed malicious chain.'
                 : 'No browser evidence has been captured yet.'
     const recommendedAction = highSignal
-        ? 'Open the timeline, copy indicators, and create or update the alert with the observed route and tool evidence.'
+        ? 'Open the evidence workspace, copy indicators, and create or update the alert with the observed route and sourced evidence.'
         : mediumSignal
             ? 'Review redirects, contacted domains, and WebCrack output before allowing user access.'
             : input.pageCaptureCount
-                ? 'Record the run as low signal unless new vendor or network evidence appears.'
-                : 'Wait for the first page and tool captures to complete.'
+                ? 'Record as no malicious verdict from available evidence unless new provider or network evidence appears.'
+                : 'Wait for the first page frame, provider result, or explicit blocker.'
     const confidence = input.confidence
-        ? `${input.confidence}% evidence confidence`
+        ? `${formatConfidencePercent(input.confidence)} evidence confidence`
         : input.virusTotal || input.urlquery
             ? 'Tool evidence parsed, confidence not provided'
             : 'Confidence pending'
@@ -1196,6 +1331,32 @@ function dedupeThreatAssociations(input: SandboxThreatAssociation[]) {
             return true
         })
         .slice(0, 12)
+}
+
+function cleanEvidenceExcerpt(value?: string) {
+    const cleaned = value?.replace(/\s+/g, ' ').trim() || ''
+    if (!cleaned || /^(ads do fetching\.?\s*){2,}/i.test(cleaned)) return ''
+    return cleaned.length > 260 ? `${cleaned.slice(0, 257)}...` : cleaned
+}
+
+function formatConfidencePercent(value: number) {
+    if (!value) return ''
+    const percent = value <= 1 ? Math.round(value * 100) : Math.round(value)
+    return `${percent}%`
+}
+
+function matchesTool(capture: Capture, tool: SandboxTool) {
+    const toolId = tool.id.toLowerCase()
+    const label = capture.label.toLowerCase()
+    const kind = capture.toolAnalysis?.toolKind?.toLowerCase()
+    return label.includes(toolId) || label.includes(tool.name.toLowerCase()) || kind === toolId
+}
+
+function providerStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
+    if (!capture) return 'Unavailable'
+    if (capture.error) return 'Blocked'
+    if (analysis?.vendorFlagged !== undefined || analysis?.alertCount !== undefined || analysis?.verdict) return 'Result captured'
+    return 'Result unavailable'
 }
 
 function extractIndicators(value: string) {
