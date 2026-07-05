@@ -4213,9 +4213,10 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         const watchlistId = encodeURIComponent(subject.id)
         const destinationId = selectedSubjectDestinationId(subject, bundle)
         const deliveryId = selectedSubjectDeliveryId(subject, bundle)
+        const destinationHref = destinationId ? `#destination-${encodeURIComponent(destinationId)}` : `#watchlist-${watchlistId}`
         return [
             { label: 'Watchlist', href: `#watchlist-${watchlistId}` },
-            ...(destinationId ? [{ label: 'Destination', href: `#destination-${encodeURIComponent(destinationId)}` }] : []),
+            { label: 'Destination', href: destinationHref },
             { label: 'Delivery', href: deliveryId ? `#delivery-${encodeURIComponent(deliveryId)}` : '#delivery-history' },
             { label: 'Open alert workspace', href: `/dashboard/ti/workbench?organizationId=${organizationId}&watchlistId=${watchlistId}` },
         ]
