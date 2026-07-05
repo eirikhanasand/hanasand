@@ -63,6 +63,14 @@ type SandboxToolAnalysis = {
     webcrackScriptId?: string
     webcrackSampleBytes?: number
     webcrackLoadReason?: string
+    threatAssociations?: SandboxThreatAssociation[]
+}
+type SandboxThreatAssociation = {
+    name?: string
+    category?: 'actor' | 'malware' | 'ransomware' | 'tool' | 'campaign'
+    confidence?: 'high' | 'medium' | 'low'
+    evidence?: string
+    source?: 'rendered_page' | 'tool_context' | 'decoded_script'
 }
 type SandboxEvidence = {
     url?: string
@@ -79,6 +87,7 @@ type SandboxEvidence = {
     forms?: Array<{ action?: string; method?: string; sensitiveInputCount?: number; inputCount?: number }>
     scripts?: Array<{ id?: string; src?: string; inlineBytes?: number; obfuscationScore?: number; reasons?: string[]; sample?: string }>
     obfuscatedScripts?: Array<{ id?: string; src?: string; inlineBytes?: number; obfuscationScore?: number; reasons?: string[]; sample?: string }>
+    threatAssociations?: SandboxThreatAssociation[]
     deobfuscationTasks?: Array<{
         scriptId?: string
         source?: string
@@ -87,6 +96,7 @@ type SandboxEvidence = {
         decodedPreview?: string
         decodedTransforms?: string[]
         indicators?: { domains?: string[]; ips?: string[]; urls?: string[] }
+        threatAssociations?: SandboxThreatAssociation[]
         assessment?: string
         summary?: string
     }>
@@ -609,6 +619,36 @@ function AnalystSummary({ summary }: { summary: ReturnType<typeof buildAnalystSu
             {summary.indicators.length ? (
                 <pre className='mt-3 max-h-32 overflow-auto rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{summary.indicators.join('\n')}</pre>
             ) : null}
+            {summary.threatAssociations.length ? (
+                <div className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3'>
+                    <p className='text-xs font-semibold uppercase text-ui-primary'>Threat context</p>
+                    <div className='mt-2 grid gap-2'>
+                        {summary.threatAssociations.slice(0, 6).map(item => (
+                            <div key={`${item.name}-${item.source}`} className='grid gap-1 rounded-md border border-ui-border bg-ui-panel p-2 text-xs'>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                    <span className='font-semibold text-ui-text'>{item.name}</span>
+                                    <span className='rounded border border-ui-border px-1.5 py-0.5 text-[10px] uppercase text-ui-muted'>{item.category || 'context'}</span>
+                                    <span className='text-ui-muted'>{item.confidence || 'low'} confidence · {item.source?.replace(/_/g, ' ') || 'evidence'}</span>
+                                </div>
+                                {item.evidence ? <p className='line-clamp-2 text-ui-muted'>{item.evidence}</p> : null}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
+            {summary.urlTimeline.length ? (
+                <div className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3'>
+                    <p className='text-xs font-semibold uppercase text-ui-primary'>URL timeline</p>
+                    <div className='mt-2 grid gap-1 text-xs text-ui-muted'>
+                        {summary.urlTimeline.slice(0, 8).map(item => (
+                            <div key={`${item.capturedAt}-${item.url}`} className='grid gap-1 rounded-md border border-ui-border bg-ui-panel p-2'>
+                                <span>{item.capturedAt}{item.reason ? ` · ${item.reason}` : ''}</span>
+                                <span className='truncate font-mono text-ui-text'>{item.url}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
             {summary.deobfuscationTasks.length ? (
                 <div className='mt-3 rounded-md border border-ui-warning/30 bg-ui-warning/10 p-3'>
                     <p className='text-xs font-semibold uppercase text-ui-warning'>WebCrack analysis</p>
@@ -708,13 +748,32 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     ])
     const allIndicators = Array.from(new Set([...indicators, ...decodedIndicators, ...networkDomains])).filter(indicator => !target.includes(indicator))
     const deobfuscationSummary = deobfuscationTasks.find(task => task.summary)?.summary || 'No decoded malicious payload summary is available yet.'
+    const threatAssociations = dedupeThreatAssociations([
+        ...captures.flatMap(capture => capture.evidence?.threatAssociations || []),
+        ...toolAnalyses.flatMap(analysis => analysis.threatAssociations || []),
+        ...deobfuscationTasks.flatMap(task => task.threatAssociations || []),
+    ])
+    const urlTimeline = pageCaptures
+        .map(capture => ({
+            url: capture.url || capture.evidence?.url || target,
+            capturedAt: capture.capturedAt,
+            reason: capture.reason || 'capture',
+            title: capture.title || '',
+        }))
+        .filter(item => item.url)
+        .reverse()
+    const threatNarrative = threatAssociations.length
+        ? `Observed threat context in captured evidence: ${threatAssociations.slice(0, 4).map(item => `${item.name} (${item.category || 'context'}, ${item.confidence || 'low'})`).join('; ')}.`
+        : 'No named actor, malware family, or tool label was extracted from the captured evidence yet.'
     const narrative = pageCaptures.length
-        ? `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. Profile "${profile.name}" produced tool context from ${toolNames}. ${toolAnalyses.length ? toolAnalyses.flatMap(item => item.extractedSignals || []).join('; ') || 'External tools loaded but did not expose a parsed detection count yet.' : 'External tool detections are still pending.'} ${suspiciousCaptures.length ? `The rendered evidence is suspicious: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'The rendered evidence is not conclusive yet.'} ${comments.length ? `Community or page comments observed: ${comments.join(' ')}` : 'No community comments were extracted from the loaded pages yet.'}`
+        ? `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. Profile "${profile.name}" produced tool context from ${toolNames}. ${toolAnalyses.length ? toolAnalyses.flatMap(item => item.extractedSignals || []).join('; ') || 'External tools loaded but did not expose a parsed detection count yet.' : 'External tool detections are still pending.'} ${suspiciousCaptures.length ? `The rendered evidence is suspicious: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'The rendered evidence is not conclusive yet.'} ${threatNarrative} ${comments.length ? `Community or page comments observed: ${comments.join(' ')}` : 'No community comments were extracted from the loaded pages yet.'}`
         : `The sandbox is preparing ${target || 'the submitted URL'}. Profile "${profile.name}" will capture external tool context for ${toolNames || 'selected tools'} when available.`
 
     return {
         narrative,
         indicators: allIndicators,
+        threatAssociations,
+        urlTimeline,
         deobfuscationTasks,
         deobfuscationSummary,
         webcrackLoaded,
@@ -729,12 +788,27 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
             { label: 'Contacted domains', value: latestNetwork?.uniqueDomainCount !== undefined ? String(latestNetwork.uniqueDomainCount) : 'unknown' },
             { label: 'Blocked/failed requests', value: String(failedRequests) },
             { label: 'Suspicious captures', value: String(suspiciousCaptures.length) },
+            { label: 'Threat context', value: threatAssociations.length ? threatAssociations.map(item => item.name).slice(0, 3).join(', ') : 'none extracted' },
+            { label: 'URL states', value: String(urlTimeline.length) },
             { label: 'Obfuscated scripts', value: String(obfuscatedScripts.length) },
             { label: 'WebCrack loaded', value: String(webcrackLoaded) },
             { label: 'Highest confidence', value: confidence ? `${confidence}%` : 'unknown' },
             { label: 'Copyable indicators', value: String(allIndicators.length) },
         ],
     }
+}
+
+function dedupeThreatAssociations(input: SandboxThreatAssociation[]) {
+    const seen = new Set<string>()
+    return input
+        .filter(item => item?.name)
+        .filter(item => {
+            const key = `${item.name}:${item.category}:${item.source}`
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+        })
+        .slice(0, 12)
 }
 
 function extractIndicators(value: string) {
