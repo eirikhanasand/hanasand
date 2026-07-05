@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { type CSSProperties, useEffect, useState } from 'react'
 import { ServiceStatus } from '@/utils/status/getStatus'
 import { Activity, AlertCircle, BadgeCheck, BellRing, Binoculars, CheckCircle, Code2, HeartPulse, Inbox, Search, ShieldAlert, Timer, Webhook, XCircle } from 'lucide-react'
 import ErrorNotice from '@/components/error/errorNotice'
@@ -114,9 +114,10 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                                         }
                                     </span>
                                 </div>
-                                <StatusEvidenceCard
+                                <StatusSignalGauge
                                     label='Availability'
                                     status={check.status}
+                                    signal={uptimeSignal(check.uptime_30d)}
                                     value={formatUptime(check.uptime_30d)}
                                 />
                                 <p className='mt-5 text-xs font-semibold uppercase text-ui-muted'>{serviceLabel}</p>
@@ -193,15 +194,43 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
     )
 }
 
-function StatusEvidenceCard({ label, status, value }: { label: string, status: ServiceStatus['checks'][number]['status'], value: string }) {
+function StatusSignalGauge({ label, signal, status, value }: { label: string, signal: number | null, status: ServiceStatus['checks'][number]['status'], value: string }) {
+    const tone = status === 'up'
+        ? 'rgb(34 197 94)'
+        : status === 'degraded'
+            ? 'rgb(245 158 11)'
+            : 'rgb(239 68 68)'
+    const clamped = typeof signal === 'number' ? Math.max(0, Math.min(100, signal)) : null
+    const degrees = clamped === null ? 0 : clamped * 3.6
+    const needleDegrees = clamped === null ? -90 : (clamped * 1.8) - 90
+
     return (
-        <div className='mt-5 rounded-lg border border-ui-border bg-ui-raised p-3'>
-            <div className='flex items-center gap-2'>
-                <p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p>
-                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase ${statusToneClass(status)}`}>{status}</span>
+        <div className='mt-5 flex items-end gap-4 rounded-lg border border-ui-border bg-ui-raised p-3'>
+            <div
+                aria-label={`${label}: ${value}`}
+                className='relative grid h-24 w-24 shrink-0 place-items-center rounded-full border border-ui-border shadow-inner'
+                role='img'
+                style={{ background: `conic-gradient(${tone} ${degrees}deg, rgba(148, 163, 184, 0.18) 0deg)` }}
+            >
+                <div className='grid h-[4.5rem] w-[4.5rem] place-items-center rounded-full border border-ui-border bg-ui-panel'>
+                    <div
+                        className='absolute bottom-[2.9rem] left-1/2 h-7 w-0.5 origin-bottom rounded-full bg-ui-text shadow-sm'
+                        style={{ transform: `translateX(-50%) rotate(${needleDegrees}deg)` } as CSSProperties}
+                    />
+                    <div className='relative mt-4 text-center'>
+                        <div className='text-base font-semibold text-ui-text'>{clamped === null ? 'Unverified' : Math.round(clamped)}</div>
+                        <div className='text-[0.6rem] font-semibold uppercase text-ui-muted'>signal</div>
+                    </div>
+                </div>
             </div>
-            <p className='mt-2 text-xl font-semibold text-ui-text'>{value}</p>
-            <p className='mt-1 text-xs leading-5 text-ui-muted'>Reported by the latest public monitor check.</p>
+            <div className='min-w-0 pb-1'>
+                <div className='flex items-center gap-2'>
+                    <p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase ${statusToneClass(status)}`}>{status}</span>
+                </div>
+                <p className='mt-2 text-xl font-semibold text-ui-text'>{value}</p>
+                <p className='mt-1 text-xs leading-5 text-ui-muted'>Latest public monitor signal.</p>
+            </div>
         </div>
     )
 }
@@ -228,6 +257,11 @@ function formatUptime(value: string) {
     }
 
     return value || 'unverified'
+}
+
+function uptimeSignal(value: string) {
+    const numeric = Number(value)
+    return Number.isFinite(numeric) ? numeric : null
 }
 
 function isCoverageFallbackCheck(check: ServiceStatus['checks'][number]) {
