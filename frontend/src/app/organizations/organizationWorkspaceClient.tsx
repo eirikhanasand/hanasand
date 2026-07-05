@@ -1587,6 +1587,7 @@ function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organi
 
 function WorkspaceHealthStrip({ organization, bundle, canManage }: { organization: OrganizationSummary, bundle: OrgBundle, canManage: boolean }) {
     const activeMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active')
+    const activeTeammates = activeMembers.filter(member => member.role.toLowerCase() !== 'owner')
     const adminMembers = bundle.members.filter(member => member.status.toLowerCase() === 'active' && ['owner', 'admin'].includes(member.role.toLowerCase()))
     const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
     const activeTerms = bundle.alertTerms.filter(term => (term.status || 'active').toLowerCase() === 'active')
@@ -1600,10 +1601,10 @@ function WorkspaceHealthStrip({ organization, bundle, canManage }: { organizatio
         {
             id: 'access',
             label: 'Access',
-            value: activeMembers.length ? `${activeMembers.length} active` : 'Invite team',
+            value: activeTeammates.length ? `${activeTeammates.length} teammate${activeTeammates.length === 1 ? '' : 's'}` : pendingInvites.length ? 'Invite pending' : 'Invite team',
             detail: adminMembers.length ? `${adminMembers.length} admin${adminMembers.length === 1 ? '' : 's'} · ${pendingInvites.length} pending` : 'Add an owner or admin',
             href: '#members',
-            tone: adminMembers.length ? 'ready' : 'blocked',
+            tone: activeTeammates.length ? 'ready' : pendingInvites.length ? 'neutral' : 'blocked',
         },
         {
             id: 'watchlists',
