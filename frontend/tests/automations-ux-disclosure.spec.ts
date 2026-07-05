@@ -119,6 +119,7 @@ test('automation delivery templates do not ship developer-local destinations', a
     expect(pageClient).not.toContain('/Users/eirikhanasand/Desktop/webhooktoday.txt')
     expect(pageClient).not.toContain('const discordWebhookFileDestination')
     expect(pageClient).toContain('status: \'paused\'')
+    expect(pageClient).toContain('Optional')
     expect(pageClient).toContain('activeRouteSaveBlocker(draft)')
     expect(pageClient).toContain('Add a delivery destination or keep the route paused before saving.')
     expect(pageClient).toContain('matched watchlist term, alert summary, claim time, source label, source link, source count, review state, recommended action, and investigation pivots')
