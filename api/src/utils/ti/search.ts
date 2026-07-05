@@ -84,6 +84,7 @@ export interface TiActionabilityContract {
         sourceName: string
         provenance: string
         captureId?: string
+        sourceRequestId?: string
         sourceFamily?: 'actor_profile' | 'source_capture' | 'watchlist' | 'alert' | 'case' | 'geography' | 'indicator' | 'vendor_disclosure' | 'webhook' | 'public_ti'
         parserStatus?: 'parsed' | 'partial' | 'queued' | 'failed' | 'missing_capture' | 'public_reference'
         reportDate?: string
@@ -1577,18 +1578,21 @@ function formatPercent(value: number) {
 }
 
 function actionabilityForQuery(query: string, known?: KnownActorContext | null, sources = known?.sources ?? []): TiActionabilityContract {
-    const sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']> = (sources.length ? sources : known ? automaticActorSources(query) : []).map(source => ({
-        sourceId: source.id,
-        sourceName: source.name,
-        provenance: source.url || source.provenance,
-        captureId: source.captureId,
-        sourceRequestId: source.sourceRequestId,
-        sourceFamily: source.sourceFamily ?? actionabilitySourceFamily(source),
-        parserStatus: source.parserStatus ?? 'public_reference' as const,
-        reportDate: source.reportDate ?? known?.lastSeen,
-        lastCollectedAt: source.lastCollectedAt ?? known?.lastSeen,
-        confidence: known?.confidence ?? 0.58
-    })).filter(source => source.provenance)
+    const sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']> = (sources.length ? sources : known ? automaticActorSources(query) : []).map(source => {
+        const sourceFamily = source.sourceFamily ?? actionabilitySourceFamily(source)
+        return {
+            sourceId: source.id,
+            sourceName: source.name,
+            provenance: source.url || source.provenance,
+            captureId: source.captureId,
+            sourceRequestId: source.sourceRequestId ?? (sourceFamily === 'source_capture' ? source.id : undefined),
+            sourceFamily,
+            parserStatus: source.parserStatus ?? 'public_reference' as const,
+            reportDate: source.reportDate ?? known?.lastSeen,
+            lastCollectedAt: source.lastCollectedAt ?? known?.lastSeen,
+            confidence: known?.confidence ?? 0.58
+        }
+    }).filter(source => source.provenance)
     const watchlistCandidates = known ? watchlistCandidatesForKnownActor(query, known) : watchlistCandidatesForQuery(query)
     const hasEvidence = sourceProvenance.length > 0
     const alertDisposition: NonNullable<TiActionabilityContract['alertDisposition']> = watchlistCandidates.length
