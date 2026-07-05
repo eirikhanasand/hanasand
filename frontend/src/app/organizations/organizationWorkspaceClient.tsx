@@ -2452,7 +2452,10 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                     const destinationName = normalizeDestinationName(destination.name || '') || defaultDestinationName(currentKind)
                     const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
                     const destinationEnabled = ['active', 'configured'].includes(destinationStatus.toLowerCase())
-                    const latestDelivery = latestDeliveryForDestination(destination, deliveries)
+                    const destinationDeliveries = deliveriesForDestination(destination, deliveries)
+                    const latestDelivery = destinationDeliveries.sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
+                    const failedDeliveryCount = destinationDeliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error)).length
+                    const dryRunCount = destinationDeliveries.filter(delivery => delivery.dryRun).length
                     const draftUrl = draft?.url.trim() || ''
                     const draftUrlInvalid = Boolean(draftUrl) && !validDestinationUrl(draftUrl)
                     const draftNameDuplicate = draft ? destinationNameInUse(destinations, normalizeDestinationName(draft.name) || destinationName, destination.id) : false
@@ -2518,6 +2521,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                         <span className='truncate'>Type: {destination.kind || destination.type || 'webhook'}</span>
                                         <span className='truncate'>Destination: {destinationDisplayState(destination)}</span>
                                         <span className='truncate' data-org-destination-route='true'>Route: {routeLabel}</span>
+                                        <span className='truncate' data-org-destination-history-count='true'>History: {destinationDeliveries.length} event{destinationDeliveries.length === 1 ? '' : 's'} · {dryRunCount} test{dryRunCount === 1 ? '' : 's'} · {failedDeliveryCount} failed</span>
                                     </span>
                                     <DestinationDeliverySummary delivery={latestDelivery} />
                                     {latestDelivery && <DeliveryPayloadPreview delivery={latestDelivery} compact />}
