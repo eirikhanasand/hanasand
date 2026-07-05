@@ -3960,15 +3960,18 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
     const delivery = item ? latestDeliveryForWatchlist(item, bundle.deliveries) : null
     const alertCount = item ? alertsForWatchlist(item, bundle.alerts).length : 0
     const matchReason = item ? matchReasonForRecord(item.id, bundle.deliveries) : ''
+    const activeAlertTerm = item ? activeTermForWatchlist(item, bundle.alertTerms) : undefined
     return compactMetadata([
         ['Watchlist', item?.value || compactReference(item?.id || subject.id, 'watchlist')],
         ['Term', item?.value],
         ['Status', item?.status],
+        ['Alert term', activeAlertTerm ? 'Active' : item?.status?.toLowerCase() === 'active' ? 'Pending' : 'Excluded'],
         ['Owner', organizationMemberLabel(item?.updatedBy || item?.createdBy, bundle.members)],
         ['Destination', item ? destinationDisplayState(item) : destinationDisplayState(delivery)],
         ['Endpoint', sanitizeOrganizationDisplayCopy(item?.webhookEndpointHint) || compactReference(item?.webhookEndpointHash, 'route')],
-        ['Match', matchReason],
-        ['Ref', compactReference(item?.alertGenerationRef || item?.id || subject.id, 'watch')],
+        ['Match', activeAlertTerm?.matchReason || matchReason],
+        ['Ref', compactReference(activeAlertTerm?.alertGenerationRef || item?.alertGenerationRef || item?.id || subject.id, 'watch')],
+        ['Provenance', compactReference(activeAlertTerm?.provenanceHash, 'hash')],
         ['Last delivery', delivery?.status],
         ['Alerts', String(alertCount)],
     ])
