@@ -2114,7 +2114,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, members, canMa
                             const canResend = canManage && inviteActionAllowed(invite, 'resend') && !busy
                             const canRevoke = canManage && inviteActionAllowed(invite, 'revoke') && !busy
                             const copyReason = !canManage ? 'Owner or admin required' : !inviteLink(invite) ? 'Invite link unavailable' : !inviteActionAllowed(invite, 'copy') ? 'Pending invite required' : ''
-                            const resendReason = !canManage ? 'Owner or admin required' : !inviteActionAllowed(invite, 'resend') ? 'Invite already accepted' : ''
+                            const resendReason = !canManage ? 'Owner or admin required' : !inviteActionAllowed(invite, 'resend') ? 'Invite closed' : ''
                             const revokeReason = !canManage ? 'Owner or admin required' : !inviteActionAllowed(invite, 'revoke') ? 'Invite already closed' : ''
                             const linkState = !canManage ? 'restricted' : linkAvailable ? 'available' : 'closed'
                             const selected = selectedSubject.type === 'invite' && selectedSubject.id === invite.id
@@ -4374,7 +4374,7 @@ function isEmailLike(value: string | undefined): value is string {
 function inviteActionAllowed(invite: OrganizationInvite, action: 'copy' | 'resend' | 'revoke') {
     const status = invite.status.toLowerCase()
     if (action === 'copy') return status === 'pending'
-    if (action === 'resend') return status !== 'accepted'
+    if (action === 'resend') return status === 'pending' || status === 'expired'
     return status === 'pending'
 }
 
