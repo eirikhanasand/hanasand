@@ -2322,6 +2322,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                     const draftNameDuplicate = draft ? destinationNameInUse(destinations, normalizeDestinationName(draft.name) || destinationName, destination.id) : false
                     const draftChanged = draft ? destinationEditChanged(destination, draft) : false
                     const selected = selectedSubject.type === 'destination' && selectedSubject.id === destination.id
+                    const testDisabledReason = !canManage ? 'Owner or admin required' : ''
                     return (
                         <div
                             role='button'
@@ -2382,7 +2383,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                     <DestinationDeliverySummary delivery={latestDelivery} />
                                     {latestDelivery && <DeliveryPayloadPreview delivery={latestDelivery} compact />}
                                     <span className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
-                                        <button type='button' className={secondaryButtonClass} disabled={Boolean(busy)} onClick={() => onTest(destination)}>
+                                        <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} title={testDisabledReason || undefined} aria-label={testDisabledReason ? `Test destination: ${testDisabledReason}` : 'Test destination'} onClick={() => onTest(destination)}>
                                             <RefreshCw className='h-4 w-4' />
                                             Test
                                         </button>

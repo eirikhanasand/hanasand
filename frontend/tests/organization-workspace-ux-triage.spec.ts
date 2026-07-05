@@ -199,6 +199,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('onRoleChange={(member, role) => void changeMemberRole(member, role)}')
     expect(page).toContain('onTest={destination => void testSavedDestination(destination)}')
     expect(page).toContain('onDelete={destination => void deleteSavedDestination(destination)}')
+    expect(page).toContain('const testDisabledReason = !canManage ? \'Owner or admin required\' : \'\'')
+    expect(page).toContain('disabled={!canManage || Boolean(busy)} title={testDisabledReason || undefined}')
     expect(page).toContain('admin controls enabled')
     expect(page).toContain('read-only access')
     expect(page).toContain('data-org-permission-strip=\'true\'')
