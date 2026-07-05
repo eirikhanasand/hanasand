@@ -85,6 +85,9 @@ export type DwmOperationsSnapshot = {
         captureCount: number
         watchlistMatchCount: number
     }
+    latestCaptures?: Array<{
+        matchedWatchTerms?: string[]
+    }>
     latestRun?: {
         status: string
         updatedAt: string
@@ -1569,6 +1572,7 @@ export function buildOrgOperatingContext(input: {
     const latestDelivery = (input.deliveries || [])[0]
     const liveAlertIds = new Set(input.liveAlertIds || [])
     const dashboardAlertDelivery = (input.deliveries || []).find(item => liveAlertIds.has(item.alertId) && item.status !== 'failed' && item.status !== 'skipped')
+    const watchlistMatchCount = derivedWatchlistMatchCount(input.operations)
     const blockedReasons = [
         !input.backendConfigured ? 'TI scraper organization stream is syncing.' : '',
         !organization ? 'Organization context is syncing.' : '',
@@ -1592,7 +1596,7 @@ export function buildOrgOperatingContext(input: {
             sourceCount: input.operations.counts.sourceCount,
             activeSourceCount: input.operations.counts.activeSourceCount,
             captureCount: input.operations.counts.captureCount,
-            watchlistMatchCount: input.operations.counts.watchlistMatchCount,
+            watchlistMatchCount,
             latestRunStatus: input.operations.latestRun?.status,
             latestRunAt: input.operations.latestRun?.updatedAt,
         } : undefined,
@@ -1627,7 +1631,7 @@ export function buildOrgOperatingContext(input: {
                 sourceCount: input.operations.counts.sourceCount,
                 activeSourceCount: input.operations.counts.activeSourceCount,
                 captureCount: input.operations.counts.captureCount,
-                watchlistMatchCount: input.operations.counts.watchlistMatchCount,
+                watchlistMatchCount,
                 latestRunStatus: input.operations.latestRun?.status,
                 latestRunAt: input.operations.latestRun?.updatedAt,
             } : undefined,
@@ -3213,7 +3217,7 @@ export function buildReadinessCases(input: {
                 captureMode: 'operator view',
                 redactionState: 'customer safe',
                 contentHash: input.operations?.latestRun?.updatedAt || 'dwm.operations',
-                excerpt: input.operations ? `${input.operations.counts.captureCount} captures, ${input.operations.counts.watchlistMatchCount} watchlist matches.` : 'Source-health operations are syncing.',
+                excerpt: input.operations ? `${input.operations.counts.captureCount} captures, ${derivedWatchlistMatchCount(input.operations)} watchlist matches.` : 'Source-health operations are syncing.',
                 observedAt: input.operations?.latestRun?.updatedAt || now,
                 provenance: 'DWM operations ledger',
                 confidence: input.operations ? 88 : 60,
@@ -3570,6 +3574,11 @@ function alertsHref(scope: OperatorScope) {
         params.set('tenantId', scope.tenantId)
     }
     return `/api/dwm/alerts?${params.toString()}`
+}
+
+function derivedWatchlistMatchCount(operations?: DwmOperationsSnapshot | null) {
+    if (!operations) return 0
+    return operations.counts.watchlistMatchCount || new Set((operations.latestCaptures ?? []).flatMap(capture => capture.matchedWatchTerms ?? []).filter(Boolean)).size
 }
 
 function actionScope(scope: OperatorScope) {

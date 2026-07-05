@@ -83,8 +83,13 @@ const operations = {
         sourceCount: 12,
         activeSourceCount: 9,
         captureCount: 42,
-        watchlistMatchCount: 3,
+        watchlistMatchCount: 0,
     },
+    latestCaptures: [
+        { matchedWatchTerms: ['acme.com'] },
+        { matchedWatchTerms: ['acme.com', 'vpn.acme.com'] },
+        { matchedWatchTerms: ['Acme Payments'] },
+    ],
     latestRun: {
         status: 'completed',
         updatedAt: '2026-06-28T10:11:00.000Z',
@@ -1326,6 +1331,9 @@ if (watchlistReadinessCase.relatedLinks.find(link => link.href === '/api/dwm/wat
     throw new Error('Expected watchlist readiness links to include the scoped watchlists API.')
 }
 const sourceCoverageCase = expectWorkbenchCase(cases, 'source_coverage')
+if (!sourceCoverageCase.evidence.some(item => item.excerpt.includes('42 captures, 3 watchlist matches.'))) {
+    throw new Error('Expected source coverage to derive watchlist matches from latest captures when the operations count is stale.')
+}
 const sourceInventoryHref = '/api/ti/scraper/control?q=org_acme&organizationId=org_acme'
 if (sourceCoverageCase.actions?.find(action => action.id === 'inspect_source_inventory')?.href !== sourceInventoryHref) {
     throw new Error('Expected source coverage to expose the scoped source inventory drill-in.')
