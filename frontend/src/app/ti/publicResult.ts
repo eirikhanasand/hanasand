@@ -39,7 +39,13 @@ export function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): 
             name: source.name,
             type: source.type,
             provenance: source.provenance ? publicTiText(source.provenance) : undefined,
-            url: source.url
+            url: source.url,
+            captureId: source.captureId,
+            sourceRequestId: source.sourceRequestId,
+            sourceFamily: source.sourceFamily,
+            parserStatus: source.parserStatus,
+            reportDate: source.reportDate,
+            lastCollectedAt: source.lastCollectedAt
         })),
         notes: result.notes,
         actorIntelligence: sanitizeActorIntelligence(result.actorIntelligence),

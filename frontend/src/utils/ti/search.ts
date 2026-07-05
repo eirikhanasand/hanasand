@@ -59,6 +59,12 @@ export interface TiSearchResponse {
         type: string
         provenance?: string
         url?: string
+        captureId?: string
+        sourceRequestId?: string
+        sourceFamily?: NonNullable<NonNullable<TiActionabilityContract['sourceProvenance']>[number]['sourceFamily']>
+        parserStatus?: NonNullable<NonNullable<TiActionabilityContract['sourceProvenance']>[number]['parserStatus']>
+        reportDate?: string
+        lastCollectedAt?: string
     }>
     notes: string[]
     operationalStatus?: TiOperationalStatus
