@@ -88,7 +88,7 @@ const operatorPaths = [
     },
     {
         label: 'Triage exposure',
-        state: 'DWM queue',
+        state: 'Review',
         value: 'Review matched source signals with evidence, freshness, confidence, and case context.',
         href: '/dashboard/dwm',
     },
@@ -380,7 +380,7 @@ function HomeOperatorPaths() {
             <div className='landing-surface-divider grid gap-2 border-b px-4 py-4 md:grid-cols-[1fr_auto] md:items-end' data-home-operator-paths-header='true'>
                 <div>
                     <p className='text-xs font-semibold uppercase text-ui-primary'>Operator paths</p>
-                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Core DWM actions in the console</h2>
+                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Core exposure actions in the console</h2>
                 </div>
                 <Link
                     href='/dashboard'
