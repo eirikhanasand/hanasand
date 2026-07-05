@@ -3870,12 +3870,16 @@ function selectedSubjectLabel(subject: ActivitySubject, organization: Organizati
 
 function selectedContextRows(subject: ActivitySubject, organization: OrganizationSummary, bundle: OrgBundle) {
     if (subject.type === 'organization') {
+        const closedMemberCount = bundle.members.filter(member => ['removed', 'revoked', 'inactive'].includes(member.status.toLowerCase())).length
         return compactMetadata([
             ['Org', organizationDisplayId(organization)],
             ['Workspace', sanitizeOrganizationDisplayCopy(organization.status || organization.slug || organization.id) || 'Active workspace'],
             ['Role', organization.role || 'member'],
             ['Members', String(bundle.members.length)],
+            ['Closed access', closedMemberCount ? String(closedMemberCount) : undefined],
+            ['Pending invites', String(bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending').length)],
             ['Watchlists', String(bundle.watchlists.length)],
+            ['Active terms', String(bundle.watchlists.filter(item => item.status === 'active').length)],
             ['Destinations', String(bundle.webhooks.length)],
         ])
     }
