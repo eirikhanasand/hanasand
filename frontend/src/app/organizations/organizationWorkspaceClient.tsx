@@ -1746,7 +1746,7 @@ function PermissionStrip({ role, canManage, hasWatchlists, hasDestination }: { r
     ] as const
     const actionCount = rows.filter(row => row.ready).length
     return (
-        <details className='group rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-permission-strip='true' aria-label='Organization permission summary'>
+        <details open className='group rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-permission-strip='true' aria-label='Organization permission summary'>
             <summary className='flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/30 dark:text-ui-text dark:hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
                 <span className='inline-flex min-w-0 items-center gap-2'>
                     <ShieldCheck className='h-4 w-4 shrink-0 text-ui-primary' />
@@ -2639,12 +2639,12 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                                         <div className='flex flex-wrap gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                             {canManage ? (
                                                 <>
-                                                    <button type='button' aria-label='Edit watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [item.id]: { kind: item.kind, value: item.value, notes: item.notes || '' } }))}>
+                                                    <button type='button' aria-label='Edit watchlist term' title='Edit watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [item.id]: { kind: item.kind, value: item.value, notes: item.notes || '' } }))}>
                                                         <Pencil className='h-4 w-4' />
                                                     </button>
-                                                    {item.status === 'active' && <button type='button' aria-label='Pause watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'pause')}><Pause className='h-4 w-4' /></button>}
-                                                    {item.status === 'paused' && <button type='button' aria-label='Resume watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'resume')}><Play className='h-4 w-4' /></button>}
-                                                    {item.status === 'archived' && <button type='button' aria-label='Restore watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'restore')}><Archive className='h-4 w-4' /></button>}
+                                                    {item.status === 'active' && <button type='button' aria-label='Pause watchlist term' title='Pause watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'pause')}><Pause className='h-4 w-4' /></button>}
+                                                    {item.status === 'paused' && <button type='button' aria-label='Resume watchlist term' title='Resume watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'resume')}><Play className='h-4 w-4' /></button>}
+                                                    {item.status === 'archived' && <button type='button' aria-label='Restore watchlist term' title='Restore watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'restore')}><Archive className='h-4 w-4' /></button>}
                                                     {item.status !== 'archived' && <ConfirmActionButton ariaLabel='Archive watchlist term' disabled={Boolean(busy)} onConfirm={() => onDelete(item)} icon={<Trash2 className='h-4 w-4' />} />}
                                                 </>
                                             ) : (
