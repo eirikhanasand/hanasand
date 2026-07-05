@@ -830,6 +830,9 @@ export default function OrganizationWorkspaceClient() {
             if (rowKey) {
                 setRowMessages(current => ({ ...current, [rowKey]: { ok: false, text: detail } }))
             }
+            if (actionSubject) {
+                selectActivitySubject(actionSubject)
+            }
             setActivity(current => [{
                 id: `${label}-${Date.now()}`,
                 at: new Date().toISOString(),
