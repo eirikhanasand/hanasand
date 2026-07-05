@@ -74,7 +74,7 @@ export function Composer({
         <div className='fixed inset-0 z-1400 grid place-items-center bg-ui-canvas/75 p-4 backdrop-blur-sm'>
             <form
                 data-testid='mail-compose-form'
-                className='w-full max-w-3xl rounded-[28px] border border-ui-border bg-ui-panel p-3 shadow-xl backdrop-blur-2xl sm:p-4'
+                className='w-full max-w-3xl rounded-lg border border-ui-border bg-ui-panel p-3 shadow-xl backdrop-blur-2xl sm:p-4'
                 onSubmit={async (event) => {
                     event.preventDefault()
                     setSubmitting(true)
@@ -133,7 +133,7 @@ export function Composer({
                     />
                     <textarea
                         data-testid='mail-compose-body'
-                        className='min-h-56 w-full rounded-[20px] border border-ui-border bg-ui-raised px-3 py-3 text-[13px] leading-6 text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:bg-ui-panel sm:min-h-64'
+                        className='min-h-56 w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-3 text-[13px] leading-6 text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:bg-ui-panel sm:min-h-64'
                         placeholder='Write your message...'
                         value={state.body}
                         onChange={(event) => patch({ body: event.target.value })}
