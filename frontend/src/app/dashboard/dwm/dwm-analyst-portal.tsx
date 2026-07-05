@@ -596,26 +596,32 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
                 </span>
             </div>
             <div className='border-t border-ui-border px-4 py-3'>
-                <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
                     <p className='text-xs leading-5 text-ui-muted'>Use this workflow when a source match needs to become a customer case and delivery.</p>
                     <a href='#dwm-workflow-actions' className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                         Run workflow
                     </a>
                 </div>
-                <div className='grid grid-cols-2 gap-x-3 gap-y-2 lg:grid-cols-3 2xl:grid-cols-6'>
-                    {cells.map(cell => (
-                        <div key={cell.label} className='min-w-0 border-l border-ui-border py-1 pl-2'>
-                            <div className='flex items-center justify-between gap-2'>
-                                <p className='truncate text-[10px] font-semibold uppercase text-ui-muted'>{cell.label}</p>
-                                <span className={`h-2 w-2 shrink-0 rounded-full ${cell.tone === 'ready' ? 'bg-ui-success' : cell.tone === 'blocked' ? 'bg-ui-warning' : 'bg-ui-primary'}`} />
+                <details className='mt-3 rounded-lg border border-ui-border bg-ui-panel p-2' data-dwm-workflow-path='true'>
+                    <summary className='flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 px-1 text-xs font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>
+                        <span>Workflow path</span>
+                        <span className='rounded-full border border-ui-border px-2 py-0.5 text-[10px] uppercase text-ui-muted'>{cells.length} steps</span>
+                    </summary>
+                    <div className='mt-2 grid grid-cols-2 gap-x-3 gap-y-2 lg:grid-cols-3 2xl:grid-cols-6'>
+                        {cells.map(cell => (
+                            <div key={cell.label} className='min-w-0 border-l border-ui-border py-1 pl-2'>
+                                <div className='flex items-center justify-between gap-2'>
+                                    <p className='truncate text-[10px] font-semibold uppercase text-ui-muted'>{cell.label}</p>
+                                    <span className={`h-2 w-2 shrink-0 rounded-full ${cell.tone === 'ready' ? 'bg-ui-success' : cell.tone === 'blocked' ? 'bg-ui-warning' : 'bg-ui-primary'}`} />
+                                </div>
+                                <div className='mt-1 flex min-w-0 items-end justify-between gap-2'>
+                                    <p className='truncate text-lg font-semibold text-ui-text' title={cell.value}>{cell.value}</p>
+                                    <p className='truncate pb-0.5 text-xs text-ui-muted' title={cell.detail}>{cell.detail}</p>
+                                </div>
                             </div>
-                            <div className='mt-1 flex min-w-0 items-end justify-between gap-2'>
-                                <p className='truncate text-lg font-semibold text-ui-text' title={cell.value}>{cell.value}</p>
-                                <p className='truncate pb-0.5 text-xs text-ui-muted' title={cell.detail}>{cell.detail}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                </details>
             </div>
         </section>
     )
