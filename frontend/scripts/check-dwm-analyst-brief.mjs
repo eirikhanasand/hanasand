@@ -104,6 +104,10 @@ assert.ok(workflowSource.includes('webhookConfigured ? \'staged\' : \'route need
 assert.ok(!workflowSource.includes('webhookConfigured ? \'staged\' : \'none\''), 'DWM workflow should not render dead none labels for webhook routing.')
 assert.ok(source.includes('row.newest ? relativeTimeLabel(row.newest) : \'waiting for capture\''), 'DWM source coverage should explain missing freshness as capture state.')
 assert.ok(!source.includes('row.newest ? relativeTimeLabel(row.newest) : \'none\''), 'DWM source coverage should not render dead none labels for freshness.')
+assert.ok(source.includes('workflowContext.hasWebhookRoute ? \'test available\' : \'destination needed\''), 'DWM selected alert webhook state should guide destination setup.')
+assert.ok(!source.includes('workflowContext.hasWebhookRoute ? \'test available\' : \'not configured\''), 'DWM selected alert webhook state should not render setup as not configured.')
+assert.ok(source.includes('return \'no retry scheduled\''), 'DWM retry state should use delivery workflow language.')
+assert.ok(!source.includes('return \'none\''), 'DWM retry state should not render dead none labels.')
 
 for (const token of [
     'data-dwm-workflow-runbook',

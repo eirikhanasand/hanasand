@@ -1181,7 +1181,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
         {
             id: 'delivery',
             label: 'Webhook',
-            value: latestDelivery ? stateLabel(latestDelivery.status) : workflowContext.hasWebhookRoute ? 'test available' : 'not configured',
+            value: latestDelivery ? stateLabel(latestDelivery.status) : workflowContext.hasWebhookRoute ? 'test available' : 'destination needed',
             detail: latestDelivery ? `${relativeTimeLabel(latestDelivery.attemptedAt)} · ${deliveryDestinationState(latestDelivery)}` : workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : 'Customer send blocked: add or test a destination before sending.',
             state: latestDelivery?.status === 'delivered' || latestDelivery?.status === 'dry_run' ? 'ready' : workflowContext.hasWebhookRoute ? 'action' : 'blocked',
         },
@@ -2707,7 +2707,7 @@ function retryStateLabel(delivery: DeliveryItem) {
     if (delivery.status === 'failed') return delivery.errorClass ? stateLabel(delivery.errorClass) : 'review failure'
     if (delivery.status === 'skipped') return 'not eligible'
     if (delivery.status === 'dry_run') return 'test only'
-    return 'none'
+    return 'no retry scheduled'
 }
 
 function organizationDeliveryWorkspaceHref(input: { organizationId?: string, alertId?: string, caseId?: string, delivery?: DeliveryItem }) {
