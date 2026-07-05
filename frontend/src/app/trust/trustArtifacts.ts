@@ -196,6 +196,17 @@ export const trustArtifacts: TrustArtifact[] = [
                 body: 'A customer should identify the organization owner, admin users, alert reviewers, webhook/API owner, procurement owner, and security-review owner before production use.',
             },
             {
+                title: 'Procurement intake checklist',
+                body: 'A review request is actionable when it includes the deployment facts needed to decide fit, contract scope, and launch sequence.',
+                items: [
+                    'Organization name, buyer owner, security-review owner, and vendor portal or questionnaire link.',
+                    'Watched companies, domains, suppliers, portfolio size, and first-month success criteria.',
+                    'Delivery route: email, webhook, API, SIEM/SOAR, ticketing, review links, or manual reporting.',
+                    'Required identity controls: SSO/SAML/OIDC, SCIM, MFA policy, role model, and offboarding expectations.',
+                    'Procurement deadline, DPA jurisdiction, retention expectations, support/SLA targets, and escalation contacts.',
+                ],
+            },
+            {
                 title: 'Identity requirements',
                 body: 'Password accounts and role-aware organization administration are available today. SSO/SAML/OIDC, SCIM provisioning, MFA policy enforcement, and advanced lifecycle controls are not claimed as generally available and should be scoped before purchase.',
             },
@@ -206,6 +217,7 @@ export const trustArtifacts: TrustArtifact[] = [
                 ['Organization owner', 'Admin/member model exists', 'Name the accountable customer admin'],
                 ['Alert reviewer', 'Alerts and cases can be routed to product surfaces', 'Name SOC/vendor-risk owner and escalation path'],
                 ['Delivery route', 'Email, API, and webhook paths are represented', 'Choose destination and verify payload fields'],
+                ['Procurement intake', 'Company is required for enterprise/security review contact requests', 'Send owner, portal, deadline, DPA, identity, retention, and support requirements'],
                 ['Support/SLA', 'By request for enterprise terms', 'Agree response targets and notification window'],
                 ['SSO/SCIM', 'Scoped deal, not generally available', 'Decide whether rollout depends on implementation'],
             ],

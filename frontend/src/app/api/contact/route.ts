@@ -42,6 +42,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Message must be at least 20 characters.' }, { status: 400 })
     }
 
+    const requiresCompany = securityReview || ['enterprise', 'procurement', 'security', 'enterprise-procurement'].includes(intent.toLowerCase()) || plan === 'managed-onboarding'
+    if (requiresCompany && !company) {
+        return NextResponse.json({ error: 'Company is required for enterprise, procurement, and security review requests.' }, { status: 400 })
+    }
+
     const ticketId = `HS-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomUUID().slice(0, 8).toUpperCase()}`
     const receivedAt = new Date().toISOString()
     const record = {

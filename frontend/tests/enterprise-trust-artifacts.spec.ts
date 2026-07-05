@@ -15,7 +15,7 @@ const artifacts = [
     },
     {
         path: '/trust/sla-onboarding',
-        required: [/Enterprise onboarding/i, /Support and SLA/i, /SSO\/SAML\/OIDC/i, /SCIM/i],
+        required: [/Enterprise onboarding/i, /Support and SLA/i, /SSO\/SAML\/OIDC/i, /SCIM/i, /Procurement intake checklist/i, /vendor portal or questionnaire link/i],
     },
 ] as const
 

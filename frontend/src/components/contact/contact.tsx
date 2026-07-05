@@ -57,7 +57,11 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
     const validationSchema = Yup.object().shape({
         name: Yup.string().required('Name is required'),
         email: Yup.string().email('Invalid email').required('Email is required'),
-        company: Yup.string(),
+        company: Yup.string().when('securityReview', {
+            is: true,
+            then: schema => schema.required('Company is required for security review requests'),
+            otherwise: schema => schema,
+        }),
         type: Yup.string().min(5, 'Subject must be at least 5 characters').required('Subject is required'),
         message: Yup.string().min(20, 'Message must be at least 20 characters').required('Message is required'),
     })
@@ -218,6 +222,7 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                             {...formik.getFieldProps('company')}
                             placeholder='Acme Security'
                             autoComplete='organization'
+                            required={formik.values.securityReview}
                         />
                     </Field>
 
