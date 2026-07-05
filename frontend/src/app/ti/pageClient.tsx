@@ -265,7 +265,7 @@ function Results({ result }: { result: TiSearchResponse }) {
         { icon: <Activity className='h-3.5 w-3.5' />, label: 'Freshness', value: formatDate(result.lastSeen || result.generatedAt) },
         { icon: <Inbox className='h-3.5 w-3.5' />, label: 'Open reviews', value: `${queueCounts.open} open` },
         { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Alert context', value: alertContextValue },
-        { icon: <Database className='h-3.5 w-3.5' />, label: 'Collection gaps', value: `${openGapCount} open` },
+        { icon: <Database className='h-3.5 w-3.5' />, label: 'Source questions', value: `${openGapCount} open` },
     ]
     const hasStableActorProfile = Boolean(actorIntel.attribution || actorIntel.motivation.length || victimObservations.length || actorIntel.sourceProvenance.length)
     const actorProfileStatus = hasStableActorProfile ? 'Current profile' : humanResultStatus(result.status)

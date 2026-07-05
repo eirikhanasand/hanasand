@@ -29,7 +29,7 @@ test.describe('public threat actor profile', () => {
         await expect(body).toContainText('Government and policy organizations')
         await expect(body).toContainText('Russia-linked SVR/APT29 activity in public government, vendor, and incident reporting')
         await expect(body).toContainText('Latest activity')
-        await expect(body).toContainText('Sources used')
+        await expect(body).toContainText('Source context')
 
         const geoBox = await page.locator('[data-ti-geo-subordinate="true"]').boundingBox()
         const activityBox = await page.locator('#ti-activity').boundingBox()
