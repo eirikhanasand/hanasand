@@ -3230,7 +3230,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, 
                         primary: alert.title || compactReference(alert.id, 'alert') || 'Alert',
                         secondary: [alert.severity || 'severity', alert.status || 'status', compactReference(alert.watchlistItemId || alert.watchlistItemIds?.[0] || alert.watchlistIds?.[0], 'watchlist'), matchReason ? `Match: ${matchReason}` : undefined].filter(Boolean).join(' · '),
                     }
-                })} empty='Alerts appear after a live capture matches an active org watchlist term.' />
+                })} empty='Alerts appear after a live capture matches an active org watchlist term.' rowPrefix='alert-record' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Cases' route={`/api/cases?organizationId=${encodeURIComponent(organizationId)}`} rows={cases.map(item => {
                     const matchReason = matchReasonForRecord(item.id, deliveries)
                     return {
@@ -3238,7 +3238,7 @@ function ScopePanel({ alertTerms, alerts, cases, deliveries, members, webhooks, 
                         primary: item.title || compactReference(item.id, 'case') || 'Case',
                         secondary: [item.status || 'status', organizationMemberLabel(item.assignedOwner, members), matchReason ? `Match: ${matchReason}` : undefined].filter(Boolean).join(' · '),
                     }
-                })} empty='Cases appear after an alert is opened from exposure monitoring.' />
+                })} empty='Cases appear after an alert is opened from exposure monitoring.' rowPrefix='case-record' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibility} empty='Visibility decisions appear after alerts are reviewed or opened as cases.' />
                 <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={webhooks.map(destination => ({
                     id: destination.id,
@@ -3377,7 +3377,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
     )
 }
 
-function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, title: string, route: string, rows: Array<{ id: string, primary: string, secondary: string }>, empty: string }) {
+function ScopeColumn({ icon, title, route, rows, empty, rowPrefix }: { icon: ReactNode, title: string, route: string, rows: Array<{ id: string, primary: string, secondary: string }>, empty: string, rowPrefix?: string }) {
     const [copyStatus, setCopyStatus] = useState<RowMessage | undefined>()
     const [showAll, setShowAll] = useState(false)
     const showRecordActions = !route.startsWith('/api/')
@@ -3409,7 +3409,7 @@ function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, tit
             <div className='mt-3 grid gap-2'>
                 {rows.length === 0 && <EmptyLine text={empty} />}
                 {visibleRows.map(row => (
-                    <div key={row.id} className='rounded-md bg-ui-raised p-2 dark:bg-ui-canvas'>
+                    <div key={row.id} id={rowPrefix ? `${rowPrefix}-${encodeURIComponent(row.id)}` : undefined} className='scroll-mt-24 rounded-md bg-ui-raised p-2 dark:bg-ui-canvas'>
                         <p className='truncate text-sm font-semibold text-ui-text dark:text-ui-text'>{sanitizeOrganizationDisplayCopy(row.primary) || row.primary}</p>
                         <p className='truncate text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(row.secondary) || row.secondary}</p>
                     </div>
@@ -4128,6 +4128,7 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         const watchlistId = selectedSubjectWatchlistId(subject, bundle)
         return [
             { label: 'Alert', href: `/dashboard/ti/workbench?alertId=${alertId}&organizationId=${organizationId}` },
+            { label: 'Record', href: `#alert-record-${alertId}` },
             ...(watchlistId ? [{ label: 'Watchlist', href: `#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
             { label: 'Delivery activity', href: '#delivery-history' },
             { label: 'Organization activity', href: '#audit' },
@@ -4138,6 +4139,7 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         const watchlistId = selectedSubjectWatchlistId(subject, bundle)
         return [
             { label: 'Case', href: `/dashboard/dwm/cases/${caseId}?organizationId=${organizationId}` },
+            { label: 'Record', href: `#case-record-${caseId}` },
             ...(watchlistId ? [{ label: 'Watchlist', href: `#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
             { label: 'Delivery activity', href: '#delivery-history' },
             { label: 'Organization activity', href: '#audit' },
