@@ -1173,9 +1173,9 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     const toolAnalyses = toolCaptures.map(capture => capture.toolAnalysis).filter(Boolean) as SandboxToolAnalysis[]
     const virusTotal = toolAnalyses.find(item => item.toolKind === 'virustotal')
     const urlquery = toolAnalyses.find(item => item.toolKind === 'urlquery')
-    const suspiciousCaptures = captures.filter(capture => capture.evidence?.verdict === 'suspicious')
-    const obfuscatedScripts = captures.flatMap(capture => capture.evidence?.obfuscatedScripts || [])
-    const deobfuscationTasks = captures.flatMap(capture => capture.evidence?.deobfuscationTasks || [])
+    const suspiciousCaptures = pageCaptures.filter(capture => capture.evidence?.verdict === 'suspicious')
+    const obfuscatedScripts = pageCaptures.flatMap(capture => capture.evidence?.obfuscatedScripts || [])
+    const deobfuscationTasks = pageCaptures.flatMap(capture => capture.evidence?.deobfuscationTasks || [])
     const suspiciousDeobfuscationTasks = deobfuscationTasks.filter(task => task.assessment === 'suspicious')
     const webcrackLoads = captures.flatMap(capture => capture.webcrackLoad ? [capture.webcrackLoad] : [])
     const webcrackLoaded = webcrackLoads.filter(load => load.loaded).length

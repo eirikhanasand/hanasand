@@ -817,7 +817,13 @@ async function dismissCookieOverlays(page: Page) {
         'button:has-text("Close")',
         'button:has-text("Godta")',
         'button:has-text("Godta alle")',
+        'button:has-text("Godta og fortsett")',
+        'button:has-text("Godta og lukk")',
         'button:has-text("Accepter")',
+        'button:has-text("Aksepter")',
+        'button:has-text("Tillat alle")',
+        'button:has-text("Lagre og fortsett")',
+        'button:has-text("Lagre valg")',
         'button:has-text("Tout accepter")',
         'button:has-text("Only Essential")',
         'button:has-text("No thanks")',
@@ -925,7 +931,7 @@ async function dismissCookieOverlays(page: Page) {
             }
             return candidate.textContent || ''
         }
-        const isCookieAction = (value: string) => /^(accept|agree|allow|got it|continue|ok|understand|close|dismiss|not now|reject|decline|godta|accepter|enable|essential|required|manage|customize|settings|preference|configure|save|save and continue|proceed|i agree)/.test(value)
+        const isCookieAction = (value: string) => /^(accept|agree|allow|got it|continue|ok|understand|close|dismiss|not now|reject|decline|godta|aksepter|accepter|tillat|lagre|enable|essential|required|manage|customize|settings|preference|configure|save|save and continue|proceed|i agree)/.test(value)
             && /(cookie|consent|privacy|gdpr|tracking|marketing|analytics|preferences)/.test(value)
         const isCookieLabel = (value: string) => /(cookie|consent|privacy|gdpr|tracking|analytics|preferences|opt.?out|data collection|essential)/.test(value)
         const target = candidates.find(candidate => {
@@ -969,7 +975,7 @@ async function dismissCookieOverlays(page: Page) {
         ))
         const toFlatText = (value: string | null | undefined) => (value || '').trim().toLowerCase()
         const hasCookieContext = (value: string) => /(cookie|consent|privacy|gdpr|tracking|analytics|preferences|data collection)/i.test(value)
-        const hasCookieAction = (value: string) => /^(accept|agree|allow|got it|continue|ok|understand|close|dismiss|not now|reject|decline|godta|accepter|enable|save|save and continue|proceed|i agree)/i.test(value)
+        const hasCookieAction = (value: string) => /^(accept|agree|allow|got it|continue|ok|understand|close|dismiss|not now|reject|decline|godta|aksepter|accepter|tillat|lagre|enable|save|save and continue|proceed|i agree)/i.test(value)
 
         const candidate = nodes.find((node) => {
             const text = toFlatText(node.textContent)
@@ -1237,7 +1243,7 @@ async function waitForProviderCaptureReadiness(page: Page, tool: { id?: string; 
             const text = (button.textContent || '').toLowerCase()
             const value = (button as HTMLInputElement).getAttribute('value')?.toLowerCase() || ''
             const combined = `${text} ${value}`
-            return /accept|allow|ok|continue|agree|godta|accepter|proceed|got it|close|dismiss|manage/.test(combined)
+            return /accept|allow|ok|continue|agree|godta|aksepter|accepter|tillat|lagre|proceed|got it|close|dismiss|manage/.test(combined)
         })
 
         return likelyActions.some((button) => {
