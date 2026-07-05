@@ -4116,6 +4116,14 @@ function inviteStatusCounts(invites: OrganizationInvite[]) {
     }))
 }
 
+function memberStatusCounts(members: OrganizationMember[]) {
+    return ['active', 'removed', 'revoked', 'inactive'].map(status => ({
+        status,
+        label: sentenceCase(status),
+        count: members.filter(member => member.status.toLowerCase() === status).length,
+    }))
+}
+
 function isEmailLike(value: string | undefined): value is string {
     return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
