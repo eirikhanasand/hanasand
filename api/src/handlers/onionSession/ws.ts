@@ -7,7 +7,6 @@ import {
     inspectScript,
     sandboxUrlSafety,
     summarizeDeobfuscationTask,
-    type SandboxThreatAssociation,
 } from './analysis.ts'
 
 type BrokerMessage = {
