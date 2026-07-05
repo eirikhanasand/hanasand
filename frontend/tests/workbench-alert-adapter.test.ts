@@ -164,7 +164,7 @@ test('maps persisted org DWM alerts into backed analyst workbench rows', () => {
     assert.equal(row.persistent, true)
     assert.equal(row.status, 'investigating')
     assert.equal(row.owner, 'analyst@acme.example')
-    assert.equal(row.caseDetailHref, '/api/cases/case_acme_lumma?organizationId=org_acme')
+    assert.equal(row.caseDetailHref, '/dashboard/dwm/cases/case_acme_lumma?organizationId=org_acme&tenantId=tenant_acme&alertId=dwm_alert_org_acme_lumma&route=ti_workbench')
     assert.equal(row.evidence.length, 2)
     assert.equal(row.evidence.some(item => item.provenance?.includes('cap_tg_acme')), true)
     assert.equal(row.evidence.some(item => item.provenance?.includes('cap_onion_acme')), true)
