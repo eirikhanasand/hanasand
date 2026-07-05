@@ -31,10 +31,16 @@ type InboxAlert = DwmAlert & {
     }>
 }
 
+type InboxMessage = {
+    text: string
+    actionHref?: string
+    actionLabel?: string
+}
+
 export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: { alerts: InboxAlert[], tenantId?: string, organizationId?: string }) {
     const router = useRouter()
     const [busyAlert, setBusyAlert] = useState<string | null>(null)
-    const [message, setMessage] = useState<string | null>(null)
+    const [message, setMessage] = useState<InboxMessage | null>(null)
 
     async function updateAlert(alertId: string, reviewState: string, deliveryState: string, note: string) {
         setBusyAlert(alertId)
@@ -48,10 +54,10 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
             })
             const payload = await response.json().catch(() => ({})) as { error?: { message?: string } }
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            setMessage('Alert updated.')
+            setMessage({ text: 'Alert updated.' })
             router.refresh()
         } catch (error) {
-            setMessage(error instanceof Error ? error.message : String(error))
+            setMessage({ text: error instanceof Error ? error.message : String(error) })
         } finally {
             setBusyAlert(null)
         }
@@ -69,10 +75,10 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
             })
             const payload = await response.json().catch(() => ({})) as { error?: { message?: string } }
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            setMessage('Evidence replay recorded.')
+            setMessage({ text: 'Evidence replay recorded.' })
             router.refresh()
         } catch (error) {
-            setMessage(error instanceof Error ? error.message : String(error))
+            setMessage({ text: error instanceof Error ? error.message : String(error) })
         } finally {
             setBusyAlert(null)
         }
@@ -92,10 +98,21 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
             })
             const payload = await response.json().catch(() => ({})) as { error?: { message?: string }, attemptedCount?: number }
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            setMessage(payload.attemptedCount ? 'Webhook delivery attempted.' : 'No delivery has been sent for this alert.')
+            setMessage(payload.attemptedCount
+                ? { text: 'Webhook delivery attempted.' }
+                : {
+                    text: 'No delivery was attempted. Configure or test a destination before sending.',
+                    actionHref: alert ? deliverySetupHref(alert, organizationId) : '/organizations?focus=destinations#destinations',
+                    actionLabel: 'Configure delivery',
+                })
             router.refresh()
         } catch (error) {
-            setMessage(error instanceof Error ? error.message : String(error))
+            const alert = alerts.find(item => item.id === alertId)
+            setMessage({
+                text: error instanceof Error ? error.message : String(error),
+                actionHref: alert ? deliverySetupHref(alert, organizationId) : undefined,
+                actionLabel: alert ? 'Review delivery setup' : undefined,
+            })
         } finally {
             setBusyAlert(null)
         }
@@ -114,6 +131,7 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
             {alerts.map((alert) => {
                 const evidencePreview = alert.evidence.slice(0, 3)
                 const eventCount = alert.workflowEvents?.length || 0
+                const deliveryHref = deliverySetupHref(alert, organizationId)
                 return (
                     <article key={alert.id} className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3' data-dwm-alert-row>
                         <div className='min-w-0'>
@@ -135,6 +153,7 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
                             <ActionButton busy={busyAlert === alert.id} onClick={() => updateAlert(alert.id, 'reviewing', 'pending_review', 'Analyst review started.')} icon='review'>Review</ActionButton>
                             <ActionButton busy={busyAlert === alert.id} onClick={() => updateAlert(alert.id, 'route_to_customer', 'ready_to_send', 'Ready for customer delivery.')} icon='send'>Ready</ActionButton>
                             <ActionButton busy={busyAlert === alert.id} onClick={() => sendAlert(alert.id)} icon='send'>Send</ActionButton>
+                            <a href={deliveryHref} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel focus:outline-none focus:ring-2 focus:ring-ui-primary/30' data-dwm-alert-delivery-setup='true'>Delivery setup</a>
                         </div>
 
                         <details className='rounded-lg border border-ui-border bg-ui-raised' data-dwm-alert-evidence-disclosure>
@@ -177,7 +196,16 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
                     </article>
                 )
             })}
-            {message && <p className='text-sm text-ui-muted'>{message}</p>}
+            {message && (
+                <div className='flex flex-wrap items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-muted' data-dwm-alert-result='true'>
+                    <span className='wrap-break-word'>{message.text}</span>
+                    {message.actionHref && message.actionLabel ? (
+                        <a href={message.actionHref} className='inline-flex min-h-8 items-center rounded-lg border border-current px-3 text-xs font-semibold text-ui-text transition hover:opacity-80' data-dwm-alert-result-action='true'>
+                            {message.actionLabel}
+                        </a>
+                    ) : null}
+                </div>
+            )}
         </div>
     )
 }
@@ -199,6 +227,16 @@ function caseDetailHref(alert: InboxAlert, tenantId: string, fallbackOrganizatio
     params.set('route', 'alert_queue')
     const query = params.toString()
     return `/dashboard/dwm/cases/${encodeURIComponent(alertCaseId(alert) || '')}${query ? `?${query}` : ''}`
+}
+
+function deliverySetupHref(alert: InboxAlert, fallbackOrganizationId?: string) {
+    const params = new URLSearchParams()
+    const organizationId = alertOrganizationId(alert, fallbackOrganizationId)
+    if (organizationId) params.set('organizationId', organizationId)
+    params.set('alertId', alert.id)
+    params.set('focus', 'destinations')
+    const query = params.toString()
+    return `/organizations${query ? `?${query}` : ''}#destinations`
 }
 
 function caseIdFromPath(path?: string) {
