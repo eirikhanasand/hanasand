@@ -2912,7 +2912,7 @@ function DeliveryPayloadPreview({ delivery, compact = false }: { delivery: Deliv
     const context = preview.context || {}
     const fields = (preview.fields || []).slice(0, compact ? 2 : 4)
     const fieldNames = preview.fieldNames?.slice(0, compact ? 3 : 6) || []
-    const route = context.casePath || context.alertUrl
+    const route = safeDeliveryRoute(context.casePath || context.alertUrl)
 
     return (
         <div className='grid gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs dark:border-ui-border dark:bg-ui-canvas' data-org-delivery-payload-preview='true'>
@@ -2942,9 +2942,18 @@ function DeliveryPayloadPreview({ delivery, compact = false }: { delivery: Deliv
             )}
             {fields.length === 0 && fieldNames.length > 0 && <p className='truncate text-ui-muted dark:text-ui-muted'>Fields: {fieldNames.map(sanitizeOrganizationDisplayCopy).join(', ')}</p>}
             {context.matchReason && !compact && <p className='line-clamp-2 text-ui-muted dark:text-ui-muted'>Match: {sanitizeOrganizationDisplayCopy(context.matchReason)}</p>}
-            {route && !compact && <p className='truncate text-ui-muted dark:text-ui-muted'>Linked case or alert is available.</p>}
+            {route && (
+                <a href={route} className='w-fit rounded-md border border-ui-border bg-ui-panel px-2 py-1 font-semibold text-ui-primary hover:bg-ui-canvas dark:border-ui-border dark:bg-ui-panel dark:text-ui-primary dark:hover:bg-ui-raised'>
+                    {context.casePath ? 'Open case' : 'Open alert'}
+                </a>
+            )}
         </div>
     )
+}
+
+function safeDeliveryRoute(value?: string | null) {
+    const route = value?.trim() || ''
+    return route.startsWith('/') || /^https?:\/\//.test(route) ? route : ''
 }
 
 function DestinationControls({ item, organization, alert, delivery, draft, canManage, busy, onDraftChange, onSelect, onTest }: { item: WatchlistItem, organization: OrganizationSummary, alert?: ScopedAlert, delivery?: DeliveryRow | null, draft: DestinationDraft, canManage: boolean, busy: string, onDraftChange: (next: DestinationDraft) => void, onSelect: () => void, onTest: (mode: 'save' | 'replay') => void }) {
