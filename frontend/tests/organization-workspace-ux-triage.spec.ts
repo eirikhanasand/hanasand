@@ -232,6 +232,7 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('aria-label={destinationManageReason ? `Edit destination: ${destinationManageReason}` : \'Edit destination\'}')
     expect(page).toContain('aria-label={destinationManageReason ? `Disable destination: ${destinationManageReason}` : \'Disable destination\'}')
     expect(page).toContain('aria-label={destinationManageReason ? `Enable destination: ${destinationManageReason}` : \'Enable destination\'}')
+    expect(page).toContain('aria-label=\'Watchlist actions: Owner or admin required\'')
     expect(page).toContain('disabled={!canManage || Boolean(busy)} title={testDisabledReason || undefined}')
     expect(page).toContain('admin controls enabled')
     expect(page).toContain('read-only access')

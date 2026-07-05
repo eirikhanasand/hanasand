@@ -2636,17 +2636,23 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                                             </div>
                                         </div>
                                         <WatchlistDestinationSummary item={item} delivery={deliveryResults[item.id] || latestDeliveryForWatchlist(item, deliveries)} />
-                                        {canManage && (
-                                            <div className='flex flex-wrap gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
-                                                <button type='button' aria-label='Edit watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [item.id]: { kind: item.kind, value: item.value, notes: item.notes || '' } }))}>
-                                                    <Pencil className='h-4 w-4' />
-                                                </button>
-                                                {item.status === 'active' && <button type='button' aria-label='Pause watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'pause')}><Pause className='h-4 w-4' /></button>}
-                                                {item.status === 'paused' && <button type='button' aria-label='Resume watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'resume')}><Play className='h-4 w-4' /></button>}
-                                                {item.status === 'archived' && <button type='button' aria-label='Restore watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'restore')}><Archive className='h-4 w-4' /></button>}
-                                                {item.status !== 'archived' && <ConfirmActionButton ariaLabel='Archive watchlist term' disabled={Boolean(busy)} onConfirm={() => onDelete(item)} icon={<Trash2 className='h-4 w-4' />} />}
-                                            </div>
-                                        )}
+                                        <div className='flex flex-wrap gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
+                                            {canManage ? (
+                                                <>
+                                                    <button type='button' aria-label='Edit watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [item.id]: { kind: item.kind, value: item.value, notes: item.notes || '' } }))}>
+                                                        <Pencil className='h-4 w-4' />
+                                                    </button>
+                                                    {item.status === 'active' && <button type='button' aria-label='Pause watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'pause')}><Pause className='h-4 w-4' /></button>}
+                                                    {item.status === 'paused' && <button type='button' aria-label='Resume watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'resume')}><Play className='h-4 w-4' /></button>}
+                                                    {item.status === 'archived' && <button type='button' aria-label='Restore watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'restore')}><Archive className='h-4 w-4' /></button>}
+                                                    {item.status !== 'archived' && <ConfirmActionButton ariaLabel='Archive watchlist term' disabled={Boolean(busy)} onConfirm={() => onDelete(item)} icon={<Trash2 className='h-4 w-4' />} />}
+                                                </>
+                                            ) : (
+                                                <span className='inline-flex min-h-10 items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted' aria-disabled='true' title='Owner or admin required' aria-label='Watchlist actions: Owner or admin required'>
+                                                    Read-only
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <DestinationControls
                                         item={item}
