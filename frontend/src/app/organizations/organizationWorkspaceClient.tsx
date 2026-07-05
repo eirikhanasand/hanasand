@@ -2684,8 +2684,10 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                     const edit = editing[item.id]
                     const editDuplicate = edit ? isDuplicateWatchlistTerm(watchlists, edit.kind, edit.value, item.id) : false
                     const editChanged = edit ? watchlistDraftChanged(item, edit) : false
+                    const activeAlertTerm = activeTermForWatchlist(item, activeTerms)
                     const status = item.status.toLowerCase()
                     const lifecycleLabel = status === 'active' ? 'Active routes' : status === 'paused' ? 'Paused excluded' : status === 'archived' ? 'Archived closed' : `${item.status} state`
+                    const alertTermLabel = activeAlertTerm ? 'Alert term active' : status === 'active' ? 'Alert term pending' : 'Alert term excluded'
                     const selected = selectedSubject.type === 'watchlist' && selectedSubject.id === item.id
                     return (
                         <div
@@ -2734,14 +2736,19 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                                                 <span className='rounded-full border border-ui-border px-2 py-0.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-watchlist-lifecycle='true'>
                                                     {lifecycleLabel}
                                                 </span>
+                                                <span className='rounded-full border border-ui-border px-2 py-0.5 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-watchlist-alert-term='true'>
+                                                    {alertTermLabel}
+                                                </span>
                                             </div>
                                             <p className='mt-2 line-clamp-2 wrap-break-word text-base font-semibold text-ui-text dark:text-ui-text'>{item.value}</p>
                                             <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{item.notes || 'Add delivery context.'}</p>
                                             <div className='mt-2 grid gap-1 text-xs text-ui-muted dark:text-ui-muted sm:grid-cols-2'>
                                                 <span className='truncate'>Org: {organizationDisplayName(organization)}</span>
                                                 <span className='truncate'>Owner: {organizationMemberLabel(item.updatedBy || item.createdBy, members)}</span>
-                                                <span className='truncate'>Ref: {compactReference(item.alertGenerationRef || item.id, 'watch')}</span>
+                                                <span className='truncate'>Ref: {compactReference(activeAlertTerm?.alertGenerationRef || item.alertGenerationRef || item.id, 'watch')}</span>
                                                 <span className='truncate'>Alerts: {alertsForWatchlist(item, alerts).length}</span>
+                                                {activeAlertTerm?.matchReason && <span className='truncate'>Match: {sanitizeOrganizationDisplayCopy(activeAlertTerm.matchReason)}</span>}
+                                                {activeAlertTerm?.provenanceHash && <span className='truncate'>Provenance: {compactReference(activeAlertTerm.provenanceHash, 'hash')}</span>}
                                             </div>
                                         </div>
                                         <WatchlistDestinationSummary item={item} delivery={deliveryResults[item.id] || latestDeliveryForWatchlist(item, deliveries)} />
@@ -4143,6 +4150,14 @@ function isDuplicateWatchlistTerm(watchlists: WatchlistItem[], kind: WatchlistKi
     const normalizedValue = normalizeWatchlistValue(value)
     if (!normalizedValue) return false
     return watchlists.some(item => item.id !== excludeId && item.status.toLowerCase() !== 'archived' && item.kind === kind && normalizeWatchlistValue(item.value) === normalizedValue)
+}
+
+function activeTermForWatchlist(item: WatchlistItem, activeTerms: AlertTerm[]) {
+    return activeTerms.find(term => (term.status || 'active').toLowerCase() === 'active'
+        && (term.watchlistItemId === item.id
+            || term.watchlistId === item.id
+            || (Boolean(item.alertGenerationRef) && term.alertGenerationRef === item.alertGenerationRef)
+            || (term.kind === item.kind && normalizeWatchlistValue(term.term || term.value || '') === normalizeWatchlistValue(item.value))))
 }
 
 function watchlistDraftChanged(item: WatchlistItem, draft: { kind: WatchlistKind, value: string, notes: string }) {
