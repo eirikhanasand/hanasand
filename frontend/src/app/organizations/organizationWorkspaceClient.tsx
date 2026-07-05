@@ -600,6 +600,8 @@ export default function OrganizationWorkspaceClient() {
     const mountedRef = useRef(false)
     const organizationLoadRef = useRef(0)
     const bundleLoadRef = useRef(0)
+    const organizationSwitchFocusRef = useRef('')
+    const workspaceFocusRef = useRef('')
 
     const selectedOrganization = useMemo(
         () => organizations.find(organization => organization.id === selectedId) || organizations[0],
@@ -729,9 +731,11 @@ export default function OrganizationWorkspaceClient() {
         })
         setBundle(nextBundle)
         setSettingsDraft(nextBundle.settings || {})
-        setSelectedActivitySubject(requestedSubjectFromSearch({
+        const switchFocus = organizationSwitchFocusRef.current
+        organizationSwitchFocusRef.current = ''
+        const nextSubject = requestedSubjectFromSearch({
             organizationId,
-            focus: requestedFocus,
+            focus: switchFocus || requestedFocus,
             inviteId: requestedInviteId,
             memberId: requestedMemberId,
             watchlistId: requestedWatchlistId,
@@ -739,18 +743,23 @@ export default function OrganizationWorkspaceClient() {
             deliveryId: requestedDeliveryId,
             alertId: requestedAlertId,
             caseId: requestedCaseId,
-        }, nextBundle))
+        }, nextBundle)
+        workspaceFocusRef.current = focusForSubjectType(nextSubject.type)
+        setSelectedActivitySubject(nextSubject)
+        if (switchFocus) replaceOrganizationWorkspaceSelectionUrl(organizationId, nextSubject)
         setBusy('')
     }, [requestedAlertId, requestedCaseId, requestedDeliveryId, requestedDestinationId, requestedFocus, requestedInviteId, requestedMemberId, requestedWatchlistId])
 
     const selectOrganization = useCallback((organizationId: string) => {
+        organizationSwitchFocusRef.current = focusForSubjectType(selectedActivitySubject.type) || workspaceFocusRef.current || currentOrganizationFocus() || requestedFocus
         setSelectedId(organizationId)
         const subject = { type: 'organization', id: organizationId } as ActivitySubject
         setSelectedActivitySubject(subject)
         replaceOrganizationWorkspaceSelectionUrl(organizationId, subject)
-    }, [])
+    }, [requestedFocus, selectedActivitySubject.type])
 
     const selectActivitySubject = useCallback((subject: ActivitySubject) => {
+        workspaceFocusRef.current = focusForSubjectType(subject.type)
         setSelectedActivitySubject(subject)
         replaceOrganizationWorkspaceSelectionUrl(selectedOrganization?.id || selectedId, subject)
     }, [selectedId, selectedOrganization?.id])
@@ -3648,6 +3657,21 @@ function requestedDeliveryFromSearch(deliveries: DeliveryRow[], deliveryId: stri
         || delivery.requestId === deliveryId
         || delivery.auditEventId === deliveryId
         || delivery.dedupeKey === deliveryId)
+}
+
+function focusForSubjectType(type: ActivitySubjectType) {
+    if (type === 'invite') return 'invites'
+    if (type === 'member') return 'members'
+    if (type === 'watchlist') return 'watchlists'
+    if (type === 'destination') return 'destinations'
+    if (type === 'alert') return 'alerts'
+    if (type === 'case') return 'cases'
+    return ''
+}
+
+function currentOrganizationFocus() {
+    if (typeof window === 'undefined') return ''
+    return new URL(window.location.href).searchParams.get('focus') || ''
 }
 
 function replaceOrganizationWorkspaceSelectionUrl(organizationId: string, subject: ActivitySubject) {

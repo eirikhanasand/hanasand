@@ -270,6 +270,14 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('const mountedRef = useRef(false)')
     expect(page).toContain('const organizationLoadRef = useRef(0)')
     expect(page).toContain('const bundleLoadRef = useRef(0)')
+    expect(page).toContain('const organizationSwitchFocusRef = useRef(\'\')')
+    expect(page).toContain('const workspaceFocusRef = useRef(\'\')')
+    expect(page).toContain('organizationSwitchFocusRef.current = focusForSubjectType(selectedActivitySubject.type) || workspaceFocusRef.current || currentOrganizationFocus() || requestedFocus')
+    expect(page).toContain('workspaceFocusRef.current = focusForSubjectType(subject.type)')
+    expect(page).toContain('workspaceFocusRef.current = focusForSubjectType(nextSubject.type)')
+    expect(page).toContain('if (switchFocus) replaceOrganizationWorkspaceSelectionUrl(organizationId, nextSubject)')
+    expect(page).toContain('function focusForSubjectType(type: ActivitySubjectType)')
+    expect(page).toContain('function currentOrganizationFocus()')
     expect(page).toContain('if (!mountedRef.current || organizationLoadRef.current !== requestId) return')
     expect(page).toContain('if (!mountedRef.current || bundleLoadRef.current !== requestId) return')
     expect(page).toContain('Object.keys(bundle.alertCaseVisibility || {}).length')
@@ -505,6 +513,33 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.route('**/api/dwm/webhooks/deliveries**', async route => {
         await route.fulfill({ json: { deliveries: fixtureDeliveries } })
     })
+    await page.route('**/api/organizations/org_contoso/settings', async route => {
+        await route.fulfill({ json: { settings: { name: 'Contoso', slug: 'contoso', defaultWebhookPolicy: 'active_destinations', alertVisibilityPolicy: 'members', lifecycleStatus: 'active', retentionDays: 365 } } })
+    })
+    await page.route('**/api/organizations/org_contoso/members', async route => {
+        await route.fulfill({ json: { members: [{ userId: 'viewer_contoso', email: 'viewer@contoso.test', name: 'Contoso Viewer', role: 'viewer', status: 'active', joinedAt: '2026-07-03T10:00:00.000Z' }] } })
+    })
+    await page.route('**/api/organizations/org_contoso/invites', async route => {
+        await route.fulfill({ json: { invites: [] } })
+    })
+    await page.route('**/api/organizations/org_contoso/watchlists', async route => {
+        await route.fulfill({ json: { watchlistItems: fixtureContosoWatchlists } })
+    })
+    await page.route('**/api/organizations/org_contoso/watchlists/alert-terms', async route => {
+        await route.fulfill({ json: { activeTerms: fixtureContosoWatchlists } })
+    })
+    await page.route('**/api/organizations/org_contoso/alert-case-visibility', async route => {
+        await route.fulfill({ json: { visibility: { alertReadAllowed: true } } })
+    })
+    await page.route('**/api/organizations/org_contoso/webhooks', async route => {
+        await route.fulfill({ json: { destinations: [] } })
+    })
+    await page.route('**/api/dwm/alerts?organizationId=org_contoso', async route => {
+        await route.fulfill({ json: { alerts: [] } })
+    })
+    await page.route('**/api/cases?organizationId=org_contoso', async route => {
+        await route.fulfill({ json: { cases: [] } })
+    })
 
     await page.goto('/organizations?organizationId=org_acme&focus=watchlists', { waitUntil: 'domcontentloaded' })
 
@@ -638,6 +673,13 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await retiredVendorRow.getByText('RetiredVendor').click()
     await expect(page.locator('#audit')).toContainText('RetiredVendor')
     await expect(page.locator('#audit')).toContainText('watch acme retired')
+    await page.getByRole('button', { name: /Contoso viewer/ }).click()
+    await expect(page).toHaveURL(/organizationId=org_contoso/)
+    await expect(page).toHaveURL(/focus=watchlists/)
+    await expect(page.locator('#audit')).toContainText('contoso.io')
+    await page.getByRole('button', { name: /Acme Security owner/ }).click()
+    await expect(page).toHaveURL(/organizationId=org_acme/)
+    await retiredVendorRow.getByText('RetiredVendor').click()
     await expect(retiredVendorRow).toContainText('Org: Acme Security')
     await expect(retiredVendorRow).toContainText('Owner: Acme Owner')
     await expect(page.locator('#audit')).toContainText(/Owner\s*Acme Owner/)
@@ -707,6 +749,10 @@ const fixtureWatchlists = [
     { id: 'watch_acme_domain', organizationId: 'org_acme', tenantId: 'tenant_acme', kind: 'domain', value: 'acme.com', status: 'active', notes: 'Customer-owned domain', createdBy: 'owner_acme', updatedBy: 'owner_acme', updatedAt: '2026-07-01T09:00:00.000Z', alertGenerationRef: 'org_acme:watch_acme_domain', webhookEndpointHint: 'discord...acme', webhookEndpointHash: 'wh_hash_acme', webhookUrlConfigured: true },
     { id: 'watch_acme_vendor', organizationId: 'org_acme', tenantId: 'tenant_acme', kind: 'vendor', value: 'Okta', status: 'paused', notes: 'Identity provider', createdBy: 'analyst_acme', updatedBy: 'analyst_acme', updatedAt: '2026-07-01T08:00:00.000Z', alertGenerationRef: 'org_acme:watch_acme_vendor' },
     { id: 'watch_acme_retired', organizationId: 'org_acme', tenantId: 'tenant_acme', kind: 'vendor', value: 'RetiredVendor', status: 'archived', notes: 'Retired supplier', createdBy: 'owner_acme', updatedBy: 'owner_acme', updatedAt: '2026-07-01T07:00:00.000Z', alertGenerationRef: 'org_acme:watch_acme_retired' },
+]
+
+const fixtureContosoWatchlists = [
+    { id: 'watch_contoso_domain', organizationId: 'org_contoso', tenantId: 'tenant_contoso', kind: 'domain', value: 'contoso.io', notes: 'Contoso domain monitoring', status: 'active', createdBy: 'viewer_contoso', updatedBy: 'viewer_contoso', createdAt: '2026-07-04T10:00:00.000Z', updatedAt: '2026-07-04T11:00:00.000Z', alertGenerationRef: 'org_contoso:watch_contoso_domain' },
 ]
 
 const fixtureDestinations = [
