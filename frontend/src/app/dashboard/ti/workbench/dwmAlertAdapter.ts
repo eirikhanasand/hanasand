@@ -1,5 +1,5 @@
 import type { DwmAlert, DwmSeverity } from '@/utils/dwm/product'
-import { safeAlertSummary } from '@/utils/dwm/display'
+import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import type { WorkbenchAction, WorkbenchCase, WorkbenchEvidence, WorkbenchTimelineItem } from './workbenchClient'
 
 type RuntimeDwmAlert = DwmAlert & {
@@ -223,7 +223,7 @@ function buildWorkbenchEvidence(alert: RuntimeDwmAlert, selectedCaptureIds: stri
         captureMode: item.captureMode.replaceAll('_', ' '),
         redactionState: item.redactionState.replaceAll('_', ' '),
         contentHash: item.contentHash,
-        excerpt: item.excerpt,
+        excerpt: safeEvidenceExcerpt(item.excerpt),
         observedAt: item.observedAt ?? item.firstSeenAt,
         provenance: typeof item.provenance === 'object'
             ? [item.provenance.sourceId, item.provenance.captureId].filter(Boolean).join(' / ')
@@ -246,7 +246,7 @@ function buildWorkbenchEvidence(alert: RuntimeDwmAlert, selectedCaptureIds: stri
             captureMode: 'metadata only',
             redactionState: 'customer safe',
             contentHash: String(row.contentHash ?? id),
-            excerpt: String(row.excerpt ?? 'Source excerpt retained in provenance summary.'),
+            excerpt: safeEvidenceExcerpt(row.excerpt ?? 'Source excerpt retained in provenance summary.'),
             observedAt: row.observedAt,
             confidence: alert.confidence,
         })
