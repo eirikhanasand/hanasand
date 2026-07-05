@@ -3816,7 +3816,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
             ok: item.status?.toLowerCase() !== 'failed' && item.status?.toLowerCase() !== 'blocked',
             subjectType: 'case',
             subjectId: item.id,
-            relatedSubjectIds: [watchlistId, ...destinationIds, delivery?.alertId].filter(Boolean) as string[],
+            relatedSubjectIds: [watchlistId, ...destinationIds, delivery?.alertId, ...(delivery?.watchlistIds || [])].filter(Boolean) as string[],
             metadata: compactMetadata([
                 ['Case', compactReference(item.id, 'case')],
                 ['Status', item.status],
@@ -3844,6 +3844,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
                 delivery.caseId,
                 delivery.actionId,
                 ...(delivery.watchlistItemIds || []),
+                ...(delivery.watchlistIds || []),
             ].filter(Boolean) as string[],
             metadata: compactMetadata([
                 ['Destination', destinationDisplayState(delivery)],
@@ -4247,17 +4248,17 @@ function selectedSubjectWatchlistId(subject: ActivitySubject, bundle: OrgBundle)
         const watchlist = bundle.watchlists.find(item => item.webhookDestinationId === subject.id
             || (destination?.endpointHash && item.webhookEndpointHash === destination.endpointHash)
             || (destination?.endpointHint && item.webhookEndpointHint === destination.endpointHint))
-        const delivery = destination ? deliveriesForDestination(destination, bundle.deliveries).find(item => item.watchlistItemId || item.watchlistId || item.watchlistItemIds?.[0]) : undefined
-        return watchlist?.id || delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0] || ''
+        const delivery = destination ? deliveriesForDestination(destination, bundle.deliveries).find(item => item.watchlistItemId || item.watchlistId || item.watchlistItemIds?.[0] || item.watchlistIds?.[0]) : undefined
+        return watchlist?.id || delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0] || delivery?.watchlistIds?.[0] || ''
     }
     if (subject.type === 'alert') {
         const alert = bundle.alerts.find(item => item.id === subject.id)
-        const delivery = bundle.deliveries.find(item => item.alertId === subject.id && (item.watchlistItemId || item.watchlistId || item.watchlistItemIds?.[0]))
-        return alert?.watchlistItemId || alert?.watchlistItemIds?.[0] || alert?.watchlistIds?.[0] || delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0] || ''
+        const delivery = bundle.deliveries.find(item => item.alertId === subject.id && (item.watchlistItemId || item.watchlistId || item.watchlistItemIds?.[0] || item.watchlistIds?.[0]))
+        return alert?.watchlistItemId || alert?.watchlistItemIds?.[0] || alert?.watchlistIds?.[0] || delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0] || delivery?.watchlistIds?.[0] || ''
     }
     if (subject.type === 'case') {
-        const delivery = bundle.deliveries.find(item => item.caseId === subject.id && (item.watchlistItemId || item.watchlistId || item.watchlistItemIds?.[0]))
-        return delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0] || ''
+        const delivery = bundle.deliveries.find(item => item.caseId === subject.id && (item.watchlistItemId || item.watchlistId || item.watchlistItemIds?.[0] || item.watchlistIds?.[0]))
+        return delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0] || delivery?.watchlistIds?.[0] || ''
     }
     return ''
 }
