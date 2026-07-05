@@ -541,7 +541,7 @@ export default function OrganizationWorkspaceClient() {
     const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
     const activityRows = useMemo(() => organizationActivityRows(activity, bundle), [activity, bundle])
     const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedInviteId || requestedMemberId || requestedFocus)
-    const hasScopeRecords = Boolean(bundle.alertTerms.length || bundle.alerts.length || bundle.cases.length || bundle.webhooks.length || bundle.alertCaseVisibility.length)
+    const hasScopeRecords = Boolean(bundle.alertTerms.length || bundle.alerts.length || bundle.cases.length || bundle.webhooks.length || Object.keys(bundle.alertCaseVisibility || {}).length)
     const settingsDirty = useMemo(() => !settingsEqual(settingsDraft, bundle.settings || {}), [settingsDraft, bundle.settings])
     const normalizedCreateName = normalizeOrganizationName(createName)
     const createNameInUse = normalizedCreateName ? organizationNameInUse(organizations, normalizedCreateName) : false
@@ -1567,10 +1567,32 @@ function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watc
 }
 
 function OrgActionStrip({ alertId, canManage, hasWatchlists, hasDestination }: { alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
-    const actions: Array<{ href: string, icon: ReactNode, label: string }> = []
-    if (canManage) actions.push({ href: '#watchlists', icon: <BellRing className='h-4 w-4' />, label: 'Create watchlist' })
-    if (canManage) actions.push({ href: '#invites', icon: <UserPlus className='h-4 w-4' />, label: 'Invite member' })
-    if (canManage && hasWatchlists) actions.push({ href: '#destinations', icon: <Webhook className='h-4 w-4' />, label: 'Test destination' })
+    const actions: Array<{ href: string, icon: ReactNode, label: string, disabled?: boolean, disabledReason?: string }> = []
+    actions.push({
+        href: '#watchlists',
+        icon: <BellRing className='h-4 w-4' />,
+        label: 'Create watchlist',
+        disabled: !canManage,
+        disabledReason: canManage ? undefined : 'Owner or admin access is required to create watchlists.',
+    })
+    actions.push({
+        href: '#invites',
+        icon: <UserPlus className='h-4 w-4' />,
+        label: 'Invite member',
+        disabled: !canManage,
+        disabledReason: canManage ? undefined : 'Admin access is required to invite team members.',
+    })
+    actions.push({
+        href: '#destinations',
+        icon: <Webhook className='h-4 w-4' />,
+        label: 'Test destination',
+        disabled: !canManage || !hasWatchlists,
+        disabledReason: !canManage
+            ? 'Owner or admin access is required to test delivery.'
+            : !hasWatchlists
+                ? 'Add a watchlist term before testing delivery.'
+                : undefined,
+    })
     if (alertId) actions.push({ href: `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}`, icon: <CircleAlert className='h-4 w-4' />, label: 'Open DWM alert' })
     if (hasDestination || hasWatchlists) actions.push({ href: '#audit', icon: <CheckCircle2 className='h-4 w-4' />, label: 'Audit' })
     const nextStep = !canManage
@@ -1584,7 +1606,7 @@ function OrgActionStrip({ alertId, canManage, hasWatchlists, hasDestination }: {
                     : 'Reviewed alerts will appear after a watchlist match.'
     return (
         <nav className='flex flex-wrap items-center gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm dark:border-ui-border dark:bg-ui-panel' aria-label='Organization actions' data-org-action-strip='true'>
-            {actions.map(action => <ActionAnchor key={action.label} href={action.href} icon={action.icon} label={action.label} />)}
+            {actions.map(action => <ActionAnchor key={action.label} href={action.href} icon={action.icon} label={action.label} disabled={action.disabled} disabledReason={action.disabledReason} />)}
             {nextStep ? <span className='inline-flex min-h-9 items-center rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted' data-org-action-next='true'>{nextStep}</span> : null}
         </nav>
     )
