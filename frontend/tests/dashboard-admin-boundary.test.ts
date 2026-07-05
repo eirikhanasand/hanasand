@@ -46,9 +46,9 @@ test('dashboard sidebar keeps internal products admin-only without deleting them
         assert(strictPaths.includes(`path: '${href}'`) || strictPaths.includes(`path: '${href.split('/').slice(0, -1).join('/')}'`), `${href} should be covered by strict role routing.`)
     }
 
-    assert(sidebar.includes("if (isAdmin)"), 'Admin controls should stay behind the existing admin gate.')
-    assert(sidebar.includes("if (canManageSystem)"), 'System controls should stay behind the existing system-admin gate.')
-    assert(sidebar.includes("if (canManageContent)"), 'Content controls should stay behind the existing content-admin gate.')
+    assert(sidebar.includes('if (isAdmin)'), 'Admin controls should stay behind the existing admin gate.')
+    assert(sidebar.includes('if (canManageSystem)'), 'System controls should stay behind the existing system-admin gate.')
+    assert(sidebar.includes('if (canManageContent)'), 'Content controls should stay behind the existing content-admin gate.')
 })
 
 function sourceBetween(source: string, start: string, end: string) {

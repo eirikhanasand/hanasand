@@ -83,7 +83,7 @@ test.describe('dashboard resource routes', () => {
         const failedResponses: string[] = []
 
         try {
-            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             page.on('pageerror', (error) => pageErrors.push(error.message))
@@ -131,7 +131,7 @@ test.describe('dashboard resource routes', () => {
         const context = await browser.newContext({ baseURL })
 
         try {
-            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             for (const route of privilegedDashboardRoutes) {
@@ -152,7 +152,7 @@ test.describe('dashboard resource routes', () => {
         const context = await browser.newContext({ baseURL })
 
         try {
-            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
@@ -300,7 +300,7 @@ test.describe('dashboard resource routes', () => {
         const canceledTitle = `${title} canceled`
 
         try {
-            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             const automationsLoaded = page.waitForResponse((response) =>
@@ -372,7 +372,7 @@ test.describe('dashboard resource routes', () => {
         const context = await browser.newContext({ baseURL })
 
         try {
-            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             await page.goto('/dashboard/projects', { waitUntil: 'networkidle' })
@@ -414,7 +414,7 @@ test.describe('dashboard resource routes', () => {
         const context = await browser.newContext({ baseURL })
 
         try {
-            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             await page.goto('/dashboard/shares', { waitUntil: 'networkidle' })
