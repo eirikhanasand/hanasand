@@ -2581,12 +2581,9 @@ function SourceCoverageWorkbench({
                                 <h3 className='mt-1 wrap-break-word text-sm font-semibold text-ui-text dark:text-ui-text'>{selectedRow.sourceName}</h3>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selectedRow.provenance)}</p>
                             </div>
-                            <div className='grid grid-cols-2 gap-2 text-xs'>
-                                <EvidenceMetric label='Family' value={formatLabel(selectedRow.family)} />
-                                <EvidenceMetric label='Results' value={String(selectedRow.evidenceItems.length)} />
-                                <EvidenceMetric label='Capture' value={selectedRow.captureId ? 'Attached' : 'Missing'} />
-                                <EvidenceMetric label='Request' value={selectedRow.sourceRequestId ? 'Queued' : 'None'} />
-                            </div>
+                            <p className='wrap-break-word text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                                {formatLabel(selectedRow.family)} · {selectedRow.evidenceItems.length} results · capture {selectedRow.captureId ? 'attached' : 'missing'} · request {selectedRow.sourceRequestId ? 'queued' : 'none'}
+                            </p>
                             {selectedRow.missing.length ? (
                                 <div className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>
                                     {selectedRow.missing.slice(0, 3).map(sourceHealthFieldLabel).join(', ')}
@@ -5583,12 +5580,9 @@ function EnrichmentGapWorkbench({
                             </div>
                             <span className={sourceHealthChipClass(selectedRow.state)}>{publicStateLabel(selectedRow.state)}</span>
                         </div>
-                        <div className='mt-3 grid grid-cols-2 gap-2 text-xs'>
-                            <EvidenceMetric label='Source' value={selectedRow.source} />
-                            <EvidenceMetric label='Evidence' value={String(selectedRow.evidenceItems.length)} />
-                            <EvidenceMetric label='Details' value={String(selectedRow.artifactIds.length)} />
-                            <EvidenceMetric label='Missing' value={String(selectedRow.missing.length)} />
-                        </div>
+                        <p className='mt-3 wrap-break-word text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                            {selectedRow.source} · {selectedRow.evidenceItems.length} evidence · {selectedRow.artifactIds.length} details · {selectedRow.missing.length} missing
+                        </p>
                         {selectedRow.missing.length ? (
                             <div className='mt-3 rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>
                                 {displayRequirementList(selectedRow.missing.slice(0, 3))}
