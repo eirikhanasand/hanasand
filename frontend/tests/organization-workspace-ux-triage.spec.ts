@@ -387,6 +387,8 @@ test('organization workspace keeps launch workflow primary and admin controls di
 
 test('organization workspace renders searchable shared watchlists', async ({ context, page, baseURL }, testInfo) => {
     const origin = baseURL || 'http://127.0.0.1:3000'
+    const inviteActions: Array<{ inviteId: string, action: string }> = []
+    const destinationTests: Array<{ destinationId: string, dryRun: boolean }> = []
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
     await context.addCookies([
         { name: 'id', value: 'dashboard-render-proof-user', url: origin },
@@ -409,6 +411,11 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.route('**/api/organizations/org_acme/invites', async route => {
         await route.fulfill({ json: { invites: fixtureInvites } })
     })
+    await page.route('**/api/organizations/org_acme/invites/*/actions', async route => {
+        const body = await route.request().postDataJSON() as { action?: string }
+        inviteActions.push({ inviteId: route.request().url().split('/invites/')[1]?.split('/')[0] || '', action: body.action || '' })
+        await route.fulfill({ json: { ok: true } })
+    })
     await page.route('**/api/organizations/org_acme/watchlists', async route => {
         await route.fulfill({ json: { watchlistItems: fixtureWatchlists } })
     })
@@ -419,7 +426,18 @@ test('organization workspace renders searchable shared watchlists', async ({ con
         await route.fulfill({ json: { visibility: { alertReadAllowed: true, caseAssignmentAllowed: true, caseRoute: '/api/cases' } } })
     })
     await page.route('**/api/organizations/org_acme/webhooks', async route => {
+        if (route.request().url().endsWith('/webhooks/test')) {
+            const body = await route.request().postDataJSON() as { destinationId?: string, dryRun?: boolean }
+            destinationTests.push({ destinationId: body.destinationId || '', dryRun: Boolean(body.dryRun) })
+            await route.fulfill({ json: { deliveries: [fixtureDeliveries[0]] } })
+            return
+        }
         await route.fulfill({ json: { destinations: fixtureDestinations } })
+    })
+    await page.route('**/api/organizations/org_acme/webhooks/test', async route => {
+        const body = await route.request().postDataJSON() as { destinationId?: string, dryRun?: boolean }
+        destinationTests.push({ destinationId: body.destinationId || '', dryRun: Boolean(body.dryRun) })
+        await route.fulfill({ json: { deliveries: [fixtureDeliveries[0]] } })
     })
     await page.route('**/api/dwm/alerts?organizationId=org_acme', async route => {
         await route.fulfill({ json: { alerts: fixtureAlerts } })
@@ -475,6 +493,13 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.locator('[data-org-invite-filter-strip="true"]').getByLabel('Status').selectOption('pending')
     await expect(page.locator('[data-org-invite-filter-count="true"]')).toContainText('1/2 shown')
     await expect(page.locator('#invites')).toContainText('admin@acme.test')
+    await page.locator('#invites').getByLabel('Resend invite').click()
+    expect(inviteActions).toContainEqual({ inviteId: 'invite_acme_admin', action: 'resend' })
+    await expect(page.locator('#audit')).toContainText('Invite resent to admin@acme.test.')
+    await page.locator('#invites').getByLabel('Revoke invite').click()
+    await page.locator('#invites').getByLabel('Confirm revoke invite').click()
+    expect(inviteActions).toContainEqual({ inviteId: 'invite_acme_admin', action: 'revoke' })
+    await expect(page.locator('#audit')).toContainText('Invite revoked for admin@acme.test.')
     await page.locator('[data-org-destinations-disclosure]').evaluate((node) => {
         if (node instanceof HTMLDetailsElement) node.open = true
         node.scrollIntoView({ block: 'nearest' })
@@ -493,6 +518,12 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('1/2 shown')
     await expect(page.locator('#destinations')).toContainText('Backup Webhook')
     await expect(page.locator('#destinations')).not.toContainText('SOC Discord')
+    await page.locator('[data-org-destination-filter-strip="true"]').getByRole('button', { name: 'Clear' }).click()
+    await expect(page.locator('[data-org-destination-filter-count="true"]')).toContainText('2/2 shown')
+    await expect(page.locator('#destinations')).toContainText('SOC Discord')
+    await page.locator('#destinations').getByRole('button', { name: 'Test destination' }).nth(1).click()
+    expect(destinationTests).toContainEqual({ destinationId: 'dest_acme_discord', dryRun: true })
+    await expect(page.locator('#audit')).toContainText('Test Destination')
     await expect(page.locator('#delivery-history')).toContainText('audit acme extra 13')
     await expect(page.locator('#delivery-history')).toContainText('Discord rejected the request: invalid embeds.')
     await expect(page.locator('#delivery-history')).toContainText('Retry scheduled')
