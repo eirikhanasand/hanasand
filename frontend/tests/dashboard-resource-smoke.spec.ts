@@ -2,12 +2,13 @@ import { expect, test, type APIRequestContext, type BrowserContext, type Page } 
 
 const apiBase = process.env.PLAYWRIGHT_API_BASE || 'http://127.0.0.1:8080/api'
 const password = `Aa11!!${Date.now()}Bb22!!`
-const adminId = process.env.PLAYWRIGHT_ADMIN_ID || 'codex_admin_20260422'
-const adminPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD || 'Aa11!!Bb22!!Cc33!!Dd44!!'
+const adminId = process.env.PLAYWRIGHT_ADMIN_ID || ''
+const adminPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD || ''
 const adminName = process.env.PLAYWRIGHT_ADMIN_NAME || 'Codex Admin'
 const adminToken = process.env.PLAYWRIGHT_ADMIN_TOKEN || ''
 const adminExpiresAt = process.env.PLAYWRIGHT_ADMIN_EXPIRES_AT || new Date(Date.now() + 60 * 60 * 1000).toISOString()
-const hasAdminLoginCredentials = Boolean(process.env.PLAYWRIGHT_ADMIN_ID && process.env.PLAYWRIGHT_ADMIN_PASSWORD)
+const hasAdminToken = Boolean(adminToken && adminId)
+const hasAdminLoginCredentials = Boolean(adminId && adminPassword)
 
 const dashboardRoutes = [
     { path: '/dashboard', heading: /Good|You're|It’s/ },
@@ -427,44 +428,48 @@ test.describe('dashboard resource routes', () => {
         }
     })
 
-    test('privileged dashboard routes load for a system admin when credentials are available', async ({ browser, request, baseURL }) => {
-        const auth = adminToken
-            ? {
-                id: adminId,
-                name: adminName,
-                token: adminToken,
-                expires_at: adminExpiresAt,
-                roles: [{ id: 'administrator' }, { id: 'system_admin' }],
-            }
-            : await loginAsAdmin(request)
+    test.describe('privileged dashboard smoke', () => {
+        test.skip(!hasAdminToken && !hasAdminLoginCredentials, 'Privileged dashboard smoke needs PLAYWRIGHT_ADMIN_TOKEN with PLAYWRIGHT_ADMIN_ID or explicit PLAYWRIGHT_ADMIN_ID/PLAYWRIGHT_ADMIN_PASSWORD.')
 
-        const context = await browser.newContext({ baseURL })
-        const pageErrors: string[] = []
-        const failedResponses: string[] = []
-
-        try {
-            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
-            const page = await context.newPage()
-
-            page.on('pageerror', (error) => pageErrors.push(error.message))
-            page.on('response', (response) => {
-                if (response.status() >= 500) {
-                    failedResponses.push(`${response.status()} ${response.url()}`)
+        test('privileged dashboard routes load for a system admin when credentials are available', async ({ browser, request, baseURL }) => {
+            const auth = hasAdminToken
+                ? {
+                    id: adminId,
+                    name: adminName,
+                    token: adminToken,
+                    expires_at: adminExpiresAt,
+                    roles: [{ id: 'administrator' }, { id: 'system_admin' }],
                 }
-            })
+                : await loginAsAdmin(request)
 
-            for (const route of privilegedDashboardRoutes) {
-                await page.goto(route.path, { waitUntil: 'domcontentloaded' })
-                await expect(page).toHaveURL(new RegExp(`${route.path.replace(/\//g, '\\/')}$`))
-                await expect(page.locator('main').getByRole('heading', { name: route.heading }).first()).toBeVisible()
-                await expect(page.getByText(/401 Unauthorized|Please log in|Failed to load|Internal Server Error/i)).toHaveCount(0)
+            const context = await browser.newContext({ baseURL })
+            const pageErrors: string[] = []
+            const failedResponses: string[] = []
+
+            try {
+                await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
+                const page = await context.newPage()
+
+                page.on('pageerror', (error) => pageErrors.push(error.message))
+                page.on('response', (response) => {
+                    if (response.status() >= 500) {
+                        failedResponses.push(`${response.status()} ${response.url()}`)
+                    }
+                })
+
+                for (const route of privilegedDashboardRoutes) {
+                    await page.goto(route.path, { waitUntil: 'domcontentloaded' })
+                    await expect(page).toHaveURL(new RegExp(`${route.path.replace(/\//g, '\\/')}$`))
+                    await expect(page.locator('main').getByRole('heading', { name: route.heading }).first()).toBeVisible()
+                    await expect(page.getByText(/401 Unauthorized|Please log in|Failed to load|Internal Server Error/i)).toHaveCount(0)
+                }
+
+                expect(pageErrors).toEqual([])
+                expect(failedResponses).toEqual([])
+            } finally {
+                await context.close()
             }
-
-            expect(pageErrors).toEqual([])
-            expect(failedResponses).toEqual([])
-        } finally {
-            await context.close()
-        }
+        })
     })
 })
 
@@ -635,7 +640,7 @@ async function authenticateContext(context: BrowserContext, auth: {
 }
 
 async function loginAsAdmin(request: APIRequestContext) {
-    test.skip(!hasAdminLoginCredentials, 'Privileged dashboard smoke needs PLAYWRIGHT_ADMIN_TOKEN or valid PLAYWRIGHT_ADMIN_ID/PLAYWRIGHT_ADMIN_PASSWORD.')
+    test.skip(!hasAdminLoginCredentials, 'Privileged dashboard smoke needs explicit PLAYWRIGHT_ADMIN_ID/PLAYWRIGHT_ADMIN_PASSWORD.')
 
     const loginResponse = await request.post(`${apiBase}/auth/login/${adminId}`, {
         data: { password: adminPassword },

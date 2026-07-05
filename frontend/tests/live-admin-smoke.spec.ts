@@ -2,11 +2,13 @@ import { expect, test, type APIRequestContext, type BrowserContext } from '@play
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'https://hanasand.com'
 const apiBase = process.env.PLAYWRIGHT_API_BASE || 'https://api.hanasand.com/api'
-const adminId = process.env.PLAYWRIGHT_ADMIN_ID || 'codex_admin_20260422'
-const adminPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD || 'Aa11!!Bb22!!Cc33!!Dd44!!'
+const adminId = process.env.PLAYWRIGHT_ADMIN_ID || ''
+const adminPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD || ''
 const adminName = process.env.PLAYWRIGHT_ADMIN_NAME || 'Codex Admin'
 const adminToken = process.env.PLAYWRIGHT_ADMIN_TOKEN || ''
-const adminExpiresAt = process.env.PLAYWRIGHT_ADMIN_EXPIRES_AT || '2026-04-23T14:05:23.863Z'
+const adminExpiresAt = process.env.PLAYWRIGHT_ADMIN_EXPIRES_AT || new Date(Date.now() + 60 * 60 * 1000).toISOString()
+const hasAdminToken = Boolean(adminToken && adminId)
+const hasAdminLoginCredentials = Boolean(adminId && adminPassword)
 
 type AuthPayload = {
     id: string
@@ -18,9 +20,10 @@ type AuthPayload = {
 
 test.describe('live admin smoke', () => {
     test.setTimeout(180_000)
+    test.skip(!hasAdminToken && !hasAdminLoginCredentials, 'Live admin smoke needs PLAYWRIGHT_ADMIN_TOKEN with PLAYWRIGHT_ADMIN_ID or explicit PLAYWRIGHT_ADMIN_ID/PLAYWRIGHT_ADMIN_PASSWORD.')
 
     test('dashboard vulnerabilities loads and profile VM action stays healthy', async ({ browser, request }) => {
-        const auth = adminToken
+        const auth = hasAdminToken
             ? {
                 id: adminId,
                 name: adminName,
@@ -88,6 +91,8 @@ async function authenticateContext(context: BrowserContext, auth: AuthPayload, a
 }
 
 async function loginAsAdmin(request: APIRequestContext) {
+    test.skip(!hasAdminLoginCredentials, 'Live admin smoke needs explicit PLAYWRIGHT_ADMIN_ID/PLAYWRIGHT_ADMIN_PASSWORD.')
+
     const loginResponse = await request.post(`${apiBase}/auth/login/${adminId}`, {
         data: { password: adminPassword },
     })
