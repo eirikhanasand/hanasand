@@ -1161,6 +1161,8 @@ export default function OrganizationWorkspaceClient() {
                 actionId: delivery.actionId,
                 watchlistId: deliveryWatchlistId(delivery),
                 watchlistItemId: delivery.watchlistItemId || delivery.watchlistItemIds?.[0],
+                watchlistIds: delivery.watchlistIds,
+                watchlistItemIds: delivery.watchlistItemIds,
                 dryRun: true,
                 replay: true,
                 idempotencyKey: delivery.dedupeKey,
