@@ -2104,6 +2104,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                 const selectedRole = pendingRoles[member.userId] || member.role
                                 const roleChanged = selectedRole !== member.role
                                 const canMutateMember = canManage && memberCanMutate(member)
+                                const memberMutationReason = !canManage ? 'Owner or admin required' : !memberCanMutate(member) ? 'Owner role cannot be changed here' : ''
                                 const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                 return (
                                     <article
@@ -2152,7 +2153,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                                     </button>
                                                 </div>
                                             ) : <RoleBadge role={member.role} />}
-                                            <ConfirmActionButton ariaLabel='Remove member' disabled={!canMutateMember || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
+                                            <ConfirmActionButton ariaLabel='Remove member' title={memberMutationReason || 'Remove member'} disabled={!canMutateMember || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
                                             <RowStatus message={rowMessages[`member-${member.userId}`]} />
                                         </div>
                                     </article>
@@ -2173,6 +2174,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                     const selectedRole = pendingRoles[member.userId] || member.role
                                     const roleChanged = selectedRole !== member.role
                                     const canMutateMember = canManage && memberCanMutate(member)
+                                    const memberMutationReason = !canManage ? 'Owner or admin required' : !memberCanMutate(member) ? 'Owner role cannot be changed here' : ''
                                     const selected = selectedSubject.type === 'member' && selectedSubject.id === member.userId
                                     return (
                                         <tr
@@ -2227,7 +2229,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                                 </div>
                                             </td>
                                             <td className='border-b border-ui-border py-2 pl-3 text-right dark:border-ui-border'>
-                                                <ConfirmActionButton ariaLabel='Remove member' disabled={!canMutateMember || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
+                                                <ConfirmActionButton ariaLabel='Remove member' title={memberMutationReason || 'Remove member'} disabled={!canMutateMember || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
                                             </td>
                                         </tr>
                                     )
@@ -2355,6 +2357,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                     const draftChanged = draft ? destinationEditChanged(destination, draft) : false
                     const selected = selectedSubject.type === 'destination' && selectedSubject.id === destination.id
                     const testDisabledReason = !canManage ? 'Owner or admin required' : ''
+                    const destinationManageReason = !canManage ? 'Owner or admin required' : ''
                     return (
                         <div
                             role='button'
@@ -2419,22 +2422,22 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
                                             <RefreshCw className='h-4 w-4' />
                                             Test
                                         </button>
-                                        <button type='button' aria-label='Edit destination' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [destination.id]: { name: destinationName, kind: currentKind, url: '', status: destination.status || 'active' } }))}>
+                                        <button type='button' aria-label={destinationManageReason ? `Edit destination: ${destinationManageReason}` : 'Edit destination'} title={destinationManageReason || 'Edit destination'} className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [destination.id]: { name: destinationName, kind: currentKind, url: '', status: destination.status || 'active' } }))}>
                                             <Pencil className='h-4 w-4' />
                                             Edit
                                         </button>
                                         {destinationStatus === 'active' ? (
-                                            <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onUpdate(destination, { name: destinationName, kind: currentKind, url: '', status: 'paused' })}>
+                                            <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} title={destinationManageReason || 'Disable destination'} aria-label={destinationManageReason ? `Disable destination: ${destinationManageReason}` : 'Disable destination'} onClick={() => onUpdate(destination, { name: destinationName, kind: currentKind, url: '', status: 'paused' })}>
                                                 <Pause className='h-4 w-4' />
                                                 Disable
                                             </button>
                                         ) : (
-                                            <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onUpdate(destination, { name: destinationName, kind: currentKind, url: '', status: 'active' })}>
+                                            <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} title={destinationManageReason || 'Enable destination'} aria-label={destinationManageReason ? `Enable destination: ${destinationManageReason}` : 'Enable destination'} onClick={() => onUpdate(destination, { name: destinationName, kind: currentKind, url: '', status: 'active' })}>
                                                 <Play className='h-4 w-4' />
                                                 Enable
                                             </button>
                                         )}
-                                        <ConfirmActionButton ariaLabel='Remove destination' disabled={!canManage || Boolean(busy)} onConfirm={() => onDelete(destination)} icon={<Trash2 className='h-4 w-4' />} />
+                                        <ConfirmActionButton ariaLabel='Remove destination' title={destinationManageReason || 'Remove destination'} disabled={!canManage || Boolean(busy)} onConfirm={() => onDelete(destination)} icon={<Trash2 className='h-4 w-4' />} />
                                         <RowStatus message={rowMessages[`destination-${destination.id}`]} />
                                     </span>
                                 </>
