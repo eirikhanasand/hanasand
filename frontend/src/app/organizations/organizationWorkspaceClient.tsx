@@ -1336,6 +1336,7 @@ export default function OrganizationWorkspaceClient() {
 
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
                                     <div className='grid gap-5'>
+                                        <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
                                         <WatchlistPanel
                                             watchlists={bundle.watchlists}
                                             activeTerms={bundle.alertTerms}
@@ -1364,7 +1365,6 @@ export default function OrganizationWorkspaceClient() {
                                             selectedSubject={selectedActivitySubject}
                                             onSelectSubject={selectActivitySubject}
                                         />
-                                        <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
                                     </div>
                                     <div className='grid min-w-0 content-start gap-5' data-org-operator-rail='true'>
                                         <div className='xl:sticky xl:top-24 xl:z-10' data-org-activity-sticky='true'>
@@ -1574,9 +1574,11 @@ function EmptyWorkspacePreview() {
                 </div>
                 <div className='min-w-0'>
                     <h2 className='text-xl font-semibold text-ui-text dark:text-ui-text'>Create an organization to start monitoring</h2>
-                    <p className='mt-2 max-w-xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-                        Start with a workspace name and one shared watchlist term. Members, destinations, and alert handling unlock from the same console after creation.
-                    </p>
+                    <div className='mt-3 flex flex-wrap gap-2 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Org settings</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Shared watchlists</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 dark:border-ui-border dark:bg-ui-canvas'>Team invites</span>
+                    </div>
                     <a href='#org-create-primary' className='mt-3 inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text'>
                         Open create form
                     </a>
@@ -1656,9 +1658,6 @@ function DwmHandoffBanner({ organization, bundle, selectedSubject, alertId, case
                         <CircleAlert className='h-4 w-4 text-ui-primary dark:text-ui-primary' />
                         DWM actions for this organization
                     </h2>
-                    <p className='mt-1 text-sm leading-5 text-ui-muted dark:text-ui-muted'>
-                        Manage {sanitizeOrganizationDisplayCopy(selectedLabel) || selectedLabel}, delivery destination, and team access from one workspace view.
-                    </p>
                     <div className='mt-3 flex flex-wrap gap-2'>
                         {scopedValues.map(([label, value]) => (
                             <span key={`${label}-${value}`} className='max-w-full truncate rounded-md border border-ui-primary/35 bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-text dark:border-ui-primary/35 dark:bg-ui-canvas dark:text-ui-primary'>
@@ -1881,11 +1880,11 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
     const validationMessage = settingsValidationMessage(settingsDraft)
     const saving = busy === 'save-settings'
     return (
-        <details id='settings' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-settings-disclosure>
+        <details id='settings' open className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-settings-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 dark:hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                <SectionTitle icon={<Settings className='h-4 w-4' />} title='Advanced organization settings' detail={canManage ? 'Policy controls stay here when workspace setup needs them.' : 'Read-only policy view.'} />
+                <SectionTitle icon={<Settings className='h-4 w-4' />} title='Workspace settings' detail={canManage ? 'Name, lifecycle, webhook policy, alert access.' : 'Read-only organization policy.'} />
                 <span className='shrink-0 rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>
-                    {settingsDirty ? 'Unsaved changes' : 'Policy controls'}
+                    {settingsDirty ? 'Unsaved changes' : 'Settings'}
                 </span>
             </summary>
             <div className='grid gap-3 border-t border-ui-border p-4 dark:border-ui-border md:grid-cols-2'>
@@ -2991,11 +2990,15 @@ function ScopePanel({ alertTerms, alerts, cases, members, webhooks, alertCaseVis
     if (!hasScopeRows) {
         return (
             <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel' data-org-scope-empty='true'>
-                <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Monitoring records' detail='Shared watchlists create the alert, case, and delivery context shown here.' />
+                <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Monitoring records' detail='Alerts, cases, destinations.' />
                 <div className='mt-4 grid gap-3 rounded-lg border border-dashed border-ui-border bg-ui-raised p-4 dark:border-ui-border dark:bg-ui-canvas sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
                     <div className='min-w-0'>
                         <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>No monitoring records yet</p>
-                        <p className='mt-1 text-sm leading-6 text-ui-muted dark:text-ui-muted'>Add a shared watchlist term first. Matching alerts, cases, and saved delivery destinations will appear after the first routed event.</p>
+                        <div className='mt-2 flex flex-wrap gap-2 text-xs font-semibold text-ui-muted dark:text-ui-muted'>
+                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 dark:border-ui-border dark:bg-ui-panel'>Add watchlist</span>
+                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 dark:border-ui-border dark:bg-ui-panel'>Save destination</span>
+                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 dark:border-ui-border dark:bg-ui-panel'>Route alert</span>
+                        </div>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Add watchlist' />
@@ -3007,7 +3010,7 @@ function ScopePanel({ alertTerms, alerts, cases, members, webhooks, alertCaseVis
     }
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-            <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination records' detail='Shared watchlist, case, and delivery records used by monitoring flows.' />
+            <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination records' detail='Matched records for this organization.' />
             <div className='mt-4 grid gap-3 lg:grid-cols-2'>
                 <ScopeColumn icon={<BellRing className='h-4 w-4' />} title='Alert terms' route={`${route}/watchlists/alert-terms`} rows={alertTerms.map(term => ({
                     id: term.watchlistItemId || term.watchlistId || term.alertGenerationRef || term.term || term.value || 'term',
