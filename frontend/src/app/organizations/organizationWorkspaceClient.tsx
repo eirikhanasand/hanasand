@@ -4225,15 +4225,15 @@ function selectedSubjectDestinationId(subject: ActivitySubject, bundle: OrgBundl
     if (subject.type === 'watchlist') {
         const item = bundle.watchlists.find(row => row.id === subject.id)
         const delivery = item ? latestDeliveryForWatchlist(item, bundle.deliveries) : undefined
-        return item?.webhookDestinationId || delivery?.webhookDestinationId || delivery?.destinationId || ''
+        return item?.webhookDestinationId || (delivery ? deliveryDestinationIds(delivery, bundle.webhooks)[0] : '') || ''
     }
     if (subject.type === 'alert') {
-        const delivery = bundle.deliveries.find(item => item.alertId === subject.id && (item.webhookDestinationId || item.destinationId))
-        return delivery?.webhookDestinationId || delivery?.destinationId || ''
+        const delivery = bundle.deliveries.find(item => item.alertId === subject.id && deliveryDestinationIds(item, bundle.webhooks)[0])
+        return delivery ? deliveryDestinationIds(delivery, bundle.webhooks)[0] || '' : ''
     }
     if (subject.type === 'case') {
-        const delivery = bundle.deliveries.find(item => item.caseId === subject.id && (item.webhookDestinationId || item.destinationId))
-        return delivery?.webhookDestinationId || delivery?.destinationId || ''
+        const delivery = bundle.deliveries.find(item => item.caseId === subject.id && deliveryDestinationIds(item, bundle.webhooks)[0])
+        return delivery ? deliveryDestinationIds(delivery, bundle.webhooks)[0] || '' : ''
     }
     return ''
 }
