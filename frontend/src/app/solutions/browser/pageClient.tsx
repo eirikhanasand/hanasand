@@ -368,7 +368,8 @@ export default function BrowserPageClient() {
             }
             if (payload.type === 'frame' && typeof payload.image === 'string') {
                 const image = `data:image/jpeg;base64,${payload.image}`
-                if (isUsefulFrameImage(image)) setActiveImage(image)
+                const evidence = evidenceValue(payload.evidence)
+                if (isUsefulFrameImage(image) && !hasCookiePromptEvidence(evidence)) setActiveImage(image)
                 const urlValue = String(payload.url || url)
                 const frameWidth = finiteNumber(payload.width) || 1280
                 const frameHeight = finiteNumber(payload.height) || 760
@@ -386,7 +387,7 @@ export default function BrowserPageClient() {
                     image,
                     frameWidth,
                     frameHeight,
-                    evidence: evidenceValue(payload.evidence),
+                    evidence,
                     networkSummary: networkSummaryValue(payload.networkSummary),
                 }))
                 return
@@ -1165,6 +1166,10 @@ function captureLabel(reason: string) {
 function isUsefulFrameImage(image: string) {
     // ponytail: tiny JPEGs here are blank white Chromium frames; decode pixels if this becomes noisy.
     return image.length > 24_000
+}
+
+function hasCookiePromptEvidence(evidence?: SandboxEvidence) {
+    return /cookieinnstillinger|godta alle|tilpass cookies|avvis personlig tilpassede annonser|accept all cookies|cookie settings/i.test(evidence?.textExcerpt || '')
 }
 
 function buildAnalystSummary(target: string, captures: Capture[], profile: SandboxProfile) {
