@@ -15,7 +15,7 @@ import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState
 import { humanizeSlug } from '../seo'
 
 const TI_WORKBENCH_PREVIEW_ROWS = 1
-const TI_EVIDENCE_QUEUE_PREVIEW_ROWS = 2
+const TI_EVIDENCE_QUEUE_PREVIEW_ROWS = 3
 const TI_SELECTED_CONTEXT_ROWS = 2
 const TI_SELECTED_CONTINUITY_REF_ROWS = 2
 const TI_SELECTED_CONTINUITY_GAP_ROWS = 3
@@ -391,7 +391,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 <div className='min-w-0'>
                                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Geography</p>
                                     <p className='mt-0.5 wrap-break-word text-xs text-ui-muted dark:text-ui-muted'>
-                                        {actorIntel.geographies.length ? `${actorIntel.geographies.slice(0, 3).join(', ')}${actorIntel.geographies.length > 3 ? ` +${actorIntel.geographies.length - 3}` : ''}` : 'Country coverage needs source detail.'}
+                                        {actorIntel.geographies.length ? actorIntel.geographies.join(', ') : 'Country coverage needs source detail.'}
                                     </p>
                                 </div>
                                 <button
