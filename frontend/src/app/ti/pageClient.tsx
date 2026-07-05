@@ -20,7 +20,7 @@ const TI_SELECTED_CONTEXT_ROWS = 3
 const TI_SELECTED_DETAIL_LIST_ROWS = 3
 const TI_SELECTED_SOURCE_REQUEST_ROWS = 2
 const TI_MOBILE_SOURCE_FILTER_OPTIONS = 5
-const TI_ACTIVITY_TIMELINE_ROWS = 5
+const TI_ACTIVITY_TIMELINE_ROWS = 3
 const TI_SOURCE_REFERENCE_ROWS = 4
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {

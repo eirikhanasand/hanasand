@@ -686,7 +686,7 @@ assert(pageClientSource.includes('const TI_SELECTED_SOURCE_REQUEST_ROWS = 2'), '
 assert(!pageClientSource.includes('TI_DESKTOP_SOURCE_FILTER_CHIPS'), 'Public TI source filters should not render duplicate desktop chip buttons.')
 assert(pageClientSource.includes('data-ti-source-count-summary=\'true\''), 'Public TI source filters should summarize source counts without extra filter buttons.')
 assert(pageClientSource.includes('const TI_MOBILE_SOURCE_FILTER_OPTIONS = 5'), 'Public TI mobile source filters should stay compact.')
-assert(pageClientSource.includes('const TI_ACTIVITY_TIMELINE_ROWS = 5'), 'Public TI activity timeline should stay compact before expansion.')
+assert(pageClientSource.includes('const TI_ACTIVITY_TIMELINE_ROWS = 3'), 'Public TI activity timeline should stay compact before expansion.')
 assert(pageClientSource.includes('const TI_SOURCE_REFERENCE_ROWS = 4'), 'Public TI source reference panel should stay compact.')
 assert(pageClientSource.includes('Linked records'), 'Public TI page should expose consumer workflow state as linked records.')
 assert(pageClientSource.includes('data-ti-consumer-readiness'), 'Public TI page should expose consumer readiness rows for render checks.')
