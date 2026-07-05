@@ -73,10 +73,10 @@ const stats = [
 ]
 
 const workflowShortcuts = [
-    { label: 'Search group intel', href: '/ti/apt29', detail: 'Evidence, sources, and action rows' },
-    { label: 'Inspect DWM queue', href: '/dashboard/dwm', detail: 'Alerts, cases, delivery, and source context' },
-    { label: 'Configure watchlists', href: '/organizations', detail: 'Org terms, members, and destinations' },
-    { label: 'Route alerts', href: '/dashboard/automations?setup=dwm', detail: 'Delivery, replay, and webhook actions' },
+    { label: 'Watch companies and vendors', href: '/organizations', detail: 'Company, vendor, domain, and brand monitoring' },
+    { label: 'Catch leak and extortion mentions', href: '/dashboard/dwm', detail: 'New exposure claims from monitored sources' },
+    { label: 'Review evidence and severity', href: '/dashboard/dwm', detail: 'Source context, confidence, and next action' },
+    { label: 'Route alerts to Slack, webhook, or cases', href: '/dashboard/automations?setup=dwm', detail: 'Send reviewed alerts to the right team' },
 ]
 
 const operatorPaths = [
@@ -180,10 +180,10 @@ export default async function Page({
     const exposureQueue = await loadExposureQueue(Headers) || emptyExposureQueue(generatedAt)
 
     return (
-        <main className='min-h-full bg-ui-canvas text-ui-text'>
+        <main className='min-h-full bg-transparent text-ui-text'>
             <LogoutClient logoutServer={logout} />
 
-            <section className='border-b border-ui-border bg-ui-canvas'>
+            <section className='border-b border-ui-border bg-transparent'>
                 <div className='mx-auto grid w-full max-w-7xl content-start gap-10 px-4 pb-12 pt-16 md:px-8 md:pt-24 lg:pt-28'>
                     <div className='mx-auto grid max-w-5xl justify-items-center gap-6 text-center'>
                         <Link href='/ti' className='landing-primary-action inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold shadow-sm transition'>
@@ -194,7 +194,7 @@ export default async function Page({
 
                         <div className='grid gap-4'>
                             <h1 className='text-5xl font-semibold tracking-normal text-ui-text md:text-7xl'>
-                                Know when your company appears in leak and extortion sources
+                                Find your company in leaks before customers do
                             </h1>
                             <p className='mx-auto max-w-3xl text-lg leading-8 text-ui-muted md:text-xl'>
                                 Give Hanasand the names and domains to watch. We return a clear alert with what happened, why it matters, source context, severity, and the next step.

@@ -36,7 +36,7 @@
 }
 
 .dark {
-  --ui-canvas: #08111f;
+  --ui-canvas: #07101d;
   --ui-panel: #101927;
   --ui-raised: #162238;
   --ui-border: #34445f;
@@ -46,9 +46,9 @@
   --ui-success: #7de0a2;
   --ui-warning: #ffd879;
   --ui-danger: #ffb8b0;
-  --background: #08111f;
+  --background: #07101d;
   --foreground: #f1f3ee;
-  --color-background: #08111f;
+  --color-background: #07101d;
   --color-dark: #101927;
   --color-dark-reverse: #0b1422;
   --color-normal: #111927;
@@ -57,9 +57,9 @@
   --color-superlight: #34445f;
   --color-almostbright: #a8b3c5;
   --color-bright: #f7f8f2;
-  --page-wash-top: #0e1520;
-  --page-wash-bottom: #050914;
-  --dot-grid: rgba(157, 182, 255, 0.18);
+  --page-wash-top: #091321;
+  --page-wash-bottom: #050b14;
+  --dot-grid: rgba(117, 148, 205, 0.22);
   --ambient-primary: rgba(48, 86, 211, 0.105);
   --ambient-secondary: rgba(20, 163, 90, 0.045);
   --ambient-neutral: rgba(157, 182, 255, 0.055);

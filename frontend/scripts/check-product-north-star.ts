@@ -608,7 +608,7 @@ for (const token of [
     'parseProductNorthStarScoreboard',
     'buildProductNorthStarScoreboard',
     'Company exposure monitoring for security teams',
-    'Know when your company appears in leak and extortion sources',
+    'Find your company in leaks before customers do',
     'Monitor a company or vendor',
     'Search intelligence',
     'New',
