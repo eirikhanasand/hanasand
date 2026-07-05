@@ -3174,12 +3174,15 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, canManage, busy, r
 function DeliveryReference({ delivery, organizationId }: { delivery: DeliveryRow, organizationId: string }) {
     const caseHref = delivery.caseId ? `/dashboard/dwm/cases/${encodeURIComponent(delivery.caseId)}?organizationId=${encodeURIComponent(organizationId)}${delivery.alertId ? `&alertId=${encodeURIComponent(delivery.alertId)}` : ''}` : ''
     const alertHref = delivery.alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(delivery.alertId)}&organizationId=${encodeURIComponent(organizationId)}` : ''
+    const watchlistId = delivery.watchlistItemId || delivery.watchlistId || ''
     return (
         <div className='grid gap-1 text-xs'>
             {delivery.caseId ? <a href={caseHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(delivery.caseId, 'Case')}</a> : null}
             {delivery.alertId ? <a href={alertHref} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(delivery.alertId, 'Alert')}</a> : null}
             {!delivery.caseId && !delivery.alertId ? <span className='truncate text-ui-muted dark:text-ui-muted'>Attach alert after replay</span> : null}
-            <span className='truncate text-ui-muted dark:text-ui-muted'>{compactReference(delivery.watchlistItemId || delivery.watchlistId || delivery.actionId, 'Watchlist') || 'Watchlist pending'}</span>
+            {watchlistId
+                ? <a href={`#watchlist-${encodeURIComponent(watchlistId)}`} className='truncate font-semibold text-ui-primary hover:text-ui-primary dark:text-ui-primary'>{compactReference(watchlistId, 'Watchlist')}</a>
+                : <span className='truncate text-ui-muted dark:text-ui-muted'>{compactReference(delivery.actionId, 'Watchlist') || 'Watchlist pending'}</span>}
         </div>
     )
 }
