@@ -267,6 +267,14 @@ function Results({ result }: { result: TiSearchResponse }) {
         { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Alert context', value: alertContextValue },
         { icon: <Database className='h-3.5 w-3.5' />, label: 'Collection gaps', value: `${openGapCount} open` },
     ]
+    const hasStableActorProfile = Boolean(actorIntel.attribution || actorIntel.motivation.length || victimObservations.length || actorIntel.sourceProvenance.length)
+    const actorProfileStatus = hasStableActorProfile ? 'Current profile' : humanResultStatus(result.status)
+    const actorProfileSummary = hasStableActorProfile
+        ? displayRequirementText([
+            actorIntel.attribution,
+            actorIntel.motivation.length ? `Motivation: ${actorIntel.motivation.slice(0, 2).join('; ')}.` : '',
+        ].filter(Boolean).join(' '))
+        : displayRequirementText(result.summary)
     const sectionOverview = sectionOverviewFor({ result, actorIntel, actionability, workItems, victimObservations, watchlist })
     const commandLinks = [
         { href: '#ti-activity', label: 'Latest activity', value: `${filteredWorkItems.length}/${workItems.length} results`, icon: Inbox },
@@ -352,11 +360,11 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     <h1 className='min-w-0 max-w-full wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{humanizeSlug(result.query)}</h1>
                                     {result.status ? (
                                         <span className='max-w-full wrap-break-word rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-xs font-semibold uppercase leading-5 text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary'>
-                                            {humanResultStatus(result.status)}
+                                            {actorProfileStatus}
                                         </span>
                                     ) : null}
                                 </div>
-                                <p className='mt-3 line-clamp-3 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(result.summary)}</p>
+                                <p className='mt-3 line-clamp-3 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{actorProfileSummary}</p>
                             </div>
                             <div data-ti-compact-actor-fact-bar='true' className='flex min-w-0 flex-wrap gap-x-3 gap-y-1'>
                                 {profileStats.map(item => (
@@ -3763,7 +3771,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         return {
             id,
             kind: 'victim',
-            severity: /microsoft|solarwinds|federal|government|diplomatic/i.test(`${item.victim} ${item.sector}`) ? 'high' : 'medium',
+            severity: /microsoft|solarwinds|federal|government|diplomatic|political|election/i.test(`${item.victim} ${item.sector}`) ? 'high' : 'medium',
             status: 'profile evidence',
             title: item.victim,
             subtitle: `${item.country} · ${item.sector}`,

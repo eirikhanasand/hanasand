@@ -84,6 +84,7 @@ test.describe('public threat actor profile', () => {
         expect(source).toContain('>Open case</StripActionButton>')
         expect(source).toContain('actorIntel.geographies.slice(0, 3).join')
         expect(source).not.toContain('actorIntel.geographies.join(\', \')')
+        expect(source).toContain('political|election')
         expect(source).toContain('{sourceBasisLabel(source.confidence)}</span>')
         expect(source).not.toContain('{Math.round(source.confidence * 100)}%</span>')
         expect(source).toContain('No intelligence is available for that search yet.')
