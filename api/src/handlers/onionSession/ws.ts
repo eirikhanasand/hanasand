@@ -523,9 +523,30 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const startedAt = new Date().toISOString()
             const toolUrl = tool.url.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
             try {
+                send({
+                    type: 'status',
+                    state: 'profile_tool_started',
+                    sessionId,
+                    message: `${tool.name || toolUrl} provider capture started.`,
+                })
                 await toolPage.goto(toolUrl, { waitUntil: 'domcontentloaded', timeout: 25_000 })
                 await dismissCookieOverlays(toolPage).catch(() => undefined)
-                await toolPage.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined)
+                await toolPage.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => undefined)
+                const initialEvidence = await collectPageEvidence(toolPage)
+                const initialImage = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
+                send({
+                    type: 'tool_capture',
+                    sessionId,
+                    id: tool.id || safeToolId(tool.name || toolUrl),
+                    name: tool.name || toolUrl,
+                    url: toolPage.url(),
+                    title: await toolPage.title().catch(() => ''),
+                    capturedAt: startedAt,
+                    image: initialImage ? initialImage.toString('base64') : null,
+                    evidence: initialEvidence,
+                    toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, initialEvidence),
+                    target,
+                })
                 const readiness = await waitForProviderCaptureReadiness(toolPage, tool).catch(() => ({ ready: false, blocker: 'readiness-check-failed' }))
                 if (!readiness.ready) {
                     const blockerEvidence = await collectPageEvidence(toolPage)

@@ -1191,6 +1191,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     ])
     const allIndicators = Array.from(new Set([...indicators, ...decodedIndicators, ...networkDomains])).filter(indicator => !target.includes(indicator))
     const deobfuscationSummary = deobfuscationTasks.find(task => task.summary)?.summary || 'No decoded malicious payload summary is available yet.'
+    const capturedToolCount = profile.tools.filter(tool => toolCaptures.some(capture => matchesTool(capture, tool))).length
     const threatAssociations = dedupeThreatAssociations([
         ...captures.flatMap(capture => capture.evidence?.threatAssociations || []),
         ...toolAnalyses.flatMap(analysis => analysis.threatAssociations || []),
@@ -1244,7 +1245,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         webcrackLoaded,
         rows: [
             { label: 'Page captures', value: String(pageCaptures.length) },
-            { label: 'Profile tools', value: `${toolCaptures.length}/${profile.tools.length}` },
+            { label: 'Profile tools', value: `${capturedToolCount}/${profile.tools.length}` },
             { label: 'VirusTotal vendors', value: virusTotal?.vendorFlagged !== undefined ? `${virusTotal.vendorFlagged}/${virusTotal.vendorTotal || '?'}` : 'unknown' },
             { label: 'urlquery alerts', value: urlquery?.alertCount !== undefined ? String(urlquery.alertCount) : 'unknown' },
             { label: 'Community comments', value: String(Math.max(virusTotal?.communityCommentCount || 0, urlquery?.communityCommentCount || 0, comments.length)) },
