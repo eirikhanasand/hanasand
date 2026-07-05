@@ -609,6 +609,35 @@ function AnalystSummary({ summary }: { summary: ReturnType<typeof buildAnalystSu
                     <Clipboard className='h-4 w-4' />
                 </button>
             </div>
+            <div className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3'>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                    <div>
+                        <p className='text-xs font-semibold uppercase text-ui-primary'>Analyst brief</p>
+                        <h3 className='mt-1 text-base font-semibold text-ui-text'>{summary.brief.verdict}</h3>
+                    </div>
+                    <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>{summary.brief.confidence}</span>
+                </div>
+                <div className='mt-3 grid gap-2 md:grid-cols-2'>
+                    <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
+                        <p className='text-[11px] font-semibold uppercase text-ui-muted'>Impact</p>
+                        <p className='mt-1 text-xs leading-5 text-ui-text'>{summary.brief.impact}</p>
+                    </div>
+                    <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
+                        <p className='text-[11px] font-semibold uppercase text-ui-muted'>Recommended action</p>
+                        <p className='mt-1 text-xs leading-5 text-ui-text'>{summary.brief.recommendedAction}</p>
+                    </div>
+                    <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
+                        <p className='text-[11px] font-semibold uppercase text-ui-muted'>Freshness</p>
+                        <p className='mt-1 text-xs leading-5 text-ui-text'>{summary.brief.freshness}</p>
+                    </div>
+                    <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
+                        <p className='text-[11px] font-semibold uppercase text-ui-muted'>Next steps</p>
+                        <ul className='mt-1 grid gap-1 text-xs leading-5 text-ui-text'>
+                            {summary.brief.nextSteps.map(step => <li key={step}>{step}</li>)}
+                        </ul>
+                    </div>
+                </div>
+            </div>
             <div className='mt-3 grid gap-2 text-sm'>
                 {summary.rows.map(row => (
                     <div key={row.label} className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
@@ -744,6 +773,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     const suspiciousCaptures = captures.filter(capture => capture.evidence?.verdict === 'suspicious')
     const obfuscatedScripts = captures.flatMap(capture => capture.evidence?.obfuscatedScripts || [])
     const deobfuscationTasks = captures.flatMap(capture => capture.evidence?.deobfuscationTasks || [])
+    const suspiciousDeobfuscationTasks = deobfuscationTasks.filter(task => task.assessment === 'suspicious')
     const webcrackLoads = captures.flatMap(capture => capture.webcrackLoad ? [capture.webcrackLoad] : [])
     const webcrackLoaded = webcrackLoads.filter(load => load.loaded).length
     const comments = captures.flatMap(capture => capture.evidence?.comments || []).slice(0, 4)
@@ -778,9 +808,26 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     const narrative = pageCaptures.length
         ? `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. Profile "${profile.name}" produced tool context from ${toolNames}. ${toolAnalyses.length ? toolAnalyses.flatMap(item => item.extractedSignals || []).join('; ') || 'External tools loaded but did not expose a parsed detection count yet.' : 'External tool detections are still pending.'} ${suspiciousCaptures.length ? `The rendered evidence is suspicious: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'The rendered evidence is not conclusive yet.'} ${threatNarrative} ${comments.length ? `Community or page comments observed: ${comments.join(' ')}` : 'No community comments were extracted from the loaded pages yet.'}`
         : `The sandbox is preparing ${target || 'the submitted URL'}. Profile "${profile.name}" will capture external tool context for ${toolNames || 'selected tools'} when available.`
+    const brief = buildAnalystBrief({
+        target,
+        pageCaptureCount: pageCaptures.length,
+        redirected,
+        virusTotal,
+        urlquery,
+        suspiciousCaptureCount: suspiciousCaptures.length,
+        suspiciousDeobfuscationCount: suspiciousDeobfuscationTasks.length,
+        obfuscatedScriptCount: obfuscatedScripts.length,
+        webcrackLoaded,
+        threatAssociations,
+        indicatorCount: allIndicators.length,
+        failedRequests,
+        confidence,
+        latestCapturedAt: pageCaptures[0]?.capturedAt || toolCaptures[0]?.capturedAt || '',
+    })
 
     return {
         narrative,
+        brief,
         indicators: allIndicators,
         threatAssociations,
         urlTimeline,
@@ -806,6 +853,63 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
             { label: 'Copyable indicators', value: String(allIndicators.length) },
         ],
     }
+}
+
+function buildAnalystBrief(input: {
+    target: string
+    pageCaptureCount: number
+    redirected: boolean
+    virusTotal?: SandboxToolAnalysis
+    urlquery?: SandboxToolAnalysis
+    suspiciousCaptureCount: number
+    suspiciousDeobfuscationCount: number
+    obfuscatedScriptCount: number
+    webcrackLoaded: number
+    threatAssociations: SandboxThreatAssociation[]
+    indicatorCount: number
+    failedRequests: number
+    confidence: number
+    latestCapturedAt: string
+}) {
+    const vtFlagged = input.virusTotal?.vendorFlagged || 0
+    const urlqueryAlerts = input.urlquery?.alertCount || 0
+    const highSignal = Boolean(vtFlagged || urlqueryAlerts || input.suspiciousCaptureCount || input.suspiciousDeobfuscationCount)
+    const mediumSignal = Boolean(input.redirected || input.obfuscatedScriptCount || input.threatAssociations.length || input.failedRequests)
+    const verdict = highSignal
+        ? 'Treat as suspicious until reviewed'
+        : mediumSignal
+            ? 'Review required before allow-listing'
+            : input.pageCaptureCount
+                ? 'No confirmed malicious signal in captured evidence'
+                : 'Waiting for sandbox evidence'
+    const impact = highSignal
+        ? `External detections, suspicious rendered evidence, or decoded script indicators were observed for ${input.target || 'the submitted URL'}.`
+        : mediumSignal
+            ? 'The run contains redirect, obfuscation, threat-context, or blocked-request signals that need analyst review.'
+            : input.pageCaptureCount
+                ? 'Captured browser and tool evidence does not currently show a confirmed malicious chain.'
+                : 'No browser evidence has been captured yet.'
+    const recommendedAction = highSignal
+        ? 'Open the timeline, copy indicators, and create or update the alert with the observed route and tool evidence.'
+        : mediumSignal
+            ? 'Review redirects, contacted domains, and WebCrack output before allowing user access.'
+            : input.pageCaptureCount
+                ? 'Record the run as low signal unless new vendor or network evidence appears.'
+                : 'Wait for the first page and tool captures to complete.'
+    const confidence = input.confidence
+        ? `${input.confidence}% evidence confidence`
+        : input.virusTotal || input.urlquery
+            ? 'Tool evidence parsed, confidence not provided'
+            : 'Confidence pending'
+    const freshness = input.latestCapturedAt
+        ? `Latest capture ${input.latestCapturedAt}`
+        : 'No capture timestamp yet'
+    const nextSteps = [
+        input.indicatorCount ? `Copy ${input.indicatorCount} indicator${input.indicatorCount === 1 ? '' : 's'} into the alert workflow.` : 'Keep the indicator list open until domains, IPs, or URLs appear.',
+        input.webcrackLoaded ? 'Review WebCrack decoded output for second-stage URLs and payload logic.' : 'Use WebCrack if obfuscated script samples appear.',
+        input.threatAssociations.length ? `Check threat context: ${input.threatAssociations.slice(0, 2).map(item => item.name).join(', ')}.` : 'Confirm actor or malware context from external sources if needed.',
+    ]
+    return { verdict, impact, recommendedAction, confidence, freshness, nextSteps }
 }
 
 function dedupeThreatAssociations(input: SandboxThreatAssociation[]) {
