@@ -53,7 +53,7 @@ const enterpriseReviewItems = [
     { label: 'Security review', value: 'Trust artifacts', href: '/trust' },
     { label: 'Commercial path', value: 'Talk to sales', href: '/contact?intent=enterprise-procurement' },
     { label: 'Admin controls', value: 'Organizations', href: '/organizations' },
-    { label: 'Delivery proof', value: 'Webhook history', href: '/dashboard/automations' },
+    { label: 'Delivery history', value: 'Webhook history', href: '/dashboard/automations' },
 ]
 
 export default function SubscriptionPage() {

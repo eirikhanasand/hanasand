@@ -36,7 +36,8 @@ test('subscription page makes access upgrade and enterprise review paths explici
     expect(page).toContain('label: \'Security review\', value: \'Trust artifacts\', href: \'/trust\'')
     expect(page).toContain('label: \'Commercial path\', value: \'Talk to sales\', href: \'/contact?intent=enterprise-procurement\'')
     expect(page).toContain('label: \'Admin controls\', value: \'Organizations\', href: \'/organizations\'')
-    expect(page).toContain('label: \'Delivery proof\', value: \'Webhook history\', href: \'/dashboard/automations\'')
+    expect(page).toContain('label: \'Delivery history\', value: \'Webhook history\', href: \'/dashboard/automations\'')
+    expect(page).not.toContain('Delivery proof')
 
     expect(page.indexOf('data-subscription-primary-flow')).toBeLessThan(page.indexOf('<section className=\'grid gap-3 xl:grid-cols-3\'>'))
     expect(page.indexOf('data-subscription-enterprise-review')).toBeGreaterThan(page.indexOf('Workspace entitlements'))
