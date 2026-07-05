@@ -6,6 +6,7 @@ const root = process.cwd()
 
 test('TI workbench keeps selected-case actions primary and collapses secondary rail context', async () => {
     const page = await readFile(path.join(root, 'src/app/dashboard/ti/workbench/workbenchClient.tsx'), 'utf8')
+    const route = await readFile(path.join(root, 'src/app/dashboard/ti/workbench/page.tsx'), 'utf8')
 
     expect(page).toContain('<OperatorActionRail')
     expect(page).toContain('data-workbench-stats-disclosure')
@@ -26,6 +27,15 @@ test('TI workbench keeps selected-case actions primary and collapses secondary r
     expect(page).toContain('onRunAction={(action) => selected && runWorkbenchAction')
     expect(page).toContain('onCustomerNotification={() => selected && recordCustomerNotification')
     expect(page).toContain('onCreateSharedWatchlistTerm={() => selected && createSharedWatchlistTerm(selected)}')
+    expect(route).toContain('const initialSelectedId = selectedWorkbenchCaseId(cases, params) || publicTiCases[0]?.id')
+    expect(route).toContain('function selectedWorkbenchCaseId')
+    expect(route).toContain('function workbenchCaseMatchesScope')
+    expect(route).toContain('function workbenchCaseReferenceRows')
+    expect(route).toContain('function scopeRefsFromHref')
+    expect(route).toContain('[\'alertId\', \'alert\']')
+    expect(route).toContain('[\'watchlistId\', \'watchlist\']')
+    expect(route).toContain('[\'organizationId\', \'organization\']')
+    expect(route).toContain('/dashboard/dwm/cases/')
     expect(page).toContain('import { safeEvidenceExcerpt } from \'@/utils/dwm/display\'')
     expect(page).toContain('function safeWorkbenchDetail(value: string | undefined)')
     expect(page).toContain('safeEvidenceExcerpt(value || \'Safe excerpt is being prepared from this evidence.\')')
