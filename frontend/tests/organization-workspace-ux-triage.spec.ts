@@ -450,6 +450,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     const watchlistUpdates: Array<{ itemId: string, value: string }> = []
     const watchlistArchives: string[] = []
     const destinationTests: Array<{ destinationId: string, dryRun: boolean }> = []
+    const deliveryReplays: Array<{ destinationId?: string, alertId?: string, caseId?: string, watchlistId?: string, replay?: boolean }> = []
     const settingsUpdates: Array<{ name?: string }> = []
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
     await context.addCookies([
@@ -545,6 +546,11 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     })
     await page.route('**/api/dwm/webhooks/deliveries**', async route => {
         await route.fulfill({ json: { deliveries: fixtureDeliveries } })
+    })
+    await page.route('**/api/dwm/webhooks/deliver', async route => {
+        const body = await route.request().postDataJSON() as { destinationId?: string, alertId?: string, caseId?: string, watchlistId?: string, replay?: boolean }
+        deliveryReplays.push({ destinationId: body.destinationId, alertId: body.alertId, caseId: body.caseId, watchlistId: body.watchlistId, replay: body.replay })
+        await route.fulfill({ json: { deliveries: [{ ...fixtureDeliveries[0], id: 'delivery_replay_1', status: 'dry_run', error: undefined, errorClass: undefined, responseSummary: 'Dry run replay accepted.', dryRun: true }] } })
     })
     await page.route('**/api/organizations/org_contoso/settings', async route => {
         await route.fulfill({ json: { settings: { name: 'Contoso', slug: 'contoso', defaultWebhookPolicy: 'active_destinations', alertVisibilityPolicy: 'members', lifecycleStatus: 'active', retentionDays: 365 } } })
@@ -666,6 +672,9 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(page.locator('#delivery-history')).toContainText('Case acme 1')
     await expect(page.locator('#delivery-history')).not.toContainText('Case case_acme_1')
     await expect(page.locator('#delivery-history')).not.toContainText('Case acme_1')
+    await page.locator('#delivery-history').getByRole('button', { name: 'Retry' }).first().click()
+    expect(deliveryReplays).toContainEqual({ destinationId: 'dest_acme_discord', alertId: 'dwm_alert_acme', caseId: 'case_acme_1', watchlistId: 'watch_acme_domain', replay: true })
+    await expect(page.locator('#delivery-history')).toContainText('Dry-run rendered the Discord/webhook payload without sending externally.')
     await page.locator('#delivery-history').getByRole('button', { name: 'Show all' }).click()
     await expect(page.locator('#delivery-history')).toContainText('Show latest')
     await expect(page.locator('#delivery-history')).toContainText('audit acme extra 0')
