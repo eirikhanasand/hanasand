@@ -201,7 +201,6 @@ function Results({ result }: { result: TiSearchResponse }) {
     const [showFullQueue, setShowFullQueue] = useState(false)
     const [showGeoCoverage, setShowGeoCoverage] = useState(false)
     const largeViewport = useMediaQuery('(min-width: 1024px)')
-    const renderDesktopActions = largeViewport !== false
     const renderMobileWorkbar = largeViewport !== true
     const filteredWorkItems = useMemo(() => filteredAnalystWorkItems(workItems, {
         kind: queueKindFilter,
@@ -402,22 +401,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                         </section>
                     </div>
                 </div>
-                {renderDesktopActions ? (
-                    <ActorActionStrip
-                        actor={actorIntel}
-                        actionability={actionability}
-                        selected={selected}
-                        caseAvailable={Boolean(selectedCaseDraft && selectedCaseOwnership && selectedCaseCreateRequest && selectedWatchlistPlan && selectedAlertPlan && selectedDeliveryPlan && selectedEnrichmentTriage && selectedCaseActionTrail)}
-                        watchlistHref={selectedConsoleLinks?.watchlist}
-                        caseHref={selectedConsoleLinks?.case}
-                        alertHref={selectedConsoleLinks?.alert}
-                        onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
-                        onCase={() => stageSelectedHandoff()}
-                        onEscalate={() => applyDecision('escalated')}
-                        onReview={() => applyDecision('reviewing')}
-                    />
-                ) : null}
-
                 <div className='grid min-h-[44rem] min-w-0 lg:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]'>
                     <aside id='ti-activity' data-ti-queue='true' className='order-2 min-w-0 border-b border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-canvas lg:order-none lg:border-b-0 lg:border-r'>
                         <div className='border-b border-ui-border p-4 dark:border-ui-border'>
@@ -840,7 +823,7 @@ function SelectedEvidenceRail({
 
     return (
         <section id='ti-selected-evidence' data-ti-actor-evidence-spotlight='true' className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel'>
-            <div className='grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_15rem]'>
+            <div className='grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,22rem)] lg:items-start'>
                 <div className='order-1 min-w-0 lg:order-none'>
                     <div className='flex flex-wrap items-center gap-2'>
                         <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Selected evidence</p>
@@ -866,7 +849,7 @@ function SelectedEvidenceRail({
                         </div>
                         <span className={decisionStepStatusClass(caseReady && alertReady ? 'ready' : 'review')}>{caseReady && alertReady ? 'routed' : 'review'}</span>
                     </div>
-                    <div className='grid min-w-0 gap-1.5'>
+                    <div className='grid min-w-0 gap-1.5 sm:grid-cols-2'>
                         {continuityRows.map(row => (
                             <ContinuityRow key={row.label} label={row.label} value={row.value} state={row.state} href={row.href} fallback={row.fallback} />
                         ))}
@@ -877,7 +860,7 @@ function SelectedEvidenceRail({
                         ))}
                     </div>
                     {continuityGaps.length ? (
-                        <div data-ti-continuity-gaps='true' className='grid min-w-0 gap-1 rounded-md border border-ui-warning/25 bg-ui-warning/10 p-2'>
+                        <div data-ti-continuity-gaps='true' className='grid min-w-0 gap-1 rounded-md border border-ui-warning/25 bg-ui-warning/10 p-1.5'>
                             <p className='text-[10px] font-semibold uppercase text-ui-warning dark:text-ui-warning'>Missing links</p>
                             <div className='flex min-w-0 flex-wrap gap-1'>
                                 {continuityGaps.map(gap => (
@@ -888,9 +871,9 @@ function SelectedEvidenceRail({
                             </div>
                         </div>
                     ) : null}
-                    <div className='grid grid-cols-2 gap-1.5'>
+                    <div data-ti-selected-console-links='true' className='grid grid-cols-2 gap-1.5 sm:grid-cols-4'>
                         <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
-                        <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onStage} href={caseHref} disabled={!caseHref && !caseReady}>Open case</StripActionButton>
+                        <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onStage} href={caseHref} disabled={!caseHref && !caseReady}>Case</StripActionButton>
                         <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate} href={alertHref}>Escalate</StripActionButton>
                         <StripActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
                     </div>
@@ -2183,95 +2166,6 @@ function normalizedAuthenticatedRoute(route: string | undefined) {
     if (route.startsWith('/v1/dwm')) return '/dashboard/dwm'
     if (route.startsWith('/dashboard')) return route
     return '/dashboard/dwm'
-}
-
-function ActorActionStrip({
-    actor,
-    actionability,
-    selected,
-    caseAvailable,
-    watchlistHref,
-    caseHref,
-    alertHref,
-    onWatchlist,
-    onCase,
-    onEscalate,
-    onReview,
-}: {
-    actor: TiActorIntelligenceProfile
-    actionability: TiActionabilityModel
-    selected?: AnalystWorkItem
-    caseAvailable: boolean
-    watchlistHref?: string
-    caseHref?: string
-    alertHref?: string
-    onWatchlist: () => void
-    onCase: () => void
-    onEscalate: () => void
-    onReview: () => void
-}) {
-    const exportRows = unique([
-        ...actor.indicators,
-        ...actor.infrastructure,
-        ...actor.malwareTools,
-    ]).slice(0, 24)
-    const alertSummary = actionability.relatedAlerts.length
-        ? `${actionability.relatedAlerts.length} linked alerts`
-        : actionability.alertGenerationReadiness.candidateCount
-            ? `${actionability.alertGenerationReadiness.candidateCount} alert reviews`
-            : 'watchlist before alert'
-    const caseSummary = actionability.relatedCases.length
-        ? `${actionability.relatedCases.length} linked cases`
-        : actionability.caseReviewIntake.summary.total
-            ? `${actionability.caseReviewIntake.summary.total} case reviews`
-            : 'case source needed'
-    const actionSummary = [
-        `${actionability.watchlistRelevance.terms.length} watch terms`,
-        alertSummary,
-        caseSummary,
-        `${actionability.enrichmentGapQueue.length} source questions`,
-    ]
-    return (
-        <div data-ti-actor-action-strip='true' className='border-b border-ui-border bg-ui-panel px-3 py-2 dark:border-ui-border dark:bg-ui-panel'>
-            <div className='flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between'>
-                <div className='min-w-0 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                    <span className='font-semibold uppercase text-ui-primary dark:text-ui-primary'>Analyst actions</span>
-                    <span className='mx-1.5 text-ui-muted/70 dark:text-ui-muted/70'>·</span>
-                    <span className='wrap-break-word'>{actionSummary.join(' · ')}</span>
-                </div>
-                <div data-ti-selected-console-links='true' className='grid min-w-0 grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:justify-end'>
-                    <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
-                    <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onCase} href={caseHref} disabled={!caseHref && !caseAvailable}>Create case</StripActionButton>
-                    <StripActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
-                    <details className='group col-span-2 rounded-lg border border-ui-border bg-ui-panel p-1 sm:col-auto' data-ti-actor-secondary-actions='true'>
-                        <summary className='flex min-h-8 cursor-pointer list-none items-center justify-between gap-2 px-2 text-[11px] font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>
-                            <span>More</span>
-                            <span className='rounded-full border border-ui-border px-1.5 py-0.5 text-[10px] uppercase text-ui-muted'>{exportRows.length ? 2 : 1}</span>
-                        </summary>
-                        <div className='mt-1 grid gap-1.5 sm:min-w-32'>
-                            <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate} href={alertHref}>Escalate</StripActionButton>
-                            {exportRows.length ? (
-                                <CopyPayloadButton
-                                    label='Export IOCs'
-                                    showLabel
-                                    payload={{
-                                        schemaVersion: 'ti.public_actor.ioc_export.v1',
-                                        source: 'public-ti',
-                                        selectedItemId: selected?.id,
-                                        indicators: actor.indicators,
-                                        infrastructure: actor.infrastructure,
-                                        malwareTools: actor.malwareTools,
-                                        sourceCoverage: actor.sourceCoverage,
-                                        provenanceRows: actor.provenanceRows,
-                                    }}
-                                />
-                            ) : null}
-                        </div>
-                    </details>
-                </div>
-            </div>
-        </div>
-    )
 }
 
 function StripActionButton({ icon, children, onClick, href, disabled = false }: { icon: React.ReactNode; children: string; onClick: () => void; href?: string; disabled?: boolean }) {
