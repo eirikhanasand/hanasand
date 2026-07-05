@@ -1119,7 +1119,6 @@ export default function OrganizationWorkspaceClient() {
             payload.webhookUrl = url
             payload.destinationType = draft.kind
             payload.attachToWatchlist = true
-            setDestinationDrafts(current => ({ ...current, [item.id]: { ...draft, url: '' } }))
         }
         const result = await requestJson<DeliveryResult>('/api/dwm/webhooks/deliver', {
             method: 'POST',
@@ -1128,6 +1127,9 @@ export default function OrganizationWorkspaceClient() {
         const delivery = firstDelivery(result)
         if (delivery) {
             setDeliveryResults(current => ({ ...current, [item.id]: delivery }))
+        }
+        if (withUrl) {
+            setDestinationDrafts(current => ({ ...current, [item.id]: { ...draft, url: '' } }))
         }
         const resultText = deliveryActionResultSummary(delivery, withUrl ? 'Destination tested and saved.' : 'Saved destination tested.')
         return withUrl ? `${resultText} Destination saved for this watchlist.` : resultText
