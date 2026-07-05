@@ -114,6 +114,8 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(page).toContain('No delivery attempt yet')
     expect(page).toContain('Configure delivery')
     expect(page).toContain('href={orgHref}')
+    expect(page).toContain('Advanced route actions')
+    expect(page).not.toContain('More route actions')
 })
 
 test('dwm next operator action prioritizes the workflow step an analyst can take now', () => {
