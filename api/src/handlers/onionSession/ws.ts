@@ -516,12 +516,33 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         target: string,
         deobfuscationTasks: SandboxDeobfuscationTask[] = [],
     ) {
-        for (const tool of tools.slice(0, 6)) {
-            if (!tool.url) continue
+        const plannedTools = tools.slice(0, 6).filter(tool => tool.url)
+        for (const tool of plannedTools) {
+            const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
+            const evidence = providerPendingEvidence(toolUrl, tool.name || toolUrl, target)
+            send({
+                type: 'tool_capture',
+                sessionId,
+                id: tool.id || safeToolId(tool.name || toolUrl),
+                name: tool.name || toolUrl,
+                url: toolUrl,
+                title: tool.name || toolUrl,
+                capturedAt: new Date().toISOString(),
+                image: null,
+                evidence,
+                toolAnalysis: {
+                    ...analyzeToolEvidence(tool.name || toolUrl, evidence),
+                    extractedSignals: [`Provider queued in sandbox for ${target}.`],
+                },
+                target,
+                error: 'provider_navigation_pending',
+            })
+        }
+        for (const tool of plannedTools) {
             const toolPage = await context.newPage().catch(() => null)
             if (!toolPage) continue
             const startedAt = new Date().toISOString()
-            const toolUrl = tool.url.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
+            const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
             try {
                 send({
                     type: 'status',
@@ -1819,6 +1840,23 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         webcrackScriptId: webcrackLoad?.scriptId,
         webcrackSampleBytes: webcrackLoad?.sampleBytes,
         webcrackLoadReason: webcrackLoad?.reason,
+    }
+}
+
+function providerPendingEvidence(url: string, toolName: string, target: string): Awaited<ReturnType<typeof collectPageEvidence>> {
+    return {
+        url,
+        textExcerpt: `${toolName} provider capture queued for ${target}. Parsed provider result is pending or blocked by provider navigation.`,
+        indicators: extractIndicators(`${url}\n${target}`),
+        comments: [],
+        forms: [],
+        scripts: [],
+        obfuscatedScripts: [],
+        verdict: 'unknown',
+        confidence: 10,
+        reasons: ['Provider result has not returned yet.'],
+        threatAssociations: [],
+        deobfuscationTasks: [],
     }
 }
 
