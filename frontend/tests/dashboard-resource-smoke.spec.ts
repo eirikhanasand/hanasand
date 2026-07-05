@@ -14,33 +14,31 @@ const dashboardRoutes = [
     { path: '/dashboard', heading: /Good|You're|It’s/ },
     { path: '/dashboard/overview', heading: 'Operations Overview', screenshot: 'dashboard-overview.png' },
     { path: '/dashboard/dwm', heading: 'Company and vendor exposure alerts' },
-    { path: '/dashboard/load-testing', heading: 'Load testing and endpoint evidence' },
     { path: '/dashboard/subscription', heading: 'Enable product access' },
-    { path: '/dashboard/vms', heading: 'Virtual Machines', screenshot: 'dashboard-vms.png' },
-    { path: '/dashboard/projects', heading: 'Projects', screenshot: 'dashboard-projects.png' },
-    { path: '/dashboard/shares', heading: 'Code shares and projects', screenshot: 'dashboard-shares.png' },
-    { path: '/dashboard/automations', heading: 'Automations' },
-    { path: '/dashboard/notes', heading: 'Notes' },
 ]
 
 const normalSidebarLinks = [
     { name: 'Console', href: '/dashboard' },
     { name: 'Threat search', href: '/ti' },
     { name: 'Dark web', href: '/dashboard/dwm' },
-    { name: 'Alerts', href: '/dashboard/automations' },
-    { name: 'Load testing', href: '/dashboard/load-testing' },
     { name: 'API docs', href: '/developers' },
     { name: 'Subscription', href: '/dashboard/subscription' },
-    { name: 'Workspaces', href: '/dashboard/projects' },
-    { name: 'Code shares', href: '/dashboard/shares' },
-    { name: 'Notes', href: '/dashboard/notes' },
 ]
 
 const privilegedSidebarLinks = [
+    'VMs',
+    'Projects',
+    'Shares',
+    'Mail',
+    'Automations',
+    'Notes',
+    'Load testing',
     'Traffic',
     'System',
     'AI Metrics',
     'Vulnerabilities',
+    'Articles',
+    'Thoughts',
     'Logs',
     'Database',
     'Backup',
@@ -51,9 +49,26 @@ const privilegedSidebarLinks = [
 ]
 
 const privilegedDashboardRoutes = [
+    { path: '/dashboard/vms', heading: 'Virtual Machines' },
+    { path: '/dashboard/projects', heading: 'Projects' },
+    { path: '/dashboard/shares', heading: 'Code shares and projects' },
+    { path: '/dashboard/mail', heading: 'Mail' },
+    { path: '/dashboard/automations', heading: 'Automations' },
+    { path: '/dashboard/notes', heading: 'Notes' },
     { path: '/dashboard/traffic', heading: 'Traffic' },
     { path: '/dashboard/system', heading: 'System metrics' },
+    { path: '/dashboard/system/ai', heading: 'AI Metrics' },
     { path: '/dashboard/vulnerabilities', heading: 'Vulnerabilities' },
+    { path: '/dashboard/load-testing', heading: 'Load testing and endpoint evidence' },
+    { path: '/dashboard/articles', heading: 'Articles' },
+    { path: '/dashboard/thoughts', heading: 'Thoughts' },
+    { path: '/dashboard/logs', heading: 'Logs' },
+    { path: '/dashboard/db', heading: 'Database' },
+    { path: '/dashboard/db/backups', heading: 'Database backups' },
+    { path: '/dashboard/system/rate-limits', heading: 'Rate Limits' },
+    { path: '/dashboard/cron-jobs', heading: 'Cron Jobs' },
+    { path: '/dashboard/system/impersonation', heading: /Support access|Impersonation/ },
+    { path: '/dashboard/management', heading: 'Admin' },
 ]
 
 test.describe('dashboard resource routes', () => {
@@ -68,7 +83,7 @@ test.describe('dashboard resource routes', () => {
         const failedResponses: string[] = []
 
         try {
-            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             page.on('pageerror', (error) => pageErrors.push(error.message))
@@ -116,7 +131,7 @@ test.describe('dashboard resource routes', () => {
         const context = await browser.newContext({ baseURL })
 
         try {
-            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             for (const route of privilegedDashboardRoutes) {
@@ -137,7 +152,7 @@ test.describe('dashboard resource routes', () => {
         const context = await browser.newContext({ baseURL })
 
         try {
-            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
@@ -164,7 +179,7 @@ test.describe('dashboard resource routes', () => {
         try {
             await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
-            const routes = ['/dashboard/overview', '/dashboard/dwm', '/dashboard/subscription', '/dashboard/load-testing', '/dashboard/shares', '/ti/apt42']
+            const routes = ['/dashboard/overview', '/dashboard/dwm', '/dashboard/subscription', '/ti/apt42']
 
             for (const route of routes) {
                 await page.goto(route, { waitUntil: 'domcontentloaded' })
@@ -172,7 +187,6 @@ test.describe('dashboard resource routes', () => {
                 await expect(page.locator('aside').getByRole('button', { name: 'Collapse sidebar' })).toBeVisible()
                 await expect(page.locator('aside nav').getByRole('link', { name: 'Dark web', exact: true })).toHaveAttribute('href', '/dashboard/dwm')
                 await expect(page.locator('aside nav').getByRole('link', { name: 'Subscription', exact: true })).toHaveAttribute('href', '/dashboard/subscription')
-                await expect(page.locator('aside nav').getByRole('link', { name: 'Code shares', exact: true })).toHaveAttribute('href', '/dashboard/shares')
                 await expect(page.locator('aside nav').getByRole('link', { name: 'Webhooks', exact: true })).toHaveCount(0)
                 await expect(page.locator('aside nav').getByRole('link', { name: 'Pricing', exact: true })).toHaveCount(0)
                 await expect(page.locator('aside nav').getByRole('link', { name: 'Articles', exact: true })).toHaveCount(0)
@@ -207,7 +221,7 @@ test.describe('dashboard resource routes', () => {
         const context = await browser.newContext({ baseURL })
 
         try {
-            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             await page.goto('/dashboard/vm', { waitUntil: 'domcontentloaded' })
@@ -229,7 +243,7 @@ test.describe('dashboard resource routes', () => {
         const content = 'Created from the dashboard manage-flow smoke.'
 
         try {
-            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(context, adminAuth(auth), baseURL || 'http://127.0.0.1:3000')
             const page = await context.newPage()
 
             const notesLoaded = page.waitForResponse((response) =>
@@ -580,6 +594,13 @@ function authHeaders(auth: { id: string, token: string }) {
         Authorization: `Bearer ${decodeURIComponent(auth.token)}`,
         id: auth.id,
         'Content-Type': 'application/json',
+    }
+}
+
+function adminAuth<T extends { roles?: Array<{ id: string } | string> }>(auth: T) {
+    return {
+        ...auth,
+        roles: [{ id: 'administrator' }, { id: 'system_admin' }, { id: 'content_admin' }],
     }
 }
 
