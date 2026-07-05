@@ -1153,6 +1153,7 @@ export default function OrganizationWorkspaceClient() {
                 orgId: selectedOrganization.id,
                 tenantId: delivery.tenantId || selectedOrganization.tenantId || 'default',
                 destinationId,
+                webhookDestinationId: destinationId,
                 alertId: delivery.alertId,
                 caseId: delivery.caseId,
                 actionId: delivery.actionId,
