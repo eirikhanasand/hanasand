@@ -3042,6 +3042,9 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                     <EmptyLine text={selectedSubject.type === 'organization' ? 'Test or replay a destination to populate delivery history.' : 'Select a row with delivery activity or run a test destination.'} />
                 ) : (
                     <>
+                        <div aria-hidden='true'>
+                            {scopedDeliveries.map(delivery => <span key={delivery.id} id={`delivery-${encodeURIComponent(delivery.id)}`} className='block h-0 scroll-mt-24' />)}
+                        </div>
                         <div className='grid gap-2 p-2 md:hidden' data-org-delivery-mobile-list='true'>
                             {scopedDeliveries.map(delivery => (
                                 <DeliveryHistoryMobileRow
@@ -4111,30 +4114,33 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
     if (subject.type === 'watchlist') {
         const watchlistId = encodeURIComponent(subject.id)
         const destinationId = selectedSubjectDestinationId(subject, bundle)
+        const deliveryId = selectedSubjectDeliveryId(subject, bundle)
         return [
             { label: 'Watchlist', href: `#watchlist-${watchlistId}` },
             ...(destinationId ? [{ label: 'Destination', href: `#destination-${encodeURIComponent(destinationId)}` }] : []),
-            { label: 'Delivery activity', href: '#delivery-history' },
+            { label: 'Delivery', href: deliveryId ? `#delivery-${encodeURIComponent(deliveryId)}` : '#delivery-history' },
             { label: 'Open alert workspace', href: `/dashboard/ti/workbench?organizationId=${organizationId}&watchlistId=${watchlistId}` },
         ]
     }
     if (subject.type === 'destination') {
         const destinationId = encodeURIComponent(subject.id)
+        const deliveryId = selectedSubjectDeliveryId(subject, bundle)
         return [
             { label: 'Destination', href: `#destination-${destinationId}` },
-            { label: 'Delivery activity', href: '#delivery-history' },
+            { label: 'Delivery', href: deliveryId ? `#delivery-${encodeURIComponent(deliveryId)}` : '#delivery-history' },
         ]
     }
     if (subject.type === 'alert') {
         const alertId = encodeURIComponent(subject.id)
         const watchlistId = selectedSubjectWatchlistId(subject, bundle)
         const destinationId = selectedSubjectDestinationId(subject, bundle)
+        const deliveryId = selectedSubjectDeliveryId(subject, bundle)
         return [
             { label: 'Alert', href: `/dashboard/ti/workbench?alertId=${alertId}&organizationId=${organizationId}` },
             { label: 'Record', href: `#alert-record-${alertId}` },
             ...(watchlistId ? [{ label: 'Watchlist', href: `#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
             ...(destinationId ? [{ label: 'Destination', href: `#destination-${encodeURIComponent(destinationId)}` }] : []),
-            { label: 'Delivery activity', href: '#delivery-history' },
+            { label: 'Delivery', href: deliveryId ? `#delivery-${encodeURIComponent(deliveryId)}` : '#delivery-history' },
             { label: 'Organization activity', href: '#audit' },
         ]
     }
@@ -4142,12 +4148,13 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
         const caseId = encodeURIComponent(subject.id)
         const watchlistId = selectedSubjectWatchlistId(subject, bundle)
         const destinationId = selectedSubjectDestinationId(subject, bundle)
+        const deliveryId = selectedSubjectDeliveryId(subject, bundle)
         return [
             { label: 'Case', href: `/dashboard/dwm/cases/${caseId}?organizationId=${organizationId}` },
             { label: 'Record', href: `#case-record-${caseId}` },
             ...(watchlistId ? [{ label: 'Watchlist', href: `#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
             ...(destinationId ? [{ label: 'Destination', href: `#destination-${encodeURIComponent(destinationId)}` }] : []),
-            { label: 'Delivery activity', href: '#delivery-history' },
+            { label: 'Delivery', href: deliveryId ? `#delivery-${encodeURIComponent(deliveryId)}` : '#delivery-history' },
             { label: 'Organization activity', href: '#audit' },
         ]
     }
@@ -4179,6 +4186,24 @@ function selectedSubjectDestinationId(subject: ActivitySubject, bundle: OrgBundl
     if (subject.type === 'case') {
         const delivery = bundle.deliveries.find(item => item.caseId === subject.id && (item.webhookDestinationId || item.destinationId))
         return delivery?.webhookDestinationId || delivery?.destinationId || ''
+    }
+    return ''
+}
+
+function selectedSubjectDeliveryId(subject: ActivitySubject, bundle: OrgBundle) {
+    if (subject.type === 'watchlist') {
+        const item = bundle.watchlists.find(row => row.id === subject.id)
+        return item ? latestDeliveryForWatchlist(item, bundle.deliveries)?.id || '' : ''
+    }
+    if (subject.type === 'destination') {
+        const destination = bundle.webhooks.find(row => row.id === subject.id)
+        return destination ? deliveriesForDestination(destination, bundle.deliveries).sort((left, right) => deliveryTime(right) - deliveryTime(left))[0]?.id || '' : ''
+    }
+    if (subject.type === 'alert') {
+        return bundle.deliveries.filter(item => item.alertId === subject.id).sort((left, right) => deliveryTime(right) - deliveryTime(left))[0]?.id || ''
+    }
+    if (subject.type === 'case') {
+        return bundle.deliveries.filter(item => item.caseId === subject.id).sort((left, right) => deliveryTime(right) - deliveryTime(left))[0]?.id || ''
     }
     return ''
 }
