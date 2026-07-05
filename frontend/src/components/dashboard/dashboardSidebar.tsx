@@ -86,7 +86,7 @@ export default function DashboardSidebar({
             { href: '/dashboard/ti/enrichment', label: 'Actor profiles', icon: <ListChecks className='h-4 w-4' /> },
             { href: '/dashboard/ti/sources', label: 'Sources', icon: <DatabaseZap className='h-4 w-4' /> },
             { href: '/dashboard/ti/domains', label: 'Watched entities', icon: <Globe2 className='h-4 w-4' /> },
-            { href: '/dashboard/ti/control', label: 'Collection runs', icon: <PlayCircle className='h-4 w-4' /> },
+            { href: '/dashboard/ti/runs', label: 'Collection runs', icon: <PlayCircle className='h-4 w-4' /> },
             { href: '/dashboard/ti/audit', label: 'Audit log', icon: <ClipboardList className='h-4 w-4' /> },
         )
 

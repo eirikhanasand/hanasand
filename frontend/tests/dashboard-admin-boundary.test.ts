@@ -37,6 +37,7 @@ test('dashboard sidebar keeps internal products admin-only without deleting them
         ['Cron Jobs', '/dashboard/cron-jobs'],
         ['Impersonation', '/dashboard/system/impersonation'],
         ['Management', '/dashboard/management'],
+        ['Collection runs', '/dashboard/ti/runs'],
     ] as const
 
     for (const [label, href] of adminOnly) {
