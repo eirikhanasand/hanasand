@@ -614,6 +614,7 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     const watchlistUpdates: Array<{ itemId: string, value: string }> = []
     const watchlistArchives: string[] = []
     const destinationTests: Array<{ destinationId: string, dryRun: boolean }> = []
+    const watchlistDestinationTests: Array<{ watchlistId?: string, webhookUrl?: string, attachToWatchlist?: boolean }> = []
     const deliveryReplays: Array<{ destinationId?: string, alertId?: string, caseId?: string, watchlistId?: string, replay?: boolean }> = []
     const settingsUpdates: Array<{ name?: string }> = []
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
@@ -718,7 +719,10 @@ test('organization workspace renders searchable shared watchlists', async ({ con
         await route.fulfill({ json: { deliveries: fixtureDeliveries } })
     })
     await page.route('**/api/dwm/webhooks/deliver', async route => {
-        const body = await route.request().postDataJSON() as { destinationId?: string, alertId?: string, caseId?: string, watchlistId?: string, replay?: boolean }
+        const body = await route.request().postDataJSON() as { destinationId?: string, alertId?: string, caseId?: string, watchlistId?: string, replay?: boolean, webhookUrl?: string, attachToWatchlist?: boolean }
+        if (body.webhookUrl) {
+            watchlistDestinationTests.push({ watchlistId: body.watchlistId, webhookUrl: body.webhookUrl, attachToWatchlist: body.attachToWatchlist })
+        }
         deliveryReplays.push({ destinationId: body.destinationId, alertId: body.alertId, caseId: body.caseId, watchlistId: body.watchlistId, replay: body.replay })
         await route.fulfill({ json: { deliveries: [{ ...fixtureDeliveries[0], id: 'delivery_replay_1', status: 'dry_run', error: undefined, errorClass: undefined, responseSummary: 'Dry run replay accepted.', dryRun: true }] } })
     })
@@ -893,6 +897,12 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(acmeRow).toContainText('Active routes')
     await expect(oktaRow).toBeVisible()
     await expect(oktaRow).toContainText('Paused excluded')
+    await acmeRow.getByLabel('URL').fill('https://discord.com/api/webhooks/test/secret-token')
+    await acmeRow.getByText('Test and save').click()
+    await expect.poll(() => watchlistDestinationTests.length).toBe(1)
+    expect(watchlistDestinationTests).toContainEqual({ watchlistId: 'watch_acme_domain', webhookUrl: 'https://discord.com/api/webhooks/test/secret-token', attachToWatchlist: true })
+    await expect(acmeRow.getByLabel('URL')).toHaveValue('')
+    await expect(page.locator('#watchlists')).not.toContainText('secret-token')
 
     await page.getByLabel('Search terms').fill('okta')
     await expect(page.locator('[data-org-watchlist-filter-count="true"]')).toContainText('1/3 shown')

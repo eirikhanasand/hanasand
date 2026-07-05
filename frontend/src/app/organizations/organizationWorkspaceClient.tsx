@@ -1086,6 +1086,7 @@ export default function OrganizationWorkspaceClient() {
             payload.webhookUrl = url
             payload.destinationType = draft.kind
             payload.attachToWatchlist = true
+            setDestinationDrafts(current => ({ ...current, [item.id]: { ...draft, url: '' } }))
         }
         const result = await requestJson<DeliveryResult>('/api/dwm/webhooks/deliver', {
             method: 'POST',
@@ -1094,9 +1095,6 @@ export default function OrganizationWorkspaceClient() {
         const delivery = firstDelivery(result)
         if (delivery) {
             setDeliveryResults(current => ({ ...current, [item.id]: delivery }))
-        }
-        if (withUrl) {
-            setDestinationDrafts(current => ({ ...current, [item.id]: { ...draft, url: '' } }))
         }
         const resultText = deliveryActionResultSummary(delivery, withUrl ? 'Destination tested and saved.' : 'Saved destination tested.')
         return withUrl ? `${resultText} Destination saved for this watchlist.` : resultText
@@ -1151,6 +1149,7 @@ export default function OrganizationWorkspaceClient() {
         const kind = destinationCreateDraft.kind
         const name = normalizeDestinationName(destinationCreateDraft.name) || defaultDestinationName(kind)
         if (destinationNameInUse(bundle.webhooks, name)) throw new Error('Destination name already exists.')
+        setDestinationCreateDraft({ name: destinationCreateDraft.name, kind, url: '' })
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks`, {
             method: 'POST',
             body: JSON.stringify({
@@ -1180,6 +1179,9 @@ export default function OrganizationWorkspaceClient() {
             requestId: `org-ui-${Date.now()}`,
         }
         if (url) body.endpointUrl = url
+        if (url) {
+            setEditingDestinations(current => ({ ...current, [destination.id]: { ...draft, url: '' } }))
+        }
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
             method: 'PATCH',
             body: JSON.stringify(body),
