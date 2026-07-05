@@ -765,7 +765,7 @@ export default function OrganizationWorkspaceClient() {
         }
     }, [selectedOrganization?.id, loadOrganizationBundle])
 
-    async function runAction(label: string, action: () => Promise<string | void>, rowKey?: string) {
+    async function runAction(label: string, action: () => Promise<string | { message?: string, organizationId?: string } | void>, rowKey?: string) {
         setBusy(label)
         setError('')
         setMessage('')
@@ -778,7 +778,9 @@ export default function OrganizationWorkspaceClient() {
             })
         }
         try {
-            const nextMessage = await action()
+            const actionResult = await action()
+            const nextMessage = typeof actionResult === 'string' ? actionResult : actionResult?.message
+            const reloadOrganizationId = typeof actionResult === 'object' ? actionResult?.organizationId : undefined
             setMessage(nextMessage || 'Saved.')
             if (rowKey) {
                 setRowMessages(current => ({ ...current, [rowKey]: { ok: true, text: nextMessage || 'Saved.' } }))
@@ -794,9 +796,10 @@ export default function OrganizationWorkspaceClient() {
                 ok: true,
                 ...activityItemSubject(actionSubject),
             }, ...current].slice(0, 8))
-            if (selectedOrganization?.id) {
-                await loadOrganizationBundle(selectedOrganization.id)
-                await loadOrganizations(selectedOrganization.id)
+            if (reloadOrganizationId || selectedOrganization?.id) {
+                const organizationId = reloadOrganizationId || selectedOrganization?.id || ''
+                await loadOrganizationBundle(organizationId)
+                await loadOrganizations(organizationId)
             } else {
                 await loadOrganizations()
             }
@@ -846,7 +849,10 @@ export default function OrganizationWorkspaceClient() {
         }
         setCreateName('')
         setCreateFirstWatchlist({ kind: 'domain', value: '', notes: '' })
-        return firstWatchlistValue ? 'Organization and first shared term created.' : 'Organization created.'
+        return {
+            organizationId,
+            message: firstWatchlistValue ? 'Organization and first shared term created.' : 'Organization created.',
+        }
     })
 
     const saveSettings = () => selectedOrganization && runAction('save-settings', async () => {
