@@ -2276,26 +2276,32 @@ function ActorActionStrip({
                 <div data-ti-selected-console-links='true' className='grid min-w-0 grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:justify-end'>
                     <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
                     <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onCase} href={caseHref} disabled={!caseHref && !caseAvailable}>Create case</StripActionButton>
-                    <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate} href={alertHref}>Escalate</StripActionButton>
                     <StripActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
-                    {exportRows.length ? (
-                        <span className='min-w-0'>
-                            <CopyPayloadButton
-                                label='Export IOCs'
-                                showLabel
-                                payload={{
-                                    schemaVersion: 'ti.public_actor.ioc_export.v1',
-                                    source: 'public-ti',
-                                    selectedItemId: selected?.id,
-                                    indicators: actor.indicators,
-                                    infrastructure: actor.infrastructure,
-                                    malwareTools: actor.malwareTools,
-                                    sourceCoverage: actor.sourceCoverage,
-                                    provenanceRows: actor.provenanceRows,
-                                }}
-                            />
-                        </span>
-                    ) : null}
+                    <details className='group col-span-2 rounded-lg border border-ui-border bg-ui-panel p-1 sm:col-auto' data-ti-actor-secondary-actions='true'>
+                        <summary className='flex min-h-8 cursor-pointer list-none items-center justify-between gap-2 px-2 text-[11px] font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>
+                            <span>More</span>
+                            <span className='rounded-full border border-ui-border px-1.5 py-0.5 text-[10px] uppercase text-ui-muted'>{exportRows.length ? 2 : 1}</span>
+                        </summary>
+                        <div className='mt-1 grid gap-1.5 sm:min-w-32'>
+                            <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate} href={alertHref}>Escalate</StripActionButton>
+                            {exportRows.length ? (
+                                <CopyPayloadButton
+                                    label='Export IOCs'
+                                    showLabel
+                                    payload={{
+                                        schemaVersion: 'ti.public_actor.ioc_export.v1',
+                                        source: 'public-ti',
+                                        selectedItemId: selected?.id,
+                                        indicators: actor.indicators,
+                                        infrastructure: actor.infrastructure,
+                                        malwareTools: actor.malwareTools,
+                                        sourceCoverage: actor.sourceCoverage,
+                                        provenanceRows: actor.provenanceRows,
+                                    }}
+                                />
+                            ) : null}
+                        </div>
+                    </details>
                 </div>
             </div>
         </div>
