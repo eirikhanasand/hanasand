@@ -53,3 +53,16 @@ test('public buyer navigation keeps hash utility discoverable without raw-secret
     expect(pwnedClient).toContain('Enter a complete 40-character SHA-1 hash.')
     expect(pwnedClient).not.toContain('window.crypto.subtle.digest')
 })
+
+test('pricing keeps endpoint checks secondary to exposure monitoring', async () => {
+    const pricing = await readFile(path.join(root, 'src/app/pricing/page.tsx'), 'utf8')
+
+    expect(pricing).toContain('Threat monitoring priced around review-ready alerts.')
+    expect(pricing).toContain('Utility tool')
+    expect(pricing).toContain('Open service checks')
+    expect(pricing).toContain('Service checks remain available for URLs you control')
+    expect(pricing).not.toContain('const loadTestingPlans')
+    expect(pricing).not.toContain('Starter checks')
+    expect(pricing).not.toContain('Team checks')
+    expect(pricing.indexOf('Common buying scenarios')).toBeLessThan(pricing.indexOf('Utility tool'))
+})

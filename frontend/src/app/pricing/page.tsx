@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, BellRing, Building2, CheckCircle2, ClipboardCheck, FileText, KeyRound, ShieldCheck, Zap } from 'lucide-react'
+import { ArrowRight, BellRing, Building2, CheckCircle2, ClipboardCheck, FileText, Gauge, KeyRound, ShieldCheck } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
@@ -103,12 +103,6 @@ const enterpriseReadiness = [
         href: '/trust/sla-onboarding',
         icon: KeyRound,
     },
-]
-
-const loadTestingPlans = [
-    { name: 'Free checks', price: '$0', detail: '5 permitted endpoint checks for evaluation.', href: '/test' },
-    { name: 'Starter checks', price: '$19/mo', detail: '50 checks per month for small websites and APIs.', href: '/contact?plan=load-starter' },
-    { name: 'Team checks', price: '$79/mo', detail: '500 checks per month with result history and launch workflows.', href: '/contact?plan=load-team' },
 ]
 
 export default function PricingPage() {
@@ -267,34 +261,6 @@ export default function PricingPage() {
                 </div>
             </section>
 
-            <section className='border-b border-ui-border bg-ui-panel'>
-                <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8'>
-                    <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
-                        <div>
-                            <p className='text-sm font-semibold uppercase text-ui-primary'>Separate utility</p>
-                            <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>Endpoint checks are priced separately from exposure monitoring.</h2>
-                            <p className='mt-2 max-w-3xl text-sm leading-6 text-ui-muted'>Use this only for permitted launch checks against URLs you control. It is not part of the dark web monitoring plans above.</p>
-                        </div>
-                        <Link href='/test' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
-                            Start free checks
-                            <Zap className='h-4 w-4 text-ui-primary' />
-                        </Link>
-                    </div>
-                    <div className='grid gap-4 md:grid-cols-3'>
-                        {loadTestingPlans.map((plan) => (
-                            <article key={plan.name} className='rounded-lg border border-ui-border bg-ui-raised p-5 shadow-sm'>
-                                <h3 className='text-lg font-semibold text-ui-text'>{plan.name}</h3>
-                                <div className='mt-3 text-3xl font-semibold text-ui-text'>{plan.price}</div>
-                                <p className='mt-2 text-sm leading-6 text-ui-muted'>{plan.detail}</p>
-                                <Link href={plan.href} className='mt-5 inline-flex h-10 items-center rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
-                                    Select
-                                </Link>
-                            </article>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
             <section className='bg-ui-canvas'>
                 <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8'>
                     <div>
@@ -315,6 +281,22 @@ export default function PricingPage() {
                             </article>
                         ))}
                     </div>
+                </div>
+            </section>
+
+            <section className='border-t border-ui-border bg-ui-panel'>
+                <div className='mx-auto flex max-w-7xl flex-col gap-4 px-4 py-8 md:flex-row md:items-center md:justify-between md:px-8'>
+                    <div className='max-w-3xl'>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>Utility tool</p>
+                        <h2 className='mt-1 text-xl font-semibold text-ui-text'>Need permitted endpoint checks instead?</h2>
+                        <p className='mt-2 text-sm leading-6 text-ui-muted'>
+                            Service checks remain available for URLs you control, but they are separate from the company exposure monitoring plans above.
+                        </p>
+                    </div>
+                    <Link href='/test' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                        Open service checks
+                        <Gauge className='h-4 w-4 text-ui-primary' />
+                    </Link>
                 </div>
             </section>
         </main>
