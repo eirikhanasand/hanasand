@@ -116,7 +116,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
             const next = await searchThreatIntel(clean)
             if (requestSeqRef.current !== requestSeq || activeQueryRef.current !== cleanKey) return
             if (!next) {
-                setError('The TI service did not return results.')
+                setError('No intelligence is available for that search yet.')
                 return
             }
             setResult(next)
@@ -466,7 +466,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     Show {filteredWorkItems.length - visibleQueueItems.length} more findings
                                 </button>
                             ) : null}
-                            {showFullQueue && filteredWorkItems.length > 3 ? (
+                            {showFullQueue && filteredWorkItems.length > TI_EVIDENCE_QUEUE_PREVIEW_ROWS ? (
                                 <button
                                     type='button'
                                     onClick={() => setShowFullQueue(false)}
@@ -9805,7 +9805,7 @@ function searchingResult(query: string): TiSearchResponse {
         mode: 'live_search',
         status: 'searching',
         refreshAfterSeconds: 3,
-        summary: 'Searching',
+        summary: 'Checking sources',
         confidence: 0.2,
         lastSeen: now,
         aliases: [],
