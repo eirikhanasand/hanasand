@@ -486,7 +486,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             }, durationMs)
 
             await navigate(target)
-            await dismissCookieOverlays(page).catch(() => undefined)
             send({
                 type: 'ready',
                 sessionId,
@@ -501,6 +500,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 void sendFrame(false)
             }, FRAME_INTERVAL_MS)
             void sendFrame(true, 'initial_target')
+            void dismissCookieOverlays(page)
+                .then(() => sendFrame(true, 'cookie_dismissed'))
+                .catch(() => undefined)
             await captureProfileTools(context, message.profileTools || [], target)
         } catch (error) {
             await cleanup()
