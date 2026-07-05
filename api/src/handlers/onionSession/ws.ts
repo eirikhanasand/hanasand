@@ -321,6 +321,14 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             send({ type: 'status', state: 'navigated', url: page.url(), sessionId })
             void sendFrame(true, 'navigation')
         })
+        page.on('domcontentloaded', () => {
+            send({ type: 'status', state: 'domcontentloaded', url: page?.url(), sessionId, message: 'Captured DOM-ready browser state.' })
+            void sendFrame(true, 'domcontentloaded')
+        })
+        page.on('load', () => {
+            send({ type: 'status', state: 'loaded', url: page?.url(), sessionId, message: 'Captured loaded browser state.' })
+            void sendFrame(true, 'load')
+        })
 
         closeTimer = setTimeout(() => {
             void cleanup()
@@ -329,6 +337,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }, durationMs)
 
         await navigate(target)
+        await sendFrame(true, 'initial_target')
         const primaryEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
         await captureProfileTools(context, message.profileTools || [], target, primaryEvidence?.deobfuscationTasks || [])
         frameTimer = setInterval(() => {

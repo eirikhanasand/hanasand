@@ -282,14 +282,15 @@ export default function BrowserSandboxPageClient() {
                 setActiveImage(image)
                 const urlValue = String(payload.url || url)
                 setActiveUrl(urlValue)
+                const reason = stringValue(payload.reason)
                 setCaptures(current => addCapture(current, {
                     id: `page-${payload.capturedAt || Date.now()}-${current.length}`,
                     kind: 'page',
-                    label: payload.reason === 'navigation' ? 'Navigation capture' : 'Page capture',
+                    label: captureLabel(reason),
                     url: urlValue,
                     title: stringValue(payload.title),
                     capturedAt: stringValue(payload.capturedAt) || new Date().toISOString(),
-                    reason: stringValue(payload.reason),
+                    reason,
                     image,
                     evidence: evidenceValue(payload.evidence),
                     networkSummary: networkSummaryValue(payload.networkSummary),
@@ -714,6 +715,15 @@ function addCapture(current: Capture[], next: Capture) {
     const last = current[0]
     if (last && last.kind === next.kind && last.url === next.url && last.image === next.image) return current
     return [next, ...current].slice(0, 24)
+}
+
+function captureLabel(reason: string) {
+    if (reason === 'navigation') return 'Navigation capture'
+    if (reason === 'domcontentloaded') return 'DOM-ready capture'
+    if (reason === 'load') return 'Loaded-page capture'
+    if (reason === 'initial_target') return 'Initial target capture'
+    if (reason === 'interval') return 'Interval capture'
+    return 'Page capture'
 }
 
 function buildAnalystSummary(target: string, captures: Capture[], profile: SandboxProfile) {
