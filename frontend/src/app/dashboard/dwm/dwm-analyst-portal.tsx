@@ -185,11 +185,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
     const captureCount = operations?.counts.captureCount || latestCaptures.length || alertCaptureCount
     const watchlistMatchCount = operations?.counts.watchlistMatchCount || latestCaptureWatchlistMatchCount(latestCaptures) || alertWatchlistMatchCount(alerts)
     const caseCount = alerts.filter(hasAlertCaseLink).length
-    const latestRunLabel = operations?.latestRun
-        ? `${operations.latestRun.captureCount} captures`
-        : activeSourceCount
-            ? 'collecting'
-            : 'source'
+    const latestRunLabel = captureRunLabel(operations?.latestRun?.captureCount, captureCount, activeSourceCount)
     const watchTermCount = snapshot.watchlist.length
     const webhookState = deliverySummaryLabel(localDeliveries)
     const apiProblemCount = [dataHealth.snapshot, dataHealth.operations, dataHealth.alerts, dataHealth.deliveries]
@@ -788,6 +784,12 @@ function latestCaptureWatchlistMatchCount(captures: OperationsSnapshot['latestCa
 
 function alertWatchlistMatchCount(alerts: PortalAlert[]) {
     return uniqueStrings(alerts.map(alert => alert.matchedTerm.value)).length
+}
+
+function captureRunLabel(runCaptureCount = 0, captureCount = 0, activeSourceCount = 0) {
+    if (runCaptureCount > 0) return `${runCaptureCount} captures`
+    if (captureCount > 0) return `${captureCount} captures`
+    return activeSourceCount ? 'collecting' : 'source'
 }
 
 function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localState, busyAction, actionMessage, onLocalStateChange, onUpdate, onOpenCase, onReplay, onTest, onSend }: {
