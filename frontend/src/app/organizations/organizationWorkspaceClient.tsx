@@ -937,7 +937,7 @@ export default function OrganizationWorkspaceClient() {
         if (validationMessage) throw new Error(validationMessage)
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/settings`, {
             method: 'PUT',
-            body: JSON.stringify(settingsDraft),
+            body: JSON.stringify(normalizeSettings(settingsDraft)),
         })
         return 'Organization settings updated.'
     }, 'settings')
@@ -4278,8 +4278,10 @@ function normalizeSettings(settings: OrganizationSettings = {}) {
 }
 
 function settingsValidationMessage(settings: OrganizationSettings = {}) {
+    const name = (settings.name || '').trim()
     const slug = (settings.slug || '').trim()
     const retentionDays = Number(settings.retentionDays || 365)
+    if (!name) return 'Organization name is required.'
     if (slug && slugifyOrganizationName(slug) !== slug) return 'Use lowercase letters, numbers, and hyphens for slug.'
     if (!Number.isFinite(retentionDays) || retentionDays < 30 || retentionDays > 3650) return 'Retention days must be between 30 and 3650.'
     return ''
