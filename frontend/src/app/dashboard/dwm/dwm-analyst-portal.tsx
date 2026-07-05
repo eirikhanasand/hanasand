@@ -440,26 +440,26 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                                 )}
                             </div>
                         </div>
-                        <div className='max-h-[610px] overflow-auto p-2'>
+                        <div className='max-h-[610px] overflow-auto'>
                             {queue.length ? visibleQueue.map(alert => (
                                 <button
                                     key={alert.id}
                                     type='button'
                                     onClick={() => selectAlert(alert)}
-                                    className={`w-full rounded-lg border p-3 text-left transition ${selectedAlert?.id === alert.id ? 'border-ui-primary bg-ui-panel shadow-sm' : 'border-transparent hover:border-ui-border hover:bg-ui-panel'}`}
+                                    className={`grid w-full gap-1 border-b border-ui-border px-3 py-2 text-left transition last:border-b-0 ${selectedAlert?.id === alert.id ? 'bg-ui-panel' : 'hover:bg-ui-panel'}`}
                                 >
-                                    <div className='flex items-center justify-between gap-2'>
+                                    <div className='flex min-w-0 items-center justify-between gap-2'>
                                         <span className='truncate text-sm font-semibold text-ui-text'>{alert.company}</span>
                                         <span className={severityClass(alert.severity)}>{alert.severity}</span>
                                     </div>
-                                    <p className='mt-1 truncate text-xs font-semibold text-ui-muted'>Watched term: {alert.matchedTerm.value}</p>
-                                    <div className='mt-3 grid grid-cols-2 gap-2 text-[11px]'>
-                                        <QueueCell label='queue' value={stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)} />
-                                        <QueueCell label='urgency' value={stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))} tone={alert.routingContext?.urgency === 'immediate' || alert.severity === 'critical' ? 'bad' : 'neutral'} />
-                                        <QueueCell label='evidence' value={`${alert.evidenceSummary?.evidenceCount ?? alert.evidence.length}`} />
-                                        <QueueCell label='last seen' value={relativeTimeLabel(alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt)} />
-                                    </div>
-                                    <p className='mt-3 line-clamp-2 text-xs leading-5 text-ui-muted'>{safeAlertSummary(alert)}</p>
+                                    <p className='truncate text-xs font-semibold text-ui-muted'>Watched term: {alert.matchedTerm.value}</p>
+                                    <p className='line-clamp-1 text-xs leading-5 text-ui-muted'>{safeAlertSummary(alert)}</p>
+                                    <span className='flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-[11px] leading-4 text-ui-muted'>
+                                        <span>{stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)}</span>
+                                        <span className={alert.routingContext?.urgency === 'immediate' || alert.severity === 'critical' ? 'font-semibold text-ui-danger' : ''}>{stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))}</span>
+                                        <span>{alert.evidenceSummary?.evidenceCount ?? alert.evidence.length} evidence</span>
+                                        <span>{relativeTimeLabel(alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt)}</span>
+                                    </span>
                                 </button>
                             )) : (
                                 <div className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm leading-6 text-ui-muted'>
