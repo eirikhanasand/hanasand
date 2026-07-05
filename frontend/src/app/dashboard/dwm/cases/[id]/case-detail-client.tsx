@@ -378,6 +378,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const destinationHref = scopedOrganizationId
         ? `/organizations${queryString({ organizationId: scopedOrganizationId, caseId: caseRecord.id, alertId: scopedAlertId, destinationId: latestDelivery?.webhookDestinationId || latestDelivery?.destinationId, focus: 'destinations' })}`
         : '/organizations?focus=destinations'
+    const actionBlockers = actionUnavailableReasons(actions, readOnly)
+    const webhookBlockedReason = !scopedAlertId ? 'Webhook delivery needs a linked alert before it can be tested or sent.' : undefined
 
     return (
         <main className='grid min-w-0 gap-3 text-ui-text'>
@@ -496,6 +498,19 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                             <div className='mt-3 grid gap-2 sm:grid-cols-2'>
                                 {actions.map(action => <ActionButton key={action.id} action={action} busy={busy === action.id} disabled={readOnly || busy !== null || !action.enabled} onClick={() => runAction(action)} />)}
                             </div>
+                            {actionBlockers.length ? (
+                                <div className='mt-3 rounded-lg border border-ui-border bg-ui-canvas p-3' data-dwm-case-action-blockers='true'>
+                                    <p className='text-[10px] font-semibold uppercase text-ui-muted'>Blocked actions</p>
+                                    <ul className='mt-2 grid gap-1 text-xs leading-5 text-ui-muted'>
+                                        {actionBlockers.slice(0, 4).map(item => (
+                                            <li key={item.id} className='flex min-w-0 gap-2'>
+                                                <span className='shrink-0 font-semibold text-ui-text'>{actionLabel(item.id)}:</span>
+                                                <span className='wrap-break-word'>{item.reason}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ) : null}
                             <button type='button' onClick={notifyCustomer} disabled={readOnly || busy !== null} className='mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
                                 {busy === 'notify' ? <Loader2 className='h-4 w-4 animate-spin' /> : <BellRing className='h-4 w-4' />}Notify dry run
                             </button>
@@ -525,13 +540,16 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                 <CommandLink href={deliveryHistoryHref}>Delivery history</CommandLink>
                             </div>
                             <div className='mt-3 grid gap-2 sm:grid-cols-2'>
-                                <button type='button' onClick={() => sendWebhook(true)} disabled={readOnly || busy !== null || !(caseRecord.alertId || alertId)} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
+                                <button type='button' onClick={() => sendWebhook(true)} disabled={readOnly || busy !== null || !scopedAlertId} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
                                     {busy === 'webhook-test' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}Test
                                 </button>
-                                <button type='button' onClick={() => sendWebhook(false)} disabled={readOnly || busy !== null || !(caseRecord.alertId || alertId)} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
+                                <button type='button' onClick={() => sendWebhook(false)} disabled={readOnly || busy !== null || !scopedAlertId} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
                                     {busy === 'webhook-send' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}Send
                                 </button>
                             </div>
+                            {webhookBlockedReason ? (
+                                <p className='mt-2 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-xs leading-5 text-ui-warning' data-dwm-webhook-action-blocker='true'>{webhookBlockedReason}</p>
+                            ) : null}
                         </Panel>
 
                         <Panel title='Case export' action={state.exportPayload?.exportChecksum ? 'ready' : 'pending'}>
@@ -926,6 +944,13 @@ function resolvedAlertId(caseRecord: CaseDetail['case'] | undefined, alertContex
 
 function uniqueStrings(values: Array<string | undefined>) {
     return [...new Set(values.map(value => value?.trim()).filter(Boolean) as string[])]
+}
+
+function actionUnavailableReasons(actions: CaseAction[], readOnly: boolean) {
+    if (readOnly) return [{ id: 'access', reason: 'Your current role can inspect this case but cannot change workflow state.' }]
+    return actions
+        .filter(action => !action.enabled)
+        .map(action => ({ id: action.id, reason: action.disabledReason || 'Action is not available for this case.' }))
 }
 
 function relativeTime(value?: string) {
