@@ -4172,9 +4172,11 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
     }
     if (subject.type === 'destination') {
         const destinationId = encodeURIComponent(subject.id)
+        const watchlistId = selectedSubjectWatchlistId(subject, bundle)
         const deliveryId = selectedSubjectDeliveryId(subject, bundle)
         return [
             { label: 'Destination', href: `#destination-${destinationId}` },
+            ...(watchlistId ? [{ label: 'Watchlist', href: `#watchlist-${encodeURIComponent(watchlistId)}` }] : []),
             { label: 'Delivery', href: deliveryId ? `#delivery-${encodeURIComponent(deliveryId)}` : '#delivery-history' },
         ]
     }
@@ -4210,6 +4212,14 @@ function selectedSubjectActions(subject: ActivitySubject, organization: Organiza
 }
 
 function selectedSubjectWatchlistId(subject: ActivitySubject, bundle: OrgBundle) {
+    if (subject.type === 'destination') {
+        const destination = bundle.webhooks.find(item => item.id === subject.id)
+        const watchlist = bundle.watchlists.find(item => item.webhookDestinationId === subject.id
+            || (destination?.endpointHash && item.webhookEndpointHash === destination.endpointHash)
+            || (destination?.endpointHint && item.webhookEndpointHint === destination.endpointHint))
+        const delivery = destination ? deliveriesForDestination(destination, bundle.deliveries).find(item => item.watchlistItemId || item.watchlistId || item.watchlistItemIds?.[0]) : undefined
+        return watchlist?.id || delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0] || ''
+    }
     if (subject.type === 'alert') {
         const alert = bundle.alerts.find(item => item.id === subject.id)
         const delivery = bundle.deliveries.find(item => item.alertId === subject.id && (item.watchlistItemId || item.watchlistId || item.watchlistItemIds?.[0]))
