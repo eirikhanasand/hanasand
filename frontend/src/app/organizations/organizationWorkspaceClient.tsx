@@ -638,6 +638,7 @@ export default function OrganizationWorkspaceClient() {
     const pausedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'paused')
     const archivedWatchlists = bundle.watchlists.filter(item => item.status.toLowerCase() === 'archived')
     const activeTeammates = bundle.members.filter(member => member.role.toLowerCase() !== 'owner' && !['removed', 'revoked', 'inactive'].includes(member.status.toLowerCase()))
+    const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
     const configuredDestinationCount = organizationConfiguredDestinationCount(bundle)
     const hasConfiguredDestination = configuredDestinationCount > 0
     const watchlistDraftDuplicate = isDuplicateWatchlistTerm(bundle.watchlists, watchlistDraft.kind, watchlistDraft.value)
@@ -1394,7 +1395,7 @@ export default function OrganizationWorkspaceClient() {
                     {(selectedOrganization || organizations.length > 0 || (!loading && organizations.length === 0)) && <main className='min-w-0'>
                         {selectedOrganization ? (
                             <div className='grid gap-5'>
-                                <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={bundle.members.length} inviteCount={bundle.invites.length} webhookCount={bundle.webhooks.length} />
+                                <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={bundle.members.length} inviteCount={pendingInvites.length} webhookCount={bundle.webhooks.length} />
                                 {hasDwmContext && (
                                     <DwmHandoffBanner
                                         organization={selectedOrganization}
@@ -1427,7 +1428,7 @@ export default function OrganizationWorkspaceClient() {
                                     organizationId={selectedOrganization.id}
                                     canManage={canManage}
                                     memberCount={activeTeammates.length}
-                                    inviteCount={bundle.invites.length}
+                                    inviteCount={pendingInvites.length}
                                     watchlistCount={bundle.watchlists.length}
                                     destinationCount={configuredDestinationCount}
                                     alertCount={bundle.alerts.length}
