@@ -2370,6 +2370,9 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
     const createUrlInvalid = Boolean(createUrl) && !validDestinationUrl(createUrl)
     const createNameDuplicate = destinationNameInUse(destinations, normalizeDestinationName(createDraft.name) || defaultDestinationName(createDraft.kind))
     const busyLabel = destinationBusyLabel(busy)
+    const activeDestinationCount = destinations.filter(destination => ['active', 'configured'].includes((destination.status || (destination.deliveryReady ? 'active' : '')).toLowerCase())).length
+    const pausedDestinationCount = destinations.filter(destination => (destination.status || '').toLowerCase() === 'paused').length
+    const failedDeliveryCount = deliveries.filter(delivery => delivery.status?.toLowerCase() === 'failed' || Boolean(delivery.error)).length
     const normalizedDestinationQuery = destinationQuery.trim().toLowerCase()
     const visibleDestinations = destinations.filter(destination => {
         const destinationStatus = (destination.status || (destination.deliveryReady ? 'active' : 'configured')).toLowerCase()
@@ -2393,6 +2396,13 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
             </summary>
             <div className='grid gap-2 border-t border-ui-border p-4 dark:border-ui-border'>
                 {busyLabel && <InlineBusy label={busyLabel} marker='data-org-destination-busy' />}
+                {destinations.length > 0 && (
+                    <div className='flex flex-wrap gap-2' data-org-destination-status-counts='true'>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Configured: {activeDestinationCount}</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Paused: {pausedDestinationCount}</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-canvas dark:text-ui-muted'>Failed: {failedDeliveryCount}</span>
+                    </div>
+                )}
                 {canManage && (
                     <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' data-org-destination-create='true'>
                         <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem]'>
