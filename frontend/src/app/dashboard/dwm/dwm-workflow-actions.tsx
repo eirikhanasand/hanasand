@@ -615,7 +615,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const routeQueue = [
         {
             id: 'full_route',
-            label: 'Run full route',
+            label: 'Run full workflow',
             state: !termCount ? 'watchlist needed' : alertCount ? `${alertCount} alerts ready` : captureCount ? `${captureCount} captures ready` : 'source pack ready',
             detail: 'Enable sources, collect captures, rebuild alerts, open a case, and dry-run delivery when a webhook is staged.',
             tone: alertCount ? 'ok' : captureCount ? 'warn' : 'neutral',
