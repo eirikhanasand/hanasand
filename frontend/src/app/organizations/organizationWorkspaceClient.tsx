@@ -3881,20 +3881,24 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
     }
     if (subject.type === 'invite') {
         const invite = bundle.invites.find(item => item.id === subject.id)
+        const status = invite?.status.toLowerCase()
         return compactMetadata([
             ['Email', invite?.email],
             ['Role', invite?.role],
             ['Status', invite?.status],
+            ['Access', status === 'accepted' ? 'Active member' : status === 'pending' ? 'Pending invite' : status ? 'Closed' : undefined],
             ['Expires', invite?.expiresAt ? formatDate(invite.expiresAt) : undefined],
         ])
     }
     if (subject.type === 'member') {
         const member = bundle.members.find(item => item.userId === subject.id)
+        const status = member?.status.toLowerCase()
         return compactMetadata([
             ['User', organizationMemberLabel(member?.userId, bundle.members)],
             ['Email', member?.email],
             ['Role', member?.role],
             ['Status', member?.status],
+            ['Access', status && ['removed', 'revoked', 'inactive'].includes(status) ? 'Closed' : status ? 'Active' : undefined],
             ['Joined', member?.joinedAt ? formatDate(member.joinedAt) : undefined],
         ])
     }
