@@ -529,9 +529,13 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     sessionId,
                     message: `${tool.name || toolUrl} provider capture started.`,
                 })
-                const navigationError = await toolPage.goto(toolUrl, { waitUntil: 'commit', timeout: 10_000 })
+                const navigation = toolPage.goto(toolUrl, { waitUntil: 'commit', timeout: 10_000 })
                     .then(() => '')
                     .catch(error => error instanceof Error ? error.message : String(error))
+                const navigationError = await Promise.race([
+                    navigation,
+                    new Promise<string>(resolve => setTimeout(() => resolve('provider navigation still pending after 6s'), 6000)),
+                ])
                 await toolPage.waitForLoadState('domcontentloaded', { timeout: 6000 }).catch(() => undefined)
                 await dismissCookieOverlays(toolPage).catch(() => undefined)
                 await toolPage.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => undefined)
