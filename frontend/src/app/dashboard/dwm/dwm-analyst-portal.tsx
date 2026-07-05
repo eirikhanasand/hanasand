@@ -26,11 +26,22 @@ type PortalAlert = DwmAlert & {
         watchlistIds?: string[]
         webhookDestinationIds?: string[]
         caseIdCandidate?: string
+        captureIds?: string[]
     }
     webhookContext?: {
         hasWebhookRoute?: boolean
         webhookDestinationIds?: string[]
         caseIdCandidate?: string
+        captureIds?: string[]
+    }
+    provenance?: {
+        captureIds?: string[]
+    }
+    sourceProvenanceSummary?: {
+        captureIds?: string[]
+        generationEvidenceWindow?: {
+            captureIds?: string[]
+        }
     }
     workflowEvents?: Array<{
         id: string
@@ -166,7 +177,7 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
     const activeSourceCount = operations?.counts.activeSourceCount ?? 0
     const sourceCount = operations?.counts.sourceCount ?? 0
     const captureCount = operations?.counts.captureCount ?? latestCaptures.length
-    const watchlistMatchCount = operations?.counts.watchlistMatchCount ?? 0
+    const watchlistMatchCount = operations?.counts.watchlistMatchCount || latestCaptureWatchlistMatchCount(latestCaptures)
     const caseCount = alerts.filter(alert => alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate).length
     const latestRunLabel = operations?.latestRun
         ? `${operations.latestRun.captureCount} captures`
@@ -761,8 +772,12 @@ function inferTermKind(value: string) {
     return 'term'
 }
 
-function uniqueStrings(values: string[]) {
-    return Array.from(new Set(values.map(value => value.trim()).filter(Boolean)))
+function uniqueStrings(values: Array<string | null | undefined>) {
+    return Array.from(new Set(values.map(value => value?.trim() || '').filter(Boolean)))
+}
+
+function latestCaptureWatchlistMatchCount(captures: OperationsSnapshot['latestCaptures']) {
+    return uniqueStrings(captures.flatMap(capture => capture.matchedWatchTerms)).length
 }
 
 function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localState, busyAction, actionMessage, onLocalStateChange, onUpdate, onOpenCase, onReplay, onTest, onSend }: {
@@ -1134,7 +1149,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
     const actualCaseId = alert.caseId
     const caseCandidate = alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
     const casePath = actualCaseId ? caseDetailHref(actualCaseId, alert.id, workflowContext.organizationId, 'alert_queue') : alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness?.actions?.find(action => action.action === 'case_link' && action.casePath)?.casePath
-    const canOpenCase = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
+    const canOpenCase = Boolean(alert.id && alertCaptureIds(alert).length)
     const routeControlLabel = actualCaseId
         ? latestDelivery
             ? 'Action controls'
@@ -1582,6 +1597,8 @@ function RouteWatchlistImpactRail({ alert, selectedEvidence, selectedEntity, wor
     const urgency = stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))
     const watchlistScope = workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} scoped` : 'default scope'
     const destinationState = workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} configured` : workflowContext.hasWebhookRoute ? 'delivery available' : 'checking delivery'
+    const selectedCaptures = selectedEvidence ? evidenceCaptureIds(selectedEvidence) : alertCaptureIds(alert)
+    const captureState = selectedCaptures[0] ?? 'capture pending'
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel'>
             <div className='flex items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
@@ -1593,7 +1610,7 @@ function RouteWatchlistImpactRail({ alert, selectedEvidence, selectedEntity, wor
             </div>
             <div className='grid gap-1 px-4 py-3 text-xs font-semibold text-ui-muted'>
                 <p className='wrap-break-word text-ui-text'>{alert.matchedTerm.value} · {stateLabel(alert.matchedTerm.kind)} · {selectedEntity?.name || alert.company} · {evidenceStatus}</p>
-                <p className='wrap-break-word'>{recommendedAction} · {urgency} urgency · {watchlistScope} · {destinationState}</p>
+                <p className='wrap-break-word'>{captureState} · {recommendedAction} · {urgency} urgency · {watchlistScope} · {destinationState}</p>
             </div>
         </section>
     )
@@ -1630,7 +1647,7 @@ function SelectedContextBar({ alert, selectedEvidence, selectedEntity, sourceFil
             </div>
             <div className='grid gap-2 text-[11px] sm:grid-cols-3'>
                 <ActionStatus label='Entity' value={selectedEntity ? stateLabel(selectedEntity.kind) : stateLabel(alert.matchedTerm.kind)} />
-                <ActionStatus label='Evidence' value={selectedEvidence?.contentHash ? evidenceHashState(selectedEvidence.contentHash, copiedHash) : `${alert.evidence.length} rows`} />
+                <ActionStatus label='Evidence' value={selectedEvidence ? evidenceReferenceState(selectedEvidence) : `${alertCaptureIds(alert).length || alert.evidence.length} rows`} />
                 <ActionStatus label='Action' value={workflowContext.caseId || stateLabel(alert.webhookDelivery.recommendedRoute)} />
             </div>
             <div className='flex flex-wrap gap-2 lg:justify-end'>
@@ -1734,7 +1751,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const closeReason = actionUnavailableReason(alert, 'close')
     const caseId = alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
     const caseHref = caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert), 'alert_queue') : undefined
-    const caseReady = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
+    const caseReady = Boolean(alert.id && alertCaptureIds(alert).length)
     const caseReason = caseReady ? undefined : 'Evidence must include a source or capture record before opening a case.'
     const nextAction = dwmNextOperatorAction({
         reviewState: alert.reviewState,
@@ -2563,7 +2580,7 @@ function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[], context?:
             id: `${alert.id}:evidence:${context.selectedEvidence.id}`,
             at: context.selectedEvidence.observedAt || context.selectedEvidence.firstSeenAt || alert.firstSeenAt,
             title: 'Evidence selected',
-            detail: `${context.selectedEvidence.sourceName} · evidence hash available`,
+            detail: `${context.selectedEvidence.sourceName} · ${evidenceReferenceState(context.selectedEvidence)}`,
         } : undefined,
         context?.sourceFilter && context.sourceFilter !== 'all' ? {
             id: `${alert.id}:source-filter:${context.sourceFilter}`,
@@ -2660,19 +2677,41 @@ function deliveryDestinationState(row: Pick<DeliveryItem, 'endpointHint' | 'endp
     return 'redacted destination'
 }
 
+function evidenceCaptureIds(item: PortalAlert['evidence'][number]) {
+    const row = item as PortalAlert['evidence'][number] & { captureId?: string, captureIds?: string[] }
+    return uniqueStrings([
+        row.provenance?.captureId,
+        row.captureId,
+        ...(row.captureIds ?? []),
+        row.id?.startsWith('cap_') ? row.id : '',
+    ])
+}
+
+function alertCaptureIds(alert: PortalAlert) {
+    return uniqueStrings([
+        ...(alert.workflowContext?.captureIds ?? []),
+        ...(alert.webhookContext?.captureIds ?? []),
+        ...(alert.provenance?.captureIds ?? []),
+        ...(alert.sourceProvenanceSummary?.captureIds ?? []),
+        ...(alert.sourceProvenanceSummary?.generationEvidenceWindow?.captureIds ?? []),
+        ...alert.evidence.flatMap(evidenceCaptureIds),
+    ])
+}
+
 function evidenceHashState(value?: string | null, copiedValue?: string) {
     if (!value) return 'hash pending'
     return copiedValue === value ? 'hash copied' : 'hash available'
 }
 
 function evidenceReferenceState(item: PortalAlert['evidence'][number]) {
-    if (item.provenance?.captureId || item.id) return 'capture linked'
+    const ids = evidenceCaptureIds(item)
+    if (ids.length) return ids[0]
     return 'capture pending'
 }
 
 function sourceReferenceState(item: PortalAlert['evidence'][number]) {
     if (item.provenance?.sourceId) return 'source linked'
-    if (item.provenance?.captureId || item.id) return 'capture linked'
+    if (evidenceCaptureIds(item).length) return 'capture linked'
     return item.sourceName || 'source pending'
 }
 
