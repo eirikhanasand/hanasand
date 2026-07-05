@@ -379,7 +379,7 @@ function deliveryRetryText(delivery: DeliveryRow) {
 
 function replayBlockedReason(delivery: DeliveryRow, destinations: WebhookDestination[] = []) {
     if (!deliveryDestinationIds(delivery, destinations)[0]) return 'Replay needs a saved destination.'
-    if (!(delivery.alertId || delivery.caseId || delivery.watchlistId || delivery.watchlistItemId || delivery.actionId)) return 'Replay needs alert, case, or watchlist context.'
+    if (!(delivery.alertId || delivery.caseId || deliveryWatchlistId(delivery) || delivery.actionId)) return 'Replay needs alert, case, or watchlist context.'
     return 'Replay is not available for this delivery row.'
 }
 
@@ -1157,8 +1157,8 @@ export default function OrganizationWorkspaceClient() {
                 alertId: delivery.alertId,
                 caseId: delivery.caseId,
                 actionId: delivery.actionId,
-                watchlistId: delivery.watchlistId,
-                watchlistItemId: delivery.watchlistItemId,
+                watchlistId: deliveryWatchlistId(delivery),
+                watchlistItemId: delivery.watchlistItemId || delivery.watchlistItemIds?.[0],
                 dryRun: true,
                 replay: true,
                 idempotencyKey: delivery.dedupeKey,
@@ -3198,7 +3198,7 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, destinations, canM
 function DeliveryReference({ delivery, organizationId, destinations }: { delivery: DeliveryRow, organizationId: string, destinations: WebhookDestination[] }) {
     const caseHref = delivery.caseId ? `/dashboard/dwm/cases/${encodeURIComponent(delivery.caseId)}?organizationId=${encodeURIComponent(organizationId)}${delivery.alertId ? `&alertId=${encodeURIComponent(delivery.alertId)}` : ''}` : ''
     const alertHref = delivery.alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(delivery.alertId)}&organizationId=${encodeURIComponent(organizationId)}` : ''
-    const watchlistId = delivery.watchlistItemId || delivery.watchlistId || ''
+    const watchlistId = deliveryWatchlistId(delivery)
     const destinationId = deliveryDestinationIds(delivery, destinations)[0]
     return (
         <div className='grid gap-1 text-xs'>
@@ -3771,7 +3771,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
     const localRows = organizationId ? local.filter(item => item.organizationId === organizationId) : []
     const alertRows: ActivityItem[] = bundle.alerts.map(alert => {
         const delivery = bundle.deliveries.find(item => item.alertId === alert.id)
-        const watchlistId = alert.watchlistItemId || alert.watchlistItemIds?.[0] || alert.watchlistIds?.[0] || delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0]
+        const watchlistId = alert.watchlistItemId || alert.watchlistItemIds?.[0] || alert.watchlistIds?.[0] || (delivery ? deliveryWatchlistId(delivery) : '')
         const destinationIds = delivery ? deliveryDestinationIds(delivery, bundle.webhooks) : []
         return {
             id: `alert-${alert.id}`,
@@ -3793,7 +3793,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
     })
     const caseRows: ActivityItem[] = bundle.cases.map(item => {
         const delivery = bundle.deliveries.find(row => row.caseId === item.id)
-        const watchlistId = delivery?.watchlistItemId || delivery?.watchlistId || delivery?.watchlistItemIds?.[0]
+        const watchlistId = delivery ? deliveryWatchlistId(delivery) : ''
         const destinationIds = delivery ? deliveryDestinationIds(delivery, bundle.webhooks) : []
         return {
             id: `case-${item.id}`,
@@ -3819,10 +3819,10 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
             id: `delivery-${delivery.id}`,
             at: delivery.attemptedAt || delivery.updatedAt || delivery.createdAt || new Date(0).toISOString(),
             title: delivery.dryRun ? 'Destination tested' : 'Alert delivery recorded',
-            detail: `${delivery.status || 'delivery'} · ${compactReference(delivery.watchlistId || delivery.watchlistItemId || delivery.alertId, 'watchlist') || 'Watchlist pending'}`,
+            detail: `${delivery.status || 'delivery'} · ${compactReference(deliveryWatchlistId(delivery) || delivery.alertId, 'watchlist') || 'Watchlist pending'}`,
             ok: !delivery.error && delivery.status?.toLowerCase() !== 'failed',
             subjectType: 'destination',
-            subjectId: destinationIds[0] || delivery.watchlistItemId || delivery.watchlistId || delivery.alertId,
+            subjectId: destinationIds[0] || deliveryWatchlistId(delivery) || delivery.alertId,
             relatedSubjectIds: [
                 ...destinationIds,
                 delivery.watchlistItemId,
@@ -3837,7 +3837,7 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle, orga
                 ['Saved route', destinationIds.length ? 'Available' : undefined],
                 ['Alert', compactReference(delivery.alertId, 'alert')],
                 ['Case', compactReference(delivery.caseId, 'case')],
-                ['Watchlist', compactReference(delivery.watchlistItemId || delivery.watchlistId, 'watchlist')],
+                ['Watchlist', compactReference(deliveryWatchlistId(delivery), 'watchlist')],
                 ['Kind', delivery.deliveryKind],
             ]),
         }
@@ -3920,8 +3920,8 @@ function requestedSubjectFromSearch(input: {
         if (deliveryCaseId && bundle.cases.some(item => item.id === deliveryCaseId)) return { type: 'case', id: deliveryCaseId }
         const deliveryAlertId = delivery.alertId
         if (deliveryAlertId && bundle.alerts.some(item => item.id === deliveryAlertId)) return { type: 'alert', id: deliveryAlertId }
-        const deliveryWatchlistId = delivery.watchlistItemId || delivery.watchlistId
-        if (deliveryWatchlistId && bundle.watchlists.some(item => item.id === deliveryWatchlistId)) return { type: 'watchlist', id: deliveryWatchlistId }
+        const requestedDeliveryWatchlistId = deliveryWatchlistId(delivery)
+        if (requestedDeliveryWatchlistId && bundle.watchlists.some(item => item.id === requestedDeliveryWatchlistId)) return { type: 'watchlist', id: requestedDeliveryWatchlistId }
     }
     if (input.caseId && bundle.cases.some(item => item.id === input.caseId)) return { type: 'case', id: input.caseId }
     if (input.alertId && bundle.alerts.some(item => item.id === input.alertId)) return { type: 'alert', id: input.alertId }
@@ -4493,6 +4493,10 @@ function deliveriesForDestination(destination: WebhookDestination, deliveries: D
     return deliveries.filter(delivery => deliveryDestinationIds(delivery, [destination]).includes(destination.id))
 }
 
+function deliveryWatchlistId(delivery: DeliveryRow) {
+    return delivery.watchlistItemId || delivery.watchlistId || delivery.watchlistItemIds?.[0] || delivery.watchlistIds?.[0] || ''
+}
+
 function deliveryDestinationIds(delivery: DeliveryRow, destinations: WebhookDestination[]) {
     return [
         delivery.webhookDestinationId,
@@ -4556,7 +4560,7 @@ function escapeRegExp(value: string) {
 function canReplayDelivery(delivery: DeliveryRow, destinations: WebhookDestination[] = []) {
     return Boolean(
         deliveryDestinationIds(delivery, destinations)[0]
-        && (delivery.alertId || delivery.caseId || delivery.watchlistId || delivery.watchlistItemId || delivery.actionId)
+        && (delivery.alertId || delivery.caseId || deliveryWatchlistId(delivery) || delivery.actionId)
     )
 }
 
@@ -4686,8 +4690,8 @@ function payloadPreviewFromPayload(payload: unknown, delivery: DeliveryRow): Del
             sourceFamily: fieldValue('Source family') || null,
             evidenceCount: numberValue(Number(fieldValue('Evidence count'))) ?? null,
             evidenceTimestamp: fieldValue('Evidence timestamp') || fieldValue('Observed at') || null,
-            watchlistName: fieldValue('Watchlist') || delivery.watchlistName || delivery.watchlistId || null,
-            watchlistId: delivery.watchlistId || null,
+            watchlistName: fieldValue('Watchlist') || delivery.watchlistName || deliveryWatchlistId(delivery) || null,
+            watchlistId: deliveryWatchlistId(delivery) || null,
             matchReason: fieldValue('Match reason') || null,
             deliveryState: fieldValue('Delivery state') || delivery.status || null,
             casePath: fieldValue('Case') || delivery.casePath || null,
