@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 const source = readFileSync(new URL('../src/app/dashboard/dwm/dwm-analyst-portal.tsx', import.meta.url), 'utf8')
 const workflowSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-workflow-actions.tsx', import.meta.url), 'utf8')
 const inboxSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-alert-inbox.tsx', import.meta.url), 'utf8')
+const caseDetailSource = readFileSync(new URL('../src/app/dashboard/dwm/cases/[id]/case-detail-client.tsx', import.meta.url), 'utf8')
 const workbenchAdapterSource = readFileSync(new URL('../src/app/dashboard/ti/workbench/dwmAlertAdapter.ts', import.meta.url), 'utf8')
 const displaySource = readFileSync(new URL('../src/utils/dwm/display.ts', import.meta.url), 'utf8')
 
@@ -91,6 +92,12 @@ assert.ok(!source.includes('sourceRows.slice(0, 8)'), 'DWM source posture should
 assert.ok(source.includes('const DWM_DELIVERY_PREVIEW_ROWS = 4'), 'DWM delivery history should stay compact by default.')
 assert.ok(source.includes('visible.slice(0, DWM_DELIVERY_PREVIEW_ROWS)'), 'DWM delivery history should use the named preview cap.')
 assert.ok(!source.includes('visible.slice(0, 6)'), 'DWM delivery history should not render a long delivery wall by default.')
+assert.ok(caseDetailSource.includes('const DWM_CASE_EVIDENCE_PREVIEW_ROWS = 6'), 'DWM case evidence tables should stay compact by default.')
+assert.ok(caseDetailSource.includes('const DWM_CASE_TIMELINE_PREVIEW_ROWS = 8'), 'DWM case timeline should stay compact by default.')
+assert.ok(caseDetailSource.includes('evidence.slice(0, DWM_CASE_EVIDENCE_PREVIEW_ROWS)'), 'DWM case evidence rows should use the named preview cap.')
+assert.ok(caseDetailSource.includes('timeline.slice(0, DWM_CASE_TIMELINE_PREVIEW_ROWS)'), 'DWM case timeline rows should use the named preview cap.')
+assert.ok(!caseDetailSource.includes('evidence.map((row, index)'), 'DWM case detail should not render all evidence rows by default.')
+assert.ok(!caseDetailSource.includes('timeline.map((row, index)'), 'DWM case detail should not render all timeline rows by default.')
 
 for (const token of [
     'data-dwm-workflow-runbook',

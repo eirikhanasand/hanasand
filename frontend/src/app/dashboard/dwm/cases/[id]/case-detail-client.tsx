@@ -5,6 +5,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, BellRing, CheckCircle2, Copy, Loader2, RotateCcw, Send, ShieldCheck, UserRound, XCircle } from 'lucide-react'
 import { safeEvidenceExcerpt } from '@/utils/dwm/display'
 
+const DWM_CASE_EVIDENCE_PREVIEW_ROWS = 6
+const DWM_CASE_TIMELINE_PREVIEW_ROWS = 8
+
 export type CaseDetail = {
     schemaVersion?: string
     generatedAt?: string
@@ -442,7 +445,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                     {evidence.length ? (
                                         <>
                                             <div className='grid gap-2 p-2 md:hidden' data-dwm-case-evidence-mobile-list='true'>
-                                                {evidence.map((row, index) => <EvidenceMobileRow key={row.id || index} row={row} />)}
+                                                {evidence.slice(0, DWM_CASE_EVIDENCE_PREVIEW_ROWS).map((row, index) => <EvidenceMobileRow key={row.id || index} row={row} />)}
                                             </div>
                                             <div className='hidden overflow-x-auto md:block'>
                                                 <table className='w-full min-w-[760px] text-left text-xs' data-dwm-case-evidence-desktop-table='true'>
@@ -455,7 +458,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                                         </tr>
                                                     </thead>
                                                     <tbody className='divide-y divide-ui-border bg-ui-panel'>
-                                                        {evidence.map((row, index) => (
+                                                        {evidence.slice(0, DWM_CASE_EVIDENCE_PREVIEW_ROWS).map((row, index) => (
                                                             <tr key={row.id || index} className='hover:bg-ui-raised'>
                                                                 <td className='px-3 py-2 align-top font-semibold text-ui-text'>{row.sourceName || sourceReferenceState(row)}<p className='text-[11px] font-normal text-ui-muted'>{stateLabel(row.sourceFamily)}</p></td>
                                                                 <td className='px-3 py-2 align-top text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</td>
@@ -476,7 +479,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                             <CollapsiblePanel title='Audit timeline' action={`${timeline.length} events`} defaultOpen={false}>
                                 <div className='max-h-[420px] overflow-y-auto pr-1'>
                                     <div className='grid gap-2'>
-                                        {timeline.length ? timeline.map((row, index) => (
+                                        {timeline.length ? timeline.slice(0, DWM_CASE_TIMELINE_PREVIEW_ROWS).map((row, index) => (
                                             <TimelineItem key={row.id || index} row={row} compact />
                                         )) : <EmptyLine text='No case events have been recorded yet.' />}
                                     </div>
