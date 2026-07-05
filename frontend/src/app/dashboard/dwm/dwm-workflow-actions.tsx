@@ -8,6 +8,8 @@ import { Activity, BellRing, Loader2, Plus, RefreshCw, Send, ShieldCheck } from 
 type WorkflowResult = {
     ok: boolean
     message: string
+    actionHref?: string
+    actionLabel?: string
 }
 
 type WorkflowTelemetry = {
@@ -182,6 +184,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
 
             const caseId = readNestedString(casePayload, ['case', 'id']) || readNestedString(casePayload, ['alertCaseHandoff', 'caseId'])
             let deliveryText = ''
+            let deliveryReady = false
             if (webhookConfigured) {
                 const delivery = await postJson('/api/dwm/webhooks/deliver', {
                     ...scope,
@@ -194,7 +197,8 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 })
                 if (!delivery.ok) throw new Error(delivery.message)
                 const attemptedCount = typeof delivery.attemptedCount === 'number' ? delivery.attemptedCount : 0
-                deliveryText = attemptedCount ? ' Dry-run delivery recorded.' : ' No delivery was ready.'
+                deliveryReady = attemptedCount > 0
+                deliveryText = deliveryReady ? ' Dry-run delivery recorded.' : ' Delivery needs setup.'
             }
 
             setTerms(nextTerms)
@@ -209,10 +213,15 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 alertId: alert.id,
                 caseId: caseId || undefined,
                 caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId, 'metadata_claim') : undefined,
-                deliveryAttempts: deliveryText ? (deliveryText.includes('recorded') ? 1 : 0) : undefined,
-                deliveryState: deliveryText ? deliveryText.trim() : undefined,
+                deliveryAttempts: deliveryText ? (deliveryReady ? 1 : 0) : undefined,
+                deliveryState: deliveryText ? (deliveryReady ? deliveryText.trim() : 'Delivery needs setup. Configure or test a destination before sending customer notification.') : undefined,
             })
-            setResult({ ok: true, message: `Ingested ${accepted} exposure report(s), opened ${caseId || 'a case'}.${deliveryText}` })
+            setResult({
+                ok: true,
+                message: `Ingested ${accepted} exposure report(s), opened ${caseId || 'a case'}.${deliveryReady ? deliveryText : deliveryText ? ' Configure or test a destination before sending customer notification.' : ''}`,
+                actionHref: deliveryText && !deliveryReady ? deliverySetupHref(organizationId, alert.id, caseId || undefined) : undefined,
+                actionLabel: deliveryText && !deliveryReady ? 'Configure delivery' : undefined,
+            })
             if (caseId) {
                 router.push(caseDetailPath(caseId, alert.id, organizationId, 'metadata_claim'))
             } else {
@@ -301,6 +310,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
 
             let deliveryText = ''
             let deliveryAttempts: number | undefined
+            let deliveryReady = false
             if (webhookConfigured) {
                 const delivery = await postJson('/api/dwm/webhooks/deliver', {
                     ...scope,
@@ -314,7 +324,8 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 if (!delivery.ok) throw new Error(delivery.message)
                 const attemptedCount = typeof delivery.attemptedCount === 'number' ? delivery.attemptedCount : 0
                 deliveryAttempts = attemptedCount
-                deliveryText = attemptedCount ? ' Dry-run delivery recorded.' : ' Delivery was not ready.'
+                deliveryReady = attemptedCount > 0
+                deliveryText = deliveryReady ? ' Dry-run delivery recorded.' : ' Delivery needs setup.'
             }
 
             setTerms(nextTerms)
@@ -329,9 +340,14 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 caseId: caseId || undefined,
                 caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId, 'source_pack') : undefined,
                 deliveryAttempts,
-                deliveryState: deliveryText ? deliveryText.trim() : undefined,
+                deliveryState: deliveryText ? (deliveryReady ? deliveryText.trim() : 'Delivery needs setup. Configure or test a destination before sending customer notification.') : undefined,
             })
-            setResult({ ok: true, message: `Added ${advisoryCount} public advisory source(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s), opened ${caseId || 'a case'}.${deliveryText}` })
+            setResult({
+                ok: true,
+                message: `Added ${advisoryCount} public advisory source(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s), opened ${caseId || 'a case'}.${deliveryReady ? deliveryText : deliveryText ? ' Configure or test a destination before sending customer notification.' : ''}`,
+                actionHref: deliveryText && !deliveryReady ? deliverySetupHref(organizationId, alert.id, caseId || undefined) : undefined,
+                actionLabel: deliveryText && !deliveryReady ? 'Configure delivery' : undefined,
+            })
             if (caseId) {
                 router.push(caseDetailPath(caseId, alert.id, organizationId, 'source_pack'))
             } else {
@@ -557,7 +573,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     function focusWebhookInput() {
         webhookInputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
         webhookInputRef.current?.focus()
-        setResult({ ok: true, message: 'Paste an HTTPS endpoint, then test the delivery destination.' })
+        setResult({ ok: true, message: 'Paste an HTTPS endpoint, then test the delivery destination.', actionHref: '#dwm-inline-webhook', actionLabel: 'Add endpoint' })
     }
 
     function seedStarterWatchlist() {
@@ -650,6 +666,11 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <div data-dwm-workflow-result className={`rounded-lg border px-3 py-2 text-sm leading-5 ${result.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>
                         <p className='font-semibold'>{result.ok ? 'Workflow updated' : 'Action blocked'}</p>
                         <p className='mt-1 text-xs leading-5'>{result.message}</p>
+                        {result.actionHref && result.actionLabel ? (
+                            <Link href={result.actionHref} className='mt-2 inline-flex min-h-8 items-center rounded-lg border border-current px-3 text-xs font-semibold transition hover:opacity-80' data-dwm-workflow-result-action='true'>
+                                {result.actionLabel}
+                            </Link>
+                        ) : null}
                     </div>
                 ) : (
                     <div className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
@@ -680,7 +701,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 <div className='mt-3 grid min-w-0 gap-2 sm:grid-cols-2 2xl:grid-cols-4'>
                     {routeQueue.map(action => <RouteQueueCard key={action.id} action={action} />)}
                 </div>
-                <div data-dwm-inline-webhook className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end'>
+                <div id='dwm-inline-webhook' data-dwm-inline-webhook className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end'>
                     <label className='min-w-0'>
                         <span className='text-[10px] font-semibold uppercase text-ui-subtle'>Delivery endpoint</span>
                         <input
@@ -956,6 +977,10 @@ function organizationDestinationPath(organizationId: string, alertId?: string, c
     if (alertId) params.set('alertId', alertId)
     if (caseId) params.set('caseId', caseId)
     return `/organizations?${params.toString()}#delivery-history`
+}
+
+function deliverySetupHref(organizationId?: string, alertId?: string, caseId?: string) {
+    return organizationId ? organizationDestinationPath(organizationId, alertId, caseId) : '#dwm-inline-webhook'
 }
 
 function RouteStateCard({ label, value, detail, tone }: { label: string, value: string, detail: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {

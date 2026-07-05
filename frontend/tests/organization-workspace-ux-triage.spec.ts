@@ -117,6 +117,18 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('data-org-delivery-payload-preview')
     expect(page).toContain('payloadPreviewForDelivery(delivery)')
     expect(page).toContain('payloadPreviewFromRecord(delivery.sanitizedPayloadPreview)')
+    expect(page).toContain('function deliveryFailureSummary')
+    expect(page).toContain('function deliveryOutcomeSummary')
+    expect(page).toContain('function deliveryRetryText')
+    expect(page).toContain('function replayBlockedReason')
+    expect(page).toContain('No active Discord or webhook destination is configured for this alert scope.')
+    expect(page).toContain('Delivery failed before Discord/webhook accepted the request.')
+    expect(page).toContain('Replay needs a saved destination.')
+    expect(page).toContain('Replay needs alert, case, or watchlist context.')
+    expect(page).toContain('Linked case or alert is available.')
+    expect(page).not.toContain('Route: {sanitizeOrganizationDisplayCopy(route) || route}')
+    expect(page).not.toContain('Linked case or alert available.')
+    expect(page).not.toContain('Needs destination and alert context')
     expect(page).toContain('/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists')
     expect(page).toContain('/api/dwm/webhooks/deliver')
 
@@ -356,6 +368,9 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(page.locator('#destinations')).toContainText('Backup Webhook')
     await expect(page.locator('#destinations')).not.toContainText('SOC Discord')
     await expect(page.locator('#delivery-history')).toContainText('audit cme_extra_13')
+    await expect(page.locator('#delivery-history')).toContainText('Discord rejected the request: invalid embeds.')
+    await expect(page.locator('#delivery-history')).toContainText('Retry scheduled')
+    await expect(page.locator('#delivery-history')).toContainText('Case case_acme_1')
     await page.locator('[data-org-members-disclosure] summary').click()
     await expect(page.locator('[data-org-member-filter-strip="true"]')).toBeVisible()
     await expect(page.locator('[data-org-member-filter-count="true"]')).toContainText('3/3 shown')
@@ -459,6 +474,6 @@ const fixtureCases = [
 ]
 
 const fixtureDeliveries = [
-    { id: 'delivery_acme_1', alertId: 'dwm_alert_acme', organizationId: 'org_acme', tenantId: 'tenant_acme', watchlistId: 'watch_acme_domain', webhookDestinationId: 'dest_acme_discord', endpointHint: 'discord...acme', endpointHash: 'wh_hash_acme', requestId: 'req_acme_1', auditEventId: 'audit_acme_1', dedupeKey: 'dedupe_acme_1', attemptedAt: '2026-07-04T09:35:00.000Z', dryRun: true, payloadHash: 'payload_hash_acme', status: 'dry_run', httpStatus: 204, attemptCount: 1, deliveryKind: 'discord' },
+    { id: 'delivery_acme_1', alertId: 'dwm_alert_acme', caseId: 'case_acme_1', organizationId: 'org_acme', tenantId: 'tenant_acme', watchlistId: 'watch_acme_domain', webhookDestinationId: 'dest_acme_discord', endpointHint: 'discord...acme', endpointHash: 'wh_hash_acme', requestId: 'req_acme_1', auditEventId: 'audit_acme_1', dedupeKey: 'dedupe_acme_1', attemptedAt: '2026-07-04T10:30:00.000Z', dryRun: true, payloadHash: 'payload_hash_acme', status: 'failed', httpStatus: 400, attemptCount: 2, nextRetryAt: '2026-07-04T10:45:00.000Z', deliveryKind: 'discord', errorClass: 'discord_validation_error', error: 'Discord rejected the request: invalid embeds.', responseSummary: 'Discord rejected the request: invalid embeds.', sanitizedPayloadPreview: { title: 'Acme credential exposure', descriptionPreview: 'High severity exposure for acme.com from dark web source.', fields: [{ name: 'Organization', valuePreview: 'Acme Security' }, { name: 'Watchlist', valuePreview: 'acme.com' }, { name: 'Severity', valuePreview: 'high' }, { name: 'Source family', valuePreview: 'darkweb' }], context: { orgName: 'Acme Security', alertTitle: 'Acme credential exposure', alertId: 'dwm_alert_acme', severity: 'high', sourceFamily: 'darkweb', evidenceCount: 2, evidenceTimestamp: '2026-07-04T09:20:00.000Z', watchlistName: 'acme.com', watchlistId: 'watch_acme_domain', matchReason: 'Customer-owned domain matched leaked credential context.', deliveryState: 'failed', casePath: '/dashboard/dwm/cases/case_acme_1?alertId=dwm_alert_acme' } } },
     ...Array.from({ length: 14 }, (_, index) => ({ id: `delivery_acme_extra_${index}`, alertId: `dwm_alert_extra_${index}`, organizationId: 'org_acme', tenantId: 'tenant_acme', watchlistId: 'watch_acme_domain', webhookDestinationId: 'dest_acme_discord', endpointHint: 'discord...acme', endpointHash: 'wh_hash_acme', requestId: `req_acme_extra_${index}`, auditEventId: `audit_acme_extra_${index}`, dedupeKey: `dedupe_acme_extra_${index}`, attemptedAt: `2026-07-04T10:${String(index).padStart(2, '0')}:00.000Z`, dryRun: true, payloadHash: `payload_hash_extra_${index}`, status: 'dry_run', httpStatus: 204, attemptCount: 1, deliveryKind: 'discord' })),
 ]

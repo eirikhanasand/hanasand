@@ -2631,11 +2631,12 @@ function mergeDeliveries(incoming: DeliveryItem[], current: DeliveryItem[]) {
 
 function deliveryActionMessage(rows: DeliveryItem[], attemptedCount: number | undefined, fallback: string) {
     const row = rows[0]
-    if (!row) return attemptedCount ? `${fallback} attempted.` : `${fallback} did not find a configured destination.`
+    if (!row) return attemptedCount ? `${fallback} attempted.` : `${fallback} blocked: no active Discord/webhook destination is configured for this alert organization or watchlist.`
     const destination = deliveryDestinationState(row)
     const retry = row.nextRetryAt ? ` Retry ${relativeTimeLabel(row.nextRetryAt)}.` : ''
     const error = row.error ? ` ${safeTimelineDetail(row.error)}` : ''
-    return `${fallback} ${stateLabel(row.status)} for ${destination}.${retry}${error}`
+    const trace = row.auditEventId || row.requestId ? ` Trace ${row.auditEventId || row.requestId}.` : ''
+    return `${fallback} ${stateLabel(row.status)} for ${destination}.${retry}${error}${trace}`
 }
 
 function deliveryDestinationState(row: Pick<DeliveryItem, 'endpointHint' | 'endpointHash' | 'webhookDestinationId' | 'destinationId'>) {

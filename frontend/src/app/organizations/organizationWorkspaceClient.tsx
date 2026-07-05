@@ -335,6 +335,40 @@ function organizationDeliveryErrorText(value: unknown) {
     return sanitizeOrganizationDisplayCopy(value) || 'Delivery error redacted.'
 }
 
+function deliveryFailureSummary(delivery: DeliveryRow) {
+    const errorClass = String(delivery.errorClass || '').toLowerCase()
+    const raw = organizationDeliveryErrorText(delivery.error || delivery.errorClass || delivery.responseSummary)
+    if (errorClass.includes('missing_webhook_url') || errorClass.includes('destination_unavailable')) return 'No active Discord or webhook destination is configured for this alert scope.'
+    if (errorClass.includes('unsupported_destination')) return 'Destination type is not supported for Discord/webhook delivery.'
+    if (errorClass.includes('permission') || errorClass.includes('access')) return 'Your role cannot test or replay this destination.'
+    if (errorClass.includes('disabled') || errorClass.includes('paused')) return 'Destination is disabled. Enable it before replaying alert delivery.'
+    if (errorClass.includes('dedupe') || errorClass.includes('idempot')) return 'Replay was skipped because this idempotency key already delivered.'
+    if (raw && raw !== 'Delivery error redacted.') return raw
+    return 'Delivery failed before Discord/webhook accepted the request.'
+}
+
+function deliveryOutcomeSummary(delivery: DeliveryRow) {
+    if (delivery.status === 'failed' || delivery.error) return deliveryFailureSummary(delivery)
+    if (delivery.status === 'skipped') return delivery.responseSummary || deliveryFailureSummary(delivery)
+    if (delivery.dryRun) return 'Dry-run rendered the Discord/webhook payload without sending externally.'
+    if (delivery.httpStatus || delivery.responseStatus) return `Destination responded with HTTP ${delivery.httpStatus ?? delivery.responseStatus}.`
+    if (delivery.responseSummary) return sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary
+    return 'Delivery attempt recorded.'
+}
+
+function deliveryRetryText(delivery: DeliveryRow) {
+    const attempts = delivery.attemptCount ?? delivery.retryCount ?? 0
+    if (delivery.nextRetryAt) return `Retry scheduled ${formatDate(delivery.nextRetryAt)} after ${attempts} attempt${attempts === 1 ? '' : 's'}`
+    if (delivery.status === 'failed' || delivery.error) return `No retry scheduled after ${attempts} attempt${attempts === 1 ? '' : 's'}`
+    return `${attempts} attempt${attempts === 1 ? '' : 's'}`
+}
+
+function replayBlockedReason(delivery: DeliveryRow) {
+    if (!delivery.webhookDestinationId && !delivery.destinationId) return 'Replay needs a saved destination.'
+    if (!(delivery.alertId || delivery.caseId || delivery.watchlistId || delivery.watchlistItemId || delivery.actionId)) return 'Replay needs alert, case, or watchlist context.'
+    return 'Replay is not available for this delivery row.'
+}
+
 function destinationDisplayState(input?: Pick<WebhookDestination, 'endpointHash' | 'endpointHint' | 'deliveryReady' | 'status'> | Pick<WatchlistItem, 'webhookEndpointHash' | 'webhookEndpointHint' | 'webhookUrlConfigured'> | Pick<DeliveryRow, 'endpointHash' | 'endpointHint' | 'webhookDestinationId'> | null) {
     if (!input) return 'Destination pending'
     if ('deliveryReady' in input && input.deliveryReady) return 'Destination configured'
@@ -417,6 +451,9 @@ function destinationSearchText(destination: WebhookDestination, destinationDeliv
         delivery.auditEventId,
         delivery.dedupeKey,
         delivery.payloadHash,
+        delivery.errorClass,
+        delivery.error,
+        delivery.nextRetryAt,
     ])
     return [
         destination.id,
@@ -2580,10 +2617,10 @@ function DestinationDeliverySummary({ delivery }: { delivery?: DeliveryRow | nul
                 <StatusPill status={delivery.status || 'attempt'} />
                 <span>{formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}</span>
             </span>
-            <span className='truncate'>{failed ? sanitizeOrganizationDisplayCopy(delivery.error || delivery.errorClass || 'Delivery failed.') : sanitizeOrganizationDisplayCopy(delivery.responseSummary || delivery.errorClass || 'Delivery accepted.')}</span>
+            <span className='truncate'>{deliveryOutcomeSummary(delivery)}</span>
             <span className='truncate'>{deliveryTraceLabel(delivery)}</span>
             {(delivery.nextRetryAt || delivery.attemptCount !== undefined || delivery.retryCount !== undefined) && (
-                <span className='truncate'>Retry: {delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
+                <span className='truncate'>Retry: {deliveryRetryText(delivery)}</span>
             )}
         </div>
     )
@@ -2625,7 +2662,7 @@ function DeliveryPayloadPreview({ delivery, compact = false }: { delivery: Deliv
             )}
             {fields.length === 0 && fieldNames.length > 0 && <p className='truncate text-ui-muted dark:text-ui-muted'>Fields: {fieldNames.map(sanitizeOrganizationDisplayCopy).join(', ')}</p>}
             {context.matchReason && !compact && <p className='line-clamp-2 text-ui-muted dark:text-ui-muted'>Match: {sanitizeOrganizationDisplayCopy(context.matchReason)}</p>}
-            {route && !compact && <p className='truncate text-ui-muted dark:text-ui-muted'>Linked case or alert available.</p>}
+            {route && !compact && <p className='truncate text-ui-muted dark:text-ui-muted'>Linked case or alert is available.</p>}
         </div>
     )
 }
@@ -2683,7 +2720,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                 <span className='truncate'>Last delivery: {deliveryStatus}</span>
                 <span className='truncate'>Tenant: {sanitizeOrganizationDisplayCopy(item.tenantId || organization.tenantId || 'default')}</span>
             </div>
-            {delivery?.error && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{organizationDeliveryErrorText(delivery.error)}</p>}
+            {delivery?.error && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{deliveryFailureSummary(delivery)}</p>}
             {delivery && <DeliveryPayloadPreview delivery={delivery} compact />}
         </div>
     )
@@ -2764,7 +2801,7 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                                             </td>
                                             <td className='max-w-64 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                                 <DeliveryReference delivery={delivery} organizationId={organization.id} />
-                                                {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{organizationDeliveryErrorText(delivery.error)}</p>}
+                                                {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{deliveryFailureSummary(delivery)}</p>}
                                                 {!delivery.error && delivery.responseSummary && <p className='mt-1 line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
                                                 <div className='mt-2'>
                                                     <DeliveryPayloadPreview delivery={delivery} compact />
@@ -2773,7 +2810,7 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                                             <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                                 <div className='grid gap-1 text-xs text-ui-muted dark:text-ui-muted'>
                                                     <span>{delivery.errorClass ? sanitizeOrganizationDisplayCopy(delivery.errorClass) : delivery.nextRetryAt ? 'scheduled' : 'none'}</span>
-                                                    <span>{delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
+                                                    <span>{deliveryRetryText(delivery)}</span>
                                                     {delivery.dedupeKey && <span className='max-w-40 truncate'>Deduplicated delivery</span>}
                                                 </div>
                                             </td>
@@ -2786,7 +2823,7 @@ function DeliveryHistoryPanel({ organization, deliveries, selectedSubject, canMa
                                                         <RefreshCw className='h-4 w-4' />
                                                         {replayLabel}
                                                     </button>
-                                                    {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>Needs destination and alert context</span>}
+                                                    {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>{replayBlockedReason(delivery)}</span>}
                                                     <RowStatus message={rowMessages[`delivery-${delivery.id}`]} />
                                                 </div>
                                             </td>
@@ -2827,11 +2864,11 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, canManage, busy, r
             </div>
             <div className='grid grid-cols-2 gap-2 text-xs text-ui-muted dark:text-ui-muted'>
                 <span className='truncate'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'webhook'}</span>
-                <span className='truncate text-right'>{delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
+                <span className='truncate text-right'>{deliveryRetryText(delivery)}</span>
                 {delivery.httpStatus !== undefined && <span className='truncate'>HTTP {delivery.httpStatus}</span>}
                 {delivery.errorClass && <span className='truncate text-right'>{sanitizeOrganizationDisplayCopy(delivery.errorClass)}</span>}
             </div>
-            {delivery.error && <p className='line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{organizationDeliveryErrorText(delivery.error)}</p>}
+            {delivery.error && <p className='line-clamp-2 rounded-md bg-ui-warning/10 px-2 py-1 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{deliveryFailureSummary(delivery)}</p>}
             {!delivery.error && delivery.responseSummary && <p className='line-clamp-2 text-xs text-ui-muted dark:text-ui-muted'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
             <DeliveryPayloadPreview delivery={delivery} compact />
             <div className='grid gap-2'>
@@ -2839,7 +2876,7 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, canManage, busy, r
                     <RefreshCw className='h-4 w-4' />
                     {replayLabel}
                 </button>
-                {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>Needs destination and alert context</span>}
+                {!replayable && <span className='text-xs text-ui-muted dark:text-ui-muted'>{replayBlockedReason(delivery)}</span>}
                 <RowStatus message={rowMessage} />
             </div>
         </article>
