@@ -1186,7 +1186,6 @@ export default function OrganizationWorkspaceClient() {
         const kind = destinationCreateDraft.kind
         const name = normalizeDestinationName(destinationCreateDraft.name) || defaultDestinationName(kind)
         if (destinationNameInUse(bundle.webhooks, name)) throw new Error('Destination name already exists.')
-        setDestinationCreateDraft({ name: destinationCreateDraft.name, kind, url: '' })
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks`, {
             method: 'POST',
             body: JSON.stringify({
