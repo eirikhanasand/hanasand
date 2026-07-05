@@ -4037,6 +4037,7 @@ function organizationWorkspaceSelectionHref(organizationId: string, subject: Act
 
 function activitySubjectFromRowKey(rowKey: string | undefined, organizationId: string | undefined): ActivitySubject | null {
     if (!rowKey) return organizationId ? { type: 'organization', id: organizationId } : null
+    if (rowKey === 'invite-create' || rowKey === 'watchlist-create' || rowKey === 'destination-create') return organizationId ? { type: 'organization', id: organizationId } : null
     if (rowKey.startsWith('invite-')) return { type: 'invite', id: rowKey.replace(/^invite-/, '') }
     if (rowKey.startsWith('member-')) return { type: 'member', id: rowKey.replace(/^member-/, '') }
     if (rowKey.startsWith('watchlist-')) return { type: 'watchlist', id: rowKey.replace(/^watchlist-/, '') }
