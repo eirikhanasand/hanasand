@@ -425,7 +425,7 @@ function destinationSearchText(destination: WebhookDestination, destinationDeliv
         destination.status,
         destination.endpointHint,
         destination.endpointHash,
-        destination.deliveryReady ? 'ready configured' : undefined,
+        destination.deliveryReady ? 'delivery configured' : undefined,
         ...deliveryFields,
     ].filter(value => value !== undefined && value !== null).join(' ').toLowerCase()
 }
@@ -1322,7 +1322,7 @@ function WorkspaceSectionNav({ organization, bundle, selectedSubject }: { organi
             id: 'destinations',
             href: '#destinations',
             label: 'Destinations',
-            value: `${activeDestinations.length} ready`,
+            value: `${activeDestinations.length} configured`,
             detail: `${bundle.webhooks.length} saved`,
             icon: <Webhook className='h-4 w-4' />,
             active: selectedSubject.type === 'destination',
@@ -1674,7 +1674,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
         {
             id: 'activity',
             title: 'Alert and case context',
-            body: alertCount || caseCount ? `${alertCount} alert${alertCount === 1 ? '' : 's'} · ${caseCount} case${caseCount === 1 ? '' : 's'}` : 'Waiting for a watchlist match',
+            body: alertCount || caseCount ? `${alertCount} alert${alertCount === 1 ? '' : 's'} · ${caseCount} case${caseCount === 1 ? '' : 's'}` : watchlistCount ? 'Open DWM workspace after the first match' : 'Add watchlist first',
             href: '#audit',
             ready: alertCount > 0 || caseCount > 0,
             blocked: false,
@@ -1696,7 +1696,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
                             <span className='truncate'>Organization setup</span>
                         </h2>
                         <span className='shrink-0 border-l border-ui-border pl-2 text-xs font-semibold text-ui-muted dark:border-ui-border dark:text-ui-muted' data-org-setup-progress-count='true'>
-                            {completed}/{visibleRows.length}
+                            {completed}/{visibleRows.length} setup
                         </span>
                     </div>
                     <div className='grid border-t border-ui-border dark:border-ui-border sm:grid-cols-2 xl:grid-cols-4'>
