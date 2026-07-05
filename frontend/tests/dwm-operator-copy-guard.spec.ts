@@ -29,7 +29,10 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     expect(workflowActions).toContain('alert linked')
     expect(workflowActions).toContain('data-dwm-command-disabled-reason=\'true\'')
     expect(workflowActions).toContain('{action.disabledReason}')
+    expect(workflowActions).toContain('function rebuiltAlertSummary(alert: Record<string, unknown>)')
+    expect(workflowActions).toContain('formatClaimSummary(readString(alert.claimSummary)')
     expect(workflowActions).not.toContain('{route.alertId}</span>')
+    expect(workflowActions).not.toContain('const summary = readString(alert.claimSummary).toLowerCase()')
     expect(dwmPortal).toContain('no active Discord/webhook destination is configured for this alert organization or watchlist')
     expect(dwmPortal).toContain('Trace ${row.auditEventId || row.requestId}.')
 

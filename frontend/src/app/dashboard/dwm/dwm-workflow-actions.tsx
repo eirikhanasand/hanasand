@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useRef, useState } from 'react'
 import { Activity, BellRing, Loader2, Plus, RefreshCw, Send, ShieldCheck } from 'lucide-react'
+import { formatClaimSummary } from '@/utils/dwm/display'
+import type { DwmSourceFamily } from '@/utils/dwm/product'
 
 type WorkflowResult = {
     ok: boolean
@@ -857,11 +859,29 @@ function selectRebuiltAlert(payload: Record<string, unknown>, company: string, t
     const match = alerts.find(alert => {
         const companyValue = readString(alert.company).toLowerCase()
         const matchedValue = readNestedString(alert, ['matchedTerm', 'value']).toLowerCase()
-        const summary = readString(alert.claimSummary).toLowerCase()
+        const summary = rebuiltAlertSummary(alert).toLowerCase()
         return needles.some(needle => companyValue.includes(needle) || matchedValue.includes(needle) || summary.includes(needle))
     }) ?? alerts[0]
     const id = readString(match?.id)
     return id ? { id } : undefined
+}
+
+function rebuiltAlertSummary(alert: Record<string, unknown>) {
+    return formatClaimSummary(readString(alert.claimSummary), {
+        actor: readString(alert.actor),
+        artifactType: readString(alert.artifactType),
+        company: readString(alert.company),
+        matchedTerm: { value: readNestedString(alert, ['matchedTerm', 'value']), kind: 'unknown' },
+        sourceFamily: readSourceFamily(alert.sourceFamily),
+    })
+}
+
+function readSourceFamily(value: unknown): DwmSourceFamily {
+    const sourceFamily = readString(value)
+    if (sourceFamily === 'telegram_public' || sourceFamily === 'darkweb_metadata' || sourceFamily === 'actor_page' || sourceFamily === 'public_advisory' || sourceFamily === 'clear_web') {
+        return sourceFamily
+    }
+    return 'darkweb_metadata'
 }
 
 function caseDetailPath(caseId: string, alertId: string, organizationId?: string, route?: string) {
