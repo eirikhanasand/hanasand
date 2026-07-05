@@ -2190,7 +2190,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                             <SelectField
                                 label='Role'
                                 value={memberRoleFilter}
-                                options={['all', 'owner', ...roleOptions]}
+                                options={['all', 'owner', ...roleOptions, 'support']}
                                 disabled={Boolean(busy)}
                                 onChange={setMemberRoleFilter}
                             />
@@ -4164,7 +4164,7 @@ function memberStatusCounts(members: OrganizationMember[]) {
 }
 
 function memberRoleStatusCounts(members: OrganizationMember[]) {
-    return ['owner', 'admin', 'member', 'viewer'].map(role => ({
+    return ['owner', 'admin', 'member', 'viewer', 'support'].map(role => ({
         role,
         label: sentenceCase(role),
         count: members.filter(member => member.role.toLowerCase() === role).length,
