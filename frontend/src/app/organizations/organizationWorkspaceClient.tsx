@@ -1028,7 +1028,7 @@ export default function OrganizationWorkspaceClient() {
         })
         setWatchlistDraft({ kind: 'domain', value: '', notes: '' })
         return watchlistMutationMessage(payload.dwmAlertBridge, `${watchlistDraft.value.trim()} saved.`)
-    })
+    }, 'watchlist-create')
 
     const saveWatchlistEdit = (item: WatchlistItem) => selectedOrganization && runAction('save-watchlist', async () => {
         requireManage()
@@ -2711,6 +2711,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                             <textarea value={draft.notes} disabled={!canManage} onChange={event => setDraft({ ...draft, notes: event.target.value })} className={`${inputClass} min-h-16 resize-y`} placeholder='Reason, owner, delivery context' />
                         </label>
                         {draftDuplicate && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-semibold text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning md:col-span-3'>This term already exists in this organization.</p>}
+                        <div className='md:col-span-3'><RowStatus message={rowMessages['watchlist-create']} /></div>
                     </div>
                 </div>
             </details>
