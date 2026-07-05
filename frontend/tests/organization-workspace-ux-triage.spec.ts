@@ -132,7 +132,7 @@ test('organization workspace keeps launch workflow primary and admin controls di
     expect(page).toContain('Create organization')
     expect(page).toContain('Add shared term')
     expect(page).toContain('Invite member')
-    expect(page).toContain('`${emails.length} ${role} invite${emails.length === 1 ? \'\' : \'s\'} sent.`')
+    expect(page).toContain('`${emails.length} ${inviteRole} invite${emails.length === 1 ? \'\' : \'s\'} sent.`')
     expect(page).toContain('`Invite revoked for ${invite.email}.`')
     expect(page).toContain('`Invite resent to ${invite.email}.`')
     expect(page).toContain('`${organizationMemberLabel(member.userId, bundle.members)} changed to ${role}.`')
@@ -388,6 +388,10 @@ test('organization workspace keeps launch workflow primary and admin controls di
 test('organization workspace renders searchable shared watchlists', async ({ context, page, baseURL }, testInfo) => {
     const origin = baseURL || 'http://127.0.0.1:3000'
     const inviteActions: Array<{ inviteId: string, action: string }> = []
+    const memberRoleChanges: Array<{ userId: string, role: string }> = []
+    const memberRemovals: string[] = []
+    const watchlistUpdates: Array<{ itemId: string, value: string }> = []
+    const watchlistArchives: string[] = []
     const destinationTests: Array<{ destinationId: string, dryRun: boolean }> = []
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
     await context.addCookies([
@@ -408,6 +412,15 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.route('**/api/organizations/org_acme/members', async route => {
         await route.fulfill({ json: { members: fixtureMembers } })
     })
+    await page.route('**/api/organizations/org_acme/members/*/role', async route => {
+        const body = await route.request().postDataJSON() as { role?: string }
+        memberRoleChanges.push({ userId: route.request().url().split('/members/')[1]?.split('/')[0] || '', role: body.role || '' })
+        await route.fulfill({ json: { ok: true } })
+    })
+    await page.route('**/api/organizations/org_acme/members/*', async route => {
+        memberRemovals.push(route.request().url().split('/members/')[1]?.split('/')[0] || '')
+        await route.fulfill({ json: { ok: true } })
+    })
     await page.route('**/api/organizations/org_acme/invites', async route => {
         await route.fulfill({ json: { invites: fixtureInvites } })
     })
@@ -418,6 +431,17 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     })
     await page.route('**/api/organizations/org_acme/watchlists', async route => {
         await route.fulfill({ json: { watchlistItems: fixtureWatchlists } })
+    })
+    await page.route('**/api/organizations/org_acme/watchlists/*', async route => {
+        const itemId = route.request().url().split('/watchlists/')[1]?.split('/')[0] || ''
+        if (route.request().method() === 'PUT') {
+            const body = await route.request().postDataJSON() as { value?: string }
+            watchlistUpdates.push({ itemId, value: body.value || '' })
+        }
+        if (route.request().method() === 'DELETE') {
+            watchlistArchives.push(itemId)
+        }
+        await route.fulfill({ json: { ok: true } })
     })
     await page.route('**/api/organizations/org_acme/watchlists/alert-terms', async route => {
         await route.fulfill({ json: { activeTerms: fixtureWatchlists.filter(item => item.status === 'active').map(item => ({ watchlistItemId: item.id, term: item.value, value: item.value, status: item.status, alertGenerationRef: item.alertGenerationRef })) } })
@@ -549,6 +573,16 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await page.locator('[data-org-member-filter-strip="true"]').getByLabel('Role').selectOption('viewer')
     await expect(page.locator('[data-org-member-filter-count="true"]')).toContainText('1/3 shown')
     await expect(page.locator('[data-org-members-disclosure]')).toContainText('viewer@acme.test')
+    await page.locator('[data-org-member-filter-strip="true"]').getByRole('button', { name: 'Clear' }).click()
+    const analystRow = page.locator('[data-org-members-disclosure] tbody tr').filter({ hasText: 'analyst@acme.test' })
+    await analystRow.getByRole('combobox').selectOption('admin')
+    await analystRow.getByRole('button', { name: 'Apply' }).click()
+    expect(memberRoleChanges).toContainEqual({ userId: 'analyst_acme', role: 'admin' })
+    await expect(page.locator('#audit')).toContainText('Acme Analyst changed to admin.')
+    await analystRow.getByLabel('Remove member').click()
+    await analystRow.getByLabel('Confirm remove member').click()
+    expect(memberRemovals).toContain('analyst_acme')
+    await expect(page.locator('#audit')).toContainText('Acme Analyst removed.')
     await expect(page.locator('[data-org-watchlist-filter-strip="true"]')).toBeVisible()
     await expect(page.locator('[data-org-watchlist-filter-count="true"]')).toContainText('3/3 shown')
     await expect(page.locator('[data-org-watchlist-row-layout="true"]').first()).toBeVisible()
@@ -579,6 +613,16 @@ test('organization workspace renders searchable shared watchlists', async ({ con
     await expect(retiredVendorRow).not.toContainText('Org: org_acme')
     await expect(retiredVendorRow).not.toContainText('Owner: owner_acme')
     await expect(retiredVendorRow).not.toContainText('Tenant: tenant_acme')
+    await page.locator('[data-org-watchlist-filter-strip="true"]').getByRole('button', { name: 'Clear' }).click()
+    await acmeRow.getByLabel('Edit watchlist term').click()
+    await page.locator('#watchlists').getByRole('textbox', { name: 'Term', exact: true }).fill('acme-updated.com')
+    await page.locator('#watchlists').getByRole('button', { name: 'Save', exact: true }).click()
+    expect(watchlistUpdates).toContainEqual({ itemId: 'watch_acme_domain', value: 'acme-updated.com' })
+    await expect(page.locator('#audit')).toContainText('acme-updated.com updated.')
+    await acmeRow.getByLabel('Archive watchlist term').click()
+    await acmeRow.getByLabel('Confirm archive watchlist term').click()
+    expect(watchlistArchives).toContain('watch_acme_domain')
+    await expect(page.locator('#audit')).toContainText('acme.com archived.')
 
     await testInfo.attach('organizations-watchlist-filter-desktop', {
         body: await page.screenshot({ path: '/tmp/organizations-watchlist-filter-desktop.png', fullPage: true }),
