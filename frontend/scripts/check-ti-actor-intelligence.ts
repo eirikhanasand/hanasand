@@ -1045,6 +1045,8 @@ assert(pageClientSource.includes('data-ti-selected-brief'), 'Selected evidence s
 assert(pageClientSource.includes('What happened, why it matters, and what to do next'), 'Selected evidence should translate the row into triage language.')
 assert(pageClientSource.includes('Public TI results show source-safe summaries'), 'Selected evidence brief should state the public TI safety boundary in customer language.')
 assert(!pageClientSource.includes('metadata-only'), 'Public TI page client should not render implementation-shaped metadata-only copy.')
+assert(pageClientSource.includes('if (owner === \'public-ti\') return \'Analyst review\''), 'Public TI owner-lane labels should render as analyst workflow copy.')
+assert(!pageClientSource.includes('if (owner === \'public-ti\') return \'Public TI\''), 'Public TI owner-lane labels should not expose internal product-lane naming.')
 assert(pageClientSource.includes('Verify before customer-facing escalation'), 'Selected evidence brief should be honest when source references lack capture IDs.')
 assert(pageClientSource.includes('selectedSourceDrilldownFor'), 'Selected evidence drilldown should be built from the selected queue item and actionability model.')
 assert(pageClientSource.includes('ti.public_actor.source_evidence_request.v1'), 'Selected source drilldown rows should export versioned source evidence requests.')

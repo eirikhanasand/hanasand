@@ -9861,7 +9861,7 @@ function relevanceLabelForStaged(status: StagedHandoff['relevanceState']) {
 }
 
 function readinessOwnerLabel(owner: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']) {
-    if (owner === 'public-ti') return 'Public TI'
+    if (owner === 'public-ti') return 'Analyst review'
     if (owner === 'org') return 'Organization'
     if (owner === 'alert') return 'Alert actions'
     if (owner === 'case') return 'Case actions'
