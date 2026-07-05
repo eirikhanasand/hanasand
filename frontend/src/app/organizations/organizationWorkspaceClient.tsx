@@ -2246,7 +2246,6 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                         role='button'
                                         tabIndex={0}
                                         aria-pressed={selected}
-                                        id={`member-${encodeURIComponent(member.userId)}`}
                                         className={`grid gap-3 rounded-lg border p-3 transition ${selected ? 'border-ui-primary/35 bg-ui-primary/10 dark:border-ui-primary/35 dark:bg-ui-raised' : 'border-ui-border bg-ui-panel hover:bg-ui-raised dark:border-ui-border dark:bg-ui-canvas dark:hover:bg-ui-panel'}`}
                                         data-org-member-mobile-row='true'
                                         onClick={() => onSelectSubject({ type: 'member', id: member.userId })}
@@ -2318,10 +2317,11 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                     return (
                                         <tr
                                             key={member.userId}
+                                            id={`member-${encodeURIComponent(member.userId)}`}
                                             role='button'
                                             tabIndex={0}
                                             aria-pressed={selected}
-                                            className={`cursor-pointer align-middle transition ${selected ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
+                                            className={`scroll-mt-24 cursor-pointer align-middle transition ${selected ? 'bg-ui-primary/10 dark:bg-ui-raised' : 'hover:bg-ui-raised dark:hover:bg-ui-panel'}`}
                                             onClick={() => onSelectSubject({ type: 'member', id: member.userId })}
                                             onKeyDown={event => {
                                                 if (event.key === 'Enter' || event.key === ' ') {
