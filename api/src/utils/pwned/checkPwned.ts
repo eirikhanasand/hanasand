@@ -6,53 +6,32 @@ type Fetcher = typeof fetch
 export type PwnedCheckResult = {
     ok: boolean
     count: number
-    source: 'internal-pwned' | 'hibp-range'
+    source: 'hibp-range'
 }
 
-const PWNED_WARNING_INTERVAL_MS = 5 * 60 * 1000
-let lastPwnedWarningAt = 0
-
-export default async function checkPwned(password: string): Promise<PwnedCheckResult> {
-    if (typeof password !== 'string' || !password.length) {
-        throw new Error('Password is required.')
+export default async function checkPwned(secret: string): Promise<PwnedCheckResult> {
+    if (typeof secret !== 'string' || !secret.length) {
+        throw new Error('Secret is required.')
     }
 
-    try {
-        return await checkInternalPwned(password, fetch)
-    } catch (error) {
-        logPwnedFallback(error)
-        return await checkHibpRange(password, fetch)
-    }
+    return await checkHibpRangeForHash(sha1SecretHash(secret), fetch)
 }
 
-async function checkInternalPwned(password: string, fetcher: Fetcher): Promise<PwnedCheckResult> {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1500)
-
-    try {
-        const response = await fetcher(config.pwned, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ password }),
-            signal: controller.signal,
-        })
-
-        if (!response.ok) {
-            throw new Error(`Internal pwned service returned ${response.status}.`)
-        }
-
-        return normalizePwnedResponse(await response.json(), 'internal-pwned')
-    } finally {
-        clearTimeout(timeout)
-    }
+export async function checkHibpRange(secret: string, fetcher: Fetcher): Promise<PwnedCheckResult> {
+    return await checkHibpRangeForHash(sha1SecretHash(secret), fetcher)
 }
 
-export async function checkHibpRange(password: string, fetcher: Fetcher): Promise<PwnedCheckResult> {
-    const hash = sha1PasswordHash(password)
+export async function checkHibpRangeForHash(hashInput: string, fetcher: Fetcher): Promise<PwnedCheckResult> {
+    const hash = normalizeSha1Hash(hashInput)
     const prefix = hash.slice(0, 5)
     const suffix = hash.slice(5)
+    const range = await fetchPwnedRange(prefix, fetcher)
+    const count = parsePwnedRangeCount(range, suffix)
+    return { ok: count === 0, count, source: 'hibp-range' }
+}
+
+export async function fetchPwnedRange(prefixInput: string, fetcher: Fetcher): Promise<string> {
+    const prefix = normalizeSha1Prefix(prefixInput)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 8000)
 
@@ -60,7 +39,7 @@ export async function checkHibpRange(password: string, fetcher: Fetcher): Promis
         const response = await fetcher(`${config.hibp_pwned_range_api}/${prefix}`, {
             headers: {
                 'Add-Padding': 'true',
-                'User-Agent': 'hanasand-password-exposure-check',
+                'User-Agent': 'hanasand-bloom-hash-lookup',
             },
             signal: controller.signal,
         })
@@ -69,15 +48,32 @@ export async function checkHibpRange(password: string, fetcher: Fetcher): Promis
             throw new Error(`HIBP range service returned ${response.status}.`)
         }
 
-        const count = parsePwnedRangeCount(await response.text(), suffix)
-        return { ok: count === 0, count, source: 'hibp-range' }
+        return await response.text()
     } finally {
         clearTimeout(timeout)
     }
 }
 
-export function sha1PasswordHash(password: string) {
-    return createHash('sha1').update(password).digest('hex').toUpperCase()
+export function sha1SecretHash(secret: string) {
+    return createHash('sha1').update(secret).digest('hex').toUpperCase()
+}
+
+export function normalizeSha1Hash(value: string) {
+    const normalized = value.replace(/\s+/g, '').toUpperCase()
+    if (!/^[A-F0-9]{40}$/.test(normalized)) {
+        throw new Error('A complete 40-character SHA-1 hash is required.')
+    }
+
+    return normalized
+}
+
+export function normalizeSha1Prefix(value: string) {
+    const normalized = value.trim().toUpperCase()
+    if (!/^[A-F0-9]{5}$/.test(normalized)) {
+        throw new Error('A valid SHA-1 hash prefix is required.')
+    }
+
+    return normalized
 }
 
 export function parsePwnedRangeCount(body: string, suffix: string) {
@@ -93,25 +89,4 @@ export function parsePwnedRangeCount(body: string, suffix: string) {
     }
 
     return 0
-}
-
-function normalizePwnedResponse(payload: unknown, source: PwnedCheckResult['source']): PwnedCheckResult {
-    const result = payload as { ok?: boolean, count?: unknown }
-    const count = Number(result?.count ?? 0)
-    if (Number.isFinite(count) && count > 0) {
-        return { ok: false, count, source }
-    }
-
-    return { ok: true, count: 0, source }
-}
-
-function logPwnedFallback(error: unknown) {
-    const now = Date.now()
-    if (now - lastPwnedWarningAt < PWNED_WARNING_INTERVAL_MS) {
-        return
-    }
-
-    lastPwnedWarningAt = now
-    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
-    console.warn(`Pwned password check internal service unavailable; using HIBP range fallback. ${detail}`)
 }

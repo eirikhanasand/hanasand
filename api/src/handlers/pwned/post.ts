@@ -1,22 +1,29 @@
-import checkPwned from '#utils/pwned/checkPwned.ts'
+import { fetchPwnedRange, normalizeSha1Prefix } from '#utils/pwned/checkPwned.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export default async function postPwned(req: FastifyRequest, res: FastifyReply) {
-    const { password } = req.body as { password: string } ?? {}
-    if (typeof password !== 'string' || !password.length) {
-        return res.status(400).send({ error: 'Password is required.' })
+    const { prefix } = req.body as { prefix?: unknown } ?? {}
+    let normalizedPrefix: string
+
+    try {
+        normalizedPrefix = normalizeSha1Prefix(String(prefix || ''))
+    } catch {
+        return res.status(400).send({ error: 'A valid SHA-1 hash prefix is required. Do not send raw secrets to this endpoint.' })
     }
 
     try {
-        const pwned = await checkPwned(password)
-        return res.status(200).send({
-            ...pwned,
-            message: pwned.ok
-                ? 'No exact match was found in the indexed breach data.'
-                : `This password has previously been found in a data breach ${pwned.count} ${pwned.count > 1 ? 'times' : 'time'}. This implies that threat actors may use this password more commonly to breach accounts. Please select a new password. Using a password manager to generate random passwords is recommended.`
-        })
+        const range = await fetchPwnedRange(normalizedPrefix, fetch)
+        return res
+            .headers({ 'cache-control': 'no-store' })
+            .status(200)
+            .send({
+                schemaVersion: 'bloom_hash.range_proxy.v1',
+                prefix: normalizedPrefix,
+                range,
+                privacy: 'Only the first five SHA-1 characters were sent to the range service. The full hash and underlying secret were not sent to Hanasand.',
+            })
     } catch (error) {
-        req.log.warn({ error }, 'Unable to check pwned password dataset')
-        return res.status(503).send({ error: 'Unable to check the password exposure dataset right now.' })
+        req.log.warn({ error }, 'Unable to check Bloom hash exposure range')
+        return res.status(503).send({ error: 'Unable to check the Bloom exposure dataset right now.' })
     }
 }
