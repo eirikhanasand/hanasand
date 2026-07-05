@@ -1862,7 +1862,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                 {availableActions.length ? (
                     <details className='group rounded-lg border border-ui-border bg-ui-panel p-2' data-dwm-available-actions='true'>
                         <summary className='flex min-h-9 cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>
-                            <span>Advanced route actions</span>
+                            <span>Route controls</span>
                             <span className='rounded-full border border-ui-border px-2 py-0.5 text-[10px] uppercase text-ui-muted'>
                                 {availableActions.length} available
                             </span>

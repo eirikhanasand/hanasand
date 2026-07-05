@@ -488,7 +488,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     {selected && (
                         <details className={disclosureClass}>
                             <summary className={disclosureSummaryClass}>
-                                <span>Advanced route actions</span>
+                                <span>Route controls</span>
                                 <span className='text-xs font-medium text-ui-muted'>Optional</span>
                             </summary>
                             <div className='flex flex-wrap items-center justify-between gap-3 border-t border-ui-border p-3'>
