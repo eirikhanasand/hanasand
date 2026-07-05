@@ -908,7 +908,7 @@ function SelectedEvidenceRail({
                     ) : null}
                     <div data-ti-selected-console-links='true' className='grid grid-cols-2 gap-1.5 sm:grid-cols-4'>
                         <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
-                        <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onStage} href={caseHref} disabled={!caseHref && !caseReady}>Case</StripActionButton>
+                        <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onStage} href={caseHref} disabled={!caseHref && !caseReady}>Open case</StripActionButton>
                         <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate} href={alertHref}>Escalate</StripActionButton>
                         <StripActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
                     </div>
@@ -6985,7 +6985,7 @@ function MobileEvidenceWorkbar({
 
             <div data-ti-mobile-console-links='true' className='grid grid-cols-4 gap-1.5'>
                 <StripActionButton icon={<BellRing className='h-3 w-3' />} onClick={onWatchlist} href={watchlistHref} iconOnly>Watch</StripActionButton>
-                <StripActionButton icon={<ClipboardList className='h-3 w-3' />} onClick={onCase} href={caseHref} disabled={!caseHref && !caseAvailable} iconOnly>Case</StripActionButton>
+                <StripActionButton icon={<ClipboardList className='h-3 w-3' />} onClick={onCase} href={caseHref} disabled={!caseHref && !caseAvailable} iconOnly>Open case</StripActionButton>
                 <StripActionButton icon={<Send className='h-3 w-3' />} onClick={onEscalate} href={alertHref} iconOnly>Escalate</StripActionButton>
                 <StripActionButton icon={<CheckCircle2 className='h-3 w-3' />} onClick={onMarkReviewed} iconOnly>Review</StripActionButton>
             </div>
