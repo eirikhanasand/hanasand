@@ -3091,6 +3091,7 @@ function DeliveryHistoryPanel({ organization, deliveries, destinations, selected
                                 {scopedDeliveries.map(delivery => {
                                     const replayable = canReplayDelivery(delivery)
                                     const replayLabel = delivery.status === 'failed' || delivery.nextRetryAt ? 'Retry' : 'Replay'
+                                    const destinationId = deliveryDestinationIds(delivery, destinations)[0]
                                     return (
                                         <tr key={delivery.id} className='align-top hover:bg-ui-raised dark:hover:bg-ui-panel'>
                                             <td className='border-b border-ui-border px-3 py-2 dark:border-ui-border'>
@@ -3102,7 +3103,7 @@ function DeliveryHistoryPanel({ organization, deliveries, destinations, selected
                                             </td>
                                             <td className='max-w-56 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                                                 <p className='truncate text-xs font-semibold text-ui-text dark:text-ui-text'>{destinationDisplayState(delivery)}</p>
-                                                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{delivery.webhookDestinationId ? 'Saved delivery destination' : 'Delivery destination redacted'}</p>
+                                                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{destinationId ? compactReference(destinationId, 'Destination') : 'Delivery destination redacted'}</p>
                                                 <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
                                             </td>
                                             <td className='max-w-64 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
@@ -3156,6 +3157,7 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, destinations, canM
 }) {
     const replayable = canReplayDelivery(delivery)
     const replayLabel = delivery.status === 'failed' || delivery.nextRetryAt ? 'Retry' : 'Replay'
+    const destinationId = deliveryDestinationIds(delivery, destinations)[0]
     return (
         <article className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-canvas' data-org-delivery-mobile-row='true'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
@@ -3164,6 +3166,7 @@ function DeliveryHistoryMobileRow({ delivery, organizationId, destinations, canM
             </div>
             <div className='min-w-0'>
                 <p className='truncate text-xs font-semibold text-ui-text dark:text-ui-text'>{destinationDisplayState(delivery)}</p>
+                <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{destinationId ? compactReference(destinationId, 'Destination') : 'Delivery destination redacted'}</p>
                 <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{deliveryTraceLabel(delivery)}</p>
                 <div className='mt-2'>
                     <DeliveryReference delivery={delivery} organizationId={organizationId} destinations={destinations} />
