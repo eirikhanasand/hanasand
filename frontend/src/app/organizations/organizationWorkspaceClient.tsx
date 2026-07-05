@@ -582,6 +582,7 @@ export default function OrganizationWorkspaceClient() {
     const [busy, setBusy] = useState('')
     const [error, setError] = useState('')
     const [message, setMessage] = useState('')
+    const [messageTone, setMessageTone] = useState<'success' | 'warning'>('success')
     const [createName, setCreateName] = useState('')
     const [workspaceQuery, setWorkspaceQuery] = useState('')
     const [createFirstWatchlist, setCreateFirstWatchlist] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
@@ -776,10 +777,11 @@ export default function OrganizationWorkspaceClient() {
         }
     }, [selectedOrganization?.id, loadOrganizationBundle])
 
-    async function runAction(label: string, action: () => Promise<string | { message?: string, organizationId?: string } | void>, rowKey?: string) {
+    async function runAction(label: string, action: () => Promise<string | { message?: string, organizationId?: string, warning?: boolean } | void>, rowKey?: string) {
         setBusy(label)
         setError('')
         setMessage('')
+        setMessageTone('success')
         const actionSubject = activitySubjectFromRowKey(rowKey, selectedOrganization?.id)
         if (rowKey) {
             setRowMessages(current => {
@@ -792,9 +794,11 @@ export default function OrganizationWorkspaceClient() {
             const actionResult = await action()
             const nextMessage = typeof actionResult === 'string' ? actionResult : actionResult?.message
             const reloadOrganizationId = typeof actionResult === 'object' ? actionResult?.organizationId : undefined
+            const warning = typeof actionResult === 'object' && Boolean(actionResult?.warning)
             setMessage(nextMessage || 'Saved.')
+            setMessageTone(warning ? 'warning' : 'success')
             if (rowKey) {
-                setRowMessages(current => ({ ...current, [rowKey]: { ok: true, text: nextMessage || 'Saved.' } }))
+                setRowMessages(current => ({ ...current, [rowKey]: { ok: !warning, text: nextMessage || 'Saved.' } }))
             }
             if (actionSubject) {
                 selectActivitySubject(actionSubject)
@@ -804,7 +808,7 @@ export default function OrganizationWorkspaceClient() {
                 at: new Date().toISOString(),
                 title: actionLabel(label),
                 detail: nextMessage || 'Saved.',
-                ok: true,
+                ok: !warning,
                 ...activityItemSubject(actionSubject),
             }, ...current].slice(0, 8))
             if (reloadOrganizationId || selectedOrganization?.id) {
@@ -891,6 +895,7 @@ export default function OrganizationWorkspaceClient() {
         setCreateInviteRole('member')
         return {
             organizationId,
+            warning: setupWarnings.length > 0,
             message: [
                 'Organization created',
                 firstWatchlistAdded ? 'shared term added' : '',
@@ -1289,7 +1294,7 @@ export default function OrganizationWorkspaceClient() {
                 {(error || message || bundle.loadErrors.length > 0) && (
                     <div className='grid gap-2'>
                         {error && <StatusBanner tone='error' text={error} />}
-                        {message && <StatusBanner tone='success' text={message} />}
+                        {message && <StatusBanner tone={messageTone} text={message} />}
                         {bundle.loadErrors.map(item => <StatusBanner key={item} tone='warning' text={item} />)}
                     </div>
                 )}
