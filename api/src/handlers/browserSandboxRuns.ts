@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { validateSession } from '#utils/auth/session.ts'
@@ -22,6 +22,7 @@ export type BrowserRunRecord = {
     status: string
     startedAt: string
     title?: string
+    reportUrl?: string
 }
 
 type BrowserRunIdentity = {
@@ -44,7 +45,12 @@ type PrepareBrowserRunInput = {
     sessionToken?: string
 }
 
+type BrowserReportParams = { id: string }
+type BrowserReportQuery = { clientId?: string; token?: string }
+type BrowserReportBody = { clientId?: string; report?: unknown }
+
 const anonymousRunLimit = 3
+const maxReportBytes = 2_000_000
 const dailyPlanLimits: Record<string, number> = {
     free: 5,
     starter: 20,
@@ -80,14 +86,14 @@ export async function getBrowserRuns(req: FastifyRequest<{ Querystring: { client
             ? [identity.ownerId, identity.clientIdHash]
             : [identity.clientIdHash]
         const result = await run(identity.ownerId ? `
-            SELECT id, target, network, status, title, created_at
+            SELECT id, target, network, status, title, created_at, metadata
             FROM browser_runs
             WHERE owner_id = $1
                OR ($2::text IS NOT NULL AND client_id_hash = $2)
             ORDER BY created_at DESC
             LIMIT 12
         ` : `
-            SELECT id, target, network, status, title, created_at
+            SELECT id, target, network, status, title, created_at, metadata
             FROM browser_runs
             WHERE client_id_hash = $1
             ORDER BY created_at DESC
@@ -101,6 +107,47 @@ export async function getBrowserRuns(req: FastifyRequest<{ Querystring: { client
     } catch (error) {
         req.log.error(error)
         return res.status(500).send({ error: 'Failed to load browser runs.' })
+    }
+}
+
+export async function getBrowserRunReport(req: FastifyRequest<{ Params: BrowserReportParams, Querystring: BrowserReportQuery }>, res: FastifyReply) {
+    try {
+        const row = await loadAccessibleBrowserRun(req, req.params.id, req.query?.clientId, req.query?.token)
+        if (!row) return res.status(404).send({ error: 'Report not found.' })
+        const report = row.metadata?.report
+        if (!report) return res.status(404).send({ error: 'Report not saved.' })
+        return res.send(report)
+    } catch (error) {
+        req.log.error(error)
+        return res.status(500).send({ error: 'Failed to load browser report.' })
+    }
+}
+
+export async function postBrowserRunReport(req: FastifyRequest<{ Params: BrowserReportParams, Body: BrowserReportBody }>, res: FastifyReply) {
+    try {
+        const row = await loadAccessibleBrowserRun(req, req.params.id, req.body?.clientId)
+        if (!row) return res.status(404).send({ error: 'Run not found.' })
+        const report = req.body?.report
+        const encoded = JSON.stringify(report)
+        if (!report || encoded.length > maxReportBytes) return res.status(400).send({ error: 'Report is missing or too large.' })
+        const token = row.metadata?.reportToken || randomUUID()
+        await run(`
+            UPDATE browser_runs
+            SET metadata = metadata || $2::jsonb,
+                updated_at = NOW()
+            WHERE id = $1
+        `, [req.params.id, JSON.stringify({
+            report,
+            reportToken: token,
+            reportSavedAt: new Date().toISOString(),
+        })])
+        return res.send({
+            ok: true,
+            reportUrl: `/api/backend/browser/runs/${encodeURIComponent(req.params.id)}/report?token=${encodeURIComponent(token)}`,
+        })
+    } catch (error) {
+        req.log.error(error)
+        return res.status(500).send({ error: 'Failed to save browser report.' })
     }
 }
 
@@ -230,6 +277,7 @@ async function loadBrowserQuota(identity: BrowserRunIdentity): Promise<BrowserQu
 }
 
 function rowToRunRecord(row: Record<string, any>): BrowserRunRecord {
+    const reportToken = row.metadata?.reportToken
     return {
         id: String(row.id || ''),
         target: String(row.target || ''),
@@ -237,7 +285,21 @@ function rowToRunRecord(row: Record<string, any>): BrowserRunRecord {
         status: String(row.status || 'running'),
         startedAt: new Date(row.created_at || Date.now()).toISOString(),
         title: String(row.title || ''),
+        reportUrl: reportToken ? `/api/backend/browser/runs/${encodeURIComponent(String(row.id || ''))}/report?token=${encodeURIComponent(String(reportToken))}` : undefined,
     }
+}
+
+async function loadAccessibleBrowserRun(req: FastifyRequest, id: string, clientId?: string, token?: string) {
+    const result = await run('SELECT * FROM browser_runs WHERE id = $1 LIMIT 1', [id])
+    const row = result.rows[0] as (Record<string, any> & { metadata?: Record<string, any> }) | undefined
+    if (!row) return null
+    if (token && row.metadata?.reportToken === token) return row
+
+    const user = await tokenWrapper(req, {} as FastifyReply).catch(() => ({ valid: false, id: '' }))
+    if (user.valid && user.id && row.owner_id === user.id) return row
+    const clientHash = cleanClientId(clientId) ? hashValue(cleanClientId(clientId)) : ''
+    if (clientHash && row.client_id_hash === clientHash) return row
+    return null
 }
 
 function cleanClientId(value: unknown) {

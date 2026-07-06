@@ -201,7 +201,7 @@ import {
     putDwmWebhookDestination,
 } from './handlers/dwm/webhooks.ts'
 import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers/browserSandboxProfiles.ts'
-import { getBrowserRuns } from './handlers/browserSandboxRuns.ts'
+import { getBrowserRunReport, getBrowserRuns, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
 
 /**
  * Defines the routes available in the API.
@@ -315,6 +315,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/browser-sandbox/profiles', getBrowserSandboxProfiles)
     fastify.put('/browser-sandbox/profiles', putBrowserSandboxProfiles)
     fastify.get('/browser/runs', getBrowserRuns)
+    fastify.get('/browser/runs/:id/report', getBrowserRunReport)
+    fastify.post('/browser/runs/:id/report', postBrowserRunReport)
 
     // Article handlers
     fastify.get('/articles', getArticles)

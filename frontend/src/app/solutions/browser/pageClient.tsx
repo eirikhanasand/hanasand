@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, ShieldCheck, Square, Trash2 } from 'lucide-react'
+import { Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, Share2, ShieldCheck, Square, Trash2 } from 'lucide-react'
 import { type KeyboardEvent, type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
@@ -92,6 +92,7 @@ type BrowserRunHistory = {
     startedAt: string
     title?: string
     providerResults?: Record<string, ProviderRunResult>
+    reportUrl?: string
 }
 type ProviderRunResult = {
     status: 'clean' | 'suspicious' | 'blocked' | 'loading'
@@ -205,6 +206,8 @@ export default function BrowserPageClient() {
     const [history, setHistory] = useState<BrowserRunHistory[]>([])
     const [quota, setQuota] = useState<BrowserQuota | null>(null)
     const [expandedRun, setExpandedRun] = useState<BrowserRunHistory | null>(null)
+    const [currentRunId, setCurrentRunId] = useState('')
+    const [shareStatus, setShareStatus] = useState('')
     const socketRef = useRef<WebSocket | null>(null)
     const viewportRef = useRef<HTMLDivElement | null>(null)
     const imageRef = useRef<HTMLImageElement | null>(null)
@@ -241,6 +244,39 @@ export default function BrowserPageClient() {
         link.click()
         URL.revokeObjectURL(url)
     }, [activeUrl, capacity, captures, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
+
+    const saveReport = useCallback(async () => {
+        if (!currentRunId || !captures.length) return
+        setShareStatus('saving')
+        const response = await fetch(`${historyApiPath}/${encodeURIComponent(currentRunId)}/report`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                clientId: getOrCreateBrowserClientId(),
+                report: buildExportReport({
+                    target: normalizedTarget,
+                    activeUrl,
+                    sessionState,
+                    socketState,
+                    profile: selectedProfile,
+                    summary,
+                    captures,
+                    events,
+                    capacity,
+                }),
+            }),
+        })
+        if (!response.ok) {
+            setShareStatus('failed')
+            return
+        }
+        const payload = await response.json() as { reportUrl?: string }
+        const reportUrl = payload.reportUrl ? new URL(payload.reportUrl, window.location.origin).toString() : ''
+        if (reportUrl) await navigator.clipboard?.writeText(reportUrl).catch(() => undefined)
+        setHistory(current => persistHistory(current.map(run => run.id === currentRunId ? { ...run, reportUrl } : run)))
+        setShareStatus(reportUrl ? 'copied' : 'saved')
+    }, [activeUrl, capacity, captures, currentRunId, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
 
     useEffect(() => {
         let cancelled = false
@@ -371,6 +407,8 @@ export default function BrowserPageClient() {
         if (override?.target) setTarget(override.target)
         socketRef.current?.close()
         socketRef.current = socket
+        setCurrentRunId(id)
+        setShareStatus('')
         setCaptures([])
         setActiveImage(null)
         setActiveUrl(url)
@@ -714,6 +752,10 @@ export default function BrowserPageClient() {
                                 <Download className='h-4 w-4' />
                                 Export
                             </button>
+                            <button type='button' onClick={() => void saveReport()} disabled={!captures.length || !currentRunId || shareStatus === 'saving'} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary disabled:cursor-not-allowed disabled:opacity-50'>
+                                <Share2 className='h-4 w-4' />
+                                {shareStatus === 'saving' ? 'Saving' : shareStatus === 'copied' ? 'Copied' : 'Share'}
+                            </button>
                             <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
                                 <Square className='h-4 w-4' />
                                 Stop
@@ -1001,6 +1043,7 @@ function RunDetailModal({ run, onClose, onRerun }: { run: BrowserRunHistory; onC
                 <div className='mt-3 grid gap-2 text-sm'>
                     <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Started</span><span className='text-ui-text'>{new Date(run.startedAt).toLocaleString()}</span></div>
                     <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Providers</span><ProviderRunBadges run={run} /></div>
+                    {run.reportUrl ? <a href={run.reportUrl} className='rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-ui-primary hover:border-ui-primary'>Open saved report JSON</a> : null}
                 </div>
                 <button type='button' onClick={() => onRerun(run)} className='mt-4 inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text hover:border-ui-primary'>
                     <RotateCcw className='h-4 w-4' />
@@ -1922,6 +1965,7 @@ function runHistoryValue(value: unknown): BrowserRunHistory | null {
         startedAt,
         title: stringValue(record.title),
         providerResults: providerResultsValue(record.providerResults),
+        reportUrl: stringValue(record.reportUrl),
     }
 }
 
