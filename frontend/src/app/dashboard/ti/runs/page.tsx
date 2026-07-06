@@ -17,6 +17,7 @@ export default function TiRunsPage() {
     const screenshotTotal = runs.reduce((sum, run) => sum + run.screenshots, 0)
     const rowTotal = runs.reduce((sum, run) => sum + run.rows, 0)
     const nextRun = [...runs].sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
+    const attentionRuns = orderedRuns.filter(run => run.status !== 'completed' || isOverdue(run.nextRunAt))
 
     return (
         <DashboardPage>
@@ -114,25 +115,30 @@ export default function TiRunsPage() {
                 <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
                     <div className='flex items-center justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Runs needing attention</h2>
-                            <p className='mt-1 text-sm text-ui-muted'>Failures, long-running jobs, and overdue next checks stay in the live attention stream.</p>
+                            <h2 className='text-base font-semibold text-ui-text'>{attentionRuns.length ? 'Runs needing attention' : 'No runs need attention'}</h2>
+                            <p className='mt-1 text-sm text-ui-muted'>{attentionRuns.length ? 'Failures, long-running jobs, and overdue next checks stay in the live attention stream.' : 'All systems are operational'}</p>
                         </div>
-                        <AlertTriangle className='h-4 w-4 text-ui-warning' />
-                    </div>
-                    <div className='mt-4 grid gap-2'>
-                        {orderedRuns.filter(run => run.status !== 'completed' || isOverdue(run.nextRunAt)).map(run => (
-                            <Link key={run.id} href={`/dashboard/ti/sources/${run.sourceId}`} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary/35'>
-                                <div>
-                                    <p className='font-mono text-xs font-semibold text-ui-text'>{run.id}</p>
-                                    <p className='mt-1 text-sm text-ui-muted'>{sourceById(run.sourceId)?.name || run.sourceId} · {run.status} · next {relativeUntil(run.nextRunAt)}</p>
-                                </div>
-                                <span className='inline-flex items-center gap-1 text-sm font-semibold text-ui-primary'>Open source <ArrowRight className='h-3.5 w-3.5' /></span>
-                            </Link>
-                        ))}
-                        {!orderedRuns.some(run => run.status !== 'completed' || isOverdue(run.nextRunAt)) && (
-                            <div className='rounded-md border border-dashed border-ui-border bg-ui-canvas p-4 text-sm text-ui-muted'>Collectors are live; no failed or overdue runs.</div>
+                        {attentionRuns.length ? (
+                            <AlertTriangle className='h-4 w-4 text-ui-warning' />
+                        ) : (
+                            <span className='grid h-7 w-7 place-items-center rounded-full bg-ui-success/15 text-ui-success'>
+                                <CheckCircle2 className='h-4 w-4' />
+                            </span>
                         )}
                     </div>
+                    {attentionRuns.length ? (
+                        <div className='mt-4 grid gap-2'>
+                            {attentionRuns.map(run => (
+                                <Link key={run.id} href={`/dashboard/ti/sources/${run.sourceId}`} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary/35'>
+                                    <div>
+                                        <p className='font-mono text-xs font-semibold text-ui-text'>{run.id}</p>
+                                        <p className='mt-1 text-sm text-ui-muted'>{sourceById(run.sourceId)?.name || run.sourceId} · {run.status} · next {relativeUntil(run.nextRunAt)}</p>
+                                    </div>
+                                    <span className='inline-flex items-center gap-1 text-sm font-semibold text-ui-primary'>Open source <ArrowRight className='h-3.5 w-3.5' /></span>
+                                </Link>
+                            ))}
+                        </div>
+                    ) : null}
                 </DashboardPanel>
 
                 <details data-ti-runs-evidence-disclosure className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
@@ -235,9 +241,10 @@ function QueuePill({ label, count }: { label: string, count: number }) {
 }
 
 function statusClass(status: string) {
-    if (status === 'completed') return 'w-fit rounded-full border border-ui-success/35 bg-ui-success/10 px-2 py-0.5 text-xs font-semibold capitalize text-ui-success'
-    if (status === 'failed') return 'w-fit rounded-full border border-ui-danger/35 bg-ui-danger/10 px-2 py-0.5 text-xs font-semibold capitalize text-ui-danger'
-    return 'w-fit rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold capitalize text-ui-primary'
+    const base = 'inline-flex w-fit self-start whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold capitalize leading-5'
+    if (status === 'completed') return `${base} border-ui-success/35 bg-ui-success/10 text-ui-success`
+    if (status === 'failed') return `${base} border-ui-danger/35 bg-ui-danger/10 text-ui-danger`
+    return `${base} border-ui-border bg-ui-panel text-ui-primary`
 }
 
 function durationLabel(startedAt: string, finishedAt?: string) {

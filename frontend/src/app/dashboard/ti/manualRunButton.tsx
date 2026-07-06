@@ -2,7 +2,6 @@
 
 import { PlayCircle, RefreshCcw } from 'lucide-react'
 import { useState } from 'react'
-import searchThreatIntel from '@/utils/ti/search'
 
 type ManualRunButtonProps = {
     sourceId?: string
@@ -54,17 +53,8 @@ export default function ManualRunButton({ sourceId = 'all_sources', label = 'Sta
             body: { error: { message: error instanceof Error ? error.message : String(error) } } as ControlResponseBody,
         }))
 
-        if (uniqueQueries.length) {
-            const results = await Promise.allSettled(uniqueQueries.map(query => searchThreatIntel(query)))
-            const started = results.filter(result => result.status === 'fulfilled' && result.value).length
-            const qa = controlResult.body.qa?.qualityScore ? ` · QA ${controlResult.body.qa.qualityScore}%` : ''
-            setMessage(controlResult.ok
-                ? `Queued in Hanasand AI scheduler${qa}${started ? `; ${started} live check${started === 1 ? '' : 's'} started` : ''}.`
-                : started ? `Started ${started} live check${started === 1 ? '' : 's'}; scheduler response unavailable.` : 'Run request recorded; scheduler response unavailable.')
-        } else {
-            const qa = controlResult.body.qa?.qualityScore ? ` QA ${controlResult.body.qa.qualityScore}%.` : ''
-            setMessage(controlResult.ok ? `Queued in Hanasand AI scheduler.${qa}` : controlResult.body.error?.message || 'Run request recorded; scheduler response unavailable.')
-        }
+        const qa = controlResult.body.qa?.qualityScore ? ` QA ${controlResult.body.qa.qualityScore}%.` : ''
+        setMessage(controlResult.ok ? `Queued in Hanasand AI scheduler.${qa}` : controlResult.body.error?.message || 'Run request recorded; scheduler response unavailable.')
 
         setState('queued')
     }
