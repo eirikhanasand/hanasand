@@ -258,7 +258,7 @@ async function finishScan(
 async function scanImage(image: string): Promise<ImageVulnerabilityReport> {
     const scannedAt = new Date().toISOString()
     try {
-        const { stdout } = await execFileAsync('trivy', ['image', '--image-src', 'docker', '--scanners', 'vuln', '--format', 'json', '--quiet', image], {
+        const { stdout } = await execFileAsync('trivy', ['image', '--image-src', 'docker', '--scanners', 'vuln', '--format', 'json', '--quiet', '--parallel', '1', '--cache-dir', '/var/lib/hanasand/trivy-cache', image], {
             timeout: Number(process.env.VULNERABILITY_SCAN_IMAGE_TIMEOUT_MS || 120000),
             maxBuffer: 8 * 1024 * 1024,
         })
