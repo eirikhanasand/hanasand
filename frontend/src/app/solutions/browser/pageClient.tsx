@@ -183,6 +183,7 @@ export default function BrowserPageClient() {
     const [history, setHistory] = useState<BrowserRunHistory[]>([])
     const [quota, setQuota] = useState<BrowserQuota | null>(null)
     const socketRef = useRef<WebSocket | null>(null)
+    const viewportRef = useRef<HTMLDivElement | null>(null)
     const imageRef = useRef<HTMLImageElement | null>(null)
 
     const normalizedTarget = useMemo(() => normalizeTarget(target), [target])
@@ -369,7 +370,7 @@ export default function BrowserPageClient() {
             if (payload.type === 'frame' && typeof payload.image === 'string') {
                 const image = `data:image/jpeg;base64,${payload.image}`
                 const evidence = evidenceValue(payload.evidence)
-                if (isUsefulFrameImage(image) && !hasCookiePromptEvidence(evidence)) setActiveImage(image)
+                if (isUsefulFrameImage(image)) setActiveImage(image)
                 const urlValue = String(payload.url || url)
                 const frameWidth = finiteNumber(payload.width) || 1280
                 const frameHeight = finiteNumber(payload.height) || 760
@@ -479,12 +480,14 @@ export default function BrowserPageClient() {
     }, [activeFrame.height, activeFrame.width])
 
     const clickBrowserFrame = useCallback((event: MouseEvent<HTMLImageElement>) => {
+        viewportRef.current?.focus()
         const point = browserPoint(event.clientX, event.clientY)
         if (!point) return
         sendBrowserInput({ type: 'click', ...point, button: 0 })
     }, [browserPoint, sendBrowserInput])
 
     const wheelBrowserFrame = useCallback((event: WheelEvent<HTMLImageElement>) => {
+        viewportRef.current?.focus()
         const point = browserPoint(event.clientX, event.clientY)
         if (!point) return
         event.preventDefault()
@@ -669,6 +672,7 @@ export default function BrowserPageClient() {
                             <div className='min-w-0 flex-1 truncate rounded-md border border-ui-border bg-ui-canvas px-3 py-2 font-mono text-xs text-ui-muted'>{activeUrl || normalizedTarget}</div>
                         </div>
                         <div
+                            ref={viewportRef}
                             className='grid min-h-0 place-items-center bg-ui-canvas p-2 outline-none focus:ring-2 focus:ring-ui-primary/30'
                             tabIndex={0}
                             role='application'
@@ -680,8 +684,10 @@ export default function BrowserPageClient() {
                                     ref={imageRef}
                                     src={activeImage}
                                     alt='Live browser sandbox frame'
-                                    className='max-h-full w-full rounded-md object-contain'
+                                    className='max-h-full w-full cursor-pointer select-none rounded-md object-contain'
+                                    draggable={false}
                                     onClick={clickBrowserFrame}
+                                    onDragStart={event => event.preventDefault()}
                                     onWheel={wheelBrowserFrame}
                                 />
                             ) : (
@@ -1176,10 +1182,6 @@ function captureLabel(reason: string) {
 function isUsefulFrameImage(image: string) {
     // ponytail: tiny JPEGs here are blank white Chromium frames; decode pixels if this becomes noisy.
     return image.length > 24_000
-}
-
-function hasCookiePromptEvidence(evidence?: SandboxEvidence) {
-    return /cookieinnstillinger|godta alle|tilpass cookies|avvis personlig tilpassede annonser|accept all cookies|cookie settings/i.test(evidence?.textExcerpt || '')
 }
 
 function buildAnalystSummary(target: string, captures: Capture[], profile: SandboxProfile) {

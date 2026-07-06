@@ -141,7 +141,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(brokerSource.includes('webcrackLoad'), 'broker should emit WebCrack load results.')
     assert(clientSource.includes('capturedToolCount'), 'client should count unique configured profile tools instead of duplicate provider update captures.')
     assert(clientSource.includes('isUsefulFrameImage') && clientSource.includes('image.length > 24_000'), 'client should not promote tiny blank frames over useful browser captures.')
-    assert(clientSource.includes('hasCookiePromptEvidence') && clientSource.includes('cookieinnstillinger'), 'client should not promote cookie-consent frames over usable browser captures.')
+    assert(clientSource.includes('setActiveImage(image)'), 'client should promote useful browser frames, including manual consent or challenge screens.')
     assert(analysisSource.includes('decodedPreview'), 'analysis helpers should include decoded previews for obfuscated scripts.')
     assert(analysisSource.includes('decoded network indicators'), 'analysis helpers should assess decoded network indicators.')
     assert(brokerSource.includes('extractIndicators'), 'broker should extract domains, IPs, and URLs for later-stage analysis.')
