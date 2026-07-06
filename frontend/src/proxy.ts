@@ -200,11 +200,17 @@ function normalizeRoles(value: unknown): Array<Role & { role_id?: string }> {
 }
 
 function roleMatchesStrictPath(role: Role & { role_id?: string }, requiredRole: string) {
-    if (role.id === 'admin' || role.id === 'administrator' || role.role_id === 'admin' || role.role_id === 'administrator') {
+    const roleIds = roleIdsFor(role)
+    if (roleIds.includes('admin') || roleIds.includes('administrator')) {
         return true
     }
 
-    return role.id === requiredRole || role.role_id === requiredRole
+    return roleIds.includes(requiredRole)
+}
+
+function roleIdsFor(role: Role & { role_id?: string }) {
+    const legacyRole = role as Role & { role_id?: string, role?: string }
+    return [legacyRole.id, legacyRole.role_id, legacyRole.role].filter(Boolean) as string[]
 }
 
 function authCookieOptions(req: NextRequest) {

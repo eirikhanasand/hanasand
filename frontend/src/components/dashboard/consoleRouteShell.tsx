@@ -14,7 +14,7 @@ export default async function ConsoleRouteShell({ children }: { children: ReactN
 
     const rolesCookie = cookieStore.get('roles')?.value
     const roles = parseCookie<Array<Role | string>>(rolesCookie, [])
-    const roleIds = roles.map((role) => typeof role === 'string' ? role : role.id || '')
+    const roleIds = roles.flatMap(roleIdsFor)
     const hasRole = (roleId: string) => roleIds.includes(roleId)
     const isAdmin = hasRole('administrator') || hasRole('admin')
     const canManageSystem = isAdmin || hasRole('system_admin')
@@ -35,4 +35,11 @@ export default async function ConsoleRouteShell({ children }: { children: ReactN
             </div>
         </div>
     )
+}
+
+function roleIdsFor(role: Role | string) {
+    if (typeof role === 'string') return [role]
+
+    const legacyRole = role as Role & { role_id?: string, role?: string }
+    return [legacyRole.id, legacyRole.role_id, legacyRole.role].filter(Boolean) as string[]
 }
