@@ -26,7 +26,32 @@ type IncidentRow = {
     checked_at: string | Date
 }
 
+const STATUS_CACHE_MS = 3000
+let statusCache: { expiresAt: number, payload: object } | null = null
+let statusInflight: Promise<object> | null = null
+
 export default async function getStatus(_req: FastifyRequest, res: FastifyReply) {
+    return res.send(await statusPayload())
+}
+
+function statusPayload() {
+    if (statusCache && statusCache.expiresAt > Date.now()) {
+        return Promise.resolve(statusCache.payload)
+    }
+
+    statusInflight ||= loadStatusPayload()
+        .then((payload) => {
+            statusCache = { expiresAt: Date.now() + STATUS_CACHE_MS, payload }
+            return payload
+        })
+        .finally(() => {
+            statusInflight = null
+        })
+
+    return statusInflight
+}
+
+async function loadStatusPayload() {
     const result = await run(`
         WITH latest AS (
             SELECT DISTINCT ON (service, check_name)
@@ -84,13 +109,13 @@ export default async function getStatus(_req: FastifyRequest, res: FastifyReply)
             ? 'down'
             : 'degraded'
 
-    return res.send({
+    return {
         overall,
         generated_at: new Date().toISOString(),
         checks,
         history,
         incidents,
-    })
+    }
 }
 
 function toPublicMonitorRow(row: MonitorRow): MonitorRow {
