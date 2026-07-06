@@ -122,7 +122,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(clientSource.includes('hasParsedProviderResult'), 'client should not treat unknown placeholder provider rows as parsed external evidence.')
     assert(brokerSource.includes('clickExactConsentAction') && brokerSource.includes('godta alle'), 'broker should explicitly click common consent accept buttons before hiding cookie overlays.')
     assert(brokerSource.includes('const initialEvidence = await collectPageEvidence(toolPage)'), 'broker should emit provider DOM-ready captures before deeper readiness parsing.')
-    assert(brokerSource.includes('void captureProfileTools(context, message.profileTools || [], target)'), 'broker should capture provider tools in the background after the browser is live.')
+    assert(brokerSource.includes('void (async () =>') && brokerSource.includes('captureProfileTools(context, message.profileTools || [], target, evidence?.deobfuscationTasks || [])'), 'broker should capture provider tools in the background after the browser is live.')
     assert(brokerSource.includes('capturedAt'), 'broker should emit screenshot timestamps.')
     assert(brokerSource.includes('page.on(\'framenavigated\''), 'broker should capture active URL changes and redirects.')
     assert(brokerSource.includes('page.on(\'domcontentloaded\''), 'broker should capture DOM-ready state changes.')

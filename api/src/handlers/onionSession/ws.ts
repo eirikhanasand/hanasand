@@ -503,7 +503,11 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             void dismissCookieOverlays(page)
                 .then(() => sendFrame(true, 'cookie_dismissed'))
                 .catch(() => undefined)
-            void captureProfileTools(context, message.profileTools || [], target).catch(error => {
+            const initialPage = page
+            void (async () => {
+                const evidence = initialPage ? await collectPageEvidence(initialPage).catch(() => null) : null
+                await captureProfileTools(context, message.profileTools || [], target, evidence?.deobfuscationTasks || [])
+            })().catch(error => {
                 send({
                     type: 'status',
                     state: 'profile_tools_failed',
@@ -594,6 +598,29 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     error: navigationError || undefined,
                 })
                 if (hasParsedProviderResult(initialAnalysis)) continue
+                if (isWebCrackTool(tool, toolUrl)) {
+                    const webcrackLoad = await loadWebCrackSample(toolPage, deobfuscationTasks)
+                    if (webcrackLoad.loaded) {
+                        await toolPage.waitForTimeout(1200).catch(() => undefined)
+                    }
+                    const buffer = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
+                    const webcrackEvidence = await collectPageEvidence(toolPage)
+                    send({
+                        type: 'tool_capture',
+                        sessionId,
+                        id: tool.id || safeToolId(tool.name || toolUrl),
+                        name: tool.name || toolUrl,
+                        url: toolPage.url(),
+                        title: await toolPage.title().catch(() => ''),
+                        capturedAt: startedAt,
+                        image: buffer ? buffer.toString('base64') : null,
+                        evidence: webcrackEvidence,
+                        toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, webcrackEvidence, webcrackLoad),
+                        webcrackLoad,
+                        target,
+                    })
+                    continue
+                }
                 const readiness = await waitForProviderCaptureReadiness(toolPage, tool).catch(() => ({ ready: false, blocker: 'readiness-check-failed' }))
                 if (!readiness.ready) {
                     const blockerEvidence = await collectPageEvidence(toolPage)
