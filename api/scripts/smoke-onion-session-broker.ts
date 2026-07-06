@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -7,11 +8,18 @@ import { chromium } from 'playwright'
 
 type BrokerPayload = {
     type?: string
+    state?: string
     text?: string
     image?: string
     ok?: boolean
     torProxyConfigured?: boolean
+    networkSummary?: {
+        downloads?: Array<{ sha256?: string; fileName?: string; bytes?: number; hashStatus?: string }>
+    }
 }
+
+const downloadBody = 'sandbox-download-smoke\n'
+const downloadHash = createHash('sha256').update(downloadBody).digest('hex')
 
 const html = `<!doctype html>
 <html>
@@ -23,6 +31,7 @@ const html = `<!doctype html>
     main { padding: 48px; }
     input { position: absolute; left: 96px; top: 32px; width: 360px; height: 40px; font-size: 20px; }
     button { position: absolute; left: 96px; top: 104px; width: 180px; height: 56px; font-size: 18px; }
+    a { position: absolute; left: 312px; top: 104px; width: 180px; height: 56px; font-size: 18px; }
     #status { position: absolute; left: 96px; top: 190px; font-size: 18px; }
   </style>
 </head>
@@ -30,6 +39,7 @@ const html = `<!doctype html>
   <main>
     <input id="target" autofocus value="">
     <button id="clicker">Click target</button>
+    <a id="download" href="/download" download="sample.txt">Download sample</a>
     <div id="status">waiting</div>
   </main>
   <script>
@@ -70,7 +80,16 @@ process.env.CHROMIUM_BIN ||= [
 
 const { handleOnionSessionSocket } = await import('../src/handlers/onionSession/ws.ts')
 
-const httpServer = http.createServer((_request, response) => {
+const httpServer = http.createServer((request, response) => {
+    if (request.url === '/download') {
+        response.writeHead(200, {
+            'content-type': 'text/plain; charset=utf-8',
+            'content-disposition': 'attachment; filename="sample.txt"',
+            'cache-control': 'no-store',
+        })
+        response.end(downloadBody)
+        return
+    }
     response.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'no-store',
@@ -135,6 +154,10 @@ client.send(JSON.stringify({ type: 'key', key: 'a', ctrlKey: true }))
 client.send(JSON.stringify({ type: 'key', key: 'c', ctrlKey: true }))
 client.send(JSON.stringify({ type: 'clipboard', direction: 'remote-to-browser' }))
 await waitForPayload(payloads, (payload) => payload.type === 'clipboard' && payload.text === 'hiclipboard-smoke')
+
+client.send(JSON.stringify({ type: 'click', x: 380, y: 132, button: 0 }))
+await waitForPayload(payloads, (payload) => payload.type === 'status' && payload.state === 'download_blocked')
+await waitForPayload(payloads, (payload) => payload.type === 'frame' && Boolean(payload.networkSummary?.downloads?.some(download => download.sha256 === downloadHash && download.fileName === 'sample.txt')))
 
 client.send(JSON.stringify({ type: 'end' }))
 await waitForPayload(payloads, (payload) => payload.type === 'ended')
