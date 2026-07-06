@@ -91,18 +91,16 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                     <h3 className='text-sm font-semibold text-ui-text'>Latest activity</h3>
                     <Marquee text={subtitle} className='text-xs text-ui-muted' />
                 </div>
-                <div className='flex items-center gap-2'>
+                <div className='flex flex-wrap items-center gap-2'>
                     <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{items.length}/{total}</span>
+                    <span className='text-xs text-ui-muted'>{formatRefreshCadence(queue.scheduler?.cadenceSeconds)}</span>
+                    <button type='button' onClick={() => void refresh()} disabled={refreshing} className='landing-surface-border rounded-md border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-primary transition hover:border-ui-primary disabled:cursor-wait disabled:opacity-60'>
+                        {refreshing ? 'Checking...' : 'Check now'}
+                    </button>
                     <Link href='/activity' aria-label='Open fullscreen activity' className='grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-muted transition hover:border-ui-primary hover:text-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
                         <Maximize2 className='h-4 w-4' />
                     </Link>
                 </div>
-            </div>
-            <div className='landing-surface-divider flex flex-wrap items-center justify-between gap-2 border-b border-ui-border bg-ui-raised px-4 py-2 text-xs text-ui-muted' data-home-exposure-panel-toolbar='true'>
-                <span>{formatRefreshCadence(queue.scheduler?.cadenceSeconds)}</span>
-                <button type='button' onClick={() => void refresh()} disabled={refreshing} className='landing-surface-border rounded-md border border-ui-border bg-ui-panel px-2.5 py-1 font-semibold text-ui-primary transition hover:border-ui-primary disabled:cursor-wait disabled:opacity-60'>
-                    {refreshing ? 'Checking...' : 'Check now'}
-                </button>
             </div>
             <div className='max-h-[34rem] min-w-0 overflow-auto'>
                 <div className='min-w-[50rem]'>

@@ -15,7 +15,8 @@ type Filters = {
     q: string
     company: string
     actor: string
-    data: string
+    category: string
+    size: string
     from: string
     to: string
 }
@@ -37,7 +38,7 @@ export default function ActivityClient({ initialQueue }: Props) {
         const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
         if (filters.q) params.set('q', filters.q)
         // ponytail: backend only supports q today; these stay in the URL until server-side indexes are worth owning.
-        for (const key of ['company', 'actor', 'data', 'from', 'to'] as const) {
+        for (const key of ['company', 'actor', 'category', 'size', 'from', 'to'] as const) {
             if (filters[key]) params.set(key, filters[key])
         }
         const response = await fetch(`/api/dwm/exposure-queue?${params.toString()}`, { cache: 'no-store' })
@@ -113,7 +114,7 @@ export default function ActivityClient({ initialQueue }: Props) {
             <section className='border-b border-ui-border bg-ui-panel px-4 py-4 md:px-6'>
                 <div className='flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between'>
                     <div className='min-w-0'>
-                        <p className='text-xs font-semibold uppercase text-ui-primary'>Exposure activity</p>
+                        <p className='text-xs font-semibold uppercase text-ui-primary'>Activity</p>
                         <h1 className='mt-1 text-2xl font-semibold tracking-normal text-ui-text md:text-3xl'>Latest company mentions</h1>
                         <p className='mt-1 text-sm text-ui-muted'>{visibleItems.length}/{total} loaded · latest {formatClaimTime(newest)}</p>
                     </div>
@@ -131,17 +132,21 @@ export default function ActivityClient({ initialQueue }: Props) {
             </section>
 
             <section className='sticky top-0 z-20 border-b border-ui-border bg-ui-panel/95 px-4 py-3 backdrop-blur md:px-6'>
-                <div className='grid gap-2 lg:grid-cols-[1.2fr_1fr_1fr_1fr_9rem_9rem_auto]'>
+                <div className='grid gap-2 lg:grid-cols-[1.1fr_0.9fr_0.9fr_0.9fr_0.9fr_8rem_8rem_auto]'>
                     <FilterInput icon={<Search className='h-4 w-4' />} label='Search' value={filters.q} onChange={q => setFilters(current => ({ ...current, q }))} placeholder='Any text' />
                     <FilterInput label='Company' value={filters.company} onChange={company => setFilters(current => ({ ...current, company }))} placeholder='Company' />
                     <FilterInput label='Actor' value={filters.actor} onChange={actor => setFilters(current => ({ ...current, actor }))} placeholder='Group' />
-                    <FilterInput label='Minimum data' value={filters.data} onChange={data => setFilters(current => ({ ...current, data }))} placeholder='ex: database' />
+                    <FilterInput label='Category' value={filters.category} onChange={category => setFilters(current => ({ ...current, category }))} placeholder='Database' />
+                    <FilterInput label='Size' value={filters.size} onChange={size => setFilters(current => ({ ...current, size }))} placeholder='5GB' />
                     <DateInput label='From' value={filters.from} onChange={from => setFilters(current => ({ ...current, from }))} />
                     <DateInput label='To' value={filters.to} onChange={to => setFilters(current => ({ ...current, to }))} />
-                    <button type='button' onClick={() => setFilters(emptyFilters())} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted transition hover:text-ui-text'>
-                        <Filter className='h-4 w-4' />
-                        Clear
-                    </button>
+                    <div className='grid gap-1'>
+                        <span className='text-[10px] font-semibold uppercase text-ui-muted'>Filters</span>
+                        <button type='button' onClick={() => setFilters(emptyFilters())} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted transition hover:text-ui-text'>
+                            <Filter className='h-4 w-4' />
+                            Clear
+                        </button>
+                    </div>
                 </div>
             </section>
 
@@ -212,7 +217,8 @@ function applyFilters(items: ExposureQueueItem[], filters: Filters) {
     const q = filters.q.trim().toLowerCase()
     const company = filters.company.trim().toLowerCase()
     const actor = filters.actor.trim().toLowerCase()
-    const data = filters.data.trim().toLowerCase()
+    const category = filters.category.trim().toLowerCase()
+    const size = filters.size.trim().toLowerCase()
     const from = filters.from ? Date.parse(`${filters.from}T00:00:00.000Z`) : null
     const to = filters.to ? Date.parse(`${filters.to}T23:59:59.999Z`) : null
 
@@ -222,7 +228,8 @@ function applyFilters(items: ExposureQueueItem[], filters: Filters) {
         if (q && !haystack.includes(q)) return false
         if (company && !item.company.toLowerCase().includes(company)) return false
         if (actor && !item.actor.toLowerCase().includes(actor)) return false
-        if (data && ![item.claimedData, item.claimedDataSize].join(' ').toLowerCase().includes(data)) return false
+        if (category && !item.claimedData.toLowerCase().includes(category)) return false
+        if (size && !item.claimedDataSize.toLowerCase().includes(size)) return false
         if (from !== null && (!Number.isFinite(time) || time < from)) return false
         if (to !== null && (!Number.isFinite(time) || time > to)) return false
         return true
@@ -234,7 +241,8 @@ function filtersFromUrl(params: URLSearchParams): Filters {
         q: params.get('q') || '',
         company: params.get('company') || '',
         actor: params.get('actor') || '',
-        data: params.get('data') || '',
+        category: params.get('category') || params.get('data') || '',
+        size: params.get('size') || '',
         from: params.get('from') || '',
         to: params.get('to') || '',
     }
@@ -249,5 +257,5 @@ function filtersToUrl(filters: Filters) {
 }
 
 function emptyFilters(): Filters {
-    return { q: '', company: '', actor: '', data: '', from: '', to: '' }
+    return { q: '', company: '', actor: '', category: '', size: '', from: '', to: '' }
 }
