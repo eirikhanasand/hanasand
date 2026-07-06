@@ -593,6 +593,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     target,
                     error: navigationError || undefined,
                 })
+                if (hasParsedProviderResult(initialAnalysis)) continue
                 const readiness = await waitForProviderCaptureReadiness(toolPage, tool).catch(() => ({ ready: false, blocker: 'readiness-check-failed' }))
                 if (!readiness.ready) {
                     const blockerEvidence = await collectPageEvidence(toolPage)
@@ -1875,6 +1876,12 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         webcrackSampleBytes: webcrackLoad?.sampleBytes,
         webcrackLoadReason: webcrackLoad?.reason,
     }
+}
+
+function hasParsedProviderResult(analysis: ReturnType<typeof analyzeToolEvidence>) {
+    return analysis.vendorFlagged !== undefined
+        || analysis.alertCount !== undefined
+        || Boolean(analysis.verdict && analysis.verdict !== 'unknown')
 }
 
 function providerPendingEvidence(url: string, toolName: string, target: string): Awaited<ReturnType<typeof collectPageEvidence>> {
