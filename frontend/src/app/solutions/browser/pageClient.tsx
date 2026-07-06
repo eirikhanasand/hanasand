@@ -626,11 +626,6 @@ export default function BrowserPageClient() {
                                     />
                                 </div>
                             </details>
-                            <div className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-3 text-xs text-ui-muted md:grid-cols-3'>
-                                <span><strong className='text-ui-text'>10 active browsers by default</strong></span>
-                                <span><strong className='text-ui-text'>Queued</strong> when capacity is full</span>
-                                <span><strong className='text-ui-text'>Auto-routed</strong> by URL type</span>
-                            </div>
                         </form>
                         <HistoryPanel history={history} quota={quota} onRerun={(run) => startRun({ target: run.target, network: run.network })} />
                     </div>

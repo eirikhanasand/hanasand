@@ -78,7 +78,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(clientSource.includes('Obfuscated scripts'), 'client should summarize obfuscated script findings.')
     assert(clientSource.includes('Suspicious captures'), 'client should summarize suspicious rendered evidence.')
     assert(clientSource.includes('Queued for sandbox capacity'), 'client should surface queued sandbox capacity state.')
-    assert(clientSource.includes('10 active browsers by default'), 'client should disclose the default shared browser capacity.')
+    assert(!clientSource.includes('10 active browsers by default'), 'pre-run browser form should not disclose shared capacity trivia.')
     assert(clientSource.includes('CapacityPanel'), 'client should show a dedicated sandbox capacity panel.')
     assert(clientSource.includes('HistoryPanel'), 'client should expose recent run history and quota state.')
     assert(clientSource.includes('/api/backend/browser/runs'), 'client should load browser run history through the backend proxy.')
