@@ -565,6 +565,19 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             await Promise.allSettled(documentEvidencePromises)
             const initialEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
             rememberDeobfuscationTasks(initialEvidence)
+            void captureProfileTools(
+                context,
+                message.profileTools || [],
+                target,
+                initialEvidence?.deobfuscationTasks?.length ? initialEvidence.deobfuscationTasks : cachedDeobfuscationTasks,
+            ).catch(error => {
+                send({
+                    type: 'status',
+                    state: 'profile_tools_failed',
+                    sessionId,
+                    message: error instanceof Error ? error.message : String(error),
+                })
+            })
             send({
                 type: 'ready',
                 sessionId,
@@ -582,19 +595,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             void dismissCookieOverlays(page)
                 .then(() => sendFrame(true, 'cookie_dismissed'))
                 .catch(() => undefined)
-            const initialPage = page
-            void (async () => {
-                const evidence = initialPage ? await collectPageEvidence(initialPage).catch(() => null) : null
-                rememberDeobfuscationTasks(evidence)
-                await captureProfileTools(context, message.profileTools || [], target, evidence?.deobfuscationTasks?.length ? evidence.deobfuscationTasks : cachedDeobfuscationTasks)
-            })().catch(error => {
-                send({
-                    type: 'status',
-                    state: 'profile_tools_failed',
-                    sessionId,
-                    message: error instanceof Error ? error.message : String(error),
-                })
-            })
         } catch (error) {
             await cleanup()
             throw error
