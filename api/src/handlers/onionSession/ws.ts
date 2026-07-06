@@ -215,6 +215,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let messageQueue = Promise.resolve()
     let networkEvents: SandboxNetworkEvent[] = []
     let cachedDeobfuscationTasks: SandboxDeobfuscationTask[] = []
+    let cachedThreatAssociations: ReturnType<typeof extractThreatAssociations> = []
 
     const send = (payload: Record<string, unknown>) => {
         if (connection.readyState === connection.OPEN) {
@@ -239,6 +240,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             await finishBrowserRun(runId, 'ended', title).catch(() => undefined)
         }
         cachedDeobfuscationTasks = []
+        cachedThreatAssociations = []
         await browser?.close().catch(() => undefined)
         browser = null
         page = null
@@ -334,6 +336,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         remoteClipboard = ''
         networkEvents = []
         cachedDeobfuscationTasks = []
+        cachedThreatAssociations = []
         const target = normalizeTarget(message.target || DEFAULT_TARGET)
         const network = message.network === 'regular' || message.network === 'tor' ? message.network : defaultNetwork
         const proxy = network === 'tor' ? process.env.ONION_SESSION_PROXY || process.env.TOR_SOCKS_PROXY || '' : ''
@@ -445,7 +448,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 })
                 if (response.request().resourceType() === 'document' && /html/i.test(response.headers()['content-type'] || '')) {
                     void response.text()
-                        .then(body => rememberDeobfuscationTasks({ deobfuscationTasks: documentDeobfuscationTasks(body) }))
+                        .then(body => rememberDocumentEvidence(body))
                         .catch(() => undefined)
                 }
             })
@@ -641,7 +644,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         })
         if (response && /html/i.test(response.headers()['content-type'] || '')) {
             await response.text()
-                .then(body => rememberDeobfuscationTasks({ deobfuscationTasks: documentDeobfuscationTasks(body) }))
+                .then(body => rememberDocumentEvidence(body))
                 .catch(() => undefined)
         }
         void sendFrame(true)
@@ -775,6 +778,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 sample: task.sample || task.decodedPreview || '',
             }))
         }
+        if (cachedThreatAssociations.length && !evidence.threatAssociations.length) evidence.threatAssociations = cachedThreatAssociations
         rememberDeobfuscationTasks(evidence)
         send({
             type: 'frame',
@@ -794,6 +798,12 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
 
     function rememberDeobfuscationTasks(evidence: { deobfuscationTasks?: SandboxDeobfuscationTask[] } | null) {
         if (evidence?.deobfuscationTasks?.length) cachedDeobfuscationTasks = evidence.deobfuscationTasks
+    }
+
+    function rememberDocumentEvidence(html: string) {
+        rememberDeobfuscationTasks({ deobfuscationTasks: documentDeobfuscationTasks(html) })
+        const associations = extractThreatAssociations(html.replace(/<script\b[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' '), 'rendered_page')
+        if (associations.length) cachedThreatAssociations = associations
     }
 }
 
