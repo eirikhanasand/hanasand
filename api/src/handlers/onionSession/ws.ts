@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { readFile, stat } from 'node:fs/promises'
 import WebSocket, { type RawData } from 'ws'
 import { chromium, type Browser, type BrowserContext, type Frame, type Page } from 'playwright'
 import recordLog from '#utils/logs/recordLog.ts'
@@ -48,6 +49,10 @@ type SandboxNetworkEvent = {
     port?: number
     protocol?: string
     tlsIssuer?: string
+    fileName?: string
+    bytes?: number
+    sha256?: string
+    hashStatus?: string
     failure?: string
     at: string
 }
@@ -66,6 +71,7 @@ const DEFAULT_HEIGHT = 760
 const MAX_DURATION_MS = 60 * 60 * 1000
 const FRAME_INTERVAL_MS = 900
 const DEFAULT_BROWSER_MAX_SESSIONS = 10
+const MAX_DOWNLOAD_HASH_BYTES = 5 * 1024 * 1024
 const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
 type SandboxAdmissionStatus = {
@@ -448,6 +454,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 userAgent: CHROME_USER_AGENT,
                 locale: 'en-US',
                 extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+                acceptDownloads: true,
                 permissions: network === 'regular' ? [] : ['clipboard-read', 'clipboard-write'],
             })
             await context.addInitScript(() => {
@@ -513,14 +520,26 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 })
             })
             page.on('download', (download) => {
-                trackNetwork({
-                    kind: 'download',
-                    url: download.url(),
-                    failure: 'download blocked for sandbox safety',
-                    at: new Date().toISOString(),
+                void inspectDownload(download).then(evidence => {
+                    trackNetwork({
+                        kind: 'download',
+                        url: download.url(),
+                        failure: 'download saved for hash evidence, then deleted',
+                        at: new Date().toISOString(),
+                        ...evidence,
+                    })
+                    send({ type: 'status', state: 'download_blocked', url: download.url(), message: 'Download hashed for evidence and deleted.' })
                 })
-                void download.cancel().catch(() => undefined)
-                send({ type: 'status', state: 'download_blocked', url: download.url(), message: 'Download blocked for sandbox safety.' })
+                    .catch(() => {
+                        trackNetwork({
+                            kind: 'download',
+                            url: download.url(),
+                            failure: 'download blocked for sandbox safety',
+                            at: new Date().toISOString(),
+                        })
+                        send({ type: 'status', state: 'download_blocked', url: download.url(), message: 'Download blocked for sandbox safety.' })
+                    })
+                    .finally(() => void download.delete().catch(() => undefined))
             })
             page.on('framenavigated', (frame) => {
                 if (frame !== page?.mainFrame()) return
@@ -987,13 +1006,39 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
         recentRequests,
         statusCounts,
         redirectChain,
-        downloads: events.filter(event => event.kind === 'download').slice(-20).map(event => ({ url: event.url, at: event.at })),
+        downloads: events.filter(event => event.kind === 'download').slice(-20).map(event => ({
+            url: event.url,
+            fileName: event.fileName,
+            bytes: event.bytes,
+            sha256: event.sha256,
+            hashStatus: event.hashStatus,
+            at: event.at,
+        })),
         recentFailures: failures.slice(-8).map(event => ({
             url: event.url,
             failure: event.failure || 'failed',
             at: event.at,
         })),
         lastUpdatedAt: events.at(-1)?.at,
+    }
+}
+
+async function inspectDownload(download: { path: () => Promise<string | null>; suggestedFilename: () => string }) {
+    const path = await download.path()
+    if (!path) return { fileName: download.suggestedFilename(), hashStatus: 'no_download_path' }
+    const info = await stat(path)
+    if (info.size > MAX_DOWNLOAD_HASH_BYTES) {
+        return {
+            fileName: download.suggestedFilename(),
+            bytes: info.size,
+            hashStatus: `too_large_over_${MAX_DOWNLOAD_HASH_BYTES}_bytes`,
+        }
+    }
+    return {
+        fileName: download.suggestedFilename(),
+        bytes: info.size,
+        sha256: createHash('sha256').update(await readFile(path)).digest('hex'),
+        hashStatus: 'hashed_and_deleted',
     }
 }
 

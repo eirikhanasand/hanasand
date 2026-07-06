@@ -58,7 +58,7 @@ type SandboxNetworkSummary = {
     recentRequests?: Array<{ url?: string; method?: string; resourceType?: string; status?: number; ip?: string; port?: number; protocol?: string; tlsIssuer?: string; failure?: string; at?: string }>
     statusCounts?: Record<string, number>
     redirectChain?: string[]
-    downloads?: Array<{ url?: string; at?: string }>
+    downloads?: Array<{ url?: string; fileName?: string; bytes?: number; sha256?: string; hashStatus?: string; at?: string }>
     recentFailures?: Array<{ url?: string; failure?: string; at?: string }>
     lastUpdatedAt?: string
 }
@@ -1246,7 +1246,7 @@ function EvidenceWorkspace({
                             <p>{latestNetwork.requestCount || 0} requests · {latestNetwork.responseCount || 0} responses · {latestNetwork.failedCount || 0} blocked/failed</p>
                             {latestNetwork.domains?.length ? <p className='break-all font-mono text-ui-text'>{latestNetwork.domains.slice(0, 8).join('\n')}</p> : null}
                             {latestNetwork.redirectChain?.length ? <pre className='max-h-20 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-panel p-2 font-mono text-[11px] text-ui-text'>Redirects:{'\n'}{latestNetwork.redirectChain.join('\n')}</pre> : null}
-                            {latestNetwork.downloads?.length ? <pre className='max-h-20 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-panel p-2 font-mono text-[11px] text-ui-text'>Downloads:{'\n'}{latestNetwork.downloads.map(item => item.url || '').filter(Boolean).join('\n')}</pre> : null}
+                            {latestNetwork.downloads?.length ? <pre className='max-h-28 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-panel p-2 font-mono text-[11px] text-ui-text'>Downloads:{'\n'}{latestNetwork.downloads.map(downloadEvidenceLine).filter(Boolean).join('\n\n')}</pre> : null}
                             {latestNetwork.recentRequests?.length ? (
                                 <div className='max-h-56 overflow-auto rounded-md border border-ui-border'>
                                     <table className='w-full min-w-[42rem] border-collapse text-left text-[11px]'>
@@ -1494,6 +1494,15 @@ function networkPeerLabel(request: NonNullable<SandboxNetworkSummary['recentRequ
         request.protocol || '',
         request.tlsIssuer || '',
     ].filter(Boolean).join(' · ')
+}
+
+function downloadEvidenceLine(item: NonNullable<SandboxNetworkSummary['downloads']>[number]) {
+    return [
+        item.fileName || item.url || 'download',
+        item.bytes !== undefined ? `${item.bytes} bytes` : '',
+        item.sha256 ? `sha256 ${item.sha256}` : item.hashStatus || '',
+        item.url && item.fileName ? item.url : '',
+    ].filter(Boolean).join('\n')
 }
 
 function buildExportReport(input: {
