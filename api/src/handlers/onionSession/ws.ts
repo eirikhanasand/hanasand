@@ -558,7 +558,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     message: `${tool.name || toolUrl} provider capture started.`,
                 })
                 const preparedUrl = providerStartUrl(tool, toolUrl, target)
-                const officialProviderText = officialProviderKind(preparedUrl) ? fetchOfficialProviderData(preparedUrl, target) : Promise.resolve('')
                 let navigationError = await withTimeout(
                     toolPage.goto(preparedUrl, { waitUntil: 'commit', timeout: 4500 })
                         .then(() => '')
@@ -569,7 +568,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await toolPage.waitForLoadState('domcontentloaded', { timeout: 900 }).catch(() => undefined)
                 const actionError = await interactWithProvider(toolPage, tool, target)
                 navigationError ||= actionError
-                const providerText = officialProviderKind(preparedUrl) ? await waitForProviderData(tool, providerBodies, officialProviderText) : providerBodies()
+                const providerText = officialProviderKind(preparedUrl) ? await waitForProviderData(tool, toolPage, providerBodies) : providerBodies()
                 if (providerText && hasParsedProviderData(tool, providerText)) navigationError = ''
                 const webcrackTool = isWebCrackTool(tool, toolUrl)
                 let webcrackLoad: WebCrackLoadResult | undefined
@@ -833,7 +832,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     function rememberDocumentEvidence(html: string) {
         rememberDeobfuscationTasks({ deobfuscationTasks: documentDeobfuscationTasks(html) })
         const renderedText = html.replace(/<script\b[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ')
-        cachedIndicators = extractIndicators(renderedText)
+        cachedIndicators = extractIndicators(`${html}\n${renderedText}`)
         const associations = extractThreatAssociations(renderedText, 'rendered_page')
         if (associations.length) cachedThreatAssociations = associations
     }
@@ -1381,48 +1380,15 @@ export function providerSummaryText(providerText: string) {
     ].filter(Boolean).join('\n')
 }
 
-async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, providerText: () => string, officialProviderText: Promise<string>) {
+async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, page: Page, providerText: () => string) {
     const deadline = Date.now() + 5000
-    let officialText = ''
-    void officialProviderText.then(text => {
-        officialText = text
-    }).catch(() => undefined)
-    let text = [providerText(), officialText].filter(Boolean).join('\n')
+    let text = [providerText(), await collectRenderedText(page)].filter(Boolean).join('\n')
     while (Date.now() < deadline) {
         if (hasParsedProviderData(tool, text)) return text
         await new Promise(resolve => setTimeout(resolve, 250))
-        text = [providerText(), officialText].filter(Boolean).join('\n')
+        text = [providerText(), await collectRenderedText(page)].filter(Boolean).join('\n')
     }
     return text
-}
-
-async function fetchOfficialProviderData(preparedUrl: string, target: string) {
-    const kind = officialProviderKind(preparedUrl)
-    const signal = AbortSignal.timeout(4500)
-    if (kind === 'urlquery') {
-        return await fetch(`https://urlquery.net/api/htmx/search/?limit=24&offset=0&q=${encodeURIComponent(target)}&type=reports`, { signal })
-            .then(response => response.ok ? response.text() : '')
-            .catch(() => '')
-    }
-    const virusTotalKey = process.env.VIRUSTOTAL_API_KEY || process.env.VT_API_KEY
-    if (kind !== 'virustotal' || !virusTotalKey) return ''
-    return await fetch(`https://www.virustotal.com/api/v3/urls/${virusTotalApiUrlId(target)}`, {
-        headers: { 'x-apikey': virusTotalKey },
-        signal,
-    })
-        .then(response => response.ok ? response.text() : '')
-        .catch(() => '')
-}
-
-function virusTotalApiUrlId(target: string) {
-    const normalized = (() => {
-        try {
-            return new URL(target).href
-        } catch {
-            return target
-        }
-    })()
-    return Buffer.from(normalized).toString('base64url').replace(/=+$/g, '')
 }
 
 function hasParsedProviderData(tool: { id?: string; name?: string; url?: string }, text: string) {
@@ -1506,9 +1472,26 @@ async function triggerWebCrackRun(page: Page) {
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter').catch(() => undefined)
 }
 
+async function collectRenderedText(page: Page) {
+    return await page.evaluate(() => {
+        const read = (node: Node): string => {
+            const parts: string[] = []
+            if (node.nodeType === Node.TEXT_NODE) parts.push(node.textContent || '')
+            if (node instanceof HTMLElement || node instanceof SVGElement) {
+                const style = window.getComputedStyle(node)
+                if (style.display === 'none' || style.visibility === 'hidden') return ''
+            }
+            const element = node as Element & { shadowRoot?: ShadowRoot }
+            if (element.shadowRoot) parts.push(read(element.shadowRoot))
+            for (const child of Array.from(node.childNodes)) parts.push(read(child))
+            return parts.join(' ')
+        }
+        return [document.body?.innerText || '', read(document.documentElement)].join(' ').replace(/\s+/g, ' ').trim()
+    }).catch(() => '')
+}
+
 async function collectPageEvidence(page: Page) {
     const snapshot = await page.evaluate(() => {
-        const text = document.body?.innerText || ''
         const scripts = Array.from(document.scripts).map((script) => ({
             src: script.src || '',
             inline: script.src ? '' : (script.textContent || '').slice(0, 12000),
@@ -1547,17 +1530,17 @@ async function collectPageEvidence(page: Page) {
             })).filter(item => item.name || item.content).slice(0, 40),
         }
     }).catch(() => ({
-        text: '',
         scripts: [] as Array<{ src: string; inline: string }>,
         comments: [] as string[],
         forms: [] as Array<{ action: string; method: string; inputs: Array<{ name: string; type: string; autocomplete: string }> }>,
         anchors: [] as string[],
         meta: [] as Array<{ name: string; content: string }>,
     }))
+    const text = await collectRenderedText(page)
 
     const joined = [
         page.url(),
-        snapshot.text,
+        text,
         snapshot.comments.join('\n'),
         snapshot.anchors.join('\n'),
         snapshot.forms.map(form => `${form.action} ${form.inputs.map(input => `${input.name}:${input.type}`).join(' ')}`).join('\n'),
@@ -1576,12 +1559,12 @@ async function collectPageEvidence(page: Page) {
         obfuscatedScripts.length ? `${obfuscatedScripts.length} obfuscated script candidate${obfuscatedScripts.length === 1 ? '' : 's'}` : '',
         indicators.ips.length ? `${indicators.ips.length} IP indicator${indicators.ips.length === 1 ? '' : 's'}` : '',
         forms.some(form => form.sensitiveInputCount > 0) ? 'sensitive form fields present' : '',
-        /wallet|seed phrase|connect wallet|verify account|install extension|wallet connect/i.test(snapshot.text) ? 'social-engineering language present' : '',
+        /wallet|seed phrase|connect wallet|verify account|install extension|wallet connect/i.test(text) ? 'social-engineering language present' : '',
     ].filter(Boolean)
 
     return {
         url: page.url(),
-        textExcerpt: snapshot.text.replace(/\s+/g, ' ').trim().slice(0, 900),
+        textExcerpt: text.replace(/\s+/g, ' ').trim().slice(0, 900),
         indicators,
         comments: snapshot.comments.slice(0, 8),
         forms,
