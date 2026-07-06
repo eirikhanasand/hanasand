@@ -529,6 +529,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             if (!toolPage) return
             const startedAt = new Date().toISOString()
             const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
+            const providerBodies = collectProviderResponses(toolPage, tool.name || toolUrl)
             try {
                 toolPage.setDefaultTimeout(900)
                 send({
@@ -537,15 +538,19 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     sessionId,
                     message: `${tool.name || toolUrl} provider capture started.`,
                 })
-                const navigationError = await withTimeout(
-                    toolPage.goto(toolUrl, { waitUntil: 'commit', timeout: 4500 })
+                const preparedUrl = providerStartUrl(tool, toolUrl)
+                let navigationError = await withTimeout(
+                    toolPage.goto(preparedUrl, { waitUntil: 'commit', timeout: 4500 })
                         .then(() => '')
                         .catch(error => error instanceof Error ? error.message : String(error)),
                     3500,
                     'provider navigation still pending after 3.5s',
                 )
-                await toolPage.waitForLoadState('domcontentloaded', { timeout: 500 }).catch(() => undefined)
-                const initialEvidence = await withTimeout(collectPageEvidence(toolPage), 700, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target))
+                await toolPage.waitForLoadState('domcontentloaded', { timeout: 900 }).catch(() => undefined)
+                const actionError = await interactWithProvider(toolPage, tool, target)
+                navigationError ||= actionError
+                await toolPage.waitForTimeout(1200).catch(() => undefined)
+                const initialEvidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 900, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies())
                 const initialImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 900 }), 900, null)
                 const initialAnalysis = analyzeToolEvidence(tool.name || toolUrl, initialEvidence)
                 let image = initialImage
@@ -566,7 +571,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         await toolPage.waitForTimeout(150).catch(() => undefined)
                     }
                     image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 500 }), 500, image)
-                    evidence = await withTimeout(collectPageEvidence(toolPage), 500, evidence)
+                    evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 500, evidence), providerBodies())
                     toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
                 }
                 send({
@@ -1181,6 +1186,71 @@ function isWebCrackTool(tool: { id?: string; name?: string; url?: string }, reso
     return /web\s*crack|webcrack/i.test(`${tool.id || ''} ${tool.name || ''} ${tool.url || ''} ${resolvedUrl}`)
 }
 
+function isVirusTotalTool(tool: { id?: string; name?: string; url?: string }, resolvedUrl = '') {
+    return /virus\s*total|virustotal/i.test(`${tool.id || ''} ${tool.name || ''} ${tool.url || ''} ${resolvedUrl}`)
+}
+
+function isUrlQueryTool(tool: { id?: string; name?: string; url?: string }, resolvedUrl = '') {
+    return /urlquery/i.test(`${tool.id || ''} ${tool.name || ''} ${tool.url || ''} ${resolvedUrl}`)
+}
+
+function providerStartUrl(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string) {
+    if (isVirusTotalTool(tool, resolvedUrl)) return 'https://www.virustotal.com/gui/home/url'
+    if (isUrlQueryTool(tool, resolvedUrl)) return 'https://urlquery.net/search'
+    return resolvedUrl
+}
+
+async function interactWithProvider(page: Page, tool: { id?: string; name?: string; url?: string }, target: string) {
+    try {
+        if (isVirusTotalTool(tool, page.url())) {
+            await page.waitForTimeout(900)
+            await page.keyboard.type(target)
+            await page.keyboard.press('Enter')
+            return ''
+        }
+        if (isUrlQueryTool(tool, page.url())) {
+            await page.locator('input[name="q"]').fill(target, { timeout: 1500 })
+            await page.keyboard.press('Enter')
+            return ''
+        }
+    } catch (error) {
+        return error instanceof Error ? error.message : String(error)
+    }
+    return ''
+}
+
+function collectProviderResponses(page: Page, toolName: string) {
+    const bodies: string[] = []
+    page.on('response', response => {
+        const url = response.url()
+        if (!providerResponseUrl(toolName, url)) return
+        const contentType = response.headers()['content-type'] || ''
+        if (!/json|html|text/i.test(contentType)) return
+        void response.text()
+            .then(body => {
+                if (body) bodies.push(body.slice(0, 80_000))
+                if (bodies.length > 8) bodies.shift()
+            })
+            .catch(() => undefined)
+    })
+    return () => bodies.join('\n')
+}
+
+function providerResponseUrl(toolName: string, url: string) {
+    const lower = `${toolName} ${url}`.toLowerCase()
+    return lower.includes('virustotal') && /\/ui\/(?:search|urls\/)/i.test(url)
+        || lower.includes('urlquery') && /\/(?:api\/htmx\/search|search\?)/i.test(url)
+}
+
+function enrichProviderEvidence<T extends Awaited<ReturnType<typeof collectPageEvidence>>>(evidence: T, providerText: string): T {
+    if (!providerText) return evidence
+    return {
+        ...evidence,
+        textExcerpt: [evidence.textExcerpt, providerText.replace(/\s+/g, ' ').trim().slice(0, 1800)].filter(Boolean).join('\n'),
+        comments: [...(evidence.comments || []), providerText.slice(0, 4000)],
+    }
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T) {
     return Promise.race([
         promise,
@@ -1364,10 +1434,12 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
     const communityMatch = text.match(/(\d{1,3})\s+(?:community\s*)?(?:comments?|votes?|reviews?)/i)
     const isVirusTotal = /virus\s*total|virustotal/.test(tool) || /virustotal\.com/i.test(text)
     const isUrlQuery = /urlquery|urlquery\.net/.test(tool) || /urlquery\.net/i.test(text)
-    const rawFlagged = vendorMatch ? Number(vendorMatch[1]) : undefined
+    const vtStats = parseVirusTotalStats(text)
+    const urlqueryScores = parseUrlQueryScores(text)
+    const rawFlagged = vtStats ? vtStats.flagged : vendorMatch ? Number(vendorMatch[1]) : undefined
     const flagged = Number.isFinite(rawFlagged) ? rawFlagged : vtNoDetectionsText ? 0 : undefined
-    const total = vendorMatch?.[2] ? Number(vendorMatch[2]) : undefined
-    const alertCount = alertMatch ? Number(alertMatch[1]) : urlqueryNoAlertText ? 0 : undefined
+    const total = vtStats?.total || (vendorMatch?.[2] ? Number(vendorMatch[2]) : undefined)
+    const alertCount = Number.isFinite(urlqueryScores?.alerts) ? urlqueryScores?.alerts : alertMatch ? Number(alertMatch[1]) : urlqueryNoAlertText ? 0 : undefined
     const communityCommentCount = communityMatch ? Number(communityMatch[1]) : evidence.comments?.length || undefined
     const hasProviderNoDetectionText = /(?:no\s+(?:detections|alerts?|results?|matches?|issues)\s+(?:found)?|undetected|clean|harmless)/i.test(text)
     const hasVendorDetections = flagged !== undefined && Number.isFinite(flagged) && flagged > 0
@@ -1375,10 +1447,10 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
     const hasUrlQueryNoResult = /no\s+(?:alerts?|detections?|results?|matches?)\s+found/i.test(text) || /0\s+alerts?/i.test(text)
     const hasExplicitMaliciousIndicator = /malicious|phishing|blacklist|detected/i.test(text)
     const hasExplicitBenignIndicator = hasProviderNoDetectionText
-    const hasParsedProviderSignal = vendorMatch !== null || alertMatch !== null || communityMatch !== null
+    const hasParsedProviderSignal = vendorMatch !== null || alertMatch !== null || communityMatch !== null || Boolean(vtStats || urlqueryScores)
 
     const verdict = isVirusTotal
-        ? vendorMatch
+        ? vendorMatch || vtStats
             ? (hasVendorDetections ? 'suspicious' : hasExplicitBenignIndicator ? 'clean' : 'clean')
             : vtNoDetectionsText
                 ? 'clean'
@@ -1417,6 +1489,31 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         webcrackSampleBytes: webcrackLoad?.sampleBytes,
         webcrackLoadReason: webcrackLoad?.reason,
     }
+}
+
+function parseVirusTotalStats(text: string) {
+    const match = text.match(/"last_analysis_stats"\s*:\s*\{([^}]+)\}/)
+    if (!match) return null
+    const malicious = numberFromJsonField(match[1], 'malicious')
+    const suspicious = numberFromJsonField(match[1], 'suspicious')
+    const harmless = numberFromJsonField(match[1], 'harmless')
+    const undetected = numberFromJsonField(match[1], 'undetected')
+    const timeout = numberFromJsonField(match[1], 'timeout')
+    const flagged = malicious + suspicious
+    const total = malicious + suspicious + harmless + undetected + timeout
+    return { flagged, total }
+}
+
+function numberFromJsonField(text: string, field: string) {
+    const match = new RegExp(`"${field}"\\s*:\\s*(\\d+)`).exec(text)
+    return match ? Number(match[1]) : 0
+}
+
+function parseUrlQueryScores(text: string) {
+    const rows = Array.from(text.matchAll(/\b(\d{1,3})\s*-\s*(\d{1,3})\s*-\s*(\d{1,3})\b/g))
+    if (!rows.length && !/Search:\s*\d+\s+hits/i.test(text)) return null
+    const alerts = rows.reduce((max, row) => Math.max(max, Number(row[1]) + Number(row[2]) + Number(row[3])), 0)
+    return { alerts }
 }
 
 function providerPendingEvidence(url: string, toolName: string, target: string): Awaited<ReturnType<typeof collectPageEvidence>> {
