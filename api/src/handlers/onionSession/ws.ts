@@ -442,6 +442,11 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     status: response.status(),
                     at: new Date().toISOString(),
                 })
+                if (response.request().resourceType() === 'document' && /html/i.test(response.headers()['content-type'] || '')) {
+                    void response.text()
+                        .then(body => rememberDeobfuscationTasks({ deobfuscationTasks: documentDeobfuscationTasks(body) }))
+                        .catch(() => undefined)
+                }
             })
             page.on('requestfailed', (request) => {
                 trackNetwork({
@@ -767,9 +772,19 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         })
     }
 
-    function rememberDeobfuscationTasks(evidence: Awaited<ReturnType<typeof collectPageEvidence>> | null) {
+    function rememberDeobfuscationTasks(evidence: { deobfuscationTasks?: SandboxDeobfuscationTask[] } | null) {
         if (evidence?.deobfuscationTasks?.length) cachedDeobfuscationTasks = evidence.deobfuscationTasks
     }
+}
+
+function documentDeobfuscationTasks(html: string): SandboxDeobfuscationTask[] {
+    const scripts = Array.from(html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi))
+        .map((match, index) => inspectScript({
+            src: /\bsrc=["']([^"']+)["']/i.exec(match[1])?.[1] || '',
+            inline: match[2] || '',
+        }, index))
+        .filter(script => script.obfuscationScore >= 3)
+    return scripts.map(script => summarizeDeobfuscationTask(script))
 }
 
 function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
