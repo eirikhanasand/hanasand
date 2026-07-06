@@ -7,7 +7,7 @@ type MonitorRow = {
     status: 'up' | 'degraded' | 'down'
     latency_ms: number
     message: string | null
-    checked_at: string
+    checked_at: string | Date
     uptime_30d: string
 }
 
@@ -23,7 +23,7 @@ type IncidentRow = {
     check_name: string
     status: 'degraded' | 'down'
     message: string | null
-    checked_at: string
+    checked_at: string | Date
 }
 
 export default async function getStatus(_req: FastifyRequest, res: FastifyReply) {
@@ -154,7 +154,7 @@ function buildIncidents(rows: IncidentRow[], checks: MonitorRow[]) {
     for (const row of rows) {
         const previous = groups[groups.length - 1]?.at(-1)
         const sameCheck = previous && previous.service === row.service && previous.check_name === row.check_name
-        const closeEnough = previous && Date.parse(row.checked_at) - Date.parse(previous.checked_at) <= maxGapMs
+        const closeEnough = previous && time(row.checked_at) - time(previous.checked_at) <= maxGapMs
         if (sameCheck && closeEnough) {
             groups[groups.length - 1].push(row)
         } else {
@@ -166,28 +166,39 @@ function buildIncidents(rows: IncidentRow[], checks: MonitorRow[]) {
         const first = group[0]
         const last = group[group.length - 1]
         const latest = latestByCheck.get(`${first.service}\n${first.check_name}`)
-        const resolved = latest?.status === 'up' || Date.parse(latest?.checked_at || '') > Date.parse(last.checked_at)
+        const resolved = latest?.status === 'up' || time(latest?.checked_at) > time(last.checked_at)
         const status = group.some(row => row.status === 'down') ? 'down' as const : 'degraded' as const
         const message = first.message || last.message || `${first.check_name} reported ${status}.`
+        const startedAt = iso(first.checked_at)
+        const resolvedAt = latest?.checked_at ? iso(latest.checked_at) : iso(last.checked_at)
 
         return {
-            id: slug(`${first.service}-${first.check_name}-${first.checked_at}`),
+            id: slug(`${first.service}-${first.check_name}-${startedAt}`),
             service: first.service,
             check_name: first.check_name,
             title: `${first.check_name} ${status === 'down' ? 'interruption' : 'instability'}`,
             impact: status === 'down' ? 'Outage' : 'Instability',
             status: resolved ? 'resolved' as const : 'investigating' as const,
-            started_at: first.checked_at,
-            resolved_at: resolved ? latest?.checked_at || last.checked_at : null,
+            started_at: startedAt,
+            resolved_at: resolved ? resolvedAt : null,
             summary: message,
             cause: message,
             updates: [
-                { at: first.checked_at, status: 'investigating', message },
-                ...(group.length > 1 ? [{ at: last.checked_at, status: 'monitoring', message: last.message || message }] : []),
-                ...(resolved ? [{ at: latest?.checked_at || last.checked_at, status: 'resolved', message: `${first.check_name} returned to normal.` }] : []),
+                { at: startedAt, status: 'investigating', message },
+                ...(group.length > 1 ? [{ at: iso(last.checked_at), status: 'monitoring', message: last.message || message }] : []),
+                ...(resolved ? [{ at: resolvedAt, status: 'resolved', message: `${first.check_name} returned to normal.` }] : []),
             ],
         }
-    }).sort((left, right) => Date.parse(right.started_at) - Date.parse(left.started_at))
+    }).sort((left, right) => time(right.started_at) - time(left.started_at))
+}
+
+function iso(value: string | Date) {
+    return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
+}
+
+function time(value: string | Date | undefined) {
+    if (!value) return 0
+    return new Date(value).getTime()
 }
 
 function slug(value: string) {
