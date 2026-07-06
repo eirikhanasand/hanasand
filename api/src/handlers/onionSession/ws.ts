@@ -523,27 +523,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         deobfuscationTasks: SandboxDeobfuscationTask[] = [],
     ) {
         const plannedTools = tools.slice(0, 6).filter(tool => tool.url)
-        for (const tool of plannedTools) {
-            const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
-            const evidence = providerPendingEvidence(toolUrl, tool.name || toolUrl, target)
-            send({
-                type: 'tool_capture',
-                sessionId,
-                id: tool.id || safeToolId(tool.name || toolUrl),
-                name: tool.name || toolUrl,
-                url: toolUrl,
-                title: tool.name || toolUrl,
-                capturedAt: new Date().toISOString(),
-                image: null,
-                evidence,
-                toolAnalysis: {
-                    ...analyzeToolEvidence(tool.name || toolUrl, evidence),
-                    extractedSignals: [`Provider queued in sandbox for ${target}.`],
-                },
-                target,
-                error: 'provider_navigation_pending',
-            })
-        }
         if (process.env.BROWSER_SANDBOX_PROVIDER_TABS === '0') return
         await Promise.all(plannedTools.map(async (tool) => {
             const toolPage = await context.newPage().catch(() => null)
@@ -551,24 +530,23 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const startedAt = new Date().toISOString()
             const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
             try {
+                toolPage.setDefaultTimeout(900)
                 send({
                     type: 'status',
                     state: 'profile_tool_started',
                     sessionId,
                     message: `${tool.name || toolUrl} provider capture started.`,
                 })
-                const navigation = toolPage.goto(toolUrl, { waitUntil: 'commit', timeout: 5000 })
-                    .then(() => '')
-                    .catch(error => error instanceof Error ? error.message : String(error))
-                const navigationError = await Promise.race([
-                    navigation,
-                    new Promise<string>(resolve => setTimeout(() => resolve('provider navigation still pending after 3.5s'), 3500)),
-                ])
-                await toolPage.waitForLoadState('domcontentloaded', { timeout: 1000 }).catch(() => undefined)
-                await dismissCookieOverlays(toolPage).catch(() => undefined)
-                await toolPage.waitForLoadState('networkidle', { timeout: 500 }).catch(() => undefined)
-                const initialEvidence = await collectPageEvidence(toolPage)
-                const initialImage = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
+                const navigationError = await withTimeout(
+                    toolPage.goto(toolUrl, { waitUntil: 'commit', timeout: 4500 })
+                        .then(() => '')
+                        .catch(error => error instanceof Error ? error.message : String(error)),
+                    3500,
+                    'provider navigation still pending after 3.5s',
+                )
+                await toolPage.waitForLoadState('domcontentloaded', { timeout: 500 }).catch(() => undefined)
+                const initialEvidence = await withTimeout(collectPageEvidence(toolPage), 700, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target))
+                const initialImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 900 }), 900, null)
                 const initialAnalysis = analyzeToolEvidence(tool.name || toolUrl, initialEvidence)
                 let image = initialImage
                 let evidence = initialEvidence
@@ -583,12 +561,12 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     : initialAnalysis
                 let webcrackLoad: WebCrackLoadResult | undefined
                 if (isWebCrackTool(tool, toolUrl)) {
-                    webcrackLoad = await loadWebCrackSample(toolPage, deobfuscationTasks)
+                    webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, deobfuscationTasks), 1200, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
                     if (webcrackLoad.loaded) {
-                        await toolPage.waitForTimeout(350).catch(() => undefined)
+                        await toolPage.waitForTimeout(150).catch(() => undefined)
                     }
-                    image = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => image)
-                    evidence = await collectPageEvidence(toolPage)
+                    image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 500 }), 500, image)
+                    evidence = await withTimeout(collectPageEvidence(toolPage), 500, evidence)
                     toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
                 }
                 send({
@@ -1201,6 +1179,13 @@ function domainFromUrl(value: string) {
 
 function isWebCrackTool(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string) {
     return /web\s*crack|webcrack/i.test(`${tool.id || ''} ${tool.name || ''} ${tool.url || ''} ${resolvedUrl}`)
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T) {
+    return Promise.race([
+        promise,
+        new Promise<T>(resolve => setTimeout(() => resolve(fallback), timeoutMs)),
+    ])
 }
 
 async function loadWebCrackSample(page: Page, tasks: SandboxDeobfuscationTask[]): Promise<WebCrackLoadResult> {
