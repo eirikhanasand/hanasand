@@ -386,7 +386,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         </div>
                         <div className='grid gap-3 sm:grid-cols-2'>
                             <EvidenceMetric label='Attribution' value={actorIntel.attribution || 'Public reporting'} />
-                            <EvidenceMetric label='Motivation' value={actorIntel.motivation.slice(0, 2).join('; ') || 'Source-backed activity'} />
+                            <EvidenceMetric label='Motivation' value={actorIntel.motivation.slice(0, 2).join('; ') || 'Reported activity'} />
                             <EvidenceMetric label='Aliases' value={result.aliases.slice(0, 3).join(', ') || humanizeSlug(result.query)} />
                             <EvidenceMetric label='Last seen' value={formatDate(result.lastSeen || result.generatedAt)} />
                         </div>
@@ -400,7 +400,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                     <div className='flex flex-wrap items-end justify-between gap-3'>
                         <div>
                             <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Recent activity</h2>
-                            <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>{workItems.length} source-backed result{workItems.length === 1 ? '' : 's'}</p>
+                            <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>{workItems.length} recent result{workItems.length === 1 ? '' : 's'}</p>
                         </div>
                     </div>
                     <div className='grid gap-2 md:grid-cols-2 xl:grid-cols-3'>
