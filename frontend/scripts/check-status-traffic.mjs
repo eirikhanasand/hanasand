@@ -17,7 +17,7 @@ for (const heading of ['Data interval', 'Uptime interval', 'Current Status: Hana
 }
 
 assert.match(statusClient, /const REFRESH_MS = 3000/, '/status should refresh public status every 3 seconds')
-assert.match(statusClient, /const UPTIME_WINDOW = '30 days'/, '/status should show the uptime interval')
+assert.match(statusClient, /const UPTIME_DAYS = 180/, '/status should show the 180-day uptime interval')
 
 for (const rawTrafficHeading of ['Most visited subdomains', 'Top endpoints']) {
     assert.doesNotMatch(statusClient, new RegExp(escapeRegExp(rawTrafficHeading)), `/status should not expose raw traffic heading "${rawTrafficHeading}"`)

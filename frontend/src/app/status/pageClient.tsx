@@ -12,7 +12,8 @@ type DashboardProps = {
 }
 
 const REFRESH_MS = 3000
-const UPTIME_WINDOW = '30 days'
+const UPTIME_DAYS = 180
+const UPTIME_WINDOW = `${UPTIME_DAYS} days`
 
 export default function StatusDashboard({ serviceStatus, mode = 'status', incidentId }: DashboardProps) {
     const [now, setNow] = useState<number | null>(null)
@@ -119,7 +120,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                 ) : (
                     <section className='rounded-md border border-ui-border bg-ui-panel p-5'>
                         <h1 className='text-2xl font-semibold text-ui-text'>Incident not found</h1>
-                        <p className='mt-2 text-sm text-ui-muted'>This incident is not available in the current 30-day status history.</p>
+                        <p className='mt-2 text-sm text-ui-muted'>This incident is not available in the current {UPTIME_WINDOW} status history.</p>
                     </section>
                 )}
             </main>
@@ -179,17 +180,17 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                                     <h3 className='font-semibold text-ui-text'>{check.check_name}</h3>
                                     <span className='text-sm text-ui-muted'>{check.service}</span>
                                 </div>
-                                <div className='mt-3 flex h-8 items-stretch gap-1' aria-label={`${check.check_name} ${formatUptime(check.uptime_30d)} uptime`}>
+                                <div className='mt-3 flex h-8 items-stretch gap-px' aria-label={`${check.check_name} ${formatUptime(check.uptime_30d)} uptime`}>
                                     {historyDaysFor(currentStatus, check).map((day) => (
                                         day.incident ? (
                                             <Link
                                                 key={day.date}
                                                 href={`/status/incidents/${day.incident.id}`}
                                                 title={`${formatDate(day.date)}: ${day.incident.title}. ${day.incident.summary}`}
-                                                className={`min-w-1 flex-1 rounded-sm ${barClass(day.status)}`}
+                                                className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.status)}`}
                                             />
                                         ) : (
-                                            <span key={day.date} title={`No incidents on ${formatDate(day.date)}`} className={`min-w-1 flex-1 rounded-sm ${barClass(day.status)}`} />
+                                            <span key={day.date} title={`No incidents on ${formatDate(day.date)}`} className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.status)}`} />
                                         )
                                     ))}
                                 </div>
@@ -285,7 +286,7 @@ function historyDaysFor(status: ServiceStatus, check: ServiceStatus['checks'][nu
         .filter(row => row.service === check.service && row.check_name === check.check_name)
         .map(row => [row.date, row]))
 
-    return lastDays(30).map(date => {
+    return lastDays(UPTIME_DAYS).map(date => {
         const row = rowsByDate.get(date)
         const incident = row?.incident_ids.map(id => incidentsById.get(id)).find(Boolean) || null
         return {

@@ -44,7 +44,7 @@ export default async function getStatus(_req: FastifyRequest, res: FastifyReply)
                     2
                 ) AS uptime_30d
             FROM service_monitor_results
-            WHERE checked_at >= NOW() - INTERVAL '30 days'
+            WHERE checked_at >= NOW() - INTERVAL '180 days'
             GROUP BY service, check_name
         )
         SELECT latest.*, COALESCE(uptime.uptime_30d, 0)::text AS uptime_30d
@@ -63,14 +63,14 @@ export default async function getStatus(_req: FastifyRequest, res: FastifyReply)
                 ELSE 'up'
             END AS status
         FROM service_monitor_results
-        WHERE checked_at >= CURRENT_DATE - INTERVAL '29 days'
+        WHERE checked_at >= CURRENT_DATE - INTERVAL '179 days'
         GROUP BY service, check_name, checked_at::date
         ORDER BY service ASC, check_name ASC, date ASC
     `)
     const incidentResult = await run(`
         SELECT service, check_name, status, message, checked_at
         FROM service_monitor_results
-        WHERE checked_at >= NOW() - INTERVAL '30 days'
+        WHERE checked_at >= NOW() - INTERVAL '180 days'
           AND status <> 'up'
         ORDER BY service ASC, check_name ASC, checked_at ASC
     `)
