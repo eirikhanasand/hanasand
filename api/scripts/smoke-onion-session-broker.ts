@@ -4,7 +4,6 @@ import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import WebSocket, { WebSocketServer } from 'ws'
 import { chromium } from 'playwright'
-import { handleOnionSessionSocket } from '../src/handlers/onionSession/ws.ts'
 
 type BrokerPayload = {
     type?: string
@@ -61,12 +60,15 @@ const html = `<!doctype html>
 delete process.env.ONION_SESSION_PROXY
 delete process.env.TOR_SOCKS_PROXY
 process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS = '1'
+process.env.BROWSER_SANDBOX_PREWARM = '0'
 process.env.CHROMIUM_BIN ||= [
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     chromium.executablePath(),
 ].find(path => existsSync(path))
+
+const { handleOnionSessionSocket } = await import('../src/handlers/onionSession/ws.ts')
 
 const httpServer = http.createServer((_request, response) => {
     response.writeHead(200, {
