@@ -8,6 +8,7 @@ test('TI workbench keeps selected-case actions primary and collapses secondary r
     const page = await readFile(path.join(root, 'src/app/dashboard/ti/workbench/workbenchClient.tsx'), 'utf8')
     const route = await readFile(path.join(root, 'src/app/dashboard/ti/workbench/page.tsx'), 'utf8')
     const loading = await readFile(path.join(root, 'src/app/dashboard/ti/loading.tsx'), 'utf8')
+    const proxy = await readFile(path.join(root, 'src/proxy.ts'), 'utf8')
 
     expect(page).toContain('<OperatorActionRail')
     expect(page).toContain('data-workbench-stats-disclosure')
@@ -38,6 +39,10 @@ test('TI workbench keeps selected-case actions primary and collapses secondary r
     expect(route).toContain('AbortSignal.timeout(WORKBENCH_FETCH_TIMEOUT_MS)')
     expect(loading).toContain('Loading collection, recent attacks, actor profiles, sources, and review state.')
     expect(loading).toContain('animate-pulse')
+    expect(proxy).toContain('recentlyValidatedSession(sessionExpiresAt, authCheckedAt)')
+    expect(proxy).toContain('const AUTH_CHECK_CACHE_MS = 5 * 60 * 1000')
+    expect(proxy).toContain('session_expires_at')
+    expect(proxy).toContain('auth_checked_at')
     expect(route).toContain('[\'alertId\', \'alert\']')
     expect(route).toContain('[\'watchlistId\', \'watchlist\']')
     expect(route).toContain('[\'organizationId\', \'organization\']')

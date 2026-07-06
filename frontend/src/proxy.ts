@@ -14,6 +14,8 @@ export async function proxy(req: NextRequest) {
     const impersonationToken = req.cookies.get('impersonation_token')?.value || ''
     const impersonatingId = req.cookies.get('impersonating_id')?.value || ''
     const impersonatingName = req.cookies.get('impersonating_name')?.value || ''
+    const sessionExpiresAt = req.cookies.get('session_expires_at')?.value || ''
+    const authCheckedAt = req.cookies.get('auth_checked_at')?.value || ''
     const requiresAuth = !pathIsAllowedWhileUnauthorized(path)
 
     if ((path === '/dev' || path.startsWith('/dev/')) && requestHostname(req).endsWith('hanasand.com')) {
@@ -46,7 +48,7 @@ export async function proxy(req: NextRequest) {
         const token = tokenCookie.value
         const id = idCookie.value
         let roles: Role[] = []
-        if (isLocalDashboardRenderProof(req, token, id)) {
+        if (isLocalDashboardRenderProof(req, token, id) || recentlyValidatedSession(sessionExpiresAt, authCheckedAt)) {
             const rolesCookie = req.cookies.get('roles')?.value
             roles = normalizeRoles(rolesCookie ? JSON.parse(rolesCookie) : [])
         } else if (!validToken || !id) {
@@ -62,6 +64,7 @@ export async function proxy(req: NextRequest) {
                     ...(refreshedAuth ?? {}),
                     token: auth.token,
                     expires_at: auth.expires_at,
+                    checked_at: new Date().toISOString(),
                 }
             }
 
@@ -71,6 +74,7 @@ export async function proxy(req: NextRequest) {
                     ...(refreshedAuth ?? {}),
                     roles,
                     expires_at: auth.expires_at,
+                    checked_at: new Date().toISOString(),
                 }
             }
 
@@ -79,6 +83,7 @@ export async function proxy(req: NextRequest) {
                     ...(refreshedAuth ?? {}),
                     name: auth.name,
                     expires_at: auth.expires_at,
+                    checked_at: new Date().toISOString(),
                 }
             }
 
@@ -87,6 +92,7 @@ export async function proxy(req: NextRequest) {
                     ...(refreshedAuth ?? {}),
                     avatar: auth.avatar,
                     expires_at: auth.expires_at,
+                    checked_at: new Date().toISOString(),
                 }
             }
 
@@ -121,6 +127,7 @@ type TokenRefreshCookies = {
     name?: string
     avatar?: string
     expires_at?: string
+    checked_at?: string
 }
 
 function applyRefreshedAuthCookies(
@@ -151,6 +158,24 @@ function applyRefreshedAuthCookies(
     if (auth.avatar !== undefined) {
         setAuthCookie(response, 'avatar', auth.avatar, cookieOptions, options.sharedDomain)
     }
+    if (auth.expires_at) {
+        setAuthCookie(response, 'session_expires_at', auth.expires_at, cookieOptions, options.sharedDomain)
+    }
+    if (auth.checked_at) {
+        setAuthCookie(response, 'auth_checked_at', auth.checked_at, cookieOptions, options.sharedDomain)
+    }
+}
+
+const AUTH_CHECK_CACHE_MS = 5 * 60 * 1000
+const SESSION_EXPIRY_SKEW_MS = 60 * 1000
+
+function recentlyValidatedSession(sessionExpiresAt: string, authCheckedAt: string) {
+    const expires = Date.parse(sessionExpiresAt)
+    const checked = Date.parse(authCheckedAt)
+    return Number.isFinite(expires)
+        && Number.isFinite(checked)
+        && expires - Date.now() > SESSION_EXPIRY_SKEW_MS
+        && Date.now() - checked < AUTH_CHECK_CACHE_MS
 }
 
 function setAuthCookie(
@@ -253,7 +278,7 @@ function loginRedirect(
 
     const response = NextResponse.redirect(url)
     if (options.clearAuth) {
-        const authCookies = ['name', 'access_token', 'id', 'avatar', 'roles']
+        const authCookies = ['name', 'access_token', 'id', 'avatar', 'roles', 'session_expires_at', 'auth_checked_at']
         for (const cookie of authCookies) {
             response.cookies.delete(cookie)
         }

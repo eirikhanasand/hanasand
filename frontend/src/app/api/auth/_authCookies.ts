@@ -9,7 +9,7 @@ type AuthPayload = {
     roles?: unknown[]
 }
 
-const authCookieNames = ['name', 'id', 'avatar', 'access_token', 'roles'] as const
+const authCookieNames = ['name', 'id', 'avatar', 'access_token', 'roles', 'session_expires_at', 'auth_checked_at'] as const
 
 export function setAuthCookies(req: NextRequest, response: NextResponse, data: AuthPayload) {
     const expires = data.expires_at ? new Date(data.expires_at) : undefined
@@ -32,6 +32,10 @@ export function setAuthCookies(req: NextRequest, response: NextResponse, data: A
         setAuthCookie(response, 'access_token', data.token, cookieOptions, sharedDomain)
     }
     setAuthCookie(response, 'roles', JSON.stringify(data.roles ?? []), cookieOptions, sharedDomain)
+    if (data.expires_at) {
+        setAuthCookie(response, 'session_expires_at', data.expires_at, cookieOptions, sharedDomain)
+    }
+    setAuthCookie(response, 'auth_checked_at', new Date().toISOString(), cookieOptions, sharedDomain)
 }
 
 export function clearAuthCookies(req: NextRequest, response: NextResponse) {
