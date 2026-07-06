@@ -1674,6 +1674,9 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
 }
 
 function parseVirusTotalStats(text: string) {
+    const renderedScore = text.match(/(\d{1,3})\s*\/\s*(\d{1,3})\s+(?:Community\s+Score|security\s+vendors?)/i)
+    if (renderedScore) return { flagged: Number(renderedScore[1]), total: Number(renderedScore[2]) }
+
     const match = text.match(/"last_analysis_stats"\s*:\s*\{([^}]+)\}/)
     if (!match) return null
     const malicious = numberFromJsonField(match[1], 'malicious')
