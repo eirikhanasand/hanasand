@@ -561,6 +561,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await toolPage.waitForLoadState('domcontentloaded', { timeout: 900 }).catch(() => undefined)
                 const actionError = await interactWithProvider(toolPage, tool, target)
                 navigationError ||= actionError
+                const providerText = officialProviderKind(preparedUrl) ? await waitForProviderData(tool, providerBodies) : providerBodies()
+                if (providerText && hasParsedProviderData(tool, providerText)) navigationError = ''
                 await toolPage.waitForTimeout(1200).catch(() => undefined)
                 const initialEvidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 900, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies())
                 const initialImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 900 }), 900, null)
@@ -1314,8 +1316,25 @@ function enrichProviderEvidence<T extends Awaited<ReturnType<typeof collectPageE
     return {
         ...evidence,
         textExcerpt: [evidence.textExcerpt, providerText.replace(/\s+/g, ' ').trim().slice(0, 1800)].filter(Boolean).join('\n'),
-        comments: [...(evidence.comments || []), providerText.slice(0, 4000)],
+        comments: [...(evidence.comments || []), providerText.slice(0, 12000)],
     }
+}
+
+async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, providerText: () => string) {
+    const deadline = Date.now() + 5000
+    let text = providerText()
+    while (Date.now() < deadline) {
+        if (hasParsedProviderData(tool, text)) return text
+        await new Promise(resolve => setTimeout(resolve, 250))
+        text = providerText()
+    }
+    return text
+}
+
+function hasParsedProviderData(tool: { id?: string; name?: string; url?: string }, text: string) {
+    if (isVirusTotalTool(tool) && parseVirusTotalStats(text)) return true
+    if (isUrlQueryTool(tool) && parseUrlQueryScores(text)) return true
+    return false
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T) {
