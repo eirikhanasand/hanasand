@@ -632,9 +632,15 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             return
         }
         send({ type: 'status', state: 'navigating', target })
-        await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 25_000 }).catch((error) => {
+        const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 25_000 }).catch((error) => {
             send({ type: 'navigation_error', target, message: error instanceof Error ? error.message : String(error) })
+            return null
         })
+        if (response && /html/i.test(response.headers()['content-type'] || '')) {
+            await response.text()
+                .then(body => rememberDeobfuscationTasks({ deobfuscationTasks: documentDeobfuscationTasks(body) }))
+                .catch(() => undefined)
+        }
         void sendFrame(true)
     }
 
@@ -755,6 +761,17 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         lastFrame = image
         const viewport = page.viewportSize()
         const evidence = await collectPageEvidence(page)
+        if (!evidence.deobfuscationTasks.length && cachedDeobfuscationTasks.length) {
+            evidence.deobfuscationTasks = cachedDeobfuscationTasks
+            evidence.obfuscatedScripts = cachedDeobfuscationTasks.map(task => ({
+                id: task.scriptId || 'cached_script',
+                src: task.source || 'inline',
+                inlineBytes: Buffer.byteLength(task.sample || task.decodedPreview || ''),
+                obfuscationScore: 3,
+                reasons: ['cached from document HTML'],
+                sample: task.sample || task.decodedPreview || '',
+            }))
+        }
         rememberDeobfuscationTasks(evidence)
         send({
             type: 'frame',
