@@ -126,6 +126,13 @@ async function smokePasskeyManagementHandlers() {
                 const [deleted] = rows.splice(index, 1)
                 return { rows: [{ credential_id: deleted.credential_id }] }
             }
+            if (compact.startsWith('UPDATE user_passkeys SET label')) {
+                const [credentialId, userId, label] = params
+                const row = rows.find(row => row.credential_id === credentialId && row.user_id === userId)
+                if (!row) return { rows: [] }
+                row.label = String(label)
+                return { rows: [{ credential_id: row.credential_id, label: row.label }] }
+            }
             throw new Error(`Unexpected passkey smoke query: ${compact}`)
         },
     }))
@@ -133,7 +140,7 @@ async function smokePasskeyManagementHandlers() {
         default: async () => ({ valid: true, id: 'passkey-user' }),
     }))
 
-    const { getPasskeys, deletePasskey } = await import('../src/handlers/auth/passkeys.ts')
+    const { getPasskeys, deletePasskey, patchPasskey } = await import('../src/handlers/auth/passkeys.ts')
 
     const listReply = makeReply()
     await getPasskeys({} as any, listReply as any)
@@ -157,6 +164,16 @@ async function smokePasskeyManagementHandlers() {
             lastUsedAt: null,
         },
     ])
+
+    const patchReply = makeReply()
+    await patchPasskey({ params: { credentialId: 'cred-es256' }, body: { label: ' Eirik MBP  ' } } as any, patchReply as any)
+    assert.equal(patchReply.statusCode, 200)
+    assert.deepEqual(patchReply.payload, { ok: true, credentialId: 'cred-es256', label: 'Eirik MBP' })
+
+    const blankPatchReply = makeReply()
+    await patchPasskey({ params: { credentialId: 'cred-es256' }, body: { label: ' ' } } as any, blankPatchReply as any)
+    assert.equal(blankPatchReply.statusCode, 400)
+    assert.equal(blankPatchReply.payload.error, 'Passkey name is required.')
 
     const deleteReply = makeReply()
     await deletePasskey({ params: { credentialId: 'cred-es256' } } as any, deleteReply as any)

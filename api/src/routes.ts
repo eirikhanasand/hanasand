@@ -6,6 +6,7 @@ import {
     getPasskeys,
     getPasskeyAuthenticateOptions,
     getPasskeyRegisterOptions,
+    patchPasskey,
     postPasskeyAuthenticateVerify,
     postPasskeyRegisterVerify,
 } from './handlers/auth/passkeys.ts'
@@ -227,6 +228,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/auth/sessions', getSessions)
     fastify.post('/auth/login/:id', loginHandler)
     fastify.get('/auth/passkeys', getPasskeys)
+    fastify.patch('/auth/passkeys/:credentialId', patchPasskey)
     fastify.delete('/auth/passkeys/:credentialId', deletePasskey)
     fastify.get('/auth/passkeys/register/options', getPasskeyRegisterOptions)
     fastify.post('/auth/passkeys/register/verify', postPasskeyRegisterVerify)

@@ -15,6 +15,7 @@ import {
 type PasskeyBody = {
     challengeId?: string
     credential?: Record<string, any>
+    label?: string
 }
 
 type ChallengeRow = {
@@ -122,6 +123,32 @@ export async function deletePasskey(req: FastifyRequest, res: FastifyReply) {
     return res.send({ ok: true, credentialId })
 }
 
+export async function patchPasskey(req: FastifyRequest, res: FastifyReply) {
+    const actor = await tokenWrapper(req, res)
+    if (!actor.valid || !actor.id) {
+        return res.status(401).send({ error: actor.error || 'Unauthorized.' })
+    }
+
+    const { credentialId } = req.params as { credentialId?: string } ?? {}
+    const label = cleanPasskeyLabel((req.body as PasskeyBody | undefined)?.label)
+    if (!credentialId) {
+        return res.status(400).send({ error: 'Missing passkey credential id.' })
+    }
+    if (!label) {
+        return res.status(400).send({ error: 'Passkey name is required.' })
+    }
+
+    const result = await run(
+        'UPDATE user_passkeys SET label = $3 WHERE credential_id = $1 AND user_id = $2 RETURNING credential_id, label',
+        [credentialId, actor.id, label],
+    )
+    if (!result.rows.length) {
+        return res.status(404).send({ error: 'Passkey not found.' })
+    }
+
+    return res.send({ ok: true, credentialId: result.rows[0].credential_id, label: result.rows[0].label })
+}
+
 export async function postPasskeyRegisterVerify(req: FastifyRequest, res: FastifyReply) {
     const actor = await tokenWrapper(req, res)
     if (!actor.valid || !actor.id) {
@@ -167,7 +194,7 @@ export async function postPasskeyRegisterVerify(req: FastifyRequest, res: Fastif
             parsed.signCount,
             parsed.alg,
             parsed.aaguid,
-            labelForCredential(body.credential),
+            labelForCredential(body.credential, body.label),
         ])
 
         return res.send({
@@ -329,7 +356,17 @@ function credentialIdFromBody(credential: Record<string, any>) {
     return String(credential.rawId || credential.id || '').trim()
 }
 
-function labelForCredential(credential: Record<string, any>) {
+function labelForCredential(credential: Record<string, any>, requestedLabel?: string) {
+    const label = cleanPasskeyLabel(requestedLabel)
+    if (label) return label
+    const platform = cleanPasskeyLabel(credential.clientPlatform)
+    if (platform) return `Passkey ${platform}`
     const authenticatorAttachment = String(credential.authenticatorAttachment || '').trim()
-    return authenticatorAttachment ? `Passkey (${authenticatorAttachment})` : 'Passkey'
+    return authenticatorAttachment && authenticatorAttachment !== 'platform' ? `Passkey ${authenticatorAttachment}` : 'Passkey'
+}
+
+function cleanPasskeyLabel(value: unknown) {
+    const label = String(value || '').replace(/\s+/g, ' ').trim()
+    if (!label || label.length > 80) return ''
+    return label
 }

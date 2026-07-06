@@ -3,7 +3,7 @@
 import config from '@/config'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import { getCookie, removeCookies } from '@/utils/cookies/cookies'
-import { Fingerprint, LogOut, Trash2 } from 'lucide-react'
+import { Check, Fingerprint, LogOut, Pencil, Trash2, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { decodePasskeyCreationOptions, passkeyCredentialToJSON } from '@/utils/auth/passkeys'
@@ -22,6 +22,8 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
     const [busy, setBusy] = useState(false)
     const [message, setMessage] = useState('')
     const [passkeys, setPasskeys] = useState<PasskeyRow[]>([])
+    const [editingPasskeyId, setEditingPasskeyId] = useState('')
+    const [passkeyLabel, setPasskeyLabel] = useState('')
 
     if (!isSelf) return null
 
@@ -96,6 +98,7 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
                 body: JSON.stringify({
                     challengeId: options.challengeId,
                     credential: passkeyCredentialToJSON(credential),
+                    label: defaultPasskeyLabel(),
                 }),
             })
             const data = await verifyResponse.json().catch(() => null)
@@ -127,6 +130,31 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
             setPasskeys(current => current.filter(passkey => passkey.credentialId !== credentialId))
         } catch (error) {
             setMessage(error instanceof Error ? error.message : 'Unable to remove passkey.')
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    async function renamePasskey(credentialId: string) {
+        const label = passkeyLabel.trim().replace(/\s+/g, ' ')
+        if (busy || !label) return
+        setBusy(true)
+        setMessage('')
+        try {
+            const response = await fetch(`/api/auth/passkeys/${encodeURIComponent(credentialId)}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ label }),
+            })
+            const data = await response.json().catch(() => null)
+            if (!response.ok) {
+                setMessage(data?.error || 'Unable to rename passkey.')
+                return
+            }
+            setPasskeys(current => current.map(passkey => passkey.credentialId === credentialId ? { ...passkey, label: data?.label || label } : passkey))
+            setEditingPasskeyId('')
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : 'Unable to rename passkey.')
         } finally {
             setBusy(false)
         }
@@ -164,15 +192,45 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
             <div className='mt-4 grid gap-2'>
                 {passkeys.map(passkey => (
                     <div key={passkey.credentialId} className='flex flex-col gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 sm:flex-row sm:items-center sm:justify-between'>
-                        <div>
-                            <p className='text-sm font-semibold text-ui-text'>{passkey.label || 'Passkey'}</p>
+                        <div className='min-w-0 flex-1'>
+                            {editingPasskeyId === passkey.credentialId ? (
+                                <form className='flex max-w-md gap-2' onSubmit={(event) => {
+                                    event.preventDefault()
+                                    void renamePasskey(passkey.credentialId)
+                                }}>
+                                    <input
+                                        value={passkeyLabel}
+                                        onChange={event => setPasskeyLabel(event.target.value)}
+                                        maxLength={80}
+                                        className='h-9 min-w-0 flex-1 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                                        aria-label='Passkey name'
+                                    />
+                                    <button type='submit' disabled={busy || !passkeyLabel.trim()} className='grid h-9 w-9 place-items-center rounded-lg border border-ui-border bg-ui-panel text-ui-success disabled:opacity-60' aria-label='Save passkey name'>
+                                        <Check className='h-4 w-4' />
+                                    </button>
+                                    <button type='button' disabled={busy} onClick={() => setEditingPasskeyId('')} className='grid h-9 w-9 place-items-center rounded-lg border border-ui-border bg-ui-panel text-ui-muted disabled:opacity-60' aria-label='Cancel rename'>
+                                        <X className='h-4 w-4' />
+                                    </button>
+                                </form>
+                            ) : (
+                                <p className='text-sm font-semibold text-ui-text'>{passkey.label || 'Passkey'}</p>
+                            )}
                             <p className='mt-1 text-xs text-ui-muted'>
                                 {passkey.algorithm} · {passkey.lastUsedAt ? `Last used ${formatDate(passkey.lastUsedAt)}` : `Added ${formatDate(passkey.createdAt)}`}
                             </p>
                         </div>
-                        <button disabled={busy} onClick={() => void removePasskey(passkey.credentialId)} className='h-8 rounded-lg border border-ui-danger/40 bg-ui-danger/10 px-3 text-xs font-semibold text-ui-danger hover:bg-ui-danger/15 disabled:opacity-60'>
-                            Remove
-                        </button>
+                        <div className='flex gap-2'>
+                            <button disabled={busy} onClick={() => {
+                                setEditingPasskeyId(passkey.credentialId)
+                                setPasskeyLabel(passkey.label || 'Passkey')
+                            }} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text hover:bg-ui-canvas disabled:opacity-60'>
+                                <Pencil className='h-3.5 w-3.5' />
+                                Rename
+                            </button>
+                            <button disabled={busy} onClick={() => void removePasskey(passkey.credentialId)} className='h-8 rounded-lg border border-ui-danger/40 bg-ui-danger/10 px-3 text-xs font-semibold text-ui-danger hover:bg-ui-danger/15 disabled:opacity-60'>
+                                Remove
+                            </button>
+                        </div>
                     </div>
                 ))}
                 {!passkeys.length && <div className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>No passkeys enrolled.</div>}
@@ -202,4 +260,16 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
 
 function formatDate(value: string) {
     return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
+function defaultPasskeyLabel() {
+    const userAgent = navigator.userAgent
+    const platform = navigator.platform
+    if (/iPhone/i.test(userAgent)) return 'Passkey iPhone'
+    if (/iPad/i.test(userAgent) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'Passkey iPad'
+    if (/Mac/i.test(platform)) return 'Passkey Mac'
+    if (/Win/i.test(platform)) return 'Passkey Windows'
+    if (/Android/i.test(userAgent)) return 'Passkey Android'
+    if (/Linux/i.test(platform)) return 'Passkey Linux'
+    return 'Passkey'
 }
