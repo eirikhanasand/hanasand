@@ -4,7 +4,8 @@ const persisted = [{
     id: 'cap_old_lockbit',
     actor: 'LockBit',
     company: 'Alpine Robotics',
-    claimedData: '22 GB',
+    claimedData: 'Corporate data',
+    claimedDataSize: '22 GB',
     claimTime: '2026-01-01T00:00:00.000Z',
     status: 'parsed',
 }]
@@ -24,7 +25,8 @@ const appended = mergeExposureQueueItems(persisted, [{
     id: 'cap_new_akira',
     actor: 'Akira',
     company: 'Fabrikam Manufacturing',
-    claimedData: '44 GB',
+    claimedData: 'Corporate data',
+    claimedDataSize: '44 GB',
     claimTime: '2026-07-02T10:00:00.000Z',
     status: 'new',
 }], 'append')
