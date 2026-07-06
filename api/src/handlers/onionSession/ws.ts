@@ -1194,22 +1194,34 @@ function isUrlQueryTool(tool: { id?: string; name?: string; url?: string }, reso
     return /urlquery/i.test(`${tool.id || ''} ${tool.name || ''} ${tool.url || ''} ${resolvedUrl}`)
 }
 
+function officialProviderKind(resolvedUrl: string) {
+    const host = domainFromUrl(resolvedUrl)
+    if (host.endsWith('virustotal.com')) return 'virustotal'
+    if (host === 'urlquery.net' || host.endsWith('.urlquery.net')) return 'urlquery'
+    return ''
+}
+
 function providerStartUrl(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string) {
-    if (isVirusTotalTool(tool, resolvedUrl)) return 'https://www.virustotal.com/gui/home/url'
-    if (isUrlQueryTool(tool, resolvedUrl)) return 'https://urlquery.net/search'
+    const kind = officialProviderKind(resolvedUrl)
+    if (kind === 'virustotal') return 'https://www.virustotal.com/gui/home/url'
+    if (kind === 'urlquery') return 'https://urlquery.net/search'
     return resolvedUrl
 }
 
 async function interactWithProvider(page: Page, tool: { id?: string; name?: string; url?: string }, target: string) {
     try {
-        if (isVirusTotalTool(tool, page.url())) {
+        const kind = officialProviderKind(page.url())
+        if (kind === 'virustotal' && isVirusTotalTool(tool, page.url())) {
             await page.waitForTimeout(900)
-            await page.keyboard.type(target)
+            const searchInput = page.locator('input[type="text"], textarea:not([name="g-recaptcha-response"])').first()
+            await searchInput.fill(target, { timeout: 2500 }).catch(async () => {
+                await page.keyboard.type(target)
+            })
             await page.keyboard.press('Enter')
             return ''
         }
-        if (isUrlQueryTool(tool, page.url())) {
-            await page.locator('input[name="q"]').fill(target, { timeout: 1500 })
+        if (kind === 'urlquery' && isUrlQueryTool(tool, page.url())) {
+            await page.locator('input[name="q"]').fill(target, { timeout: 3000 })
             await page.keyboard.press('Enter')
             return ''
         }
