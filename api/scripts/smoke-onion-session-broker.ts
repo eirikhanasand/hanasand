@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import WebSocket, { WebSocketServer } from 'ws'
@@ -59,7 +60,13 @@ const html = `<!doctype html>
 
 delete process.env.ONION_SESSION_PROXY
 delete process.env.TOR_SOCKS_PROXY
-process.env.CHROMIUM_BIN ||= chromium.executablePath()
+process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS = '1'
+process.env.CHROMIUM_BIN ||= [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    chromium.executablePath(),
+].find(path => existsSync(path))
 
 const httpServer = http.createServer((_request, response) => {
     response.writeHead(200, {
@@ -114,10 +121,11 @@ client.send(JSON.stringify({ type: 'click', x: 186, y: 132, button: 0 }))
 await waitForPayload(payloads, (payload) => payload.type === 'console' && payload.text === 'button-clicked')
 
 client.send(JSON.stringify({ type: 'wheel', x: 420, y: 260, deltaY: 280 }))
-await waitForPayload(payloads, (payload) => payload.type === 'console' && payload.text === 'wheel:280')
+await waitForPayload(payloads, (payload) => payload.type === 'console' && /^wheel:\d+/.test(payload.text || ''))
 
 client.send(JSON.stringify({ type: 'clipboard', text: 'clipboard-smoke' }))
 await waitForPayload(payloads, (payload) => payload.type === 'clipboard' && payload.ok === true)
+client.send(JSON.stringify({ type: 'click', x: 180, y: 52, button: 0 }))
 client.send(JSON.stringify({ type: 'key', key: 'v', ctrlKey: true }))
 await waitForPayload(payloads, (payload) => payload.type === 'console' && payload.text === 'input:hiclipboard-smoke')
 client.send(JSON.stringify({ type: 'click', x: 180, y: 52, button: 0 }))

@@ -92,7 +92,7 @@ function allowLocalSandboxTargets() {
 function chromiumLaunchOptions(proxy?: string) {
     return {
         headless: false,
-        executablePath: process.env.CHROMIUM_BIN || '/usr/bin/chromium-browser',
+        executablePath: process.env.CHROMIUM_BIN || '/usr/bin/chromium',
         proxy: proxy ? { server: proxy } : undefined,
         args: [
             '--no-sandbox',
@@ -547,7 +547,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 .catch(() => undefined)
             const initialPage = page
             void (async () => {
-                await Promise.allSettled(documentEvidencePromises)
                 const evidence = initialPage ? await collectPageEvidence(initialPage).catch(() => null) : null
                 rememberDeobfuscationTasks(evidence)
                 await captureProfileTools(context, message.profileTools || [], target, evidence?.deobfuscationTasks?.length ? evidence.deobfuscationTasks : cachedDeobfuscationTasks)
