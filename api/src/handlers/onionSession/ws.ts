@@ -1323,11 +1323,21 @@ function providerResponseUrl(toolName: string, url: string) {
 
 function enrichProviderEvidence<T extends Awaited<ReturnType<typeof collectPageEvidence>>>(evidence: T, providerText: string): T {
     if (!providerText) return evidence
+    const summary = providerSummaryText(providerText)
     return {
         ...evidence,
-        textExcerpt: [evidence.textExcerpt, providerText.replace(/\s+/g, ' ').trim().slice(0, 1800)].filter(Boolean).join('\n'),
-        comments: [...(evidence.comments || []), providerText.slice(0, 12000)],
+        textExcerpt: [evidence.textExcerpt, summary, providerText.replace(/\s+/g, ' ').trim().slice(0, 1800)].filter(Boolean).join('\n'),
+        comments: [...(evidence.comments || []), summary, providerText.slice(0, 12000)].filter(Boolean),
     }
+}
+
+export function providerSummaryText(providerText: string) {
+    const vt = parseVirusTotalStats(providerText)
+    const uq = parseUrlQueryScores(providerText)
+    return [
+        vt ? `${vt.flagged}/${vt.total || '?'} security vendors flagged this URL.` : '',
+        uq ? `${uq.alerts} urlquery alerts were found.` : '',
+    ].filter(Boolean).join('\n')
 }
 
 async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, providerText: () => string) {
