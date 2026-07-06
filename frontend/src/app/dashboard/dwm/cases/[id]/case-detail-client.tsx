@@ -768,7 +768,7 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
                     <CommandLink href={`/dashboard/dwm${dashboardScope}`}>Queue</CommandLink>
                     <CommandLink href={organizationHref}>Organization</CommandLink>
                     {alertHref ? <CommandLink href={alertHref}>Selected alert</CommandLink> : null}
-                    <CommandLink href={exportHref}>{exportReady ? 'Export packet' : 'Check export'}</CommandLink>
+                    <CommandLink href={exportHref}>{exportReady ? 'Export case' : 'Check export'}</CommandLink>
                     {readOnly ? <span className='inline-flex h-9 items-center rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 text-xs font-semibold text-ui-warning'>Read only</span> : null}
                     <CommandLink href={currentCaseHref}>Current case</CommandLink>
                 </div>

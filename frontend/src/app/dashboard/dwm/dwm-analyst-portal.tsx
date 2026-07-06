@@ -134,6 +134,7 @@ type PortalProps = {
     dataHealth: DwmDataHealth
     initialAlertId?: string
     publicTiHandoff?: PublicTiHandoffDecodeResult | null
+    view?: 'cases' | 'watchlists'
 }
 
 type DwmDataHealth = {
@@ -168,6 +169,7 @@ export function DwmAnalystPortal({
     dataHealth: initialDataHealth,
     initialAlertId,
     publicTiHandoff,
+    view = 'cases',
 }: PortalProps) {
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -389,6 +391,25 @@ export function DwmAnalystPortal({
             filter: 'active',
             query: '',
         }), { scroll: false })
+    }
+
+    if (view === 'watchlists') {
+        return (
+            <div className='grid gap-4'>
+                <section className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+                    <div className='flex flex-col gap-1 border-b border-ui-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
+                        <div>
+                            <p className='text-[10px] font-semibold uppercase text-ui-primary'>Dark web monitoring</p>
+                            <h1 className='mt-1 text-lg font-semibold text-ui-text'>Watchlists</h1>
+                        </div>
+                        <p className='text-xs font-medium text-ui-muted'>{watchTermCount} terms · {activeSourceCount}/{sourceCount} sources active</p>
+                    </div>
+                    <div className='p-3'>
+                        {workflowActions}
+                    </div>
+                </section>
+            </div>
+        )
     }
 
     return (

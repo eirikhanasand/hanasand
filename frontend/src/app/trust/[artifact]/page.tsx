@@ -133,7 +133,7 @@ export default async function TrustArtifactPage({ params }: Props) {
                         </ul>
                     </div>
                     <Link href='/contact?intent=procurement' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
-                        Request review packet
+                        Request review docs
                         <ArrowRight className='h-4 w-4' />
                     </Link>
                 </div>

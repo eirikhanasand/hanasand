@@ -10,6 +10,7 @@ type Item = {
     href: string
     label: string
     icon: React.ReactNode
+    subItems?: Array<{ href: string, label: string }>
 }
 
 type Section = {
@@ -45,7 +46,10 @@ export default function DashboardSidebar({
     const productItems: Item[] = [
         { href: '/dashboard', label: 'Console', icon: <LayoutDashboard className='h-4 w-4' /> },
         { href: '/ti', label: 'Threat search', icon: <Radar className='h-4 w-4' /> },
-        { href: '/dashboard/dwm', label: 'Dark web', icon: <ShieldCheck className='h-4 w-4' /> },
+        { href: '/dashboard/dwm/cases', label: 'Dark web', icon: <ShieldCheck className='h-4 w-4' />, subItems: [
+            { href: '/dashboard/dwm/cases', label: 'Active cases' },
+            { href: '/dashboard/dwm/watchlists', label: 'Watchlists' },
+        ] },
         { href: '/developers', label: 'API docs', icon: <Code2 className='h-4 w-4' /> },
         { href: '/dashboard/subscription', label: 'Subscription', icon: <ScanSearch className='h-4 w-4' /> },
     ]
@@ -116,10 +120,14 @@ export default function DashboardSidebar({
         { title: 'Admin', items: adminItems },
     ].filter(section => section.items.length)
     const items = sections.flatMap(section => section.items)
+    const allItems = items.flatMap(item => [item, ...(item.subItems || []).map(subItem => ({ ...subItem, icon: item.icon }))])
     const activeHref = items
         .filter((item) => pathname === item.href
             || (item.href === '/dashboard' && pathname === '/dashboard/overview')
             || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`)))
+        .sort((a, b) => b.href.length - a.href.length)[0]?.href
+    const activeSubHref = allItems
+        .filter((item) => pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`)))
         .sort((a, b) => b.href.length - a.href.length)[0]?.href
 
     return (
@@ -160,25 +168,42 @@ export default function DashboardSidebar({
                         {!compact && <p className='px-2 text-[0.62rem] font-semibold uppercase text-ui-muted'>{section.title}</p>}
                         <div className='grid gap-1 sm:grid-cols-2 lg:grid-cols-1'>
                             {section.items.map((item) => {
-                                const active = item.href === activeHref
+                                const active = item.href === activeHref || item.subItems?.some(subItem => subItem.href === activeSubHref)
                                 const itemKey = `${section.title}:${item.href}:${item.label}`
 
                                 return (
-                                    <Link
-                                        key={itemKey}
-                                        href={item.href}
-                                        title={item.label}
-                                        className={`flex min-h-10 items-center rounded-lg border px-3 transition ${
-                                            compact ? 'justify-center' : 'gap-3'
-                                        } ${
-                                            active
-                                                ? 'border-ui-primary bg-ui-primary/10 text-ui-primary'
-                                                : 'border-transparent text-ui-muted hover:border-ui-border hover:bg-ui-canvas hover:text-ui-text'
-                                        }`}
-                                    >
-                                        {item.icon}
-                                        {!compact && <span className='text-sm font-medium'>{item.label}</span>}
-                                    </Link>
+                                    <div key={itemKey} className='grid gap-1'>
+                                        <Link
+                                            href={item.href}
+                                            title={item.label}
+                                            className={`flex min-h-10 items-center rounded-lg border px-3 transition ${
+                                                compact ? 'justify-center' : 'gap-3'
+                                            } ${
+                                                active
+                                                    ? 'border-ui-primary bg-ui-primary/10 text-ui-primary'
+                                                    : 'border-transparent text-ui-muted hover:border-ui-border hover:bg-ui-canvas hover:text-ui-text'
+                                            }`}
+                                        >
+                                            {item.icon}
+                                            {!compact && <span className='text-sm font-medium'>{item.label}</span>}
+                                        </Link>
+                                        {!compact && active && item.subItems?.length ? (
+                                            <div className='grid gap-0.5 pl-7'>
+                                                {item.subItems.map(subItem => {
+                                                    const subActive = activeSubHref === subItem.href
+                                                    return (
+                                                        <Link
+                                                            key={subItem.href}
+                                                            href={subItem.href}
+                                                            className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${subActive ? 'text-ui-primary' : 'text-ui-muted hover:bg-ui-canvas hover:text-ui-text'}`}
+                                                        >
+                                                            {subItem.label}
+                                                        </Link>
+                                                    )
+                                                })}
+                                            </div>
+                                        ) : null}
+                                    </div>
                                 )
                             })}
                         </div>

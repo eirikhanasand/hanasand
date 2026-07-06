@@ -4172,7 +4172,7 @@ function operatorSourceLabel(value: string) {
     if (clean.includes('/api/dwm/watchlists') || clean.includes('watchlist')) return 'Customer watchlist'
     if (clean.includes('/api/dwm/webhooks') || clean.includes('delivery')) return 'Delivery ledger'
     if (clean.includes('selected queue')) return 'Selected case'
-    if (clean.includes('evidence')) return 'Evidence packet'
+    if (clean.includes('evidence')) return 'Evidence brief'
     if (clean.includes('org')) return 'Organization scope'
     return label(value)
 }

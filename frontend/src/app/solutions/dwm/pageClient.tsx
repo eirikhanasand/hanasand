@@ -128,13 +128,13 @@ const workflow = [
 
 const requestTypes = [
     { title: 'Telegram channels', detail: 'Public channels and approved invite reviews for broker rooms, ransomware mirrors, and stealer-log markets.' },
-    { title: 'New forums and markets', detail: 'Source onboarding packets for newly launched communities before they appear in generic indexes.' },
+    { title: 'New forums and markets', detail: 'Source onboarding alerts for newly launched communities before they appear in generic indexes.' },
     { title: 'Actor or sector scopes', detail: 'Language, region, campaign, actor alias, industry, vendor, product, or portfolio monitoring windows.' },
     { title: 'Safe source records', detail: 'Page details, hashes, screenshots, source timing, and redaction state without downloading stolen files.' },
 ]
 
 const pricingTiers = [
-    { name: 'Pilot', price: '$49/mo', detail: '25 watched names or domains, recent actor-claim matches, email notification packets.', href: '/contact?plan=pilot' },
+    { name: 'Pilot', price: '$49/mo', detail: '25 watched names or domains, recent actor-claim matches, email notifications.', href: '/contact?plan=pilot' },
     { name: 'Company Monitor', price: '$149/mo', detail: '250 watched names or domains, faster refreshes, structured alert export.', href: '/contact?plan=company-monitor', featured: true },
     { name: 'Portfolio', price: '$499/mo', detail: '1,500 watched names or domains, priority source expansion, custom delivery format.', href: '/contact?plan=portfolio' },
 ]
@@ -324,7 +324,7 @@ export default function DarkWebMonitoringPage() {
                     </div>
                     <div className='overflow-hidden rounded-lg border border-ui-primary/35 bg-ui-panel shadow-[0_30px_90px_rgba(0,0,0,0.35)]'>
                         <div className='border-b border-ui-border p-5'>
-                            <p className='text-xs font-semibold uppercase tracking-[0.28em] text-ui-primary'>Sample alert packet</p>
+                            <p className='text-xs font-semibold uppercase tracking-[0.28em] text-ui-primary'>Sample alert</p>
                             <h3 className='mt-2 text-2xl font-semibold'>Vendor named in extortion post</h3>
                             <p className='mt-2 text-sm leading-6 text-ui-muted'>Alert format. Real notifications use your watchlist and live source context.</p>
                         </div>
@@ -361,7 +361,7 @@ export default function DarkWebMonitoringPage() {
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-16 md:px-8'>
                     <div className='grid max-w-4xl gap-3'>
                         <p className='text-sm font-semibold uppercase tracking-[0.18em] text-ui-primary'>Built for the analyst</p>
-                        <h2 className='text-4xl font-semibold md:text-5xl'>Focused alert packets, built for analyst review.</h2>
+                        <h2 className='text-4xl font-semibold md:text-5xl'>Focused alerts, built for analyst review.</h2>
                         <p className='text-base leading-7 text-ui-muted'>Every alert should state where it came from, why it matched, how urgent it is, and what action owner should review next.</p>
                     </div>
                     <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>

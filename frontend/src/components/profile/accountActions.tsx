@@ -191,10 +191,10 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
             {message && <p className='mt-3 text-sm text-ui-danger'>{message}</p>}
             <div className='mt-4 grid gap-2'>
                 {passkeys.map(passkey => (
-                    <div key={passkey.credentialId} className='flex flex-col gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 sm:flex-row sm:items-center sm:justify-between'>
+                    <div key={passkey.credentialId} className='flex min-w-0 flex-col gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 sm:flex-row sm:items-center sm:justify-between'>
                         <div className='min-w-0 flex-1'>
                             {editingPasskeyId === passkey.credentialId ? (
-                                <form className='flex max-w-md gap-2' onSubmit={(event) => {
+                                <form className='flex w-full min-w-0 max-w-full gap-2' onSubmit={(event) => {
                                     event.preventDefault()
                                     void renamePasskey(passkey.credentialId)
                                 }}>
@@ -219,7 +219,7 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
                                 {passkey.algorithm} · {passkey.lastUsedAt ? `Last used ${formatDate(passkey.lastUsedAt)}` : `Added ${formatDate(passkey.createdAt)}`}
                             </p>
                         </div>
-                        <div className='flex gap-2'>
+                        <div className='flex shrink-0 flex-wrap gap-2'>
                             <button disabled={busy} onClick={() => {
                                 setEditingPasskeyId(passkey.credentialId)
                                 setPasskeyLabel(passkey.label || 'Passkey')

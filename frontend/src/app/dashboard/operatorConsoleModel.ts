@@ -1192,7 +1192,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         productionCoverageReady || sourceProxyVerificationReady ? '' : 'Source reachability checks are syncing.',
         productionCoverageReady || schemaLookupReady ? '' : 'Safe contract schema lookup is syncing from the sources.',
         productionCoverageReady || receiptMatrixReady ? '' : 'Product status delivery-check matrix is syncing from the sources.',
-        productionCoverageReady || endToEndWorkflowReady ? '' : endToEndWorkflow?.detail || 'End-to-end workflow packet is syncing from the sources.',
+        productionCoverageReady || endToEndWorkflowReady ? '' : endToEndWorkflow?.detail || 'End-to-end workflow status is syncing from the sources.',
         productionCoverageReady || sourceFamilyCount > 0 ? '' : 'Source family counts are syncing from the source pack.',
         productionCoverageReady || parserSourceFamilyCount > 0 ? '' : 'Parser family counts are syncing from the source pack.',
         ...(!productionCoverageReady && Array.isArray(input.sourcePacks?.readiness?.blockers) ? input.sourcePacks.readiness.blockers.filter(Boolean) : []),

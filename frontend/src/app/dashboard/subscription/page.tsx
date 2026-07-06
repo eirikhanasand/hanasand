@@ -180,7 +180,7 @@ export default function SubscriptionPage() {
                         <summary className='flex cursor-pointer list-none flex-col gap-1 border-b border-ui-border bg-ui-raised px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                             <span className='inline-flex items-center gap-2'>
                                 <FileCheck2 className='h-4 w-4 text-ui-primary' />
-                                Enterprise review packet
+                                Enterprise review
                             </span>
                             <span className='text-xs font-medium text-ui-muted'>Security, procurement, admin, and delivery evidence</span>
                         </summary>

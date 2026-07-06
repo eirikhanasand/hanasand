@@ -19,7 +19,7 @@ const plans = [
         cta: 'Start pilot',
         href: '/contact?plan=pilot',
         icon: BellRing,
-        features: ['25 watched names or domains', 'Recent actor-claim matches', 'Email notification packets', 'Company and actor pivots'],
+        features: ['25 watched names or domains', 'Recent actor-claim matches', 'Email notifications', 'Company and actor pivots'],
     },
     {
         name: 'Company Monitor',
@@ -56,7 +56,7 @@ const buyerScenarios = [
         detail: 'Watch suppliers, portfolio companies, acquisition targets, and managed-service providers. Route only the claims that include enough source context to review.',
     },
     {
-        title: 'Analyst triage packet',
+        title: 'Analyst triage alert',
         buyer: 'SOC or threat-intel team',
         detail: 'Give analysts the matched term, source, timing, confidence, claim summary, source context, and recommended next action instead of a raw feed.',
     },
@@ -65,7 +65,7 @@ const buyerScenarios = [
 const competitiveFitRows = [
     {
         label: 'Best Hanasand fit',
-        value: 'Focused company, supplier, executive, domain, and portfolio monitoring where the buyer wants a small alert packet, transparent pricing, and direct webhook/API delivery.',
+        value: 'Focused company, supplier, executive, domain, and portfolio monitoring where the buyer wants a small alert, transparent pricing, and direct webhook/API delivery.',
     },
     {
         label: 'Best larger-platform fit',
@@ -92,7 +92,7 @@ const enterpriseReadiness = [
         icon: ShieldCheck,
     },
     {
-        title: 'Procurement packet',
+        title: 'Procurement review',
         detail: 'DPA, order-form notes, subprocessor details, SLA/support targets, and questionnaire responses can be packaged for review.',
         href: '/trust/dpa-and-data',
         icon: FileText,
@@ -237,7 +237,7 @@ export default function PricingPage() {
                                 <ArrowRight className='h-4 w-4' />
                             </Link>
                             <Link href='/contact?intent=procurement' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
-                                Request packet
+                                Request review
                                 <ClipboardCheck className='h-4 w-4 text-ui-primary' />
                             </Link>
                         </div>

@@ -68,7 +68,7 @@ export const trustArtifacts: TrustArtifact[] = [
             ],
         },
         nextSteps: [
-            'Request the procurement packet if you need a questionnaire answered against a specific deployment.',
+            'Request the procurement review if you need a questionnaire answered against a specific deployment.',
             'Raise SSO, SCIM, retention, regional hosting, and support-response requirements before pilot approval.',
             'Do not treat this overview as a SOC 2, ISO 27001, or penetration-test report.',
         ],
@@ -138,7 +138,7 @@ export const trustArtifacts: TrustArtifact[] = [
         sections: [
             {
                 title: 'Why the register is scoped',
-                body: 'The product can run with a mostly self-hosted stack. Some customers may use invoice-only billing, customer-managed deployments, or their own downstream integrations. Because provider use can change by deployment, the signed packet should identify the exact providers and regions for that customer.',
+                body: 'The product can run with a mostly self-hosted stack. Some customers may use invoice-only billing, customer-managed deployments, or their own downstream integrations. Because provider use can change by deployment, the signed docs should identify the exact providers and regions for that customer.',
             },
             {
                 title: 'Customer-selected destinations',
@@ -181,8 +181,8 @@ export const trustArtifacts: TrustArtifact[] = [
                 title: 'Recommended pilot sequence',
                 body: 'Start with a narrow watchlist and a clear reviewer. Verify source context, alert fields, delivery route, false-positive handling, and escalation before expanding to a larger supplier or portfolio program.',
                 items: [
-                    'Week 0: security/procurement packet, watchlist shape, delivery route, and reviewer named.',
-                    'Week 1: first watchlist added, alert packet reviewed, webhook/API/email delivery checked.',
+                    'Week 0: security/procurement review, watchlist shape, delivery route, and reviewer named.',
+                    'Week 1: first watchlist added, alert reviewed, webhook/API/email delivery checked.',
                     'Weeks 2-3: tune watched names, severity expectations, suppression, and escalation owners.',
                     'Week 4: decide whether coverage and workflow are strong enough for paid production use.',
                 ],

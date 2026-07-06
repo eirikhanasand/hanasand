@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         }).catch(() => null)
 
         if (!response?.ok) {
-            return NextResponse.json({ error: 'Contact intake is temporarily unavailable. Email eirik@hanasand.com and include this request text.' }, { status: 503 })
+            return NextResponse.json({ error: 'Contact intake is temporarily unavailable. Email contact@hanasand.com and include this request text.' }, { status: 503 })
         }
         delivery = 'forwarded'
     } else {

@@ -57,7 +57,7 @@ const controlRows = [
 const buyerReviewRows = [
     ['Live product check', 'Search a company or actor, inspect the current alert list, and review source context before any sales call.', '/ti/apt29'],
     ['Pilot design', 'Define watched companies, suppliers, domains, delivery route, alert reviewer, and success criteria for the first month.', '/pricing#pilot-path'],
-    ['Procurement packet', 'Review DPA notes, subprocessor categories, SLA expectations, security questionnaire inputs, and onboarding timeline before requesting a signed packet.', '/trust/dpa-and-data'],
+    ['Procurement review', 'Review DPA notes, subprocessor categories, SLA expectations, security questionnaire inputs, and onboarding timeline before requesting signed docs.', '/trust/dpa-and-data'],
     ['Current boundary', 'Use Hanasand for direct company exposure alerts. Choose a larger CTI platform when you need certified controls, broad stealer-log claims, or named-enterprise references today.', '/trust/security-overview'],
 ]
 
@@ -81,7 +81,7 @@ const dataHandling = [
 ]
 
 const subprocessorRows = [
-    ['Hosting and runtime', 'Application, API, worker, processing, and scheduled-job infrastructure used to deliver the service.', 'Provider details supplied in the DPA packet until the public register is finalized.'],
+    ['Hosting and runtime', 'Application, API, worker, processing, and scheduled-job infrastructure used to deliver the service.', 'Provider details supplied in the DPA docs until the public register is finalized.'],
     ['Database and storage', 'PostgreSQL-backed application data, alert records, audit events, and operational state.', 'Customer-managed deployments can replace Hanasand-managed storage by agreement.'],
     ['Mail and notification delivery', 'Account, support, alert, webhook, and operational email paths where configured.', 'Only the data required to deliver the message or alert is sent.'],
     ['Payment and billing', 'Subscription, invoice, and plan administration if a paid plan uses external billing rails.', 'Not used for customers handled by invoice/order form.'],
@@ -108,7 +108,7 @@ export default function TrustPage() {
                         </p>
                         <div className='flex flex-wrap gap-3'>
                             <Link href='/contact?intent=procurement' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
-                                Request procurement packet
+                                Request procurement review
                                 <ArrowRight className='h-4 w-4' />
                             </Link>
                             <Link href='/status' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
@@ -134,7 +134,7 @@ export default function TrustPage() {
             <section id='security-overview' className='scroll-mt-24 border-b border-ui-border bg-ui-canvas'>
                 <div className='mx-auto grid max-w-7xl gap-5 px-4 py-12 md:px-8'>
                     <div>
-                        <p className='text-sm font-semibold uppercase text-ui-primary'>Diligence packet</p>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>Diligence review</p>
                         <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>What enterprise buyers can verify today.</h2>
                     </div>
                     <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
@@ -162,7 +162,7 @@ export default function TrustPage() {
                     </div>
                     <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm md:grid-cols-[12rem_1fr] md:items-start'>
                         <div>
-                            <p className='text-sm font-semibold uppercase text-ui-primary'>Public packet</p>
+                            <p className='text-sm font-semibold uppercase text-ui-primary'>Public docs</p>
                             <p className='mt-2 text-sm leading-6 text-ui-muted'>Stable URLs a reviewer can inspect before opening a vendor portal.</p>
                         </div>
                         <div className='grid gap-2 md:grid-cols-2'>

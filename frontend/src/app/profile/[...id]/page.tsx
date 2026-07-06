@@ -78,7 +78,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                             title='Account profile'
                             description={`Signed in as @${displayName}. Manage account access, active devices, and API certificates.`}
                         />
-                        <div className='grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.65fr)]'>
+                        <div className='grid gap-3 xl:grid-cols-2'>
                             <div className='grid gap-3'>
                                 <SessionsPanel isSelf={isSelf} />
                                 <Certificates certificates={certificates} />

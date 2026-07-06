@@ -6262,7 +6262,7 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
                 </p>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(triage.state)}>{decisionStepStatusLabel(triage.state)}</span>
-                    <CopyPayloadButton label='Review packet' payload={triage} />
+                    <CopyPayloadButton label='Review alert' payload={triage} />
                 </div>
             </div>
             <p className='mt-2 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{displayRequirementText(triage.route)}</p>
@@ -6417,7 +6417,7 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
                     </div>
                 ))}
                 {!plan.alerts.length ? (
-                    <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-[11px] leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Generate an alert before opening a case packet.</p>
+                    <p className='rounded-md border border-ui-warning/35 bg-ui-warning/10 p-2 text-[11px] leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Generate an alert before opening a case.</p>
                 ) : null}
             </div>
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
@@ -7235,7 +7235,7 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
     ].filter(Boolean)
 
     return {
-        title: isCustomerAlert ? `Candidate customer alert: ${displayRequirementText(selected.title)}` : `Actor context packet: ${displayRequirementText(selected.title)}`,
+        title: isCustomerAlert ? `Candidate customer alert: ${displayRequirementText(selected.title)}` : `Actor context brief: ${displayRequirementText(selected.title)}`,
         customerValue: isCustomerAlert
             ? 'This finding has enough structure to enter alert review: named object, evidence basis, timestamp, source reference, and routing guidance.'
             : 'This finding strengthens watchlist and detection context, but should not become a customer alert until it matches a watched organization, domain, vendor, or portfolio term.',

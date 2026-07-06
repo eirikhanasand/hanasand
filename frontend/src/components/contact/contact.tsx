@@ -43,10 +43,10 @@ const intakeSteps = [
     ['Security review', 'Package DPA, subprocessors, SLA notes, identity requirements, and current control gaps.'],
 ]
 
-const reviewPacketRows = [
+const reviewRows = [
     ['Pilot scope', 'Watched names, domains, suppliers, alert owner, and first-month success criteria.'],
     ['Delivery setup', 'Email, webhook, API, or shared review link path with the fields your team needs.'],
-    ['Security packet', 'DPA notes, subprocessors, SLA expectations, identity requirements, and current certification limits.'],
+    ['Security review', 'DPA notes, subprocessors, SLA expectations, identity requirements, and current certification limits.'],
 ]
 
 export default function Contact({ plan = '', intent = '' }: { plan?: string; intent?: string }) {
@@ -135,7 +135,7 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                         <ContactPoint icon={<ShieldCheck className='h-4.5 w-4.5' />} title='Threat monitoring' detail='Company and supplier exposure alerts from recent actor activity.' />
                         <ContactPoint icon={<Building2 className='h-4.5 w-4.5' />} title='Buyer fit' detail='Best for teams that need fast notification, clean fields, and reviewable context.' />
                         <ContactPoint icon={<MessageSquareText className='h-4.5 w-4.5' />} title='Procurement review' detail='Request DPA, subprocessor details, SLA notes, security questionnaire, and identity requirements.' />
-                        <ContactPoint icon={<Mail className='h-4.5 w-4.5' />} title='Direct email' detail='eirik@hanasand.com' />
+                        <ContactPoint icon={<Mail className='h-4.5 w-4.5' />} title='Direct email' detail='contact@hanasand.com' />
                     </div>
 
                     <div className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
@@ -152,11 +152,11 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
 
                     <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
                         <div className='border-b border-ui-border bg-ui-raised px-4 py-3'>
-                            <p className='text-sm font-semibold uppercase text-ui-primary'>Review packet</p>
+                            <p className='text-sm font-semibold uppercase text-ui-primary'>Security review</p>
                             <p className='mt-1 text-sm leading-6 text-ui-muted'>A good request should leave with a concrete pilot shape, not a generic sales thread.</p>
                         </div>
                         <div className='divide-y divide-ui-border'>
-                            {reviewPacketRows.map(([label, detail]) => (
+                            {reviewRows.map(([label, detail]) => (
                                 <div key={label} className='grid gap-1 px-4 py-3 text-sm sm:grid-cols-[8rem_1fr] sm:gap-4'>
                                     <span className='font-semibold text-ui-text'>{label}</span>
                                     <span className='leading-6 text-ui-muted'>{detail}</span>
@@ -300,8 +300,8 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                         {submitting ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
                         {submitting ? 'Sending' : 'Send request'}
                     </button>
-                    <a href='mailto:eirik@hanasand.com' className='text-center text-sm font-semibold text-ui-primary hover:text-ui-primary/80'>
-                        Email eirik@hanasand.com instead
+                    <a href='mailto:contact@hanasand.com' className='text-center text-sm font-semibold text-ui-primary hover:text-ui-primary/80'>
+                        Email contact@hanasand.com instead
                     </a>
                 </form>
             </div>
@@ -423,7 +423,7 @@ function getContactIntent(plan: string, intent: string): ContactIntent {
     if (normalizedIntent === 'procurement' || normalizedIntent === 'enterprise' || normalizedIntent === 'security') {
         return {
             subject: 'Enterprise security and procurement review',
-            message: 'I need the Hanasand enterprise review packet.\n\nOrganization:\nVendor portal or questionnaire link:\nJurisdiction / DPA requirements:\nSecurity controls required:\nSSO / SCIM requirements:\nSLA or support requirements:\nProcurement deadline:',
+            message: 'I need the Hanasand enterprise security review.\n\nOrganization:\nVendor portal or questionnaire link:\nJurisdiction / DPA requirements:\nSecurity controls required:\nSSO / SCIM requirements:\nSLA or support requirements:\nProcurement deadline:',
             eyebrow: 'Enterprise review',
             heading: 'Request security, DPA, SLA, and procurement material.',
             detail: 'Send the vendor portal, required controls, deadline, identity requirements, and contract needs. The reply can cover DPA, subprocessors, SLA/support terms, security questionnaire responses, and onboarding scope.',

@@ -8,7 +8,6 @@ import { DwmAnalystPortal } from './dwm-analyst-portal'
 export const dynamic = 'force-dynamic'
 
 const DWM_CACHE_REFRESH_MS = 60_000
-const DWM_FAST_LOAD_TIMEOUTS = { snapshot: 1200, operations: 900, alerts: 900, deliveries: 900 }
 const DWM_FULL_LOAD_TIMEOUTS = { snapshot: 8000, operations: 2500, alerts: 2500, deliveries: 2500 }
 const dwmPageCache = new Map<string, { loadedAt: number, data: DwmPageData }>()
 
@@ -29,8 +28,7 @@ export default async function DashboardDwmPage({
     const scraperHeaders = await dwmScraperHeaders()
     const cacheKey = dwmPageCacheKey(scope, scraperHeaders)
     const cached = dwmPageCache.get(cacheKey)
-    const pageData = cached?.data ?? await loadDwmPageData(scope, scraperHeaders, DWM_FAST_LOAD_TIMEOUTS)
-    if (!cached) dwmPageCache.set(cacheKey, { loadedAt: Date.now(), data: pageData })
+    const pageData = cached?.data ?? emptyDwmPageData(scope)
     if (!cached || Date.now() - cached.loadedAt > DWM_CACHE_REFRESH_MS) {
         void refreshDwmPageCache(cacheKey, scope, scraperHeaders).catch(() => {})
     }
@@ -60,9 +58,24 @@ export default async function DashboardDwmPage({
                 dataHealth={dataHealth}
                 initialAlertId={initialAlertId}
                 publicTiHandoff={publicTiHandoff}
+                view={firstParam(params?.panel) === 'watchlists' ? 'watchlists' : 'cases'}
             />
         </DashboardPage>
     )
+}
+
+function emptyDwmPageData(scope: DwmPageScope): DwmPageData {
+    return {
+        snapshotResult: {
+            data: emptyDwmProductSnapshot('Loading dark web monitoring state', undefined, scope.tenantId),
+            state: 'missing',
+            label: 'Dark web stream loading',
+            detail: 'Initial content is available while live monitoring state loads.',
+        },
+        operationsResult: { data: null, state: 'missing', label: 'Collection loading', detail: 'Collection state is loading in the background.' },
+        alertsResult: { data: [], state: 'missing', label: 'Alerts loading', detail: 'Saved alerts are loading in the background.' },
+        deliveriesResult: { data: [], state: 'missing', label: 'Deliveries loading', detail: 'Delivery state is loading in the background.' },
+    }
 }
 
 async function loadDwmPageData(scope: DwmPageScope, headers: HeadersInit, timeouts: DwmLoadTimeouts): Promise<DwmPageData> {

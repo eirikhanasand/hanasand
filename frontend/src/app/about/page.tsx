@@ -23,7 +23,7 @@ const principles = [
     },
     {
         title: 'Alerts should be fast and usable',
-        detail: 'The goal is notification packets a security team can route, review, and act on quickly.',
+        detail: 'The goal is alerts a security team can route, review, and act on quickly.',
         icon: ShieldCheck,
     },
 ]

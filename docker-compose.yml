@@ -16,7 +16,7 @@ services:
       MAIL_JMAP_INTERNAL_URL: ${MAIL_JMAP_INTERNAL_URL:-http://stalwart:8080}
       MAIL_PUBLIC_BASE_URL: ${MAIL_PUBLIC_BASE_URL:-https://mail.hanasand.com}
       MAIL_INBOX_USERNAME: ${MAIL_INBOX_USERNAME:-eirik}
-      MAIL_INBOX_ADDRESS: ${MAIL_INBOX_ADDRESS:-eirik@hanasand.com}
+      MAIL_INBOX_ADDRESS: ${MAIL_INBOX_ADDRESS:-contact@hanasand.com}
       MAIL_INBOX_PASSWORD: ${MAIL_INBOX_PASSWORD:-}
     ports:
       - "3000:3000"
