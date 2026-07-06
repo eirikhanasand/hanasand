@@ -12,18 +12,18 @@ const dockerfile = await read('Dockerfile')
 const apiTraffic = await readFromRepo('api/src/handlers/traffic/legacy.ts')
 const apiSchema = await readFromRepo('api/src/utils/db/ensureSchema.ts')
 
-for (const heading of ['Public routes monitored', 'Alert flow observed', 'No active spikes']) {
+for (const heading of ['Data interval', 'Uptime interval', 'Current Status: Hanasand.com', 'Recent incidents']) {
     assert.match(statusClient, new RegExp(escapeRegExp(heading)), `/status should render "${heading}"`)
 }
+
+assert.match(statusClient, /const REFRESH_MS = 3000/, '/status should refresh public status every 3 seconds')
+assert.match(statusClient, /const UPTIME_WINDOW = '30 days'/, '/status should show the uptime interval')
 
 for (const rawTrafficHeading of ['Most visited subdomains', 'Top endpoints']) {
     assert.doesNotMatch(statusClient, new RegExp(escapeRegExp(rawTrafficHeading)), `/status should not expose raw traffic heading "${rawTrafficHeading}"`)
 }
 
-assert.match(statusClient, /without exposing raw traffic paths/, '/status should explain that raw traffic paths are not exposed publicly')
-
-assert.match(statusPage, /monitoringPayload\?\.top_paths/, '/status should fall back to monitoring top_paths when legacy endpoint data is empty')
-assert.match(statusPage, /monitoringPayload\?\.top_domains/, '/status should fall back to monitoring top_domains when legacy endpoint data is empty')
+assert.doesNotMatch(statusPage, /getMetrics|getDomains|getTrafficMetrics/, '/status should not fetch traffic metrics for the public page')
 assert.match(apiTraffic, /FROM traffic_events/, 'traffic compatibility endpoints should aggregate recorded traffic events')
 const summaryBody = apiTraffic.slice(
     apiTraffic.indexOf('export async function getLegacyTrafficSummary'),
