@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Clipboard, Globe2, Hourglass, Play, Plus, RotateCcw, ShieldCheck, Square, Trash2 } from 'lucide-react'
+import { Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, ShieldCheck, Square, Trash2 } from 'lucide-react'
 import { type KeyboardEvent, type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
@@ -221,6 +221,26 @@ export default function BrowserPageClient() {
     const pushEvent = useCallback((event: string) => {
         setEvents(current => [event, ...current].slice(0, 8))
     }, [])
+
+    const exportReport = useCallback(() => {
+        const blob = new Blob([JSON.stringify(buildExportReport({
+            target: normalizedTarget,
+            activeUrl,
+            sessionState,
+            socketState,
+            profile: selectedProfile,
+            summary,
+            captures,
+            events,
+            capacity,
+        }), null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `browser-sandbox-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+        link.click()
+        URL.revokeObjectURL(url)
+    }, [activeUrl, capacity, captures, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
 
     useEffect(() => {
         let cancelled = false
@@ -690,6 +710,10 @@ export default function BrowserPageClient() {
                             <StatusPill label='Run' value={sessionStateLabel(sessionState)} good={sessionState === 'live'} />
                             {sessionState !== 'ended' ? <StatusPill label='Connection' value={socketStateLabel(socketState)} good={socketState === 'open'} /> : null}
                             {capacity ? <StatusPill label='Capacity' value={capacity.queuePosition ? `${capacity.queuePosition}/${capacity.queuedSessions} queued` : `${capacity.activeSessions}/${capacity.maxSessions} active`} good={!capacity.queuePosition} /> : null}
+                            <button type='button' onClick={exportReport} disabled={!captures.length} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary disabled:cursor-not-allowed disabled:opacity-50'>
+                                <Download className='h-4 w-4' />
+                                Export
+                            </button>
                             <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
                                 <Square className='h-4 w-4' />
                                 Stop
@@ -1470,6 +1494,53 @@ function networkPeerLabel(request: NonNullable<SandboxNetworkSummary['recentRequ
         request.protocol || '',
         request.tlsIssuer || '',
     ].filter(Boolean).join(' · ')
+}
+
+function buildExportReport(input: {
+    target: string
+    activeUrl: string
+    sessionState: SessionState
+    socketState: SocketState
+    profile: SandboxProfile
+    summary: ReturnType<typeof buildAnalystSummary>
+    captures: Capture[]
+    events: string[]
+    capacity: SandboxCapacity | null
+}) {
+    return {
+        exportedAt: new Date().toISOString(),
+        target: input.target,
+        finalUrl: input.activeUrl || input.summary.urlTimeline[0]?.url || input.target,
+        status: {
+            run: input.sessionState,
+            connection: input.socketState,
+            capacity: input.capacity,
+        },
+        profile: input.profile,
+        analystSummary: {
+            narrative: input.summary.narrative,
+            brief: input.summary.brief,
+            rows: input.summary.rows,
+            indicators: input.summary.indicators,
+            threatAssociations: input.summary.threatAssociations,
+            urlTimeline: input.summary.urlTimeline,
+        },
+        captures: input.captures.map(capture => ({
+            kind: capture.kind,
+            label: capture.label,
+            url: capture.url,
+            title: capture.title,
+            capturedAt: capture.capturedAt,
+            reason: capture.reason,
+            error: capture.error,
+            image: capture.image,
+            evidence: capture.evidence,
+            networkSummary: capture.networkSummary,
+            toolAnalysis: capture.toolAnalysis,
+            webcrackLoad: capture.webcrackLoad,
+        })),
+        events: input.events,
+    }
 }
 
 function isUsefulFrameImage(image: string) {
