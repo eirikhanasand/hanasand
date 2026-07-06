@@ -144,7 +144,7 @@ assert(pageFrames.some(payload => payload.url?.endsWith('/start')), 'captures in
 assert(pageFrames.some(payload => payload.url?.endsWith('/final')), 'captures final URL after redirect')
 assert(pageFrames.some(payload => (payload.image || '').length > 1000), 'captures non-empty screenshots')
 
-const initialEvidence = pageFrames.find(payload => payload.url?.endsWith('/start'))?.evidence
+const initialEvidence = pageFrames.find(payload => payload.url?.endsWith('/start') && payload.evidence?.obfuscatedScripts?.length)?.evidence
 assert(initialEvidence?.obfuscatedScripts?.length, 'extracts obfuscated script candidates')
 assert(initialEvidence?.deobfuscationTasks?.some(task => task.assessment === 'suspicious'), 'summarizes suspicious decoded script')
 assert(initialEvidence?.deobfuscationTasks?.some(task => task.indicators?.domains?.includes(payloadDomain)), 'decoded script exposes second-stage domain')
