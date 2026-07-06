@@ -217,6 +217,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let cachedDeobfuscationTasks: SandboxDeobfuscationTask[] = []
     let cachedThreatAssociations: ReturnType<typeof extractThreatAssociations> = []
     let cachedIndicators: ReturnType<typeof extractIndicators> | null = null
+    let documentEvidencePromises: Promise<void>[] = []
 
     const send = (payload: Record<string, unknown>) => {
         if (connection.readyState === connection.OPEN) {
@@ -340,6 +341,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         cachedDeobfuscationTasks = []
         cachedThreatAssociations = []
         cachedIndicators = null
+        documentEvidencePromises = []
         const target = normalizeTarget(message.target || DEFAULT_TARGET)
         const network = message.network === 'regular' || message.network === 'tor' ? message.network : defaultNetwork
         const proxy = network === 'tor' ? process.env.ONION_SESSION_PROXY || process.env.TOR_SOCKS_PROXY || '' : ''
@@ -450,9 +452,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     at: new Date().toISOString(),
                 })
                 if (response.request().resourceType() === 'document' && /html/i.test(response.headers()['content-type'] || '')) {
-                    void response.text()
-                        .then(body => rememberDocumentEvidence(body))
-                        .catch(() => undefined)
+                    queueDocumentEvidence(response.text())
                 }
             })
             page.on('requestfailed', (request) => {
@@ -517,6 +517,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 .catch(() => undefined)
             const initialPage = page
             void (async () => {
+                await Promise.allSettled(documentEvidencePromises)
                 const evidence = initialPage ? await collectPageEvidence(initialPage).catch(() => null) : null
                 rememberDeobfuscationTasks(evidence)
                 await captureProfileTools(context, message.profileTools || [], target, evidence?.deobfuscationTasks?.length ? evidence.deobfuscationTasks : cachedDeobfuscationTasks)
@@ -646,9 +647,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             return null
         })
         if (response && /html/i.test(response.headers()['content-type'] || '')) {
-            await response.text()
-                .then(body => rememberDocumentEvidence(body))
-                .catch(() => undefined)
+            await queueDocumentEvidence(response.text())
         }
         void sendFrame(true)
     }
@@ -816,6 +815,15 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         cachedIndicators = extractIndicators(renderedText)
         const associations = extractThreatAssociations(renderedText, 'rendered_page')
         if (associations.length) cachedThreatAssociations = associations
+    }
+
+    function queueDocumentEvidence(body: Promise<string>) {
+        const pending = body.then(html => rememberDocumentEvidence(html)).catch(() => undefined)
+        documentEvidencePromises.push(pending)
+        void pending.finally(() => {
+            documentEvidencePromises = documentEvidencePromises.filter(item => item !== pending)
+        })
+        return pending
     }
 }
 
