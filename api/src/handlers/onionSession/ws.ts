@@ -569,7 +569,12 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 navigationError ||= actionError
                 const providerText = officialProviderKind(preparedUrl) ? await waitForProviderData(tool, providerBodies) : providerBodies()
                 if (providerText && hasParsedProviderData(tool, providerText)) navigationError = ''
-                await toolPage.waitForTimeout(1200).catch(() => undefined)
+                const webcrackTool = isWebCrackTool(tool, toolUrl)
+                let webcrackLoad: WebCrackLoadResult | undefined
+                if (webcrackTool) {
+                    webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, deobfuscationTasks), 2500, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
+                }
+                await toolPage.waitForTimeout(webcrackLoad?.loaded ? 150 : 1200).catch(() => undefined)
                 const initialEvidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 900, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies())
                 const initialImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 900 }), 900, null)
                 const initialAnalysis = analyzeToolEvidence(tool.name || toolUrl, initialEvidence)
@@ -584,12 +589,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         ],
                     }
                     : initialAnalysis
-                let webcrackLoad: WebCrackLoadResult | undefined
-                if (isWebCrackTool(tool, toolUrl)) {
-                    webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, deobfuscationTasks), 2500, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
-                    if (webcrackLoad.loaded) {
-                        await toolPage.waitForTimeout(150).catch(() => undefined)
-                    }
+                if (webcrackTool) {
                     image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 500 }), 500, image)
                     evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 500, evidence), providerBodies())
                     toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
