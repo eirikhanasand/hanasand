@@ -124,7 +124,7 @@ export default function ActivityClient({ initialQueue }: Props) {
                         </button>
                         <Link href='/dashboard/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-text px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
                             <ShieldCheck className='h-4 w-4' />
-                            Review queue
+                            Dark web cases
                         </Link>
                     </div>
                 </div>
