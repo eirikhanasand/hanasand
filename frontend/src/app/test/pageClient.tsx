@@ -1,61 +1,37 @@
 'use client'
 
 import ErrorNotice from '@/components/error/errorNotice'
-import RecentScans from '@/components/test/recentScans'
 import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import copy from '@/utils/copy'
 import { fetchRecentTests } from '@/utils/test/fetchRecentTests'
 import { postTest } from '@/utils/test/postTest'
-import { ArrowLeft, ArrowRight, BarChart3, CheckCircle2, Copy, Flame, Gauge, Globe2, Search, Timer } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BarChart3, CheckCircle2, Copy, Flame, Gauge, Globe2, Inbox, Search, Timer, UserRound } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, KeyboardEvent, useEffect, useState } from 'react'
 
 const freeTryLimit = 5
 const freeTryStorageKey = 'hanasand:load-testing-free-tries-v2'
 const scenarioPresets = [
-    {
-        id: 'baseline',
-        label: 'Baseline',
-        detail: 'Single-user HTTP check for release confidence.',
-        stages: [{ duration: '30s', target: 1 }],
-        timeout: 30000,
-    },
-    {
-        id: 'ramp',
-        label: 'Ramp',
-        detail: 'Gradual traffic increase for capacity smoke tests.',
-        stages: [{ duration: '30s', target: 5 }, { duration: '1m', target: 20 }, { duration: '30s', target: 0 }],
-        timeout: 45000,
-    },
-    {
-        id: 'spike',
-        label: 'Spike',
-        detail: 'Short burst to expose timeout and error behavior.',
-        stages: [{ duration: '15s', target: 5 }, { duration: '20s', target: 40 }, { duration: '25s', target: 0 }],
-        timeout: 60000,
-    },
+    { id: 'baseline', label: 'Baseline', detail: 'Single-user HTTP check.', stages: [{ duration: '30s', target: 1 }], timeout: 30000 },
+    { id: 'ramp', label: 'Ramp', detail: 'Gradual traffic increase.', stages: [{ duration: '30s', target: 5 }, { duration: '1m', target: 20 }, { duration: '30s', target: 0 }], timeout: 45000 },
+    { id: 'spike', label: 'Spike', detail: 'Short timeout burst.', stages: [{ duration: '15s', target: 5 }, { duration: '20s', target: 40 }, { duration: '25s', target: 0 }], timeout: 60000 },
 ]
 
 export default function TestPageClient({ serverId, created, missingTestId }: { serverId?: string, created?: string, missingTestId?: string }) {
     const router = useRouter()
     const [path, setPath] = useState('')
     const [recentScans, setRecentScans] = useState<Test[]>([])
-    const [myScans, setMyScans] = useState<Test[]>([])
     const [freeTriesUsed, setFreeTriesUsed] = useState(0)
     const [loadTestQuota, setLoadTestQuota] = useState<LoadTestQuota | null>(null)
     const [scenarioId, setScenarioId] = useState(scenarioPresets[0].id)
     const selectedScenario = scenarioPresets.find((scenario) => scenario.id === scenarioId) ?? scenarioPresets[0]
-    const isValidLink =
-        (path.includes('http://') && path.includes('.') && path.length >= 10)
-        || (path.includes('https://') && path.includes('.') && path.length >= 11)
     const fullUrl = `${config.url.link}/${serverId}`
     const remainingChecks = loadTestQuota?.remaining ?? Math.max(0, freeTryLimit - freeTriesUsed)
     const quotaLabel = loadTestQuota && loadTestQuota.plan !== 'free'
         ? `${remainingChecks} ${loadTestQuota.plan} check${remainingChecks === 1 ? '' : 's'} remaining this month`
         : `${remainingChecks} free check${remainingChecks === 1 ? '' : 's'} remaining`
-    const recentChecks = dedupeScans([...myScans, ...recentScans]).slice(0, 3)
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
         initialState: false,
@@ -65,22 +41,9 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
 
     useEffect(() => {
         let active = true
-
-        async function loadScans() {
-            const [recent, mine] = await Promise.all([
-                fetchRecentTests('recent'),
-                fetchRecentTests('mine')
-            ])
-
-            if (!active) {
-                return
-            }
-
-            setRecentScans(recent)
-            setMyScans(mine)
-        }
-
-        loadScans()
+        fetchRecentTests('recent').then((recent) => {
+            if (active) setRecentScans(recent)
+        })
         return () => {
             active = false
         }
@@ -92,31 +55,41 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         e.preventDefault()
-        if (!isValidLink) {
+        await startCheck()
+    }
+
+    async function handleEndpointKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+        if (e.key !== 'Enter') return
+        e.preventDefault()
+        await startCheck()
+    }
+
+    async function startCheck() {
+        setError(null)
+
+        const url = normalizeEndpoint(path)
+        if (!isValidEndpoint(url)) {
+            setError('Enter a full HTTP or HTTPS endpoint you control.')
             return
         }
-        const result = await postTest({ url: path, timeout: selectedScenario.timeout, stages: selectedScenario.stages })
+
+        const result = await postTest({ url, timeout: selectedScenario.timeout, stages: selectedScenario.stages })
         if (!result.ok) {
             if (result.quota) {
                 setLoadTestQuota(result.quota)
-                if (result.quota.plan === 'free') {
-                    setFreeTriesUsed(Math.min(freeTryLimit, result.quota.used))
-                }
+                if (result.quota.plan === 'free') setFreeTriesUsed(Math.min(freeTryLimit, result.quota.used))
             }
-            return setError(result.error)
+            setError(result.error)
+            return
         }
 
-        if (result.test.id) {
-            if (result.test.quota) {
-                setLoadTestQuota(result.test.quota)
-                if (result.test.quota.plan === 'free') {
-                    setFreeTriesUsed(Math.min(freeTryLimit, result.test.quota.used))
-                }
-            } else {
-                setFreeTriesUsed(incrementFreeTriesUsed())
-            }
-            router.push(`/test/${result.test.id}`)
+        if (result.test.quota) {
+            setLoadTestQuota(result.test.quota)
+            if (result.test.quota.plan === 'free') setFreeTriesUsed(Math.min(freeTryLimit, result.test.quota.used))
+        } else {
+            setFreeTriesUsed(incrementFreeTriesUsed())
         }
+        if (result.test.id) router.push(`/test/${result.test.id}`)
     }
 
     if (created) {
@@ -136,11 +109,7 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
                         <Copy height={15} width={15} className={`shrink-0 ${didCopy === true ? 'stroke-ui-success' : didCopy === false ? 'stroke-ui-muted' : 'stroke-ui-danger'}`} />
                         <span className='min-w-0 break-all text-sm text-ui-text'>{fullUrl}</span>
                     </button>
-                    <button
-                        type='button'
-                        onClick={() => router.push('/test')}
-                        className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'
-                    >
+                    <button type='button' onClick={() => router.push('/test')} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
                         <ArrowLeft className='h-4 w-4' />
                         New check
                     </button>
@@ -150,17 +119,24 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
     }
 
     return (
-        <div className='grid h-full min-h-0 w-full min-w-0 grid-rows-[minmax(21rem,auto)_minmax(0,1fr)] gap-4'>
-            <section className='grid place-items-center'>
-                <div className='grid w-full max-w-3xl gap-5 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm md:p-6'>
+        <>
+            <div className='grid gap-4'>
+                <p className='text-sm font-semibold uppercase text-ui-primary'>Endpoint check</p>
+                <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>Check a service before users do.</h1>
+                <p className='max-w-xl text-base leading-7 text-ui-muted'>
+                    Run an owned HTTP endpoint through a measured scenario with latency, failure-rate, logs, and a shareable result link.
+                </p>
+            </div>
+
+            <section className='rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm md:p-6'>
+                <div className='grid gap-4'>
                     <div className='flex items-start justify-between gap-4'>
                         <div className='grid gap-1'>
-                            <div className='flex items-center gap-2 text-sm font-semibold uppercase text-ui-primary'>
+                            <div className='flex items-center gap-2 text-lg font-semibold text-ui-text'>
                                 <Flame className='h-5 w-5 text-ui-primary' />
-                                Endpoint check
+                                Start endpoint check
                             </div>
-                            <h1 className='text-3xl font-semibold tracking-normal text-ui-text md:text-4xl'>Check a service before users do</h1>
-                            <p className='max-w-2xl text-sm leading-6 text-ui-muted'>Run an owned HTTP endpoint through a measured scenario with latency, failure-rate, logs, and a shareable evidence report.</p>
+                            <p className='text-sm leading-6 text-ui-muted'>Paste an HTTP endpoint and choose the traffic shape.</p>
                         </div>
                         <span className='rounded-lg border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-primary'>{quotaLabel}</span>
                     </div>
@@ -177,6 +153,7 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
                                     className='h-11 w-full rounded-lg border border-ui-border bg-ui-raised pl-10 pr-3 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
                                     placeholder='https://api.example.com/health'
                                     onChange={(e) => setPath(e.target.value)}
+                                    onKeyDown={(e) => void handleEndpointKeyDown(e)}
                                     value={path}
                                     required
                                 />
@@ -185,7 +162,7 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
 
                         <div className='grid gap-2'>
                             <span className='text-xs font-semibold uppercase text-ui-primary'>Traffic shape</span>
-                            <div className='grid grid-cols-3 gap-2'>
+                            <div className='grid gap-2 sm:grid-cols-3'>
                                 {scenarioPresets.map((scenario) => (
                                     <button
                                         key={scenario.id}
@@ -209,35 +186,29 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
                             <CompactFact icon={<BarChart3 className='h-3.5 w-3.5' />} label='logs and result link' />
                         </div>
 
-                        <button
-                            type='submit'
-                            disabled={!isValidLink}
-                            className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:bg-ui-primary/90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
-                        >
+                        <button type='submit' className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:bg-ui-primary/90'>
                             <Search className='h-4 w-4' />
                             Start check
                         </button>
                     </form>
 
-                    <div className='flex items-center justify-between gap-3 border-t border-ui-border pt-4'>
-                        <p className='text-xs leading-5 text-ui-muted'>Only run checks against endpoints you own or have permission to test.</p>
-                        <button
-                            type='button'
-                            onClick={() => router.push('/test/stats')}
-                            className='inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'
-                        >
-                            Results
-                            <ArrowRight className='h-4 w-4' />
-                        </button>
+                    <div className='flex flex-wrap items-center justify-between gap-3 border-t border-ui-border pt-3'>
+                        <h2 className='text-sm font-semibold text-ui-text'>Recent checks</h2>
+                        <div className='flex flex-wrap gap-2'>
+                            <button type='button' onClick={() => router.push('/test/stats?scope=mine')} className='inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>
+                                <UserRound className='h-4 w-4' />
+                                My checks
+                            </button>
+                            <button type='button' onClick={() => router.push('/test/stats')} className='inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>
+                                Results
+                                <ArrowRight className='h-4 w-4' />
+                            </button>
+                        </div>
                     </div>
+                    <RecentChecks scans={recentScans} />
                 </div>
             </section>
-
-            <section className='grid min-h-0 gap-4 lg:grid-cols-2'>
-                <RecentScans title='My service checks' readyMessage='No personal checks yet.' scans={myScans.length ? myScans : recentChecks} mine surface='default' className='min-h-0' listClassName='max-h-80' />
-                <RecentScans title='Service-wide checks' readyMessage='Service-wide check history is updating.' scans={recentScans} surface='default' className='min-h-0' listClassName='max-h-80' />
-            </section>
-        </div>
+        </>
     )
 }
 
@@ -250,15 +221,52 @@ function CompactFact({ icon, label }: { icon: ReactNode, label: string }) {
     )
 }
 
-function dedupeScans(scans: Test[]) {
-    const seen = new Set<string>()
-    return scans
-        .filter((scan) => {
-            if (seen.has(scan.id)) return false
-            seen.add(scan.id)
-            return true
-        })
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+function RecentChecks({ scans }: { scans: Test[] }) {
+    if (!scans.length) {
+        return (
+            <div className='grid min-h-24 place-items-center rounded-lg border border-dashed border-ui-border bg-ui-raised p-4 text-center text-sm text-ui-muted'>
+                <div>
+                    <div className='mx-auto grid h-9 w-9 place-items-center rounded-lg border border-ui-border bg-ui-panel text-ui-primary'>
+                        <Inbox className='h-4 w-4' />
+                    </div>
+                    <p className='mt-2 font-semibold text-ui-text'>Recent check history is updating.</p>
+                    <p className='mt-1 text-xs'>New public run summaries stream here automatically.</p>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className='grid max-h-48 gap-2 overflow-y-auto pr-1'>
+            {scans.slice(0, 4).map(scan => (
+                <button
+                    key={scan.id}
+                    type='button'
+                    onClick={() => window.location.assign(`/test/${scan.id}`)}
+                    className='grid min-w-0 grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-left text-sm transition hover:border-ui-primary'
+                >
+                    <span className='min-w-0'>
+                        <span className='block truncate font-semibold text-ui-text'>{scan.url}</span>
+                        <span className='mt-0.5 block text-xs text-ui-muted'>{scan.status}</span>
+                    </span>
+                    <ArrowRight className='h-4 w-4 text-ui-muted' />
+                </button>
+            ))}
+        </div>
+    )
+}
+
+function normalizeEndpoint(value: string) {
+    return value.trim()
+}
+
+function isValidEndpoint(value: string) {
+    try {
+        const url = new URL(value)
+        return (url.protocol === 'http:' || url.protocol === 'https:') && Boolean(url.hostname)
+    } catch {
+        return false
+    }
 }
 
 function readFreeTriesUsed() {

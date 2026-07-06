@@ -19,8 +19,8 @@ export default async function Page({
     const id = Array.isArray(params.id) ? params.id[0] : params.id
 
     return (
-        <main className='grid min-h-[calc(100vh-4.5rem)] w-full bg-ui-canvas px-4 py-6 text-ui-text md:px-8'>
-            <div className='mx-auto grid h-full w-full max-w-6xl'>
+        <main className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-ui-canvas px-4 py-10 text-ui-text md:px-10'>
+            <div className='grid w-full max-w-5xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center'>
                 <LinkPageClient serverId={id} created={created} missingTestId={params.null ? id : undefined} />
             </div>
         </main>

@@ -53,7 +53,7 @@ const utilitySolutions = [
     {
         title: 'Endpoint Checks',
         eyebrow: 'Separate utility',
-        detail: 'Run permitted checks against URLs you control. This is a service-checking utility, separate from company exposure monitoring.',
+        detail: 'Run checks against URLs you control. This is a service-checking utility, separate from company exposure monitoring.',
         href: '/test',
         icon: Gauge,
         points: ['5 checks before payment', 'Starter and team tiers', 'Shareable result links'],
