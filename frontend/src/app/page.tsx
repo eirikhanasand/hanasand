@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { headers } from 'next/headers'
 import { ArrowRight, Building2, ChevronRight, ExternalLink, Search, ShieldCheck, Waypoints } from 'lucide-react'
 import LogoutClient from '@/components/logout/logoutClient'
 import Marquee from '@/components/shared/marquee'
+import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
 import { buildRouteMetadata } from './seo'
 import HomeExposureQueueClient from './homeExposureQueueClient'
 
@@ -176,9 +176,8 @@ export default async function Page({
 }) {
     const params = await searchParams
     const logout = Boolean(firstParam(params.logout)) || false
-    const Headers = await headers()
     const generatedAt = new Date().toISOString()
-    const exposureQueue = await loadExposureQueue(Headers) || emptyExposureQueue(generatedAt)
+    const exposureQueue = await loadExposureQueue() || emptyExposureQueue(generatedAt)
 
     return (
         <main className='min-h-full bg-transparent text-ui-text'>
@@ -423,21 +422,17 @@ function HomeOperatorPaths() {
     )
 }
 
-async function loadExposureQueue(requestHeaders: Headers): Promise<ExposureQueue | null> {
-    const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host')
-    if (!host) return null
-    const proto = requestHeaders.get('x-forwarded-proto') || 'http'
-    const target = new URL('/api/dwm/exposure-queue', `${proto}://${host}`)
+async function loadExposureQueue(): Promise<ExposureQueue | null> {
+    const target = new URL('/v1/dwm/exposure-queue', tiScraperApiBase())
     target.searchParams.set('limit', '10')
     target.searchParams.set('offset', '0')
 
     try {
         const response = await fetch(target, {
             cache: 'no-store',
-            headers: forwardedHeaders(requestHeaders),
             signal: AbortSignal.timeout(3500),
         })
-        if (!response.ok && response.status !== 202) return null
+        if (!response.ok) return null
         return normalizeExposureQueue(await response.json())
     } catch {
         return null
@@ -505,17 +500,6 @@ function emptyExposureQueue(generatedAt: string): ExposureQueue {
         page: { limit: 10, offset: 0, total: 0, nextOffset: null, hasMore: false },
         items: [],
     }
-}
-
-function forwardedHeaders(requestHeaders: Headers) {
-    const next = new Headers()
-    const cookie = requestHeaders.get('cookie')
-    if (cookie) next.set('cookie', cookie)
-    for (const name of ['authorization', 'x-tenant-id', 'x-organization-id', 'x-user-id', 'x-user-email', 'x-actor-id']) {
-        const value = requestHeaders.get(name)
-        if (value) next.set(name, value)
-    }
-    return next
 }
 
 function firstParam(value: string | string[] | undefined) {
