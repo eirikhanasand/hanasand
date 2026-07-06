@@ -28,7 +28,7 @@ test.describe('public threat actor profile', () => {
         await expect(body).toContainText('Recent activity')
         await expect(body).toContainText('Summary')
         await expect(body).toContainText('Sources')
-        await expect(body).toContainText("Malpedia's actor summary for APT29.")
+        await expect(body).toContainText('Malpedia\'s actor summary for APT29.')
 
         const actorBox = await page.locator('[data-ti-actor-info="true"]').boundingBox()
         const geoBox = await page.locator('[data-ti-map="true"]').boundingBox()
