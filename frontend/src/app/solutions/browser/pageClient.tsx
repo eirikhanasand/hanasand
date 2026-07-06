@@ -55,8 +55,10 @@ type SandboxNetworkSummary = {
     failedCount?: number
     uniqueDomainCount?: number
     domains?: string[]
+    recentRequests?: Array<{ url?: string; method?: string; resourceType?: string; status?: number; failure?: string; at?: string }>
     statusCounts?: Record<string, number>
     redirectChain?: string[]
+    downloads?: Array<{ url?: string; at?: string }>
     recentFailures?: Array<{ url?: string; failure?: string; at?: string }>
     lastUpdatedAt?: string
 }
@@ -378,7 +380,7 @@ export default function BrowserPageClient() {
         }
         socket.onclose = () => {
             setSocketState('closed')
-            setSessionState(current => current === 'connecting' ? 'ended' : current)
+            setSessionState(current => current === 'prompt' ? current : 'ended')
             pushEvent('Sandbox broker closed.')
         }
         socket.onerror = () => {
@@ -685,8 +687,8 @@ export default function BrowserPageClient() {
                             <h1 className='truncate text-lg font-semibold text-ui-text'>{activeUrl || normalizedTarget}</h1>
                         </div>
                         <div className='flex flex-wrap items-center gap-2'>
-                            <StatusPill label='Session' value={sessionState} good={sessionState === 'live'} />
-                            <StatusPill label='Broker' value={socketState} good={socketState === 'open'} />
+                            <StatusPill label='Run' value={sessionStateLabel(sessionState)} good={sessionState === 'live'} />
+                            {sessionState !== 'ended' ? <StatusPill label='Connection' value={socketStateLabel(socketState)} good={socketState === 'open'} /> : null}
                             {capacity ? <StatusPill label='Capacity' value={capacity.queuePosition ? `${capacity.queuePosition}/${capacity.queuedSessions} queued` : `${capacity.activeSessions}/${capacity.maxSessions} active`} good={!capacity.queuePosition} /> : null}
                             <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
                                 <Square className='h-4 w-4' />
@@ -1091,7 +1093,6 @@ function AnalystSummary({ summary, captures }: { summary: ReturnType<typeof buil
                                     <p className='truncate font-mono text-ui-text'>{capture.url}</p>
                                     {cleanEvidenceExcerpt(capture.evidence?.textExcerpt) ? <p className='line-clamp-3 leading-5'>{cleanEvidenceExcerpt(capture.evidence?.textExcerpt)}</p> : null}
                                     {capture.image ? <img src={capture.image} alt={`${capture.label} screenshot`} className='max-h-44 w-full rounded border border-ui-border object-contain' /> : null}
-                                    <SourceCodeDisclosure evidence={capture.evidence} />
                                 </div>
                             ))}
                         </div>
@@ -1217,9 +1218,33 @@ function EvidenceWorkspace({
 
                 <EvidencePanel title='Network / requests' status={latestNetwork ? 'Captured' : 'No network summary'}>
                     {latestNetwork ? (
-                        <div className='grid gap-1 text-xs text-ui-muted'>
+                        <div className='grid gap-2 text-xs text-ui-muted'>
                             <p>{latestNetwork.requestCount || 0} requests · {latestNetwork.responseCount || 0} responses · {latestNetwork.failedCount || 0} blocked/failed</p>
                             {latestNetwork.domains?.length ? <p className='break-all font-mono text-ui-text'>{latestNetwork.domains.slice(0, 8).join('\n')}</p> : null}
+                            {latestNetwork.redirectChain?.length ? <pre className='max-h-20 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-panel p-2 font-mono text-[11px] text-ui-text'>Redirects:{'\n'}{latestNetwork.redirectChain.join('\n')}</pre> : null}
+                            {latestNetwork.downloads?.length ? <pre className='max-h-20 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-panel p-2 font-mono text-[11px] text-ui-text'>Downloads:{'\n'}{latestNetwork.downloads.map(item => item.url || '').filter(Boolean).join('\n')}</pre> : null}
+                            {latestNetwork.recentRequests?.length ? (
+                                <div className='max-h-56 overflow-auto rounded-md border border-ui-border'>
+                                    <table className='w-full min-w-[42rem] border-collapse text-left text-[11px]'>
+                                        <thead className='sticky top-0 bg-ui-raised text-ui-muted'>
+                                            <tr>
+                                                <th className='border-b border-ui-border px-2 py-1'>Type</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>Status</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>URL</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {latestNetwork.recentRequests.slice(-30).map((request, index) => (
+                                                <tr key={`${request.at}-${request.url}-${index}`}>
+                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.resourceType || request.method || 'request'}</td>
+                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.status || request.failure || ''}</td>
+                                                    <td className='max-w-[28rem] truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-text'>{request.url}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : null}
                         </div>
                     ) : (
                         <p className='text-xs leading-5 text-ui-muted'>No request summary has been emitted by the browser broker yet.</p>
@@ -1387,6 +1412,21 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
 
 function StatusPill({ label, value, good }: { label: string; value: string; good: boolean }) {
     return <span className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold ${good ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-border bg-ui-panel text-ui-text'}`}><span className='text-ui-muted'>{label}</span>{value}</span>
+}
+
+function sessionStateLabel(state: SessionState) {
+    if (state === 'queued') return 'queued'
+    if (state === 'connecting') return 'starting'
+    if (state === 'live') return 'running'
+    if (state === 'ended') return 'closed'
+    return 'ready'
+}
+
+function socketStateLabel(state: SocketState) {
+    if (state === 'open') return 'connected'
+    if (state === 'connecting') return 'connecting'
+    if (state === 'error') return 'failed'
+    return 'closed'
 }
 
 function addCapture(current: Capture[], next: Capture) {
@@ -1668,8 +1708,47 @@ function hasParsedProviderResult(analysis?: SandboxToolAnalysis) {
 
 function extractIndicators(value: string) {
     const domains = value.match(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi) || []
-    const ips = value.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) || []
-    return Array.from(new Set([...domains, ...ips].map(item => item.toLowerCase()))).slice(0, 80)
+    const ips = (value.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) || [])
+        .filter(ip => ip.split('.').every(part => Number(part) >= 0 && Number(part) <= 255))
+    const urls = value.match(/https?:\/\/[^\s"'<>]+/gi) || []
+    return Array.from(new Set([
+        ...urls.filter(isUsefulUrlIndicator),
+        ...domains.filter(isUsefulDomainIndicator),
+        ...ips,
+    ].map(item => item.toLowerCase()))).slice(0, 80)
+}
+
+const GENERIC_DOTTED_INDICATORS = new Set([
+    'document.createelement',
+    'document.body',
+    'document.head',
+    'document.cookie',
+    'document.location',
+    'window.location',
+    'window.history',
+    'object.assign',
+    'object.create',
+    'json.parse',
+    'json.stringify',
+    'console.log',
+    'el.style',
+    'el.textcontent',
+    'element.style',
+])
+
+function isUsefulDomainIndicator(value: string) {
+    const normalized = value.toLowerCase()
+    if (GENERIC_DOTTED_INDICATORS.has(normalized)) return false
+    return !/^(?:document|window|object|array|string|number|console|json|math|element|el|node|event|navigator|location|history|localstorage|sessionstorage)\./i.test(normalized)
+}
+
+function isUsefulUrlIndicator(value: string) {
+    try {
+        const url = new URL(value)
+        return isUsefulDomainIndicator(url.hostname)
+    } catch {
+        return false
+    }
 }
 
 function parsePayload(value: string) {

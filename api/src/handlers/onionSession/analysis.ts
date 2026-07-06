@@ -174,9 +174,9 @@ export function extractIndicators(value: string) {
         .filter(ip => ip.split('.').every(part => Number(part) >= 0 && Number(part) <= 255))
     const urls = value.match(/https?:\/\/[^\s"'<>]+/gi) || []
     return {
-        domains: Array.from(new Set(domains.map(item => item.toLowerCase()))).slice(0, 80),
+        domains: Array.from(new Set(domains.map(item => item.toLowerCase()).filter(isUsefulDomainIndicator))).slice(0, 80),
         ips: Array.from(new Set(ips)).slice(0, 80),
-        urls: Array.from(new Set(urls)).slice(0, 80),
+        urls: Array.from(new Set(urls.filter(isUsefulUrlIndicator))).slice(0, 80),
     }
 }
 
@@ -192,6 +192,7 @@ export function extractThreatAssociations(value: string, source: SandboxThreatAs
             : source === 'tool_context'
                 ? 'medium'
                 : 'low'
+        if (source === 'rendered_page' && confidence === 'low') continue
         found.push({
             name: term.name,
             category: term.category,
@@ -207,6 +208,38 @@ export function extractThreatAssociations(value: string, source: SandboxThreatAs
         seen.add(key)
         return true
     }).slice(0, 12)
+}
+
+const GENERIC_DOTTED_IDENTIFIERS = new Set([
+    'document.createelement',
+    'document.body',
+    'document.head',
+    'document.cookie',
+    'document.location',
+    'window.location',
+    'window.history',
+    'object.assign',
+    'object.create',
+    'json.parse',
+    'json.stringify',
+    'console.log',
+    'el.style',
+    'el.textcontent',
+    'element.style',
+])
+
+function isUsefulDomainIndicator(value: string) {
+    if (GENERIC_DOTTED_IDENTIFIERS.has(value)) return false
+    if (/^(?:document|window|object|array|string|number|console|json|math|element|el|node|event|navigator|location|history|localstorage|sessionstorage)\./i.test(value)) return false
+    return true
+}
+
+function isUsefulUrlIndicator(value: string) {
+    try {
+        return isUsefulDomainIndicator(new URL(value).hostname.toLowerCase())
+    } catch {
+        return false
+    }
 }
 
 function evidenceWindow(value: string, index: number, length: number) {

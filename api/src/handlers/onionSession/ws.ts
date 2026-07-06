@@ -47,13 +47,7 @@ type SandboxNetworkEvent = {
     failure?: string
     at: string
 }
-type SandboxDeobfuscationTask = {
-    scriptId?: string
-    source?: string
-    sample?: string
-    decodedPreview?: string
-    summary?: string
-}
+type SandboxDeobfuscationTask = ReturnType<typeof summarizeDeobfuscationTask>
 type WebCrackLoadResult = {
     loaded: boolean
     scriptId?: string
@@ -924,6 +918,17 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
     const responses = events.filter(event => event.kind === 'response')
     const failures = events.filter(event => event.kind === 'failed' || event.kind === 'download')
     const domains = Array.from(new Set(events.map(event => domainFromUrl(event.url)).filter(Boolean))).slice(0, 80)
+    const recentRequests = events
+        .filter(event => event.kind === 'request' || event.kind === 'response' || event.kind === 'failed')
+        .slice(-60)
+        .map(event => ({
+            url: event.url,
+            method: event.method,
+            resourceType: event.resourceType,
+            status: event.status,
+            failure: event.failure,
+            at: event.at,
+        }))
     const statusCounts = responses.reduce<Record<string, number>>((current, event) => {
         const bucket = event.status ? `${Math.floor(event.status / 100)}xx` : 'unknown'
         current[bucket] = (current[bucket] || 0) + 1
@@ -940,8 +945,10 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
         failedCount: failures.length,
         uniqueDomainCount: domains.length,
         domains,
+        recentRequests,
         statusCounts,
         redirectChain,
+        downloads: events.filter(event => event.kind === 'download').slice(-20).map(event => ({ url: event.url, at: event.at })),
         recentFailures: failures.slice(-8).map(event => ({
             url: event.url,
             failure: event.failure || 'failed',
