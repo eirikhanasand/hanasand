@@ -89,9 +89,42 @@ type SandboxAdmissionRequest = {
 
 let activeBrowserSessions = 0
 const browserSessionQueue: SandboxAdmissionRequest[] = []
+let warmRegularBrowser: Promise<Browser> | null = null
 
 function allowLocalSandboxTargets() {
     return process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS === '1'
+}
+
+function chromiumLaunchOptions(proxy?: string) {
+    return {
+        headless: false,
+        executablePath: process.env.CHROMIUM_BIN || '/usr/bin/chromium-browser',
+        proxy: proxy ? { server: proxy } : undefined,
+        args: [
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--disable-blink-features=AutomationControlled',
+        ],
+    }
+}
+
+function regularBrowser() {
+    warmRegularBrowser ||= chromium.launch(chromiumLaunchOptions()).then(browser => {
+        browser.on('disconnected', () => {
+            warmRegularBrowser = null
+        })
+        return browser
+    }).catch(error => {
+        warmRegularBrowser = null
+        throw error
+    })
+    return warmRegularBrowser
+}
+
+if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_PREWARM !== '0') {
+    setTimeout(() => void regularBrowser().catch(() => undefined), 1000).unref()
 }
 
 function browserMaxSessions() {
@@ -203,7 +236,9 @@ function broadcastBrowserQueuePositions() {
 
 export function handleOnionSessionSocket(connection: WebSocket, sessionId: string, defaultNetwork: 'tor' | 'regular' = 'tor') {
     let browser: Browser | null = null
+    let context: BrowserContext | null = null
     let page: Page | null = null
+    let ownsBrowser = false
     let frameTimer: NodeJS.Timeout | null = null
     let closeTimer: NodeJS.Timeout | null = null
     let cancelAdmission: (() => void) | null = null
@@ -245,9 +280,12 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         cachedDeobfuscationTasks = []
         cachedThreatAssociations = []
         cachedIndicators = null
-        await browser?.close().catch(() => undefined)
+        await context?.close().catch(() => undefined)
+        if (ownsBrowser) await browser?.close().catch(() => undefined)
+        context = null
         browser = null
         page = null
+        ownsBrowser = false
     }
 
     connection.on('message', (message) => {
@@ -395,19 +433,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     : proxy ? 'Launching isolated browser through configured Tor proxy.' : 'Launching isolated browser without Tor proxy; configure ONION_SESSION_PROXY or TOR_SOCKS_PROXY for onion routing.',
             })
 
-            browser = await chromium.launch({
-                headless: false,
-                executablePath: process.env.CHROMIUM_BIN || '/usr/bin/chromium-browser',
-                proxy: proxy ? { server: proxy } : undefined,
-                args: [
-                    '--no-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--no-first-run',
-                    '--no-default-browser-check',
-                    '--disable-blink-features=AutomationControlled',
-                ],
-            })
-            const context = await browser.newContext({
+            ownsBrowser = Boolean(proxy || network !== 'regular')
+            browser = ownsBrowser ? await chromium.launch(chromiumLaunchOptions(proxy)) : await regularBrowser()
+            context = await browser.newContext({
                 viewport: {
                     width: clampNumber(message.width, 640, 2400, DEFAULT_WIDTH),
                     height: clampNumber(message.height, 420, 1600, DEFAULT_HEIGHT),
@@ -577,6 +605,22 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await dismissCookieOverlays(toolPage).catch(() => undefined)
                 const actionError = await interactWithProvider(toolPage, tool, target)
                 navigationError ||= actionError
+                const openedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 56, animations: 'disabled', timeout: 800 }), 800, null)
+                const openedEvidence = providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target)
+                send({
+                    type: 'tool_capture',
+                    sessionId,
+                    id: tool.id || safeToolId(tool.name || toolUrl),
+                    name: tool.name || toolUrl,
+                    url: toolPage.url() || preparedUrl,
+                    title: await toolPage.title().catch(() => ''),
+                    capturedAt: startedAt,
+                    image: openedImage ? openedImage.toString('base64') : null,
+                    evidence: openedEvidence,
+                    toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, openedEvidence),
+                    target,
+                    error: navigationError || 'Provider tab opened; verdict parsing is still running.',
+                })
                 const providerText = officialProviderKind(preparedUrl) ? await waitForProviderData(tool, toolPage, providerBodies) : providerBodies()
                 if (providerText && hasParsedProviderData(tool, providerText)) navigationError = ''
                 const webcrackTool = isWebCrackTool(tool, toolUrl)
@@ -1729,6 +1773,8 @@ function providerPendingEvidence(url: string, toolName: string, target: string):
         url,
         textExcerpt: `${toolName} provider capture queued for ${target}. Parsed provider result is pending or blocked by provider navigation.`,
         indicators: extractIndicators(`${url}\n${target}`),
+        sourceCode: '',
+        sourceUrls: [],
         comments: [],
         forms: [],
         scripts: [],

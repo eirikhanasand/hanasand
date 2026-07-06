@@ -167,6 +167,11 @@ function brokerUrlForSession(baseUrl: string, id: string) {
     return `${baseUrl.replace(/\/$/, '')}/${encodeURIComponent(id)}`
 }
 
+function resolveToolUrl(template: string, target: string) {
+    if (!target) return template
+    return template.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
+}
+
 function browserViewportSize(element: HTMLElement | null) {
     const rect = element?.getBoundingClientRect()
     if (!rect?.width || !rect.height) return null
@@ -209,7 +214,7 @@ export default function BrowserPageClient() {
     const activeTool = useMemo(() => selectedProfile.tools.find(tool => tool.id === activeSandboxTab), [activeSandboxTab, selectedProfile.tools])
     const activeToolCapture = activeTool ? toolCaptures.find(capture => matchesTool(capture, activeTool)) : undefined
     const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage
-    const activeViewportUrl = activeTool ? activeToolCapture?.url || activeTool.url : activeUrl || normalizedTarget
+    const activeViewportUrl = activeTool ? activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : activeUrl || normalizedTarget
 
     const pushEvent = useCallback((event: string) => {
         setEvents(current => [event, ...current].slice(0, 8))
@@ -1385,6 +1390,7 @@ function StatusPill({ label, value, good }: { label: string; value: string; good
 }
 
 function addCapture(current: Capture[], next: Capture) {
+    if (current.some(capture => capture.id === next.id)) return current.map(capture => capture.id === next.id ? next : capture)
     const last = current[0]
     if (last && last.kind === next.kind && last.url === next.url && last.image === next.image) return current
     return [next, ...current].slice(0, 24)
