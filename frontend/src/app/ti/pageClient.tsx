@@ -9080,7 +9080,7 @@ function EmptyState() {
                         {item.label}
                     </Link>
                 ))}
-                <button type='button' onClick={() => setShowSearchHelp(value => !value)} className='inline-flex h-9 items-center gap-2 rounded-full border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised' aria-expanded={showSearchHelp}>
+                <button type='button' onClick={() => setShowSearchHelp(true)} className='inline-flex h-9 items-center gap-2 rounded-full border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised' aria-haspopup='dialog'>
                     <HelpCircle className='h-4 w-4 text-ui-primary dark:text-ui-primary' />
                     Search help
                 </button>
@@ -9090,29 +9090,32 @@ function EmptyState() {
                 </Link>
             </div>
             {showSearchHelp ? (
-                <div className='grid w-full max-w-3xl gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 text-left shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                    <div className='flex items-start justify-between gap-3'>
-                        <div>
-                            <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Start with a company or domain.</h2>
-                            <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-                                Search by actor, company, domain, CVE, or malware name to see what was reported, where it appeared, which sources support it, and what to do next.
-                            </p>
-                        </div>
-                        <button type='button' onClick={() => setShowSearchHelp(false)} className='grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:border-ui-primary hover:text-ui-primary' aria-label='Close search help'>
-                            <XCircle className='h-4 w-4' />
-                        </button>
-                    </div>
-                    <div className='grid gap-2 sm:grid-cols-2'>
-                        {outcomeItems.map(([title, detail]) => (
-                            <div key={title} className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
-                                <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>{title}</p>
-                                <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{detail}</p>
+                <div className='fixed inset-0 z-[1100] grid place-items-center bg-black/45 px-4 py-6' role='dialog' aria-modal='true' aria-labelledby='ti-search-help-title'>
+                    <div className='absolute inset-0' onClick={() => setShowSearchHelp(false)} aria-hidden='true' />
+                    <div className='relative grid w-full max-w-2xl gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 text-left shadow-2xl dark:border-ui-border dark:bg-ui-panel'>
+                        <div className='flex items-start justify-between gap-3'>
+                            <div>
+                                <h2 id='ti-search-help-title' className='text-base font-semibold text-ui-text dark:text-ui-text'>Search examples</h2>
+                                <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
+                                    Try an actor, company, domain, CVE, or malware name: Lazy Bear, APT29, LockBit, microsoft.com, CVE-2024-3094.
+                                </p>
                             </div>
-                        ))}
+                            <button type='button' onClick={() => setShowSearchHelp(false)} className='grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:border-ui-primary hover:text-ui-primary' aria-label='Close search help'>
+                                <XCircle className='h-4 w-4' />
+                            </button>
+                        </div>
+                        <div className='grid gap-2 sm:grid-cols-2'>
+                            {outcomeItems.map(([title, detail]) => (
+                                <div key={title} className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
+                                    <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>{title}</p>
+                                    <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{detail}</p>
+                                </div>
+                            ))}
+                        </div>
+                        <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
+                            Public results use reviewable metadata and sources. Customer notification, saved watchlists, and delivery destinations continue in the authenticated console.
+                        </p>
                     </div>
-                    <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-                        Public results use reviewable metadata and sources. Customer notification, saved watchlists, and delivery destinations continue in the authenticated console.
-                    </p>
                 </div>
             ) : null}
         </section>
