@@ -147,11 +147,14 @@ type ApiOverview = Omit<TiEnrichmentOverview, 'updatedActors' | 'queuedActors'> 
     pipeline?: TiPipelineOverview
 }
 
+const TI_ENRICHMENT_FETCH_TIMEOUT_MS = 800
+
 export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
     try {
         const response = await fetch(`${config.url.api}/ti/enrichment`, {
             cache: 'no-store',
             next: { revalidate: 0 },
+            signal: AbortSignal.timeout(TI_ENRICHMENT_FETCH_TIMEOUT_MS),
         })
         if (!response.ok) {
             return unavailableOverview(`API returned ${response.status}`)

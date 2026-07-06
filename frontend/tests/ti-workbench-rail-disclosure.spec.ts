@@ -7,6 +7,7 @@ const root = process.cwd()
 test('TI workbench keeps selected-case actions primary and collapses secondary rail context', async () => {
     const page = await readFile(path.join(root, 'src/app/dashboard/ti/workbench/workbenchClient.tsx'), 'utf8')
     const route = await readFile(path.join(root, 'src/app/dashboard/ti/workbench/page.tsx'), 'utf8')
+    const loading = await readFile(path.join(root, 'src/app/dashboard/ti/loading.tsx'), 'utf8')
 
     expect(page).toContain('<OperatorActionRail')
     expect(page).toContain('data-workbench-stats-disclosure')
@@ -33,6 +34,10 @@ test('TI workbench keeps selected-case actions primary and collapses secondary r
     expect(route).toContain('function workbenchCaseMatchesScope')
     expect(route).toContain('function workbenchCaseReferenceRows')
     expect(route).toContain('function scopeRefsFromHref')
+    expect(route).toContain('const WORKBENCH_FETCH_TIMEOUT_MS = 800')
+    expect(route).toContain('AbortSignal.timeout(WORKBENCH_FETCH_TIMEOUT_MS)')
+    expect(loading).toContain('Loading collection, recent attacks, actor profiles, sources, and review state.')
+    expect(loading).toContain('animate-pulse')
     expect(route).toContain('[\'alertId\', \'alert\']')
     expect(route).toContain('[\'watchlistId\', \'watchlist\']')
     expect(route).toContain('[\'organizationId\', \'organization\']')

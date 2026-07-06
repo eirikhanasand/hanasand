@@ -9,6 +9,7 @@ import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence } fr
 import { dwmAlertToWorkbenchCase } from './dwmAlertAdapter'
 
 export const dynamic = 'force-dynamic'
+const WORKBENCH_FETCH_TIMEOUT_MS = 800
 
 export default async function TiAnalystWorkbenchPage({
     searchParams,
@@ -156,7 +157,7 @@ async function loadDwmAlerts(): Promise<DwmAlert[]> {
     try {
         const target = new URL('/v1/dwm/alerts', base)
         target.searchParams.set('tenantId', 'default')
-        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(WORKBENCH_FETCH_TIMEOUT_MS) })
         if (!response.ok) return []
         const payload = await response.json() as { alerts?: DwmAlert[] }
         return payload.alerts || []
@@ -216,7 +217,7 @@ async function loadDwmCases(): Promise<WorkbenchDwmCaseListItem[]> {
     try {
         const target = new URL('/v1/cases', base)
         target.searchParams.set('tenantId', 'default')
-        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(WORKBENCH_FETCH_TIMEOUT_MS) })
         if (!response.ok) return []
         const payload = await response.json() as { cases?: WorkbenchDwmCaseListItem[] }
         return (payload.cases || []).sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
@@ -232,7 +233,7 @@ async function loadDwmDeliveries(): Promise<WorkbenchDwmDelivery[]> {
     try {
         const target = new URL('/v1/dwm/webhooks/deliveries', base)
         target.searchParams.set('tenantId', 'default')
-        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(WORKBENCH_FETCH_TIMEOUT_MS) })
         if (!response.ok) return []
         const payload = await response.json() as { deliveries?: WorkbenchDwmDelivery[] }
         return (payload.deliveries || []).sort((a, b) => String(b.attemptedAt ?? '').localeCompare(String(a.attemptedAt ?? '')))
