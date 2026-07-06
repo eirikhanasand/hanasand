@@ -1390,7 +1390,7 @@ export function providerSummaryText(providerText: string) {
 }
 
 async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, page: Page, providerText: () => string) {
-    const deadline = Date.now() + 5000
+    const deadline = Date.now() + (isVirusTotalTool(tool) ? 20_000 : 5000)
     let text = [providerText(), await collectRenderedText(page)].filter(Boolean).join('\n')
     while (Date.now() < deadline) {
         if (hasParsedProviderData(tool, text)) return text
