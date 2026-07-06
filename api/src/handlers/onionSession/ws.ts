@@ -1473,7 +1473,7 @@ async function triggerWebCrackRun(page: Page) {
 }
 
 async function collectRenderedText(page: Page) {
-    return await page.evaluate(() => {
+    const domText = await page.evaluate(() => {
         const read = (node: Node): string => {
             const parts: string[] = []
             if (node.nodeType === Node.TEXT_NODE) parts.push(node.textContent || '')
@@ -1488,6 +1488,14 @@ async function collectRenderedText(page: Page) {
         }
         return [document.body?.innerText || '', read(document.documentElement)].join(' ').replace(/\s+/g, ' ').trim()
     }).catch(() => '')
+    const accessibilityText = await page.context().newCDPSession(page)
+        .then(session => session.send('Accessibility.getFullAXTree'))
+        .then(tree => (tree.nodes || [])
+            .flatMap(node => [node.name?.value, node.value?.value, node.description?.value])
+            .filter(Boolean)
+            .join(' '))
+        .catch(() => '')
+    return [domText, accessibilityText].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
 }
 
 async function collectPageEvidence(page: Page) {
@@ -1587,6 +1595,7 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         ...(evidence.reasons || []),
     ].join('\n')
     const vendorMatch = text.match(/(\d{1,3})\s*\/\s*(\d{1,3})\s*(?:security\s*)?(?:vendors?|engines?)/i)
+        || text.match(/(\d{1,3})\s*\/\s*(\d{1,3})\s+Community Score/i)
         || text.match(/(\d{1,3})\s+(?:security\s*)?(?:vendors?|engines?)\s+(?:flagged|detected|marked)/i)
         || text.match(/(\d{1,3})\s+(?:of)\s+(\d{1,3})\s+security engines?/i)
         || text.match(/(\d{1,3})\s+out of\s+(\d{1,3})\s+engines?/i)
