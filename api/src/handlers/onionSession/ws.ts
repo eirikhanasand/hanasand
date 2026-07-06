@@ -330,8 +330,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }
 
         if (message.type === 'end') {
-            await cleanup()
             send({ type: 'ended', sessionId })
+            await cleanup()
             connection.close()
             return
         }
