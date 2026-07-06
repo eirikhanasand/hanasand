@@ -244,6 +244,7 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items).toHaveLength(1);
     expect(queueBody.items[0].actor).toBe("Akira");
     expect(queueBody.items[0].company).toBe("Refinery Hotel");
-    expect(queueBody.items[0].claimedData).toBe("15 GB");
+    expect(queueBody.items[0].claimedData).toBe("Corporate data");
+    expect(queueBody.items[0].claimedDataSize).toBe("15 GB");
   });
 });

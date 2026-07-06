@@ -131,6 +131,7 @@ type ExposureQueueItem = {
     actor: string
     company: string
     claimedData: string
+    claimedDataSize: string
     claimTime?: string
     collectedAt?: string
     status: string
@@ -448,7 +449,8 @@ function normalizeExposureQueue(value: unknown): ExposureQueue {
             id: String(item.id || `exposure-${index}`),
             actor: String(item.actor || 'Unknown actor'),
             company: String(item.company || 'Unknown company'),
-            claimedData: String(item.claimedData || 'new company mention'),
+            claimedData: String(item.claimedData || 'Not disclosed by TA'),
+            claimedDataSize: String(item.claimedDataSize || 'Not disclosed by TA'),
             claimTime: typeof item.claimTime === 'string' ? item.claimTime : undefined,
             collectedAt: typeof item.collectedAt === 'string' ? item.collectedAt : undefined,
             status: String(item.status || 'parsed'),

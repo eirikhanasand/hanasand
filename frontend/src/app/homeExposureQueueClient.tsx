@@ -8,6 +8,7 @@ type ExposureQueueItem = {
     actor: string
     company: string
     claimedData: string
+    claimedDataSize: string
     claimTime?: string
     collectedAt?: string
     status: string
@@ -142,22 +143,22 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                 </button>
             </div>
             <div className='max-h-[34rem] min-w-0 overflow-auto'>
-                <div className='min-w-[48rem]'>
-                    <div className='landing-surface-divider sticky top-0 z-10 grid grid-cols-[7rem_minmax(12rem,1fr)_10rem_11rem_5rem] gap-3 border-b border-ui-border bg-ui-panel px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted' data-home-exposure-panel-table-header='true'>
+                <div className='min-w-[50rem]'>
+                    <div className='landing-surface-divider sticky top-0 z-10 grid grid-cols-[7rem_minmax(12rem,1fr)_11rem_9rem_11rem] gap-3 border-b border-ui-border bg-ui-panel px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted' data-home-exposure-panel-table-header='true'>
                         <span>Group</span>
                         <span>Company</span>
                         <span>Data mentioned</span>
+                        <span>Size</span>
                         <span>Seen</span>
-                        <span className='text-right'>Review</span>
                     </div>
                     <div className='divide-y landing-surface-divider'>
-                        {items.length ? items.map(({ id, actor, company, claimedData, claimTime, collectedAt, status }) => (
-                            <div key={id} className='grid min-w-0 grid-cols-[7rem_minmax(12rem,1fr)_10rem_11rem_5rem] items-center gap-3 px-4 py-3 text-sm'>
+                        {items.length ? items.map(({ id, actor, company, claimedData, claimedDataSize, claimTime, collectedAt }) => (
+                            <div key={id} className='grid min-w-0 grid-cols-[7rem_minmax(12rem,1fr)_11rem_9rem_11rem] items-center gap-3 px-4 py-3 text-sm'>
                                 <Marquee text={actor} innerClassName='font-semibold text-ui-text' />
                                 <Marquee text={company} innerClassName='text-ui-text' />
                                 <Marquee text={claimedData} innerClassName='text-ui-muted' />
+                                <Marquee text={claimedDataSize} innerClassName='text-ui-muted' />
                                 <time dateTime={claimTime || collectedAt || queue.generatedAt} className='truncate whitespace-nowrap text-xs font-semibold text-ui-muted'>{formatClaimTime(claimTime || collectedAt)}</time>
-                                <span className='landing-surface-border justify-self-end whitespace-nowrap rounded-full border border-ui-border bg-ui-raised px-2 py-1 text-xs font-medium text-ui-muted'>{formatReviewStatus(status)}</span>
                             </div>
                         )) : (
                             <div className='grid min-w-0 gap-2 px-4 py-8 text-sm'>
@@ -185,7 +186,8 @@ function normalizeExposureQueue(value: unknown): ExposureQueue {
             id: String(item.id || `exposure-${index}`),
             actor: String(item.actor || 'Unknown actor'),
             company: String(item.company || 'Unknown company'),
-            claimedData: String(item.claimedData || 'new company mention'),
+            claimedData: String(item.claimedData || 'Not disclosed by TA'),
+            claimedDataSize: String(item.claimedDataSize || 'Not disclosed by TA'),
             claimTime: typeof item.claimTime === 'string' ? item.claimTime : undefined,
             collectedAt: typeof item.collectedAt === 'string' ? item.collectedAt : undefined,
             status: String(item.status || 'parsed'),
@@ -307,14 +309,6 @@ function formatClaimTime(value?: string | null) {
     const minute = String(date.getUTCMinutes()).padStart(2, '0')
     const suffix = hour24 >= 12 ? 'PM' : 'AM'
     return `${month} ${date.getUTCDate()}, ${hour}:${minute} ${suffix} UTC`
-}
-
-function formatReviewStatus(status: string) {
-    const normalized = status.replace(/[_-]+/g, ' ').trim().toLowerCase()
-    if (!normalized) return 'Review'
-    if (normalized === 'parsed') return 'Ready'
-    if (normalized === 'metadata only') return 'Needs review'
-    return normalized[0].toUpperCase() + normalized.slice(1)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

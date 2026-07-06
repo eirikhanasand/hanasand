@@ -14,6 +14,7 @@ type ExposureClaimItem = {
   company?: string;
   victimName?: string;
   claimedData?: string;
+  claimedDataSize?: string;
   claimType?: string;
   capturedAt?: string;
   publishedAt?: string;
@@ -25,6 +26,7 @@ type ParsedExposureClaim = ExposureClaimItem & {
   actor: string;
   company: string;
   claimedData: string;
+  claimedDataSize: string;
   claimTime: string;
   capturedAt: string;
   confidence: number;
@@ -229,7 +231,7 @@ function saveExposureClaim(store: any, claim: any, at: string) {
     title,
     collectedAt: claim.capturedAt || at,
     publishedAt: claimTime,
-    contentHash: hashContent(`${title}:${claim.claimedData ?? ""}:${claimTime}:${claim.url ?? ""}`),
+    contentHash: hashContent(`${title}:${claim.claimedData ?? ""}:${claim.claimedDataSize ?? ""}:${claimTime}:${claim.url ?? ""}`),
     mediaType: "text/plain",
     storageKind: "metadata_only",
     sensitive: true,
@@ -244,7 +246,8 @@ function saveExposureClaim(store: any, claim: any, at: string) {
       leakSite: {
         actorName: claim.actor,
         victimName: claim.company,
-        claimedDataCategory: claim.claimedData || "new victim claim",
+        claimedDataCategory: claim.claimedData || "Not disclosed by TA",
+        claimedDataSize: claim.claimedDataSize || "Not disclosed by TA",
         firstSeenAt: claimTime,
         claimType: claim.claimType || "ransomware_victim_publication"
       },
@@ -265,7 +268,8 @@ async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<
     ...parsed,
     actor: clean(parsed.actor || item.actor || item.sourceName || "Unknown actor"),
     company: clean(parsed.company || parsed.victimName || item.company || item.victimName || ""),
-    claimedData: clean(parsed.claimedData || item.claimedData || "new victim claim"),
+    claimedData: clean(parsed.claimedData || item.claimedData || "Not disclosed by TA"),
+    claimedDataSize: clean(parsed.claimedDataSize || item.claimedDataSize || dataSizeFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"),
     claimTime: parsed.claimTime || item.publishedAt || item.capturedAt || at,
     capturedAt: item.capturedAt || at,
     confidence,
@@ -298,12 +302,14 @@ function fallbackParse(item: ExposureClaimItem, at: string) {
     match(text, /\b(?:listed|lists|added|adds|claims?|target(?:ed|ing))\s+([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})/i) ||
     match(text, /:\s*([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})$/);
   const actor = item.actor || match(text, /^([A-Z][A-Za-z0-9_.-]{2,40})\b/) || item.sourceName || "Unknown actor";
-  const claimedData = item.claimedData || match(text, /\b(\d+(?:\.\d+)?\s*(?:GB|TB|MB)\s+(?:claimed|leaked|stolen|exfiltrated|data))/i) || "new victim claim";
+  const claimedData = meaningfulClaimedData(item.claimedData) || claimedDataFromText(text) || "Not disclosed by TA";
+  const claimedDataSize = item.claimedDataSize || dataSizeFromText(text) || "Not disclosed by TA";
   const confidence = victim && actor !== "Unknown actor" ? 0.78 : 0.58;
   return {
     actor,
     company: victim,
     claimedData,
+    claimedDataSize,
     claimTime: item.publishedAt || item.capturedAt || at,
     summary: text.slice(0, 300),
     confidence
@@ -365,7 +371,8 @@ function exposureClaimFromCapture(capture: any, source?: any) {
     sourceName: source?.name || capture.sourceId,
     actor: leak.actorName || capture.metadata?.actor || parsedTitle?.actor || "Unknown actor",
     company: leak.victimName || capture.metadata?.victimName || parsedTitle?.company || "Unknown company",
-    claimedData: leak.claimedDataCategory || claimedDataFromText(text) || "new victim claim",
+    claimedData: meaningfulClaimedData(leak.claimedDataCategory) || claimedDataFromText(text) || "Not disclosed by TA",
+    claimedDataSize: leak.claimedDataSize || leak.dataSize || dataSizeFromText(text) || "Not disclosed by TA",
     claimType: leak.claimType || "ransomware_victim_publication",
     claimTime: firstSeen,
     collectedAt: capture.collectedAt,
@@ -406,9 +413,34 @@ function stripVictimFeedPrefix(value: unknown) {
 }
 
 function claimedDataFromText(text: string) {
-  const found = text.match(/\b(\d+(?:\.\d+)?)\s*(GB|TB|MB)\b(?:\s+(claimed|leaked|stolen|exfiltrated|data))?/i);
-  if (!found) return "";
-  return clean(`${found[1]} ${found[2].toUpperCase()}${found[3] ? ` ${found[3].toLowerCase()}` : ""}`);
+  const normalized = clean(text).toLowerCase();
+  const patterns: Array<[RegExp, string]> = [
+    [/\b(usernames?\s+(?:and|&)\s+passwords?|credentials?|login\s+data|account\s+credentials?)\b/i, "Usernames and passwords"],
+    [/\b(patient|medical|healthcare|health)\s+(records?|data|files?|information)\b/i, "Patient records"],
+    [/\b(customer|client)\s+(records?|data|files?|information|database)\b/i, "Customer data"],
+    [/\b(employee|staff|hr)\s+(records?|data|files?|information)\b/i, "Employee data"],
+    [/\b(financial|banking|payment)\s+(records?|data|files?|information)\b/i, "Financial records"],
+    [/\b(source\s+code|git\s+repositories?)\b/i, "Source code"],
+    [/\b(email|mailbox|mailboxes|emails)\b/i, "Email"],
+    [/\b(invoices?|contracts?|legal\s+documents?)\b/i, "Business documents"],
+    [/\b(database|databases|sql\s+dump|db\s+dump)\b/i, "Database"],
+    [/\b(backups?|archive|archives?)\b/i, "Backups"],
+    [/\b(corporate|company)\s+data\b/i, "Corporate data"],
+    [/\b(documents?|files?)\b/i, "Documents"]
+  ];
+  return patterns.find(([pattern]) => pattern.test(normalized))?.[1] ?? "";
+}
+
+function dataSizeFromText(text: string) {
+  const found = text.match(/\b(\d+(?:\.\d+)?)\s*(GB|TB|MB)\b/i);
+  return found ? clean(`${found[1]} ${found[2].toUpperCase()}`) : "";
+}
+
+function meaningfulClaimedData(value: unknown) {
+  const cleaned = clean(value);
+  if (!cleaned || /^new (?:victim|exposure) claim$/i.test(cleaned)) return "";
+  if (/^\d+(?:\.\d+)?\s*(?:GB|TB|MB)\b/i.test(cleaned)) return "";
+  return cleaned;
 }
 
 function nextCollectionAt(at: string) {
