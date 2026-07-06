@@ -129,8 +129,8 @@ client.send(JSON.stringify({
 await waitForPayload(payloads, payload => payload.type === 'ready')
 await waitForPayload(payloads, payload => payload.type === 'frame' && Boolean(payload.image) && payload.url?.endsWith('/start'))
 await waitForPayload(payloads, payload => payload.type === 'frame' && payload.url?.endsWith('/final'), 25_000)
-await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'virustotal')
-await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery')
+await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'virustotal' && payload.toolAnalysis.vendorFlagged !== undefined)
+await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery' && payload.toolAnalysis.alertCount !== undefined)
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'webcrack')
 
 const ready = payloads.find(payload => payload.type === 'ready')
@@ -150,12 +150,12 @@ assert(initialEvidence?.deobfuscationTasks?.some(task => task.indicators?.domain
 assert(initialEvidence?.threatAssociations?.some(item => item.name === 'LockBit'), 'extracts actor/malware context from rendered evidence')
 assert(initialEvidence?.indicators?.domains?.includes('credential.example.test'), 'extracts form-action domain indicators')
 
-const vt = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'virustotal')
+const vt = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'virustotal' && payload.toolAnalysis.vendorFlagged !== undefined)
 assert.equal(vt?.toolAnalysis?.vendorFlagged, 12)
 assert.equal(vt?.toolAnalysis?.vendorTotal, 94)
 assert.equal(vt?.toolAnalysis?.communityCommentCount, 3)
 
-const urlquery = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery')
+const urlquery = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery' && payload.toolAnalysis.alertCount !== undefined)
 assert.equal(urlquery?.toolAnalysis?.alertCount, 4)
 assert.equal(urlquery?.toolAnalysis?.communityCommentCount, 2)
 
