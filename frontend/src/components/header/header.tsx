@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, Gauge, LockKeyhole, MenuIcon, Network, Radar, Search, ShieldCheck, Waypoints, X } from 'lucide-react'
+import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, Gauge, LockKeyhole, MenuIcon, Network, Radar, Search, ShieldCheck, X } from 'lucide-react'
 import Login from '@/components/login/login'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
@@ -18,8 +18,7 @@ import { useState } from 'react'
 const productItems = [
     { title: 'Organizations', detail: 'Manage members, shared watchlists, alert scope, and destinations.', href: '/organizations', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'Watch companies, vendors, domains, and brands for reviewable exposure alerts.', href: '/solutions/dwm', icon: BellRing },
-    { title: 'Threat Intelligence', detail: 'Search companies, groups, source changes, and alert context.', href: '/ti', icon: Radar },
-    { title: 'Group Overview', detail: 'Group profiles, company pivots, and review-ready timelines.', href: '/ti', icon: Waypoints },
+    { title: 'Search', detail: 'Search companies, groups, source changes, and alert context.', href: '/ti', icon: Search },
     { title: 'API and Webhooks', detail: 'Route reviewed alert fields into customer tools and analyst workflows.', href: '/developers', icon: Code2 },
 ]
 
