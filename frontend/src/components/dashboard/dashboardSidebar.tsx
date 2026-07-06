@@ -110,7 +110,7 @@ export default function DashboardSidebar({
     const sections: Section[] = [
         { title: 'Monitoring', items: productItems },
         { title: 'Threat monitoring', items: tiAdminItems },
-        { title: 'Review', items: workspaceItems },
+        { title: 'Settings', items: workspaceItems },
         { title: 'Content', items: contentItems },
         { title: 'System', items: systemItems },
         { title: 'Admin', items: adminItems },
