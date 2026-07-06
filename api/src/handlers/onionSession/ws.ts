@@ -583,7 +583,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     : initialAnalysis
                 let webcrackLoad: WebCrackLoadResult | undefined
                 if (isWebCrackTool(tool, toolUrl)) {
-                    webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, deobfuscationTasks), 1200, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
+                    webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, deobfuscationTasks), 2500, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
                     if (webcrackLoad.loaded) {
                         await toolPage.waitForTimeout(150).catch(() => undefined)
                     }
