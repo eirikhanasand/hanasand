@@ -801,6 +801,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             await page.mouse.move(clampNumber(message.x, 0, 2400, 0), clampNumber(message.y, 0, 1600, 0)).catch(() => undefined)
         }
         await page.mouse.wheel(deltaX, deltaY)
+        await page.waitForTimeout(80).catch(() => undefined)
         await sendFrame(false)
     }
 

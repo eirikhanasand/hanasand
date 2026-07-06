@@ -587,7 +587,7 @@ export default function BrowserPageClient() {
         sendBrowserInput({ type: 'click', ...point, button: 0 })
     }, [browserPoint, sendBrowserInput])
 
-    const wheelBrowserFrame = useCallback((event: WheelEvent<HTMLImageElement>) => {
+    const wheelBrowserFrame = useCallback((event: WheelEvent<HTMLDivElement>) => {
         viewportRef.current?.focus()
         const point = browserPoint(event.clientX, event.clientY)
         if (!point) return
@@ -783,28 +783,30 @@ export default function BrowserPageClient() {
                             </div>
                             <div
                                 ref={viewportRef}
-                                className='grid min-h-0 place-items-center overflow-hidden bg-ui-canvas p-2 outline-none focus:ring-2 focus:ring-ui-primary/30'
+                                className='relative min-h-0 overflow-hidden bg-ui-canvas outline-none focus:ring-2 focus:ring-ui-primary/30'
                                 tabIndex={0}
                                 role='application'
                                 aria-label='Interactive isolated browser viewport'
                                 onKeyDown={keyBrowserFrame}
+                                onWheel={activeTool ? undefined : wheelBrowserFrame}
                             >
                                 {activeViewportImage ? (
                                     <img
                                         ref={activeTool ? undefined : imageRef}
                                         src={activeViewportImage}
                                         alt={activeTool ? `${activeTool.name} provider frame` : 'Live browser sandbox frame'}
-                                        className={`h-full w-full select-none rounded-md object-fill ${activeTool ? '' : 'cursor-pointer'}`}
+                                        className={`absolute inset-0 h-full w-full select-none object-fill ${activeTool ? '' : 'cursor-pointer'}`}
                                         draggable={false}
                                         onClick={activeTool ? undefined : clickBrowserFrame}
                                         onDragStart={event => event.preventDefault()}
-                                        onWheel={activeTool ? undefined : wheelBrowserFrame}
                                     />
                                 ) : (
-                                    <div className='grid max-w-md gap-2 text-center'>
-                                        <ShieldCheck className='mx-auto h-8 w-8 text-ui-primary' />
-                                        <p className='text-lg font-semibold text-ui-text'>{activeTool ? `${activeTool.name} tab loading` : sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
-                                        <p className='text-sm leading-6 text-ui-muted'>{activeTool ? providerDetail(activeToolCapture?.toolAnalysis, activeToolCapture) : sessionState === 'queued' ? queueCopy(capacity) : 'The remote browser has not sent a screenshot yet. If this persists, rerun the URL or check the broker and provider status below.'}</p>
+                                    <div className='grid h-full place-items-center'>
+                                        <div className='grid max-w-md gap-2 text-center'>
+                                            <ShieldCheck className='mx-auto h-8 w-8 text-ui-primary' />
+                                            <p className='text-lg font-semibold text-ui-text'>{activeTool ? `${activeTool.name} tab loading` : sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
+                                            <p className='text-sm leading-6 text-ui-muted'>{activeTool ? providerDetail(activeToolCapture?.toolAnalysis, activeToolCapture) : sessionState === 'queued' ? queueCopy(capacity) : 'The remote browser has not sent a screenshot yet. If this persists, rerun the URL or check the broker and provider status below.'}</p>
+                                        </div>
                                     </div>
                                 )}
                             </div>
