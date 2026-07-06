@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable @typescript-eslint/no-unused-vars -- ponytail: dormant TI workbench sections are parked while the simplified public result view ships. */
+
 import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, countryFromValue, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
@@ -180,8 +182,6 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
 
 function Results({ result }: { result: TiSearchResponse }) {
     const sourceUrlById = useMemo(() => new Map(result.sources.map(source => [source.id, source.url || linkFromText(source.provenance)])), [result.sources])
-    const collectionSources = result.collectionStrategy?.sourcePosture ?? defaultCollectionSources()
-    const datasets = (result.datasets.length ? result.datasets : defaultDatasets()).filter(item => !/planned|rejected|blocked/i.test(item.status))
     const sources = result.sources.length ? result.sources : defaultSourceLinks()
     const victimObservations = useMemo(() => victimObservationsFor(result), [result])
     const actorIntel = useMemo(() => buildActorIntelligence(result, victimObservations), [result, victimObservations])
@@ -194,25 +194,17 @@ function Results({ result }: { result: TiSearchResponse }) {
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const [relevanceMarks, setRelevanceMarks] = useState<Record<string, LocalRelevanceMark>>({})
     const [stagedHandoffs, setStagedHandoffs] = useState<Record<string, StagedHandoff>>({})
-    const [notes, setNotes] = useState<Record<string, string>>({})
+    const [notes] = useState<Record<string, string>>({})
     const [queueKindFilter, setQueueKindFilter] = useState<AnalystWorkItem['kind'] | 'all'>('all')
     const [queueSourceFilter, setQueueSourceFilter] = useState('all')
     const [queueConfidenceFilter, setQueueConfidenceFilter] = useState<'all' | 'high' | 'medium'>('all')
-    const [queueSort, setQueueSort] = useState<'priority' | 'confidence' | 'freshness'>('priority')
-    const [showMoreAnalysis, setShowMoreAnalysis] = useState(false)
-    const [secondaryView, setSecondaryView] = useState<SecondaryAnalysisView>('profile')
-    const [showFullQueue, setShowFullQueue] = useState(false)
-    const [showGeoCoverage, setShowGeoCoverage] = useState(true)
-    const largeViewport = useMediaQuery('(min-width: 1024px)')
-    const renderMobileWorkbar = largeViewport !== true
+    const [queueSort] = useState<'priority' | 'confidence' | 'freshness'>('priority')
     const filteredWorkItems = useMemo(() => filteredAnalystWorkItems(workItems, {
         kind: queueKindFilter,
         source: queueSourceFilter,
         confidence: queueConfidenceFilter,
         sort: queueSort,
     }), [queueConfidenceFilter, queueKindFilter, queueSort, queueSourceFilter, workItems])
-    const visibleQueueItems = showFullQueue ? filteredWorkItems : filteredWorkItems.slice(0, TI_EVIDENCE_QUEUE_PREVIEW_ROWS)
-    const queueSourceOptions = useMemo(() => unique(workItems.map(item => item.source).filter(Boolean)).sort((a, b) => a.localeCompare(b)).slice(0, 8), [workItems])
     const queueSourceCounts = useMemo(() => sourceCountsFor(filteredWorkItems), [filteredWorkItems])
     const selected = filteredWorkItems.find(item => item.id === selectedId) ?? filteredWorkItems[0] ?? workItems.find(item => item.id === selectedId) ?? workItems[0]
     const selectedArtifact = actorArtifacts.find(item => item.id === selectedArtifactId) ?? actorArtifacts[0]
@@ -233,41 +225,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedDeliveryPlan = selected ? selectedDeliveryReadinessPlanFor(result, selected, actionability, selectedAlertPlan, selectedCaseOwnership) : null
     const selectedConsoleLinks = selected ? selectedConsoleLinksFor(result, selected, selectedWatchlistPlan, selectedCaseCreateRequest, selectedAlertPlan, selectedSourceDrilldown, selectedArtifactHandoffs) : null
     const selectedTriageBrief = selected ? selectedTriageBriefFor(result, selected, actionability, watchlist, alertPacket, selectedCaseDraft) : null
-    const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
-    const openGapCount = actionability.enrichmentGapQueue.length
-    const sessionEvents = Object.entries(localDecisions).map(([id, decision]) => {
-        const item = workItems.find(entry => entry.id === id)
-        return {
-            id: `${id}-${decision.decidedAt}`,
-            at: decision.decidedAt ?? result.generatedAt,
-            label: `${decisionLabel(decision.status)}${item ? `: ${item.title}` : ''}`,
-            detail: decision.reason || 'No rationale recorded.',
-        }
-    })
-    const relevanceEvents = Object.entries(relevanceMarks).map(([id, mark]) => {
-        const item = workItems.find(entry => entry.id === id)
-        return {
-            id: `${id}-${mark.markedAt}`,
-            at: mark.markedAt ?? result.generatedAt,
-            label: `${relevanceLabel(mark.state)}${item ? `: ${item.title}` : ''}`,
-            detail: mark.rationale || 'No relevance rationale recorded.',
-        }
-    })
-    const queueCounts = queueCountsFor(filteredWorkItems, localDecisions)
-    const alertContextValue = actionability.relatedAlerts.length
-        ? `${actionability.relatedAlerts.length} linked`
-        : actionability.alertGenerationReadiness.candidateCount
-            ? `${actionability.alertGenerationReadiness.candidateCount} alert reviews`
-            : 'watchlist needed'
-    const profileStats = [
-        { icon: <ShieldCheck className='h-3.5 w-3.5' />, label: 'Sources', value: sourceCountLabel(sources.length) },
-        { icon: <Activity className='h-3.5 w-3.5' />, label: 'Freshness', value: formatDate(result.lastSeen || result.generatedAt) },
-        { icon: <Inbox className='h-3.5 w-3.5' />, label: 'Open reviews', value: `${queueCounts.open} open` },
-        { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Alert context', value: alertContextValue },
-        { icon: <Database className='h-3.5 w-3.5' />, label: 'Source questions', value: `${openGapCount} open` },
-    ]
     const hasStableActorProfile = Boolean(actorIntel.attribution || actorIntel.motivation.length || victimObservations.length || actorIntel.sourceProvenance.length)
-    const actorProfileStatus = hasStableActorProfile ? '' : humanResultStatus(result.status)
     const heroVictimContext = victimObservations
         .filter(item => /democratic national committee|solarwinds|microsoft|government and policy/i.test(item.victim))
         .map(item => `${item.victim} (${item.country})`)
@@ -302,39 +260,6 @@ function Results({ result }: { result: TiSearchResponse }) {
             meta: row.reportDate ? formatDate(row.reportDate) : sourceBasisLabel(row.confidence),
         })) ?? []),
     ], row => row.id).slice(0, 12)
-    const sectionOverview = sectionOverviewFor({ result, actorIntel, actionability, workItems, victimObservations, watchlist })
-    const commandLinks = [
-        { href: '#ti-activity', label: 'Latest activity', value: `${filteredWorkItems.length}/${workItems.length} results`, icon: Inbox },
-        { href: '#ti-selected-evidence', label: 'Evidence', value: selected ? selected.source : 'select result', icon: Eye },
-        { href: '#ti-secondary-analysis', label: 'Workbenches', value: `${sources.length} sources`, icon: Database },
-        { href: selectedConsoleLinks?.case ?? selectedConsoleLinks?.alert ?? selectedConsoleLinks?.watchlist ?? '/dashboard', label: 'Console', value: selectedCaseCreateRequest?.refs.casePaths.length ? `${selectedCaseCreateRequest.refs.casePaths.length} linked` : selectedAlertPlan?.sourceRefs.alertIds.length ? `${selectedAlertPlan.sourceRefs.alertIds.length} alerts` : `${actionability.relatedCases.length} cases`, icon: ShieldAlert },
-        { href: '/dashboard/automations?setup=dwm', label: 'Delivery', value: `${actionability.readiness.backedIds.webhookDestinationIds.length} destinations`, icon: Send },
-    ]
-    const stagedHandoffItems = useMemo(() => Object.values(stagedHandoffs), [stagedHandoffs])
-    const showRightRail = showMoreAnalysis || stagedHandoffItems.length > 0
-    const mobileEvidenceWorkbar = selected ? (
-        <MobileEvidenceWorkbar
-            selected={selected}
-            filteredCount={filteredWorkItems.length}
-            totalCount={workItems.length}
-            kind={queueKindFilter}
-            source={queueSourceFilter}
-            confidence={queueConfidenceFilter}
-            sourceCounts={queueSourceCounts}
-            onKindChange={setQueueKindFilter}
-            onSourceChange={setQueueSourceFilter}
-            onConfidenceChange={setQueueConfidenceFilter}
-            onMarkReviewed={() => applyDecision('reviewing')}
-            onEscalate={() => applyDecision('escalated')}
-            onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
-            onCase={() => stageSelectedHandoff()}
-            watchlistHref={selectedConsoleLinks?.watchlist}
-            caseHref={selectedConsoleLinks?.case}
-            alertHref={selectedConsoleLinks?.alert}
-            caseAvailable={Boolean(selectedCaseDraft && selectedCaseOwnership && selectedCaseCreateRequest && selectedWatchlistPlan && selectedAlertPlan && selectedDeliveryPlan && selectedEnrichmentTriage && selectedCaseActionTrail)}
-        />
-    ) : null
-
     useEffect(() => {
         if (!workItems.length) return
         if (filteredWorkItems.length && !filteredWorkItems.some(item => item.id === selectedId)) {
