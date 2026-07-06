@@ -213,6 +213,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let editableSelectAllArmed = false
     let messageQueue = Promise.resolve()
     let networkEvents: SandboxNetworkEvent[] = []
+    let cachedDeobfuscationTasks: SandboxDeobfuscationTask[] = []
 
     const send = (payload: Record<string, unknown>) => {
         if (connection.readyState === connection.OPEN) {
@@ -236,6 +237,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const title = page ? await page.title().catch(() => '') : ''
             await finishBrowserRun(runId, 'ended', title).catch(() => undefined)
         }
+        cachedDeobfuscationTasks = []
         await browser?.close().catch(() => undefined)
         browser = null
         page = null
@@ -330,6 +332,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         closed = false
         remoteClipboard = ''
         networkEvents = []
+        cachedDeobfuscationTasks = []
         const target = normalizeTarget(message.target || DEFAULT_TARGET)
         const network = message.network === 'regular' || message.network === 'tor' ? message.network : defaultNetwork
         const proxy = network === 'tor' ? process.env.ONION_SESSION_PROXY || process.env.TOR_SOCKS_PROXY || '' : ''
@@ -481,6 +484,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             }, durationMs)
 
             await navigate(target)
+            const initialEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
+            rememberDeobfuscationTasks(initialEvidence)
             send({
                 type: 'ready',
                 sessionId,
@@ -501,7 +506,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const initialPage = page
             void (async () => {
                 const evidence = initialPage ? await collectPageEvidence(initialPage).catch(() => null) : null
-                await captureProfileTools(context, message.profileTools || [], target, evidence?.deobfuscationTasks || [])
+                rememberDeobfuscationTasks(evidence)
+                await captureProfileTools(context, message.profileTools || [], target, evidence?.deobfuscationTasks?.length ? evidence.deobfuscationTasks : cachedDeobfuscationTasks)
             })().catch(error => {
                 send({
                     type: 'status',
@@ -743,6 +749,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         if (!force && image === lastFrame) return
         lastFrame = image
         const viewport = page.viewportSize()
+        const evidence = await collectPageEvidence(page)
+        rememberDeobfuscationTasks(evidence)
         send({
             type: 'frame',
             encoding: 'jpeg',
@@ -754,9 +762,13 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             title: await page.title().catch(() => ''),
             capturedAt: new Date().toISOString(),
             reason,
-            evidence: await collectPageEvidence(page),
+            evidence,
             networkSummary: summarizeNetworkEvents(networkEvents),
         })
+    }
+
+    function rememberDeobfuscationTasks(evidence: Awaited<ReturnType<typeof collectPageEvidence>> | null) {
+        if (evidence?.deobfuscationTasks?.length) cachedDeobfuscationTasks = evidence.deobfuscationTasks
     }
 }
 
