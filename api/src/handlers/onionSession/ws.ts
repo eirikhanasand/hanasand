@@ -634,7 +634,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 })
                 const providerText = officialProviderKind(preparedUrl)
                     ? await waitForProviderData(tool, toolPage, providerBodies)
-                    : [providerBodies(), await collectRenderedText(toolPage)].filter(Boolean).join('\n')
+                    : [providerBodies(), await collectFastRenderedText(toolPage)].filter(Boolean).join('\n')
                 if (providerText && hasParsedProviderData(tool, providerText)) {
                     navigationError = ''
                     const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText)
@@ -1612,6 +1612,11 @@ async function collectRenderedText(page: Page) {
             .join(' '))
         .catch(() => '')
     return [domText, accessibilityText].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+}
+
+async function collectFastRenderedText(page: Page) {
+    return page.evaluate(() => [document.body?.innerText || '', document.documentElement?.textContent || ''].join(' ').replace(/\s+/g, ' ').trim())
+        .catch(() => '')
 }
 
 async function collectPageEvidence(page: Page) {
