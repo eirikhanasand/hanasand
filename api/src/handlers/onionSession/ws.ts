@@ -44,6 +44,10 @@ type SandboxNetworkEvent = {
     method?: string
     resourceType?: string
     status?: number
+    ip?: string
+    port?: number
+    protocol?: string
+    tlsIssuer?: string
     failure?: string
     at: string
 }
@@ -479,11 +483,19 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     at: new Date().toISOString(),
                 })
             })
-            page.on('response', (response) => {
+            page.on('response', async (response) => {
+                const [server, security] = await Promise.all([
+                    response.serverAddr().catch(() => null),
+                    response.securityDetails().catch(() => null),
+                ])
                 trackNetwork({
                     kind: 'response',
                     url: response.url(),
                     status: response.status(),
+                    ip: server?.ipAddress,
+                    port: server?.port,
+                    protocol: security?.protocol,
+                    tlsIssuer: security?.issuer,
                     at: new Date().toISOString(),
                 })
                 if (response.request().resourceType() === 'document' && /html/i.test(response.headers()['content-type'] || '')) {
@@ -947,6 +959,10 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
             method: event.method,
             resourceType: event.resourceType,
             status: event.status,
+            ip: event.ip,
+            port: event.port,
+            protocol: event.protocol,
+            tlsIssuer: event.tlsIssuer,
             failure: event.failure,
             at: event.at,
         }))

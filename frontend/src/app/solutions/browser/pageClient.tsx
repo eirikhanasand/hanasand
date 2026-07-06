@@ -55,7 +55,7 @@ type SandboxNetworkSummary = {
     failedCount?: number
     uniqueDomainCount?: number
     domains?: string[]
-    recentRequests?: Array<{ url?: string; method?: string; resourceType?: string; status?: number; failure?: string; at?: string }>
+    recentRequests?: Array<{ url?: string; method?: string; resourceType?: string; status?: number; ip?: string; port?: number; protocol?: string; tlsIssuer?: string; failure?: string; at?: string }>
     statusCounts?: Record<string, number>
     redirectChain?: string[]
     downloads?: Array<{ url?: string; at?: string }>
@@ -1230,6 +1230,7 @@ function EvidenceWorkspace({
                                             <tr>
                                                 <th className='border-b border-ui-border px-2 py-1'>Type</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>Status</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>IP / TLS</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>URL</th>
                                             </tr>
                                         </thead>
@@ -1238,6 +1239,7 @@ function EvidenceWorkspace({
                                                 <tr key={`${request.at}-${request.url}-${index}`}>
                                                     <td className='border-b border-ui-border/60 px-2 py-1'>{request.resourceType || request.method || 'request'}</td>
                                                     <td className='border-b border-ui-border/60 px-2 py-1'>{request.status || request.failure || ''}</td>
+                                                    <td className='border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{networkPeerLabel(request)}</td>
                                                     <td className='max-w-[28rem] truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-text'>{request.url}</td>
                                                 </tr>
                                             ))}
@@ -1460,6 +1462,14 @@ function captureLabel(reason: string) {
     if (reason === 'initial_target') return 'Initial target capture'
     if (reason === 'interval') return 'Interval capture'
     return 'Page capture'
+}
+
+function networkPeerLabel(request: NonNullable<SandboxNetworkSummary['recentRequests']>[number]) {
+    return [
+        request.ip ? `${request.ip}${request.port ? `:${request.port}` : ''}` : '',
+        request.protocol || '',
+        request.tlsIssuer || '',
+    ].filter(Boolean).join(' · ')
 }
 
 function isUsefulFrameImage(image: string) {
