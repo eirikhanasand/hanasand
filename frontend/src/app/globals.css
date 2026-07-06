@@ -313,12 +313,19 @@ button:not(:disabled),
 
 .dashboard-sidebar-sticky {
   position: sticky;
-  top: 0;
+  top: 0.5rem;
   align-self: start;
-  max-height: min(100%, calc(100dvh - 5rem));
+  max-height: min(100%, calc(100dvh - 5.5rem));
   overscroll-behavior: contain;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+@media (min-width: 640px) {
+  .dashboard-sidebar-sticky {
+    top: 1rem;
+    max-height: min(100%, calc(100dvh - 6rem));
+  }
 }
 
 .dashboard-sidebar-sticky::-webkit-scrollbar {
