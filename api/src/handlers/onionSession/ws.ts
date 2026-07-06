@@ -573,7 +573,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 const webcrackTool = isWebCrackTool(tool, toolUrl)
                 let webcrackLoad: WebCrackLoadResult | undefined
                 if (webcrackTool) {
-                    webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, deobfuscationTasks), 2500, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
+                    const tasks = await webCrackTasks(deobfuscationTasks)
+                    webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, tasks), 2500, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
                 }
                 await toolPage.waitForTimeout(webcrackLoad?.loaded ? 150 : 1200).catch(() => undefined)
                 if (webcrackTool) {
@@ -844,6 +845,14 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             documentEvidencePromises = documentEvidencePromises.filter(item => item !== pending)
         })
         return pending
+    }
+
+    async function webCrackTasks(tasks: SandboxDeobfuscationTask[]) {
+        const deadline = Date.now() + 1200
+        while (!tasks.length && !cachedDeobfuscationTasks.length && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 100))
+        }
+        return tasks.length ? tasks : cachedDeobfuscationTasks
     }
 }
 
