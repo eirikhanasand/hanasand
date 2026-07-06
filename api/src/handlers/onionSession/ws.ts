@@ -61,11 +61,6 @@ type WebCrackLoadResult = {
     action?: string
     reason?: string
 }
-type ProviderCaptureReadiness = {
-    ready: boolean
-    blocker?: string
-    statusText?: string
-}
 const DEFAULT_TARGET = 'http://sample-intel-source.onion'
 const DEFAULT_WIDTH = 1280
 const DEFAULT_HEIGHT = 760
@@ -550,9 +545,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             })
         }
         if (process.env.BROWSER_SANDBOX_PROVIDER_TABS === '0') return
-        for (const tool of plannedTools) {
+        await Promise.all(plannedTools.map(async (tool) => {
             const toolPage = await context.newPage().catch(() => null)
-            if (!toolPage) continue
+            if (!toolPage) return
             const startedAt = new Date().toISOString()
             const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
             try {
@@ -562,113 +557,40 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     sessionId,
                     message: `${tool.name || toolUrl} provider capture started.`,
                 })
-                const navigation = toolPage.goto(toolUrl, { waitUntil: 'commit', timeout: 10_000 })
+                const navigation = toolPage.goto(toolUrl, { waitUntil: 'commit', timeout: 5000 })
                     .then(() => '')
                     .catch(error => error instanceof Error ? error.message : String(error))
                 const navigationError = await Promise.race([
                     navigation,
-                    new Promise<string>(resolve => setTimeout(() => resolve('provider navigation still pending after 6s'), 6000)),
+                    new Promise<string>(resolve => setTimeout(() => resolve('provider navigation still pending after 3.5s'), 3500)),
                 ])
-                await toolPage.waitForLoadState('domcontentloaded', { timeout: 6000 }).catch(() => undefined)
+                await toolPage.waitForLoadState('domcontentloaded', { timeout: 1000 }).catch(() => undefined)
                 await dismissCookieOverlays(toolPage).catch(() => undefined)
-                await toolPage.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => undefined)
+                await toolPage.waitForLoadState('networkidle', { timeout: 500 }).catch(() => undefined)
                 const initialEvidence = await collectPageEvidence(toolPage)
                 const initialImage = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
                 const initialAnalysis = analyzeToolEvidence(tool.name || toolUrl, initialEvidence)
-                send({
-                    type: 'tool_capture',
-                    sessionId,
-                    id: tool.id || safeToolId(tool.name || toolUrl),
-                    name: tool.name || toolUrl,
-                    url: toolPage.url(),
-                    title: await toolPage.title().catch(() => ''),
-                    capturedAt: startedAt,
-                    image: initialImage ? initialImage.toString('base64') : null,
-                    evidence: initialEvidence,
-                    toolAnalysis: navigationError
-                        ? {
-                            ...initialAnalysis,
-                            extractedSignals: [
-                                ...((initialAnalysis.extractedSignals || []) as string[]),
-                                `Provider navigation incomplete: ${navigationError}`,
-                            ],
-                        }
-                        : initialAnalysis,
-                    target,
-                    error: navigationError || undefined,
-                })
-                if (hasParsedProviderResult(initialAnalysis)) continue
+                let image = initialImage
+                let evidence = initialEvidence
+                let toolAnalysis = navigationError
+                    ? {
+                        ...initialAnalysis,
+                        extractedSignals: [
+                            ...((initialAnalysis.extractedSignals || []) as string[]),
+                            `Provider navigation incomplete: ${navigationError}`,
+                        ],
+                    }
+                    : initialAnalysis
+                let webcrackLoad: WebCrackLoadResult | undefined
                 if (isWebCrackTool(tool, toolUrl)) {
-                    const webcrackLoad = await loadWebCrackSample(toolPage, deobfuscationTasks)
+                    webcrackLoad = await loadWebCrackSample(toolPage, deobfuscationTasks)
                     if (webcrackLoad.loaded) {
-                        await toolPage.waitForTimeout(1200).catch(() => undefined)
+                        await toolPage.waitForTimeout(350).catch(() => undefined)
                     }
-                    const buffer = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
-                    const webcrackEvidence = await collectPageEvidence(toolPage)
-                    send({
-                        type: 'tool_capture',
-                        sessionId,
-                        id: tool.id || safeToolId(tool.name || toolUrl),
-                        name: tool.name || toolUrl,
-                        url: toolPage.url(),
-                        title: await toolPage.title().catch(() => ''),
-                        capturedAt: startedAt,
-                        image: buffer ? buffer.toString('base64') : null,
-                        evidence: webcrackEvidence,
-                        toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, webcrackEvidence, webcrackLoad),
-                        webcrackLoad,
-                        target,
-                    })
-                    continue
+                    image = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => image)
+                    evidence = await collectPageEvidence(toolPage)
+                    toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
                 }
-                const readiness = await waitForProviderCaptureReadiness(toolPage, tool).catch(() => ({ ready: false, blocker: 'readiness-check-failed' }))
-                if (!readiness.ready) {
-                    const blockerEvidence = await collectPageEvidence(toolPage)
-                    const blockerImage = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
-                    const blockerSummary = analyzeToolEvidence(tool.name || toolUrl, blockerEvidence)
-                    const hasParsedProviderResult = blockerSummary.vendorFlagged !== undefined
-                        || blockerSummary.alertCount !== undefined
-                        || blockerSummary.verdict === 'suspicious'
-                        || blockerSummary.verdict === 'clean'
-                    const blocker = `${readiness.blocker || 'provider-capture-blocked'}`
-                    const isBlockerWithNoData = /provider-blocked-(?:urlquery|virustotal|generic)|provider-result-timeout/.test(blocker) && !hasParsedProviderResult
-                    const isHardBlocker = /cloudflare-or-challenge/.test(blocker)
-                    send({
-                        type: 'tool_capture',
-                        sessionId,
-                        id: tool.id || safeToolId(tool.name || toolUrl),
-                        name: tool.name || toolUrl,
-                        url: toolPage.url(),
-                        title: await toolPage.title().catch(() => ''),
-                        capturedAt: startedAt,
-                        image: blockerImage ? blockerImage.toString('base64') : null,
-                        evidence: blockerEvidence,
-                        toolAnalysis: {
-                            ...blockerSummary,
-                            verdict: blockerSummary.verdict ?? 'unknown',
-                            extractedSignals: [
-                                ...((blockerSummary.extractedSignals || []) as string[]),
-                                `Provider not ready: ${blocker}`,
-                            ].filter(Boolean),
-                        },
-                        target,
-                        error: isHardBlocker || isBlockerWithNoData ? blocker : undefined,
-                    })
-                    if (isHardBlocker || isBlockerWithNoData) {
-                        continue
-                    }
-                }
-                await toolPage.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined)
-                await toolPage.waitForTimeout(450).catch(() => undefined)
-                const webcrackLoad = isWebCrackTool(tool, toolUrl)
-                    ? await loadWebCrackSample(toolPage, deobfuscationTasks)
-                    : undefined
-                if (webcrackLoad?.loaded) {
-                    await toolPage.waitForTimeout(1200).catch(() => undefined)
-                }
-                const buffer = await toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled' }).catch(() => null)
-                const evidence = await collectPageEvidence(toolPage)
-                const toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
                 send({
                     type: 'tool_capture',
                     sessionId,
@@ -677,11 +599,12 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     url: toolPage.url(),
                     title: await toolPage.title().catch(() => ''),
                     capturedAt: startedAt,
-                    image: buffer ? buffer.toString('base64') : null,
+                    image: image ? image.toString('base64') : null,
                     evidence,
                     toolAnalysis,
                     webcrackLoad,
                     target,
+                    error: navigationError || undefined,
                 })
             } catch (error) {
                 send({
@@ -697,7 +620,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             } finally {
                 await toolPage.close().catch(() => undefined)
             }
-        }
+        }))
     }
 
     function trackNetwork(event: SandboxNetworkEvent) {
@@ -1268,400 +1191,6 @@ async function dismissCookieOverlays(page: Page) {
     }
 }
 
-async function waitForProviderCaptureReadiness(page: Page, tool: { id?: string; name?: string; url?: string }): Promise<ProviderCaptureReadiness> {
-    const normalized = `${tool.id || ''} ${tool.name || ''} ${tool.url || ''}`.toLowerCase()
-    const isVirusTotal = /virustotal|virus total/.test(normalized)
-    const isUrlQuery = /urlquery/.test(normalized)
-    const provider = isVirusTotal ? 'virustotal' : isUrlQuery ? 'urlquery' : 'generic'
-    const markerSelectors = isVirusTotal
-        ? [
-            'text=/results/i',
-            'text=/security vendors/i',
-            'text=/harmless/i',
-            'text=/undetected/i',
-            'text=/malicious/i',
-            'text=/no detections/i',
-            'text=/detection ratio/i',
-            'text=/analysis/i',
-            'text=/threats?/i',
-            'text=/suspicious/i',
-            'text=/clean/i',
-            'text=/vendors?/i',
-            'text=/last analysis/i',
-            'text=/detection/i',
-            'text=/scanner/i',
-            'text=/sha256/i',
-            'text=/permalink/i',
-            'text=/reports?/i',
-            'text=/file info/i',
-            'text=/community/i',
-        ]
-        : isUrlQuery
-            ? [
-                'text=/no results/i',
-                'text=/0 alerts/i',
-                'text=/alerts?/i',
-                'text=/results?/i',
-                'text=/search results/i',
-                'text=/community/i',
-                'text=/query/i',
-                'text=/urlquery/i',
-                'text=/malicious/i',
-                'text=/detected/i',
-                'text=/analysis/i',
-                'text=/not malicious/i',
-                'text=/clean/i',
-            ]
-            : [
-                'text=/search/i',
-                'text=/analysis/i',
-                'text=/result/i',
-            ]
-
-    const cookieGateText = /cookie|consent|privacy|gdpr|opt.?out|data collection/i
-    const hasCookieOverlay = async () => page.evaluate(() => {
-        const selectors = [
-            '[id*="cookie" i]',
-            '[class*="cookie" i]',
-            '[id*="consent" i]',
-            '[class*="consent" i]',
-            '[role="dialog"][aria-label*="cookie" i]',
-            '[role="dialog"][aria-label*="consent" i]',
-            '[id*="onetrust" i]',
-            '[class*="onetrust" i]',
-            '[id*="sp_message" i]',
-            '[class*="sp_message" i]',
-            'iframe[src*="cookie" i]',
-            'iframe[src*="consent" i]',
-            'iframe[src*="gdpr" i]',
-            'iframe[src*="onetrust" i]',
-        ]
-
-        const hasVisible = (element: Element | null) => {
-            if (!element) return false
-            const style = window.getComputedStyle(element)
-            if (style.display === 'none' || style.visibility === 'hidden' || Number.parseFloat(style.opacity || '1') <= 0.05) return false
-            const rect = element.getBoundingClientRect()
-            return rect.width > 0 && rect.height > 0
-        }
-
-        const topMatch = (text: string) => /cookie|consent|privacy|gdpr|tracking|analytics|preferences|data collection/i.test(text)
-
-        for (const selector of selectors) {
-            for (const node of Array.from(document.querySelectorAll(selector))) {
-                if (!hasVisible(node)) continue
-                const text = (node.textContent || '').toLowerCase()
-                if (topMatch(text)) return true
-                const z = Number.parseInt(window.getComputedStyle(node as Element).zIndex || '0', 10)
-                const bounds = (node as Element).getBoundingClientRect()
-                if ((Number.isFinite(z) && z >= 2000) || (bounds.height > 120 && bounds.width > 300)) {
-                    return true
-                }
-            }
-        }
-
-        const buttons = Array.from(document.querySelectorAll('button, a, input'))
-        const likelyActions = buttons.filter((button) => {
-            const text = (button.textContent || '').toLowerCase()
-            const value = (button as HTMLInputElement).getAttribute('value')?.toLowerCase() || ''
-            const combined = `${text} ${value}`
-            return /accept|allow|ok|continue|agree|godta|aksepter|accepter|tillat|lagre|proceed|got it|close|dismiss|manage/.test(combined)
-        })
-
-        return likelyActions.some((button) => {
-            if (!hasVisible(button)) return false
-            const parentText = ((button.closest('[role="dialog"], [class*="cookie" i], [id*="cookie" i], [class*="consent" i], [id*="consent" i]')?.textContent || '').toLowerCase())
-            return /cookie|consent|privacy|gdpr|tracking/.test(parentText)
-        })
-    }).catch(() => false)
-
-    const hasNoProviderSignal = (text: string) => /access denied|not authorized|403|rate limit|too many requests|error/i.test(text)
-    const hardBlockers = [
-        cookieGateText,
-        /cloudflare|just a moment|bot check|enable javascript|challenge/i,
-    ]
-    const softWaitText = [
-        /loading/i,
-        /please wait/i,
-        /analyzing/i,
-        /preparing/i,
-        /running/i,
-        /searching/i,
-        /redirecting/i,
-    ]
-    const antiBotText = /turnstile|captcha|human verification|anti.?bot/i
-    const markerText = markerSelectors.map(item => item.replace(/^text=\/|\/$/g, '').replace(/\\i$/g, '').toLowerCase())
-    const providerTimeoutMs = (isVirusTotal || isUrlQuery) ? 28_000 : 16_000
-    const settledMs = (isVirusTotal || isUrlQuery) ? 14_000 : 7_000
-    const stableMs = (isVirusTotal || isUrlQuery) ? 9_000 : 4_000
-    const cookieAttemptLimit = (isVirusTotal || isUrlQuery) ? 12 : 4
-    const deadline = Date.now() + providerTimeoutMs
-    const settledDeadline = Date.now() + settledMs
-    const stableDeadline = Date.now() + stableMs
-
-    const hasExpectedProviderDomain = async () => {
-        const current = page.url().toLowerCase()
-        if (isVirusTotal) return /virustotal\.com/i.test(current)
-        if (isUrlQuery) return /urlquery\.net/i.test(current) || /urlquery\.io/i.test(current) || /urlquery/i.test(current)
-        return true
-    }
-    const hasProviderTextSignal = (text: string, tokens: RegExp[]) => tokens.some(token => token.test(text))
-    const hasMeaningfulContent = (text: string) => text.length > 220 && /[a-z]{2,}/i.test(text)
-    const readyTokens = isVirusTotal
-        ? [
-            /\b(vendor|vendors|engine|engines)\b/i,
-            /\b(\d+\s*\/\s*\d+)\b/i,
-            /\bdetection ratio\b/i,
-            /\b(no detections|undetected|harmless|suspicious|malicious)\b/i,
-            /\bsecurity\s+vendors\b/i,
-            /\bcommunity\b/i,
-            /\bpermalink\b/i,
-            /\blast analysis\b/i,
-        ]
-        : [
-            /\b(\d+)\s+(?:alerts?|detections?)\b/i,
-            /\burlquery\b/i,
-            /\b(community|security|threat)\b/i,
-            /\b(no alerts|0 alerts|no results|undetected|not malicious|malicious)\b/i,
-            /\bsearch results\b/i,
-        ]
-    const providerResultTokens = isVirusTotal
-        ? [
-            /\b\d+\s*\/\s*\d+\b/i,
-            /\bsecurity\s+vendors\b/i,
-            /\bdetection ratio\b/i,
-            /\bno detections\b/i,
-            /\bfile info\b/i,
-            /\breport\b/i,
-            /\b(analysis|scan)\b.*(?:result|report|summary)/i,
-        ]
-        : [
-            /\b(\d+)\s+(?:alerts?|detections?)\b/i,
-            /\bno alerts?\b/i,
-            /\bno results\b/i,
-            /\bnot malicious\b/i,
-            /\bresults?\b/i,
-            /\b(unblocked|malicious|community|query)\b/i,
-            /\bcommunity comments?\b/i,
-            /\b(\d+)\s*(?:security alerts?|detection|hits?)\b/i,
-            /\bsearch results\b/i,
-        ]
-    const snapshotText = async () => {
-        const result = await page.evaluate(() => `${document.title} ${document.body?.innerText || ''}`.toLowerCase()).catch(() => '')
-        return `${result || ''}`
-    }
-    const hasReadyEvidence = (text: string) => markerText.some(item => text.includes(item))
-    const hasResultLikeSignal = (text: string) => hasProviderTextSignal(text, readyTokens)
-    let cookieGateAttempts = 0
-    while (Date.now() < deadline) {
-        const text = await snapshotText()
-        await dismissCookieOverlays(page).catch(() => undefined)
-        const likelyCookieOverlay = await hasCookieOverlay()
-        const inProviderDomain = await hasExpectedProviderDomain()
-        const hasMeaningful = hasMeaningfulContent(text)
-        const hasProviderResultText = hasProviderTextSignal(text, providerResultTokens)
-        const hasProviderResultLikeSignal = hasProviderResultText || hasResultLikeSignal(text)
-        const isLikelyCookiePath = /consent|cookie|privacy|gdpr/i.test(page.url())
-
-        if ((isVirusTotal || isUrlQuery) && inProviderDomain && hasProviderResultLikeSignal && !antiBotText.test(text)) {
-            return {
-                ready: true,
-                statusText: `content-ready-${provider}`,
-            }
-        }
-        if (!isVirusTotal && !isUrlQuery && hasProviderResultLikeSignal && inProviderDomain && Date.now() > settledDeadline) {
-            return {
-                ready: true,
-                statusText: `content-ready-${provider}`,
-            }
-        }
-
-        if ((isVirusTotal || isUrlQuery) && likelyCookieOverlay && cookieGateAttempts < cookieAttemptLimit) {
-            cookieGateAttempts += 1
-            await dismissCookieOverlays(page).catch(() => undefined)
-            await page.waitForTimeout(450).catch(() => undefined)
-            continue
-        }
-        if (
-            isVirusTotal
-            && hasMeaningful
-            && inProviderDomain
-            && Date.now() > settledDeadline
-            && !antiBotText.test(text)
-            && !/access denied|challenge|captcha|cloudflare|just a moment/i.test(text)
-        ) {
-            return {
-                ready: true,
-                statusText: `stabilized-content-${provider}`,
-            }
-        }
-
-        if (
-            isUrlQuery
-            && hasMeaningful
-            && inProviderDomain
-            && Date.now() > settledDeadline
-            && !antiBotText.test(text)
-            && !/access denied|challenge|captcha|cloudflare|just a moment/i.test(text)
-        ) {
-            return {
-                ready: true,
-                statusText: `stabilized-content-${provider}`,
-            }
-        }
-
-        if (hasNoProviderSignal(text)) {
-            return {
-                ready: false,
-                blocker: `provider-blocked-${provider}`,
-                statusText: 'Provider returned access denial or error text.',
-            }
-        }
-        if (!inProviderDomain && !isVirusTotal && !isUrlQuery) {
-            // Unknown provider page is not a usable provider result.
-            return {
-                ready: false,
-                blocker: `provider-domain-mismatch-${provider}`,
-                statusText: `Expected provider domain context not reached yet (${tool.name || tool.id || provider}).`,
-            }
-        }
-        if ((isVirusTotal || isUrlQuery) && !inProviderDomain) {
-            if (cookieGateAttempts < cookieAttemptLimit) {
-                cookieGateAttempts += 1
-                await dismissCookieOverlays(page).catch(() => undefined)
-                await page.waitForTimeout(500).catch(() => undefined)
-                continue
-            }
-            return {
-                ready: false,
-                blocker: `provider-domain-mismatch-${provider}`,
-                statusText: `Could not reach ${provider} provider page after consent handling.`,
-            }
-        }
-
-        for (const selector of markerSelectors) {
-            if (await page.locator(selector).first().isVisible({ timeout: 100 }).catch(() => false)) {
-                return {
-                    ready: true,
-                    statusText: `selector-ready-${provider}`,
-                }
-            }
-        }
-
-        if ((isVirusTotal || isUrlQuery) && hasProviderResultText && hasMeaningful && inProviderDomain) {
-            return {
-                ready: true,
-                statusText: `content-ready-${provider}`,
-            }
-        }
-        if (hasProviderResultText) {
-            return {
-                ready: true,
-                statusText: `content-ready-${provider}`,
-            }
-        }
-
-        const cookieGate = cookieGateText.test(text)
-        if (!isVirusTotal && !isUrlQuery && hasResultLikeSignal(text) && inProviderDomain && Date.now() > settledDeadline && hasMeaningful) {
-            return {
-                ready: true,
-                statusText: `stabilized-content-${provider}`,
-            }
-        }
-        if (!isVirusTotal && !isUrlQuery && hasResultLikeSignal(text) && hasMeaningful && hasProviderResultText && Date.now() > stableDeadline) {
-            return {
-                ready: true,
-                statusText: `stabilized-content-${provider}`,
-            }
-        }
-        if (cookieGate && likelyCookieOverlay && cookieGateAttempts < cookieAttemptLimit) {
-            cookieGateAttempts += 1
-            await dismissCookieOverlays(page).catch(() => undefined)
-            await page.waitForTimeout(500).catch(() => undefined)
-            continue
-        }
-        if (cookieGate && !likelyCookieOverlay && !isLikelyCookiePath && hasMeaningful && inProviderDomain && Date.now() > settledDeadline) {
-            return {
-                ready: true,
-                statusText: `stabilized-content-${provider}`,
-            }
-        }
-        if (cookieGate && !likelyCookieOverlay && !isLikelyCookiePath && hasResultLikeSignal(text) && Date.now() > settledDeadline) {
-            return {
-                ready: true,
-                statusText: `stabilized-content-${provider}`,
-            }
-        }
-        if (cookieGate && !likelyCookieOverlay && !isLikelyCookiePath && hasMeaningful && inProviderDomain) {
-            // Non-overlay cookie vocabulary on the same result page may be benign footer text.
-            if (Date.now() > settledDeadline && hasResultLikeSignal(text)) {
-                return {
-                    ready: true,
-                    statusText: `stabilized-content-${provider}`,
-                }
-            }
-        }
-
-        if (cookieGate && !likelyCookieOverlay && inProviderDomain && hasMeaningful && Date.now() > stableDeadline) {
-            return {
-                ready: true,
-                statusText: `stabilized-content-${provider}`,
-            }
-        }
-
-        const hardBlockMatch = hardBlockers.find(item => item.test(text))
-        if (hardBlockMatch) {
-            const isCookieGate = cookieGateText.test(text) && hardBlockMatch === cookieGateText
-            if (isCookieGate && likelyCookieOverlay && cookieGateAttempts < cookieAttemptLimit) {
-                cookieGateAttempts += 1
-                await dismissCookieOverlays(page).catch(() => undefined)
-                await page.waitForTimeout(500).catch(() => undefined)
-                continue
-            }
-            if (isCookieGate && !(hasMeaningful && inProviderDomain)) {
-                return {
-                    ready: false,
-                    blocker: `blocked-by-${provider}-consent-or-cookie-gate`,
-                    statusText: likelyCookieOverlay
-                        ? `Detected persistent cookie-consent blocker UI on ${provider}.`
-                        : `Detected cookie-consent keyword while waiting for ${provider}.`,
-                }
-            }
-            const blocker = antiBotText.test(text) ? 'anti-bot-challenge' : 'cloudflare-or-challenge'
-            return {
-                ready: false,
-                blocker: `${blocker}-${provider}`,
-                statusText: antiBotText.test(text) ? 'Anti-bot challenge detected.' : 'Cloudflare or challenge gate detected.',
-            }
-        }
-
-        if (inProviderDomain && Date.now() > settledDeadline && hasMeaningful && hasResultLikeSignal(text)) {
-            return {
-                ready: true,
-                statusText: `stabilized-content-${provider}`,
-            }
-        }
-
-        if (softWaitText.some(item => item.test(text)) && Date.now() < settledDeadline) {
-            await page.waitForTimeout(350).catch(() => undefined)
-            continue
-        }
-        if (Date.now() > stableDeadline && hasReadyEvidence(text) && hasResultLikeSignal(text)) {
-            return {
-                ready: true,
-                statusText: `content-ready-${provider}`,
-            }
-        }
-        await page.waitForTimeout(250).catch(() => undefined)
-    }
-
-    return {
-        ready: false,
-        blocker: `provider-result-timeout-${provider}`,
-        statusText: 'provider result not ready after timeout',
-    }
-}
-
 function domainFromUrl(value: string) {
     try {
         return new URL(value).hostname.toLowerCase()
@@ -1903,12 +1432,6 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         webcrackSampleBytes: webcrackLoad?.sampleBytes,
         webcrackLoadReason: webcrackLoad?.reason,
     }
-}
-
-function hasParsedProviderResult(analysis: ReturnType<typeof analyzeToolEvidence>) {
-    return analysis.vendorFlagged !== undefined
-        || analysis.alertCount !== undefined
-        || Boolean(analysis.verdict && analysis.verdict !== 'unknown')
 }
 
 function providerPendingEvidence(url: string, toolName: string, target: string): Awaited<ReturnType<typeof collectPageEvidence>> {

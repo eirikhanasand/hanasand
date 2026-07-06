@@ -357,8 +357,6 @@ export default function BrowserPageClient() {
         socket.onclose = () => {
             setSocketState('closed')
             setSessionState(current => current === 'connecting' ? 'ended' : current)
-            setCaptures(current => ensureProviderFallbacks(current, selectedProfile.tools, url))
-            setHistory(current => persistHistory(current.map(run => run.id === id ? addFallbackProviderResults(run, selectedProfile.tools) : run)))
             pushEvent('Sandbox broker closed.')
         }
         socket.onerror = () => {
@@ -1320,61 +1318,6 @@ function addCapture(current: Capture[], next: Capture) {
     const last = current[0]
     if (last && last.kind === next.kind && last.url === next.url && last.image === next.image) return current
     return [next, ...current].slice(0, 24)
-}
-
-function ensureProviderFallbacks(current: Capture[], tools: SandboxTool[], target: string) {
-    const now = new Date().toISOString()
-    const next = [...current]
-    for (const tool of tools) {
-        const existing = next.find(capture => matchesTool(capture, tool))
-        if (existing && existing.error !== 'provider_navigation_pending') continue
-        const analysis = providerFallbackAnalysis(tool)
-        next.unshift({
-            id: `tool-${tool.id}-fallback-${now}`,
-            kind: 'tool',
-            label: tool.name,
-            url: tool.url.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target),
-            capturedAt: now,
-            error: existing?.error === 'provider_navigation_pending' ? 'provider_unavailable' : undefined,
-            evidence: {
-                url: tool.url,
-                verdict: 'unknown',
-                confidence: 10,
-                reasons: ['Provider did not return a parsed result before the sandbox closed.'],
-                indicators: {},
-                comments: [],
-                forms: [],
-                scripts: [],
-                obfuscatedScripts: [],
-                threatAssociations: [],
-                deobfuscationTasks: [],
-            },
-            toolAnalysis: analysis,
-        })
-    }
-    return next.slice(0, 24)
-}
-
-function providerFallbackAnalysis(tool: SandboxTool): SandboxToolAnalysis {
-    if (safeToolKey(tool.id || tool.name) === 'virustotal') {
-        return { toolKind: 'virustotal', vendorFlagged: 0, verdict: 'clean', extractedSignals: ['No VirusTotal detection parsed before close.'] }
-    }
-    if (safeToolKey(tool.id || tool.name) === 'urlquery') {
-        return { toolKind: 'urlquery', alertCount: 0, verdict: 'clean', extractedSignals: ['No urlquery alerts parsed before close.'] }
-    }
-    if (safeToolKey(tool.id || tool.name) === 'webcrack') {
-        return { toolKind: 'webcrack', verdict: 'unknown', extractedSignals: ['WebCrack result unavailable before close.'] }
-    }
-    return { toolKind: safeToolKey(tool.id || tool.name) || 'generic', verdict: 'unknown' }
-}
-
-function addFallbackProviderResults(run: BrowserRunHistory, tools: SandboxTool[]) {
-    const providerResults = { ...(run.providerResults || {}) }
-    for (const tool of tools) {
-        const key = safeToolKey(tool.id || tool.name)
-        if ((key === 'virustotal' || key === 'urlquery') && !providerResults[key]) providerResults[key] = { status: 'clean', label: key === 'virustotal' ? 'VT' : 'urlquery' }
-    }
-    return { ...run, providerResults }
 }
 
 function providerRunResult(analysis?: SandboxToolAnalysis, error = ''): ProviderRunResult | null {

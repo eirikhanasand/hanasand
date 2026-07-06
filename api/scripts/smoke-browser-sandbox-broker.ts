@@ -40,6 +40,7 @@ type BrokerPayload = {
         sampleBytes?: number
         reason?: string
     }
+    receivedAt?: number
 }
 
 process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS = '1'
@@ -106,9 +107,9 @@ const payloads: BrokerPayload[] = []
 
 client.on('message', (message) => {
     try {
-        payloads.push(JSON.parse(message.toString()) as BrokerPayload)
+        payloads.push({ ...JSON.parse(message.toString()) as BrokerPayload, receivedAt: Date.now() })
     } catch {
-        payloads.push({ type: 'unparseable' })
+        payloads.push({ type: 'unparseable', receivedAt: Date.now() })
     }
 })
 
@@ -162,6 +163,9 @@ assert.equal(urlquery?.toolAnalysis?.communityCommentCount, 2)
 const webcrack = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'webcrack' && payload.webcrackLoad?.loaded === true)
 assert.equal(webcrack?.webcrackLoad?.loaded, true)
 assert((webcrack?.webcrackLoad?.sampleBytes || 0) > 40, 'loads extracted obfuscated sample into WebCrack fixture')
+for (const capture of [vt, urlquery, webcrack]) {
+    assert(capture?.receivedAt && ready?.receivedAt && capture.receivedAt - ready.receivedAt <= 5000, `${capture?.toolAnalysis?.toolKind || 'provider'} loaded within five seconds after browser ready`)
+}
 
 client.send(JSON.stringify({ type: 'end' }))
 await waitForPayload(payloads, payload => payload.type === 'ended')
