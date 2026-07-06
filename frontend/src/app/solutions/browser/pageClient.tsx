@@ -562,7 +562,7 @@ export default function BrowserPageClient() {
                         <p className='text-xs font-semibold uppercase text-ui-primary'>Browser sandbox</p>
                         <h1 className='max-w-xl text-4xl font-semibold tracking-normal text-ui-text md:text-6xl'>Browser</h1>
                         <p className='max-w-xl text-base leading-7 text-ui-muted'>
-                            Detonate an untrusted URL in a remote browser, route onion targets through Tor, and capture redirects without exposing the analyst workstation.
+                            Check unknown URLs in a sandbox. Onion addresses are also supported.
                         </p>
                         <div className='grid max-w-xl gap-2 text-sm text-ui-muted sm:grid-cols-3'>
                             <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'><strong className='text-ui-text'>10</strong> active browsers</span>
