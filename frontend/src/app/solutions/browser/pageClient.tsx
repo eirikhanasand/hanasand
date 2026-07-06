@@ -173,6 +173,7 @@ export default function BrowserPageClient() {
     const [activeFrame, setActiveFrame] = useState<{ width: number; height: number }>({ width: 1280, height: 760 })
     const [activeUrl, setActiveUrl] = useState('')
     const [events, setEvents] = useState<string[]>(['Sandbox ready.'])
+    const [activeSandboxTab, setActiveSandboxTab] = useState('browser')
     const [customProfileName, setCustomProfileName] = useState('')
     const [customToolName, setCustomToolName] = useState('')
     const [customToolUrl, setCustomToolUrl] = useState('')
@@ -191,6 +192,11 @@ export default function BrowserPageClient() {
     const selectedNetwork = networkTouched ? network : inferredNetwork
     const selectedProfile = useMemo(() => profiles.find(profile => profile.id === selectedProfileId) || profiles[0], [profiles, selectedProfileId])
     const summary = useMemo(() => buildAnalystSummary(normalizedTarget, captures, selectedProfile), [captures, normalizedTarget, selectedProfile])
+    const toolCaptures = useMemo(() => captures.filter(capture => capture.kind === 'tool'), [captures])
+    const activeTool = useMemo(() => selectedProfile.tools.find(tool => tool.id === activeSandboxTab), [activeSandboxTab, selectedProfile.tools])
+    const activeToolCapture = activeTool ? toolCaptures.find(capture => matchesTool(capture, activeTool)) : undefined
+    const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage
+    const activeViewportUrl = activeTool ? activeToolCapture?.url || activeTool.url : activeUrl || normalizedTarget
 
     const pushEvent = useCallback((event: string) => {
         setEvents(current => [event, ...current].slice(0, 8))
@@ -273,6 +279,10 @@ export default function BrowserPageClient() {
     }, [inferredNetwork, networkTouched])
 
     useEffect(() => {
+        if (activeSandboxTab !== 'browser' && !selectedProfile.tools.some(tool => tool.id === activeSandboxTab)) setActiveSandboxTab('browser')
+    }, [activeSandboxTab, selectedProfile.tools])
+
+    useEffect(() => {
         try {
             const stored = JSON.parse(window.localStorage.getItem(historyStorageKey) || '[]')
             if (Array.isArray(stored)) setHistory(sanitizeHistory(stored))
@@ -315,6 +325,7 @@ export default function BrowserPageClient() {
         setCaptures([])
         setActiveImage(null)
         setActiveUrl(url)
+        setActiveSandboxTab('browser')
         setCapacity(null)
         setSessionState('connecting')
         setSocketState('connecting')
@@ -658,54 +669,143 @@ export default function BrowserPageClient() {
                         </div>
                     </div>
                 </header>
-                <div className='mx-auto grid min-h-0 w-full max-w-[96rem] gap-4 px-4 py-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.7fr)]'>
-                    <section className='grid min-h-[34rem] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
-                        <div className='flex items-center gap-2 border-b border-ui-border bg-ui-raised px-3 py-2'>
-                            <span className='h-3 w-3 rounded-full bg-ui-danger' />
-                            <span className='h-3 w-3 rounded-full bg-ui-warning' />
-                            <span className='h-3 w-3 rounded-full bg-ui-success' />
-                            <div className='min-w-0 flex-1 truncate rounded-md border border-ui-border bg-ui-canvas px-3 py-2 font-mono text-xs text-ui-muted'>{activeUrl || normalizedTarget}</div>
-                        </div>
-                        <div
-                            ref={viewportRef}
-                            className='grid min-h-0 place-items-center bg-ui-canvas p-2 outline-none focus:ring-2 focus:ring-ui-primary/30'
-                            tabIndex={0}
-                            role='application'
-                            aria-label='Interactive isolated browser viewport'
-                            onKeyDown={keyBrowserFrame}
-                        >
-                            {activeImage ? (
-                                <img
-                                    ref={imageRef}
-                                    src={activeImage}
-                                    alt='Live browser sandbox frame'
-                                    className='max-h-full w-full cursor-pointer select-none rounded-md object-contain'
-                                    draggable={false}
-                                    onClick={clickBrowserFrame}
-                                    onDragStart={event => event.preventDefault()}
-                                    onWheel={wheelBrowserFrame}
-                                />
-                            ) : (
-                                <div className='grid max-w-md gap-2 text-center'>
-                                    <ShieldCheck className='mx-auto h-8 w-8 text-ui-primary' />
-                                    <p className='text-lg font-semibold text-ui-text'>{sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
-                                    <p className='text-sm leading-6 text-ui-muted'>{sessionState === 'queued' ? queueCopy(capacity) : 'The remote browser has not sent a screenshot yet. If this persists, rerun the URL or check the broker and provider status below.'}</p>
-                                </div>
-                            )}
-                        </div>
-                    </section>
-                    <aside className='grid min-h-0 gap-4 xl:grid-rows-[auto_minmax(0,1fr)_auto]'>
-                        <CapacityPanel capacity={capacity} sessionState={sessionState} />
-                        <AnalystSummary summary={summary} />
+                <div className='mx-auto grid w-full max-w-[96rem] gap-4 px-4 py-4'>
+                    <div className='grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]'>
+                        <section className='grid h-[min(56vh,38rem)] min-h-96 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
+                            <SandboxTabStrip
+                                activeTab={activeSandboxTab}
+                                tools={selectedProfile.tools}
+                                toolCaptures={toolCaptures}
+                                onSelect={setActiveSandboxTab}
+                            />
+                            <div className='flex items-center gap-2 border-b border-ui-border bg-ui-raised px-3 py-2'>
+                                <span className='h-3 w-3 rounded-full bg-ui-danger' />
+                                <span className='h-3 w-3 rounded-full bg-ui-warning' />
+                                <span className='h-3 w-3 rounded-full bg-ui-success' />
+                                <div className='min-w-0 flex-1 truncate rounded-md border border-ui-border bg-ui-canvas px-3 py-2 font-mono text-xs text-ui-muted'>{activeViewportUrl}</div>
+                            </div>
+                            <div
+                                ref={viewportRef}
+                                className='grid min-h-0 place-items-center bg-ui-canvas p-2 outline-none focus:ring-2 focus:ring-ui-primary/30'
+                                tabIndex={0}
+                                role='application'
+                                aria-label='Interactive isolated browser viewport'
+                                onKeyDown={keyBrowserFrame}
+                            >
+                                {activeViewportImage ? (
+                                    <img
+                                        ref={activeTool ? undefined : imageRef}
+                                        src={activeViewportImage}
+                                        alt={activeTool ? `${activeTool.name} provider frame` : 'Live browser sandbox frame'}
+                                        className={`max-h-full w-full select-none rounded-md object-contain ${activeTool ? '' : 'cursor-pointer'}`}
+                                        draggable={false}
+                                        onClick={activeTool ? undefined : clickBrowserFrame}
+                                        onDragStart={event => event.preventDefault()}
+                                        onWheel={activeTool ? undefined : wheelBrowserFrame}
+                                    />
+                                ) : (
+                                    <div className='grid max-w-md gap-2 text-center'>
+                                        <ShieldCheck className='mx-auto h-8 w-8 text-ui-primary' />
+                                        <p className='text-lg font-semibold text-ui-text'>{activeTool ? `${activeTool.name} tab loading` : sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
+                                        <p className='text-sm leading-6 text-ui-muted'>{activeTool ? providerDetail(activeToolCapture?.toolAnalysis, activeToolCapture) : sessionState === 'queued' ? queueCopy(capacity) : 'The remote browser has not sent a screenshot yet. If this persists, rerun the URL or check the broker and provider status below.'}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+                        <aside className='grid gap-4'>
+                            <CapacityPanel capacity={capacity} sessionState={sessionState} />
+                            <ProviderStatusPanel tools={selectedProfile.tools} toolCaptures={toolCaptures} onSelect={setActiveSandboxTab} />
+                            <div className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted'>
+                                Latest event: {events[0]}
+                            </div>
+                        </aside>
+                    </div>
+                    <div className='grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.72fr)]'>
                         <EvidenceWorkspace captures={captures} profile={selectedProfile} summary={summary} events={events} />
-                        <CaptureTimeline captures={captures} />
-                        <div className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted'>
-                            Latest event: {events[0]}
-                        </div>
-                    </aside>
+                        <aside className='grid gap-4'>
+                            <AnalystSummary summary={summary} />
+                            <CaptureTimeline captures={captures} />
+                        </aside>
+                    </div>
                 </div>
             </section>
         </main>
+    )
+}
+
+function SandboxTabStrip({
+    activeTab,
+    tools,
+    toolCaptures,
+    onSelect,
+}: {
+    activeTab: string
+    tools: SandboxTool[]
+    toolCaptures: Capture[]
+    onSelect: (tab: string) => void
+}) {
+    return (
+        <div className='flex gap-2 overflow-x-auto border-b border-ui-border bg-ui-panel px-3 py-2'>
+            <SandboxTabButton
+                active={activeTab === 'browser'}
+                label='Browser'
+                status='live frame'
+                onClick={() => onSelect('browser')}
+            />
+            {tools.map(tool => {
+                const capture = toolCaptures.find(item => matchesTool(item, tool))
+                return (
+                    <SandboxTabButton
+                        key={tool.id}
+                        active={activeTab === tool.id}
+                        label={tool.name}
+                        status={providerTabStatus(capture, capture?.toolAnalysis)}
+                        onClick={() => onSelect(tool.id)}
+                    />
+                )
+            })}
+        </div>
+    )
+}
+
+function SandboxTabButton({ active, label, status, onClick }: { active: boolean; label: string; status: string; onClick: () => void }) {
+    return (
+        <button
+            type='button'
+            onClick={onClick}
+            className={`grid min-w-[9rem] shrink-0 gap-1 rounded-md border px-3 py-2 text-left transition ${active ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary/60'}`}
+        >
+            <span className='truncate text-sm font-semibold'>{label}</span>
+            <span className='truncate text-[11px] text-ui-muted'>{status}</span>
+        </button>
+    )
+}
+
+function ProviderStatusPanel({ tools, toolCaptures, onSelect }: { tools: SandboxTool[]; toolCaptures: Capture[]; onSelect: (tab: string) => void }) {
+    return (
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+            <h2 className='text-sm font-semibold uppercase text-ui-primary'>Provider tabs</h2>
+            <div className='mt-3 grid gap-2'>
+                {tools.length ? tools.map(tool => {
+                    const capture = toolCaptures.find(item => matchesTool(item, tool))
+                    const analysis = capture?.toolAnalysis
+                    return (
+                        <button
+                            key={tool.id}
+                            type='button'
+                            onClick={() => onSelect(tool.id)}
+                            className='grid gap-1 rounded-md border border-ui-border bg-ui-raised p-3 text-left transition hover:border-ui-primary'
+                        >
+                            <span className='flex items-center justify-between gap-2'>
+                                <span className='font-semibold text-ui-text'>{tool.name}</span>
+                                <span className='rounded border border-ui-border bg-ui-panel px-1.5 py-0.5 text-[10px] font-semibold uppercase text-ui-muted'>{providerStatus(capture, analysis)}</span>
+                            </span>
+                            <span className='text-xs leading-5 text-ui-muted'>{providerDetail(analysis, capture)}</span>
+                        </button>
+                    )
+                }) : <p className='text-xs text-ui-muted'>No provider tools configured for this profile.</p>}
+            </div>
+        </section>
     )
 }
 
@@ -1382,9 +1482,29 @@ function matchesTool(capture: Capture, tool: SandboxTool) {
 
 function providerStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (!capture) return 'Unavailable'
+    if (capture.error === 'provider_navigation_pending') return 'Loading'
     if (capture.error) return 'Provider error'
     if (hasParsedProviderResult(analysis)) return 'Result captured'
     return 'Result unavailable'
+}
+
+function providerTabStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
+    if (!capture) return 'waiting'
+    if (analysis?.vendorFlagged !== undefined) return `${analysis.vendorFlagged}/${analysis.vendorTotal || '?'} vendors`
+    if (analysis?.alertCount !== undefined) return `${analysis.alertCount} alerts`
+    if (capture.error === 'provider_navigation_pending') return 'loading'
+    if (capture.error) return 'blocked'
+    return analysis?.verdict && analysis.verdict !== 'unknown' ? analysis.verdict : 'captured'
+}
+
+function providerDetail(analysis?: SandboxToolAnalysis, capture?: Capture) {
+    if (analysis?.vendorFlagged !== undefined) return `VirusTotal vendors: ${analysis.vendorFlagged}/${analysis.vendorTotal || '?'}${analysis.communityCommentCount !== undefined ? ` · Community comments: ${analysis.communityCommentCount}` : ''}`
+    if (analysis?.alertCount !== undefined) return `urlquery alerts: ${analysis.alertCount}${analysis.communityCommentCount !== undefined ? ` · Community comments: ${analysis.communityCommentCount}` : ''}`
+    if (analysis?.extractedSignals?.length) return analysis.extractedSignals.slice(0, 2).join(' · ')
+    if (capture?.error === 'provider_navigation_pending') return 'Provider tab is open and loading in the sandbox.'
+    if (capture?.error) return `Provider blocked or failed: ${capture.error}`
+    if (capture) return 'Provider tab captured, but no parsed verdict was returned.'
+    return 'Provider tab has not returned a capture yet.'
 }
 
 function hasParsedProviderResult(analysis?: SandboxToolAnalysis) {

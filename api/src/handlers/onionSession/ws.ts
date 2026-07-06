@@ -503,7 +503,14 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             void dismissCookieOverlays(page)
                 .then(() => sendFrame(true, 'cookie_dismissed'))
                 .catch(() => undefined)
-            await captureProfileTools(context, message.profileTools || [], target)
+            void captureProfileTools(context, message.profileTools || [], target).catch(error => {
+                send({
+                    type: 'status',
+                    state: 'profile_tools_failed',
+                    sessionId,
+                    message: error instanceof Error ? error.message : String(error),
+                })
+            })
         } catch (error) {
             await cleanup()
             throw error
