@@ -576,6 +576,26 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     webcrackLoad = await withTimeout(loadWebCrackSample(toolPage, deobfuscationTasks), 2500, { loaded: false, reason: 'WebCrack did not accept a sample within the provider budget.' })
                 }
                 await toolPage.waitForTimeout(webcrackLoad?.loaded ? 150 : 1200).catch(() => undefined)
+                if (webcrackTool) {
+                    const evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 400, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies())
+                    const image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 500 }), 500, null)
+                    send({
+                        type: 'tool_capture',
+                        sessionId,
+                        id: tool.id || safeToolId(tool.name || toolUrl),
+                        name: tool.name || toolUrl,
+                        url: toolPage.url(),
+                        title: await toolPage.title().catch(() => ''),
+                        capturedAt: startedAt,
+                        image: image ? image.toString('base64') : null,
+                        evidence,
+                        toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad),
+                        webcrackLoad,
+                        target,
+                        error: navigationError || undefined,
+                    })
+                    return
+                }
                 const initialEvidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 900, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies())
                 const initialImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 900 }), 900, null)
                 const initialAnalysis = analyzeToolEvidence(tool.name || toolUrl, initialEvidence)
