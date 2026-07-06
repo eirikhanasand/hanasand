@@ -69,7 +69,7 @@ const solutions = [
 const stats = [
     ['Alert target', 'Company, vendor, domain, and brand mentions'],
     ['What gets sent', 'Group, company, data mentioned, source, time, review status'],
-    ['Freshness basis', 'New and changed leak-site posts'],
+    ['Based on', 'New and changed leak-site posts'],
     ['Where it goes', 'Webhook, case workflow, and analyst console'],
 ]
 
@@ -295,7 +295,7 @@ export default async function Page({
                         <p className='text-sm font-semibold uppercase text-ui-primary'>How monitoring works</p>
                         <h2 className='text-3xl font-semibold text-ui-text md:text-4xl'>Find the company mention before it becomes a screenshot</h2>
                         <p className='text-base leading-7 text-ui-muted'>
-                            Each alert is built for the first triage decision: who posted it, which company was named, what data was mentioned, when it appeared, and what to review next.
+                            Each alert is built for the first triage decision: who posted it, which company was named, what data was mentioned, when it appeared, and what to do next.
                         </p>
                         <div className='grid gap-3'>
                             {stats.map(([label, value]) => (

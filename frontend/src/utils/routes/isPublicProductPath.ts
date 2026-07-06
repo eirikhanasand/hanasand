@@ -18,6 +18,7 @@ export default function isPublicProductPath(path: string | null | undefined) {
         || pathname === '/contact'
         || pathname === '/developers'
         || pathname === '/about'
+        || pathname === '/activity'
         || pathname === '/ti'
         || pathname.startsWith('/ti/')
         || pathname === '/pwned'

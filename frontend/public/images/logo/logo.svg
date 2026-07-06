@@ -1,16 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
-    <defs>
-        <style>.a{fill:#f08640;}.b{fill:#fff;}</style>
-    </defs>
-    <title>base-white</title>
-    <rect class="a" width="40" height="170"/>
-    <rect class="a" x="65" y="-65" width="40" height="170" transform="translate(105 -65) rotate(90)"/>
-    <rect class="a" x="495" y="-65" width="40" height="170" transform="translate(535 -495) rotate(90)"/>
-    <rect class="a" x="560" width="40" height="170" transform="translate(1160 170) rotate(180)"/>
-    <rect class="a" x="65" y="495" width="40" height="170" transform="translate(-495 665) rotate(-90)"/>
-    <rect class="a" y="430" width="40" height="170"/>
-    <rect class="a" x="560" y="430" width="40" height="170" transform="translate(1160 1030) rotate(180)"/>
-    <rect class="a" x="495" y="495" width="40" height="170" transform="translate(-65 1095) rotate(-90)"/>
-    <rect class="b" x="190" y="110" width="70" height="380"/>
-    <rect class="b" x="190" y="420" width="220" height="70"/>
+  <rect width="600" height="600" rx="132" fill="#0e1520"/>
+  <path d="M75 395c75-47 150-47 225 0s150 47 225 0" fill="none" stroke="#67d6c5" stroke-width="38" stroke-linecap="round"/>
+  <path d="M140 470h320" stroke="#f5f7fb" stroke-width="40" stroke-linecap="round"/>
+  <path d="M200 470l68-175h72l68 175" fill="none" stroke="#d7e5ff" stroke-width="40" stroke-linejoin="round"/>
+  <path d="M238 295l66-66 66 66" fill="none" stroke="#f0b35a" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M408 178v292" stroke="#d7e5ff" stroke-width="40" stroke-linecap="round"/>
+  <path d="M408 185a122 122 0 0 1 122 122" fill="none" stroke="#8fb2ff" stroke-width="30" stroke-linecap="round"/>
+  <path d="M408 252a55 55 0 0 1 55 55" fill="none" stroke="#8fb2ff" stroke-width="30" stroke-linecap="round"/>
+  <circle cx="408" cy="185" r="30" fill="#e35f2b"/>
 </svg>

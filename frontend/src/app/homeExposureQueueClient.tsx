@@ -1,50 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import { Maximize2 } from 'lucide-react'
 import Marquee from '@/components/shared/marquee'
-
-type ExposureQueueItem = {
-    id: string
-    actor: string
-    company: string
-    claimedData: string
-    claimedDataSize: string
-    claimTime?: string
-    collectedAt?: string
-    status: string
-    confidence?: number
-    sourceName?: string
-}
-
-type ExposureQueue = {
-    generatedAt: string
-    status: string
-    freshness?: {
-        latestClaimAt?: string | null
-        latestCollectedAt?: string | null
-        ageMinutes?: number | null
-        collectionAgeMinutes?: number | null
-        maxLiveAgeMinutes?: number
-    }
-    scheduler?: {
-        state?: string
-        cadenceSeconds?: number
-    }
-    counts?: {
-        visible?: number
-        total?: number
-        needsReview?: number
-        metadataOnly?: number
-    }
-    page?: {
-        limit?: number
-        offset?: number
-        total?: number
-        nextOffset?: number | null
-        hasMore?: boolean
-    }
-    items: ExposureQueueItem[]
-}
+import { dedupeItems, formatClaimTime, mergeExposureQueueItems, normalizeExposureQueue, type ExposureQueue, type ExposureQueueItem } from './exposureQueue'
 
 type Props = {
     initialQueue: ExposureQueue
@@ -133,7 +93,9 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                 </div>
                 <div className='flex items-center gap-2'>
                     <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{items.length}/{total}</span>
-                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${exposureQueueTone(queue.status)}`}>{exposureQueueLabel(queue.status)}</span>
+                    <Link href='/activity' aria-label='Open fullscreen activity' className='grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-muted transition hover:border-ui-primary hover:text-ui-primary focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
+                        <Maximize2 className='h-4 w-4' />
+                    </Link>
                 </div>
             </div>
             <div className='landing-surface-divider flex flex-wrap items-center justify-between gap-2 border-b border-ui-border bg-ui-raised px-4 py-2 text-xs text-ui-muted' data-home-exposure-panel-toolbar='true'>
@@ -177,89 +139,6 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
     )
 }
 
-function normalizeExposureQueue(value: unknown): ExposureQueue {
-    const record = isRecord(value) ? value : {}
-    const generatedAt = typeof record.generatedAt === 'string' ? record.generatedAt : new Date().toISOString()
-    const items = Array.isArray(record.items) ? record.items.map((rawItem, index) => {
-        const item = isRecord(rawItem) ? rawItem : {}
-        return {
-            id: String(item.id || `exposure-${index}`),
-            actor: String(item.actor || 'Unknown actor'),
-            company: String(item.company || 'Unknown company'),
-            claimedData: String(item.claimedData || 'Not disclosed by TA'),
-            claimedDataSize: String(item.claimedDataSize || 'Not disclosed by TA'),
-            claimTime: typeof item.claimTime === 'string' ? item.claimTime : undefined,
-            collectedAt: typeof item.collectedAt === 'string' ? item.collectedAt : undefined,
-            status: String(item.status || 'parsed'),
-            confidence: typeof item.confidence === 'number' ? item.confidence : undefined,
-            sourceName: typeof item.sourceName === 'string' ? item.sourceName : undefined,
-        }
-    }) : []
-    const freshnessRecord = isRecord(record.freshness) ? record.freshness : {}
-    const schedulerRecord = isRecord(record.scheduler) ? record.scheduler : {}
-    const countsRecord = isRecord(record.counts) ? record.counts : {}
-    const pageRecord = isRecord(record.page) ? record.page : {}
-    return {
-        generatedAt,
-        status: String(record.status || (items.length ? 'stale' : 'checking')),
-        freshness: {
-            latestClaimAt: typeof freshnessRecord.latestClaimAt === 'string' || freshnessRecord.latestClaimAt === null ? freshnessRecord.latestClaimAt : undefined,
-            latestCollectedAt: typeof freshnessRecord.latestCollectedAt === 'string' || freshnessRecord.latestCollectedAt === null ? freshnessRecord.latestCollectedAt : undefined,
-            ageMinutes: typeof freshnessRecord.ageMinutes === 'number' || freshnessRecord.ageMinutes === null ? freshnessRecord.ageMinutes : undefined,
-            collectionAgeMinutes: typeof freshnessRecord.collectionAgeMinutes === 'number' || freshnessRecord.collectionAgeMinutes === null ? freshnessRecord.collectionAgeMinutes : undefined,
-            maxLiveAgeMinutes: typeof freshnessRecord.maxLiveAgeMinutes === 'number' ? freshnessRecord.maxLiveAgeMinutes : undefined,
-        },
-        scheduler: {
-            state: typeof schedulerRecord.state === 'string' ? schedulerRecord.state : undefined,
-            cadenceSeconds: typeof schedulerRecord.cadenceSeconds === 'number' ? schedulerRecord.cadenceSeconds : undefined,
-        },
-        counts: {
-            visible: typeof countsRecord.visible === 'number' ? countsRecord.visible : undefined,
-            total: typeof countsRecord.total === 'number' ? countsRecord.total : undefined,
-            needsReview: typeof countsRecord.needsReview === 'number' ? countsRecord.needsReview : undefined,
-            metadataOnly: typeof countsRecord.metadataOnly === 'number' ? countsRecord.metadataOnly : undefined,
-        },
-        page: {
-            limit: typeof pageRecord.limit === 'number' ? pageRecord.limit : undefined,
-            offset: typeof pageRecord.offset === 'number' ? pageRecord.offset : undefined,
-            total: typeof pageRecord.total === 'number' ? pageRecord.total : undefined,
-            nextOffset: typeof pageRecord.nextOffset === 'number' || pageRecord.nextOffset === null ? pageRecord.nextOffset : undefined,
-            hasMore: typeof pageRecord.hasMore === 'boolean' ? pageRecord.hasMore : undefined,
-        },
-        items,
-    }
-}
-
-export function mergeExposureQueueItems(current: ExposureQueueItem[], nextItems: ExposureQueueItem[], mode: 'replace' | 'append') {
-    return mode === 'append'
-        ? dedupeItems([...current, ...nextItems])
-        : dedupeItems([...nextItems, ...current])
-}
-
-export function dedupeItems(items: ExposureQueueItem[]) {
-    const seen = new Set<string>()
-    return items.filter((item) => {
-        if (seen.has(item.id)) return false
-        seen.add(item.id)
-        return true
-    })
-}
-
-function exposureQueueLabel(status: string) {
-    if (status === 'live') return 'Live'
-    if (status === 'stale') return 'Updating'
-    if (status === 'empty') return 'Watching'
-    if (status === 'unavailable') return 'Unavailable'
-    return 'Checking'
-}
-
-function exposureQueueTone(status: string) {
-    if (status === 'live') return 'border-ui-success/35 bg-ui-success/10 text-ui-success'
-    if (status === 'stale') return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
-    if (status === 'unavailable') return 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
-    return 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary'
-}
-
 function latestActivitySubtitle(queue: ExposureQueue, items: ExposureQueueItem[]) {
     if (!items.length && queue.status === 'unavailable') {
         return 'Live exposure feed is temporarily unavailable.'
@@ -297,20 +176,4 @@ function formatRefreshCadence(seconds?: number) {
         return `Refreshes every ${minutes} minute${minutes === 1 ? '' : 's'}`
     }
     return `Refreshes every ${seconds} seconds`
-}
-
-function formatClaimTime(value?: string | null) {
-    if (!value) return 'pending'
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return value
-    const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getUTCMonth()]
-    const hour24 = date.getUTCHours()
-    const hour = hour24 % 12 || 12
-    const minute = String(date.getUTCMinutes()).padStart(2, '0')
-    const suffix = hour24 >= 12 ? 'PM' : 'AM'
-    return `${month} ${date.getUTCDate()}, ${hour}:${minute} ${suffix} UTC`
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }

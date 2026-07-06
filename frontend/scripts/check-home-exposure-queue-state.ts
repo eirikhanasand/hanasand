@@ -1,4 +1,4 @@
-import { mergeExposureQueueItems } from '../src/app/homeExposureQueueClient'
+import { mergeExposureQueueItems } from '../src/app/exposureQueue'
 
 const persisted = [{
     id: 'cap_old_lockbit',
