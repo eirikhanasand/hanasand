@@ -59,7 +59,7 @@
   --color-bright: #f7f8f2;
   --page-wash-top: #091321;
   --page-wash-bottom: #050b14;
-  --dot-grid: rgba(117, 148, 205, 0.28);
+  --dot-grid: rgba(117, 148, 205, 0.46);
   --ambient-primary: rgba(48, 86, 211, 0.105);
   --ambient-secondary: rgba(20, 163, 90, 0.045);
   --ambient-neutral: rgba(157, 182, 255, 0.055);
@@ -96,7 +96,7 @@
   --color-bright: #171a21;
   --page-wash-top: #ffffff;
   --page-wash-bottom: #eef2f7;
-  --dot-grid: rgba(48, 86, 211, 0.085);
+  --dot-grid: rgba(48, 86, 211, 0.16);
   --ambient-primary: rgba(48, 86, 211, 0.044);
   --ambient-secondary: rgba(20, 163, 90, 0.030);
   --ambient-neutral: rgba(22, 26, 33, 0.026);
@@ -236,16 +236,16 @@ button:not(:disabled),
   content: '';
   position: absolute;
   inset: 0;
-  opacity: 0.68;
+  opacity: 0.9;
   background-image:
     radial-gradient(circle at 1px 1px, var(--dot-grid) 1px, transparent 0);
   background-position: 0 0;
   background-size: 22px 22px;
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.82), transparent 78%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.96), transparent 86%);
 }
 
 .light .site-atmosphere::before {
-  opacity: 0.46;
+  opacity: 0.72;
 }
 
 .site-atmosphere::after {

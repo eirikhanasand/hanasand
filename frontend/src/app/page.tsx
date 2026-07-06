@@ -75,7 +75,7 @@ const stats = [
 
 const workflowShortcuts = [
     { label: 'Watch companies', href: '/organizations', detail: 'Companies, vendors, domains' },
-    { label: 'Catch beaches', href: '/dashboard/dwm', detail: 'New exposure mentions' },
+    { label: 'Catch breaches', href: '/dashboard/dwm', detail: 'New exposure mentions' },
     { label: 'Review severity', href: '/dashboard/dwm', detail: 'Evidence, confidence, action' },
     { label: 'Route alerts', href: '/dashboard/automations?setup=dwm', detail: 'Slack, webhooks, cases' },
 ]
@@ -343,7 +343,7 @@ export default async function Page({
 function HomeOperatorStrip() {
     return (
         <div
-            className='landing-surface-border grid w-full max-w-6xl gap-3 rounded-xl border border-ui-border bg-ui-panel/90 p-3 text-left shadow-sm backdrop-blur sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.95fr_1.5fr_auto]'
+            className='landing-surface-border grid w-full max-w-6xl gap-3 rounded-xl border border-ui-border bg-ui-panel/90 p-3 text-left shadow-sm backdrop-blur sm:grid-cols-2 lg:grid-cols-[1.2fr_1.05fr_0.8fr_0.95fr_1.25fr_auto]'
             data-home-product-status='true'
         >
             <HomeOperatorFact label='Product' value='Company exposure alerts' />
