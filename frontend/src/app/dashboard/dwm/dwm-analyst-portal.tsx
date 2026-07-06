@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type Dispatch, type MouseEvent, type ReactNode, type SetStateAction } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, XCircle } from 'lucide-react'
@@ -158,13 +158,27 @@ const DWM_TIMELINE_PREVIEW_ROWS = 4
 const DWM_RECOVERY_PREVIEW_ROWS = 3
 const DWM_DELIVERY_PREVIEW_ROWS = 3
 
-export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operations, alerts, deliveries, dataHealth, initialAlertId, publicTiHandoff }: PortalProps) {
+export function DwmAnalystPortal({
+    tenantId,
+    organizationId,
+    snapshot: initialSnapshot,
+    operations: initialOperations,
+    alerts: initialAlerts,
+    deliveries: initialDeliveries,
+    dataHealth: initialDataHealth,
+    initialAlertId,
+    publicTiHandoff,
+}: PortalProps) {
     const router = useRouter()
     const searchParams = useSearchParams()
+    const [snapshot, setSnapshot] = useState(initialSnapshot)
+    const [operations, setOperations] = useState(initialOperations)
+    const [alerts, setAlerts] = useState(initialAlerts)
+    const [dataHealth, setDataHealth] = useState(initialDataHealth)
     const [selectedId, setSelectedId] = useState(initialAlertId && alerts.some(alert => alert.id === initialAlertId) ? initialAlertId : alerts[0]?.id ?? '')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
-    const [localDeliveries, setLocalDeliveries] = useState<DeliveryItem[]>(deliveries)
+    const [localDeliveries, setLocalDeliveries] = useState<DeliveryItem[]>(initialDeliveries)
     const [localCaseState, setLocalCaseState] = useLocalCaseState()
     const [queueFilter, setQueueFilter] = useState<QueueFilter>(() => normalizeQueueFilter(searchParams.get('filter')))
     const [queueQuery, setQueueQuery] = useState(() => searchParams.get('q')?.slice(0, 120) ?? '')
@@ -216,8 +230,16 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
     }, [queue, selectedId])
 
     useEffect(() => {
-        setLocalDeliveries(current => mergeDeliveries(deliveries, current))
-    }, [deliveries])
+        const controller = new AbortController()
+        const params = dwmScopeSearchParams(tenantId, organizationId)
+        void refreshDwmProduct(params, controller.signal, setSnapshot, setDataHealth)
+        void refreshDwmOperations(params, controller.signal, setOperations, setDataHealth)
+        void refreshDwmAlerts(params, controller.signal, snapshot.alerts, setAlerts, setDataHealth)
+        void refreshDwmDeliveries(params, controller.signal, setLocalDeliveries, setDataHealth)
+        return () => {
+            controller.abort()
+        }
+    }, [tenantId, organizationId])
 
     async function updateAlert(alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) {
         await runAction(`update:${alertId}`, async () => {
@@ -574,6 +596,105 @@ function dwmQueueHref(input: { params: URLSearchParams, tenantId: string, organi
         nextParams.delete('q')
     }
     return `/dashboard/dwm?${nextParams.toString()}`
+}
+
+function dwmScopeSearchParams(tenantId: string, organizationId?: string) {
+    const params = new URLSearchParams({ tenantId })
+    if (organizationId) params.set('organizationId', organizationId)
+    return params
+}
+
+async function refreshDwmProduct(
+    params: URLSearchParams,
+    signal: AbortSignal,
+    setSnapshot: Dispatch<SetStateAction<DwmProductSnapshot>>,
+    setDataHealth: Dispatch<SetStateAction<DwmDataHealth>>,
+) {
+    const productParams = new URLSearchParams(params)
+    productParams.set('demo', 'false')
+    try {
+        const response = await fetch(`/api/dwm/product?${productParams.toString()}`, { cache: 'no-store', signal })
+        if (!response.ok) return
+        setSnapshot(await response.json() as DwmProductSnapshot)
+        setDataHealth(current => ({ ...current, snapshot: { state: 'live', label: 'Dark web stream live', detail: 'The exposure monitor is showing live watchlists, sources, actors, and alerts.' } }))
+    } catch (error) {
+        if (!isAbortError(error)) setDataHealth(current => ({ ...current, snapshot: { ...current.snapshot, state: current.snapshot.state === 'live' ? 'live' : 'error' } }))
+    }
+}
+
+async function refreshDwmOperations(
+    params: URLSearchParams,
+    signal: AbortSignal,
+    setOperations: Dispatch<SetStateAction<OperationsSnapshot | null>>,
+    setDataHealth: Dispatch<SetStateAction<DwmDataHealth>>,
+) {
+    try {
+        const response = await fetch(`/api/dwm/operations?${params.toString()}`, { cache: 'no-store', signal })
+        if (!response.ok) return
+        setOperations(await response.json() as OperationsSnapshot)
+        setDataHealth(current => ({ ...current, operations: { state: 'live', label: 'Collection live', detail: 'Collection is showing source and evidence state.' } }))
+    } catch (error) {
+        if (!isAbortError(error)) setDataHealth(current => ({ ...current, operations: { ...current.operations, state: current.operations.state === 'live' ? 'live' : 'error' } }))
+    }
+}
+
+async function refreshDwmAlerts(
+    params: URLSearchParams,
+    signal: AbortSignal,
+    fallbackAlerts: PortalAlert[],
+    setAlerts: Dispatch<SetStateAction<PortalAlert[]>>,
+    setDataHealth: Dispatch<SetStateAction<DwmDataHealth>>,
+) {
+    try {
+        const response = await fetch(`/api/dwm/alerts?${params.toString()}`, { cache: 'no-store', signal })
+        if (!response.ok) return
+        const payload = await response.json() as { alerts?: PortalAlert[] }
+        const savedAlerts = payload.alerts || []
+        setAlerts(savedAlerts.length ? mergePortalAlerts(savedAlerts, fallbackAlerts) : fallbackAlerts)
+        setDataHealth(current => ({ ...current, alerts: { state: 'live', label: 'Alerts live', detail: `${savedAlerts.length} saved alert(s).` }, usingFallbackAlerts: !savedAlerts.length && fallbackAlerts.length > 0 }))
+    } catch (error) {
+        if (!isAbortError(error)) setDataHealth(current => ({ ...current, alerts: { ...current.alerts, state: current.alerts.state === 'live' ? 'live' : 'error' } }))
+    }
+}
+
+async function refreshDwmDeliveries(
+    params: URLSearchParams,
+    signal: AbortSignal,
+    setLocalDeliveries: Dispatch<SetStateAction<DeliveryItem[]>>,
+    setDataHealth: Dispatch<SetStateAction<DwmDataHealth>>,
+) {
+    try {
+        const response = await fetch(`/api/dwm/webhooks/deliveries?${params.toString()}`, { cache: 'no-store', signal })
+        if (!response.ok) return
+        const payload = await response.json() as { deliveries?: DeliveryItem[] }
+        const deliveries = payload.deliveries || []
+        setLocalDeliveries(current => mergeDeliveries(deliveries, current))
+        setDataHealth(current => ({ ...current, deliveries: { state: 'live', label: 'Deliveries live', detail: `${deliveries.length} delivery attempt(s).` } }))
+    } catch (error) {
+        if (!isAbortError(error)) setDataHealth(current => ({ ...current, deliveries: { ...current.deliveries, state: current.deliveries.state === 'live' ? 'live' : 'error' } }))
+    }
+}
+
+function mergePortalAlerts(savedAlerts: PortalAlert[], fallbackAlerts: PortalAlert[]) {
+    if (!savedAlerts.length) return fallbackAlerts
+    const fallbackById = new Map(fallbackAlerts.map(alert => [alert.id, alert]))
+    const merged = savedAlerts.map(alert => {
+        const fallback = fallbackById.get(alert.id)
+        if (!fallback) return alert
+        return {
+            ...fallback,
+            ...alert,
+            evidence: alert.evidence.length ? alert.evidence : fallback.evidence,
+            provenance: { ...(fallback.provenance ?? {}), ...(alert.provenance ?? {}) },
+            sourceProvenanceSummary: { ...(fallback.sourceProvenanceSummary ?? {}), ...(alert.sourceProvenanceSummary ?? {}) },
+        }
+    })
+    const savedIds = new Set(savedAlerts.map(alert => alert.id))
+    return [...merged, ...fallbackAlerts.filter(alert => !savedIds.has(alert.id))]
+}
+
+function isAbortError(error: unknown) {
+    return error instanceof DOMException && error.name === 'AbortError'
 }
 
 function scopeBody<T extends Record<string, unknown>>(body: T, tenantId: string, organizationId?: string) {

@@ -7,6 +7,11 @@ import { DwmAnalystPortal } from './dwm-analyst-portal'
 
 export const dynamic = 'force-dynamic'
 
+const DWM_CACHE_REFRESH_MS = 60_000
+const DWM_FAST_LOAD_TIMEOUTS = { snapshot: 1200, operations: 900, alerts: 900, deliveries: 900 }
+const DWM_FULL_LOAD_TIMEOUTS = { snapshot: 8000, operations: 2500, alerts: 2500, deliveries: 2500 }
+const dwmPageCache = new Map<string, { loadedAt: number, data: DwmPageData }>()
+
 export default async function DashboardDwmPage({
     searchParams,
 }: {
@@ -22,12 +27,14 @@ export default async function DashboardDwmPage({
         organizationId: firstParam(params?.organizationId)?.trim() || undefined,
     }
     const scraperHeaders = await dwmScraperHeaders()
-    const [snapshotResult, operationsResult, alertsResult, deliveriesResult] = await Promise.all([
-        loadDwmSnapshot(scope, scraperHeaders),
-        loadDwmOperations(scope, scraperHeaders),
-        loadDwmAlerts(scope, scraperHeaders),
-        loadDwmDeliveries(scope, scraperHeaders),
-    ])
+    const cacheKey = dwmPageCacheKey(scope, scraperHeaders)
+    const cached = dwmPageCache.get(cacheKey)
+    const pageData = cached?.data ?? await loadDwmPageData(scope, scraperHeaders, DWM_FAST_LOAD_TIMEOUTS)
+    if (!cached) dwmPageCache.set(cacheKey, { loadedAt: Date.now(), data: pageData })
+    if (!cached || Date.now() - cached.loadedAt > DWM_CACHE_REFRESH_MS) {
+        void refreshDwmPageCache(cacheKey, scope, scraperHeaders).catch(() => {})
+    }
+    const { snapshotResult, operationsResult, alertsResult, deliveriesResult } = pageData
     const snapshot = snapshotResult.data
     const operations = operationsResult.data
     const savedAlerts = alertsResult.data
@@ -58,12 +65,37 @@ export default async function DashboardDwmPage({
     )
 }
 
+async function loadDwmPageData(scope: DwmPageScope, headers: HeadersInit, timeouts: DwmLoadTimeouts): Promise<DwmPageData> {
+    const [snapshotResult, operationsResult, alertsResult, deliveriesResult] = await Promise.all([
+        loadDwmSnapshot(scope, headers, timeouts.snapshot),
+        loadDwmOperations(scope, headers, timeouts.operations),
+        loadDwmAlerts(scope, headers, timeouts.alerts),
+        loadDwmDeliveries(scope, headers, timeouts.deliveries),
+    ])
+    return { snapshotResult, operationsResult, alertsResult, deliveriesResult }
+}
+
+async function refreshDwmPageCache(cacheKey: string, scope: DwmPageScope, headers: HeadersInit) {
+    const data = await loadDwmPageData(scope, headers, DWM_FULL_LOAD_TIMEOUTS)
+    dwmPageCache.set(cacheKey, { loadedAt: Date.now(), data })
+}
+
+function dwmPageCacheKey(scope: DwmPageScope, headers: HeadersInit) {
+    const entries = new Headers(headers)
+    return [
+        scope.tenantId,
+        scope.organizationId || '',
+        entries.get('id') || '',
+        entries.get('x-actor-id') || '',
+    ].join(':')
+}
+
 function firstParam(value: string | string[] | undefined) {
     if (Array.isArray(value)) return value[0] || undefined
     return value
 }
 
-async function loadDwmSnapshot(scope: DwmPageScope, headers: HeadersInit): Promise<LoadResult<DwmProductSnapshot>> {
+async function loadDwmSnapshot(scope: DwmPageScope, headers: HeadersInit, timeoutMs: number): Promise<LoadResult<DwmProductSnapshot>> {
     const base = tiScraperApiBase()
     if (!base) return {
         data: emptyDwmProductSnapshot('missing scraper base', undefined, scope.tenantId),
@@ -77,7 +109,7 @@ async function loadDwmSnapshot(scope: DwmPageScope, headers: HeadersInit): Promi
         setDwmScopeParams(target, scope)
         target.searchParams.set('demo', 'false')
 
-        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(8000) })
+        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(timeoutMs) })
         if (!response.ok) return {
             data: emptyDwmProductSnapshot(`DWM stream ${response.status}`, undefined, scope.tenantId),
             state: 'error',
@@ -119,14 +151,14 @@ function emptyDwmProductSnapshot(reason: string, generatedAt = new Date().toISOS
     }
 }
 
-async function loadDwmOperations(scope: DwmPageScope, headers: HeadersInit): Promise<LoadResult<DwmOperationsSnapshot | null>> {
+async function loadDwmOperations(scope: DwmPageScope, headers: HeadersInit, timeoutMs: number): Promise<LoadResult<DwmOperationsSnapshot | null>> {
     const base = tiScraperApiBase()
     if (!base) return { data: null, state: 'missing', label: 'Collection syncing', detail: 'Collection state is loading.' }
 
     try {
         const target = new URL('/v1/dwm/operations', base)
         setDwmScopeParams(target, scope)
-        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(2500) })
+        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(timeoutMs) })
         if (!response.ok) return { data: null, state: 'error', label: `Collection ${response.status}`, detail: 'Collection could not load current source state.' }
         return { data: await response.json() as DwmOperationsSnapshot, state: 'live', label: 'Collection live', detail: 'Collection is showing source and evidence state.' }
     } catch (error) {
@@ -134,14 +166,14 @@ async function loadDwmOperations(scope: DwmPageScope, headers: HeadersInit): Pro
     }
 }
 
-async function loadDwmAlerts(scope: DwmPageScope, headers: HeadersInit): Promise<LoadResult<DwmAlertInboxItem[]>> {
+async function loadDwmAlerts(scope: DwmPageScope, headers: HeadersInit, timeoutMs: number): Promise<LoadResult<DwmAlertInboxItem[]>> {
     const base = tiScraperApiBase()
     if (!base) return { data: [], state: 'missing', label: 'Alerts syncing', detail: 'Saved alert state is loading.' }
 
     try {
         const target = new URL('/v1/dwm/alerts', base)
         setDwmScopeParams(target, scope)
-        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(2500) })
+        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(timeoutMs) })
         if (!response.ok) return { data: [], state: 'error', label: `Alerts ${response.status}`, detail: 'The alert stream could not load saved alerts.' }
         const payload = await response.json() as { alerts?: DwmAlertInboxItem[] }
         return { data: payload.alerts || [], state: 'live', label: 'Alerts live', detail: `${(payload.alerts || []).length} saved alert(s).` }
@@ -150,14 +182,14 @@ async function loadDwmAlerts(scope: DwmPageScope, headers: HeadersInit): Promise
     }
 }
 
-async function loadDwmDeliveries(scope: DwmPageScope, headers: HeadersInit): Promise<LoadResult<DwmDeliveryItem[]>> {
+async function loadDwmDeliveries(scope: DwmPageScope, headers: HeadersInit, timeoutMs: number): Promise<LoadResult<DwmDeliveryItem[]>> {
     const base = tiScraperApiBase()
     if (!base) return { data: [], state: 'missing', label: 'Deliveries syncing', detail: 'Delivery state is loading.' }
 
     try {
         const target = new URL('/v1/dwm/webhooks/deliveries', base)
         setDwmScopeParams(target, scope)
-        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(2500) })
+        const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(timeoutMs) })
         if (!response.ok) return { data: [], state: 'error', label: `Deliveries ${response.status}`, detail: 'The delivery ledger could not load delivery attempts.' }
         const payload = await response.json() as { deliveries?: DwmDeliveryItem[] }
         const deliveries = (payload.deliveries || []).sort((a, b) => b.attemptedAt.localeCompare(a.attemptedAt))
@@ -202,6 +234,20 @@ type LoadResult<T> = {
     state: 'live' | 'fallback' | 'missing' | 'error'
     label: string
     detail: string
+}
+
+type DwmLoadTimeouts = {
+    snapshot: number
+    operations: number
+    alerts: number
+    deliveries: number
+}
+
+type DwmPageData = {
+    snapshotResult: LoadResult<DwmProductSnapshot>
+    operationsResult: LoadResult<DwmOperationsSnapshot | null>
+    alertsResult: LoadResult<DwmAlertInboxItem[]>
+    deliveriesResult: LoadResult<DwmDeliveryItem[]>
 }
 
 type DwmOperationsSnapshot = {
