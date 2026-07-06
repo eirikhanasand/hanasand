@@ -9,7 +9,6 @@ import postBlocklist from '@/utils/traffic/postBlocklist'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import prettyDate from '@/utils/date/prettyDate'
 import TrafficSpeedometer from '@/components/traffic/speedometer'
-import useWS from '@/hooks/useWS'
 
 type MetricSummary = {
     value: string
@@ -53,7 +52,7 @@ export default function TrafficDashboard({
     const [editingBlock, setEditingBlock] = useState<BlocklistEntry | null>(null)
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
-    const { data: domains } = useWS<DomainTPS[]>({ initialState: Array.isArray(topDomains) ? topDomains : [], path: '/tps/:id', replace: true })
+    const domains = Array.isArray(topDomains) ? topDomains : []
     const commonListStyle = 'flex max-h-[62vh] flex-col gap-3 overflow-y-auto rounded-md border border-ui-border bg-ui-panel p-4 text-sm shadow-sm'
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
