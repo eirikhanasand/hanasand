@@ -632,7 +632,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     target,
                     error: navigationError || 'Provider tab opened; verdict parsing is still running.',
                 })
-                const providerText = officialProviderKind(preparedUrl) ? await waitForProviderData(tool, toolPage, providerBodies) : providerBodies()
+                const providerText = officialProviderKind(preparedUrl)
+                    ? await waitForProviderData(tool, toolPage, providerBodies)
+                    : [providerBodies(), await collectRenderedText(toolPage)].filter(Boolean).join('\n')
                 if (providerText && hasParsedProviderData(tool, providerText)) {
                     navigationError = ''
                     const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText)
