@@ -28,6 +28,7 @@ test.describe('public threat actor profile', () => {
         await expect(body).toContainText('Recent activity')
         await expect(body).toContainText('Summary')
         await expect(body).toContainText('Sources')
+        await expect(body).toContainText("Malpedia's actor summary for APT29.")
 
         const actorBox = await page.locator('[data-ti-actor-info="true"]').boundingBox()
         const geoBox = await page.locator('[data-ti-map="true"]').boundingBox()
@@ -56,6 +57,7 @@ test.describe('public threat actor profile', () => {
         expect(bodyText).not.toMatch(/Next action/i)
         expect(bodyText).not.toMatch(/Selected evidence/i)
         expect(bodyText).not.toMatch(/Action rail/i)
+        expect(bodyText).not.toMatch(/Source reference attached/i)
 
         await testInfo.attach('apt29-country-map', {
             body: await page.screenshot({ fullPage: false }),

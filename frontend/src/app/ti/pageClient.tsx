@@ -373,7 +373,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 <div className='flex min-w-0 items-start justify-between gap-3'>
                                     <div className='min-w-0'>
                                         <p className='wrap-break-word text-sm font-semibold text-ui-text dark:text-ui-text'>{row.name}</p>
-                                        <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.detail)}</p>
+                                        <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.detail, row.name, result.query)}</p>
                                     </div>
                                     <span className='shrink-0 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{row.meta}</span>
                                 </div>
@@ -4329,13 +4329,25 @@ function sourceHealthChipClass(state: SourceHealthRow['state']) {
     return 'max-w-full wrap-break-word rounded-md border border-ui-warning/35 bg-ui-warning/10 px-2 py-1 text-[11px] font-semibold text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'
 }
 
-function compactSourceReferenceLabel(value: string) {
+function compactSourceReferenceLabel(value: string, sourceName?: string, query?: string) {
     const cleaned = displayRequirementText(value).trim()
-    if (!cleaned) return 'Source reference attached.'
-    if (/^https?:\/\//i.test(value) || /[/?=&]{2,}/.test(value)) return 'Source reference attached.'
-    if (/[{}[\]]/.test(value) || /\b[a-f0-9]{24,}\b/i.test(value)) return 'Source reference attached.'
-    if (cleaned.length > 96) return 'Source reference attached.'
+    const fallback = sourceReferenceSummary(sourceName, query)
+    if (!cleaned) return fallback
+    if (/^https?:\/\//i.test(value) || /[/?=&]{2,}/.test(value)) return fallback
+    if (/[{}[\]]/.test(value) || /\b[a-f0-9]{24,}\b/i.test(value)) return fallback
+    if (cleaned.length > 96) return fallback
     return cleaned
+}
+
+function sourceReferenceSummary(sourceName?: string, query?: string) {
+    const source = (sourceName || 'This source').trim()
+    const actor = humanizeSlug(query || 'this actor')
+    if (/malpedia/i.test(source)) return `Malpedia's actor summary for ${actor}.`
+    if (/mitre/i.test(source)) return `MITRE ATT&CK's group profile for ${actor}.`
+    if (/google cloud security/i.test(source)) return `Google Cloud Security's APT group directory entry for ${actor}.`
+    if (/cisa/i.test(source)) return `CISA advisories used to cross-check public government reporting on ${actor}.`
+    if (/live reporting query/i.test(source)) return `Live news search used to refresh recent reporting on ${actor}.`
+    return `${source} reporting used for ${actor} context.`
 }
 
 function sourceHealthEvidenceLabel(row: SourceHealthRow) {
