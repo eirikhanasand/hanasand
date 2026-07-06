@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
 import { chromium, type Browser, type BrowserContext, type Frame, type Page } from 'playwright'
 import recordLog from '#utils/logs/recordLog.ts'
@@ -549,7 +550,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     sessionId,
                     message: `${tool.name || toolUrl} provider capture started.`,
                 })
-                const preparedUrl = providerStartUrl(tool, toolUrl)
+                const preparedUrl = providerStartUrl(tool, toolUrl, target)
                 let navigationError = await withTimeout(
                     toolPage.goto(preparedUrl, { waitUntil: 'commit', timeout: 4500 })
                         .then(() => '')
@@ -1245,16 +1246,26 @@ function officialProviderKind(resolvedUrl: string) {
     return ''
 }
 
-function providerStartUrl(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string) {
+function providerStartUrl(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string, target: string) {
     const kind = officialProviderKind(resolvedUrl)
-    if (kind === 'virustotal') return 'https://www.virustotal.com/gui/home/url'
-    if (kind === 'urlquery') return 'https://urlquery.net/search'
+    if (kind === 'virustotal') return `https://www.virustotal.com/gui/url/${virusTotalUrlId(target)}`
+    if (kind === 'urlquery') return `https://urlquery.net/api/htmx/search/?limit=24&offset=0&q=${encodeURIComponent(target)}&type=reports`
     return resolvedUrl
+}
+
+function virusTotalUrlId(target: string) {
+    try {
+        return createHash('sha256').update(new URL(target).href).digest('hex')
+    } catch {
+        return createHash('sha256').update(target).digest('hex')
+    }
 }
 
 async function interactWithProvider(page: Page, tool: { id?: string; name?: string; url?: string }, target: string) {
     try {
         const kind = officialProviderKind(page.url())
+        if (kind === 'virustotal' && /\/gui\/url\//i.test(page.url())) return ''
+        if (kind === 'urlquery' && /\/api\/htmx\/search/i.test(page.url())) return ''
         if (kind === 'virustotal' && isVirusTotalTool(tool, page.url())) {
             await page.waitForTimeout(900)
             const searchInput = page.locator('input[type="text"], textarea:not([name="g-recaptcha-response"])').first()
