@@ -131,7 +131,7 @@ await waitForPayload(payloads, payload => payload.type === 'frame' && Boolean(pa
 await waitForPayload(payloads, payload => payload.type === 'frame' && payload.url?.endsWith('/final'), 25_000)
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'virustotal' && payload.toolAnalysis.vendorFlagged !== undefined)
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery' && payload.toolAnalysis.alertCount !== undefined)
-await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'webcrack')
+await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'webcrack' && payload.webcrackLoad?.loaded === true)
 
 const ready = payloads.find(payload => payload.type === 'ready')
 assert.equal(ready?.torProxyConfigured, false, 'regular browser sandbox should not use the Tor proxy')
@@ -159,7 +159,7 @@ const urlquery = payloads.find(payload => payload.type === 'tool_capture' && pay
 assert.equal(urlquery?.toolAnalysis?.alertCount, 4)
 assert.equal(urlquery?.toolAnalysis?.communityCommentCount, 2)
 
-const webcrack = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'webcrack')
+const webcrack = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'webcrack' && payload.webcrackLoad?.loaded === true)
 assert.equal(webcrack?.webcrackLoad?.loaded, true)
 assert((webcrack?.webcrackLoad?.sampleBytes || 0) > 40, 'loads extracted obfuscated sample into WebCrack fixture')
 
