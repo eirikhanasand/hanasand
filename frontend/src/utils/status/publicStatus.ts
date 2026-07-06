@@ -1,8 +1,9 @@
 import { ServiceCheck, ServiceStatus } from './getStatus'
 
 export function toPublicServiceStatus(status: ServiceStatus): ServiceStatus {
-    const checks = status.checks
-        .filter(isCurrentPublicCheck)
+    const publicChecks = status.checks.filter(isCurrentPublicCheck)
+    const publicCheckKeys = new Set(publicChecks.map(checkKey))
+    const checks = publicChecks
         .map(toPublicServiceCheck)
 
     if (!checks.length) {
@@ -10,6 +11,8 @@ export function toPublicServiceStatus(status: ServiceStatus): ServiceStatus {
             overall: 'degraded',
             generated_at: status.generated_at,
             checks: [publicStatusCoverageCheck(status.generated_at)],
+            history: [],
+            incidents: [],
         }
     }
 
@@ -21,7 +24,28 @@ export function toPublicServiceStatus(status: ServiceStatus): ServiceStatus {
                 : 'up',
         generated_at: status.generated_at,
         checks,
+        history: status.history.filter(row => publicCheckKeys.has(checkKey(row))).map(row => ({
+            ...row,
+            service: publicStatusLabel(row.service),
+            check_name: publicStatusLabel(row.check_name),
+        })),
+        incidents: status.incidents.filter(incident => publicCheckKeys.has(checkKey(incident))).map(incident => ({
+            ...incident,
+            service: publicStatusLabel(incident.service),
+            check_name: publicStatusLabel(incident.check_name),
+            title: publicStatusLabel(incident.title),
+            summary: publicStatusMessage(incident.summary) || incident.summary,
+            cause: publicStatusMessage(incident.cause) || incident.cause,
+            updates: incident.updates.map(update => ({
+                ...update,
+                message: publicStatusMessage(update.message) || update.message,
+            })),
+        })),
     }
+}
+
+function checkKey(value: { service: string, check_name: string }) {
+    return `${value.service}\n${value.check_name}`
 }
 
 export function publicStatusCoverageCheck(generatedAt = new Date().toISOString()): ServiceCheck {

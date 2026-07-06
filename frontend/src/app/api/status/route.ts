@@ -9,6 +9,8 @@ export async function GET() {
         overall: 'degraded' as const,
         generated_at: generatedAt,
         checks: [publicStatusCoverageCheck(generatedAt)],
+        history: [],
+        incidents: [],
     }))
     const publicStatus = toPublicServiceStatus(status)
     const productProgressDeployProof = await loadProductDeployProofLedger()

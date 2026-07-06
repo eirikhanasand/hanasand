@@ -47,5 +47,7 @@ function getFallbackServiceStatus() {
         overall: 'degraded' as const,
         generated_at: generatedAt,
         checks: [publicStatusCoverageCheck(generatedAt)],
+        history: [],
+        incidents: [],
     }
 }

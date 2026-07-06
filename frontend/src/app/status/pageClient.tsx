@@ -7,16 +7,18 @@ import { AlertCircle, CheckCircle, Clock, RefreshCw } from 'lucide-react'
 
 type DashboardProps = {
     serviceStatus: ServiceStatus
-    mode?: 'status' | 'incidents'
+    mode?: 'status' | 'incidents' | 'incident'
+    incidentId?: string
 }
 
 const REFRESH_MS = 3000
 const UPTIME_WINDOW = '30 days'
 
-export default function StatusDashboard({ serviceStatus, mode = 'status' }: DashboardProps) {
+export default function StatusDashboard({ serviceStatus, mode = 'status', incidentId }: DashboardProps) {
     const [now, setNow] = useState<number | null>(null)
     const [currentStatus, setCurrentStatus] = useState(serviceStatus)
     const [isRefreshing, setIsRefreshing] = useState(false)
+    const [lastRefreshAt, setLastRefreshAt] = useState(serviceStatus.generated_at)
 
     useEffect(() => {
         setNow(Date.now())
@@ -26,6 +28,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status' }: Dash
                 const response = await fetch('/api/status', { cache: 'no-store' })
                 if (response.ok) {
                     setCurrentStatus(await response.json() as ServiceStatus)
+                    setLastRefreshAt(new Date().toISOString())
                 }
             } catch {
                 // Keep the latest visible status when a poll misses.
@@ -49,31 +52,79 @@ export default function StatusDashboard({ serviceStatus, mode = 'status' }: Dash
         () => currentStatus.checks.filter((check) => isCurrentPublicCheck(check, nowMs)),
         [currentStatus, nowMs],
     )
-    const incidents = checks.filter((check) => check.status !== 'up' || check.message)
+    const incidents = currentStatus.incidents
     const headline = currentStatus.overall === 'up'
         ? 'All systems operational'
         : currentStatus.overall === 'degraded'
             ? 'Some systems degraded'
             : 'Service interruption'
+    const incident = incidentId ? incidents.find(item => item.id === incidentId) : null
     const incidentsSection = (
         <section className='rounded-md border border-ui-border bg-ui-panel p-4'>
             <h2 className='text-xl font-semibold text-ui-text'>Recent incidents</h2>
             <div className='mt-3 divide-y divide-ui-border'>
                 {incidents.length ? incidents.map((incident) => (
-                    <article key={`${incident.service}-${incident.check_name}-incident`} className='py-3 first:pt-0 last:pb-0'>
+                    <Link key={incident.id} href={`/status/incidents/${incident.id}`} className='block py-3 first:pt-0 last:pb-0'>
                         <div className='flex flex-wrap items-center justify-between gap-2'>
-                            <h3 className='font-semibold text-ui-text'>{incident.check_name}</h3>
-                            <span className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${statusPillClass(incident.status)}`}>{incident.status}</span>
+                            <h3 className='font-semibold text-ui-text'>{incident.title}</h3>
+                            <span className='flex flex-wrap gap-2'>
+                                <IncidentTag label={incident.impact} tone='warn' />
+                                <IncidentTag label={incident.status === 'resolved' ? 'Resolved' : 'Investigating'} tone={incident.status === 'resolved' ? 'ok' : 'warn'} />
+                            </span>
                         </div>
-                        <p className='mt-1 text-sm text-ui-muted'>{incident.message || `${incident.service} reported ${incident.status}.`}</p>
-                        <p className='mt-1 text-sm text-ui-muted'>{relativeTime(incident.checked_at, now)}</p>
-                    </article>
+                        <p className='mt-1 text-sm text-ui-muted'>{incident.summary}</p>
+                        <p className='mt-1 text-sm text-ui-muted'>{formatDateTime(incident.started_at)}{incident.resolved_at ? ` - ${formatDateTime(incident.resolved_at)}` : ''}</p>
+                    </Link>
                 )) : (
                     <p className='py-3 text-sm text-ui-muted'>No incidents reported in the current status data.</p>
                 )}
             </div>
         </section>
     )
+
+    if (mode === 'incident') {
+        return (
+            <main className='mx-auto grid max-w-5xl gap-6 pb-8'>
+                <Link href='/status/incidents' className='text-sm font-semibold text-ui-primary'>Incident history</Link>
+                {incident ? (
+                    <article className='grid gap-5 rounded-md border border-ui-border bg-ui-panel p-5'>
+                        <div className='flex flex-wrap items-start justify-between gap-3'>
+                            <div>
+                                <p className='text-sm font-semibold uppercase text-ui-primary'>{incident.service}</p>
+                                <h1 className='mt-1 text-3xl font-semibold text-ui-text'>{incident.title}</h1>
+                                <p className='mt-2 text-sm text-ui-muted'>{incident.check_name}</p>
+                            </div>
+                            <span className='flex flex-wrap gap-2'>
+                                <IncidentTag label={incident.impact} tone='warn' />
+                                <IncidentTag label={incident.status === 'resolved' ? 'Resolved' : 'Investigating'} tone={incident.status === 'resolved' ? 'ok' : 'warn'} />
+                            </span>
+                        </div>
+                        <StatusText title='What happened' value={incident.summary} />
+                        <StatusText title='Why it happened' value={incident.cause} />
+                        <section>
+                            <h2 className='text-lg font-semibold text-ui-text'>Timeline</h2>
+                            <div className='mt-3 divide-y divide-ui-border'>
+                                {incident.updates.map((update, index) => (
+                                    <div key={`${update.at}-${index}`} className='grid gap-1 py-3 first:pt-0 last:pb-0'>
+                                        <div className='flex flex-wrap items-center justify-between gap-2'>
+                                            <p className='font-semibold text-ui-text'>{update.status}</p>
+                                            <time className='text-sm text-ui-muted'>{formatDateTime(update.at)}</time>
+                                        </div>
+                                        <p className='text-sm text-ui-muted'>{update.message}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    </article>
+                ) : (
+                    <section className='rounded-md border border-ui-border bg-ui-panel p-5'>
+                        <h1 className='text-2xl font-semibold text-ui-text'>Incident not found</h1>
+                        <p className='mt-2 text-sm text-ui-muted'>This incident is not available in the current 30-day status history.</p>
+                    </section>
+                )}
+            </main>
+        )
+    }
 
     if (mode === 'incidents') {
         return (
@@ -104,7 +155,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status' }: Dash
                         <Link href='/status/incidents' className='inline-flex h-9 items-center rounded-md bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25'>
                             Incident history
                         </Link>
-                        <span className='text-sm font-medium'>Checked {relativeTime(latestCheckedAt(currentStatus), now)}</span>
+                        <span className='text-sm font-medium'>Data refreshed {relativeTime(lastRefreshAt, now)}</span>
                     </div>
                 </div>
             </section>
@@ -129,8 +180,17 @@ export default function StatusDashboard({ serviceStatus, mode = 'status' }: Dash
                                     <span className='text-sm text-ui-muted'>{check.service}</span>
                                 </div>
                                 <div className='mt-3 flex h-8 items-stretch gap-1' aria-label={`${check.check_name} ${formatUptime(check.uptime_30d)} uptime`}>
-                                    {Array.from({ length: 45 }, (_, index) => (
-                                        <span key={index} className={`min-w-1 flex-1 rounded-sm ${barClass(check.status, index)}`} />
+                                    {historyDaysFor(currentStatus, check).map((day) => (
+                                        day.incident ? (
+                                            <Link
+                                                key={day.date}
+                                                href={`/status/incidents/${day.incident.id}`}
+                                                title={`${formatDate(day.date)}: ${day.incident.title}. ${day.incident.summary}`}
+                                                className={`min-w-1 flex-1 rounded-sm ${barClass(day.status)}`}
+                                            />
+                                        ) : (
+                                            <span key={day.date} title={`No incidents on ${formatDate(day.date)}`} className={`min-w-1 flex-1 rounded-sm ${barClass(day.status)}`} />
+                                        )
                                     ))}
                                 </div>
                                 <div className='mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-ui-muted'>
@@ -168,6 +228,23 @@ function StatusMeta({ icon, label, value }: { icon: ReactNode, label: string, va
     )
 }
 
+function StatusText({ title, value }: { title: string, value: string }) {
+    return (
+        <section>
+            <h2 className='text-lg font-semibold text-ui-text'>{title}</h2>
+            <p className='mt-2 text-sm leading-6 text-ui-muted'>{value}</p>
+        </section>
+    )
+}
+
+function IncidentTag({ label, tone }: { label: string, tone: 'ok' | 'warn' }) {
+    return (
+        <span className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${tone === 'ok' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+            {label}
+        </span>
+    )
+}
+
 function relativeTime(value: string, now: number | null) {
     if (!now) return 'recently'
 
@@ -180,21 +257,14 @@ function relativeTime(value: string, now: number | null) {
     return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
-function latestCheckedAt(status: ServiceStatus) {
-    return status.checks
-        .map(check => check.checked_at)
-        .filter(Boolean)
-        .sort((left, right) => Date.parse(right) - Date.parse(left))[0] || status.generated_at
-}
-
 function formatUptime(value: string) {
     const numeric = Number(value)
     return Number.isFinite(numeric) ? `${value}%` : value || 'unverified'
 }
 
-function barClass(status: ServiceStatus['checks'][number]['status'], index: number) {
-    if (status === 'down') return index > 38 ? 'bg-red-500' : 'bg-green-300'
-    if (status === 'degraded') return index > 38 ? 'bg-amber-400' : 'bg-green-300'
+function barClass(status: ServiceStatus['checks'][number]['status']) {
+    if (status === 'down') return 'bg-red-500 hover:ring-2 hover:ring-red-300'
+    if (status === 'degraded') return 'bg-amber-400 hover:ring-2 hover:ring-amber-200'
     return 'bg-green-300'
 }
 
@@ -207,4 +277,40 @@ function statusPillClass(status: ServiceStatus['checks'][number]['status']) {
 function isCurrentPublicCheck(check: ServiceStatus['checks'][number], nowMs: number) {
     const checkedAt = new Date(check.checked_at).getTime()
     return Number.isFinite(checkedAt) && nowMs - checkedAt <= 14 * 24 * 60 * 60 * 1000
+}
+
+function historyDaysFor(status: ServiceStatus, check: ServiceStatus['checks'][number]) {
+    const incidentsById = new Map(status.incidents.map(incident => [incident.id, incident]))
+    const rowsByDate = new Map(status.history
+        .filter(row => row.service === check.service && row.check_name === check.check_name)
+        .map(row => [row.date, row]))
+
+    return lastDays(30).map(date => {
+        const row = rowsByDate.get(date)
+        const incident = row?.incident_ids.map(id => incidentsById.get(id)).find(Boolean) || null
+        return {
+            date,
+            status: row?.status || 'up',
+            incident,
+        }
+    })
+}
+
+function lastDays(count: number) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    return Array.from({ length: count }, (_, index) => {
+        const date = new Date(today)
+        date.setDate(today.getDate() - (count - 1 - index))
+        return date.toISOString().slice(0, 10)
+    })
+}
+
+function formatDate(value: string) {
+    return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(value))
+}
+
+function formatDateTime(value: string) {
+    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }

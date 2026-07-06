@@ -10,16 +10,40 @@ export type ServiceCheck = {
     uptime_30d: string
 }
 
+export type ServiceHistoryDay = {
+    service: string
+    check_name: string
+    date: string
+    status: ServiceCheck['status']
+    incident_ids: string[]
+}
+
+export type ServiceIncident = {
+    id: string
+    service: string
+    check_name: string
+    title: string
+    impact: 'Instability' | 'Outage'
+    status: 'resolved' | 'investigating'
+    started_at: string
+    resolved_at: string | null
+    summary: string
+    cause: string
+    updates: Array<{ at: string, status: string, message: string }>
+}
+
 export type ServiceStatus = {
     overall: 'up' | 'degraded' | 'down'
     generated_at: string
     checks: ServiceCheck[]
+    history: ServiceHistoryDay[]
+    incidents: ServiceIncident[]
 }
 
 export default async function getStatus(): Promise<ServiceStatus> {
     const response = await fetch(`${config.url.api}/status`, { cache: 'no-store' })
     if (!response.ok) {
-        return { overall: 'down', generated_at: new Date().toISOString(), checks: [] }
+        return { overall: 'down', generated_at: new Date().toISOString(), checks: [], history: [], incidents: [] }
     }
 
     const payload = await response.json()
@@ -47,5 +71,49 @@ function normalizeStatus(payload: Partial<ServiceStatus>): ServiceStatus {
             : checks.some((check) => check.status === 'down') ? 'down' : checks.some((check) => check.status === 'degraded') ? 'degraded' : 'up',
         generated_at: payload.generated_at || new Date().toISOString(),
         checks,
+        history: normalizeHistory((payload as ServiceStatus).history),
+        incidents: normalizeIncidents((payload as ServiceStatus).incidents),
     }
+}
+
+function normalizeHistory(value: unknown): ServiceHistoryDay[] {
+    if (!Array.isArray(value)) return []
+
+    return value.flatMap((row): ServiceHistoryDay[] => {
+        if (!row || typeof row !== 'object') return []
+        const item = row as Partial<ServiceHistoryDay>
+        return [{
+            service: item.service || 'system',
+            check_name: item.check_name || 'Status',
+            date: item.date || new Date().toISOString().slice(0, 10),
+            status: item.status === 'up' || item.status === 'degraded' || item.status === 'down' ? item.status : 'up',
+            incident_ids: Array.isArray(item.incident_ids) ? item.incident_ids.map(String) : [],
+        }]
+    })
+}
+
+function normalizeIncidents(value: unknown): ServiceIncident[] {
+    if (!Array.isArray(value)) return []
+
+    return value.flatMap((row): ServiceIncident[] => {
+        if (!row || typeof row !== 'object') return []
+        const item = row as Partial<ServiceIncident>
+        return [{
+            id: item.id || '',
+            service: item.service || 'system',
+            check_name: item.check_name || 'Status',
+            title: item.title || 'Service incident',
+            impact: item.impact === 'Outage' ? 'Outage' : 'Instability',
+            status: item.status === 'investigating' ? 'investigating' : 'resolved',
+            started_at: item.started_at || new Date().toISOString(),
+            resolved_at: item.resolved_at || null,
+            summary: item.summary || 'Automated monitors detected a service issue.',
+            cause: item.cause || item.summary || 'Automated monitor evidence is attached to this incident.',
+            updates: Array.isArray(item.updates) ? item.updates.map(update => ({
+                at: String(update.at || item.started_at || new Date().toISOString()),
+                status: String(update.status || 'update'),
+                message: String(update.message || item.summary || 'Monitor update.'),
+            })) : [],
+        }]
+    }).filter(incident => incident.id)
 }

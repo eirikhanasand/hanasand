@@ -11,6 +11,8 @@ test('public status does not claim operational health without fresh public check
         overall: 'up',
         generated_at: '2026-07-05T00:00:00.000Z',
         checks: [],
+        history: [],
+        incidents: [],
     })
 
     expect(status.overall).toBe('degraded')
@@ -37,6 +39,8 @@ test('public status keeps fresh failing checks more severe than freshness fallba
             checked_at: new Date().toISOString(),
             uptime_30d: '99.1',
         }],
+        history: [],
+        incidents: [],
     } satisfies ServiceStatus)
 
     expect(status.overall).toBe('down')
@@ -58,16 +62,15 @@ test('public status fallback check is reusable by API and page fallbacks', () =>
 test('public status page renders unverified coverage without fake uptime', async () => {
     const source = await readFile(path.join(root, 'src/app/status/pageClient.tsx'), 'utf8')
 
-    expect(source).toContain('Status awaiting fresh checks')
+    expect(source).toContain('Incident history')
     expect(source).toContain('formatUptime(check.uptime_30d)')
     expect(source).toContain('function formatUptime')
-    expect(source).toContain('function StatusSignalGauge')
-    expect(source).toContain('function uptimeSignal')
-    expect(source).toContain('Latest public monitor signal.')
-    expect(source).toContain('function isCoverageFallbackCheck')
+    expect(source).toContain('historyDaysFor(currentStatus, check)')
+    expect(source).toContain('No incidents on')
+    expect(source).toContain('/status/incidents/${day.incident.id}')
     expect(source).not.toContain('{check.uptime_30d}%')
-    expect(source).not.toContain('function statusScore')
-    expect(source).not.toMatch(/if \(check\.status === 'up'\) return 96/)
+    expect(source).not.toContain('Array.from({ length: 45 }')
+    expect(source).not.toContain('index > 38')
 })
 
 test('public footer does not hardcode operational status', async () => {
