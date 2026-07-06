@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import { ArrowRight, Building2, ChevronRight, ExternalLink, Search, ShieldCheck, Waypoints } from 'lucide-react'
 import LogoutClient from '@/components/logout/logoutClient'
+import Marquee from '@/components/shared/marquee'
 import { buildRouteMetadata } from './seo'
 import HomeExposureQueueClient from './homeExposureQueueClient'
 
@@ -19,13 +20,13 @@ const examples = [
     {
         title: 'Company exposure monitor',
         slug: 'Watches companies and suppliers',
-        detail: 'Enter the companies, domains, vendors, brands, or executives you care about. Hanasand watches for new mentions and sends a short alert.',
+        detail: 'Enter the companies, domains, vendors, brands, or executives you care about. Hanasand watches for new mentions and notifies you.',
         badge: 'Live alerts',
         action: 'Recent attacks',
         icon: Building2,
     },
     {
-        title: 'Plain-English incident brief',
+        title: 'Alerts',
         slug: 'Explains what happened',
         detail: 'Each result says who posted the claim, which company was named, what data was mentioned, how confident the match is, and what to do next.',
         badge: 'Actor context',
@@ -33,7 +34,7 @@ const examples = [
         icon: Waypoints,
     },
     {
-        title: 'Dark web exposure index',
+        title: 'Dark web search',
         slug: 'Searches leak and extortion records',
         detail: 'Search company names, domains, vendor names, group names, source notes, risk signals, and timing from monitored public records.',
         badge: 'Searchable records',
@@ -74,7 +75,7 @@ const stats = [
 
 const workflowShortcuts = [
     { label: 'Watch companies', href: '/organizations', detail: 'Companies, vendors, domains' },
-    { label: 'Catch leak claims', href: '/dashboard/dwm', detail: 'New exposure mentions' },
+    { label: 'Catch beaches', href: '/dashboard/dwm', detail: 'New exposure mentions' },
     { label: 'Review severity', href: '/dashboard/dwm', detail: 'Evidence, confidence, action' },
     { label: 'Route alerts', href: '/dashboard/automations?setup=dwm', detail: 'Slack, webhooks, cases' },
 ]
@@ -112,16 +113,16 @@ const customerSteps = [
         detail: 'Add company names, domains, subsidiaries, vendors, brands, executives, or portfolio companies.',
     },
     {
-        title: 'We monitor criminal exposure sources',
-        detail: 'Hanasand checks leak and extortion sites, Telegram-like public channels, advisories, and source indexes.',
+        title: 'We monitor threat actors',
+        detail: 'Hanasand checks leak and extortion sites, Telegram groups, advisories, and dark web forums.',
     },
     {
-        title: 'You get a triage alert',
+        title: 'You get notified',
         detail: 'The alert explains the mention, source, severity, confidence, and the next review step.',
     },
     {
         title: 'Route it to the right team',
-        detail: 'Send the packet to email, webhook, Slack/Jira/SIEM flows, cases, or the analyst console.',
+        detail: 'Send the alert through an email, webhook, Slack/Jira/SIEM flow, cases, or to the analyst console.',
     },
 ]
 
@@ -225,7 +226,7 @@ export default async function Page({
                                     className='landing-surface-border landing-surface-border-hover grid min-w-0 gap-1 rounded-lg border border-ui-border bg-ui-panel px-3 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-ui-primary'
                                 >
                                     <span className='flex min-w-0 items-center justify-between gap-2 text-sm font-semibold text-ui-text'>
-                                        <span className='truncate'>{item.label}</span>
+                                        <Marquee text={item.label} className='min-w-0 flex-1' innerClassName='font-semibold text-ui-text' />
                                         <ArrowRight className='h-4 w-4 shrink-0 text-ui-primary' />
                                     </span>
                                     <span className='text-xs leading-5 text-ui-muted'>{item.detail}</span>
@@ -239,7 +240,7 @@ export default async function Page({
                     <div className='landing-surface-border grid overflow-hidden rounded-xl border border-ui-border bg-ui-panel shadow-sm' id='sample-alert' data-home-workflow-panel='true'>
                         <div className='landing-surface-divider grid gap-3 border-b p-5 md:grid-cols-[0.8fr_1.2fr] md:items-end' data-home-workflow-panel-header='true'>
                             <div>
-                                <p className='text-sm font-semibold uppercase text-ui-primary'>Exposure alert flow</p>
+                                <p className='text-sm font-semibold uppercase text-ui-primary'>Alert flow</p>
                                 <h2 className='mt-2 text-2xl font-semibold text-ui-text'>From watchlist to alert.</h2>
                             </div>
                             <p className='text-sm leading-6 text-ui-muted'>
@@ -292,7 +293,7 @@ export default async function Page({
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8 lg:grid-cols-[0.82fr_1.18fr] lg:py-18'>
                     <div className='grid content-start gap-5'>
                         <p className='text-sm font-semibold uppercase text-ui-primary'>How monitoring works</p>
-                        <h2 className='text-3xl font-semibold text-ui-text md:text-4xl'>Find the company mention before it becomes a forwarded screenshot.</h2>
+                        <h2 className='text-3xl font-semibold text-ui-text md:text-4xl'>Find the company mention before it becomes a screenshot</h2>
                         <p className='text-base leading-7 text-ui-muted'>
                             Each alert is built for the first triage decision: who posted it, which company was named, what data was mentioned, when it appeared, and what to review next.
                         </p>
@@ -315,7 +316,7 @@ export default async function Page({
                     <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
                         <div className='grid gap-2'>
                             <p className='text-sm font-semibold uppercase text-ui-primary'>Solutions</p>
-                            <h2 className='text-3xl font-semibold text-ui-text'>Monitoring and secure response tools in one place.</h2>
+                            <h2 className='text-3xl font-semibold text-ui-text'>Monitoring and response tools in one place.</h2>
                         </div>
                         <Link href='/dashboard/overview' className='landing-primary-action inline-flex w-fit items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold shadow-sm transition'>
                             Go to Console
@@ -366,7 +367,7 @@ function HomeOperatorFact({ label, value }: { label: string, value: string }) {
     return (
         <div className='landing-surface-border min-w-0 rounded-lg border border-ui-border bg-ui-raised px-3 py-2' data-home-status-fact='true'>
             <p className='text-[11px] font-semibold uppercase text-ui-muted'>{label}</p>
-            <p className='mt-1 line-clamp-2 text-sm font-semibold leading-5 text-ui-text'>{value}</p>
+            <Marquee text={value} className='mt-1' innerClassName='text-sm font-semibold leading-5 text-ui-text' />
         </div>
     )
 }
@@ -380,7 +381,7 @@ function HomeOperatorPaths() {
             <div className='landing-surface-divider grid gap-2 border-b px-4 py-4 md:grid-cols-[1fr_auto] md:items-end' data-home-operator-paths-header='true'>
                 <div>
                     <p className='text-xs font-semibold uppercase text-ui-primary'>Operator paths</p>
-                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Core exposure actions in the console</h2>
+                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>Console actions</h2>
                 </div>
                 <Link
                     href='/dashboard'

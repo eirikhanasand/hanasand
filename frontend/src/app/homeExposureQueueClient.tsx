@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Marquee from '@/components/shared/marquee'
 
 type ExposureQueueItem = {
     id: string
@@ -127,7 +128,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
             <div className='landing-surface-divider flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-4 py-3' data-home-exposure-panel-header='true'>
                 <div className='min-w-0'>
                     <h3 className='text-sm font-semibold text-ui-text'>Latest activity</h3>
-                    <p className='truncate text-xs text-ui-muted'>{subtitle}</p>
+                    <Marquee text={subtitle} className='text-xs text-ui-muted' />
                 </div>
                 <div className='flex items-center gap-2'>
                     <span className='landing-surface-border rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-muted'>{items.length}/{total}</span>
@@ -152,9 +153,9 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                     <div className='divide-y landing-surface-divider'>
                         {items.length ? items.map(({ id, actor, company, claimedData, claimTime, collectedAt, status }) => (
                             <div key={id} className='grid min-w-0 grid-cols-[7rem_minmax(12rem,1fr)_10rem_11rem_5rem] items-center gap-3 px-4 py-3 text-sm'>
-                                <span className='truncate font-semibold text-ui-text'>{actor}</span>
-                                <span className='truncate text-ui-text'>{company}</span>
-                                <span className='truncate whitespace-nowrap text-ui-muted'>{claimedData}</span>
+                                <Marquee text={actor} innerClassName='font-semibold text-ui-text' />
+                                <Marquee text={company} innerClassName='text-ui-text' />
+                                <Marquee text={claimedData} innerClassName='text-ui-muted' />
                                 <time dateTime={claimTime || collectedAt || queue.generatedAt} className='truncate whitespace-nowrap text-xs font-semibold text-ui-muted'>{formatClaimTime(claimTime || collectedAt)}</time>
                                 <span className='landing-surface-border justify-self-end whitespace-nowrap rounded-full border border-ui-border bg-ui-raised px-2 py-1 text-xs font-medium text-ui-muted'>{formatReviewStatus(status)}</span>
                             </div>

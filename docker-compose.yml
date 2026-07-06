@@ -255,6 +255,8 @@ volumes:
     external: true
     name: hanasand_postgres_data
   ti_scraper_evidence:
+    external: true
+    name: hanasand-deploy-64d9339_ti_scraper_evidence
 
 networks:
   pwnednet:
