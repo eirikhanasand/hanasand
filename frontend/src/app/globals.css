@@ -59,7 +59,7 @@
   --color-bright: #f7f8f2;
   --page-wash-top: #091321;
   --page-wash-bottom: #050b14;
-  --dot-grid: rgba(117, 148, 205, 0.22);
+  --dot-grid: rgba(117, 148, 205, 0.14);
   --ambient-primary: rgba(48, 86, 211, 0.105);
   --ambient-secondary: rgba(20, 163, 90, 0.045);
   --ambient-neutral: rgba(157, 182, 255, 0.055);
@@ -236,7 +236,7 @@ button:not(:disabled),
   content: '';
   position: absolute;
   inset: 0;
-  opacity: 0.58;
+  opacity: 0.46;
   background-image:
     radial-gradient(circle at 1px 1px, var(--dot-grid) 1px, transparent 0);
   background-position: 0 0;

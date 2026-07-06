@@ -73,10 +73,10 @@ const stats = [
 ]
 
 const workflowShortcuts = [
-    { label: 'Watch companies and vendors', href: '/organizations', detail: 'Company, vendor, domain, and brand monitoring' },
-    { label: 'Catch leak and extortion mentions', href: '/dashboard/dwm', detail: 'New exposure claims from monitored sources' },
-    { label: 'Review evidence and severity', href: '/dashboard/dwm', detail: 'Source context, confidence, and next action' },
-    { label: 'Route alerts to Slack, webhook, or cases', href: '/dashboard/automations?setup=dwm', detail: 'Send reviewed alerts to the right team' },
+    { label: 'Watch companies', href: '/organizations', detail: 'Companies, vendors, domains' },
+    { label: 'Catch leak claims', href: '/dashboard/dwm', detail: 'New exposure mentions' },
+    { label: 'Review severity', href: '/dashboard/dwm', detail: 'Evidence, confidence, action' },
+    { label: 'Route alerts', href: '/dashboard/automations?setup=dwm', detail: 'Slack, webhooks, cases' },
 ]
 
 const operatorPaths = [
@@ -117,7 +117,7 @@ const customerSteps = [
     },
     {
         title: 'You get a triage alert',
-        detail: 'The alert explains the mention, source, severity, confidence, source context, and the next review step.',
+        detail: 'The alert explains the mention, source, severity, confidence, and the next review step.',
     },
     {
         title: 'Route it to the right team',
@@ -197,7 +197,7 @@ export default async function Page({
                                 Find your company in leaks before customers do
                             </h1>
                             <p className='mx-auto max-w-3xl text-lg leading-8 text-ui-muted md:text-xl'>
-                                Give Hanasand the names and domains to watch. We return a clear alert with what happened, why it matters, source context, severity, and the next step.
+                                Give Hanasand the names and domains to watch. We return a clear alert with what happened, why it matters, severity, and the next step.
                             </p>
                         </div>
 
@@ -239,8 +239,8 @@ export default async function Page({
                     <div className='landing-surface-border grid overflow-hidden rounded-xl border border-ui-border bg-ui-panel shadow-sm' id='sample-alert' data-home-workflow-panel='true'>
                         <div className='landing-surface-divider grid gap-3 border-b p-5 md:grid-cols-[0.8fr_1.2fr] md:items-end' data-home-workflow-panel-header='true'>
                             <div>
-                                <p className='text-sm font-semibold uppercase text-ui-primary'>Plain-English alert path</p>
-                                <h2 className='mt-2 text-2xl font-semibold text-ui-text'>From watchlist to decision packet.</h2>
+                                <p className='text-sm font-semibold uppercase text-ui-primary'>Exposure alert flow</p>
+                                <h2 className='mt-2 text-2xl font-semibold text-ui-text'>From watchlist to alert.</h2>
                             </div>
                             <p className='text-sm leading-6 text-ui-muted'>
                                 A threat actor is a criminal group or seller. A source is where the mention appeared. A webhook is just an automatic delivery to your existing tools.
@@ -346,11 +346,11 @@ function HomeOperatorStrip() {
             className='landing-surface-border grid w-full max-w-6xl gap-3 rounded-xl border border-ui-border bg-ui-panel/90 p-3 text-left shadow-sm backdrop-blur sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.95fr_1.5fr_auto]'
             data-home-product-status='true'
         >
-            <HomeOperatorFact label='Product' value='Company exposure monitoring for security teams' />
-            <HomeOperatorFact label='Coverage' value='Companies, vendors, domains, actors, and sources' />
-            <HomeOperatorFact label='Alert packet' value='Source, evidence, confidence, freshness, and next action' />
-            <HomeOperatorFact label='Delivery' value='Webhook, case, and analyst console routing' />
-            <HomeOperatorFact label='Setup path' value='Create an organization, add watchlists, route reviewed alerts' />
+            <HomeOperatorFact label='Product' value='Company exposure alerts' />
+            <HomeOperatorFact label='Coverage' value='Companies, vendors, domains' />
+            <HomeOperatorFact label='Alert' value='Evidence, severity, action' />
+            <HomeOperatorFact label='Delivery' value='Webhook, case, console' />
+            <HomeOperatorFact label='Setup' value='Add watchlists, route alerts' />
             <Link
                 href='/dashboard'
                 className='inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
