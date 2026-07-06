@@ -234,7 +234,7 @@ const apiBackgroundJobDefinitions: Array<{
     {
         id: VULNERABILITY_SCAN_JOB_ID,
         name: 'Vulnerability image scanner',
-        description: 'Discovers running container images, runs Docker Scout CVE scans, persists results, and exposes exact scanner blockers.',
+        description: 'Discovers running container images, runs CVE scans, persists results, and exposes exact scanner blockers.',
         category: 'Other/System',
         schedule: secondsSchedule(VULNERABILITY_SCAN_CADENCE_SECONDS),
         cadenceSeconds: VULNERABILITY_SCAN_CADENCE_SECONDS,
@@ -478,7 +478,7 @@ async function vulnerabilityScannerJob(definition: typeof apiBackgroundJobDefini
         costEstimate: costEstimate(20, 'Estimated shared API process plus scanner subprocess draw while scheduled; exact scanner power is not metered per job.'),
         assumptions: [
             'Pause/resume toggles the persisted scanner schedule flag; already-running scans are allowed to finish.',
-            scan.blockerAction || scan.staleReason || 'Docker Scout must be available inside the API container for package-level CVE details.',
+            scan.blockerAction || scan.staleReason || 'Trivy must be available inside the API container for package-level CVE details.',
         ],
     }
 }

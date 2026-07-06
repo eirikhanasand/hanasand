@@ -167,8 +167,6 @@ function brokerUrlForSession(baseUrl: string, id: string) {
 
 export default function BrowserPageClient() {
     const [target, setTarget] = useState('')
-    const [network, setNetwork] = useState<BrowserNetwork>('regular')
-    const [networkTouched, setNetworkTouched] = useState(false)
     const [sessionState, setSessionState] = useState<SessionState>('prompt')
     const [socketState, setSocketState] = useState<SocketState>('closed')
     const [profiles, setProfiles] = useState<SandboxProfile[]>(defaultProfiles)
@@ -194,8 +192,6 @@ export default function BrowserPageClient() {
     const imageRef = useRef<HTMLImageElement | null>(null)
 
     const normalizedTarget = useMemo(() => normalizeTarget(target), [target])
-    const inferredNetwork = useMemo(() => inferNetwork(normalizedTarget), [normalizedTarget])
-    const selectedNetwork = networkTouched ? network : inferredNetwork
     const selectedProfile = useMemo(() => profiles.find(profile => profile.id === selectedProfileId) || profiles[0], [profiles, selectedProfileId])
     const summary = useMemo(() => buildAnalystSummary(normalizedTarget, captures, selectedProfile), [captures, normalizedTarget, selectedProfile])
     const toolCaptures = useMemo(() => captures.filter(capture => capture.kind === 'tool'), [captures])
@@ -281,10 +277,6 @@ export default function BrowserPageClient() {
     }, [profileSyncEnabled, profiles, profilesLoaded])
 
     useEffect(() => {
-        if (!networkTouched) setNetwork(inferredNetwork)
-    }, [inferredNetwork, networkTouched])
-
-    useEffect(() => {
         if (activeSandboxTab !== 'browser' && !selectedProfile.tools.some(tool => tool.id === activeSandboxTab)) setActiveSandboxTab('browser')
     }, [activeSandboxTab, selectedProfile.tools])
 
@@ -320,12 +312,8 @@ export default function BrowserPageClient() {
         if (!url) return
         const id = sessionId()
         const socket = new WebSocket(brokerUrlForSession(brokerBaseUrl, id))
-        const runNetwork = override?.network || selectedNetwork
+        const runNetwork = inferNetwork(url)
         if (override?.target) setTarget(override.target)
-        if (override?.network) {
-            setNetwork(override.network)
-            setNetworkTouched(true)
-        }
         socketRef.current?.close()
         socketRef.current = socket
         setCaptures([])
@@ -381,7 +369,7 @@ export default function BrowserPageClient() {
                 const nextQuota = quotaValue(payload.quota)
                 if (nextQuota) setQuota(nextQuota)
                 setSessionState('live')
-                pushEvent(`${runNetwork === 'tor' ? 'Tor' : 'Regular'} browser is live.`)
+                pushEvent('Browser is live.')
                 return
             }
             if (payload.type === 'frame' && typeof payload.image === 'string') {
@@ -460,7 +448,7 @@ export default function BrowserPageClient() {
                 pushEvent(String(payload.message || 'Sandbox navigation failed.'))
             }
         }
-    }, [pushEvent, selectedNetwork, selectedProfile.tools, selectedProfileId, target])
+    }, [pushEvent, selectedProfile.tools, selectedProfileId, target])
 
     const stopRun = useCallback(() => {
         socketRef.current?.send(JSON.stringify({ type: 'end' }))
@@ -481,11 +469,6 @@ export default function BrowserPageClient() {
         setCapacity(null)
         pushEvent('Sandbox reset.')
     }, [pushEvent])
-
-    const selectNetwork = useCallback((value: BrowserNetwork) => {
-        setNetworkTouched(true)
-        setNetwork(value)
-    }, [])
 
     const sendBrowserInput = useCallback((payload: Record<string, unknown>) => {
         const socket = socketRef.current
@@ -591,7 +574,7 @@ export default function BrowserPageClient() {
                         <div className='grid max-w-xl gap-2 text-sm text-ui-muted sm:grid-cols-3'>
                             <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'><strong className='text-ui-text'>10</strong> active browsers</span>
                             <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>Queues when full</span>
-                            <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>Tor auto-route</span>
+                            <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>Onion supported</span>
                         </div>
                     </div>
                     <div className='grid min-w-0 gap-3'>
@@ -605,12 +588,11 @@ export default function BrowserPageClient() {
                             <div className='flex items-start justify-between gap-3'>
                                 <div>
                                     <h2 className='text-lg font-semibold text-ui-text'>Start sandbox</h2>
-                                    <p className='mt-1 text-sm text-ui-muted'>Paste a URL and choose the browser route.</p>
+                                    <p className='mt-1 text-sm text-ui-muted'>Paste a URL. Onion addresses route automatically.</p>
                                 </div>
                                 <Globe2 className='h-5 w-5 shrink-0 text-ui-primary' />
                             </div>
                             <label className='text-sm font-semibold text-ui-text' htmlFor='sandbox-url'>URL to investigate</label>
-                            <NetworkSegment network={selectedNetwork} inferred={inferredNetwork} onSelect={selectNetwork} />
                             <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]'>
                                 <input
                                     id='sandbox-url'
@@ -650,11 +632,11 @@ export default function BrowserPageClient() {
                                     />
                                 </div>
                             </details>
-                            <HistoryPanel history={history} quota={quota} onRerun={(run) => startRun({ target: run.target, network: run.network })} onExpand={setExpandedRun} embedded />
+                            <HistoryPanel history={history} quota={quota} onRerun={(run) => startRun({ target: run.target })} onExpand={setExpandedRun} embedded />
                         </form>
                     </div>
                 </section>
-                {expandedRun ? <RunDetailModal run={expandedRun} onClose={() => setExpandedRun(null)} onRerun={(run) => startRun({ target: run.target, network: run.network })} /> : null}
+                {expandedRun ? <RunDetailModal run={expandedRun} onClose={() => setExpandedRun(null)} onRerun={(run) => startRun({ target: run.target })} /> : null}
             </main>
         )
     }
@@ -665,13 +647,12 @@ export default function BrowserPageClient() {
                 <header className='border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div className='mx-auto flex max-w-[96rem] flex-wrap items-center justify-between gap-3'>
                         <div className='min-w-0'>
-                            <p className='text-xs font-semibold uppercase text-ui-primary'>{selectedNetwork === 'tor' ? 'Tor browser' : 'Regular browser'}</p>
+                            <p className='text-xs font-semibold uppercase text-ui-primary'>Browser sandbox</p>
                             <h1 className='truncate text-lg font-semibold text-ui-text'>{activeUrl || normalizedTarget}</h1>
                         </div>
                         <div className='flex flex-wrap items-center gap-2'>
                             <StatusPill label='Session' value={sessionState} good={sessionState === 'live'} />
                             <StatusPill label='Broker' value={socketState} good={socketState === 'open'} />
-                            <StatusPill label='Network' value={selectedNetwork} good />
                             {capacity ? <StatusPill label='Capacity' value={capacity.queuePosition ? `${capacity.queuePosition}/${capacity.queuedSessions} queued` : `${capacity.activeSessions}/${capacity.maxSessions} active`} good={!capacity.queuePosition} /> : null}
                             <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
                                 <Square className='h-4 w-4' />
@@ -737,7 +718,7 @@ export default function BrowserPageClient() {
                     <div className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)]'>
                         <EvidenceWorkspace captures={captures} profile={selectedProfile} summary={summary} events={events} />
                         <aside className='grid min-w-0 gap-4'>
-                            <AnalystSummary summary={summary} />
+                            <AnalystSummary summary={summary} captures={captures} />
                             <CaptureTimeline captures={captures} />
                         </aside>
                     </div>
@@ -889,11 +870,11 @@ function ProfilePicker({ profiles, selectedProfileId, onSelect, onDelete }: { pr
                         <button
                             type='button'
                             onClick={() => onSelect(profile.id)}
-                            className='inline-flex min-h-9 items-center gap-2 px-3 text-sm font-semibold transition hover:bg-ui-primary/5'
+                            className='inline-flex min-h-9 items-center gap-2 px-3 text-sm font-semibold leading-none transition hover:bg-ui-primary/5'
                         >
                             {selected ? <Check className='h-4 w-4' /> : null}
-                            {profile.name}
-                            <span className='text-xs text-ui-muted'>{profile.tools.length} tools</span>
+                            <span>{profile.name}</span>
+                            <span className='text-xs leading-none text-ui-muted'>{profile.tools.length} tools</span>
                         </button>
                         {!locked ? (
                             <button
@@ -912,26 +893,6 @@ function ProfilePicker({ profiles, selectedProfileId, onSelect, onDelete }: { pr
     )
 }
 
-function NetworkSegment({ network, inferred, onSelect }: { network: BrowserNetwork; inferred: BrowserNetwork; onSelect: (network: BrowserNetwork) => void }) {
-    return (
-        <div className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-2'>
-            <div className='inline-grid grid-cols-2 rounded-md border border-ui-border bg-ui-panel p-1' role='group' aria-label='Choose browser network'>
-                {(['regular', 'tor'] as BrowserNetwork[]).map(item => (
-                    <button
-                        key={item}
-                        type='button'
-                        onClick={() => onSelect(item)}
-                        className={`h-9 rounded px-3 text-sm font-semibold capitalize transition ${network === item ? 'bg-ui-primary text-ui-canvas' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}
-                    >
-                        {item === 'regular' ? 'Regular' : 'Tor'}
-                    </button>
-                ))}
-            </div>
-            <p className='text-xs text-ui-muted'>Auto-detected route: <span className='font-semibold text-ui-text'>{inferred === 'tor' ? 'Tor' : 'Regular'}</span>. Onion URLs default to Tor; normal web URLs default to Regular.</p>
-        </div>
-    )
-}
-
 function HistoryPanel({ history, quota, onRerun, onExpand, embedded = false }: { history: BrowserRunHistory[]; quota: BrowserQuota | null; onRerun: (run: BrowserRunHistory) => void; onExpand: (run: BrowserRunHistory) => void; embedded?: boolean }) {
     const used = quota?.used ?? history.length
     const limit = quota?.limit ?? 3
@@ -942,12 +903,11 @@ function HistoryPanel({ history, quota, onRerun, onExpand, embedded = false }: {
                     <h2 className='text-sm font-semibold text-ui-text'>Recent browser runs</h2>
                     <p className='mt-1 text-xs text-ui-muted'>{quota ? `${used}/${limit} ${quota.plan} run${limit === 1 ? '' : 's'} used${quota.resetsAt ? ` · resets ${new Date(quota.resetsAt).toLocaleDateString()}` : ''}.` : 'Anonymous history is saved to this browser and synced when available.'}</p>
                 </div>
-                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'>{quota?.identityKind === 'user' ? 'account' : 'browser id'}</span>
+                {quota?.identityKind === 'user' ? <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'>account</span> : null}
             </div>
             <div className='grid max-h-[10.75rem] gap-2 overflow-y-auto pr-1'>
                 {history.map(run => (
-                    <div key={run.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-2 text-xs md:grid-cols-[4.75rem_minmax(0,1fr)_auto_auto_auto] md:items-center'>
-                        <button type='button' onClick={() => onExpand(run)} className='text-left font-semibold uppercase text-ui-primary'>{run.network}</button>
+                    <div key={run.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-2 text-xs md:grid-cols-[minmax(0,1fr)_auto_auto_auto] md:items-center'>
                         <button type='button' onClick={() => onExpand(run)} className='min-w-0 truncate text-left font-mono text-ui-text'>{run.target}</button>
                         <ProviderRunBadges run={run} />
                         <span className='whitespace-nowrap text-ui-muted'>{new Date(run.startedAt).toLocaleString()}</span>
@@ -979,7 +939,6 @@ function RunDetailModal({ run, onClose, onRerun }: { run: BrowserRunHistory; onC
                     <button type='button' onClick={onClose} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Close</button>
                 </div>
                 <div className='mt-3 grid gap-2 text-sm'>
-                    <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Network</span><span className='font-semibold uppercase text-ui-primary'>{run.network}</span></div>
                     <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Started</span><span className='text-ui-text'>{new Date(run.startedAt).toLocaleString()}</span></div>
                     <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Providers</span><ProviderRunBadges run={run} /></div>
                 </div>
@@ -1004,7 +963,8 @@ function ProviderRunBadges({ run }: { run: BrowserRunHistory }) {
 function ProviderRunBadge({ provider, label, result }: { provider: 'virustotal' | 'urlquery'; label: string; result?: ProviderRunResult }) {
     const clean = !result || result.status === 'clean'
     const icon = provider === 'urlquery' && !clean ? '!' : clean ? '✓' : '!'
-    return <span className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-semibold ${clean ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}><span>{icon}</span><span>{result?.label || label}</span></span>
+    const text = provider === 'virustotal' ? (result?.label?.includes('/') ? result.label : '0/?') : (result?.label || label)
+    return <span className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-semibold ${clean ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}>{provider === 'urlquery' ? <span>{icon}</span> : null}<span>{text}</span></span>
 }
 
 function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity | null; sessionState: SessionState }) {
@@ -1022,7 +982,7 @@ function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity |
                 </div>
                 <div className='min-w-0 flex-1'>
                     <p className='text-sm font-semibold text-ui-text'>{busy ? 'Queued for isolated capacity' : 'Sandbox capacity'}</p>
-                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{busy ? queueCopy(capacity) : `${active}/${max} browser slots are active across Regular and Tor. Overflow runs queue instead of failing silently.`}</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{busy ? queueCopy(capacity) : `${active}/${max} browser slots are active. Overflow runs queue instead of failing silently.`}</p>
                 </div>
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'>
                     {position ? `#${position}` : `${active}/${max}`}
@@ -1036,7 +996,8 @@ function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity |
     )
 }
 
-function AnalystSummary({ summary }: { summary: ReturnType<typeof buildAnalystSummary> }) {
+function AnalystSummary({ summary, captures }: { summary: ReturnType<typeof buildAnalystSummary>; captures: Capture[] }) {
+    const metadataItems = metadataRows(summary, captures)
     return (
         <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-4'>
             <div className='flex items-start justify-between gap-3'>
@@ -1083,11 +1044,23 @@ function AnalystSummary({ summary }: { summary: ReturnType<typeof buildAnalystSu
                 </div>
             </div>
             <div className='mt-3 grid gap-2 text-sm'>
-                {summary.rows.map(row => (
-                    <div key={row.label} className='flex min-w-0 justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
-                        <span className='text-ui-muted'>{row.label}</span>
-                        <span className='min-w-0 wrap-break-word text-right font-semibold text-ui-text'>{row.value}</span>
-                    </div>
+                {metadataItems.map(row => (
+                    <details key={row.label} className='group rounded-md border border-ui-border bg-ui-raised'>
+                        <summary className='flex min-w-0 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden'>
+                            <span className='text-ui-muted'>{row.label}</span>
+                            <span className='min-w-0 wrap-break-word text-right font-semibold text-ui-text'>{row.value}</span>
+                        </summary>
+                        <div className='grid gap-2 border-t border-ui-border p-3 text-xs text-ui-muted'>
+                            {row.details.map(detail => <p key={detail} className='wrap-break-word leading-5'>{detail}</p>)}
+                            {row.captures.slice(0, 3).map(capture => (
+                                <div key={capture.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-panel p-2'>
+                                    <p className='truncate font-mono text-ui-text'>{capture.url}</p>
+                                    {cleanEvidenceExcerpt(capture.evidence?.textExcerpt) ? <p className='line-clamp-3 leading-5'>{cleanEvidenceExcerpt(capture.evidence?.textExcerpt)}</p> : null}
+                                    {capture.image ? <img src={capture.image} alt={`${capture.label} screenshot`} className='max-h-44 w-full rounded border border-ui-border object-contain' /> : null}
+                                </div>
+                            ))}
+                        </div>
+                    </details>
                 ))}
             </div>
             {summary.indicators.length ? (
@@ -1263,6 +1236,44 @@ function EvidencePanel({ title, status, children }: { title: string; status: str
     )
 }
 
+function metadataRows(summary: ReturnType<typeof buildAnalystSummary>, captures: Capture[]) {
+    const pageCaptures = captures.filter(capture => capture.kind === 'page')
+    const toolCaptures = captures.filter(capture => capture.kind === 'tool')
+    return summary.rows.flatMap(row => {
+        if (/^(unknown|none extracted)$/i.test(row.value)) return []
+        const lower = row.label.toLowerCase()
+        const related = lower.includes('page') || lower.includes('network') || lower.includes('domain') || lower.includes('failed') || lower.includes('url states')
+            ? pageCaptures
+            : lower.includes('virustotal')
+                ? toolCaptures.filter(capture => capture.toolAnalysis?.toolKind === 'virustotal')
+                : lower.includes('urlquery')
+                    ? toolCaptures.filter(capture => capture.toolAnalysis?.toolKind === 'urlquery')
+                    : lower.includes('webcrack') || lower.includes('obfuscated')
+                        ? captures.filter(capture => capture.webcrackLoad || capture.evidence?.deobfuscationTasks?.length || capture.evidence?.obfuscatedScripts?.length)
+                        : lower.includes('profile tools')
+                            ? toolCaptures
+                            : captures
+        if (!related.length && row.value === '0') return []
+        return [{
+            ...row,
+            captures: related,
+            details: metadataDetails(row.label, row.value, related),
+        }]
+    })
+}
+
+function metadataDetails(label: string, value: string, captures: Capture[]) {
+    const lines = [
+        `${label}: ${value}`,
+        ...captures.flatMap(capture => [
+            capture.toolAnalysis?.extractedSignals?.join(' · ') || '',
+            capture.networkSummary ? `${capture.networkSummary.requestCount || 0} requests, ${capture.networkSummary.uniqueDomainCount || 0} domains, ${capture.networkSummary.failedCount || 0} blocked/failed.` : '',
+            capture.evidence?.reasons?.join(' · ') || '',
+        ]),
+    ].map(line => line.trim()).filter(Boolean)
+    return Array.from(new Set(lines)).slice(0, 6)
+}
+
 function CaptureTimeline({ captures }: { captures: Capture[] }) {
     return (
         <section className='min-h-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
@@ -1280,7 +1291,7 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
                             </div>
                             <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>{capture.kind}</span>
                         </div>
-                        {capture.image ? <img src={capture.image} alt={`${capture.label} screenshot`} className='rounded border border-ui-border' /> : null}
+                        {capture.image ? <img src={capture.image} alt={`${capture.label} screenshot`} className='max-h-64 w-full rounded border border-ui-border object-contain' /> : null}
                         {cleanEvidenceExcerpt(capture.evidence?.textExcerpt) ? <p className='line-clamp-3 text-xs leading-5 text-ui-muted'>{cleanEvidenceExcerpt(capture.evidence?.textExcerpt)}</p> : null}
                         {capture.networkSummary ? (
                             <div className='grid gap-1 rounded-md border border-ui-border bg-ui-panel p-2 text-[11px] text-ui-muted'>

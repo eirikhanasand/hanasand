@@ -213,7 +213,7 @@ async function runVulnerabilityScanInternal(): Promise<VulnerabilityReport> {
         ? reports[0]?.scanError || 'Every image scan failed.'
         : null
     const blockerAction = blocker
-        ? 'Install Docker CLI with the Scout plugin in the API container, or configure a supported image scanner service.'
+        ? 'Install Trivy in the API container, verify Docker socket access, or configure a supported image scanner service.'
         : null
 
     return finishScan(currentState, isScannerSetupError(blocker) ? currentState.images : reports, blocker, blockerAction)
@@ -258,11 +258,11 @@ async function finishScan(
 async function scanImage(image: string): Promise<ImageVulnerabilityReport> {
     const scannedAt = new Date().toISOString()
     try {
-        const { stdout } = await execFileAsync('docker', ['scout', 'cves', '--format', 'sarif', image], {
+        const { stdout } = await execFileAsync('trivy', ['image', '--image-src', 'docker', '--scanners', 'vuln', '--format', 'json', '--quiet', image], {
             timeout: Number(process.env.VULNERABILITY_SCAN_IMAGE_TIMEOUT_MS || 120000),
             maxBuffer: 8 * 1024 * 1024,
         })
-        const vulnerabilities = parseSarif(stdout)
+        const vulnerabilities = parseTrivy(stdout)
         return {
             image,
             scannedAt,
@@ -273,7 +273,7 @@ async function scanImage(image: string): Promise<ImageVulnerabilityReport> {
             scanError: null,
         }
     } catch (error) {
-        return emptyImageReport(image, scannedAt, dockerScoutError(error))
+        return emptyImageReport(image, scannedAt, scannerError(error))
     }
 }
 
@@ -286,31 +286,26 @@ async function discoverTargetImages() {
         .sort()
 }
 
-function parseSarif(raw: string): VulnerabilityDetail[] {
+function parseTrivy(raw: string): VulnerabilityDetail[] {
     const parsed = JSON.parse(raw) as Record<string, unknown>
-    const runs = Array.isArray(parsed.runs) ? parsed.runs as Array<Record<string, unknown>> : []
     const details: VulnerabilityDetail[] = []
 
-    for (const run of runs) {
-        const tool = record(record(run.tool).driver)
-        const rules = new Map((Array.isArray(tool.rules) ? tool.rules as Array<Record<string, unknown>> : [])
-            .map(rule => [String(rule.id || 'unknown'), rule]))
-        for (const result of Array.isArray(run.results) ? run.results as Array<Record<string, unknown>> : []) {
-            const id = String(result.ruleId || 'unknown')
-            const rule = rules.get(id) || {}
-            const properties = record({ ...record(rule.properties), ...record(result.properties) })
-            const message = stringValue(record(result.message).text)
+    for (const result of Array.isArray(parsed.Results) ? parsed.Results as Array<Record<string, unknown>> : []) {
+        const target = stringValue(result.Target)
+        const type = stringValue(result.Type)
+        for (const vulnerability of Array.isArray(result.Vulnerabilities) ? result.Vulnerabilities as Array<Record<string, unknown>> : []) {
+            const id = stringValue(vulnerability.VulnerabilityID) || 'unknown'
             details.push({
                 id,
-                title: stringValue(record(rule.shortDescription).text) || message || id,
-                severity: normalizeSeverity(stringValue(properties.severity || properties['security-severity'] || record(result.level).text) || stringValue(result.level)),
-                source: stringValue(tool.name) || 'Docker Scout',
-                packageName: stringValue(properties.packageName || properties.package || properties.purl),
-                packageType: stringValue(properties.packageType || properties.ecosystem),
-                installedVersion: stringValue(properties.installedVersion || properties.version),
-                fixedVersion: stringValue(properties.fixedVersion || properties.fixed_version),
-                description: stringValue(record(rule.fullDescription).text) || message,
-                references: arrayOfStrings(properties.references),
+                title: stringValue(vulnerability.Title) || id,
+                severity: normalizeSeverity(stringValue(vulnerability.Severity)),
+                source: target || 'Trivy',
+                packageName: stringValue(vulnerability.PkgName),
+                packageType: type,
+                installedVersion: stringValue(vulnerability.InstalledVersion),
+                fixedVersion: stringValue(vulnerability.FixedVersion),
+                description: stringValue(vulnerability.Description),
+                references: arrayOfStrings(vulnerability.References),
             })
         }
     }
@@ -330,13 +325,16 @@ function emptyImageReport(image: string, scannedAt: string, scanError: string): 
     }
 }
 
-function dockerScoutError(error: unknown) {
+function scannerError(error: unknown) {
     const message = errorMessage(error)
     if (/ENOENT|not found|executable file/i.test(message)) {
-        return 'Docker CLI or Docker Scout is unavailable in the API container.'
+        return 'Trivy is unavailable in the API container.'
     }
     if (/unknown command.*scout|docker:.*scout|unknown flag: --format/i.test(message)) {
         return 'Docker CLI is installed but the Docker Scout plugin is unavailable.'
+    }
+    if (/docker.*not found|Cannot connect to the Docker daemon|permission denied|connect: permission/i.test(message)) {
+        return 'Docker socket permission denied or unavailable for the API container.'
     }
     if (/permission denied|connect: permission/i.test(message)) {
         return 'Docker socket permission denied for the API container.'
@@ -601,7 +599,7 @@ function normalizeLogLevel(value: string | null): VulnerabilityScanLog['level'] 
 }
 
 function isScannerSetupError(value: string | null) {
-    return Boolean(value && /Docker (?:CLI|Scout|socket)|unknown flag: --format|unknown command.*scout/i.test(value))
+    return Boolean(value && /Trivy|Docker (?:CLI|Scout|socket)|unknown flag: --format|unknown command.*scout|Log in with your Docker ID/i.test(value))
 }
 
 function hasOnlyScannerSetupReports(images: ImageVulnerabilityReport[]) {

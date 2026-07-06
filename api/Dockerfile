@@ -9,12 +9,11 @@ RUN bun install
 
 FROM oven/bun:1.3.11-alpine
 
-ARG DOCKER_SCOUT_VERSION=1.23.1
+ARG TRIVY_VERSION=0.72.0
 RUN apk add --no-cache varnish git openssh-client chromium docker-cli curl tar \
-    && mkdir -p /usr/local/lib/docker/cli-plugins \
-    && curl -fsSL "https://github.com/docker/scout-cli/releases/download/v${DOCKER_SCOUT_VERSION}/docker-scout_${DOCKER_SCOUT_VERSION}_linux_amd64.tar.gz" \
-        | tar -xz -C /usr/local/lib/docker/cli-plugins docker-scout \
-    && chmod +x /usr/local/lib/docker/cli-plugins/docker-scout
+    && curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+        | tar -xz -C /usr/local/bin trivy \
+    && chmod +x /usr/local/bin/trivy
 
 COPY --from=k6builder /usr/bin/k6 /usr/bin/k6
 
