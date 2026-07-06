@@ -23,5 +23,7 @@ crond -f &
 # Starts varnish
 varnishd -a :8080 -f /etc/varnish/default.vcl -s malloc,512m &
 
-# Starts API. Chromium sandboxes are headed; xvfb gives them a real display in Docker.
-xvfb-run -a -s "-screen 0 1920x1080x24" bun start
+# Starts API. Chromium sandboxes are headed; Xvfb gives them a real display in Docker.
+export DISPLAY="${DISPLAY:-:99}"
+Xvfb "$DISPLAY" -screen 0 1920x1080x24 >/tmp/xvfb.log 2>&1 &
+bun start
