@@ -53,7 +53,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(clientSource.includes('urlquery'), 'client should show urlquery provider status.')
     assert(clientSource.includes('WebCrack / decoded scripts'), 'client should show WebCrack decoded-script status.')
     assert(clientSource.includes('Network / requests'), 'client should show network request evidence.')
-    assert(clientSource.includes('Console / logs'), 'client should show console and broker event evidence.')
+    assert(clientSource.includes('Console logs'), 'client should show console and broker event evidence.')
     assert(clientSource.includes('Indicators'), 'client should show copyable indicator evidence.')
     assert(clientSource.includes('Provider unavailable'), 'client should render honest unavailable provider states.')
     assert(clientSource.includes('Result unavailable'), 'client should render honest unavailable parsed-result states.')

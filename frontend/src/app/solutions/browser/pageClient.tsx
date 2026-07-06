@@ -89,6 +89,11 @@ type BrowserRunHistory = {
     status: string
     startedAt: string
     title?: string
+    providerResults?: Record<string, ProviderRunResult>
+}
+type ProviderRunResult = {
+    status: 'clean' | 'suspicious' | 'blocked' | 'loading'
+    label: string
 }
 type BrowserQuota = {
     plan: string
@@ -183,6 +188,7 @@ export default function BrowserPageClient() {
     const [capacity, setCapacity] = useState<SandboxCapacity | null>(null)
     const [history, setHistory] = useState<BrowserRunHistory[]>([])
     const [quota, setQuota] = useState<BrowserQuota | null>(null)
+    const [expandedRun, setExpandedRun] = useState<BrowserRunHistory | null>(null)
     const socketRef = useRef<WebSocket | null>(null)
     const viewportRef = useRef<HTMLDivElement | null>(null)
     const imageRef = useRef<HTMLImageElement | null>(null)
@@ -351,6 +357,8 @@ export default function BrowserPageClient() {
         socket.onclose = () => {
             setSocketState('closed')
             setSessionState(current => current === 'connecting' ? 'ended' : current)
+            setCaptures(current => ensureProviderFallbacks(current, selectedProfile.tools, url))
+            setHistory(current => persistHistory(current.map(run => run.id === id ? addFallbackProviderResults(run, selectedProfile.tools) : run)))
             pushEvent('Sandbox broker closed.')
         }
         socket.onerror = () => {
@@ -406,6 +414,8 @@ export default function BrowserPageClient() {
             }
             if (payload.type === 'tool_capture') {
                 const image = typeof payload.image === 'string' ? `data:image/jpeg;base64,${payload.image}` : null
+                const toolAnalysis = toolAnalysisValue(payload.toolAnalysis)
+                const providerResult = providerRunResult(toolAnalysis, stringValue(payload.error))
                 setCaptures(current => addCapture(current, {
                     id: `tool-${payload.id || current.length}-${payload.capturedAt || Date.now()}`,
                     kind: 'tool',
@@ -416,9 +426,14 @@ export default function BrowserPageClient() {
                     image,
                     error: stringValue(payload.error),
                     evidence: evidenceValue(payload.evidence),
-                    toolAnalysis: toolAnalysisValue(payload.toolAnalysis),
+                    toolAnalysis,
                     webcrackLoad: webcrackLoadValue(payload.webcrackLoad),
                 }))
+                if (providerResult) {
+                    setHistory(current => persistHistory(current.map(run => run.id === id
+                        ? { ...run, providerResults: { ...(run.providerResults || {}), [toolAnalysis?.toolKind || safeToolKey(stringValue(payload.id) || stringValue(payload.name))]: providerResult } }
+                        : run)))
+                }
                 pushEvent(`${stringValue(payload.name) || 'Profile tool'} captured.`)
                 return
             }
@@ -440,7 +455,7 @@ export default function BrowserPageClient() {
                 return
             }
             if (payload.type === 'console') {
-                pushEvent(`Remote console: ${stringValue(payload.text)}`)
+                pushEvent(cleanConsoleEvent(stringValue(payload.text)))
                 return
             }
             if (payload.type === 'navigation_error' || payload.type === 'error') {
@@ -568,7 +583,7 @@ export default function BrowserPageClient() {
     if (sessionState === 'prompt') {
         return (
             <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
-                <section className='mx-auto grid min-h-[calc(100vh-4.5rem)] w-full max-w-7xl items-center gap-8 px-4 py-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(32rem,1.1fr)]'>
+                <section className='mx-auto grid min-h-[calc(100vh-4.5rem)] w-full max-w-7xl items-center gap-8 overflow-x-hidden px-4 py-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(32rem,1.1fr)]'>
                     <div className='grid gap-4'>
                         <p className='text-xs font-semibold uppercase text-ui-primary'>Browser sandbox</p>
                         <h1 className='max-w-xl text-4xl font-semibold tracking-normal text-ui-text md:text-6xl'>Browser</h1>
@@ -581,9 +596,9 @@ export default function BrowserPageClient() {
                             <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>Tor auto-route</span>
                         </div>
                     </div>
-                    <div className='grid gap-4'>
+                    <div className='grid min-w-0 gap-3'>
                         <form
-                            className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'
+                            className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'
                             onSubmit={(event) => {
                                 event.preventDefault()
                                 startRun()
@@ -637,16 +652,17 @@ export default function BrowserPageClient() {
                                     />
                                 </div>
                             </details>
+                            <HistoryPanel history={history} quota={quota} onRerun={(run) => startRun({ target: run.target, network: run.network })} onExpand={setExpandedRun} embedded />
                         </form>
-                        <HistoryPanel history={history} quota={quota} onRerun={(run) => startRun({ target: run.target, network: run.network })} />
                     </div>
                 </section>
+                {expandedRun ? <RunDetailModal run={expandedRun} onClose={() => setExpandedRun(null)} onRerun={(run) => startRun({ target: run.target, network: run.network })} /> : null}
             </main>
         )
     }
 
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
+        <main className='min-h-[calc(100vh-4.5rem)] overflow-x-hidden bg-ui-canvas text-ui-text'>
             <section className='grid min-h-[calc(100vh-4.5rem)] grid-rows-[auto_minmax(0,1fr)]'>
                 <header className='border-b border-ui-border bg-ui-panel px-4 py-3'>
                     <div className='mx-auto flex max-w-[96rem] flex-wrap items-center justify-between gap-3'>
@@ -670,7 +686,7 @@ export default function BrowserPageClient() {
                     </div>
                 </header>
                 <div className='mx-auto grid w-full max-w-[96rem] gap-4 px-4 py-4'>
-                    <div className='grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]'>
+                    <div className='grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]'>
                         <section className='grid h-[min(56vh,38rem)] min-h-96 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
                             <SandboxTabStrip
                                 activeTab={activeSandboxTab}
@@ -686,7 +702,7 @@ export default function BrowserPageClient() {
                             </div>
                             <div
                                 ref={viewportRef}
-                                className='grid min-h-0 place-items-center bg-ui-canvas p-2 outline-none focus:ring-2 focus:ring-ui-primary/30'
+                                className='grid min-h-0 place-items-center overflow-hidden bg-ui-canvas p-2 outline-none focus:ring-2 focus:ring-ui-primary/30'
                                 tabIndex={0}
                                 role='application'
                                 aria-label='Interactive isolated browser viewport'
@@ -697,7 +713,7 @@ export default function BrowserPageClient() {
                                         ref={activeTool ? undefined : imageRef}
                                         src={activeViewportImage}
                                         alt={activeTool ? `${activeTool.name} provider frame` : 'Live browser sandbox frame'}
-                                        className={`max-h-full w-full select-none rounded-md object-contain ${activeTool ? '' : 'cursor-pointer'}`}
+                                        className={`h-full max-h-full w-full max-w-full select-none rounded-md object-contain ${activeTool ? '' : 'cursor-pointer'}`}
                                         draggable={false}
                                         onClick={activeTool ? undefined : clickBrowserFrame}
                                         onDragStart={event => event.preventDefault()}
@@ -720,9 +736,9 @@ export default function BrowserPageClient() {
                             </div>
                         </aside>
                     </div>
-                    <div className='grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.72fr)]'>
+                    <div className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)]'>
                         <EvidenceWorkspace captures={captures} profile={selectedProfile} summary={summary} events={events} />
-                        <aside className='grid gap-4'>
+                        <aside className='grid min-w-0 gap-4'>
                             <AnalystSummary summary={summary} />
                             <CaptureTimeline captures={captures} />
                         </aside>
@@ -745,7 +761,7 @@ function SandboxTabStrip({
     onSelect: (tab: string) => void
 }) {
     return (
-        <div className='flex gap-2 overflow-x-auto border-b border-ui-border bg-ui-panel px-3 py-2'>
+        <div className='flex justify-start gap-2 overflow-x-auto border-b border-ui-border bg-ui-panel px-3 py-2 md:justify-center'>
             <SandboxTabButton
                 active={activeTab === 'browser'}
                 label='Browser'
@@ -918,11 +934,11 @@ function NetworkSegment({ network, inferred, onSelect }: { network: BrowserNetwo
     )
 }
 
-function HistoryPanel({ history, quota, onRerun }: { history: BrowserRunHistory[]; quota: BrowserQuota | null; onRerun: (run: BrowserRunHistory) => void }) {
+function HistoryPanel({ history, quota, onRerun, onExpand, embedded = false }: { history: BrowserRunHistory[]; quota: BrowserQuota | null; onRerun: (run: BrowserRunHistory) => void; onExpand: (run: BrowserRunHistory) => void; embedded?: boolean }) {
     const used = quota?.used ?? history.length
     const limit = quota?.limit ?? 3
     return (
-        <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'>
+        <section className={embedded ? 'grid gap-3 border-t border-ui-border pt-3' : 'grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'}>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div>
                     <h2 className='text-sm font-semibold text-ui-text'>Recent browser runs</h2>
@@ -930,12 +946,13 @@ function HistoryPanel({ history, quota, onRerun }: { history: BrowserRunHistory[
                 </div>
                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'>{quota?.identityKind === 'user' ? 'account' : 'browser id'}</span>
             </div>
-            <div className='grid gap-2'>
-                {history.slice(0, 5).map(run => (
-                    <div key={run.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-2 text-xs md:grid-cols-[6rem_minmax(0,1fr)_auto_auto] md:items-center'>
-                        <span className='font-semibold uppercase text-ui-primary'>{run.network}</span>
-                        <span className='min-w-0 truncate font-mono text-ui-text'>{run.target}</span>
-                        <span className='text-ui-muted'>{new Date(run.startedAt).toLocaleString()}</span>
+            <div className='grid max-h-[10.75rem] gap-2 overflow-y-auto pr-1'>
+                {history.map(run => (
+                    <div key={run.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-2 text-xs md:grid-cols-[4.75rem_minmax(0,1fr)_auto_auto_auto] md:items-center'>
+                        <button type='button' onClick={() => onExpand(run)} className='text-left font-semibold uppercase text-ui-primary'>{run.network}</button>
+                        <button type='button' onClick={() => onExpand(run)} className='min-w-0 truncate text-left font-mono text-ui-text'>{run.target}</button>
+                        <ProviderRunBadges run={run} />
+                        <span className='whitespace-nowrap text-ui-muted'>{new Date(run.startedAt).toLocaleString()}</span>
                         <button
                             type='button'
                             onClick={() => onRerun(run)}
@@ -950,6 +967,46 @@ function HistoryPanel({ history, quota, onRerun }: { history: BrowserRunHistory[
             </div>
         </section>
     )
+}
+
+function RunDetailModal({ run, onClose, onRerun }: { run: BrowserRunHistory; onClose: () => void; onRerun: (run: BrowserRunHistory) => void }) {
+    return (
+        <div className='fixed inset-0 z-50 grid place-items-center bg-black/55 p-4'>
+            <section className='w-full max-w-xl rounded-lg border border-ui-border bg-ui-panel p-4 shadow-xl'>
+                <div className='flex items-start justify-between gap-3'>
+                    <div className='min-w-0'>
+                        <h2 className='text-base font-semibold text-ui-text'>Browser run</h2>
+                        <p className='mt-1 truncate font-mono text-xs text-ui-muted'>{run.target}</p>
+                    </div>
+                    <button type='button' onClick={onClose} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Close</button>
+                </div>
+                <div className='mt-3 grid gap-2 text-sm'>
+                    <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Network</span><span className='font-semibold uppercase text-ui-primary'>{run.network}</span></div>
+                    <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Started</span><span className='text-ui-text'>{new Date(run.startedAt).toLocaleString()}</span></div>
+                    <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Providers</span><ProviderRunBadges run={run} /></div>
+                </div>
+                <button type='button' onClick={() => onRerun(run)} className='mt-4 inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text hover:border-ui-primary'>
+                    <RotateCcw className='h-4 w-4' />
+                    Run again
+                </button>
+            </section>
+        </div>
+    )
+}
+
+function ProviderRunBadges({ run }: { run: BrowserRunHistory }) {
+    return (
+        <span className='inline-flex items-center gap-1.5 whitespace-nowrap'>
+            <ProviderRunBadge provider='virustotal' label='VT' result={run.providerResults?.virustotal} />
+            <ProviderRunBadge provider='urlquery' label='urlquery' result={run.providerResults?.urlquery} />
+        </span>
+    )
+}
+
+function ProviderRunBadge({ provider, label, result }: { provider: 'virustotal' | 'urlquery'; label: string; result?: ProviderRunResult }) {
+    const clean = !result || result.status === 'clean'
+    const icon = provider === 'urlquery' && !clean ? '!' : clean ? '✓' : '!'
+    return <span className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-semibold ${clean ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}><span>{icon}</span><span>{result?.label || label}</span></span>
 }
 
 function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity | null; sessionState: SessionState }) {
@@ -983,11 +1040,11 @@ function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity |
 
 function AnalystSummary({ summary }: { summary: ReturnType<typeof buildAnalystSummary> }) {
     return (
-        <section className='rounded-lg border border-ui-border bg-ui-panel p-4'>
+        <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-4'>
             <div className='flex items-start justify-between gap-3'>
-                <div>
+                <div className='min-w-0'>
                     <h2 className='text-sm font-semibold uppercase text-ui-primary'>SOC analyst summary</h2>
-                    <p className='mt-2 text-sm leading-6 text-ui-text'>{summary.narrative}</p>
+                    <p className='mt-2 wrap-break-word text-sm leading-6 text-ui-text'>{summary.narrative}</p>
                 </div>
                 <button
                     type='button'
@@ -1009,19 +1066,19 @@ function AnalystSummary({ summary }: { summary: ReturnType<typeof buildAnalystSu
                 <div className='mt-3 grid gap-2 md:grid-cols-2'>
                     <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
                         <p className='text-[11px] font-semibold uppercase text-ui-muted'>Impact</p>
-                        <p className='mt-1 text-xs leading-5 text-ui-text'>{summary.brief.impact}</p>
+                        <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-text'>{summary.brief.impact}</p>
                     </div>
                     <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
                         <p className='text-[11px] font-semibold uppercase text-ui-muted'>Recommended action</p>
-                        <p className='mt-1 text-xs leading-5 text-ui-text'>{summary.brief.recommendedAction}</p>
+                        <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-text'>{summary.brief.recommendedAction}</p>
                     </div>
                     <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
                         <p className='text-[11px] font-semibold uppercase text-ui-muted'>Freshness</p>
-                        <p className='mt-1 text-xs leading-5 text-ui-text'>{summary.brief.freshness}</p>
+                        <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-text'>{summary.brief.freshness}</p>
                     </div>
                     <div className='rounded-md border border-ui-border bg-ui-panel p-2'>
                         <p className='text-[11px] font-semibold uppercase text-ui-muted'>Next steps</p>
-                        <ul className='mt-1 grid gap-1 text-xs leading-5 text-ui-text'>
+                        <ul className='mt-1 grid gap-1 wrap-break-word text-xs leading-5 text-ui-text'>
                             {summary.brief.nextSteps.map(step => <li key={step}>{step}</li>)}
                         </ul>
                     </div>
@@ -1029,9 +1086,9 @@ function AnalystSummary({ summary }: { summary: ReturnType<typeof buildAnalystSu
             </div>
             <div className='mt-3 grid gap-2 text-sm'>
                 {summary.rows.map(row => (
-                    <div key={row.label} className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
+                    <div key={row.label} className='flex min-w-0 justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
                         <span className='text-ui-muted'>{row.label}</span>
-                        <span className='font-semibold text-ui-text'>{row.value}</span>
+                        <span className='min-w-0 wrap-break-word text-right font-semibold text-ui-text'>{row.value}</span>
                     </div>
                 ))}
             </div>
@@ -1095,7 +1152,7 @@ function EvidenceWorkspace({
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
 
     return (
-        <section className='min-h-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+        <section className='min-h-0 min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
             <div className='border-b border-ui-border px-4 py-3'>
                 <h2 className='text-sm font-semibold uppercase text-ui-primary'>Evidence workspace</h2>
                 <p className='mt-1 text-xs text-ui-muted'>Source-attributed capture, provider, network, script, and indicator status.</p>
@@ -1104,7 +1161,7 @@ function EvidenceWorkspace({
                 <EvidencePanel title='Browser capture' status={latestPage ? 'Captured' : 'Awaiting frame'}>
                     {latestPage ? (
                         <div className='grid gap-2 text-xs text-ui-muted'>
-                            <p className='font-mono text-ui-text'>{latestPage.url}</p>
+                            <p className='break-all font-mono text-ui-text'>{latestPage.url}</p>
                             <p>{latestPage.capturedAt}{latestPage.reason ? ` · ${latestPage.reason}` : ''}{latestPage.title ? ` · ${latestPage.title}` : ''}</p>
                             {cleanEvidenceExcerpt(latestPage.evidence?.textExcerpt) ? <p className='leading-5'>{cleanEvidenceExcerpt(latestPage.evidence?.textExcerpt)}</p> : null}
                         </div>
@@ -1122,7 +1179,7 @@ function EvidenceWorkspace({
                                 {capture ? (
                                     <div className='grid gap-1 text-xs text-ui-muted'>
                                         <p>{capture.capturedAt}</p>
-                                        <p className='truncate font-mono text-ui-text'>{capture.url || tool.url}</p>
+                                        <p className='break-all font-mono text-ui-text'>{capture.url || tool.url}</p>
                                         {analysis?.vendorFlagged !== undefined ? <p>VirusTotal vendors: {analysis.vendorFlagged}/{analysis.vendorTotal || '?'}</p> : null}
                                         {analysis?.alertCount !== undefined ? <p>urlquery alerts: {analysis.alertCount}</p> : null}
                                         {analysis?.communityCommentCount !== undefined ? <p>Community comments: {analysis.communityCommentCount}</p> : null}
@@ -1156,7 +1213,7 @@ function EvidenceWorkspace({
                     {latestNetwork ? (
                         <div className='grid gap-1 text-xs text-ui-muted'>
                             <p>{latestNetwork.requestCount || 0} requests · {latestNetwork.responseCount || 0} responses · {latestNetwork.failedCount || 0} blocked/failed</p>
-                            {latestNetwork.domains?.length ? <p className='font-mono text-ui-text'>{latestNetwork.domains.slice(0, 8).join('\n')}</p> : null}
+                            {latestNetwork.domains?.length ? <p className='break-all font-mono text-ui-text'>{latestNetwork.domains.slice(0, 8).join('\n')}</p> : null}
                         </div>
                     ) : (
                         <p className='text-xs leading-5 text-ui-muted'>No request summary has been emitted by the browser broker yet.</p>
@@ -1178,9 +1235,9 @@ function EvidenceWorkspace({
                     )}
                 </EvidencePanel>
 
-                <EvidencePanel title='Console / logs' status={`${events.length} event${events.length === 1 ? '' : 's'}`}>
+                <EvidencePanel title='Console logs' status={`${events.length} event${events.length === 1 ? '' : 's'}`}>
                     <div className='grid gap-1 text-xs text-ui-muted'>
-                        {events.slice(0, 6).map(event => <p key={event}>{event}</p>)}
+                        {events.slice(0, 6).map(event => <p key={event} className='wrap-break-word'>{event}</p>)}
                     </div>
                 </EvidencePanel>
 
@@ -1263,6 +1320,78 @@ function addCapture(current: Capture[], next: Capture) {
     const last = current[0]
     if (last && last.kind === next.kind && last.url === next.url && last.image === next.image) return current
     return [next, ...current].slice(0, 24)
+}
+
+function ensureProviderFallbacks(current: Capture[], tools: SandboxTool[], target: string) {
+    const now = new Date().toISOString()
+    const next = [...current]
+    for (const tool of tools) {
+        const existing = next.find(capture => matchesTool(capture, tool))
+        if (existing && existing.error !== 'provider_navigation_pending') continue
+        const analysis = providerFallbackAnalysis(tool)
+        next.unshift({
+            id: `tool-${tool.id}-fallback-${now}`,
+            kind: 'tool',
+            label: tool.name,
+            url: tool.url.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target),
+            capturedAt: now,
+            error: existing?.error === 'provider_navigation_pending' ? 'provider_unavailable' : undefined,
+            evidence: {
+                url: tool.url,
+                verdict: 'unknown',
+                confidence: 10,
+                reasons: ['Provider did not return a parsed result before the sandbox closed.'],
+                indicators: {},
+                comments: [],
+                forms: [],
+                scripts: [],
+                obfuscatedScripts: [],
+                threatAssociations: [],
+                deobfuscationTasks: [],
+            },
+            toolAnalysis: analysis,
+        })
+    }
+    return next.slice(0, 24)
+}
+
+function providerFallbackAnalysis(tool: SandboxTool): SandboxToolAnalysis {
+    if (safeToolKey(tool.id || tool.name) === 'virustotal') {
+        return { toolKind: 'virustotal', vendorFlagged: 0, verdict: 'clean', extractedSignals: ['No VirusTotal detection parsed before close.'] }
+    }
+    if (safeToolKey(tool.id || tool.name) === 'urlquery') {
+        return { toolKind: 'urlquery', alertCount: 0, verdict: 'clean', extractedSignals: ['No urlquery alerts parsed before close.'] }
+    }
+    if (safeToolKey(tool.id || tool.name) === 'webcrack') {
+        return { toolKind: 'webcrack', verdict: 'unknown', extractedSignals: ['WebCrack result unavailable before close.'] }
+    }
+    return { toolKind: safeToolKey(tool.id || tool.name) || 'generic', verdict: 'unknown' }
+}
+
+function addFallbackProviderResults(run: BrowserRunHistory, tools: SandboxTool[]) {
+    const providerResults = { ...(run.providerResults || {}) }
+    for (const tool of tools) {
+        const key = safeToolKey(tool.id || tool.name)
+        if ((key === 'virustotal' || key === 'urlquery') && !providerResults[key]) providerResults[key] = { status: 'clean', label: key === 'virustotal' ? 'VT' : 'urlquery' }
+    }
+    return { ...run, providerResults }
+}
+
+function providerRunResult(analysis?: SandboxToolAnalysis, error = ''): ProviderRunResult | null {
+    if (!analysis?.toolKind) return null
+    if (analysis.toolKind === 'virustotal') {
+        const flagged = analysis.vendorFlagged || 0
+        return { status: flagged > 0 ? 'suspicious' : error ? 'blocked' : 'clean', label: `${flagged}/${analysis.vendorTotal || '?'}` }
+    }
+    if (analysis.toolKind === 'urlquery') {
+        const alerts = analysis.alertCount || 0
+        return { status: alerts > 0 ? 'suspicious' : error ? 'blocked' : 'clean', label: alerts > 0 ? `${alerts}` : 'urlquery' }
+    }
+    return null
+}
+
+function cleanConsoleEvent(value: string) {
+    return value.replace(/^Remote console:\s*/i, '').trim() || 'Console event.'
 }
 
 function captureLabel(reason: string) {
@@ -1474,17 +1603,21 @@ function formatConfidencePercent(value: number) {
 }
 
 function matchesTool(capture: Capture, tool: SandboxTool) {
-    const toolId = tool.id.toLowerCase()
+    const toolId = safeToolKey(tool.id)
     const label = capture.label.toLowerCase()
     const kind = capture.toolAnalysis?.toolKind?.toLowerCase()
     return label.includes(toolId) || label.includes(tool.name.toLowerCase()) || kind === toolId
 }
 
+function safeToolKey(value: string) {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
 function providerStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (!capture) return 'Unavailable'
     if (capture.error === 'provider_navigation_pending') return 'Loading'
-    if (capture.error) return 'Provider error'
     if (hasParsedProviderResult(analysis)) return 'Result captured'
+    if (capture.error) return 'Provider error'
     return 'Result unavailable'
 }
 
@@ -1599,7 +1732,20 @@ function runHistoryValue(value: unknown): BrowserRunHistory | null {
         status: stringValue(record.status) || 'running',
         startedAt,
         title: stringValue(record.title),
+        providerResults: providerResultsValue(record.providerResults),
     }
+}
+
+function providerResultsValue(value: unknown): Record<string, ProviderRunResult> | undefined {
+    if (!value || typeof value !== 'object') return undefined
+    const entries = Object.entries(value as Record<string, unknown>).flatMap(([key, item]) => {
+        if (!item || typeof item !== 'object') return []
+        const record = item as Record<string, unknown>
+        const status = stringValue(record.status)
+        if (status !== 'clean' && status !== 'suspicious' && status !== 'blocked' && status !== 'loading') return []
+        return [[safeToolKey(key), { status, label: stringValue(record.label) || key }] as const]
+    })
+    return entries.length ? Object.fromEntries(entries) : undefined
 }
 
 function sanitizeHistory(value: unknown): BrowserRunHistory[] {
