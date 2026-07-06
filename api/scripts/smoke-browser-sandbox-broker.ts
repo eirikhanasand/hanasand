@@ -57,7 +57,7 @@ const pages = new Map<string, string>([
     <p>LockBit ransomware campaign associated with this lure.</p>
     <form action="https://credential.example.test/login"><input name="email"><input name="password" type="password"></form>
   </main>
-  <script>eval(atob("${encoded}"));</script>
+  <script type="text/plain">eval(atob("${encoded}"));</script>
   <script>setTimeout(() => { location.href = "/final" }, 950)</script>
 </body></html>`],
     ['/final', `<!doctype html>
