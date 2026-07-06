@@ -621,7 +621,23 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     error: navigationError || 'Provider tab opened; verdict parsing is still running.',
                 })
                 const providerText = officialProviderKind(preparedUrl) ? await waitForProviderData(tool, toolPage, providerBodies) : providerBodies()
-                if (providerText && hasParsedProviderData(tool, providerText)) navigationError = ''
+                if (providerText && hasParsedProviderData(tool, providerText)) {
+                    navigationError = ''
+                    const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText)
+                    send({
+                        type: 'tool_capture',
+                        sessionId,
+                        id: tool.id || safeToolId(tool.name || toolUrl),
+                        name: tool.name || toolUrl,
+                        url: toolPage.url() || preparedUrl,
+                        title: await toolPage.title().catch(() => ''),
+                        capturedAt: startedAt,
+                        image: openedImage ? openedImage.toString('base64') : null,
+                        evidence: parsedEvidence,
+                        toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, parsedEvidence),
+                        target,
+                    })
+                }
                 const webcrackTool = isWebCrackTool(tool, toolUrl)
                 let webcrackLoad: WebCrackLoadResult | undefined
                 if (webcrackTool) {
