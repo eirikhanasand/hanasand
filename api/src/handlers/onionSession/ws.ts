@@ -848,7 +848,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     }
 
     async function webCrackTasks(tasks: SandboxDeobfuscationTask[]) {
-        const deadline = Date.now() + 1200
+        const deadline = Date.now() + 3500
         while (!tasks.length && !cachedDeobfuscationTasks.length && Date.now() < deadline) {
             await new Promise(resolve => setTimeout(resolve, 100))
         }
