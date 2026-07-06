@@ -165,6 +165,15 @@ function brokerUrlForSession(baseUrl: string, id: string) {
     return `${baseUrl.replace(/\/$/, '')}/${encodeURIComponent(id)}`
 }
 
+function browserViewportSize(element: HTMLElement | null) {
+    const rect = element?.getBoundingClientRect()
+    if (!rect?.width || !rect.height) return null
+    return {
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+    }
+}
+
 export default function BrowserPageClient() {
     const [target, setTarget] = useState('')
     const [sessionState, setSessionState] = useState<SessionState>('prompt')
@@ -307,6 +316,23 @@ export default function BrowserPageClient() {
         socketRef.current = null
     }, [])
 
+    const sendBrowserResize = useCallback(() => {
+        const size = browserViewportSize(viewportRef.current)
+        const socket = socketRef.current
+        if (!size || !socket || socket.readyState !== WebSocket.OPEN) return
+        socket.send(JSON.stringify({ type: 'resize', ...size }))
+    }, [])
+
+    useEffect(() => {
+        if (sessionState === 'prompt') return
+        const element = viewportRef.current
+        if (!element) return
+        sendBrowserResize()
+        const observer = new ResizeObserver(sendBrowserResize)
+        observer.observe(element)
+        return () => observer.disconnect()
+    }, [sendBrowserResize, sessionState])
+
     const startRun = useCallback((override?: { target?: string; network?: BrowserNetwork }) => {
         const url = normalizeTarget(override?.target ?? target)
         if (!url) return
@@ -337,6 +363,7 @@ export default function BrowserPageClient() {
                 target: url,
                 durationMinutes: 15,
                 profileTools,
+                ...browserViewportSize(viewportRef.current),
                 clientId: getOrCreateBrowserClientId(),
                 userId: getCookie('id') || undefined,
                 sessionToken: getCookie('access_token') || undefined,
@@ -481,13 +508,8 @@ export default function BrowserPageClient() {
         if (!image) return null
         const rect = image.getBoundingClientRect()
         if (!rect.width || !rect.height) return null
-        const scale = Math.min(rect.width / activeFrame.width, rect.height / activeFrame.height)
-        const drawnWidth = activeFrame.width * scale
-        const drawnHeight = activeFrame.height * scale
-        const offsetX = (rect.width - drawnWidth) / 2
-        const offsetY = (rect.height - drawnHeight) / 2
-        const x = Math.max(0, Math.min(activeFrame.width, Math.round(((clientX - rect.left - offsetX) / drawnWidth) * activeFrame.width)))
-        const y = Math.max(0, Math.min(activeFrame.height, Math.round(((clientY - rect.top - offsetY) / drawnHeight) * activeFrame.height)))
+        const x = Math.max(0, Math.min(activeFrame.width, Math.round(((clientX - rect.left) / rect.width) * activeFrame.width)))
+        const y = Math.max(0, Math.min(activeFrame.height, Math.round(((clientY - rect.top) / rect.height) * activeFrame.height)))
         return { x, y }
     }, [activeFrame.height, activeFrame.width])
 
@@ -697,7 +719,7 @@ export default function BrowserPageClient() {
                                         ref={activeTool ? undefined : imageRef}
                                         src={activeViewportImage}
                                         alt={activeTool ? `${activeTool.name} provider frame` : 'Live browser sandbox frame'}
-                                        className={`h-full max-h-full w-full max-w-full select-none rounded-md object-contain ${activeTool ? '' : 'cursor-pointer'}`}
+                                        className={`h-full w-full select-none rounded-md object-fill ${activeTool ? '' : 'cursor-pointer'}`}
                                         draggable={false}
                                         onClick={activeTool ? undefined : clickBrowserFrame}
                                         onDragStart={event => event.preventDefault()}
