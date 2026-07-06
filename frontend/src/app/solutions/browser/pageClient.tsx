@@ -597,41 +597,38 @@ export default function BrowserPageClient() {
                                     Start sandbox
                                 </button>
                             </div>
-                            <ProfilePicker profiles={profiles} selectedProfileId={selectedProfileId} onSelect={setSelectedProfileId} onDelete={deleteProfile} />
+                            <details className='grid gap-3 rounded-md border border-ui-border bg-ui-raised p-3'>
+                                <summary className='flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden'>
+                                    <ProfilePicker profiles={profiles} selectedProfileId={selectedProfileId} onSelect={setSelectedProfileId} onDelete={deleteProfile} />
+                                    <span className='ml-auto shrink-0 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-primary'>Edit</span>
+                                </summary>
+                                <div className='mt-3 grid gap-3'>
+                                    <p className='text-sm text-ui-muted'>Profiles run the selected URL through external triage surfaces in the remote sandbox context.</p>
+                                    <p className='text-xs text-ui-muted'>{profileSyncLabel(profileSyncState)}</p>
+                                    <div className='flex gap-2'>
+                                        <input value={customProfileName} onChange={event => setCustomProfileName(event.target.value)} placeholder='Profile name' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none' />
+                                        <button type='button' onClick={saveProfile} className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary' aria-label='Save profile'>
+                                            <Plus className='h-4 w-4' />
+                                        </button>
+                                    </div>
+                                    <ProfileToolEditor
+                                        profile={selectedProfile}
+                                        locked={isDefaultProfile(selectedProfile.id)}
+                                        toolName={customToolName}
+                                        toolUrl={customToolUrl}
+                                        onToolName={setCustomToolName}
+                                        onToolUrl={setCustomToolUrl}
+                                        onAddTool={addToolToSelectedProfile}
+                                        onRemoveTool={removeToolFromSelectedProfile}
+                                    />
+                                </div>
+                            </details>
                             <div className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-3 text-xs text-ui-muted md:grid-cols-3'>
                                 <span><strong className='text-ui-text'>10 active browsers by default</strong></span>
                                 <span><strong className='text-ui-text'>Queued</strong> when capacity is full</span>
                                 <span><strong className='text-ui-text'>Auto-routed</strong> by URL type</span>
                             </div>
                         </form>
-                        <details className='rounded-lg border border-ui-border bg-ui-panel p-4'>
-                            <summary className='flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 [&::-webkit-details-marker]:hidden'>
-                                <div>
-                                    <h2 className='text-sm font-semibold text-ui-text'>Saved profiles</h2>
-                                    <p className='mt-1 text-xs text-ui-muted'>{profileSyncLabel(profileSyncState)}</p>
-                                </div>
-                                <span className='text-xs font-semibold text-ui-primary'>Edit</span>
-                            </summary>
-                            <div className='mt-3 grid gap-3'>
-                                <p className='text-sm text-ui-muted'>Profiles run the selected URL through external triage surfaces in the remote sandbox context.</p>
-                                <div className='flex gap-2'>
-                                    <input value={customProfileName} onChange={event => setCustomProfileName(event.target.value)} placeholder='Profile name' className='h-9 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none' />
-                                    <button type='button' onClick={saveProfile} className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary' aria-label='Save profile'>
-                                        <Plus className='h-4 w-4' />
-                                    </button>
-                                </div>
-                                <ProfileToolEditor
-                                    profile={selectedProfile}
-                                    locked={isDefaultProfile(selectedProfile.id)}
-                                    toolName={customToolName}
-                                    toolUrl={customToolUrl}
-                                    onToolName={setCustomToolName}
-                                    onToolUrl={setCustomToolUrl}
-                                    onAddTool={addToolToSelectedProfile}
-                                    onRemoveTool={removeToolFromSelectedProfile}
-                                />
-                            </div>
-                        </details>
                         <HistoryPanel history={history} quota={quota} onRerun={(run) => startRun({ target: run.target, network: run.network })} />
                     </div>
                 </section>
@@ -768,12 +765,12 @@ function ProfileToolEditor({
 
 function ProfilePicker({ profiles, selectedProfileId, onSelect, onDelete }: { profiles: SandboxProfile[]; selectedProfileId: string; onSelect: (id: string) => void; onDelete: (id: string) => void }) {
     return (
-        <div className='flex flex-wrap gap-2'>
+        <div className='flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1'>
             {profiles.map(profile => {
                 const selected = selectedProfileId === profile.id
                 const locked = defaultProfiles.some(item => item.id === profile.id)
                 return (
-                    <span key={profile.id} className={`inline-flex min-h-9 items-center overflow-hidden rounded-md border transition ${selected ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text'}`}>
+                    <span key={profile.id} className={`inline-flex min-h-9 shrink-0 items-center overflow-hidden rounded-md border transition ${selected ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-text'}`}>
                         <button
                             type='button'
                             onClick={() => onSelect(profile.id)}
