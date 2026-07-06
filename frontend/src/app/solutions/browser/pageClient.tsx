@@ -1242,6 +1242,10 @@ function metadataRows(summary: ReturnType<typeof buildAnalystSummary>, captures:
     return summary.rows.flatMap(row => {
         if (/^(unknown|none extracted)$/i.test(row.value)) return []
         const lower = row.label.toLowerCase()
+        const numericValue = Number(row.value.replace(/[^\d.-]/g, ''))
+        const isZeroValue = Number.isFinite(numericValue) && numericValue === 0
+        const isNoValue = /^(no|false)$/i.test(row.value)
+        if ((isZeroValue || isNoValue) && !lower.includes('blocked') && !lower.includes('profile tools')) return []
         const related = lower.includes('page') || lower.includes('network') || lower.includes('domain') || lower.includes('failed') || lower.includes('url states')
             ? pageCaptures
             : lower.includes('virustotal')
