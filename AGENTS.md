@@ -8,7 +8,7 @@ Default to ship mode:
 1. One main thread owns the website and portal experience end to end.
 2. No more readiness, receipt, proof, or contract-only slices unless they are required to make a visible workflow work in the same prompt.
 3. Prioritize these three surfaces: `/dashboard`, `/ti/<query>`, and organization/watchlist/settings workflows.
-4. In one prompt, make the chosen surface visibly better with real APIs, useful UI states, quick visual check only when it directly helps ship, and deploy when appropriate.
+4. In one prompt, make the chosen surface visibly better with real APIs, useful UI states, quick visual check only when it directly helps ship, then always commit, push, deploy, and probe.
 5. Use subagents only for narrow backend blockers that prevent the visible workflow from shipping.
 
 If a task would only add metadata, receipts, proof ledgers, compatibility fixtures, or readiness rows, stop and instead implement the visible customer or analyst workflow those artifacts were supposed to support. The final result should be something a user can open and immediately feel is better.
@@ -33,7 +33,7 @@ For the three priority surfaces, ship the full workflow shape in one pass:
 - `/ti/<query>`: an actor intelligence workspace with compact actor facts, aliases, TTPs, infrastructure, tools/malware, observed sources, evidence rows, watchlist relevance, enrichment gaps, and alert/case handoff. Ban teaser/example/signal language.
 - Organization/watchlist/settings: a SaaS settings workflow for org creation, invites, member roles, shared watchlists, webhook destinations/test delivery, permissions, and audit trail.
 
-A one-prompt ship must include real API wiring where available, loading/empty/error states, responsive desktop/mobile behavior, quick visual check only when it directly helps ship, focused checks, and deploy or deploy-ready handoff. If backend support is missing, implement the missing hook in the same prompt when reasonable; otherwise ask exactly one narrow blocker agent.
+A one-prompt ship must include real API wiring where available, loading/empty/error states, responsive desktop/mobile behavior, quick visual check only when it directly helps ship, focused checks, commit, push, deploy, and live probe. If backend support is missing, implement the missing hook in the same prompt when reasonable; otherwise ask exactly one narrow blocker agent.
 
 ## Default Bar
 Hanasand work should feel finished, integrated, and product-grade. Do not treat user requests as tiny literal patches when the surrounding product behavior clearly needs more. Expand the ask into the adjacent obvious work that a user would reasonably expect, then ship that complete slice.
@@ -51,10 +51,10 @@ Before final response, a task is not done until all applicable items are true:
 - For product surfaces, the result lets the target user perform the job, not only observe metrics. If the user asks for an analyst/security/customer workflow, ship a workbench: queue, detail view, evidence, decision controls, assignment/notes where applicable, delivery/replay, and audit trail. A dashboard-only answer is incomplete unless the user explicitly asked only for reporting.
 - Nearby related UI/API states are handled: loading, empty, error, hover/focus, mobile, desktop, light/dark when present.
 - The feature is wired to real data or an honest fallback with clear product semantics.
-- The implementation is committed only when the intended diff is cleanly isolated from unrelated dirty work.
-- The agent's own work is not left as loose dirty files. Commit, deliberately leave only user-owned pre-existing changes, or explicitly report a blocker.
+- The implementation is always committed. Stage only the intended diff and preserve unrelated dirty work by leaving it unstaged.
+- The agent's own work is not left as loose dirty files. Commit the agent-owned diff, push it to GitHub and Forgejo, deploy it from the real server checkout, and explicitly report any unrelated pre-existing dirty files left unstaged.
 - Verification includes focused automated checks and, for UI work, an actual browser/visual check when feasible.
-- Production-impacting changes are deployed and probed live when the user asked for deploy or the thread convention expects it.
+- Production-impacting changes are always deployed and probed live.
 - The final answer states exactly what changed, what was verified, what commit/deploy happened, and any real remaining limitation.
 
 ## Overdelivery Heuristic
@@ -117,7 +117,17 @@ For every future prompt, especially product/UI work, use this operating loop:
 5. Include loading, empty, error, mobile, desktop, hover/focus, and light/dark states where relevant.
 6. Add or adjust focused tests where the behavior can regress.
 7. Verify UI work in a browser/rendered surface when feasible.
-8. End with focused checks, an isolated commit, and push/deploy/probe when production-impacting or expected by the thread.
+8. End with focused checks, an isolated commit, push to GitHub and Forgejo, deploy from the real server checkout, and live probe.
+
+## Commit And Deploy Discipline
+Every implementation prompt ends with a real commit and deployment. Do not leave agent-authored code or docs uncommitted because the tree was dirty; stage only the intended paths and leave unrelated dirty files unstaged.
+
+- Always commit the agent-owned diff locally, then push the commit to both GitHub and Forgejo.
+- Always deploy from the real Hanasand directory on the server. Never deploy from a temp folder, copied checkout, archive, worktree, or generated staging directory.
+- Never use `rsync` for Hanasand deployment.
+- Never copy `.env`, env folders, secret folders, or environment material as part of deployment. The server's real checkout and existing server environment are the source of truth.
+- On the server, update the real Hanasand checkout from git, verify it is on the intended commit/main branch, then rebuild/restart from that directory only.
+- Keep local `main`, GitHub, Forgejo, and the deployed server checkout aligned to the same commit unless a command is blocked; report the exact blocker and commit hash.
 
 Do not say a task is done because scaffolding exists. The user must be able to do meaningful work in the product. If the result still feels like dashboard cards instead of a usable application, continue.
 
@@ -134,11 +144,11 @@ Every agent must clean up after itself:
 
 - Start by recording the dirty-worktree baseline.
 - Before handoff, run `git status --short` again.
-- If the repo was clean at start, it should be clean at handoff unless the user explicitly asked for uncommitted changes.
-- If the repo was dirty at start, the final dirty list may contain only the same pre-existing paths plus files the user explicitly asked to leave uncommitted.
+- If the repo was clean at start, it should be clean at handoff after the commit unless unrelated external changes appeared during the task.
+- If the repo was dirty at start, commit the agent-owned diff and leave only pre-existing unrelated paths unstaged.
 - Do not leave generated screenshots, temp scripts, logs, build artifacts, test outputs, or exploratory files in tracked or untracked repo paths.
 - Do not use `git reset --hard`, destructive checkout, or broad cleanup to hide a mess. Clean only files you created, and preserve other agents' or the user's work.
-- If a commit is appropriate, commit only the isolated intended diff. Do not bundle unrelated dirty files just to make the status clean.
+- A commit is always required for agent-owned changes. Commit only the isolated intended diff. Do not bundle unrelated dirty files just to make the status clean.
 
 ## Context And Archive Discipline
 The Codex archive shows multiple huge threads, including raw sessions over 1GB and hundreds of truncated events. Avoid recreating that failure mode.

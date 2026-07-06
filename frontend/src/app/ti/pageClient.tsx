@@ -18,7 +18,6 @@ const TI_WORKBENCH_PREVIEW_ROWS = 1
 const TI_EVIDENCE_QUEUE_PREVIEW_ROWS = 2
 const TI_SELECTED_CONTEXT_ROWS = 2
 const TI_SELECTED_CONTINUITY_REF_ROWS = 2
-const TI_SELECTED_CONTINUITY_GAP_ROWS = 3
 const TI_SELECTED_DETAIL_LIST_ROWS = 3
 const TI_SELECTED_SOURCE_REQUEST_ROWS = 2
 const TI_MOBILE_SOURCE_FILTER_OPTIONS = 5
@@ -142,14 +141,14 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
 
     return (
         <div className={visible ? 'mx-auto grid w-full max-w-7xl gap-6' : 'mx-auto grid min-h-[calc(100vh-9rem)] w-full max-w-4xl place-content-center gap-5 py-10'}>
-            <form onSubmit={submit} className={visible ? 'grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm md:p-3' : 'grid gap-5'}>
+            <form onSubmit={submit} className={visible ? 'grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm md:p-3' : 'grid gap-3'}>
                 {!visible ? (
                     <div className='text-center'>
                         <h1 className='text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>Search threat intelligence</h1>
                         <p className='mt-3 text-sm font-medium text-ui-primary dark:text-ui-primary'>Find current intelligence about any threat actor, company, domain, CVE, or malware family.</p>
                     </div>
                 ) : null}
-                <div className={`flex flex-col gap-3 ${visible ? 'md:flex-row md:items-end' : 'rounded-2xl border border-ui-border bg-ui-panel p-3 shadow-[0_18px_50px_rgba(26,35,55,0.12)] dark:border-ui-border dark:bg-ui-panel'}`}>
+                <div className={`flex flex-col gap-3 ${visible ? 'md:flex-row md:items-end' : 'rounded-xl border border-ui-border bg-ui-panel p-3 shadow-[0_18px_50px_rgba(26,35,55,0.12)] dark:border-ui-border dark:bg-ui-panel'}`}>
                     <label className='grid flex-1 gap-2'>
                         <span className={`text-xs font-semibold uppercase text-ui-primary ${visible ? 'sr-only' : ''}`}>Threat intelligence search</span>
                         <input
@@ -158,14 +157,14 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                             value={query}
                             onChange={(event) => handleQueryChange(event.target.value)}
                             placeholder='APT29, LockBit, microsoft.com, CVE-2024-3094...'
-                            className={`${visible ? 'h-10 rounded-lg px-3 text-sm' : 'h-16 rounded-xl px-4 text-base'} border border-ui-border bg-ui-panel font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:placeholder:text-ui-muted`}
+                            className={`${visible ? 'h-10 rounded-lg px-3 text-sm' : 'h-12 rounded-lg px-4 text-base'} border border-ui-border bg-ui-panel font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:placeholder:text-ui-muted`}
                         />
                     </label>
                     <button
                         type='submit'
                         aria-busy={busy}
                         aria-label={busy ? 'Searching threat intelligence' : 'Search threat intelligence'}
-                        className={`${visible ? 'h-10 min-w-28 rounded-lg' : 'h-16 min-w-36 rounded-xl'} inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap bg-ui-text px-5 text-sm font-semibold text-white transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted dark:bg-ui-primary dark:text-white dark:hover:bg-ui-primary`}
+                        className={`${visible ? 'h-10 min-w-28 rounded-lg' : 'h-11 min-w-36 rounded-lg'} inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap bg-ui-text px-5 text-sm font-semibold text-white transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted dark:bg-ui-primary dark:text-white dark:hover:bg-ui-primary`}
                     >
                         <Search className='h-4 w-4' />
                         <span>{busy ? 'Searching' : 'Search'}</span>
@@ -203,7 +202,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const [showMoreAnalysis, setShowMoreAnalysis] = useState(false)
     const [secondaryView, setSecondaryView] = useState<SecondaryAnalysisView>('profile')
     const [showFullQueue, setShowFullQueue] = useState(false)
-    const [showGeoCoverage, setShowGeoCoverage] = useState(false)
+    const [showGeoCoverage, setShowGeoCoverage] = useState(true)
     const largeViewport = useMediaQuery('(min-width: 1024px)')
     const renderMobileWorkbar = largeViewport !== true
     const filteredWorkItems = useMemo(() => filteredAnalystWorkItems(workItems, {
@@ -268,7 +267,7 @@ function Results({ result }: { result: TiSearchResponse }) {
         { icon: <Database className='h-3.5 w-3.5' />, label: 'Source questions', value: `${openGapCount} open` },
     ]
     const hasStableActorProfile = Boolean(actorIntel.attribution || actorIntel.motivation.length || victimObservations.length || actorIntel.sourceProvenance.length)
-    const actorProfileStatus = hasStableActorProfile ? 'Current profile' : humanResultStatus(result.status)
+    const actorProfileStatus = hasStableActorProfile ? '' : humanResultStatus(result.status)
     const heroVictimContext = victimObservations
         .filter(item => /democratic national committee|solarwinds|microsoft|government and policy/i.test(item.victim))
         .map(item => `${item.victim} (${item.country})`)
@@ -280,6 +279,29 @@ function Results({ result }: { result: TiSearchResponse }) {
             heroVictimContext.length ? `Victim context: ${heroVictimContext.join('; ')}.` : '',
         ].filter(Boolean).join(' '))
         : displayRequirementText(result.summary)
+    const sourceRows = uniqueBy([
+        ...sources.map(source => ({
+            id: source.id,
+            name: source.name,
+            detail: source.url || source.provenance || source.type,
+            href: source.url || linkFromText(source.provenance),
+            meta: source.reportDate ? formatDate(source.reportDate) : sourceStatusLabel(source.parserStatus || source.type),
+        })),
+        ...actorIntel.provenanceRows.map(row => ({
+            id: row.sourceId || `${row.sourceName}:${row.provenance}`,
+            name: row.sourceName,
+            detail: row.provenance,
+            href: linkFromText(row.provenance),
+            meta: row.reportDate ? formatDate(row.reportDate) : sourceBasisLabel(row.confidence),
+        })),
+        ...(selectedSourceDrilldown?.rows.map(row => ({
+            id: row.sourceId || `${row.sourceName}:${row.provenance}`,
+            name: row.sourceName,
+            detail: row.provenance,
+            href: row.href || linkFromText(row.provenance),
+            meta: row.reportDate ? formatDate(row.reportDate) : sourceBasisLabel(row.confidence),
+        })) ?? []),
+    ], row => row.id).slice(0, 12)
     const sectionOverview = sectionOverviewFor({ result, actorIntel, actionability, workItems, victimObservations, watchlist })
     const commandLinks = [
         { href: '#ti-activity', label: 'Latest activity', value: `${filteredWorkItems.length}/${workItems.length} results`, icon: Inbox },
@@ -354,384 +376,91 @@ function Results({ result }: { result: TiSearchResponse }) {
     }
 
     return (
-        <div className='grid gap-6'>
-            <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                {renderMobileWorkbar && mobileEvidenceWorkbar ? <div className='border-b border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
-                <div className='grid gap-4 border-b border-ui-border bg-ui-panel p-4 dark:border-ui-border dark:bg-ui-panel'>
-                    <div data-ti-desktop-action-first-grid='true' className='grid min-w-0 gap-3 xl:grid-cols-[minmax(260px,0.52fr)_minmax(680px,1.48fr)] xl:items-start 2xl:grid-cols-[minmax(260px,0.5fr)_minmax(680px,1.25fr)_minmax(220px,0.35fr)]'>
-                        <div className='order-1 grid min-w-0 content-start gap-4 xl:order-none'>
-                            <div className='min-w-0'>
-                                <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center'>
-                                    <h1 className='min-w-0 max-w-full wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{humanizeSlug(result.query)}</h1>
-                                    {result.status ? (
-                                        <span className='max-w-full wrap-break-word rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-xs font-semibold uppercase leading-5 text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary'>
-                                            {actorProfileStatus}
-                                        </span>
-                                    ) : null}
-                                </div>
-                                <p className='mt-3 line-clamp-3 max-w-2xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{actorProfileSummary}</p>
-                            </div>
-                            <div data-ti-compact-actor-fact-bar='true' className='flex min-w-0 flex-wrap gap-x-3 gap-y-1'>
-                                {profileStats.map(item => (
-                                    <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
-                                ))}
-                            </div>
+        <div className='grid gap-4'>
+            <section data-ti-workspace='true' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
+                <div className='grid gap-4 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)] xl:items-start'>
+                    <section data-ti-actor-info='true' className='grid gap-4'>
+                        <div>
+                            <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{humanizeSlug(result.query)}</h1>
+                            <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{actorProfileSummary}</p>
                         </div>
-                        <div className='order-0 grid min-w-0 content-start gap-3 xl:order-none' data-ti-actor-workspace-rail='true'>
-                            {selected ? (
-                                <SelectedEvidenceRail
-                                    selected={selected}
-                                    reviewHandoff={reviewHandoff}
-                                    caseDraft={selectedCaseDraft}
-                                    caseOwnership={selectedCaseOwnership}
-                                    alertPlan={selectedAlertPlan}
-                                    deliveryPlan={selectedDeliveryPlan}
-                                    sourceDrilldown={selectedSourceDrilldown}
-                                    watchlistPlan={selectedWatchlistPlan}
-                                    caseHref={selectedConsoleLinks?.case}
-                                    watchlistHref={selectedConsoleLinks?.watchlist}
-                                    alertHref={selectedConsoleLinks?.alert}
-                                    onOpenDetails={() => setShowMoreAnalysis(true)}
-                                    onStage={stageSelectedHandoff}
-                                    onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
-                                    onEscalate={() => applyDecision('escalated')}
-                                    onReview={() => applyDecision('reviewing')}
-                                />
-                            ) : null}
+                        <div className='grid gap-3 sm:grid-cols-2'>
+                            <EvidenceMetric label='Attribution' value={actorIntel.attribution || 'Public reporting'} />
+                            <EvidenceMetric label='Motivation' value={actorIntel.motivation.slice(0, 2).join('; ') || 'Source-backed activity'} />
+                            <EvidenceMetric label='Aliases' value={result.aliases.slice(0, 3).join(', ') || humanizeSlug(result.query)} />
+                            <EvidenceMetric label='Last seen' value={formatDate(result.lastSeen || result.generatedAt)} />
                         </div>
-                        <section data-ti-geo-subordinate='true' className='order-2 rounded-lg border border-ui-border bg-ui-raised dark:border-ui-border dark:bg-ui-panel xl:order-none xl:col-start-2 2xl:col-start-auto'>
-                            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 px-3 py-2'>
-                                <div className='min-w-0'>
-                                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Geography</p>
-                                    <p className='mt-0.5 wrap-break-word text-xs text-ui-muted dark:text-ui-muted'>
-                                        {actorIntel.geographies.length ? `${actorIntel.geographies.slice(0, 3).join(', ')}${actorIntel.geographies.length > 3 ? ` +${actorIntel.geographies.length - 3}` : ''}` : 'Country coverage needs source detail.'}
-                                    </p>
-                                </div>
-                                <button
-                                    type='button'
-                                    onClick={() => setShowGeoCoverage(value => !value)}
-                                    aria-expanded={showGeoCoverage}
-                                    className='inline-flex min-h-8 shrink-0 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-2.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'
-                                >
-                                    {showGeoCoverage ? 'Hide map' : 'Open map'}
-                                </button>
-                            </div>
-                            {showGeoCoverage ? <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact /> : null}
-                        </section>
+                    </section>
+                    <section data-ti-map='true' className='min-w-0'>
+                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
+                    </section>
+                </div>
+
+                <section id='ti-activity' data-ti-activity='true' className='grid gap-3 border-t border-ui-border pt-4 dark:border-ui-border'>
+                    <div className='flex flex-wrap items-end justify-between gap-3'>
+                        <div>
+                            <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Recent activity</h2>
+                            <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>{workItems.length} source-backed result{workItems.length === 1 ? '' : 's'}</p>
+                        </div>
                     </div>
-                </div>
-                <div className={`grid min-h-[44rem] min-w-0 lg:grid-cols-[300px_minmax(0,1fr)] ${showRightRail ? '2xl:grid-cols-[320px_minmax(0,1fr)_340px]' : ''}`} data-ti-right-rail={showRightRail ? 'expanded' : 'collapsed'}>
-                    <aside id='ti-activity' data-ti-queue='true' className='order-2 min-w-0 border-b border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-canvas lg:order-none lg:border-b-0 lg:border-r'>
-                        <div className='border-b border-ui-border p-4 dark:border-ui-border'>
-                            <div className='flex items-center justify-between gap-3'>
-                                <div>
-                                    <h2 className='text-sm font-semibold text-ui-text dark:text-ui-text'>Latest activity</h2>
-                                    <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>
-                                        {queueCounts.open} open · {queueCounts.high} high · {queueCounts.closed} closed. Evidence ordered by severity, source strength, and recency.
-                                    </p>
-                                </div>
-                                <span className='rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary'>{workItems.length}</span>
-                            </div>
-                            <EvidenceQueueFilters
-                                kind={queueKindFilter}
-                                source={queueSourceFilter}
-                                confidence={queueConfidenceFilter}
-                                sort={queueSort}
-                                sources={queueSourceOptions}
-                                sourceCounts={queueSourceCounts}
-                                onKindChange={setQueueKindFilter}
-                                onSourceChange={setQueueSourceFilter}
-                                onConfidenceChange={setQueueConfidenceFilter}
-                                onSortChange={setQueueSort}
-                            />
-                        </div>
-                        <div className='lg:max-h-[32rem] lg:overflow-y-auto'>
-                            {visibleQueueItems.map(item => {
-                                const decision = localDecisions[item.id]
-                                const active = selected?.id === item.id
-                                return (
-                                    <button
-                                        key={item.id}
-                                        type='button'
-                                        onClick={() => setSelectedId(item.id)}
-                                        className={`grid w-full gap-1 border-b border-ui-border px-3 py-2 text-left transition last:border-b-0 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border ${active ? 'bg-ui-primary/10 dark:bg-ui-primary/10' : 'bg-transparent hover:bg-ui-raised dark:hover:bg-ui-raised'}`}
-                                    >
-                                        <div className='flex min-w-0 items-center justify-between gap-2'>
-                                            <span className='min-w-0 truncate text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{displayRequirementText(item.title)}</span>
-                                            <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-semibold ${severityClass(item.severity)}`}>{item.severity}</span>
-                                        </div>
-                                        <span className='line-clamp-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{item.subtitle}</span>
-                                        <span className='flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-[11px] leading-4 text-ui-muted dark:text-ui-muted'>
-                                            <span>{decision ? decisionLabel(decision.status) : item.status}</span>
-                                            <span>{item.source}</span>
-                                            <span>{sourceBasisLabel(item.confidence)}</span>
-                                            {item.priority ? <span>{item.priority.score}/100 priority</span> : null}
-                                        </span>
-                                    </button>
-                                )
-                            })}
-                            {filteredWorkItems.length > visibleQueueItems.length ? (
+                    <div className='grid gap-2 md:grid-cols-2 xl:grid-cols-3'>
+                        {workItems.slice(0, 9).map(item => {
+                            const active = selected?.id === item.id
+                            return (
                                 <button
+                                    key={item.id}
                                     type='button'
-                                    onClick={() => setShowFullQueue(true)}
-                                    className='mt-2 flex min-h-9 w-full items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
+                                    onClick={() => setSelectedId(item.id)}
+                                    className={`grid min-w-0 gap-2 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-ui-primary/35 ${active ? 'border-ui-primary/45 bg-ui-primary/10 dark:border-ui-primary/45 dark:bg-ui-primary/10' : 'border-ui-border bg-ui-panel hover:bg-ui-raised dark:border-ui-border dark:bg-ui-panel dark:hover:bg-ui-raised'}`}
                                 >
-                                    Show {filteredWorkItems.length - visibleQueueItems.length} more findings
-                                </button>
-                            ) : null}
-                            {showFullQueue && filteredWorkItems.length > TI_EVIDENCE_QUEUE_PREVIEW_ROWS ? (
-                                <button
-                                    type='button'
-                                    onClick={() => setShowFullQueue(false)}
-                                    className='mt-2 flex min-h-9 w-full items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
-                                >
-                                    Show top findings only
-                                </button>
-                            ) : null}
-                            {!filteredWorkItems.length ? <p className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-4 text-sm text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{workItems.length ? 'Adjust filters to recover findings.' : 'Start a search to build activity.'}</p> : null}
-                        </div>
-                    </aside>
-
-                    <main className='order-1 min-w-0 p-4 lg:order-none'>
-                        {selected ? (
-                            <div className='grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden'>
-                                <section id='ti-evidence-drilldown' data-ti-detail='true' className='rounded-lg border border-ui-border bg-ui-panel p-4 dark:border-ui-border dark:bg-ui-panel'>
-                                    <div className='flex flex-wrap items-start justify-between gap-3'>
-                                        <div className='min-w-0'>
-                                            <div className='flex flex-wrap items-center gap-2'>
-                                                <span className={`rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
-                                                <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-muted'>{kindLabel(selected.kind)}</span>
-                                                <span className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-xs font-semibold text-ui-primary dark:border-ui-primary/35 dark:bg-ui-primary/10 dark:text-ui-primary'>{selectedDecision ? decisionLabel(selectedDecision.status) : selected.status}</span>
-                                            </div>
-                                            <h2 className='mt-3 wrap-break-word text-2xl font-semibold text-ui-text dark:text-ui-text'>{displayRequirementText(selected.title)}</h2>
-                                            <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selected.detail)}</p>
-                                        </div>
-                                        {selected.href ? (
-                                            <a href={selected.href} target='_blank' rel='noopener noreferrer' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
-                                                <ExternalLink className='h-3.5 w-3.5' />
-                                                Source
-                                            </a>
-                                        ) : null}
+                                    <div className='flex min-w-0 items-center justify-between gap-2'>
+                                        <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${severityClass(item.severity)}`}>{item.severity}</span>
+                                        <span className='truncate text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{item.timestamp}</span>
                                     </div>
-
-                                    <div className='mt-4 grid gap-3 md:grid-cols-4'>
-                                        <EvidenceMetric label='First seen' value={selected.timestamp} />
-                                        <EvidenceMetric label='Source' value={selected.source} />
-                                        <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(selected.confidence)} />
-                                        <EvidenceMetric label='Source reference' value={displayRequirementText(selected.provenance)} />
-                                    </div>
-
-                                    {selectedSourceDrilldown ? <SelectedEvidenceContextTable drilldown={selectedSourceDrilldown} /> : null}
-                                    {showMoreAnalysis ? (
-                                        <>
-                                            {selectedTriageBrief ? <SelectedTriageBriefPanel brief={selectedTriageBrief} /> : null}
-                                            {selected.priority ? <EvidencePriorityPanel priority={selected.priority} /> : null}
-                                            {selectedSourceDrilldown ? <SelectedSourceDrilldownPanel drilldown={selectedSourceDrilldown} /> : null}
-
-                                            <CustomerAlertFit selected={selected} watchlist={watchlist} alertPacket={alertPacket} />
-
-                                            <div className='mt-4 grid gap-3 md:grid-cols-2'>
-                                                <EvidencePanel title='Evidence'>
-                                                    {selected.evidence.slice(0, TI_SELECTED_DETAIL_LIST_ROWS).map(line => <li key={line}>{line}</li>)}
-                                                    {selected.evidence.length > TI_SELECTED_DETAIL_LIST_ROWS ? <li className='text-ui-muted'>+{selected.evidence.length - TI_SELECTED_DETAIL_LIST_ROWS} more evidence rows in workbenches</li> : null}
-                                                </EvidencePanel>
-                                                <EvidencePanel title='Recommended next step'>
-                                                    {selected.nextActions.slice(0, TI_SELECTED_DETAIL_LIST_ROWS).map(line => <li key={line}>{displayRequirementText(line)}</li>)}
-                                                    {selected.nextActions.length > TI_SELECTED_DETAIL_LIST_ROWS ? <li className='text-ui-muted'>+{selected.nextActions.length - TI_SELECTED_DETAIL_LIST_ROWS} more actions in workbenches</li> : null}
-                                                </EvidencePanel>
-                                            </div>
-                                        </>
-                                    ) : null}
-                                </section>
-                                <SecondaryAnalysisToggle
-                                    expanded={showMoreAnalysis}
-                                    artifactCount={actorArtifacts.length}
-                                    sourceCount={sources.length}
-                                    watchlistCount={watchlist.terms.length}
-                                    gapCount={openGapCount}
-                                    onToggle={() => setShowMoreAnalysis(value => !value)}
-                                />
-
-                                {showMoreAnalysis ? (
-                                    <>
-                                        <SecondaryAnalysisTabs active={secondaryView} onSelect={setSecondaryView} />
-                                        <div id='ti-secondary-analysis' className='grid gap-3'>
-                                            <TiCommandBar links={commandLinks} />
-                                            <SectionOverviewRail items={sectionOverview} />
-                                            {secondaryView === 'profile' ? <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} /> : null}
-                                        </div>
-                                        {secondaryView === 'profile' ? (
-                                            <>
-                                                <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
-                                                <ActorIntelligenceDossier
-                                                    actor={actorIntel}
-                                                    actionability={actionability}
-                                                    result={result}
-                                                    artifacts={actorArtifacts}
-                                                    selectedArtifactId={selectedArtifact?.id}
-                                                    onSelectArtifact={setSelectedArtifactId}
-                                                />
-                                            </>
-                                        ) : null}
-                                        {secondaryView === 'artifacts' ? (
-                                            <>
-                                                {actorArtifacts.length ? (
-                                                    <ArtifactNavigator
-                                                        artifacts={actorArtifacts}
-                                                        selectedArtifactId={selectedArtifact?.id}
-                                                        onSelectArtifact={setSelectedArtifactId}
-                                                    />
-                                                ) : null}
-                                                {selectedArtifact && selectedArtifactHandoffs ? (
-                                                    <ActorArtifactWorkbench artifact={selectedArtifact} handoffs={selectedArtifactHandoffs} />
-                                                ) : null}
-                                                <ActorOperationsMatrix
-                                                    result={result}
-                                                    actor={actorIntel}
-                                                    victimObservations={victimObservations}
-                                                    selectedArtifactId={selectedArtifact?.id}
-                                                    onSelectArtifactBy={selectArtifactBy}
-                                                    onEscalate={() => applyDecision('escalated')}
-                                                    onReview={() => applyDecision('reviewing')}
-                                                />
-                                            </>
-                                        ) : null}
-                                        {secondaryView === 'sources' ? (
-                                            <SourceCoverageWorkbench
-                                                actor={actorIntel}
-                                                actionability={actionability}
-                                                sources={sources}
-                                                sourcePosture={collectionSources}
-                                                workItems={workItems}
-                                                selectedId={selected?.id}
-                                                sourceOptions={queueSourceOptions}
-                                                onSelectEvidence={setSelectedId}
-                                                onFilterSource={setQueueSourceFilter}
-                                                onEscalate={() => applyDecision('escalated')}
-                                                onReview={() => applyDecision('reviewing')}
-                                            />
-                                        ) : null}
-                                    </>
-                                ) : null}
-
+                                    <span className='wrap-break-word text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{displayRequirementText(item.title)}</span>
+                                    <span className='line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(item.detail)}</span>
+                                    <span className='text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{item.source} · {sourceBasisLabel(item.confidence)}</span>
+                                </button>
+                            )
+                        })}
+                    </div>
+                    {selected ? (
+                        <section data-ti-selected-summary='true' className='rounded-lg border border-ui-border bg-ui-raised p-4 dark:border-ui-border dark:bg-ui-raised'>
+                            <div className='flex flex-wrap items-center gap-2'>
+                                <span className={`rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
+                                <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{kindLabel(selected.kind)}</span>
                             </div>
-                        ) : (
-                            <div className='grid min-h-72 place-items-center rounded-lg border border-dashed border-ui-border bg-ui-panel p-6 text-center text-sm text-ui-muted'>Search is finding recent activity.</div>
-                        )}
-                    </main>
+                            <h3 className='mt-3 wrap-break-word text-2xl font-semibold text-ui-text dark:text-ui-text'>{displayRequirementText(selected.title)}</h3>
+                            <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selected.detail)}</p>
+                            {selectedTriageBrief ? <SelectedTriageBriefPanel brief={selectedTriageBrief} /> : null}
+                        </section>
+                    ) : null}
+                </section>
 
-                    {showRightRail ? <aside className='order-3 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-hidden border-t border-ui-border bg-ui-panel p-4 lg:order-none lg:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
-                        {showMoreAnalysis && alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
-                        <div id='ti-actions' data-ti-actions='true'>
-                            {showMoreAnalysis ? (
-                                secondaryView === 'actions' ? (
-                                    <ActionPanel
-                                        note={selectedNote}
-                                        decision={selectedDecision}
-                                        relevance={selectedRelevance}
-                                        reviewHandoff={reviewHandoff}
-                                        caseDraft={selectedCaseDraft}
-                                        caseActionTrail={selectedCaseActionTrail}
-                                        caseOwnership={selectedCaseOwnership}
-                                        caseCreateRequest={selectedCaseCreateRequest}
-                                        watchlistPlan={selectedWatchlistPlan}
-                                        alertPlan={selectedAlertPlan}
-                                        deliveryPlan={selectedDeliveryPlan}
-                                        enrichmentTriage={selectedEnrichmentTriage}
-                                        onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
-                                        onDecision={applyDecision}
-                                        onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
-                                        onStage={stageSelectedHandoff}
-                                    />
-                                ) : null
-                            ) : null}
-                        </div>
-                        {stagedHandoffItems.length ? (
-                            <StagedHandoffQueuePanel
-                                items={stagedHandoffItems}
-                                onClear={() => setStagedHandoffs({})}
-                            />
-                        ) : null}
-
-                        {showMoreAnalysis ? (
-                            <>
-                                {secondaryView === 'sources' ? (
-                                    <>
-                                        <EnrichmentTasksPanel tasks={enrichmentTasks} intake={actionability.sourceEnrichmentIntake} />
-                                        <SourceHealthPanel queue={actionability.sourceHealthQueue} intake={actionability.sourceEnrichmentIntake} coverage={actionability.actorEnrichmentCoverage} consumerReadiness={actionability.actorEnrichmentConsumerReadiness} payload={actionability.exportPayloads.enrichment} />
-                                    </>
-                                ) : null}
-                                {secondaryView === 'actions' ? <ActionabilityPanel actionability={actionability} query={result.query} /> : null}
-
-                                {secondaryView === 'profile' ? <Panel title='Activity timeline' description='Source timestamps plus review decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
-                                    <div className='grid gap-3'>
-                                        {[...timelineFor(result, selected), ...sessionEvents, ...relevanceEvents].slice(0, TI_ACTIVITY_TIMELINE_ROWS).map(event => (
-                                            <div key={event.id} className='border-l-2 border-ui-border pl-3'>
-                                                <p className='text-xs font-semibold text-ui-text'>{event.label}</p>
-                                                <p className='mt-1 text-[11px] text-ui-muted'>{formatDate(event.at)}</p>
-                                                <p className='mt-1 text-xs leading-5 text-ui-muted'>{displayRequirementText(event.detail)}</p>
-                                            </div>
-                                        ))}
+                <section id='ti-sources' data-ti-sources='true' className='grid gap-3 border-t border-ui-border pt-4 dark:border-ui-border'>
+                    <div>
+                        <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Sources</h2>
+                        <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>{sourceRows.length} references collected automatically from scraper output and actor provenance.</p>
+                    </div>
+                    <div className='grid gap-2 md:grid-cols-2'>
+                        {sourceRows.map(row => (
+                            <EvidenceBox key={row.id} href={row.href}>
+                                <div className='flex min-w-0 items-start justify-between gap-3'>
+                                    <div className='min-w-0'>
+                                        <p className='wrap-break-word text-sm font-semibold text-ui-text dark:text-ui-text'>{row.name}</p>
+                                        <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.detail)}</p>
                                     </div>
-                                </Panel> : null}
-
-                                {secondaryView === 'sources' ? (
-                                    <>
-                                        <EnrichmentGapWorkbench
-                                            tasks={enrichmentTasks}
-                                            result={result}
-                                            actor={actorIntel}
-                                            actionability={actionability}
-                                            workItems={workItems}
-                                            artifacts={actorArtifacts}
-                                            selectedId={selected?.id}
-                                            selectedArtifactId={selectedArtifact?.id}
-                                            onSelectEvidence={setSelectedId}
-                                            onSelectArtifact={setSelectedArtifactId}
-                                            onReview={() => applyDecision('reviewing')}
-                                            onEscalate={() => applyDecision('escalated')}
-                                        />
-                                        {result.analystLoop?.sourceActivationWorkflow.required ? <SourceActivationPanel activation={result.analystLoop.sourceActivationWorkflow} /> : null}
-                                    </>
-                                ) : null}
-                            </>
-                        ) : null}
-                    </aside> : null}
-                </div>
-            </section>
-
-            {showMoreAnalysis ? (
-                <section className='grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
-                    {secondaryView === 'watchlist' ? <WatchlistRelevanceWorkbench
-                        watchlist={watchlist}
-                        actionability={actionability}
-                        query={result.query}
-                        workItems={workItems}
-                        artifacts={actorArtifacts}
-                        selectedId={selected?.id}
-                        selectedArtifactId={selectedArtifact?.id}
-                        onSelectEvidence={setSelectedId}
-                        onSelectArtifact={setSelectedArtifactId}
-                        onMarkRelevant={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
-                    /> : null}
-
-                    {secondaryView === 'sources' ? <Panel title='Sources' description='Sources checked for this result, including actor profiles, recent attacks, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
-                        <div id='ti-sources' className='sr-only'>Source coverage</div>
-                        {datasets.map(item => (
-                            <EvidenceBox key={`${item.type}-${item.name}`} href={item.url}>
-                                <div className='flex items-center justify-between gap-3'>
-                                    <h2 className='text-sm font-semibold text-ui-text'>{item.name}</h2>
-                                    <span className='text-xs text-ui-muted'>{sourceStatusLabel(item.status)}</span>
+                                    <span className='shrink-0 text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{row.meta}</span>
                                 </div>
-                                <p className='text-sm leading-6 text-ui-muted'>{item.coverage}</p>
                             </EvidenceBox>
                         ))}
-                    </Panel> : null}
+                        {!sourceRows.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted dark:border-ui-border dark:text-ui-muted'>Sources are syncing from the scraper.</p> : null}
+                    </div>
                 </section>
-            ) : null}
-
+            </section>
         </div>
     )
+
 }
 
 function useMediaQuery(query: string) {
@@ -746,350 +475,6 @@ function useMediaQuery(query: string) {
     }, [query])
 
     return matches
-}
-
-function SelectedEvidenceRail({
-    selected,
-    reviewHandoff,
-    caseDraft,
-    caseOwnership,
-    alertPlan,
-    deliveryPlan,
-    sourceDrilldown,
-    watchlistPlan,
-    caseHref,
-    watchlistHref,
-    alertHref,
-    onOpenDetails,
-    onStage,
-    onWatchlist,
-    onEscalate,
-    onReview,
-}: {
-    selected: AnalystWorkItem
-    reviewHandoff: SelectedReviewHandoff | null
-    caseDraft: SelectedCaseDraft | null
-    caseOwnership: SelectedCaseOwnershipPlan | null
-    alertPlan: SelectedAlertActionPlan | null
-    deliveryPlan: SelectedDeliveryReadinessPlan | null
-    sourceDrilldown: ReturnType<typeof selectedSourceDrilldownFor> | null
-    watchlistPlan: SelectedWatchlistPlan | null
-    caseHref?: string
-    watchlistHref?: string
-    alertHref?: string
-    onOpenDetails: () => void
-    onStage: () => void
-    onWatchlist: () => void
-    onEscalate: () => void
-    onReview: () => void
-}) {
-    const alertReady = Boolean(reviewHandoff?.alertHandoff.ready || alertPlan?.ready)
-    const deliveryReady = deliveryPlan?.state === 'ready'
-    const watchReady = Boolean(watchlistPlan?.ready || watchlistHref)
-    const sourceCount = sourceDrilldown?.rows.length ?? 0
-    const captureCount = sourceDrilldown?.rows.filter(row => Boolean(row.captureId)).length ?? 0
-    const caseReady = Boolean(reviewHandoff?.caseHandoff.ready || (caseDraft && captureCount > 0))
-    const owner = caseOwnership?.owner.label ?? 'unassigned'
-    const alertValue = selectedAlertContinuityValue(deliveryPlan, alertPlan, captureCount)
-    const caseValue = selectedCaseContinuityValue(deliveryPlan, caseOwnership, caseDraft, captureCount)
-    const continuityRefs = selectedContinuityRefs({
-        sourceCount,
-        captureCount,
-        sourceDrilldown,
-        watchlistPlan,
-        alertPlan,
-        caseOwnership,
-        deliveryPlan,
-    })
-    const continuityGaps = selectedContinuityGaps({
-        captureCount,
-        sourceDrilldown,
-        watchlistPlan,
-        alertPlan,
-        caseOwnership,
-        deliveryPlan,
-    })
-    const continuityRows = [
-        {
-            label: 'Watchlist',
-            value: watchlistPlan?.intersections.some(item => item.watchlistItemId)
-                ? `${watchlistPlan.intersections.filter(item => item.watchlistItemId).length} linked`
-                : watchlistPlan?.terms.length ? `${watchlistPlan.terms.length} terms` : 'term needed',
-            state: watchReady ? 'ready' : 'review',
-            href: watchlistHref,
-            fallback: watchlistPlan?.nextAction ?? 'Review customer relevance before saving a watch term.',
-        },
-        {
-            label: 'Alert',
-            value: alertValue,
-            state: alertReady ? 'ready' : captureCount ? 'review' : 'blocked',
-            href: alertHref,
-            fallback: alertPlan?.nextAction ?? 'Attach watchlist and source context before alert review.',
-        },
-        {
-            label: 'Case',
-            value: caseValue,
-            state: caseReady ? 'ready' : captureCount ? 'review' : 'blocked',
-            href: caseHref,
-            fallback: caseOwnership?.nextAction ?? 'Attach source evidence before authenticated case handoff.',
-        },
-        {
-            label: 'Delivery',
-            value: deliveryReady ? 'ready' : deliveryPlan?.summary.captures ? 'review' : 'capture needed',
-            state: deliveryReady ? 'ready' : deliveryPlan?.summary.captures ? 'review' : 'blocked',
-            href: deliveryPlan?.route,
-            fallback: deliveryPlan?.nextAction ?? 'Choose an authenticated destination before delivery review.',
-        },
-    ] as const
-
-    return (
-        <section id='ti-selected-evidence' data-ti-actor-evidence-spotlight='true' className='grid min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-panel'>
-            <div className='grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,22rem)] lg:items-start'>
-                <div className='order-1 min-w-0 lg:order-none'>
-                    <div className='flex flex-wrap items-center gap-2'>
-                        <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Selected evidence</p>
-                        <span className={`rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
-                        <span className={decisionStepStatusClass(alertReady ? 'ready' : 'review')}>alert {alertReady ? 'linked' : 'review'}</span>
-                        <span className={decisionStepStatusClass(caseReady ? 'ready' : 'review')}>case {caseReady ? 'ready' : 'review'}</span>
-                        <span className={decisionStepStatusClass(watchReady ? 'ready' : 'review')}>watch {watchReady ? 'ready' : 'review'}</span>
-                    </div>
-                    <h2 className='mt-2 wrap-break-word text-lg font-semibold leading-6 text-ui-text dark:text-ui-text'>{displayRequirementText(selected.title)}</h2>
-                    <p className='mt-1 line-clamp-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selected.detail)}</p>
-                    <div className='mt-3 grid gap-2 sm:grid-cols-4'>
-                        <EvidenceMetric label='Source' value={selected.source} />
-                        <EvidenceMetric label='Strength' value={sourceBasisLabel(selected.confidence)} />
-                        <EvidenceMetric label='First seen' value={selected.timestamp} />
-                        <EvidenceMetric label='Source rows' value={sourceCount ? String(sourceCount) : 'source needed'} />
-                    </div>
-                    {sourceDrilldown?.rows.length ? (
-                        <div data-ti-selected-source-inline='true' className='mt-3 hidden border-t border-ui-border pt-3 dark:border-ui-border lg:block'>
-                            <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
-                                <span className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source context</span>
-                                {sourceDrilldown.rows.slice(0, TI_SELECTED_CONTEXT_ROWS).map(row => (
-                                    <span
-                                        key={`${row.sourceName}-${row.sourceId || row.provenance}`}
-                                        title={row.provenance}
-                                        className='inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border border-ui-border bg-ui-panel px-1.5 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'
-                                    >
-                                        <span className='max-w-40 truncate'>{row.sourceName}</span>
-                                        <span className={row.captureId ? 'text-ui-success' : 'text-ui-warning'}>{row.captureId ? 'capture' : 'capture needed'}</span>
-                                    </span>
-                                ))}
-                                {sourceDrilldown.rows.length > TI_SELECTED_CONTEXT_ROWS ? <span className='text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>+{sourceDrilldown.rows.length - TI_SELECTED_CONTEXT_ROWS}</span> : null}
-                            </div>
-                        </div>
-                    ) : null}
-                </div>
-                <div data-ti-selected-action-rail='true' className='order-0 grid min-w-0 content-start gap-2 rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised lg:order-none'>
-                    <div className='flex min-w-0 items-center justify-between gap-2 border-b border-ui-border pb-2 dark:border-ui-border'>
-                        <div className='min-w-0'>
-                            <p className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Action rail</p>
-                            <p className='mt-0.5 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>Owner: {owner}</p>
-                        </div>
-                        <span className={decisionStepStatusClass(caseReady && alertReady ? 'ready' : 'review')}>{caseReady && alertReady ? 'routed' : 'review'}</span>
-                    </div>
-                    <div className='grid min-w-0 gap-1.5 sm:grid-cols-2'>
-                        {continuityRows.map(row => (
-                            <ContinuityRow key={row.label} label={row.label} value={row.value} state={row.state} href={row.href} fallback={row.fallback} />
-                        ))}
-                    </div>
-                    <div data-ti-auth-continuity-refs='true' className='flex min-w-0 flex-wrap gap-1'>
-                        {continuityRefs.slice(0, TI_SELECTED_CONTINUITY_REF_ROWS).map(ref => (
-                            <ContinuityRefChip key={ref.label} refItem={ref} />
-                        ))}
-                        {continuityRefs.length > TI_SELECTED_CONTINUITY_REF_ROWS ? (
-                            <span className='inline-flex max-w-full items-center rounded-md bg-ui-raised px-1.5 py-1 text-[10px] font-semibold leading-4 text-ui-muted dark:bg-ui-panel dark:text-ui-muted'>+{continuityRefs.length - TI_SELECTED_CONTINUITY_REF_ROWS} refs</span>
-                        ) : null}
-                    </div>
-                    {continuityGaps.length ? (
-                        <details data-ti-continuity-gaps='true' className='group rounded-md border border-ui-warning/25 bg-ui-warning/10 p-1.5'>
-                            <summary className='flex min-h-7 cursor-pointer list-none items-center justify-between gap-2 text-[10px] font-semibold uppercase text-ui-warning [&::-webkit-details-marker]:hidden dark:text-ui-warning'>
-                                <span>Missing links</span>
-                                <span>{continuityGaps.length}</span>
-                            </summary>
-                            <div className='mt-1 flex min-w-0 flex-wrap gap-1'>
-                                {continuityGaps.slice(0, TI_SELECTED_CONTINUITY_GAP_ROWS).map(gap => (
-                                    <span key={gap} className='max-w-full wrap-break-word rounded-md border border-ui-warning/25 bg-ui-panel px-1.5 py-1 text-[10px] font-semibold leading-4 text-ui-warning dark:bg-ui-panel dark:text-ui-warning'>
-                                        {gap}
-                                    </span>
-                                ))}
-                                {continuityGaps.length > TI_SELECTED_CONTINUITY_GAP_ROWS ? (
-                                    <span className='rounded-md border border-ui-warning/25 bg-ui-panel px-1.5 py-1 text-[10px] font-semibold leading-4 text-ui-warning dark:bg-ui-panel dark:text-ui-warning'>+{continuityGaps.length - TI_SELECTED_CONTINUITY_GAP_ROWS} more</span>
-                                ) : null}
-                            </div>
-                        </details>
-                    ) : null}
-                    <div data-ti-selected-console-links='true' className='grid grid-cols-2 gap-1.5 sm:grid-cols-4'>
-                        <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist} href={watchlistHref}>Watch</StripActionButton>
-                        <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onStage} href={caseHref} disabled={!caseHref && !caseReady}>Open case</StripActionButton>
-                        <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate} href={alertHref}>Escalate</StripActionButton>
-                        <StripActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
-                    </div>
-                    <button
-                        type='button'
-                        onClick={onOpenDetails}
-                        className='inline-flex min-h-9 w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'
-                    >
-                        <Eye className='h-3.5 w-3.5' />
-                        Open details
-                    </button>
-                </div>
-            </div>
-        </section>
-    )
-}
-
-function selectedContinuityRefs(input: {
-    sourceCount: number
-    captureCount: number
-    sourceDrilldown: ReturnType<typeof selectedSourceDrilldownFor> | null
-    watchlistPlan: SelectedWatchlistPlan | null
-    alertPlan: SelectedAlertActionPlan | null
-    caseOwnership: SelectedCaseOwnershipPlan | null
-    deliveryPlan: SelectedDeliveryReadinessPlan | null
-}) {
-    const alertRefs = unique([
-        ...(input.alertPlan?.sourceRefs.alertIds ?? []),
-        ...(input.caseOwnership?.sourceRefs.alertIds ?? []),
-        ...(input.deliveryPlan?.sourceRefs.alertIds ?? []),
-    ])
-    const caseRoutes = unique([
-        ...(input.caseOwnership?.sourceRefs.casePaths ?? []),
-        ...(input.deliveryPlan?.sourceRefs.casePaths ?? []),
-    ])
-    const sourceRoute = input.sourceDrilldown?.rows.find(row => row.route)?.route
-    const destinationIds = input.deliveryPlan?.sourceRefs.destinationIds ?? []
-    const watchRefs = unique([
-        ...(input.watchlistPlan?.intersections.map(item => item.watchlistItemId).filter((value): value is string => Boolean(value)) ?? []),
-        ...(input.watchlistPlan?.terms.map(term => term.value) ?? []),
-    ])
-
-    return [
-        {
-            label: 'Captures',
-            value: input.captureCount ? `${input.captureCount}/${input.sourceCount || input.captureCount} linked` : input.sourceCount ? 'capture needed' : 'source needed',
-            state: input.captureCount ? 'ready' : 'blocked',
-            href: sourceRoute,
-        },
-        {
-            label: 'Alerts',
-            value: alertRefs.length ? `${alertRefs.length} linked` : input.alertPlan?.readiness.candidateCount ? `${input.alertPlan.readiness.candidateCount} review` : 'watchlist needed',
-            state: alertRefs.length ? 'ready' : input.alertPlan?.readiness.candidateCount ? 'review' : 'blocked',
-            href: input.alertPlan?.route,
-        },
-        {
-            label: 'Cases',
-            value: caseRoutes.length ? `${caseRoutes.length} route${caseRoutes.length === 1 ? '' : 's'}` : input.caseOwnership?.summary.caseCandidates ? `${input.caseOwnership.summary.caseCandidates} review` : 'case source needed',
-            state: caseRoutes.length ? 'ready' : input.caseOwnership?.summary.caseCandidates ? 'review' : 'blocked',
-            href: input.caseOwnership?.route,
-        },
-        {
-            label: 'Watch',
-            value: watchRefs.length ? `${watchRefs.length} ref${watchRefs.length === 1 ? '' : 's'}` : 'watch term needed',
-            state: input.watchlistPlan?.ready || watchRefs.length ? 'ready' : 'review',
-            href: input.watchlistPlan?.route,
-        },
-        {
-            label: 'Destinations',
-            value: destinationIds.length ? `${destinationIds.length} ready` : 'destination needed',
-            state: destinationIds.length ? 'ready' : 'blocked',
-            href: input.deliveryPlan?.route,
-        },
-    ] as const
-}
-
-function ContinuityRefChip({ refItem }: { refItem: ReturnType<typeof selectedContinuityRefs>[number] }) {
-    const className = 'inline-flex max-w-full items-center gap-1 rounded-md bg-ui-raised px-1.5 py-1 text-[10px] leading-4 text-ui-muted transition hover:bg-ui-panel focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:bg-ui-panel dark:text-ui-muted dark:hover:bg-ui-raised'
-    const content = (
-        <>
-            <span className='shrink-0 font-semibold uppercase'>{refItem.label}</span>
-            <span className={`min-w-0 wrap-break-word font-semibold ${refItem.state === 'ready' ? 'text-ui-success' : refItem.state === 'blocked' ? 'text-ui-warning' : 'text-ui-text dark:text-ui-text'}`}>{refItem.value}</span>
-        </>
-    )
-    if (refItem.href) return <a href={refItem.href} className={className}>{content}</a>
-    return <span className={className}>{content}</span>
-}
-
-function selectedContinuityGaps(input: {
-    captureCount: number
-    sourceDrilldown: ReturnType<typeof selectedSourceDrilldownFor> | null
-    watchlistPlan: SelectedWatchlistPlan | null
-    alertPlan: SelectedAlertActionPlan | null
-    caseOwnership: SelectedCaseOwnershipPlan | null
-    deliveryPlan: SelectedDeliveryReadinessPlan | null
-}) {
-    const rawGaps = unique([
-        ...(input.captureCount ? [] : ['capture evidence']),
-        ...(input.watchlistPlan?.ready ? [] : ['org watchlist']),
-        ...(input.alertPlan?.ready ? [] : input.alertPlan?.sourceRefs.alertIds.length ? [] : ['alert review']),
-        ...(input.caseOwnership?.sourceRefs.casePaths.length ? [] : ['case route']),
-        ...(input.deliveryPlan?.summary.destinations ? [] : ['delivery destination']),
-        ...(input.sourceDrilldown?.blockers ?? []),
-        ...(input.alertPlan?.blockers.map(blocker => blocker.detail) ?? []),
-        ...(input.caseOwnership?.blockers ?? []),
-        ...(input.deliveryPlan?.blockers ?? []),
-    ])
-
-    return unique(rawGaps.map(shortContinuityGap).filter(Boolean)).slice(0, 4)
-}
-
-function shortContinuityGap(value: string) {
-    const normalized = displayRequirementText(value).replace(/\.$/, '')
-    if (/capture/i.test(normalized)) return 'capture evidence'
-    if (/alert id|dwm alert/i.test(normalized)) return 'alert review'
-    if (/watchlist|watch term|customer term/i.test(normalized)) return 'org watchlist'
-    if (/case route|case link|case path|case creation/i.test(normalized)) return 'case route'
-    if (/destination|webhook/i.test(normalized)) return 'delivery destination'
-    if (/source/i.test(normalized)) return 'source reference'
-    return normalized.length > 30 ? `${normalized.slice(0, 29).trimEnd()}…` : normalized
-}
-
-function selectedAlertContinuityValue(deliveryPlan: SelectedDeliveryReadinessPlan | null, alertPlan: SelectedAlertActionPlan | null, captureCount: number) {
-    if (deliveryPlan?.summary.alerts) return `${deliveryPlan.summary.alerts} linked`
-    if (captureCount === 0) return 'capture needed'
-    if (alertPlan?.readiness.candidateCount) return `${alertPlan.readiness.candidateCount} alert reviews`
-    return 'watchlist needed'
-}
-
-function selectedCaseContinuityValue(deliveryPlan: SelectedDeliveryReadinessPlan | null, caseOwnership: SelectedCaseOwnershipPlan | null, caseDraft: SelectedCaseDraft | null, captureCount: number) {
-    if (deliveryPlan?.summary.caseRoutes) return `${deliveryPlan.summary.caseRoutes} linked`
-    if (captureCount === 0) return 'capture needed'
-    if (caseOwnership?.summary.caseCandidates) return `${caseOwnership.summary.caseCandidates} case reviews`
-    if (caseDraft) return 'draft ready'
-    return 'source needed'
-}
-
-function ContinuityRow({ label, value, state, href, fallback }: { label: string; value: string; state: DecisionStep['status']; href?: string; fallback: string }) {
-    const content = (
-        <>
-            <span className='min-w-0'>
-                <span className='block truncate text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>{label}</span>
-                <span className='block truncate text-xs font-semibold text-ui-text dark:text-ui-text'>{value}</span>
-            </span>
-            <span className={decisionStepStatusClass(state)}>{href && state !== 'blocked' ? 'console' : decisionStepStatusLabel(state)}</span>
-        </>
-    )
-
-    if (href) {
-        return (
-            <a
-                href={href}
-                title={fallback}
-                className='grid min-h-10 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-2 py-1.5 transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:hover:bg-ui-raised'
-            >
-                {content}
-            </a>
-        )
-    }
-
-    return (
-        <div
-            title={fallback}
-            className='grid min-h-10 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-2 py-1.5 dark:border-ui-border dark:bg-ui-panel'
-        >
-            {content}
-        </div>
-    )
 }
 
 function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchlistCount, gapCount, onToggle }: {
@@ -2280,7 +1665,7 @@ function ActorOperationsMatrix({
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Attack details</p>
-                    <p className='mt-0.5 hidden wrap-break-word text-xs text-ui-muted dark:text-ui-muted md:block'>Methods, infrastructure, and targeting details with source context.</p>
+                    <p className='mt-0.5 hidden wrap-break-word text-xs text-ui-muted dark:text-ui-muted md:block'>Methods, infrastructure, and targeting details with sources.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap gap-1.5'>
                     <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{rows.length} details</span>
@@ -2623,7 +2008,7 @@ function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorInt
         { label: 'Newest evidence', value: actor.sourceCoverage.latestReportDate ? formatDate(actor.sourceCoverage.latestReportDate) : 'Not dated' },
         { label: 'Generated', value: formatDate(actor.freshness.generatedAt) },
         { label: 'Source results', value: String(actor.sourceCoverage.totalRows) },
-        { label: 'Capture status', value: captureCoverageLabel(actor.sourceCoverage) },
+        { label: 'Source status', value: captureCoverageLabel(actor.sourceCoverage) },
     ]
 
     return (
@@ -2879,7 +2264,7 @@ function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfil
     const metrics = [
         { label: 'Source results', value: String(coverage.totalRows) },
         { label: 'Dated activity', value: String(coverage.datedRows) },
-        { label: 'Capture status', value: captureCoverageLabel(coverage) },
+        { label: 'Source status', value: captureCoverageLabel(coverage) },
         { label: 'Latest', value: coverage.latestReportDate ? formatDate(coverage.latestReportDate) : 'Not dated' },
     ]
     const coverageCopy = coverage.captureRows
@@ -2926,9 +2311,9 @@ function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfil
 }
 
 function captureCoverageLabel(coverage: TiActorIntelligenceProfile['sourceCoverage']) {
-    if (coverage.captureRows) return `${coverage.captureRows} capture${coverage.captureRows === 1 ? '' : 's'} linked`
-    if (coverage.missing.includes('sourceProvenance[].captureId')) return 'capture evidence needed'
-    return 'capture optional'
+    if (coverage.captureRows) return `${coverage.captureRows} source row${coverage.captureRows === 1 ? '' : 's'} linked`
+    if (coverage.missing.includes('sourceProvenance[].captureId')) return 'sources syncing'
+    return 'source optional'
 }
 
 function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenceProfile['techniqueCoverage'] }) {
@@ -2964,7 +2349,7 @@ function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenc
                             <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(item.detail)}</p>
                             <div className='mt-2 grid gap-1 border-t border-ui-border pt-2 dark:border-ui-border'>
                                 <p className='wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                    {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'Source reference needed'} · {item.captureIds.length ? `${item.captureIds.length} capture reference${item.captureIds.length === 1 ? '' : 's'}` : 'capture needed'} · {item.missing.length ? `needs ${item.missing.map(coverageMissingLabel).join(', ')}` : 'case context ready'}
+                                    {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'Source reference needed'} · {item.captureIds.length ? `${item.captureIds.length} source row${item.captureIds.length === 1 ? '' : 's'}` : 'sources syncing'} · {item.missing.length ? `needs ${item.missing.map(coverageMissingLabel).join(', ')}` : 'case context ready'}
                                 </p>
                                 {item.provenanceRefs[0] ? <p className='wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(item.provenanceRefs[0])}</p> : null}
                             </div>
@@ -3155,7 +2540,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Key details</p>
-                    <p className='mt-0.5 hidden wrap-break-word text-xs text-ui-muted dark:text-ui-muted md:block'>Indicators, methods, tools, campaigns, and locations with source context.</p>
+                    <p className='mt-0.5 hidden wrap-break-word text-xs text-ui-muted dark:text-ui-muted md:block'>Indicators, methods, tools, campaigns, and locations with sources.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap gap-1.5'>
                     <span className={sourceHealthChipClass('ready')}>{readyCount} ready</span>
@@ -3334,10 +2719,10 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                     <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between'>
                                         <p className='min-w-0 wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{request.sourceName}</p>
                                         <span className={sourceRequestCaptureClass(Boolean(request.captureId))}>
-                                            {request.captureId ? 'capture attached' : 'capture needed'}
+                                            {request.captureId ? 'source linked' : 'sources syncing'}
                                         </span>
                                     </div>
-                                    <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{request.captureId ? 'capture linked' : compactSourceReferenceLabel(request.provenance)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{request.captureId ? 'source linked' : compactSourceReferenceLabel(request.provenance)}</p>
                                     {request.missing.length || typeof request.confidence === 'number' ? (
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                             {[typeof request.confidence === 'number' ? sourceBasisLabel(request.confidence) : '', ...request.missing.map(displayRequirementText)].filter(Boolean).join(' · ')}
@@ -3487,10 +2872,10 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
         <div data-ti-selected-evidence-context='true' className='mt-4 overflow-hidden rounded-lg border border-ui-border bg-ui-panel dark:border-ui-border dark:bg-ui-raised'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-ui-border px-3 py-2 dark:border-ui-border'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source context</p>
+                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Sources</p>
                     <p className='mt-0.5 text-[11px] text-ui-muted dark:text-ui-muted'>{rows.length} source{rows.length === 1 ? '' : 's'} tied to the selected result</p>
                 </div>
-                <CopyPayloadButton label='Source context' payload={drilldown} />
+                <CopyPayloadButton label='Sources' payload={drilldown} />
             </div>
             <div className='grid gap-2 p-2 md:hidden'>
                 {rows.map(row => (
@@ -3554,7 +2939,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source details</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        Sources, capture status, and follow-up for the selected result.
+                        Sources, source status, and follow-up for the selected result.
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -3574,7 +2959,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                                 </p>
                             </div>
                             <span className={row.state === 'ready' ? decisionStepStatusClass('ready') : row.state === 'needs_capture' ? decisionStepStatusClass('review') : decisionStepStatusClass('blocked')}>
-                                {row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'capture needed' : 'source needed'}
+                                {row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'sources syncing' : 'source needed'}
                             </span>
                         </div>
                         <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{row.captureId ? 'capture linked' : compactSourceReferenceLabel(row.provenance)}</p>
@@ -3765,7 +3150,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
                 item.countries?.length ? `Countries: ${item.countries.join(', ')}` : 'Country not stated.',
             ],
             nextActions: exposure
-                ? ['Review the source context before customer alerting.', 'Check whether the victim/domain is in a watched portfolio.', 'Escalate if the claim is fresh, corroborated, or customer-relevant.']
+                ? ['Review sources before customer alerting.', 'Check whether the victim/domain is in a watched portfolio.', 'Escalate if the claim is fresh, corroborated, or customer-relevant.']
                 : ['Review for relevance to the selected actor or company.', 'Open the source when available.', 'Close if it is duplicate background reporting.'],
             priority,
         }
@@ -4241,7 +3626,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
                             </div>
                         ))}
-                        {!actionability.geographyHandoffs.length ? <p className='text-xs text-ui-muted dark:text-ui-muted'>Add country-specific source context before regional routing.</p> : null}
+                        {!actionability.geographyHandoffs.length ? <p className='text-xs text-ui-muted dark:text-ui-muted'>Use country-specific sources before regional routing.</p> : null}
                     </div>
                 </div>
 
@@ -4252,7 +3637,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                             <div key={`${item.sourceName}-${item.provenance}`} className='rounded-lg border border-ui-border bg-ui-panel p-2 dark:border-ui-border dark:bg-ui-raised'>
                                 <div className='flex items-center justify-between gap-2'>
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{item.sourceName}</p>
-                                    <span className={item.captureId ? 'shrink-0 text-[11px] text-ui-success' : 'shrink-0 text-[11px] text-ui-warning'}>{item.captureId ? 'capture attached' : 'capture needed'}</span>
+                                    <span className={item.captureId ? 'shrink-0 text-[11px] text-ui-success' : 'shrink-0 text-[11px] text-ui-warning'}>{item.captureId ? 'source linked' : 'sources syncing'}</span>
                                 </div>
                                 <p className='mt-1 wrap-break-word text-[11px] text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(item.provenance)}</p>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
@@ -4585,7 +3970,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                         {watchlistIntersectionActionLabel(item.recommendedAction)} · {item.organizationId ? 'organization linked' : 'organization needed'} · {item.watchlistItemId ? 'watchlist linked' : 'watchlist item needed'}
                                     </p>
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                        {item.sourceFamilies.map(formatLabel).join(', ') || 'source family needed'} · {item.captureIds.length ? `${item.captureIds.length} capture${item.captureIds.length === 1 ? '' : 's'}` : 'capture needed'} · {item.alertIds.length ? `${item.alertIds.length} alert${item.alertIds.length === 1 ? '' : 's'}` : 'alert needed'}
+                                        {item.sourceFamilies.map(formatLabel).join(', ') || 'source family needed'} · {item.captureIds.length ? `${item.captureIds.length} source row${item.captureIds.length === 1 ? '' : 's'}` : 'sources syncing'} · {item.alertIds.length ? `${item.alertIds.length} alert${item.alertIds.length === 1 ? '' : 's'}` : 'alert needed'}
                                     </p>
                                     {item.blockers.length ? <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementText(item.blockers[0].handoff)}</p> : null}
                                 </div>
@@ -5651,7 +5036,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                                 <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                     {row.sourceId ? <span className={sourceHealthChipClass('review')}>source linked</span> : null}
                                     {row.sourceRequestId ? <span className={sourceHealthChipClass('review')}>request linked</span> : null}
-                                    <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'capture linked' : 'capture needed'}</span>
+                                    <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'source linked' : 'sources syncing'}</span>
                                     {typeof row.confidence === 'number' ? <span className={sourceHealthChipClass('review')}>{sourceBasisLabel(row.confidence)}</span> : null}
                                     <span className={sourceHealthChipClass(row.ownerLane === 'source' ? 'blocked' : row.state)}>{readinessOwnerLabel(row.ownerLane)}</span>
                                 </div>
@@ -5674,7 +5059,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                         )) : null}
                     </>
                 ) : !rows.length ? (
-                    <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Add source context before sending this actor to a customer path.</p>
+                    <p className='rounded-lg border border-ui-warning/35 bg-ui-warning/10 p-3 text-xs leading-5 text-ui-warning dark:border-ui-warning/35 dark:bg-ui-warning/10 dark:text-ui-warning'>Use sources before sending this actor to a customer path.</p>
                 ) : null}
             </div>
         </Panel>
@@ -6099,7 +5484,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                                     <p className='wrap-break-word text-[11px] font-semibold text-ui-text dark:text-ui-text'>{row.sourceName}{row.sourceId ? ' · source linked' : ''}</p>
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.provenance)}</p>
                                 </div>
-                                <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'capture linked' : 'capture needed'}</span>
+                                <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'source linked' : 'sources syncing'}</span>
                             </div>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                 {row.reportDate ? formatDate(row.reportDate) : 'report date pending'}{typeof row.confidence === 'number' ? ` · ${sourceBasisLabel(row.confidence)}` : ''}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
@@ -6222,7 +5607,7 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                                                         {source.sourceFamily ? formatLabel(source.sourceFamily) : 'source type pending'} · {source.reportDate ? formatDate(source.reportDate) : source.lastCollectedAt ? formatDate(source.lastCollectedAt) : 'date pending'} · {source.parserStatus ?? 'processing status pending'}
                                                     </p>
                                                 </div>
-                                                <span className={sourceHealthChipClass(source.captureId ? 'ready' : 'blocked')}>{source.captureId ? 'capture linked' : 'capture needed'}</span>
+                                                <span className={sourceHealthChipClass(source.captureId ? 'ready' : 'blocked')}>{source.captureId ? 'source linked' : 'sources syncing'}</span>
                                             </div>
                                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(source.provenance)}</p>
                                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{source.shownBecause}</p>
@@ -6281,7 +5666,7 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5' data-ti-selected-enrichment-readiness='true'>
                             <span className={sourceHealthChipClass(row.ownerLane === 'source' ? 'blocked' : row.state)}>{readinessOwnerLabel(row.ownerLane)}</span>
                             <span className={sourceHealthChipClass(row.matchingIntakeItemIds.length ? 'review' : 'blocked')}>{row.matchingIntakeItemIds.length} source item{row.matchingIntakeItemIds.length === 1 ? '' : 's'}</span>
-                            {row.captureId ? <span className={sourceHealthChipClass('ready')}>capture linked</span> : <span className={sourceHealthChipClass('blocked')}>capture needed</span>}
+                            {row.captureId ? <span className={sourceHealthChipClass('ready')}>source linked</span> : <span className={sourceHealthChipClass('blocked')}>sources syncing</span>}
                             {row.sourceRequestId ? <span className={sourceHealthChipClass('review')}>request {row.sourceRequestId}</span> : null}
                         </div>
                         <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(row.recommendedAction)}</p>
@@ -6348,7 +5733,7 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                 {row.alertId ? <span className={sourceHealthChipClass('ready')}>alert {row.alertId}</span> : null}
                                 {row.casePath ? <span className={sourceHealthChipClass('ready')}>{displayRequirementText(row.casePath)}</span> : null}
-                                {row.captureIds.length ? <span className={sourceHealthChipClass('ready')}>{row.captureIds.length} capture{row.captureIds.length === 1 ? '' : 's'}</span> : <span className={sourceHealthChipClass('blocked')}>capture needed</span>}
+                                {row.captureIds.length ? <span className={sourceHealthChipClass('ready')}>{row.captureIds.length} source row{row.captureIds.length === 1 ? '' : 's'}</span> : <span className={sourceHealthChipClass('blocked')}>sources syncing</span>}
                             </div>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
                                 {row.route ? 'Source action available.' : 'Source action pending.'}
@@ -6372,7 +5757,7 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
             {plan.blockers.length ? (
                 <p className='mt-2 wrap-break-word text-[11px] leading-5 text-ui-warning dark:text-ui-warning'>{displayRequirementList(plan.blockers.slice(0, 3).map(blocker => blocker.detail))}</p>
             ) : (
-                <p className='mt-2 text-[11px] leading-5 text-ui-success dark:text-ui-success'>Alert rebuild has the required watchlist, capture, and source context.</p>
+                <p className='mt-2 text-[11px] leading-5 text-ui-success dark:text-ui-success'>Alert rebuild has the required watchlist and sources.</p>
             )}
         </div>
     )
@@ -6407,7 +5792,7 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
                             <span className={sourceHealthChipClass(alert.ready ? 'ready' : 'blocked')}>{alert.ready ? 'ready' : 'syncing'}</span>
                         </div>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                            {alert.captureIds.length ? `${alert.captureIds.length} capture${alert.captureIds.length === 1 ? '' : 's'}` : 'Capture needed'}
+                            {alert.captureIds.length ? `${alert.captureIds.length} source row${alert.captureIds.length === 1 ? '' : 's'}` : 'sources syncing'}
                             {alert.destinationIds.length ? ` · ${alert.destinationIds.length} destination${alert.destinationIds.length === 1 ? '' : 's'}` : ' · destination needed'}
                             {alert.casePath ? ` · ${displayRequirementText(alert.casePath)}` : ' · case link pending'}
                         </p>
@@ -6508,7 +5893,7 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>{compactSourceReferenceLabel(row.provenance)}</p>
                                 </div>
                                 <span className={sourceHealthChipClass(row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'blocked' : 'review')}>
-                                    {row.captureId ? 'capture linked' : 'capture needed'}
+                                    {row.captureId ? 'source linked' : 'sources syncing'}
                                 </span>
                             </div>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
@@ -6648,37 +6033,8 @@ function EvidencePanel({ title, children }: { title: string; children: React.Rea
 function SelectedTriageBriefPanel({ brief }: { brief: SelectedTriageBrief }) {
     return (
         <section data-ti-selected-brief='true' className='mt-4 rounded-lg border border-ui-border bg-ui-raised p-4 dark:border-ui-border dark:bg-ui-raised'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-3'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Analyst brief</p>
-                    <h3 className='mt-1 text-base font-semibold text-ui-text dark:text-ui-text'>What happened, why it matters, and what to do next</h3>
-                </div>
-                <span className={brief.evidenceTone === 'ready' ? sourceHealthChipClass('ready') : brief.evidenceTone === 'blocked' ? sourceHealthChipClass('blocked') : sourceHealthChipClass('review')}>
-                    {brief.evidenceTone === 'ready' ? 'source ready' : brief.evidenceTone === 'blocked' ? 'source needed' : 'verify source'}
-                </span>
-            </div>
-            <div className='mt-4 grid gap-3 lg:grid-cols-3'>
-                <BriefStep title='What happened' value={brief.whatHappened} />
-                <BriefStep title='Why it matters' value={brief.whyItMatters} />
-                <BriefStep title='Next action' value={brief.nextAction} />
-            </div>
-            <div className='mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
-                <div className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Source status</p>
-                    <p className='mt-1 wrap-break-word text-sm leading-6 text-ui-muted dark:text-ui-muted'>{brief.evidenceStatus}</p>
-                </div>
-                <div className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-panel'>
-                    <p className='text-xs font-semibold uppercase text-ui-muted dark:text-ui-muted'>Safety boundary</p>
-                    <p className='mt-1 wrap-break-word text-sm leading-6 text-ui-muted dark:text-ui-muted'>{brief.safetyBoundary}</p>
-                </div>
-            </div>
-            <div className='mt-3 flex min-w-0 flex-wrap gap-2'>
-                {brief.labels.map(label => (
-                    <span key={`${label.label}:${label.value}`} className='max-w-full wrap-break-word rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[11px] font-semibold text-ui-text dark:border-ui-border dark:bg-ui-panel dark:text-ui-text'>
-                        {label.label}: {label.value}
-                    </span>
-                ))}
-            </div>
+            <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Analyst brief</p>
+            <BriefStep title='Summary' value={brief.whatHappened} />
         </section>
     )
 }
@@ -6747,7 +6103,7 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
     ] as const
     const review = {
         icon: <ClipboardList className='h-4 w-4' />,
-        value: openGap ? displayRequirementText(openGap.title) : 'Profile has enough source context for review',
+        value: openGap ? displayRequirementText(openGap.title) : 'Profile has enough sources for review',
         meta: openGap ? sourceHealthFieldLabel(openGap.requestedFields[0] ?? 'source') : 'No open source question',
     }
 
@@ -7847,8 +7203,8 @@ function selectedCaseActionTrailFor(
             at: result.generatedAt,
             label: caseDraft?.ready ? 'Case handoff ready' : 'Case handoff syncing',
             detail: caseDraft?.ready
-                ? 'Selected evidence has the required case link, source context, and watch terms for authenticated review.'
-                : 'Case review needs the missing identifiers or source context listed below before persistence.',
+                ? 'Selected evidence has the required case link, sources, and watch terms for authenticated review.'
+                : 'Case review needs the missing identifiers or sources listed below before persistence.',
             state: caseDraft?.ready ? 'ready' : 'blocked',
             route: caseRoute,
             blockers: unique([...(caseDraft?.missing ?? []), ...(reviewHandoff?.blockers ?? [])]).slice(0, 8),
@@ -9224,7 +8580,7 @@ function actorOperationsRowsFor(result: TiSearchResponse, actor: TiActorIntellig
         confidence: item.confidence,
         freshness: item.freshness,
         source: item.sourceIds[0] ? 'Source reference linked' : defaultSource,
-        sourceFamily: item.captureIds.length ? 'Capture linked' : item.missing.length ? 'Capture needed' : defaultFamily,
+        sourceFamily: item.captureIds.length ? 'Source linked' : item.missing.length ? 'Sources syncing' : defaultFamily,
         timestamp: latestDate,
         artifactKind: 'technique',
         artifactLookup: item.attackId ? `${item.attackId} ${item.name}` : item.name,
@@ -9776,6 +9132,7 @@ function EvidenceBox({ href, children }: { href?: string; children: React.ReactN
 }
 
 function EmptyState() {
+    const [showSearchHelp, setShowSearchHelp] = useState(false)
     const launchItems = [
         { label: 'acworth-ga.gov', href: '/ti/acworth-ga.gov', icon: <Building2 className='h-4 w-4' /> },
         { label: 'APT29', href: '/ti/APT29', icon: <ShieldCheck className='h-4 w-4' /> },
@@ -9783,33 +9140,14 @@ function EmptyState() {
         { label: 'microsoft.com', href: '/ti/Microsoft', icon: <Building2 className='h-4 w-4' /> },
     ]
     const outcomeItems = [
-        ['Recent evidence', 'Recent company, actor, domain, and detail results with evidence strength, freshness, source family, and review state.'],
-        ['Source context', 'Linked source references, capture state, and open questions so analysts can judge whether a result is useful.'],
+        ['Recent evidence', 'Recent company, actor, domain, and detail results with evidence strength, last-seen age, source family, and review state.'],
+        ['Sources', 'Linked source references and open questions so analysts can judge whether a result is useful.'],
         ['Watchlist fit', 'Company, supplier, domain, and portfolio terms are separated from broad actor background.'],
         ['Follow-up actions', 'Review, watch, escalate, export, or open the authenticated console when the result needs follow-up.'],
     ]
 
     return (
         <section data-ti-empty-workspace='true' className='grid justify-items-center gap-4 text-center'>
-            <div className='grid w-full max-w-3xl gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 text-left shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                <div>
-                    <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Not an analyst? Start with a company or domain.</h2>
-                    <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-                        Search by actor, company, domain, CVE, or malware name to see what was reported, where it appeared, which sources support it, and what to review next.
-                    </p>
-                </div>
-                <div className='grid gap-2 sm:grid-cols-2'>
-                    {outcomeItems.map(([title, detail]) => (
-                        <div key={title} className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
-                            <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>{title}</p>
-                            <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{detail}</p>
-                        </div>
-                    ))}
-                </div>
-                <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
-                    Public results use reviewable metadata and source context. Customer notification, saved watchlists, and delivery destinations continue in the authenticated console.
-                </p>
-            </div>
             <div className='flex flex-wrap justify-center gap-2'>
                 {launchItems.map(item => (
                     <Link key={item.href} href={item.href} className='inline-flex h-9 items-center gap-2 rounded-full border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised'>
@@ -9817,11 +9155,41 @@ function EmptyState() {
                         {item.label}
                     </Link>
                 ))}
+                <button type='button' onClick={() => setShowSearchHelp(value => !value)} className='inline-flex h-9 items-center gap-2 rounded-full border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-text dark:hover:bg-ui-raised' aria-expanded={showSearchHelp}>
+                    <HelpCircle className='h-4 w-4 text-ui-primary dark:text-ui-primary' />
+                    Search help
+                </button>
+                <Link href='/dashboard/dwm' className='inline-flex h-9 items-center gap-2 rounded-full border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-primary transition hover:border-ui-primary/35 hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:bg-ui-panel dark:text-ui-primary dark:hover:bg-ui-raised'>
+                    <BellRing className='h-4 w-4' />
+                    Review recent monitoring alerts
+                </Link>
             </div>
-            <Link href='/dashboard/dwm' className='inline-flex items-center gap-2 text-sm font-semibold text-ui-primary transition hover:text-ui-primary dark:text-ui-primary dark:hover:text-ui-primary'>
-                <BellRing className='h-4 w-4' />
-                Review recent monitoring alerts
-            </Link>
+            {showSearchHelp ? (
+                <div className='grid w-full max-w-3xl gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 text-left shadow-sm dark:border-ui-border dark:bg-ui-panel'>
+                    <div className='flex items-start justify-between gap-3'>
+                        <div>
+                            <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Start with a company or domain.</h2>
+                            <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
+                                Search by actor, company, domain, CVE, or malware name to see what was reported, where it appeared, which sources support it, and what to do next.
+                            </p>
+                        </div>
+                        <button type='button' onClick={() => setShowSearchHelp(false)} className='grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:border-ui-primary hover:text-ui-primary' aria-label='Close search help'>
+                            <XCircle className='h-4 w-4' />
+                        </button>
+                    </div>
+                    <div className='grid gap-2 sm:grid-cols-2'>
+                        {outcomeItems.map(([title, detail]) => (
+                            <div key={title} className='rounded-lg border border-ui-border bg-ui-panel p-3 dark:border-ui-border dark:bg-ui-raised'>
+                                <p className='text-sm font-semibold text-ui-text dark:text-ui-text'>{title}</p>
+                                <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{detail}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>
+                        Public results use reviewable metadata and sources. Customer notification, saved watchlists, and delivery destinations continue in the authenticated console.
+                    </p>
+                </div>
+            ) : null}
         </section>
     )
 }
@@ -10281,7 +9649,7 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
                     <div key={item.family} className='grid grid-cols-[minmax(0,1fr)_5rem_minmax(0,0.8fr)] gap-2 border-b border-ui-border px-3 py-2 text-xs last:border-b-0 dark:border-ui-border'>
                         <span className='wrap-break-word font-semibold text-ui-text dark:text-ui-text'>{formatLabel(item.family)}</span>
                         <span className='text-ui-muted dark:text-ui-muted'>{item.count}</span>
-                        <span className='wrap-break-word text-ui-muted dark:text-ui-muted'>{gaps[0] ? sourceHealthFieldLabel(gaps[0]) : 'Review source context'}</span>
+                        <span className='wrap-break-word text-ui-muted dark:text-ui-muted'>{gaps[0] ? sourceHealthFieldLabel(gaps[0]) : 'Review sources'}</span>
                     </div>
                 ))}
             </div>
@@ -10302,7 +9670,7 @@ function MapCoverageFallback({ regions, actor, actionability, compact = false }:
                         ) : null}
                     </div>
                     <div className='flex min-w-0 flex-wrap gap-2'>
-                        <span className={sourceHealthChipClass(gaps.length ? 'review' : 'ready')}>{gaps.length ? `${gaps.length} source question${gaps.length === 1 ? '' : 's'}` : 'source context ready'}</span>
+                        <span className={sourceHealthChipClass(gaps.length ? 'review' : 'ready')}>{gaps.length ? `${gaps.length} source question${gaps.length === 1 ? '' : 's'}` : 'sources ready'}</span>
                         <span className={sourceHealthChipClass(actionability.watchlistRelevance.terms.length ? 'ready' : 'review')}>{actionability.watchlistRelevance.terms.length ? `${actionability.watchlistRelevance.terms.length} watch terms` : 'watch term needed'}</span>
                     </div>
                 </>
@@ -10468,7 +9836,7 @@ function humanResultStatus(value?: string) {
     if (value === 'metadata_review') return 'Needs review'
     if (value === 'needs_source_activation') return 'Connecting sources'
     if (value === 'blocked_unsafe_target') return 'Review required'
-    if (value === 'ready') return 'Current profile'
+    if (value === 'ready') return 'Ready'
     if (value === 'partial') return 'Updating'
     if (value === 'searching' || value === 'queued') return 'Searching'
     return formatLabel(value)

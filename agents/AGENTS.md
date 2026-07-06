@@ -8,7 +8,7 @@ Default to ship mode:
 1. One main thread owns the website and portal experience end to end.
 2. No more readiness, receipt, proof, or contract-only slices unless they are required to make a visible workflow work in the same prompt.
 3. Prioritize these three surfaces: `/dashboard`, `/ti/<query>`, and organization/watchlist/settings workflows.
-4. In one prompt, make the chosen surface visibly better with real APIs, useful UI states, quick visual check only when it directly helps ship, and deploy when appropriate.
+4. In one prompt, make the chosen surface visibly better with real APIs, useful UI states, quick visual check only when it directly helps ship, then always commit, push, deploy, and probe.
 5. Use subagents only for narrow backend blockers that prevent the visible workflow from shipping.
 
 If a task would only add metadata, receipts, proof ledgers, compatibility fixtures, or readiness rows, stop and instead implement the visible customer or analyst workflow those artifacts were supposed to support. The final result should be something a user can open and immediately feel is better.
@@ -33,7 +33,7 @@ For the three priority surfaces, ship the full workflow shape in one pass:
 - `/ti/<query>`: an actor intelligence workspace with compact actor facts, aliases, TTPs, infrastructure, tools/malware, observed sources, evidence rows, watchlist relevance, enrichment gaps, and alert/case handoff. Ban teaser/example/signal language.
 - Organization/watchlist/settings: a SaaS settings workflow for org creation, invites, member roles, shared watchlists, webhook destinations/test delivery, permissions, and audit trail.
 
-A one-prompt ship must include real API wiring where available, loading/empty/error states, responsive desktop/mobile behavior, quick visual check only when it directly helps ship, focused checks, and deploy or deploy-ready handoff. If backend support is missing, implement the missing hook in the same prompt when reasonable; otherwise ask exactly one narrow blocker agent.
+A one-prompt ship must include real API wiring where available, loading/empty/error states, responsive desktop/mobile behavior, quick visual check only when it directly helps ship, focused checks, commit, push, deploy, and live probe. If backend support is missing, implement the missing hook in the same prompt when reasonable; otherwise ask exactly one narrow blocker agent.
 
 ## Goal
 Make Hanasand production-ready without wasting user time, tokens, or server resources. Prefer small automated checks over broad manual rereads. Do not tail server logs for minutes. Use the API audit, monitor, status, and filtered logs surfaces first.
@@ -46,10 +46,15 @@ For SOC, TI, DWM, XDR, monitoring, source operations, incident response, and ana
 
 ## Token-Saving Workflow
 - Start with `git status --short` and targeted `rg`, not whole-repo reading.
-- For every implementation prompt, write 3-7 acceptance criteria, identify affected routes/files/surfaces, implement the complete presentable slice, verify with focused checks and quick browser check for UI, then commit only the isolated intended diff.
+- For every implementation prompt, write 3-7 acceptance criteria, identify affected routes/files/surfaces, implement the complete presentable slice, verify with focused checks and quick browser check for UI, then commit only the isolated intended diff, push to GitHub and Forgejo, deploy from the real server checkout, and live probe.
 - Acceptance criteria must include the real user workflow, not only the visible screen components. Ask what a strong competitor would let the user do here and what would make the slice feel genuinely better.
 - Do not stop at 5 percent of the ask. Keep going on the obvious next 20 percent inside the same scope when that is what makes the workflow usable.
 - Final implementation handoffs must include: `BASELINE dirty files:`, `FINAL dirty files:`, `Commit:`, `Checks:`, `Live probes:`, and `Remaining blockers:`.
+- Always commit agent-owned changes. Dirty worktree baseline is not a reason to skip commit; leave unrelated paths unstaged and report them.
+- Always push committed work to both GitHub and Forgejo, keep local main aligned, and deploy from the real Hanasand directory on the server.
+- Never deploy from a temp folder, copied checkout, archive, worktree, or generated staging directory.
+- Never use `rsync` for Hanasand deployment.
+- Never copy `.env`, env folders, secret folders, or environment material as part of deployment. The server's real checkout and existing server environment are the source of truth.
 - After code edits, run type checks and the focused scripts below instead of manually reviewing every touched file.
 - For logs, use the database-backed API/UI:
   - API: `GET /api/logs?level=error`
