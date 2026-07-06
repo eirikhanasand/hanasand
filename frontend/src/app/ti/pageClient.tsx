@@ -142,7 +142,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     const visible = result
 
     return (
-        <div className={visible ? 'mx-auto grid w-full max-w-7xl gap-6' : 'mx-auto grid min-h-[calc(100vh-9rem)] w-full max-w-4xl place-content-center gap-5 py-10'}>
+        <div className={visible ? 'mx-auto grid w-full max-w-7xl gap-6' : 'mx-auto grid min-h-[calc(100vh-9rem)] w-full max-w-[45rem] place-content-center gap-5 py-10'}>
             <form onSubmit={submit} className={visible ? 'grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm md:p-3' : 'grid gap-3'}>
                 {!visible ? (
                     <div className='text-center'>
@@ -166,7 +166,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                         type='submit'
                         aria-busy={busy}
                         aria-label={busy ? 'Searching threat intelligence' : 'Search threat intelligence'}
-                        className={`${visible ? 'h-10 min-w-28 rounded-lg' : 'h-11 min-w-36 rounded-lg'} inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap bg-ui-text px-5 text-sm font-semibold text-white transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted dark:bg-ui-primary dark:text-white dark:hover:bg-ui-primary`}
+                        className={`${visible ? 'h-10 min-w-24 rounded-lg' : 'h-11 min-w-28 rounded-lg'} inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:bg-ui-panel disabled:cursor-not-allowed disabled:bg-ui-raised disabled:text-ui-muted dark:border-ui-border dark:bg-ui-raised dark:text-ui-text dark:hover:bg-ui-panel`}
                     >
                         <Search className='h-4 w-4' />
                         <span>{busy ? 'Searching' : 'Search'}</span>
