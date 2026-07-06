@@ -1,17 +1,19 @@
 'use client'
 
+import Link from 'next/link'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import type { ServiceStatus } from '@/utils/status/getStatus'
 import { AlertCircle, CheckCircle, Clock, RefreshCw } from 'lucide-react'
 
 type DashboardProps = {
     serviceStatus: ServiceStatus
+    mode?: 'status' | 'incidents'
 }
 
 const REFRESH_MS = 3000
 const UPTIME_WINDOW = '30 days'
 
-export default function StatusDashboard({ serviceStatus }: DashboardProps) {
+export default function StatusDashboard({ serviceStatus, mode = 'status' }: DashboardProps) {
     const [now, setNow] = useState<number | null>(null)
     const [currentStatus, setCurrentStatus] = useState(serviceStatus)
     const [isRefreshing, setIsRefreshing] = useState(false)
@@ -53,6 +55,42 @@ export default function StatusDashboard({ serviceStatus }: DashboardProps) {
         : currentStatus.overall === 'degraded'
             ? 'Some systems degraded'
             : 'Service interruption'
+    const incidentsSection = (
+        <section className='rounded-md border border-ui-border bg-ui-panel p-4'>
+            <h2 className='text-xl font-semibold text-ui-text'>Recent incidents</h2>
+            <div className='mt-3 divide-y divide-ui-border'>
+                {incidents.length ? incidents.map((incident) => (
+                    <article key={`${incident.service}-${incident.check_name}-incident`} className='py-3 first:pt-0 last:pb-0'>
+                        <div className='flex flex-wrap items-center justify-between gap-2'>
+                            <h3 className='font-semibold text-ui-text'>{incident.check_name}</h3>
+                            <span className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${statusPillClass(incident.status)}`}>{incident.status}</span>
+                        </div>
+                        <p className='mt-1 text-sm text-ui-muted'>{incident.message || `${incident.service} reported ${incident.status}.`}</p>
+                        <p className='mt-1 text-sm text-ui-muted'>{relativeTime(incident.checked_at, now)}</p>
+                    </article>
+                )) : (
+                    <p className='py-3 text-sm text-ui-muted'>No incidents reported in the current status data.</p>
+                )}
+            </div>
+        </section>
+    )
+
+    if (mode === 'incidents') {
+        return (
+            <main className='mx-auto grid max-w-5xl gap-6 pb-8'>
+                <div className='flex flex-wrap items-center justify-between gap-3'>
+                    <div>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>Status</p>
+                        <h1 className='mt-1 text-3xl font-semibold text-ui-text'>Incident history</h1>
+                    </div>
+                    <Link href='/status' className='inline-flex h-10 items-center rounded-md border border-ui-border px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:text-ui-primary'>
+                        Current status
+                    </Link>
+                </div>
+                {incidentsSection}
+            </main>
+        )
+    }
 
     return (
         <main className='mx-auto grid max-w-5xl gap-6 pb-8'>
@@ -62,7 +100,12 @@ export default function StatusDashboard({ serviceStatus }: DashboardProps) {
                         {currentStatus.overall === 'up' ? <CheckCircle className='h-5 w-5' /> : <AlertCircle className='h-5 w-5' />}
                         <h1 className='text-xl font-semibold'>{headline}</h1>
                     </div>
-                    <span className='text-sm font-medium'>Checked {relativeTime(latestCheckedAt(currentStatus), now)}</span>
+                    <div className='flex flex-wrap items-center gap-3'>
+                        <Link href='/status/incidents' className='inline-flex h-9 items-center rounded-md bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25'>
+                            Incident history
+                        </Link>
+                        <span className='text-sm font-medium'>Checked {relativeTime(latestCheckedAt(currentStatus), now)}</span>
+                    </div>
                 </div>
             </section>
 
@@ -106,24 +149,6 @@ export default function StatusDashboard({ serviceStatus }: DashboardProps) {
                     ))}
                     {!checks.length && (
                         <div className='p-6 text-sm text-ui-muted'>No current public monitor checks are available.</div>
-                    )}
-                </div>
-            </section>
-
-            <section className='rounded-md border border-ui-border bg-ui-panel p-4'>
-                <h2 className='text-xl font-semibold text-ui-text'>Recent incidents</h2>
-                <div className='mt-3 divide-y divide-ui-border'>
-                    {incidents.length ? incidents.map((incident) => (
-                        <article key={`${incident.service}-${incident.check_name}-incident`} className='py-3 first:pt-0 last:pb-0'>
-                            <div className='flex flex-wrap items-center justify-between gap-2'>
-                                <h3 className='font-semibold text-ui-text'>{incident.check_name}</h3>
-                                <span className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${statusPillClass(incident.status)}`}>{incident.status}</span>
-                            </div>
-                            <p className='mt-1 text-sm text-ui-muted'>{incident.message || `${incident.service} reported ${incident.status}.`}</p>
-                            <p className='mt-1 text-sm text-ui-muted'>{relativeTime(incident.checked_at, now)}</p>
-                        </article>
-                    )) : (
-                        <p className='py-3 text-sm text-ui-muted'>No incidents reported in the current status data.</p>
                     )}
                 </div>
             </section>
