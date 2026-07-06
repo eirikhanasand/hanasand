@@ -769,7 +769,7 @@ assert(pageClientSource.includes('actionability.sourceEnrichmentIntake.summary.t
 assert(pageClientSource.includes('data-ti-actor-summary-grid'), 'Actor overview should render a compact summary grid instead of a dense status table.')
 assert(pageClientSource.includes('ActorSummaryFact'), 'Actor overview should use reusable summary facts for type, targets, methods, and source coverage.')
 assert(!pageClientSource.includes('sourceHealthChipClass(row.tone)'), 'Actor overview should not attach a status chip to every summary row.')
-assert(pageClientSource.includes('text-white transition hover:bg-ui-raised'), 'Public TI search submit should render visible text on the dark button.')
+assert(pageClientSource.includes('border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text'), 'Public TI search submit should use the quieter raised button.')
 assert(pageClientSource.includes('sourceHealthQueue.rows.filter(item => item.state !== \'ready\').slice(0, TI_ENRICHMENT_GAP_PREVIEW_ROWS)'), 'Public TI source-health gap rows should use the named preview cap.')
 assert(pageClientSource.includes('workItems.filter(item => item.confidence < 0.55 || !item.href || isDateStale(item.timestamp, result.generatedAt)).slice(0, TI_ENRICHMENT_GAP_PREVIEW_ROWS)'), 'Public TI evidence gap rows should use the named preview cap.')
 assert(pageClientSource.includes('artifacts.filter(item => item.readiness.blockers.length || item.enrichmentTasks.length).slice(0, TI_ENRICHMENT_GAP_PREVIEW_ROWS)'), 'Public TI artifact gap rows should use the named preview cap.')

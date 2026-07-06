@@ -54,7 +54,7 @@ const landingForm = tiClient.slice(searchFormStart, resultsGate)
 
 assertIncludes(landingForm, 'Search threat intelligence', 'TI landing must use a concise search-focused heading')
 assertIncludes(landingForm, 'Find current intelligence about any threat actor, company, domain, CVE, or malware family.', 'TI landing must use one short blue helper line')
-assertIncludes(tiClient, 'max-w-4xl place-content-center gap-5 py-10', 'TI landing must center the search workflow before a result exists')
+assertIncludes(tiClient, 'max-w-[45rem] place-content-center gap-5 py-10', 'TI landing must center the search workflow before a result exists')
 assertIncludes(emptyState, 'APT29', 'TI empty state may keep compact query chips')
 assertIncludes(emptyState, 'LockBit', 'TI empty state may keep compact query chips')
 assertIncludes(emptyState, 'microsoft.com', 'TI empty state may keep compact query chips')
