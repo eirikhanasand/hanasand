@@ -496,6 +496,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             }, durationMs)
 
             await navigate(target)
+            await Promise.allSettled(documentEvidencePromises)
             const initialEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
             rememberDeobfuscationTasks(initialEvidence)
             send({
@@ -848,7 +849,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     }
 
     async function webCrackTasks(tasks: SandboxDeobfuscationTask[]) {
-        const deadline = Date.now() + 3500
+        const deadline = Date.now() + 1200
         while (!tasks.length && !cachedDeobfuscationTasks.length && Date.now() < deadline) {
             await new Promise(resolve => setTimeout(resolve, 100))
         }
