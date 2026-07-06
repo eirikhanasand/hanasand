@@ -1526,6 +1526,7 @@ async function collectRenderedText(page: Page) {
 
 async function collectPageEvidence(page: Page) {
     const snapshot = await page.evaluate(() => {
+        const html = document.documentElement?.outerHTML || ''
         const scripts = Array.from(document.scripts).map((script) => ({
             src: script.src || '',
             inline: script.src ? '' : (script.textContent || '').slice(0, 12000),
@@ -1553,7 +1554,8 @@ async function collectPageEvidence(page: Page) {
         const anchors = Array.from(document.links).map((link) => link.href).slice(0, 80)
 
         return {
-            text: text.slice(0, 8000),
+            sourceCode: html.slice(0, 80_000),
+            text: (document.body?.innerText || '').slice(0, 8000),
             scripts,
             comments,
             forms,
@@ -1569,12 +1571,15 @@ async function collectPageEvidence(page: Page) {
         forms: [] as Array<{ action: string; method: string; inputs: Array<{ name: string; type: string; autocomplete: string }> }>,
         anchors: [] as string[],
         meta: [] as Array<{ name: string; content: string }>,
+        sourceCode: '',
     }))
     const text = await collectRenderedText(page)
+    const sourceIndicators = extractIndicators(snapshot.sourceCode)
 
     const joined = [
         page.url(),
         text,
+        snapshot.sourceCode,
         snapshot.comments.join('\n'),
         snapshot.anchors.join('\n'),
         snapshot.forms.map(form => `${form.action} ${form.inputs.map(input => `${input.name}:${input.type}`).join(' ')}`).join('\n'),
@@ -1600,6 +1605,8 @@ async function collectPageEvidence(page: Page) {
         url: page.url(),
         textExcerpt: text.replace(/\s+/g, ' ').trim().slice(0, 900),
         indicators,
+        sourceCode: snapshot.sourceCode,
+        sourceUrls: sourceIndicators.urls.filter(url => url !== page.url()).slice(0, 40),
         comments: snapshot.comments.slice(0, 8),
         forms,
         scripts,

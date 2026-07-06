@@ -106,6 +106,8 @@ type BrowserQuota = {
 type SandboxEvidence = {
     url?: string
     textExcerpt?: string
+    sourceCode?: string
+    sourceUrls?: string[]
     verdict?: string
     confidence?: number
     reasons?: string[]
@@ -1084,6 +1086,7 @@ function AnalystSummary({ summary, captures }: { summary: ReturnType<typeof buil
                                     <p className='truncate font-mono text-ui-text'>{capture.url}</p>
                                     {cleanEvidenceExcerpt(capture.evidence?.textExcerpt) ? <p className='line-clamp-3 leading-5'>{cleanEvidenceExcerpt(capture.evidence?.textExcerpt)}</p> : null}
                                     {capture.image ? <img src={capture.image} alt={`${capture.label} screenshot`} className='max-h-44 w-full rounded border border-ui-border object-contain' /> : null}
+                                    <SourceCodeDisclosure evidence={capture.evidence} />
                                 </div>
                             ))}
                         </div>
@@ -1222,9 +1225,10 @@ function EvidenceWorkspace({
                     {pageCaptures.length ? (
                         <div className='grid gap-2 text-xs text-ui-muted'>
                             {pageCaptures.slice(0, 6).map(capture => (
-                                <div key={capture.id} className='rounded-md border border-ui-border bg-ui-panel p-2'>
+                                <div key={capture.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-panel p-2'>
                                     <p>{capture.capturedAt}{capture.reason ? ` · ${capture.reason}` : ''}</p>
                                     <p className='truncate font-mono text-ui-text'>{capture.url}</p>
+                                    <SourceCodeDisclosure evidence={capture.evidence} />
                                 </div>
                             ))}
                         </div>
@@ -1260,6 +1264,29 @@ function EvidencePanel({ title, status, children }: { title: string; status: str
             </div>
             {children}
         </div>
+    )
+}
+
+function SourceCodeDisclosure({ evidence }: { evidence?: SandboxEvidence }) {
+    if (!evidence?.sourceCode && !evidence?.sourceUrls?.length) return null
+    return (
+        <details open className='rounded-md border border-ui-border bg-ui-canvas'>
+            <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-2 py-1.5 text-xs font-semibold text-ui-primary [&::-webkit-details-marker]:hidden'>
+                <span>Source code</span>
+                <span className='text-[10px] text-ui-muted'>{evidence.sourceUrls?.length || 0} source URL{evidence.sourceUrls?.length === 1 ? '' : 's'}</span>
+            </summary>
+            <div className='grid gap-2 border-t border-ui-border p-2'>
+                {evidence.sourceUrls?.length ? (
+                    <div className='grid gap-1'>
+                        <p className='text-[11px] font-semibold uppercase text-ui-muted'>Source URLs</p>
+                        <pre className='max-h-24 overflow-auto whitespace-pre-wrap break-all rounded border border-ui-border bg-ui-panel p-2 text-[11px] text-ui-text'>{evidence.sourceUrls.join('\n')}</pre>
+                    </div>
+                ) : null}
+                {evidence.sourceCode ? (
+                    <pre className='max-h-56 overflow-auto whitespace-pre-wrap break-all rounded border border-ui-border bg-ui-panel p-2 font-mono text-[11px] leading-5 text-ui-muted'>{evidence.sourceCode}</pre>
+                ) : null}
+            </div>
+        </details>
     )
 }
 
@@ -1323,6 +1350,7 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
                             <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>{capture.kind}</span>
                         </div>
                         {capture.image ? <img src={capture.image} alt={`${capture.label} screenshot`} className='max-h-64 w-full rounded border border-ui-border object-contain' /> : null}
+                        <SourceCodeDisclosure evidence={capture.evidence} />
                         {cleanEvidenceExcerpt(capture.evidence?.textExcerpt) ? <p className='line-clamp-3 text-xs leading-5 text-ui-muted'>{cleanEvidenceExcerpt(capture.evidence?.textExcerpt)}</p> : null}
                         {capture.networkSummary ? (
                             <div className='grid gap-1 rounded-md border border-ui-border bg-ui-panel p-2 text-[11px] text-ui-muted'>
@@ -1402,6 +1430,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         ...(capture.evidence?.indicators?.domains || []),
         ...(capture.evidence?.indicators?.ips || []),
         ...(capture.evidence?.indicators?.urls || []),
+        ...(capture.evidence?.sourceUrls || []),
     ])
     const indicators = Array.from(new Set([...extracted, ...evidenceIndicators])).filter(indicator => !target.includes(indicator))
     const toolAnalyses = toolCaptures.map(capture => capture.toolAnalysis).filter(Boolean) as SandboxToolAnalysis[]
