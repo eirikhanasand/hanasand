@@ -558,6 +558,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     message: `${tool.name || toolUrl} provider capture started.`,
                 })
                 const preparedUrl = providerStartUrl(tool, toolUrl, target)
+                const officialProviderText = officialProviderKind(preparedUrl) ? fetchOfficialProviderData(preparedUrl, target) : Promise.resolve('')
                 let navigationError = await withTimeout(
                     toolPage.goto(preparedUrl, { waitUntil: 'commit', timeout: 4500 })
                         .then(() => '')
@@ -568,7 +569,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await toolPage.waitForLoadState('domcontentloaded', { timeout: 900 }).catch(() => undefined)
                 const actionError = await interactWithProvider(toolPage, tool, target)
                 navigationError ||= actionError
-                const providerText = officialProviderKind(preparedUrl) ? await waitForProviderData(tool, providerBodies) : providerBodies()
+                const providerText = officialProviderKind(preparedUrl) ? await waitForProviderData(tool, providerBodies, officialProviderText) : providerBodies()
                 if (providerText && hasParsedProviderData(tool, providerText)) navigationError = ''
                 const webcrackTool = isWebCrackTool(tool, toolUrl)
                 let webcrackLoad: WebCrackLoadResult | undefined
@@ -1380,15 +1381,48 @@ export function providerSummaryText(providerText: string) {
     ].filter(Boolean).join('\n')
 }
 
-async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, providerText: () => string) {
+async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, providerText: () => string, officialProviderText: Promise<string>) {
     const deadline = Date.now() + 5000
-    let text = providerText()
+    let officialText = ''
+    void officialProviderText.then(text => {
+        officialText = text
+    }).catch(() => undefined)
+    let text = [providerText(), officialText].filter(Boolean).join('\n')
     while (Date.now() < deadline) {
         if (hasParsedProviderData(tool, text)) return text
         await new Promise(resolve => setTimeout(resolve, 250))
-        text = providerText()
+        text = [providerText(), officialText].filter(Boolean).join('\n')
     }
     return text
+}
+
+async function fetchOfficialProviderData(preparedUrl: string, target: string) {
+    const kind = officialProviderKind(preparedUrl)
+    const signal = AbortSignal.timeout(4500)
+    if (kind === 'urlquery') {
+        return await fetch(`https://urlquery.net/api/htmx/search/?limit=24&offset=0&q=${encodeURIComponent(target)}&type=reports`, { signal })
+            .then(response => response.ok ? response.text() : '')
+            .catch(() => '')
+    }
+    const virusTotalKey = process.env.VIRUSTOTAL_API_KEY || process.env.VT_API_KEY
+    if (kind !== 'virustotal' || !virusTotalKey) return ''
+    return await fetch(`https://www.virustotal.com/api/v3/urls/${virusTotalApiUrlId(target)}`, {
+        headers: { 'x-apikey': virusTotalKey },
+        signal,
+    })
+        .then(response => response.ok ? response.text() : '')
+        .catch(() => '')
+}
+
+function virusTotalApiUrlId(target: string) {
+    const normalized = (() => {
+        try {
+            return new URL(target).href
+        } catch {
+            return target
+        }
+    })()
+    return Buffer.from(normalized).toString('base64url').replace(/=+$/g, '')
 }
 
 function hasParsedProviderData(tool: { id?: string; name?: string; url?: string }, text: string) {
