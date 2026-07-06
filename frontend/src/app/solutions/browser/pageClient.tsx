@@ -481,8 +481,13 @@ export default function BrowserPageClient() {
         if (!image) return null
         const rect = image.getBoundingClientRect()
         if (!rect.width || !rect.height) return null
-        const x = Math.max(0, Math.min(activeFrame.width, Math.round(((clientX - rect.left) / rect.width) * activeFrame.width)))
-        const y = Math.max(0, Math.min(activeFrame.height, Math.round(((clientY - rect.top) / rect.height) * activeFrame.height)))
+        const scale = Math.min(rect.width / activeFrame.width, rect.height / activeFrame.height)
+        const drawnWidth = activeFrame.width * scale
+        const drawnHeight = activeFrame.height * scale
+        const offsetX = (rect.width - drawnWidth) / 2
+        const offsetY = (rect.height - drawnHeight) / 2
+        const x = Math.max(0, Math.min(activeFrame.width, Math.round(((clientX - rect.left - offsetX) / drawnWidth) * activeFrame.width)))
+        const y = Math.max(0, Math.min(activeFrame.height, Math.round(((clientY - rect.top - offsetY) / drawnHeight) * activeFrame.height)))
         return { x, y }
     }, [activeFrame.height, activeFrame.width])
 

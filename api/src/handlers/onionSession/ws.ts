@@ -68,6 +68,7 @@ const DEFAULT_HEIGHT = 760
 const MAX_DURATION_MS = 60 * 60 * 1000
 const FRAME_INTERVAL_MS = 900
 const DEFAULT_BROWSER_MAX_SESSIONS = 10
+const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
 type SandboxAdmissionStatus = {
     activeSessions: number
@@ -395,7 +396,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             })
 
             browser = await chromium.launch({
-                headless: true,
+                headless: false,
                 executablePath: process.env.CHROMIUM_BIN || '/usr/bin/chromium-browser',
                 proxy: proxy ? { server: proxy } : undefined,
                 args: [
@@ -403,7 +404,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     '--disable-dev-shm-usage',
                     '--no-first-run',
                     '--no-default-browser-check',
-                    '--disable-background-networking',
+                    '--disable-blink-features=AutomationControlled',
                 ],
             })
             const context = await browser.newContext({
@@ -412,7 +413,13 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     height: clampNumber(message.height, 420, 1600, DEFAULT_HEIGHT),
                 },
                 ignoreHTTPSErrors: true,
+                userAgent: CHROME_USER_AGENT,
+                locale: 'en-US',
+                extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
                 permissions: network === 'regular' ? [] : ['clipboard-read', 'clipboard-write'],
+            })
+            await context.addInitScript(() => {
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
             })
             page = await context.newPage()
             await page.route('**/*', async (route) => {
@@ -551,7 +558,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
             const providerBodies = collectProviderResponses(toolPage, tool.name || toolUrl)
             try {
-                toolPage.setDefaultTimeout(900)
+                toolPage.setDefaultTimeout(providerTimeoutMs(tool))
                 send({
                     type: 'status',
                     state: 'profile_tool_started',
@@ -560,13 +567,14 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 })
                 const preparedUrl = providerStartUrl(tool, toolUrl, target)
                 let navigationError = await withTimeout(
-                    toolPage.goto(preparedUrl, { waitUntil: 'commit', timeout: 4500 })
+                    toolPage.goto(preparedUrl, { waitUntil: 'commit', timeout: providerTimeoutMs(tool) })
                         .then(() => '')
                         .catch(error => error instanceof Error ? error.message : String(error)),
-                    3500,
-                    'provider navigation still pending after 3.5s',
+                    providerTimeoutMs(tool),
+                    `provider navigation still pending after ${Math.round(providerTimeoutMs(tool) / 1000)}s`,
                 )
-                await toolPage.waitForLoadState('domcontentloaded', { timeout: 900 }).catch(() => undefined)
+                await toolPage.waitForLoadState('domcontentloaded', { timeout: providerTimeoutMs(tool) }).catch(() => undefined)
+                await dismissCookieOverlays(toolPage).catch(() => undefined)
                 const actionError = await interactWithProvider(toolPage, tool, target)
                 navigationError ||= actionError
                 const providerText = officialProviderKind(preparedUrl) ? await waitForProviderData(tool, toolPage, providerBodies) : providerBodies()
@@ -598,8 +606,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     })
                     return
                 }
-                const initialEvidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 900, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies())
-                const initialImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 900 }), 900, null)
+                const initialEvidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 2500, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies())
+                const initialImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 2500 }), 2500, null)
                 const initialAnalysis = analyzeToolEvidence(tool.name || toolUrl, initialEvidence)
                 let image = initialImage
                 let evidence = initialEvidence
@@ -1391,7 +1399,7 @@ export function providerSummaryText(providerText: string) {
 }
 
 async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, page: Page, providerText: () => string) {
-    const deadline = Date.now() + (isVirusTotalTool(tool) ? 20_000 : 5000)
+    const deadline = Date.now() + providerDataTimeoutMs(tool)
     let text = [providerText(), await collectRenderedText(page)].filter(Boolean).join('\n')
     while (Date.now() < deadline) {
         if (hasParsedProviderData(tool, text)) return text
@@ -1399,6 +1407,14 @@ async function waitForProviderData(tool: { id?: string; name?: string; url?: str
         text = [providerText(), await collectRenderedText(page)].filter(Boolean).join('\n')
     }
     return text
+}
+
+function providerTimeoutMs(tool: { id?: string; name?: string; url?: string }) {
+    return isVirusTotalTool(tool) ? 15_000 : isUrlQueryTool(tool) ? 10_000 : 4_000
+}
+
+function providerDataTimeoutMs(tool: { id?: string; name?: string; url?: string }) {
+    return isVirusTotalTool(tool) ? 45_000 : isUrlQueryTool(tool) ? 18_000 : 5_000
 }
 
 function hasParsedProviderData(tool: { id?: string; name?: string; url?: string }, text: string) {
