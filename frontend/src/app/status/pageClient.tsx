@@ -12,7 +12,7 @@ type DashboardProps = {
 }
 
 const REFRESH_MS = 3000
-const UPTIME_DAYS = 180
+const UPTIME_DAYS = 90
 const UPTIME_WINDOW = `${UPTIME_DAYS} days`
 
 export default function StatusDashboard({ serviceStatus, mode = 'status', incidentId }: DashboardProps) {

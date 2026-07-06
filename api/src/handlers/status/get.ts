@@ -69,7 +69,7 @@ async function loadStatusPayload() {
                     2
                 ) AS uptime_30d
             FROM service_monitor_results
-            WHERE checked_at >= NOW() - INTERVAL '180 days'
+            WHERE checked_at >= NOW() - INTERVAL '90 days'
             GROUP BY service, check_name
         )
         SELECT latest.*, COALESCE(uptime.uptime_30d, 0)::text AS uptime_30d
@@ -88,14 +88,14 @@ async function loadStatusPayload() {
                 ELSE 'up'
             END AS status
         FROM service_monitor_results
-        WHERE checked_at >= CURRENT_DATE - INTERVAL '179 days'
+        WHERE checked_at >= CURRENT_DATE - INTERVAL '89 days'
         GROUP BY service, check_name, checked_at::date
         ORDER BY service ASC, check_name ASC, date ASC
     `)
     const incidentResult = await run(`
         SELECT service, check_name, status, message, checked_at
         FROM service_monitor_results
-        WHERE checked_at >= NOW() - INTERVAL '180 days'
+        WHERE checked_at >= NOW() - INTERVAL '90 days'
           AND status <> 'up'
         ORDER BY service ASC, check_name ASC, checked_at ASC
     `)
