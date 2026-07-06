@@ -9,7 +9,12 @@ RUN bun install
 
 FROM oven/bun:1.3.11-alpine
 
-RUN apk add --no-cache varnish git openssh-client chromium docker-cli
+ARG DOCKER_SCOUT_VERSION=1.23.1
+RUN apk add --no-cache varnish git openssh-client chromium docker-cli curl tar \
+    && mkdir -p /usr/local/lib/docker/cli-plugins \
+    && curl -fsSL "https://github.com/docker/scout-cli/releases/download/v${DOCKER_SCOUT_VERSION}/docker-scout_${DOCKER_SCOUT_VERSION}_linux_amd64.tar.gz" \
+        | tar -xz -C /usr/local/lib/docker/cli-plugins docker-scout \
+    && chmod +x /usr/local/lib/docker/cli-plugins/docker-scout
 
 COPY --from=k6builder /usr/bin/k6 /usr/bin/k6
 

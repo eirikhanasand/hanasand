@@ -184,7 +184,8 @@ async function runVulnerabilityScanInternal(): Promise<VulnerabilityReport> {
     try {
         targets = await discoverTargetImages()
     } catch (error) {
-        return finishScan(startedState, [], errorMessage(error), 'Mount /var/run/docker.sock into the API container and verify Docker API access.')
+        const blocker = errorMessage(error)
+        return finishScan(startedState, isScannerSetupError(blocker) ? startedState.images : [], blocker, 'Mount /var/run/docker.sock into the API container and verify Docker API access.')
     }
 
     if (!targets.length) {
@@ -215,7 +216,7 @@ async function runVulnerabilityScanInternal(): Promise<VulnerabilityReport> {
         ? 'Install Docker CLI with the Scout plugin in the API container, or configure a supported image scanner service.'
         : null
 
-    return finishScan(currentState, reports, blocker, blockerAction)
+    return finishScan(currentState, isScannerSetupError(blocker) ? currentState.images : reports, blocker, blockerAction)
 }
 
 async function finishScan(
@@ -334,7 +335,7 @@ function dockerScoutError(error: unknown) {
     if (/ENOENT|not found|executable file/i.test(message)) {
         return 'Docker CLI or Docker Scout is unavailable in the API container.'
     }
-    if (/unknown command.*scout|docker:.*scout/i.test(message)) {
+    if (/unknown command.*scout|docker:.*scout|unknown flag: --format/i.test(message)) {
         return 'Docker CLI is installed but the Docker Scout plugin is unavailable.'
     }
     if (/permission denied|connect: permission/i.test(message)) {
@@ -345,14 +346,15 @@ function dockerScoutError(error: unknown) {
 
 function withDerivedStatus(state: StoredScannerState): VulnerabilityReport {
     const status = state.scanStatus
-    const lastFinishedAt = status.finishedAt || latestImageScanAt(state.images)
+    const images = hasOnlyScannerSetupReports(state.images) ? [] : state.images
+    const lastFinishedAt = status.finishedAt || latestImageScanAt(images)
     const staleReason = computeStaleReason(state, lastFinishedAt)
     const generatedAt = state.generatedAt || lastFinishedAt
 
     return {
         generatedAt,
-        imageCount: state.images.length,
-        images: state.images,
+        imageCount: images.length,
+        images,
         scanStatus: {
             ...status,
             enabled: !state.paused,
@@ -596,6 +598,18 @@ function arrayOfStrings(value: unknown) {
 function normalizeLogLevel(value: string | null): VulnerabilityScanLog['level'] {
     if (value === 'error' || value === 'warn' || value === 'info') return value
     return 'info'
+}
+
+function isScannerSetupError(value: string | null) {
+    return Boolean(value && /Docker (?:CLI|Scout|socket)|unknown flag: --format|unknown command.*scout/i.test(value))
+}
+
+function hasOnlyScannerSetupReports(images: ImageVulnerabilityReport[]) {
+    return Boolean(images.length && images.every(image =>
+        image.totalVulnerabilities === 0
+        && image.vulnerabilities.length === 0
+        && isScannerSetupError(image.scanError)
+    ))
 }
 
 function errorMessage(error: unknown) {
