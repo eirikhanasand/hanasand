@@ -486,18 +486,23 @@ function applyCountryEnrichment(store: any, captureId: string, enrichment: Count
 type CountryEnrichment = { country: string; confidence: number; evidence: Array<{ source: string; title: string; url?: string }> };
 
 export async function resolveCompanyCountryFromPublicRecords(company: string, fetcher: typeof fetch = fetch): Promise<CountryEnrichment> {
+  const domainCountry = countryFromCompanyDomain(company);
+  if (domainCountry) {
+    return {
+      country: domainCountry,
+      confidence: 0.68,
+      evidence: [{ source: "Public domain registry", title: `${company} uses a country-code domain for ${domainCountry}` }]
+    };
+  }
   const records = await publicCountryRecords(company, fetcher);
   const evidence = records.flatMap((record) => countryEvidenceFromRecord(company, record));
   const counts = new Map<string, number>();
   for (const item of evidence) counts.set(item.country, (counts.get(item.country) ?? 0) + 1);
   const [country, count] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
-  const domainCountry = country || countryFromCompanyDomain(company);
   return {
-    country: domainCountry,
-    confidence: country ? Math.min(0.95, count >= 2 ? 0.86 : 0.72) : domainCountry ? 0.68 : 0,
-    evidence: country
-      ? evidence.filter((item) => item.country === country).slice(0, 3).map(({ country: _country, ...item }) => item)
-      : domainCountry ? [{ source: "Public domain registry", title: `${company} uses a country-code domain for ${domainCountry}` }] : []
+    country,
+    confidence: country ? Math.min(0.95, count >= 2 ? 0.86 : 0.72) : 0,
+    evidence: evidence.filter((item) => item.country === country).slice(0, 3).map(({ country: _country, ...item }) => item)
   };
 }
 
