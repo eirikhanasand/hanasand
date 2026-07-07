@@ -5,7 +5,7 @@ import { type KeyboardEvent, type MouseEvent, type ReactNode, type WheelEvent, u
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 
-type SessionState = 'prompt' | 'queued' | 'connecting' | 'live' | 'ended'
+type SessionState = 'prompt' | 'queued' | 'connecting' | 'live' | 'ended' | 'failed'
 type SocketState = 'closed' | 'connecting' | 'open' | 'error'
 type BrowserNetwork = 'regular' | 'tor'
 type SandboxCapacity = {
@@ -439,11 +439,12 @@ export default function BrowserPageClient() {
         }
         socket.onclose = () => {
             setSocketState('closed')
-            setSessionState(current => current === 'prompt' ? current : 'ended')
+            setSessionState(current => current === 'prompt' || current === 'failed' ? current : 'ended')
             pushEvent('Sandbox broker closed.')
         }
         socket.onerror = () => {
             setSocketState('error')
+            setSessionState('failed')
             pushEvent('Sandbox broker errored.')
         }
         socket.onmessage = (message) => {
@@ -540,6 +541,7 @@ export default function BrowserPageClient() {
                 return
             }
             if (payload.type === 'navigation_error' || payload.type === 'error') {
+                setSessionState('failed')
                 pushEvent(String(payload.message || 'Sandbox navigation failed.'))
             }
         }
@@ -1505,7 +1507,8 @@ function sessionStateLabel(state: SessionState) {
     if (state === 'queued') return 'queued'
     if (state === 'connecting') return 'starting'
     if (state === 'live') return 'running'
-    if (state === 'ended') return 'closed'
+    if (state === 'ended') return 'complete'
+    if (state === 'failed') return 'failed'
     return 'ready'
 }
 
