@@ -1581,7 +1581,7 @@ function ProviderReportDetails({ tool, capture, compact = false }: { tool: Sandb
         analysis?.vendorFlagged !== undefined ? ['Vendors', `${analysis.vendorFlagged}/${analysis.vendorTotal || '?'}`] : undefined,
         analysis?.alertCount !== undefined ? ['urlquery alerts', String(analysis.alertCount)] : undefined,
         analysis?.communityCommentCount !== undefined ? ['Comments', String(analysis.communityCommentCount)] : undefined,
-        analysis?.verdict ? ['Verdict', analysis.verdict] : undefined,
+        analysis?.verdict && analysis.verdict !== 'unknown' ? ['Verdict', analysis.verdict] : undefined,
         capture.image ? ['Screenshot', 'captured'] : undefined,
         capture.error && capture.error !== 'provider_navigation_pending' ? `Error: ${capture.error}` : '',
     ].filter(Boolean) as Array<string | [string, string]>
