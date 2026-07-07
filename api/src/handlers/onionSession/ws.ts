@@ -641,6 +641,19 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     message: `${tool.name || toolUrl} provider capture started.`,
                 })
                 const preparedUrl = providerStartUrl(tool, toolUrl, target)
+                const pendingEvidence = providerPendingEvidence(preparedUrl, tool.name || toolUrl, target)
+                send({
+                    type: 'tool_capture',
+                    sessionId,
+                    id: tool.id || safeToolId(tool.name || toolUrl),
+                    name: tool.name || toolUrl,
+                    url: preparedUrl,
+                    capturedAt: startedAt,
+                    evidence: pendingEvidence,
+                    toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, pendingEvidence),
+                    target,
+                    error: 'provider_navigation_pending',
+                })
                 let navigationError = await withTimeout(
                     toolPage.goto(preparedUrl, { waitUntil: 'commit', timeout: providerTimeoutMs(tool) })
                         .then(() => '')

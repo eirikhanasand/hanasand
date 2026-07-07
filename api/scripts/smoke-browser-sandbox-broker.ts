@@ -167,6 +167,7 @@ await waitForPayload(payloads, payload => payload.type === 'frame' && payload.ur
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'virustotal' && payload.toolAnalysis.vendorFlagged !== undefined)
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery' && payload.toolAnalysis.alertCount !== undefined)
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'webcrack' && payload.webcrackLoad?.loaded === true)
+assert(payloads.some(payload => payload.type === 'tool_capture' && payload.error === 'provider_navigation_pending'), 'provider tabs surface a pending capture immediately')
 
 const ready = payloads.find(payload => payload.type === 'ready')
 assert.equal(ready?.torProxyConfigured, false, 'regular browser sandbox should not use the Tor proxy')
