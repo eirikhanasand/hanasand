@@ -47,6 +47,7 @@ type BrowserReport = {
         indicators?: string[]
         threatAssociations?: Array<{ name?: string; category?: string; confidence?: string; evidence?: string; source?: string }>
         recommendedActions?: string[]
+        markdown?: string
     }
 }
 
@@ -207,6 +208,9 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                         </ReportPanel>
                         <ReportPanel title='Resource URLs'>
                             <ReportList items={reportResourceUrls(report).slice(0, 80)} empty='No resource URLs saved.' />
+                        </ReportPanel>
+                        <ReportPanel title='Markdown export'>
+                            <pre className='max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{analystReport.markdown || 'No markdown export saved.'}</pre>
                         </ReportPanel>
                     </div>
                     <aside className='grid content-start gap-4'>
