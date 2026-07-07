@@ -806,6 +806,7 @@ export default function BrowserPageClient() {
                                 sessionState={sessionState}
                                 tools={selectedProfile.tools}
                                 toolCaptures={toolCaptures}
+                                browserCaptured={Boolean(activeImage || captures.some(capture => capture.kind === 'page' && capture.image && !capture.frameQuality?.looksBlank))}
                                 onSelect={setActiveSandboxTab}
                             />
                             <div className='flex items-center gap-2 border-b border-ui-border bg-ui-raised px-3 py-2'>
@@ -872,12 +873,14 @@ function SandboxTabStrip({
     sessionState,
     tools,
     toolCaptures,
+    browserCaptured,
     onSelect,
 }: {
     activeTab: string
     sessionState: SessionState
     tools: SandboxTool[]
     toolCaptures: Capture[]
+    browserCaptured: boolean
     onSelect: (tab: string) => void
 }) {
     return (
@@ -885,7 +888,7 @@ function SandboxTabStrip({
             <SandboxTabButton
                 active={activeTab === 'browser'}
                 label='Browser'
-                status={sessionState === 'live' ? 'live frame' : sessionState === 'ended' ? 'captured frame' : sessionStateLabel(sessionState)}
+                status={sessionState === 'live' ? 'live frame' : sessionState === 'ended' ? (browserCaptured ? 'captured frame' : 'no frame') : sessionStateLabel(sessionState)}
                 onClick={() => onSelect('browser')}
             />
             {tools.map(tool => {
