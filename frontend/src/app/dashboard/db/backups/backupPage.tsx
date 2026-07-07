@@ -49,25 +49,25 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
     const firstRestoreReady = presentations.find(({ presentation }) => presentation.restoreReady)
     const hasRestoreTargets = presentations.length > 0
     const primaryTitle = loadBlocker
-        ? 'Fix backup configuration first'
+        ? 'Fix backup config'
         : !backups.length
-            ? 'Create the first verified backup'
+            ? 'Create first backup'
             : attentionTarget
-                ? `Open logs for ${attentionTarget.backup.name}`
+                ? `Check ${attentionTarget.backup.name}`
                 : restoreReadyCount
                     ? 'Restore files are ready'
                     : hasRestoreTargets
-                        ? 'Run backup to create a verified restore point'
-                        : 'Run backup to create a restore point'
+                        ? 'Create restore point'
+                        : 'Run backup'
     const primaryDetail = loadBlocker
         ? loadBlocker.safeError
         : !backups.length
-            ? 'No backup targets are reporting yet. Start a backup check to establish the first restore point.'
+            ? 'No targets are reporting. Run backup to initialize the lane.'
             : attentionTarget
                 ? attentionTarget.presentation.safeError || attentionTarget.presentation.summary
                 : restoreReadyCount
-                    ? `${restoreReadyCount} target${restoreReadyCount === 1 ? '' : 's'} can open restore files. Last backup: ${formatRelative(lastBackup)}.`
-                    : 'Backup targets are visible, but no verified restore file is indexed yet. Run a backup first, then return for restore validation.'
+                    ? `${restoreReadyCount} target${restoreReadyCount === 1 ? '' : 's'} ready. Last backup: ${formatRelative(lastBackup)}.`
+                    : 'Targets are visible. Run backup to index the first restore file.'
     const primaryRestoreHref = firstRestoreReady ? `/dashboard/db/restore?service=${encodeURIComponent(backupServiceSlug(firstRestoreReady.backup))}` : ''
 
     function handleRun() {
@@ -150,6 +150,8 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
             {message && (
                 <p className='rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm text-ui-text shadow-sm'>{message}</p>
             )}
+
+            <BackupCommandGrid presentations={presentations} isPending={isPending} onRun={handleRun} />
 
             <div className='grid gap-4' id='backup-targets' data-backup-targets>
                 {presentations.map(({ backup, presentation }) => (
@@ -256,6 +258,74 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                 )}
             </div>
         </div>
+    )
+}
+
+function BackupCommandGrid({
+    presentations,
+    isPending,
+    onRun,
+}: {
+    presentations: Array<{ backup: BackupService; presentation: BackupPresentation }>
+    isPending: boolean
+    onRun: () => void
+}) {
+    if (!presentations.length) return null
+    return (
+        <section className={`${dashboardPanelClass} overflow-hidden`} data-backup-command-grid>
+            <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border px-4 py-3'>
+                <h2 className='text-base font-semibold text-ui-text'>Backup operator</h2>
+                <span className='text-xs font-medium text-ui-muted'>{presentations.length} target{presentations.length === 1 ? '' : 's'}</span>
+            </div>
+            <div className='overflow-x-auto'>
+                <table className='min-w-full text-left text-sm'>
+                    <thead className='border-b border-ui-border bg-ui-panel text-xs uppercase text-ui-muted'>
+                        <tr>
+                            <th className='px-4 py-2 font-semibold'>Target</th>
+                            <th className='px-3 py-2 font-semibold'>Health</th>
+                            <th className='px-3 py-2 font-semibold'>Restore</th>
+                            <th className='px-3 py-2 font-semibold'>Last file</th>
+                            <th className='px-3 py-2 font-semibold'>Storage</th>
+                            <th className='px-4 py-2 text-right font-semibold'>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className='divide-y divide-ui-border'>
+                        {presentations.map(({ backup, presentation }) => (
+                            <tr key={backup.id} className='text-ui-text'>
+                                <td className='px-4 py-3 font-semibold'>{backup.name}</td>
+                                <td className='px-3 py-3'>
+                                    <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${healthClasses(presentation.healthTone)}`}>{presentation.healthLabel}</span>
+                                </td>
+                                <td className='px-3 py-3 font-medium'>{presentation.restoreReady ? 'Ready' : 'Run backup'}</td>
+                                <td className='px-3 py-3 text-ui-muted'>{presentation.latestFile}</td>
+                                <td className='max-w-72 px-3 py-3 text-ui-muted'><span className='wrap-break-word'>{presentation.storageTarget}</span></td>
+                                <td className='px-4 py-3'>
+                                    <div className='flex justify-end gap-2'>
+                                        <button
+                                            type='button'
+                                            onClick={onRun}
+                                            disabled={isPending}
+                                            className='inline-flex min-h-9 items-center gap-2 rounded-md border border-ui-primary bg-ui-primary/15 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
+                                        >
+                                            <DatabaseBackup className='h-4 w-4' />
+                                            {isPending ? 'Running' : 'Run'}
+                                        </button>
+                                        <Link
+                                            href={`/dashboard/db/restore?service=${encodeURIComponent(backupServiceSlug(backup))}`}
+                                            className='inline-flex min-h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised'
+                                            title={presentation.restoreReady ? 'Open restore files.' : presentation.restoreDisabledReason}
+                                        >
+                                            <RotateCcw className='h-4 w-4' />
+                                            Restore
+                                        </Link>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </section>
     )
 }
 

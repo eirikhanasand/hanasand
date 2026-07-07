@@ -91,6 +91,8 @@ assert.match(apiRoutes, /fastify\.post\('\/backup', postDatabaseBackup\)/, 'API 
 assert.match(apiRoutes, /fastify\.get\('\/backup\/files', getDatabaseBackupFiles\)/, 'API should expose GET /backup/files')
 assert.match(apiRoutes, /fastify\.post\('\/backup\/restore', postDatabaseBackupRestore\)/, 'API should expose POST /backup/restore')
 assert.match(backupPage, /presentations\.map/, 'backup actions should render inside each backup target card')
+assert.match(backupPage, /data-backup-command-grid/, 'backup page should expose a command grid before target details')
+assert.match(backupPage, /Backup operator/, 'backup page should start from operator commands')
 assert.match(backupPage, /restoreDisabledReason/, 'restore action state should carry a visible reason')
 assert.match(backupPage, /data-backup-restore-proof/, 'backup page should surface restore check state per target')
 assert.match(backupPage, /Restore actions/, 'backup page should label the restore action section')

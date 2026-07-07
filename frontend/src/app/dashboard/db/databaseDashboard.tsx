@@ -14,19 +14,12 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
     const primaryHref = unavailable ? '/dashboard/logs' : activeQueryCount > 0 ? '#active-queries' : '#storage-inventory'
     const primaryAction = unavailable ? 'Open logs' : activeQueryCount > 0 ? 'Review queries' : 'Review inventory'
     const primaryTitle = unavailable
-        ? 'Restore telemetry before triage'
+        ? 'Restore telemetry'
         : longRunningQueries.length
-            ? 'Review long-running queries now'
+            ? 'Long query running'
             : activeQueryCount > 0
-                ? 'Watch active query pressure'
-                : 'Confirm inventory and backup readiness'
-    const primaryDetail = unavailable
-        ? overview.health.detail || overview.health.message
-        : longRunningQueries.length
-            ? `${longRunningQueries.length} query${longRunningQueries.length === 1 ? '' : 'ies'} exceeded the ${formatTime(overview.longRunningThresholdSeconds)} watch threshold.`
-            : activeQueryCount > 0
-                ? `${activeQueryCount} active query${activeQueryCount === 1 ? '' : 'ies'} are running with no long-running rows right now.`
-                : `${overview.databaseCount ?? databaseRows.length} databases are indexed; use the inventory to confirm storage and backup context.`
+                ? 'Active queries'
+                : 'Database ready'
     const queryStateText = unavailable
         ? 'Long-running query state: telemetry reconnecting.'
         : longRunningQueries.length
@@ -34,61 +27,59 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
             : 'Long-running query state: no long-running queries right now.'
     const monitorMetrics = [
         { label: 'Clusters', value: formatNumberMetric(overview.clusterCount) },
-        { label: 'Databases', value: formatNumberMetric(overview.databaseCount) },
+        { label: 'DBs', value: formatNumberMetric(overview.databaseCount) },
+        { label: 'Tables', value: formatNumberMetric(overview.clusters.reduce((total, cluster) => total + cluster.databases.reduce((count, database) => count + (database.tableCount || 0), 0), 0)) },
         { label: 'Storage', value: overview.totalSizeBytes === null ? 'Metering' : formatBytes(overview.totalSizeBytes) },
-        { label: 'Active queries', value: String(activeQueryCount) },
-        { label: 'Long-running', value: String(longRunningQueries.length) },
+        { label: 'Active', value: String(activeQueryCount) },
+        { label: 'Long', value: String(longRunningQueries.length) },
     ]
 
     return (
         <DashboardPage>
             <DashboardHeader eyebrow='Operations' title='Database' actions={<DatabaseActions />} />
 
-            <DashboardPanel className={`p-4 ${unavailable ? 'border-ui-danger/30 bg-ui-danger/10' : 'border-ui-success/30 bg-ui-success/10'}`}>
-                <div className='flex flex-wrap items-start justify-between gap-3'>
-                    <div className='flex min-w-0 gap-3'>
-                        {unavailable ? <AlertTriangle className='mt-0.5 h-5 w-5 shrink-0 text-ui-danger' /> : <ShieldCheck className='mt-0.5 h-5 w-5 shrink-0 text-ui-success' />}
-                        <div className='min-w-0'>
-                            <p className={`mb-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${unavailable ? 'border-ui-danger/30 bg-ui-danger/15 text-ui-danger' : 'border-ui-success/30 bg-ui-success/15 text-ui-success'}`}>
-                                {unavailable ? 'Unavailable' : 'Live'}
-                            </p>
-                            <p className='text-sm font-semibold text-ui-text'>{overview.health.message}</p>
-                            {overview.health.detail && <p className='mt-1 text-sm text-ui-muted'>{overview.health.detail}</p>}
-                        </div>
-                    </div>
-                    <p className='shrink-0 text-xs font-medium text-ui-muted'>Checked {formatDateTime(overview.generatedAt)}</p>
-                </div>
-            </DashboardPanel>
-
-            <DashboardPanel className='p-4'>
-                <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-db-primary-triage>
-                    <div className='min-w-0'>
-                        <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
-                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>Recommended next</span>
-                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{activeQueryCount} active</span>
-                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{longRunningQueries.length} long-running</span>
-                        </div>
-                        <h2 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h2>
-                        <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
-                        <p className='mt-2 text-sm font-semibold text-ui-text' data-db-long-running-state>{queryStateText}</p>
-                        <div className='mt-3 grid gap-2 sm:grid-cols-5' data-db-monitor-metrics>
-                            {monitorMetrics.map(metric => (
-                                <div key={metric.label} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2'>
-                                    <p className='text-[11px] font-semibold uppercase tracking-[0.08em] text-ui-muted'>{metric.label}</p>
-                                    <p className='mt-1 text-sm font-semibold text-ui-text'>{metric.value}</p>
+            <section className='grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]' data-db-primary-triage>
+                <DashboardPanel className={`p-3 ${unavailable ? 'border-ui-danger/30 bg-ui-danger/10' : 'border-ui-success/30 bg-ui-success/10'}`}>
+                    <div className='flex flex-wrap items-center justify-between gap-3'>
+                        <div className='flex min-w-0 items-center gap-3'>
+                            {unavailable ? <AlertTriangle className='h-5 w-5 shrink-0 text-ui-danger' /> : <ShieldCheck className='h-5 w-5 shrink-0 text-ui-success' />}
+                            <div className='min-w-0'>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${unavailable ? 'border-ui-danger/30 bg-ui-danger/15 text-ui-danger' : 'border-ui-success/30 bg-ui-success/15 text-ui-success'}`}>
+                                        {unavailable ? 'Offline' : 'Live'}
+                                    </span>
+                                    <h2 className='text-base font-semibold text-ui-text'>{primaryTitle}</h2>
                                 </div>
-                            ))}
+                                <p className='mt-1 line-clamp-1 text-sm text-ui-muted'>{unavailable ? overview.health.detail || overview.health.message : queryStateText}</p>
+                            </div>
                         </div>
+                        <p className='shrink-0 text-xs font-medium text-ui-muted'>{formatDateTime(overview.generatedAt)}</p>
                     </div>
-                    <Link
-                        href={primaryHref}
-                        className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
-                        data-db-primary-action
-                    >
+                    <div className='mt-3 grid gap-2 sm:grid-cols-3 xl:grid-cols-6' data-db-monitor-metrics>
+                        {monitorMetrics.map(metric => (
+                            <div key={metric.label} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2'>
+                                <p className='text-[11px] font-semibold uppercase text-ui-muted'>{metric.label}</p>
+                                <p className='mt-1 text-sm font-semibold text-ui-text'>{metric.value}</p>
+                            </div>
+                        ))}
+                    </div>
+                </DashboardPanel>
+                <DashboardPanel className='grid min-w-52 gap-2 p-3'>
+                    <Link href={primaryHref} className='inline-flex min-h-10 items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40' data-db-primary-action>
                         {primaryAction}
                     </Link>
-                </div>
-            </DashboardPanel>
+                    <Link href='/dashboard/db/backups' className='inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
+                        <DatabaseBackup className='h-4 w-4' />
+                        Backups
+                    </Link>
+                    <Link href='/dashboard/db/restore' className='inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
+                        <ArchiveRestore className='h-4 w-4' />
+                        Restore
+                    </Link>
+                </DashboardPanel>
+            </section>
+
+            {!unavailable && <DatabaseWorkbench overview={overview} />}
 
             <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-db-telemetry-disclosure>
                 <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
@@ -162,8 +153,6 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                     )}
                 </DashboardPanel>
             </div>
-
-            {!unavailable && <DatabaseWorkbench overview={overview} />}
 
             <div className='grid gap-4 xl:grid-cols-[1fr_0.7fr]'>
                 <DashboardPanel className='p-4' id='storage-inventory'>

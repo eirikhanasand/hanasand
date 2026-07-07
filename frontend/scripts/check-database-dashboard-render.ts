@@ -90,8 +90,8 @@ const unavailableMarkup = renderToStaticMarkup(React.createElement(DatabaseDashb
     } satisfies DatabaseOverview,
 }))
 
-assert.match(unavailableMarkup, /Database metrics unavailable/)
-assert.match(unavailableMarkup, /Unavailable/)
+assert.match(unavailableMarkup, /Restore telemetry/)
+assert.match(unavailableMarkup, /Offline/)
 assert.match(unavailableMarkup, /Query telemetry unavailable/)
 assert.doesNotMatch(unavailableMarkup, /password authentication failed/i)
 

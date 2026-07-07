@@ -66,10 +66,10 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
 
     return (
         <section className={`${dashboardPanelClass} p-4`} data-db-workbench>
-            <div className='flex flex-wrap items-start justify-between gap-3'>
+            <div className='flex flex-wrap items-center justify-between gap-3'>
                 <div>
                     <h2 className='text-base font-semibold text-ui-text'>Database workbench</h2>
-                    <p className='mt-1 text-sm text-ui-muted'>Inspect table rows, run a liveness check, or execute SQL as the system admin connection.</p>
+                    <p className='mt-1 text-xs text-ui-muted'>Rows, liveness, and SQL execution.</p>
                 </div>
                 <button
                     type='button'
@@ -82,8 +82,8 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
                 </button>
             </div>
 
-            <div className='mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]'>
-                <div className='rounded-lg border border-ui-border bg-ui-canvas p-3'>
+            <div className='mt-4 grid gap-3 xl:grid-cols-[0.9fr_1.1fr]'>
+                <div className='rounded-md border border-ui-border bg-ui-canvas p-3'>
                     <div className='grid gap-3 sm:grid-cols-[1fr_0.7fr_0.45fr_auto] sm:items-end'>
                         <label className='grid gap-1.5 text-sm'>
                             <span className='text-xs font-semibold uppercase text-ui-muted'>Table</span>
@@ -124,7 +124,7 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
                     </div>
                 </div>
 
-                <div className='rounded-lg border border-ui-border bg-ui-canvas p-3'>
+                <div className='rounded-md border border-ui-border bg-ui-canvas p-3'>
                     <label className='grid gap-1.5 text-sm'>
                         <span className='text-xs font-semibold uppercase text-ui-muted'>SQL</span>
                         <textarea
@@ -149,8 +149,8 @@ export default function DatabaseWorkbench({ overview }: { overview: DatabaseOver
             {message && <p className='mt-3 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text'>{message}</p>}
             {result ? <QueryResultTable result={result} /> : (
                 <div className='mt-3 rounded-md border border-dashed border-ui-border bg-ui-canvas px-3 py-3 text-sm text-ui-muted'>
-                    <p className='font-semibold text-ui-text'>Ready for inspection</p>
-                    <p className='mt-1'>Choose a table or run SQL to see rows here.</p>
+                    <p className='font-semibold text-ui-text'>Result grid</p>
+                    <p className='mt-1'>Inspect rows or execute SQL.</p>
                 </div>
             )}
         </section>
