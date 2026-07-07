@@ -30,6 +30,12 @@ assertIncludes(liveClient, 'networkPeerSummary(latestNetwork)', 'browser export 
 assertIncludes(liveClient, '## Network', 'markdown export must include network evidence')
 assertIncludes(liveClient, '## Script artifacts', 'markdown export must include script evidence')
 assertIncludes(liveClient, '## Indicators', 'markdown export must include copyable indicators')
+assertIncludes(liveClient, 'Run evidence summary', 'live browser workspace must summarize analyst evidence before raw drilldown')
+assertIncludes(liveClient, 'Final URL', 'live browser workspace must expose final URL')
+assertIncludes(liveClient, 'DNS / IP / certificate peers', 'live browser workspace must expose peer/certificate evidence')
+assertIncludes(liveClient, 'Hashed downloads', 'live browser workspace must expose download hash evidence')
+assertIncludes(liveClient, 'Script hashes', 'live browser workspace must expose script hash evidence')
+assertIncludes(liveClient, 'Copyable indicators', 'live browser workspace must expose IOC count')
 
 for (const token of [
     'Browser sandbox report',

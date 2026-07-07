@@ -1258,6 +1258,10 @@ function EvidenceWorkspace({
     const toolCaptures = captures.filter(capture => capture.kind === 'tool')
     const latestPage = pageCaptures[0]
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
+    const scriptHashCount = new Set(pageCaptures.flatMap(capture => [
+        ...(capture.evidence?.scripts || []).map(script => script.sha256),
+        ...(capture.evidence?.deobfuscationTasks || []).map(task => task.sha256),
+    ]).filter(Boolean)).size
 
     return (
         <section className='min-h-0 min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
@@ -1276,6 +1280,19 @@ function EvidenceWorkspace({
                     ) : (
                         <p className='text-xs leading-5 text-ui-muted'>No browser screenshot has arrived. The run is not treated as successful until a frame, provider result, or explicit failure is visible here.</p>
                     )}
+                </EvidencePanel>
+
+                <EvidencePanel title='Run evidence summary' status={latestPage ? 'Ready for review' : 'Waiting'}>
+                    <div className='grid gap-2 text-xs text-ui-muted sm:grid-cols-2'>
+                        <EvidenceFact label='Final URL' value={summary.urlTimeline.at(-1)?.url || latestPage?.url || 'unknown'} mono />
+                        <EvidenceFact label='URL states' value={String(summary.urlTimeline.length || pageCaptures.length || 0)} />
+                        <EvidenceFact label='DNS / IP / certificate peers' value={String(networkPeerSummary(latestNetwork).length)} />
+                        <EvidenceFact label='Network requests' value={String(latestNetwork?.requestCount || 0)} />
+                        <EvidenceFact label='Hashed downloads' value={String(latestNetwork?.downloads?.filter(download => download.sha256).length || 0)} />
+                        <EvidenceFact label='Script hashes' value={String(scriptHashCount)} />
+                        <EvidenceFact label='Provider captures' value={`${toolCaptures.length}/${profile.tools.length}`} />
+                        <EvidenceFact label='Copyable indicators' value={String(summary.indicators.length)} />
+                    </div>
                 </EvidencePanel>
 
                 <EvidencePanel title='Analyst review list' status={`${summary.reviewQueue.length} item${summary.reviewQueue.length === 1 ? '' : 's'}`}>
@@ -1419,6 +1436,15 @@ function EvidencePanel({ title, status, children }: { title: string; status: str
                 <span className='rounded border border-ui-border bg-ui-panel px-1.5 py-0.5 text-[10px] font-semibold text-ui-muted'>{status}</span>
             </div>
             {children}
+        </div>
+    )
+}
+
+function EvidenceFact({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+    return (
+        <div className='min-w-0 rounded-md border border-ui-border bg-ui-panel p-2'>
+            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className={`mt-1 truncate font-semibold text-ui-text ${mono ? 'font-mono text-[11px]' : ''}`}>{value}</p>
         </div>
     )
 }
