@@ -30,7 +30,7 @@ const normalSidebarLinks = [
 
 const privilegedSidebarLinks = [
     'Collection',
-    'Recent attacks',
+    'Attacks',
     'Latest activity',
     'Actor profiles',
     'Sources',

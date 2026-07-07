@@ -946,16 +946,20 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                 {compact ? (
                     <details className='border-b border-ui-border bg-ui-canvas' data-workbench-stats-disclosure>
                         <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20 sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                            <span>Workbench counters</span>
+                            <span>Attack summary</span>
                             <span className='text-xs font-medium text-ui-muted'>{workbenchStats.total} cases · {workbenchStats.highPriority} high · {workbenchStats.latest}</span>
                         </summary>
                         {workbenchStatsGrid}
                     </details>
                 ) : workbenchStatsGrid}
 
-                <div className={`grid min-w-0 ${compact ? 'min-h-[480px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_300px]' : 'min-h-[480px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)_330px]'}`}>
+                <div className={`grid min-w-0 ${compact ? 'min-h-[480px] xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)_280px]' : 'min-h-[480px] xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)_300px]'}`}>
                     <aside className='min-w-0 border-b border-ui-border bg-ui-canvas xl:border-b-0 xl:border-r'>
                         <div className='grid gap-3 border-b border-ui-border p-4'>
+                            <div>
+                                <h2 className='text-sm font-semibold text-ui-text'>Attack queue</h2>
+                                <p className='mt-0.5 text-xs text-ui-muted'>{cases.length} matching items</p>
+                            </div>
                             <label className='relative block'>
                                 <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-muted' />
                                 <input
@@ -3084,14 +3088,28 @@ function CaseRouteStrip({ item, caseDetail, alertDetail, actionDeliveries, orgCo
         ...((item.workflowPath || []).filter(step => step.id.includes('watchlist')).map(step => step.entityId || step.detail)),
     ].filter(Boolean)
     const caseHref = item.caseDetailHref
-    const routeCells: Array<{ id: string, label: string, value: string, tone: WorkbenchWorkflowStep['status'], href?: string }> = [
+    type RouteCell = { id: string, label: string, value: string, tone: WorkbenchWorkflowStep['status'], href?: string }
+    const hasCaseLane = Boolean(detail?.case || caseHref)
+    const caseRouteCells: RouteCell[] = hasCaseLane ? [
         {
             id: 'case_state',
             label: 'Case state',
             value: `${label(detail?.case?.status || item.status)} · ${detail?.case?.assignedOwner || item.owner || 'unassigned'}`,
-            tone: detail?.case?.status === 'closed' ? 'blocked' : caseHref || detail ? 'ready' : 'needs_action',
+            tone: detail?.case?.status === 'closed' ? 'blocked' : 'ready',
             href: caseHref,
         },
+    ] : []
+    const auditRouteCells: RouteCell[] = hasCaseLane ? [
+        {
+            id: 'audit_scope',
+            label: 'Audit',
+            value: `${timelineCount} rows · ${workflowEventCount} events`,
+            tone: timelineCount || workflowEventCount ? 'ready' : caseHref ? 'needs_action' : 'blocked',
+            href: caseHref ? caseExportHref(caseHref) : undefined,
+        },
+    ] : []
+    const routeCells: RouteCell[] = [
+        ...caseRouteCells,
         {
             id: 'watchlist_scope',
             label: 'Watchlist',
@@ -3110,16 +3128,10 @@ function CaseRouteStrip({ item, caseDetail, alertDetail, actionDeliveries, orgCo
             id: 'delivery_scope',
             label: 'Delivery',
             value: delivery ? `${label(delivery.status)} · ${relativeTime(delivery.attemptedAt)}` : activeDestination ? `${activeDestination.name} ready` : 'destination needed',
-            tone: delivery ? delivery.status === 'failed' || delivery.status === 'skipped' ? 'blocked' : 'ready' : activeDestination ? 'needs_action' : 'blocked',
+            tone: delivery ? delivery.status === 'failed' || delivery.status === 'skipped' ? 'blocked' : 'ready' : 'needs_action',
             href: deliveryLedgerHref(orgContext, item, delivery),
         },
-        {
-            id: 'audit_scope',
-            label: 'Audit',
-            value: `${timelineCount} rows · ${workflowEventCount} events`,
-            tone: timelineCount || workflowEventCount ? 'ready' : caseHref ? 'needs_action' : 'blocked',
-            href: caseHref ? caseExportHref(caseHref) : undefined,
-        },
+        ...auditRouteCells,
     ]
 
     return (
@@ -3215,7 +3227,7 @@ function SelectedWorkflowHandoff({ item, caseDetail, alertDetail, actionDeliveri
     )
 }
 
-function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetailState | undefined, alertDetail: AlertDetailState | undefined, actionDeliveries: WorkbenchDeliveryEvidence[], orgContext: WorkbenchOrgContext | undefined): Array<{
+type SelectedWorkflowHandoffStep = {
     id: string
     label: string
     status: WorkbenchWorkflowStep['status']
@@ -3224,7 +3236,9 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
     href?: string
     actionLabel: string
     blockedReason: string
-}> {
+}
+
+function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetailState | undefined, alertDetail: AlertDetailState | undefined, actionDeliveries: WorkbenchDeliveryEvidence[], orgContext: WorkbenchOrgContext | undefined): SelectedWorkflowHandoffStep[] {
     const detail = caseDetail?.status === 'ready' ? caseDetail.detail : undefined
     const caseHref = item.caseDetailHref
     const alertHref = item.kind === 'dwm_alert' && item.persistent ? `/api/dwm/alerts/${encodeURIComponent(item.id)}` : undefined
@@ -3253,7 +3267,7 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
     const deliveryStatus: WorkbenchWorkflowStep['status'] = delivered ? 'ready' : delivery || activeDestination || item.kind === 'dwm_alert' ? 'needs_action' : 'blocked'
     const auditStatus: WorkbenchWorkflowStep['status'] = auditCount ? 'ready' : caseDetail?.status === 'loading' || caseHref ? 'needs_action' : 'blocked'
 
-    return [
+    const steps: SelectedWorkflowHandoffStep[] = [
         {
             id: 'watchlist',
             label: 'Watchlist',
@@ -3315,6 +3329,7 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
             blockedReason: 'Case timeline needed',
         },
     ]
+    return steps.filter(step => caseHref || detail || (step.id !== 'case' && step.id !== 'audit'))
 }
 
 function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgContext }: { item: WorkbenchCase, decision?: LocalDecision, caseDetail?: CaseDetailState, actionMessage: WorkbenchActionOutcome | null, orgContext?: WorkbenchOrgContext }) {
