@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 
+type NetworkRequestRow = { url?: string; method?: string; status?: number; failure?: string; host?: string; mimeType?: string; durationMs?: number; initiator?: string; ip?: string; asn?: string; port?: number; protocol?: string; tlsSubject?: string; tlsIssuer?: string }
+
 type BrowserReport = {
     target?: string
     finalUrl?: string
@@ -26,7 +28,15 @@ type BrowserReport = {
         verdict?: string
         evidenceChecklist?: Record<string, number>
         providerReports?: Array<{ tool?: string; status?: string; verdict?: string; url?: string; vendorFlagged?: number; vendorTotal?: number; alertCount?: number; communityCommentCount?: number }>
-        networkEvidence?: { requests?: number; responses?: number; blockedOrFailed?: number; contactedDomains?: string[]; redirectChain?: string[] }
+        networkEvidence?: {
+            requests?: number
+            responses?: number
+            blockedOrFailed?: number
+            contactedDomains?: string[]
+            redirectChain?: string[]
+            downloads?: Array<{ url?: string; fileName?: string; bytes?: number; sha256?: string; hashStatus?: string }>
+            recentRequests?: NetworkRequestRow[]
+        }
         scriptArtifacts?: Array<{ scriptId?: string; source?: string; sha256?: string; assessment?: string; summary?: string }>
         recommendedActions?: string[]
     }
@@ -117,6 +127,46 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 `${analystReport.networkEvidence?.blockedOrFailed || 0} blocked/failed`,
                                 ...((analystReport.networkEvidence?.redirectChain || []).map(url => `redirect: ${url}`)),
                             ]} empty='No network evidence saved.' />
+                            {analystReport.networkEvidence?.recentRequests?.length ? (
+                                <div className='mt-3 max-h-96 overflow-auto rounded-md border border-ui-border'>
+                                    <table className='w-full min-w-[56rem] border-collapse text-left text-xs'>
+                                        <thead className='sticky top-0 bg-ui-raised text-ui-muted'>
+                                            <tr>
+                                                <th className='border-b border-ui-border px-2 py-1'>Method</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>Status</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>Host</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>MIME</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>Peer</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>Time</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>Initiator</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>URL</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {analystReport.networkEvidence.recentRequests.slice(-40).map((request, index) => (
+                                                <tr key={`${request.url}-${request.status}-${request.failure}-${index}`}>
+                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.method || 'GET'}</td>
+                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.status || request.failure || ''}</td>
+                                                    <td className='max-w-36 truncate border-b border-ui-border/60 px-2 py-1 font-mono'>{request.host || ''}</td>
+                                                    <td className='max-w-40 truncate border-b border-ui-border/60 px-2 py-1'>{request.mimeType || ''}</td>
+                                                    <td className='max-w-64 truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{networkPeer(request)}</td>
+                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.durationMs !== undefined ? `${request.durationMs}ms` : ''}</td>
+                                                    <td className='max-w-48 truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{request.initiator || ''}</td>
+                                                    <td className='max-w-[28rem] truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-text'>{request.url || ''}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : null}
+                            {analystReport.networkEvidence?.downloads?.length ? (
+                                <pre className='mt-3 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{analystReport.networkEvidence.downloads.map(download => [
+                                    download.fileName || download.url || 'download',
+                                    download.bytes !== undefined ? `${download.bytes} bytes` : '',
+                                    download.sha256 ? `sha256 ${download.sha256}` : download.hashStatus || '',
+                                    download.url && download.fileName ? download.url : '',
+                                ].filter(Boolean).join('\n')).join('\n\n')}</pre>
+                            ) : null}
                         </ReportPanel>
                         <ReportPanel title='Script artifacts'>
                             <ReportList items={(analystReport.scriptArtifacts || []).map(script => [
@@ -142,6 +192,16 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
             </section>
         </main>
     )
+}
+
+function networkPeer(request: NetworkRequestRow) {
+    return [
+        request.ip ? `${request.ip}${request.port ? `:${request.port}` : ''}` : '',
+        request.asn ? `AS${request.asn}` : '',
+        request.protocol || '',
+        request.tlsSubject ? `cert ${request.tlsSubject}` : '',
+        request.tlsIssuer || '',
+    ].filter(Boolean).join(' · ')
 }
 
 function ReportPanel({ title, children }: { title: string; children: React.ReactNode }) {
