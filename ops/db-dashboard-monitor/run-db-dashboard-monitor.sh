@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-CURRENT_DEPLOY_DIR="/home/hanasand/hanasand-deploy-clean/ops/db-dashboard-monitor"
+CURRENT_DEPLOY_DIR="/home/hanasand/hanasand/ops/db-dashboard-monitor"
 APP_DIR="${HANASAND_DB_MONITOR_DIR:-$CURRENT_DEPLOY_DIR}"
 ENV_FILE="${HANASAND_DB_MONITOR_ENV:-/home/hanasand/monitor-state/db-dashboard-monitor.env}"
 LOG_FILE="${HANASAND_DB_MONITOR_LOG:-/home/hanasand/monitor-state/db-dashboard-monitor.log}"
