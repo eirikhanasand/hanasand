@@ -301,7 +301,7 @@ async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<
   return {
     ...item,
     ...parsed,
-    actor: clean(parsed.actor || item.actor || item.sourceName || "Unknown actor"),
+    actor: cleanActorName(parsed.actor || item.actor || item.sourceName || "Unknown actor"),
     company: clean(parsed.company || parsed.victimName || item.company || item.victimName || ""),
     claimedData: clean(parsed.claimedData || item.claimedData || "Not disclosed by TA"),
     claimedDataSize: clean(parsed.claimedDataSize || item.claimedDataSize || dataSizeFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"),
@@ -337,7 +337,7 @@ function fallbackParse(item: ExposureClaimItem, at: string) {
     match(text, /\bvictim\s*:?\s+([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})/i) ||
     match(text, /\b(?:listed|lists|added|adds|claims?|target(?:ed|ing))\s+([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})/i) ||
     match(text, /:\s*([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})$/);
-  const actor = item.actor || match(text, /^([A-Z][A-Za-z0-9_.-]{2,40})\b/) || item.sourceName || "Unknown actor";
+  const actor = cleanActorName(item.actor || match(text, /^([A-Z][A-Za-z0-9_.-]{2,40})\b/) || item.sourceName || "Unknown actor");
   const claimedData = meaningfulClaimedData(item.claimedData) || claimedDataFromText(text) || "Not disclosed by TA";
   const claimedDataSize = item.claimedDataSize || dataSizeFromText(text) || "Not disclosed by TA";
   const country = item.country || item.claimedCountry || countryFromText(text) || "Not disclosed by TA";
@@ -449,6 +449,11 @@ function stripVictimFeedPrefix(value: unknown) {
   return clean(String(value ?? "")
     .replace(/^Ransomware\.live Victim Feed\s+/i, "")
     .replace(/^[^A-Za-z0-9]+/, ""));
+}
+
+function cleanActorName(value: unknown) {
+  return clean(stripVictimFeedPrefix(value)
+    .replace(/\s+(?:has just published a new victim|claims? victim|claim(?:ed|s)? victim|listed victim|added victim|published victim)\b.*$/i, ""));
 }
 
 function claimedDataFromText(text: string) {

@@ -157,7 +157,7 @@ async function parseExposureClaim(request) {
 
   const content = completion?.message ?? completion?.choices?.[0]?.message?.content ?? completion?.choices?.[0]?.text ?? "";
   const parsed = parseJsonObject(content) ?? {};
-  const actor = clean(parsed.actor ?? parsed.threatActor ?? hints.actor ?? item?.actor ?? item?.sourceName ?? "Unknown actor");
+  const actor = cleanActorName(parsed.actor ?? parsed.threatActor ?? hints.actor ?? item?.actor ?? item?.sourceName ?? "Unknown actor");
   const company = clean(parsed.company ?? parsed.victimName ?? parsed.victim ?? hints.company ?? item?.company ?? item?.victimName ?? "");
   const claimedData = clean(parsed.claimedData ?? parsed.dataClaim ?? hints.claimedData ?? item?.claimedData ?? "new victim claim");
   const country = clean(parsed.country ?? parsed.claimedCountry ?? hints.country ?? item?.country ?? item?.claimedCountry ?? "");
@@ -254,7 +254,7 @@ function deterministicHints(item) {
     match(text, /\bvictim\s*:?\s+([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})/i) ||
     match(text, /\b(?:listed|lists|added|adds|published|claims?|target(?:ed|ing))\s+(?:victim\s*:?\s*)?([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})/i) ||
     match(text, /:\s*([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})$/);
-  const actor = clean(item?.actor) || match(text, /^([A-Z][A-Za-z0-9_. -]{2,50})\b/) || clean(item?.sourceName) || "Unknown actor";
+  const actor = cleanActorName(item?.actor) || match(text, /^([A-Z][A-Za-z0-9_. -]{2,50})\b/) || cleanActorName(item?.sourceName) || "Unknown actor";
   const claimedData = clean(item?.claimedData) || match(text, /\b(\d+(?:\.\d+)?\s*(?:GB|TB|MB)\s+(?:claimed|leaked|stolen|exfiltrated|data))/i) || "new victim claim";
   const country = clean(item?.country ?? item?.claimedCountry) || match(text, /\bcountry\s*:?\s*([A-Z][A-Za-z .'-]{1,60}|[A-Z]{2})\b/i);
   return {
@@ -321,6 +321,10 @@ function match(text, regex) {
 
 function clean(value) {
   return String(value ?? "").replace(/\s+/g, " ").replace(/[.。]+$/, "").trim();
+}
+
+function cleanActorName(value) {
+  return clean(value).replace(/\s+(?:has just published a new victim|claims? victim|claim(?:ed|s)? victim|listed victim|added victim|published victim)\b.*$/i, "");
 }
 
 function clamp(value) {
