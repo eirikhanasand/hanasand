@@ -92,19 +92,17 @@ const DEFAULT_LOGS: VulnerabilityScanLog[] = [{
 let activeScan: Promise<VulnerabilityReport> | null = null
 
 export async function getVulnerabilityReport(): Promise<VulnerabilityReport> {
-    const [state, targetCount] = await Promise.all([
-        readState(),
-        discoverTargetImages().then(images => images.length).catch(() => 0),
-    ])
+    const state = await readState()
+    const targetImages = await discoverTargetImages().catch(() => null)
 
     return withDerivedStatus({
         ...state,
         imageCount: state.images.length,
         scanStatus: {
             ...state.scanStatus,
-            targetCount,
+            targetCount: targetImages?.length ?? state.scanStatus.targetCount,
         },
-    })
+    }, targetImages)
 }
 
 export async function runDueVulnerabilityScan() {
@@ -208,15 +206,17 @@ async function runVulnerabilityScanInternal(): Promise<VulnerabilityReport> {
         reports.push(await scanImage(image))
     }
 
-    const failed = reports.filter(report => report.scanError).length
-    const blocker = failed === reports.length
-        ? reports[0]?.scanError || 'Every image scan failed.'
+    const activeTargets = await discoverTargetImages().catch(() => targets)
+    const activeReports = filterCurrentImageReports(reports, activeTargets)
+    const failed = activeReports.filter(report => report.scanError).length
+    const blocker = activeReports.length && failed === activeReports.length
+        ? activeReports[0]?.scanError || 'Every image scan failed.'
         : null
     const blockerAction = blocker
         ? 'Install Trivy in the API container, verify Docker socket access, or configure a supported image scanner service.'
         : null
 
-    return finishScan(currentState, isScannerSetupError(blocker) ? currentState.images : reports, blocker, blockerAction)
+    return finishScan(currentState, isScannerSetupError(blocker) ? currentState.images : activeReports, blocker, blockerAction)
 }
 
 async function finishScan(
@@ -342,9 +342,10 @@ function scannerError(error: unknown) {
     return message
 }
 
-function withDerivedStatus(state: StoredScannerState): VulnerabilityReport {
+function withDerivedStatus(state: StoredScannerState, targetImages: string[] | null = null): VulnerabilityReport {
     const status = state.scanStatus
-    const images = hasOnlyScannerSetupReports(state.images) ? [] : state.images
+    const currentImages = filterCurrentImageReports(state.images, targetImages)
+    const images = hasOnlyScannerSetupReports(currentImages) ? [] : currentImages
     const lastFinishedAt = status.finishedAt || latestImageScanAt(images)
     const staleReason = computeStaleReason(state, lastFinishedAt)
     const generatedAt = state.generatedAt || lastFinishedAt
@@ -366,6 +367,12 @@ function withDerivedStatus(state: StoredScannerState): VulnerabilityReport {
             logs: state.logs,
         },
     }
+}
+
+export function filterCurrentImageReports(images: ImageVulnerabilityReport[], targetImages: string[] | null) {
+    if (!targetImages) return images
+    const targets = new Set(targetImages)
+    return images.filter(image => targets.has(image.image))
 }
 
 async function readState(): Promise<StoredScannerState> {
