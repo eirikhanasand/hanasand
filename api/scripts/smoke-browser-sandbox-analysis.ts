@@ -6,7 +6,7 @@ import {
     sandboxUrlSafety,
     summarizeDeobfuscationTask,
 } from '../src/handlers/onionSession/analysis.ts'
-import { providerSummaryText } from '../src/handlers/onionSession/ws.ts'
+import { parseCymruAsn, providerSummaryText } from '../src/handlers/onionSession/ws.ts'
 
 assert.deepEqual(sandboxUrlSafety('https://example.com/path'), { ok: true })
 assert.equal(sandboxUrlSafety('ftp://example.com').ok, false)
@@ -36,6 +36,7 @@ assert.equal(task.assessment, 'suspicious')
 assert(task.decodedTransforms.includes('base64 string'), 'records base64 decoding')
 assert(task.indicators.domains.includes('payload.example.com'), 'decoded indicators include second-stage domain')
 assert(task.summary.includes('decoded network indicators'), 'summarizes why decoded script is suspicious')
+assert.equal(parseCymruAsn([['15169 | 8.8.8.0/24 | US | arin | 2023-12-28']]), '15169', 'parses Team Cymru ASN TXT rows')
 
 const providerSummary = providerSummaryText(JSON.stringify({ last_analysis_stats: { malicious: 2, suspicious: 1, harmless: 80, undetected: 12, timeout: 0 } }) + '<td>0 - 1 - 2</td>')
 assert(providerSummary.includes('3/95 security vendors'), 'summarizes VirusTotal stats before provider text is trimmed')

@@ -42,7 +42,7 @@ type BrokerPayload = {
         reason?: string
     }
     networkSummary?: {
-        recentRequests?: Array<{ method?: string; resourceType?: string; status?: number; host?: string; mimeType?: string; initiator?: string; durationMs?: number; url?: string }>
+        recentRequests?: Array<{ method?: string; resourceType?: string; status?: number; host?: string; mimeType?: string; initiator?: string; durationMs?: number; url?: string; asn?: string }>
     }
     receivedAt?: number
 }

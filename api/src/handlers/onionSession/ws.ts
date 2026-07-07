@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { resolveTxt } from 'node:dns/promises'
 import { readFile, stat } from 'node:fs/promises'
 import WebSocket, { type RawData } from 'ws'
 import { chromium, type Browser, type BrowserContext, type Frame, type Page, type Request } from 'playwright'
@@ -50,6 +51,7 @@ type SandboxNetworkEvent = {
     initiator?: string
     durationMs?: number
     ip?: string
+    asn?: string
     port?: number
     protocol?: string
     tlsIssuer?: string
@@ -79,6 +81,7 @@ const MAX_DURATION_MS = 60 * 60 * 1000
 const FRAME_INTERVAL_MS = 900
 const DEFAULT_BROWSER_MAX_SESSIONS = 10
 const MAX_DOWNLOAD_HASH_BYTES = 5 * 1024 * 1024
+const asnCache = new Map<string, Promise<string | undefined>>()
 const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
 type SandboxAdmissionStatus = {
@@ -502,6 +505,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     response.serverAddr().catch(() => null),
                     response.securityDetails().catch(() => null),
                 ])
+                const asn = await lookupAsn(server?.ipAddress)
                 const request = response.request()
                 const capturedAt = new Date().toISOString()
                 const startedAt = [...networkEvents].reverse().find(event => event.kind === 'request' && event.url === response.url() && event.method === request.method())?.at
@@ -516,6 +520,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     initiator: requestInitiator(request),
                     durationMs: responseDurationMs(request.timing()) ?? elapsedMs(startedAt, capturedAt),
                     ip: server?.ipAddress,
+                    asn,
                     port: server?.port,
                     protocol: security?.protocol,
                     tlsIssuer: security?.issuer,
@@ -1007,6 +1012,7 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
             initiator: event.initiator,
             durationMs: event.durationMs,
             ip: event.ip,
+            asn: event.asn,
             port: event.port,
             protocol: event.protocol,
             tlsIssuer: event.tlsIssuer,
@@ -1050,6 +1056,30 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
         })),
         lastUpdatedAt: events.at(-1)?.at,
     }
+}
+
+async function lookupAsn(ip: string | undefined) {
+    if (!ip || !isPublicIPv4(ip)) return undefined
+    if (!asnCache.has(ip)) {
+        asnCache.set(ip, withTimeout(
+            resolveTxt(`${ip.split('.').reverse().join('.')}.origin.asn.cymru.com`).then(parseCymruAsn).catch(() => undefined),
+            700,
+            undefined,
+        ))
+    }
+    return asnCache.get(ip)
+}
+
+export function parseCymruAsn(records: string[][]) {
+    const row = records.flat().find(Boolean)?.split('|').map(part => part.trim())
+    return row?.[0] && /^\d+$/.test(row[0]) ? row[0] : undefined
+}
+
+function isPublicIPv4(ip: string) {
+    const parts = ip.split('.').map(part => Number(part))
+    if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255)) return false
+    const [a, b] = parts
+    return !(a === 10 || a === 127 || a === 0 || a >= 224 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254))
 }
 
 function responseDurationMs(timing: { startTime: number; responseEnd: number }) {

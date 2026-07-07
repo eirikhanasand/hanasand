@@ -55,7 +55,7 @@ type SandboxNetworkSummary = {
     failedCount?: number
     uniqueDomainCount?: number
     domains?: string[]
-    recentRequests?: Array<{ url?: string; method?: string; resourceType?: string; status?: number; host?: string; mimeType?: string; initiator?: string; durationMs?: number; ip?: string; port?: number; protocol?: string; tlsIssuer?: string; tlsSubject?: string; tlsValidFrom?: number; tlsValidTo?: number; failure?: string; at?: string }>
+    recentRequests?: Array<{ url?: string; method?: string; resourceType?: string; status?: number; host?: string; mimeType?: string; initiator?: string; durationMs?: number; ip?: string; asn?: string; port?: number; protocol?: string; tlsIssuer?: string; tlsSubject?: string; tlsValidFrom?: number; tlsValidTo?: number; failure?: string; at?: string }>
     statusCounts?: Record<string, number>
     redirectChain?: string[]
     downloads?: Array<{ url?: string; fileName?: string; bytes?: number; sha256?: string; hashStatus?: string; at?: string }>
@@ -1316,7 +1316,7 @@ function EvidenceWorkspace({
                                                 <th className='border-b border-ui-border px-2 py-1'>Host</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>MIME</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>Time</th>
-                                                <th className='border-b border-ui-border px-2 py-1'>DNS / TLS</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>DNS / ASN / TLS</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>Initiator</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>URL</th>
                                             </tr>
@@ -1583,6 +1583,7 @@ function captureLabel(reason: string) {
 function networkPeerLabel(request: NonNullable<SandboxNetworkSummary['recentRequests']>[number]) {
     return [
         request.ip ? `${request.ip}${request.port ? `:${request.port}` : ''}` : '',
+        request.asn ? `AS${request.asn}` : '',
         request.protocol || '',
         request.tlsSubject ? `cert ${request.tlsSubject}` : '',
         request.tlsIssuer || '',
