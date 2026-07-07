@@ -16,6 +16,8 @@ const child = spawn(process.execPath, ["ti/ai-model-client/client.mjs"], {
 try {
   const health = await waitFor(`http://127.0.0.1:${port}/health`);
   assert.equal(health.status, 200);
+  await new Promise(resolve => setTimeout(resolve, 2500));
+  assert.equal((await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(500) })).status, 200);
   const ready = await fetch(`http://127.0.0.1:${port}/ready`);
   assert.equal(ready.status, 503);
 } finally {

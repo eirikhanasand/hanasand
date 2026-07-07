@@ -13,6 +13,8 @@ let lastModelCheck = null;
 let heartbeat;
 let modelCheckInFlight = false;
 let modelHealth = { ready: false, blocker: "not_checked", checkedAt: null };
+let reconnectTimer;
+let reconnectDelayMs = 2_000;
 
 Bun.serve({
   hostname: "0.0.0.0",
@@ -45,6 +47,8 @@ setInterval(refreshModelHealth, 30_000);
 
 function connect() {
   clearInterval(heartbeat);
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
   connected = false;
 
   const ws = new WebSocket(API_WS);
@@ -52,6 +56,7 @@ function connect() {
 
   ws.addEventListener("open", () => {
     connected = true;
+    reconnectDelayMs = 2_000;
     lastError = null;
     refreshModelHealth();
     sendClientUpdate("idle");
@@ -71,17 +76,21 @@ function connect() {
     }
   });
 
-  ws.addEventListener("close", () => scheduleReconnect("websocket closed"));
-  ws.addEventListener("error", () => scheduleReconnect("websocket error"));
+  ws.addEventListener("close", () => scheduleReconnect(ws, "websocket closed"));
+  ws.addEventListener("error", () => scheduleReconnect(ws, "websocket error"));
 }
 
-function scheduleReconnect(error) {
+function scheduleReconnect(source, error) {
+  if (source !== socket || reconnectTimer) return;
   if (error) lastError = error;
   connected = false;
   clearInterval(heartbeat);
-  setTimeout(() => {
+  const delay = reconnectDelayMs;
+  reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30_000);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
     if (!connected) connect();
-  }, 2_000);
+  }, delay);
 }
 
 async function handlePromptRequest(request) {
