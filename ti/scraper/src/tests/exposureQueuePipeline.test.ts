@@ -1,6 +1,8 @@
 import { describe, expect, fixtureCapture, FocusedFrontier, handleApiRequest, InMemoryScraperStore, source, test } from "./apiTestHarness.ts";
 import { saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
 
+Bun.env.HANASAND_AI_API_BASE = "";
+
 describe("DWM exposure queue pipeline", () => {
   test("ingests parsed actor claims into the queue and shared TI search index", async () => {
     const store = new InMemoryScraperStore();
