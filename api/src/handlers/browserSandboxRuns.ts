@@ -156,7 +156,7 @@ export async function postBrowserRunReport(req: FastifyRequest<{ Params: Browser
         })])
         return res.send({
             ok: true,
-            reportUrl: `/backend/browser/runs/${encodeURIComponent(req.params.id)}/report?token=${encodeURIComponent(token)}`,
+            reportUrl: browserReportViewerUrl(req.params.id, token),
         })
     } catch (error) {
         req.log.error(error)
@@ -299,7 +299,7 @@ function rowToRunRecord(row: Record<string, any>): BrowserRunRecord {
         startedAt: new Date(row.created_at || Date.now()).toISOString(),
         checkCount: Math.max(1, Number(row.check_count || 1)),
         title: String(row.title || ''),
-        reportUrl: reportToken ? `/backend/browser/runs/${encodeURIComponent(String(row.id || ''))}/report?token=${encodeURIComponent(String(reportToken))}` : undefined,
+        reportUrl: reportToken ? browserReportViewerUrl(String(row.id || ''), String(reportToken)) : undefined,
     }
 }
 
@@ -327,4 +327,8 @@ function cleanText(value: unknown) {
 
 function hashValue(value: string) {
     return createHash('sha256').update(value).digest('hex')
+}
+
+function browserReportViewerUrl(id: string, token: string) {
+    return `/solutions/browser/report?run=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`
 }
