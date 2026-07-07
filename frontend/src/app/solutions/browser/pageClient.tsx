@@ -149,6 +149,13 @@ type SandboxEvidence = {
         summary?: string
     }>
 }
+type ReviewQueueItem = {
+    severity: 'high' | 'medium' | 'low'
+    source: string
+    title: string
+    detail: string
+    evidence?: string
+}
 
 const storageKey = 'hanasand:browser:profiles:v1'
 const historyStorageKey = 'hanasand:browser:history:v1'
@@ -1270,6 +1277,26 @@ function EvidenceWorkspace({
                     )}
                 </EvidencePanel>
 
+                <EvidencePanel title='Analyst review queue' status={`${summary.reviewQueue.length} item${summary.reviewQueue.length === 1 ? '' : 's'}`}>
+                    {summary.reviewQueue.length ? (
+                        <div className='grid gap-2 text-xs text-ui-muted'>
+                            {summary.reviewQueue.map(item => (
+                                <div key={`${item.source}-${item.title}-${item.evidence || item.detail}`} className='grid gap-1 rounded-md border border-ui-border bg-ui-panel p-2'>
+                                    <div className='flex flex-wrap items-center gap-2'>
+                                        <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${item.severity === 'high' ? 'border-ui-danger/40 text-ui-danger' : item.severity === 'medium' ? 'border-ui-warning/40 text-ui-warning' : 'border-ui-border text-ui-muted'}`}>{item.severity}</span>
+                                        <span className='font-semibold text-ui-text'>{item.title}</span>
+                                        <span className='text-ui-muted'>{item.source}</span>
+                                    </div>
+                                    <p className='leading-5'>{item.detail}</p>
+                                    {item.evidence ? <p className='truncate font-mono text-[11px] text-ui-text'>{item.evidence}</p> : null}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className='text-xs leading-5 text-ui-muted'>No priority review items from the captured evidence.</p>
+                    )}
+                </EvidencePanel>
+
                 <div className='grid gap-3 md:grid-cols-3'>
                     {profile.tools.map(tool => {
                         const capture = toolCaptures.find(item => matchesTool(item, tool))
@@ -1655,6 +1682,7 @@ function buildExportReport(input: {
             indicators: input.summary.indicators,
             threatAssociations: input.summary.threatAssociations,
             urlTimeline: input.summary.urlTimeline,
+            reviewQueue: input.summary.reviewQueue,
         },
         analystReport: buildShareableAnalystReport(input),
         captures: input.captures.map(capture => ({
@@ -1733,6 +1761,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
         } : null,
         scriptArtifacts,
         urlTimeline: input.summary.urlTimeline,
+        reviewQueue: input.summary.reviewQueue,
         indicators: input.summary.indicators,
         threatAssociations: input.summary.threatAssociations,
         recommendedActions: input.summary.brief.nextSteps,
@@ -1810,6 +1839,14 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         }))
         .filter(item => item.url)
         .reverse()
+    const reviewQueue = buildReviewQueue({
+        pageCaptures,
+        toolCaptures,
+        latestNetwork,
+        urlTimeline,
+        threatAssociations,
+        deobfuscationTasks,
+    })
     const threatNarrative = threatAssociations.length
         ? `Observed threat context in captured evidence: ${threatAssociations.slice(0, 4).map(item => `${item.name} (${item.category || 'context'}, ${item.confidence || 'low'})`).join('; ')}.`
         : 'No named actor, malware family, or tool label was extracted from the captured evidence yet.'
@@ -1845,6 +1882,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         indicators: allIndicators,
         threatAssociations,
         urlTimeline,
+        reviewQueue,
         deobfuscationTasks,
         deobfuscationSummary,
         webcrackLoaded,
@@ -1867,6 +1905,67 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
             { label: 'Copyable indicators', value: String(allIndicators.length) },
         ],
     }
+}
+
+function buildReviewQueue(input: {
+    pageCaptures: Capture[]
+    toolCaptures: Capture[]
+    latestNetwork?: SandboxNetworkSummary
+    urlTimeline: Array<{ url: string; capturedAt: string; reason: string; title: string }>
+    threatAssociations: SandboxThreatAssociation[]
+    deobfuscationTasks: NonNullable<SandboxEvidence['deobfuscationTasks']>
+}): ReviewQueueItem[] {
+    const items: ReviewQueueItem[] = []
+    const blankFrame = input.pageCaptures.find(capture => capture.frameQuality?.looksBlank)
+    if (blankFrame) items.push({
+        severity: 'high',
+        source: 'browser',
+        title: 'Blank-looking rendered frame',
+        detail: `${blankFrame.frameQuality?.visibleTextLength || 0} visible chars and ${blankFrame.frameQuality?.elementCount || 0} elements were observed.`,
+        evidence: blankFrame.url,
+    })
+    input.toolCaptures.filter(capture => capture.error && capture.error !== 'provider_navigation_pending').slice(0, 2).forEach(capture => items.push({
+        severity: 'medium',
+        source: capture.label,
+        title: 'Provider failed or blocked',
+        detail: capture.error || 'Provider returned no usable evidence.',
+        evidence: capture.url,
+    }))
+    if ((input.latestNetwork?.failedCount || 0) > 0) items.push({
+        severity: 'medium',
+        source: 'network',
+        title: 'Blocked or failed requests',
+        detail: `${input.latestNetwork?.failedCount || 0} blocked/failed request${input.latestNetwork?.failedCount === 1 ? '' : 's'} recorded.`,
+        evidence: input.latestNetwork?.recentFailures?.[0]?.url || input.latestNetwork?.recentRequests?.find(request => request.failure)?.url,
+    })
+    if ((input.latestNetwork?.redirectChain?.length || input.urlTimeline.length) > 1) items.push({
+        severity: 'medium',
+        source: 'navigation',
+        title: 'Redirect or URL change',
+        detail: `${input.latestNetwork?.redirectChain?.length || input.urlTimeline.length} URL state${(input.latestNetwork?.redirectChain?.length || input.urlTimeline.length) === 1 ? '' : 's'} captured.`,
+        evidence: input.latestNetwork?.redirectChain?.at(-1) || input.urlTimeline.at(-1)?.url,
+    })
+    input.latestNetwork?.downloads?.slice(0, 2).forEach(download => items.push({
+        severity: download.sha256 ? 'medium' : 'high',
+        source: 'download',
+        title: download.sha256 ? 'Downloaded file hashed' : 'Downloaded file missing hash',
+        detail: [download.fileName || 'download', download.bytes !== undefined ? `${download.bytes} bytes` : '', download.hashStatus || ''].filter(Boolean).join(' · '),
+        evidence: download.sha256 || download.url,
+    }))
+    input.deobfuscationTasks.filter(task => task.assessment === 'suspicious' || task.sha256).slice(0, 3).forEach(task => items.push({
+        severity: task.assessment === 'suspicious' ? 'high' : 'medium',
+        source: 'script',
+        title: task.assessment === 'suspicious' ? 'Suspicious decoded script' : 'Script sample hashed',
+        detail: task.summary || task.decodedPreview || task.source || 'Script evidence requires review.',
+        evidence: task.sha256 || task.source,
+    }))
+    input.threatAssociations.filter(item => item.confidence !== 'low').slice(0, 2).forEach(item => items.push({
+        severity: item.confidence === 'high' ? 'high' : 'medium',
+        source: item.source?.replace(/_/g, ' ') || 'threat context',
+        title: item.name || 'Threat association',
+        detail: item.evidence || `${item.category || 'context'} association from captured evidence.`,
+    }))
+    return items.slice(0, 8)
 }
 
 function buildAnalystBrief(input: {
