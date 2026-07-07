@@ -158,7 +158,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                                                 <p className='truncate font-mono text-xs font-semibold text-ui-text'>{run.id}</p>
                                                 <p className='mt-1 line-clamp-1 text-xs text-ui-muted'>{run.message}</p>
                                             </div>
-                                            <span className={run.status === 'completed' ? 'w-fit rounded-full border border-ui-success/35 bg-ui-success/10 px-2 py-0.5 text-xs font-semibold text-ui-success' : 'w-fit rounded-full border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-primary'}>{operationalStateLabel(run.status)}</span>
+                                            <span className={run.status === 'completed' ? 'inline-flex min-h-8 w-fit items-center justify-center rounded-full border border-ui-success/35 bg-ui-success/10 px-3 text-xs font-semibold text-ui-success' : 'inline-flex min-h-8 w-fit items-center justify-center rounded-full border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-primary'}>{operationalStateLabel(run.status)}</span>
                                             <span className='font-semibold text-ui-text'>{run.rows}</span>
                                             <span className='font-semibold text-ui-text'>{run.captures}</span>
                                             <span className='font-semibold text-ui-text'>{run.screenshots}</span>

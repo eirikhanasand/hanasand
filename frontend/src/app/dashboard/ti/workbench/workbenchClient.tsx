@@ -1332,6 +1332,7 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
     onCopyPayload: (payload?: unknown) => void | Promise<void>
 }) {
     const rows = actionRailRows(selected, orgContext, caseDetail, alertDetail, actionDeliveries, note)
+        .filter(row => !row.disabledReason && row.tone === 'ready')
 
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel'>
@@ -1347,7 +1348,7 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
                                 <p className='text-xs font-semibold uppercase text-ui-muted'>{sanitizeWorkbenchCopy(row.label) || row.label}</p>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted'>{sanitizeWorkbenchCopy(row.detail) || row.detail}</p>
                             </div>
-                            <span className={workflowStatusClass(row.disabledReason ? 'blocked' : row.tone)}>{row.disabledReason ? 'syncing' : label(row.tone)}</span>
+                            <span className={workflowStatusClass(row.tone)}>{label(row.tone)}</span>
                         </div>
                         <div className='mt-3 flex flex-wrap gap-2'>
                             {row.href ? (
@@ -1396,6 +1397,9 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
                         </div>
                     </div>
                 ))}
+                {!rows.length && (
+                    <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-4 text-sm text-ui-muted'>Select an attack to see ready actions.</p>
+                )}
             </div>
         </section>
     )
@@ -1791,7 +1795,6 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         })
         handledActionIds.add(action.id)
     }
-    rows.push(...readinessActionRows(orgContext))
     const rebuildAction = selected.actions?.find(action => action.id === 'rebuild_alerts')
     if (rebuildAction) rows.push({ id: 'rebuild_alerts', label: 'Rebuild alerts', detail: 'Rebuild alerts for the selected workspace.', tone: 'ready', action: rebuildAction })
     return rows.slice(0, 8)
@@ -2973,22 +2976,6 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                     <span>{item.company || item.matchedTerm}</span>
                 </div>
             </div>
-
-            <SelectedWorkflowHandoff
-                item={item}
-                caseDetail={caseDetail}
-                alertDetail={alertDetail}
-                actionDeliveries={actionDeliveries}
-                orgContext={orgContext}
-            />
-
-            <CaseRouteStrip
-                item={item}
-                caseDetail={caseDetail}
-                alertDetail={alertDetail}
-                actionDeliveries={actionDeliveries}
-                orgContext={orgContext}
-            />
 
             <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-4 lg:grid-cols-[0.48fr_minmax(0,1fr)]'>
                 <label className='grid gap-2'>

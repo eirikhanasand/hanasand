@@ -7,6 +7,8 @@ const root = process.cwd()
 test('TI workbench keeps selected-case actions primary and collapses secondary rail context', async () => {
     const page = await readFile(path.join(root, 'src/app/dashboard/ti/workbench/workbenchClient.tsx'), 'utf8')
     const route = await readFile(path.join(root, 'src/app/dashboard/ti/workbench/page.tsx'), 'utf8')
+    const attacksRoute = await readFile(path.join(root, 'src/app/dashboard/ti/attacks/page.tsx'), 'utf8')
+    const sidebar = await readFile(path.join(root, 'src/components/dashboard/dashboardSidebar.tsx'), 'utf8')
     const loading = await readFile(path.join(root, 'src/app/dashboard/ti/loading.tsx'), 'utf8')
     const proxy = await readFile(path.join(root, 'src/proxy.ts'), 'utf8')
 
@@ -22,6 +24,12 @@ test('TI workbench keeps selected-case actions primary and collapses secondary r
 
     expect(page).toContain('embedded')
     expect(page).toContain('Attack summary')
+    expect(page).not.toContain('<SelectedWorkflowHandoff')
+    expect(page).not.toContain('<CaseRouteStrip')
+    expect(page).toContain('.filter(row => !row.disabledReason && row.tone === \'ready\')')
+    expect(route).toContain('title=\'Attacks\'')
+    expect(attacksRoute).toContain('export { default, dynamic } from \'../workbench/page\'')
+    expect(sidebar).toContain('{ href: \'/dashboard/ti/attacks\', label: \'Attacks\'')
     expect(page).toContain('const workbenchStatsGrid')
     expect(page).toContain('Org and shared watchlist')
     expect(page).toContain('Case groups and links')

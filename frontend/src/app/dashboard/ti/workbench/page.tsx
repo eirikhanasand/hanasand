@@ -44,7 +44,7 @@ export default async function TiAnalystWorkbenchPage({
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Attack review'
-                title='Recent attacks'
+                title='Attacks'
                 description='Triage active exposure cases, inspect evidence, assign owners, and send findings when they are ready.'
                 actions={(
                     <div className='flex flex-wrap gap-2'>

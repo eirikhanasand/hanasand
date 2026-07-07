@@ -24,3 +24,9 @@ test('ti source inventory keeps source health primary while summary and coverage
     expect(source).toContain('sourceRows.filter(row => row.health.state !== \'healthy\'')
     expect(source).toContain('{captures.length} captures across {sources.length} sources')
 })
+
+test('ti source detail centers run status pills', async () => {
+    const source = await readFile(path.join(root, 'src/app/dashboard/ti/sources/[id]/page.tsx'), 'utf8')
+
+    expect(source).toContain('inline-flex min-h-8 w-fit items-center justify-center rounded-full')
+})

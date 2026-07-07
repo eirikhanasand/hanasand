@@ -18,9 +18,9 @@ export default function TiScraperControlPage() {
                             <ArrowLeft className='h-4 w-4' />
                             Intelligence
                         </Link>
-                        <Link href='/dashboard/ti/workbench' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-raised'>
+                        <Link href='/dashboard/ti/attacks' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-raised'>
                             <Activity className='h-4 w-4' />
-                            Recent attacks
+                            Attacks
                         </Link>
                         <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-panel'>
                             <DatabaseZap className='h-4 w-4' />
