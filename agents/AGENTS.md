@@ -77,7 +77,7 @@ For SOC, TI, DWM, XDR, monitoring, source operations, incident response, and ana
 - Profile pages expose login sessions/devices and token revocation controls.
 - The coding/Postman-style workbench has an authenticated backend HTTP runner and an AI-ready endpoint stub.
 - Application error logs are persisted to `service_logs` and queryable/filterable without shell log tailing.
-- The agent training path for native app parity work is documented in `agents/DESKTOP_APP_DEVELOPMENT.md`. Use it before implementing Hanasand app or Nucleus app features copied from the web products.
+- The agent training path for native app parity work is documented in `agents/DESKTOP_APP_DEVELOPMENT.md`. Use it before implementing Hanasand app features copied from the web product.
 
 ## Useful Commands
 Run from `/Users/eirikhanasand/Desktop/personal/hanasand`.
@@ -100,14 +100,6 @@ For Hanasand native app work:
 cd app
 npm run typecheck
 npm run lint
-```
-
-For Nucleus app work:
-
-```bash
-cd /Users/eirikhanasand/Desktop/Login/nucleus
-npx tsc --noEmit
-npm test -- --watchman=false
 ```
 
 For practical app-parity agent training, start the local model and run:
@@ -179,4 +171,4 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000 PLAYWRIGHT_API_BASE=http://127.0.0.1:8
 - Preserve server-local files unless explicitly asked to remove them.
 
 ## App Parity Rule
-- If the user asks for website functionality in the Hanasand or Nucleus app, independently trace the website implementation and backend contract first. Do not ask for endpoint names or payload shapes unless source inspection and smoke checks cannot identify them.
+- If the user asks for website functionality in the Hanasand app, independently trace the website implementation and backend contract first. Do not ask for endpoint names or payload shapes unless source inspection and smoke checks cannot identify them.

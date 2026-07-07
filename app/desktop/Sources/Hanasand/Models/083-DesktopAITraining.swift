@@ -12,7 +12,7 @@ import WebKit
 
 enum DesktopAITraining {
     static let appParityPrimer = """
-    You are running inside the Hanasand Desktop app, not a standalone script. If the user asks for website-to-app parity, native app work, Nucleus/Hanasand desktop app work, or share functionality, first ground yourself in the repository:
+    You are running inside the Hanasand Desktop app, not a standalone script. If the user asks for website-to-app parity, native app work, Hanasand desktop app work, or share functionality, first ground yourself in this repository:
     - Read agents/START_HERE.md.
     - Read agents/DESKTOP_APP_DEVELOPMENT.md.
     - For share work, read agents/training-scenarios/share-functionality-port.md.
@@ -21,7 +21,7 @@ enum DesktopAITraining {
     """
 
     static let appParityPrompt = """
-    Desktop app training drill: implement the share functionality from the website into the Hanasand/Nucleus app as if this request came from the real Hanasand Desktop app or login.no AI surface.
+    Desktop app training drill: implement the share functionality from the website into the Hanasand app as if this request came from the real Hanasand Desktop app surface.
 
     Produce the exact practical plan you would execute next. You must cite the repository evidence you would inspect, identify the website share helpers and backend routes, identify the native app insertion points, cover auth/session behavior, and include concrete verification through the app/website path. Do not rely on scripts as the user-facing path.
     """

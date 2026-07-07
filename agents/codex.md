@@ -84,7 +84,7 @@
   - verified mobile `npm run typecheck`, Desktop `swift build`, frontend `bun run lint:eslint`, Desktop loopback health, and queued another app-parity/UI-audit drill.
 - Added shared notes support across the Hanasand API, website dashboard, mobile app, and desktop app.
 - Added and ran `api/scripts/smoke-notes.mjs` through `bun run smoke:notes` against the rebuilt local Docker API to cover the authenticated notes contract, owner isolation, clearable fields, and delete flow.
-- Database, backup, restore, and dashboard work belongs in the Hanasand frontend/API in this repo. Do not point agents at Login, Queenbee, or Beekeeper for Hanasand dashboard features.
+- Database, backup, restore, and dashboard work belongs in the Hanasand frontend/API in this repo. Recreate any needed dashboard behavior here from the Hanasand codebase.
 - Moved the Hanasand server internal API from PM2 to Docker as `internal`, removed Hanasand PM2, and stopped the legacy dev-server `scouterbee` PM2 process after verifying dev Docker `internal`.
 - Completed local Packet 85 by tagging orchestration benchmark artifacts with the active profile identity and adding `benchmark-profile-comparison-latest.{json,md}` generation. Verified with `cd gpt/api && npm run lint` and `cd gpt/api && npm run orchestration:benchmark`.
 - Completed local Packet 86 by making orchestration benchmark regression trends profile-aware, adding `benchmark-profile-baselines-latest.{json,md}`, and validating both same-profile and cross-profile behavior.

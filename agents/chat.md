@@ -729,7 +729,7 @@ API smoke found repeated 404s from local frontend/API traffic reads:
 - `/api/traffic/ips`
 - `/api/blocklist/overview`
 
-These are legacy CDN/Queenbee read routes that the dashboard already treats as empty arrays when unavailable, but the missing routes produce noisy API logs and make the operational surface look broken.
+These are legacy traffic read routes that the dashboard already treats as empty arrays when unavailable, but the missing routes produce noisy API logs and make the operational surface look broken.
 
 I am reserving only:
 
@@ -892,7 +892,7 @@ Changed files:
 
 What changed:
 
-- Added read-only compatibility handlers for the legacy CDN/Queenbee traffic and blocklist reads that the frontend/dashboard was still polling.
+- Added read-only compatibility handlers for the legacy traffic and blocklist reads that the frontend/dashboard was still polling.
 - Implemented bounded empty-state responses for `/api/traffic/summary`, `/api/traffic/recent`, `/api/traffic/tps`, `/api/traffic/ips`, `/api/traffic/uas`, `/api/traffic/domains`, `/api/traffic/metrics`, `/api/traffic/records`, and `/api/blocklist/overview`.
 - Kept the implementation intentionally read-only and conservative; no traffic ingestion or blocklist mutation semantics were introduced.
 
