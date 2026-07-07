@@ -53,6 +53,9 @@ type SandboxNetworkEvent = {
     port?: number
     protocol?: string
     tlsIssuer?: string
+    tlsSubject?: string
+    tlsValidFrom?: number
+    tlsValidTo?: number
     fileName?: string
     bytes?: number
     sha256?: string
@@ -516,6 +519,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     port: server?.port,
                     protocol: security?.protocol,
                     tlsIssuer: security?.issuer,
+                    tlsSubject: security?.subjectName,
+                    tlsValidFrom: security?.validFrom,
+                    tlsValidTo: security?.validTo,
                     at: capturedAt,
                 })
                 if (response.request().resourceType() === 'document' && /html/i.test(response.headers()['content-type'] || '')) {
@@ -1003,6 +1009,9 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
             port: event.port,
             protocol: event.protocol,
             tlsIssuer: event.tlsIssuer,
+            tlsSubject: event.tlsSubject,
+            tlsValidFrom: event.tlsValidFrom,
+            tlsValidTo: event.tlsValidTo,
             failure: event.failure,
             at: event.at,
         }))

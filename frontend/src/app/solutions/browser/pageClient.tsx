@@ -55,7 +55,7 @@ type SandboxNetworkSummary = {
     failedCount?: number
     uniqueDomainCount?: number
     domains?: string[]
-    recentRequests?: Array<{ url?: string; method?: string; resourceType?: string; status?: number; host?: string; mimeType?: string; initiator?: string; durationMs?: number; ip?: string; port?: number; protocol?: string; tlsIssuer?: string; failure?: string; at?: string }>
+    recentRequests?: Array<{ url?: string; method?: string; resourceType?: string; status?: number; host?: string; mimeType?: string; initiator?: string; durationMs?: number; ip?: string; port?: number; protocol?: string; tlsIssuer?: string; tlsSubject?: string; tlsValidFrom?: number; tlsValidTo?: number; failure?: string; at?: string }>
     statusCounts?: Record<string, number>
     redirectChain?: string[]
     downloads?: Array<{ url?: string; fileName?: string; bytes?: number; sha256?: string; hashStatus?: string; at?: string }>
@@ -1553,8 +1553,14 @@ function networkPeerLabel(request: NonNullable<SandboxNetworkSummary['recentRequ
     return [
         request.ip ? `${request.ip}${request.port ? `:${request.port}` : ''}` : '',
         request.protocol || '',
+        request.tlsSubject ? `cert ${request.tlsSubject}` : '',
         request.tlsIssuer || '',
+        request.tlsValidTo ? `expires ${formatEpochDate(request.tlsValidTo)}` : '',
     ].filter(Boolean).join(' · ')
+}
+
+function formatEpochDate(value: number) {
+    return new Date(value * 1000).toISOString().slice(0, 10)
 }
 
 function downloadEvidenceLine(item: NonNullable<SandboxNetworkSummary['downloads']>[number]) {
