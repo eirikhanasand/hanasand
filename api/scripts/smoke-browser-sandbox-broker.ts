@@ -186,6 +186,7 @@ console.log(JSON.stringify({
     pageCaptureCount: pageFrames.length,
     toolCaptures: payloads.filter(payload => payload.type === 'tool_capture').map(payload => payload.toolAnalysis?.toolKind),
 }, null, 2))
+process.exit(0)
 
 function listen(server: http.Server) {
     return new Promise<void>((resolve, reject) => {
