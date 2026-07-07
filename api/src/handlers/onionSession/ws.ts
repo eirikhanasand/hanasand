@@ -662,7 +662,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     `provider navigation still pending after ${Math.round(providerTimeoutMs(tool) / 1000)}s`,
                 )
                 await toolPage.waitForLoadState('domcontentloaded', { timeout: providerTimeoutMs(tool) }).catch(() => undefined)
-                await dismissCookieOverlays(toolPage).catch(() => undefined)
+                await withTimeout(dismissCookieOverlays(toolPage), 1200, undefined).catch(() => undefined)
                 const actionError = await interactWithProvider(toolPage, tool, target)
                 navigationError ||= actionError
                 const openedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 56, animations: 'disabled', timeout: 800 }), 800, null)
