@@ -115,7 +115,7 @@ services:
       HANASAND_AI_OPENAI_BASE: ${HANASAND_AI_OPENAI_BASE:-http://127.0.0.1:18081}
       HANASAND_AI_MODEL: ${HANASAND_AI_MODEL:-hanasand}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${HANASAND_AI_BRIDGE_PORT:-18181}/health"]
+      test: ["CMD-SHELL", "wget -T 2 -t 1 -qO- http://127.0.0.1:${HANASAND_AI_BRIDGE_PORT:-18181}/health"]
       interval: 10s
       retries: 5
       start_period: 10s

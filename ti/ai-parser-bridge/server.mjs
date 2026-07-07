@@ -10,7 +10,7 @@ const server = Bun.serve({
   port: PORT,
   async fetch(request) {
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/health") return health();
+    if (request.method === "GET" && (url.pathname === "/health" || url.pathname === "/ready")) return health(url.pathname === "/health");
     if (request.method === "GET" && url.pathname === "/v1/models") return proxyModels();
     if (request.method === "POST" && url.pathname === "/v1/parse/exposure-claim") return parseExposureClaim(request);
     return json({ error: "not_found" }, 404);
@@ -27,9 +27,9 @@ console.log(JSON.stringify({
   model: MODEL
 }));
 
-async function health() {
+async function health(liveness = false) {
   const started = Date.now();
-  if (TRANSPORT === "tools-ai") return toolsAiHealth(started);
+  if (TRANSPORT === "tools-ai") return toolsAiHealth(started, liveness);
 
   try {
     const response = await fetch(upstreamUrl("/v1/models"), {
@@ -49,7 +49,7 @@ async function health() {
       modelAvailable,
       models,
       latencyMs: Date.now() - started
-    }, response.ok && modelAvailable ? 200 : 502);
+    }, liveness ? 200 : response.ok && modelAvailable ? 200 : 502);
   } catch (error) {
     return json({
       schemaVersion: "hanasand.ai_parser_bridge.health.v1",
@@ -59,11 +59,11 @@ async function health() {
       model: MODEL,
       blocker: messageOf(error),
       latencyMs: Date.now() - started
-    }, 502);
+    }, liveness ? 200 : 502);
   }
 }
 
-async function toolsAiHealth(started) {
+async function toolsAiHealth(started, liveness = false) {
   try {
     const response = await fetch(MODELS_URL, {
       cache: "no-store",
@@ -84,7 +84,7 @@ async function toolsAiHealth(started) {
       modelAvailable,
       models,
       latencyMs: Date.now() - started
-    }, response.ok && modelAvailable ? 200 : 502);
+    }, liveness ? 200 : response.ok && modelAvailable ? 200 : 502);
   } catch (error) {
     return json({
       schemaVersion: "hanasand.ai_parser_bridge.health.v1",
@@ -96,7 +96,7 @@ async function toolsAiHealth(started) {
       model: MODEL,
       blocker: messageOf(error),
       latencyMs: Date.now() - started
-    }, 502);
+    }, liveness ? 200 : 502);
   }
 }
 
