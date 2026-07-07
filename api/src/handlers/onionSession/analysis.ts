@@ -19,7 +19,7 @@ export type InspectedSandboxScript = {
 }
 
 const MAX_SCRIPT_SAMPLE = 3200
-export const THREAT_ASSOCIATION_TERMS: Array<{ name: string; category: SandboxThreatAssociation['category']; pattern: RegExp }> = [
+export const THREAT_ASSOCIATION_TERMS: Array<{ name: string; category: SandboxThreatAssociation['category']; pattern: RegExp; context?: RegExp }> = [
     { name: 'LockBit', category: 'ransomware', pattern: /\block\s*bit\b/i },
     { name: 'ALPHV / BlackCat', category: 'ransomware', pattern: /\b(?:alphv|black\s*cat)\b/i },
     { name: 'Clop', category: 'ransomware', pattern: /\bcl0?p\b/i },
@@ -42,7 +42,7 @@ export const THREAT_ASSOCIATION_TERMS: Array<{ name: string; category: SandboxTh
     { name: 'AsyncRAT', category: 'malware', pattern: /\basync\s*rat\b/i },
     { name: 'Agent Tesla', category: 'malware', pattern: /\bagent\s*tesla\b/i },
     { name: 'FormBook', category: 'malware', pattern: /\bformbook\b/i },
-    { name: 'Vidar', category: 'malware', pattern: /\bvidar\b/i },
+    { name: 'Vidar', category: 'malware', pattern: /\bvidar\b/i, context: /\b(?:vidar\s+(?:stealer|malware|payload|c2|ioc|infection)|(?:stealer|malware|payload|c2|ioc|infection)\s+vidar)\b/i },
     { name: 'SmokeLoader', category: 'malware', pattern: /\bsmoke\s*loader\b/i },
     { name: 'DarkGate', category: 'malware', pattern: /\bdarkgate\b/i },
     { name: 'Remcos', category: 'malware', pattern: /\bremcos\b/i },
@@ -192,7 +192,7 @@ export function extractThreatAssociations(value: string, source: SandboxThreatAs
         const match = term.pattern.exec(normalized)
         if (!match || match.index === undefined) continue
         const evidence = evidenceWindow(normalized, match.index, match[0].length)
-        const hasThreatContext = /\b(?:attributed|associated|linked|campaign|operator|ransomware|malware|detected|family|actor)\b/i.test(evidence)
+        const hasThreatContext = term.context ? term.context.test(evidence) : /\b(?:attributed|associated|linked|campaign|operator|ransomware|malware|detected|family|actor)\b/i.test(evidence)
         if (!hasThreatContext && source !== 'decoded_script') continue
         const confidence = hasThreatContext ? 'high' : 'low'
         found.push({
