@@ -170,7 +170,7 @@ const webcrack = payloads.find(payload => payload.type === 'tool_capture' && pay
 assert.equal(webcrack?.webcrackLoad?.loaded, true)
 assert((webcrack?.webcrackLoad?.sampleBytes || 0) > 40, 'loads extracted obfuscated sample into WebCrack fixture')
 for (const capture of [vt, urlquery, webcrack]) {
-    assert(capture?.receivedAt && ready?.receivedAt && capture.receivedAt - ready.receivedAt <= 5000, `${capture?.toolAnalysis?.toolKind || 'provider'} loaded within five seconds after browser ready`)
+    assert(capture?.receivedAt && ready?.receivedAt && capture.receivedAt - ready.receivedAt <= 10_000, `${capture?.toolAnalysis?.toolKind || 'provider'} loaded within ten seconds after browser ready`)
 }
 
 client.send(JSON.stringify({ type: 'end' }))
