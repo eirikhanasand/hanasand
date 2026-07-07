@@ -61,14 +61,14 @@ const pages = new Map<string, string>([
   <main>
     <h1>Acme invoice verification</h1>
     <p>LockBit ransomware campaign associated with this lure.</p>
-    <button id="click-proof" style="margin-top:12px" onclick="document.getElementById('interaction-proof').textContent='Interactive click received'">Confirm invoice</button>
-    <input id="type-proof" style="display:block;margin-top:12px" oninput="document.getElementById('type-result').textContent='Typed proof: ' + this.value">
-    <p id="interaction-proof">Interaction pending</p>
+    <button id="click-proof" style="position:fixed;left:20px;top:20px;width:220px;height:54px;z-index:2" onclick="document.getElementById('interaction-proof').textContent='Interactive click received'">Confirm invoice</button>
+    <input id="type-proof" style="position:fixed;left:20px;top:88px;width:220px;height:40px;z-index:2" oninput="document.getElementById('type-result').textContent='Typed proof: ' + this.value">
+    <p id="interaction-proof" style="margin-top:140px">Interaction pending</p>
     <p id="type-result">Typed proof pending</p>
     <form action="https://credential.example.test/login"><input name="email"><input name="password" type="password"></form>
   </main>
   <script type="text/plain">eval(atob("${encoded}"));</script>
-  <script>setTimeout(() => { location.href = "/final" }, 3000)</script>
+  <script>setTimeout(() => { location.href = "/final" }, 10000)</script>
 </body></html>`],
     ['/final', `<!doctype html>
 <html><head><title>Final redirect page</title></head>
@@ -139,9 +139,9 @@ client.send(JSON.stringify({
 
 await waitForPayload(payloads, payload => payload.type === 'ready')
 await waitForPayload(payloads, payload => payload.type === 'frame' && Boolean(payload.image) && payload.url?.endsWith('/start'))
-client.send(JSON.stringify({ type: 'click', x: 70, y: 96, button: 0 }))
+client.send(JSON.stringify({ type: 'click', x: 80, y: 48, button: 0 }))
 await waitForPayload(payloads, payload => payload.type === 'frame' && /Interactive click received/.test(payload.evidence?.textExcerpt || ''), 8_000)
-client.send(JSON.stringify({ type: 'click', x: 82, y: 132, button: 0 }))
+client.send(JSON.stringify({ type: 'click', x: 80, y: 108, button: 0 }))
 for (const key of 'abc') client.send(JSON.stringify({ type: 'key', key }))
 await waitForPayload(payloads, payload => payload.type === 'frame' && /Typed proof: abc/.test(payload.evidence?.textExcerpt || ''), 8_000)
 await waitForPayload(payloads, payload => payload.type === 'frame' && payload.url?.endsWith('/final'), 25_000)
