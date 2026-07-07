@@ -1348,6 +1348,7 @@ function EvidenceWorkspace({
                                                 <th className='border-b border-ui-border px-2 py-1'>Time</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>DNS / ASN / TLS</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>Initiator</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>Block reason</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>URL</th>
                                             </tr>
                                         </thead>
@@ -1361,6 +1362,7 @@ function EvidenceWorkspace({
                                                     <td className='border-b border-ui-border/60 px-2 py-1'>{request.durationMs !== undefined ? `${request.durationMs}ms` : ''}</td>
                                                     <td className='border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{networkPeerLabel(request)}</td>
                                                     <td className='max-w-48 truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{request.initiator || ''}</td>
+                                                    <td className='max-w-48 truncate border-b border-ui-border/60 px-2 py-1 text-ui-danger'>{request.failure || ''}</td>
                                                     <td className='max-w-[28rem] truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-text'>{request.url}</td>
                                                 </tr>
                                             ))}

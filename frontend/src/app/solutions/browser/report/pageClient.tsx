@@ -153,6 +153,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                                 <th className='border-b border-ui-border px-2 py-1'>Peer</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>Time</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>Initiator</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>Block reason</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>URL</th>
                                             </tr>
                                         </thead>
@@ -166,6 +167,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                                     <td className='max-w-64 truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{networkPeer(request)}</td>
                                                     <td className='border-b border-ui-border/60 px-2 py-1'>{request.durationMs !== undefined ? `${request.durationMs}ms` : ''}</td>
                                                     <td className='max-w-48 truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{request.initiator || ''}</td>
+                                                    <td className='max-w-48 truncate border-b border-ui-border/60 px-2 py-1 text-ui-danger'>{request.failure || ''}</td>
                                                     <td className='max-w-[28rem] truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-text'>{request.url || ''}</td>
                                                 </tr>
                                             ))}
