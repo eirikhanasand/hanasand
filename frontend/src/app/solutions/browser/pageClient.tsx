@@ -790,7 +790,7 @@ export default function BrowserPageClient() {
                     </div>
                 </header>
                 <div className='mx-auto grid w-full max-w-[96rem] gap-4 px-4 py-4'>
-                    <div className='grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]'>
+                    <div className='grid min-w-0 items-start gap-4'>
                         <section className='grid overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
                             <SandboxTabStrip
                                 activeTab={activeSandboxTab}
@@ -806,7 +806,7 @@ export default function BrowserPageClient() {
                             </div>
                             <div
                                 ref={viewportRef}
-                                className='relative aspect-video overflow-hidden bg-ui-canvas outline-none focus:ring-2 focus:ring-ui-primary/30'
+                                className='relative aspect-[16/9] w-full overflow-hidden bg-ui-canvas outline-none focus:ring-2 focus:ring-ui-primary/30'
                                 tabIndex={0}
                                 role='application'
                                 aria-label='Interactive isolated browser viewport'
@@ -836,7 +836,7 @@ export default function BrowserPageClient() {
                                 )}
                             </div>
                         </section>
-                        <aside className='grid gap-4'>
+                        <aside className='grid gap-4 xl:grid-cols-3'>
                             <CapacityPanel capacity={capacity} sessionState={sessionState} />
                             <ProviderStatusPanel tools={selectedProfile.tools} toolCaptures={toolCaptures} onSelect={setActiveSandboxTab} />
                             <div className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted'>

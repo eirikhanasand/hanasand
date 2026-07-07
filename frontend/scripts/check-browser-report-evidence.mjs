@@ -36,6 +36,7 @@ assertIncludes(liveClient, 'DNS / IP / certificate peers', 'live browser workspa
 assertIncludes(liveClient, 'Hashed downloads', 'live browser workspace must expose download hash evidence')
 assertIncludes(liveClient, 'Script hashes', 'live browser workspace must expose script hash evidence')
 assertIncludes(liveClient, 'Copyable indicators', 'live browser workspace must expose IOC count')
+assertIncludes(liveClient, 'aspect-[16/9] w-full', 'live browser viewport must stay full-width 16:9')
 
 for (const token of [
     'Browser sandbox report',
