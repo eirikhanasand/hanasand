@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net'
 import WebSocket, { WebSocketServer } from 'ws'
 import { chromium } from 'playwright'
 import { handleOnionSessionSocket } from '../src/handlers/onionSession/ws.ts'
+import { extractThreatAssociations } from '../src/handlers/onionSession/analysis.ts'
 
 type BrokerPayload = {
     type?: string
@@ -120,6 +121,9 @@ await listen(httpServer)
 const httpPort = portFor(httpServer)
 const base = `http://127.0.0.1:${httpPort}`
 const target = `${base}/start`
+
+assert.deepEqual(extractThreatAssociations('Vidar (26) våknet med nytt navn i en nyhetssak.', 'rendered_page'), [], 'does not treat benign person-name Vidar as malware context')
+assert.equal(extractThreatAssociations('Vidar malware family detected stealing browser credentials.', 'rendered_page')[0]?.name, 'Vidar', 'keeps explicit Vidar malware context')
 
 const wsServer = new WebSocketServer({ host: '127.0.0.1', port: 0 })
 await onceListening(wsServer)
