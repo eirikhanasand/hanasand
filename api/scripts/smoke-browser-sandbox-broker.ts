@@ -161,14 +161,17 @@ const vt = payloads.find(payload => payload.type === 'tool_capture' && payload.t
 assert.equal(vt?.toolAnalysis?.vendorFlagged, 12)
 assert.equal(vt?.toolAnalysis?.vendorTotal, 94)
 assert.equal(vt?.toolAnalysis?.communityCommentCount, 3)
+assert((vt?.image || '').length > 1000, 'VirusTotal parsed capture includes a screenshot')
 
 const urlquery = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery' && payload.toolAnalysis.alertCount !== undefined)
 assert.equal(urlquery?.toolAnalysis?.alertCount, 4)
 assert.equal(urlquery?.toolAnalysis?.communityCommentCount, 2)
+assert((urlquery?.image || '').length > 1000, 'urlquery parsed capture includes a screenshot')
 
 const webcrack = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'webcrack' && payload.webcrackLoad?.loaded === true)
 assert.equal(webcrack?.webcrackLoad?.loaded, true)
 assert((webcrack?.webcrackLoad?.sampleBytes || 0) > 40, 'loads extracted obfuscated sample into WebCrack fixture')
+assert((webcrack?.image || '').length > 1000, 'WebCrack capture includes a screenshot')
 for (const capture of [vt, urlquery, webcrack]) {
     assert(capture?.receivedAt && ready?.receivedAt && capture.receivedAt - ready.receivedAt <= 10_000, `${capture?.toolAnalysis?.toolKind || 'provider'} loaded within ten seconds after browser ready`)
 }

@@ -668,6 +668,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 if (providerText && hasParsedProviderData(tool, providerText)) {
                     navigationError = ''
                     const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText)
+                    const parsedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 1500 }), 1500, openedImage)
                     send({
                         type: 'tool_capture',
                         sessionId,
@@ -676,7 +677,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         url: toolPage.url() || preparedUrl,
                         title: await toolPage.title().catch(() => ''),
                         capturedAt: startedAt,
-                        image: openedImage ? openedImage.toString('base64') : null,
+                        image: parsedImage ? parsedImage.toString('base64') : null,
                         evidence: parsedEvidence,
                         toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, parsedEvidence),
                         target,
