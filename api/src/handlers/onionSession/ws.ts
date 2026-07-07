@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import WebSocket, { type RawData } from 'ws'
-import { chromium, type Browser, type BrowserContext, type Frame, type Page } from 'playwright'
+import { chromium, type Browser, type BrowserContext, type Frame, type Page, type Request } from 'playwright'
 import recordLog from '#utils/logs/recordLog.ts'
 import { finishBrowserRun, prepareBrowserRun } from '../browserSandboxRuns.ts'
 import {
@@ -499,6 +499,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     response.securityDetails().catch(() => null),
                 ])
                 const request = response.request()
+                const capturedAt = new Date().toISOString()
+                const startedAt = [...networkEvents].reverse().find(event => event.kind === 'request' && event.url === response.url() && event.method === request.method())?.at
                 trackNetwork({
                     kind: 'response',
                     url: response.url(),
@@ -506,13 +508,13 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     resourceType: request.resourceType(),
                     status: response.status(),
                     mimeType: response.headers()['content-type'],
-                    initiator: request.frame()?.url(),
-                    durationMs: responseDurationMs(request.timing()),
+                    initiator: requestInitiator(request),
+                    durationMs: responseDurationMs(request.timing()) ?? elapsedMs(startedAt, capturedAt),
                     ip: server?.ipAddress,
                     port: server?.port,
                     protocol: security?.protocol,
                     tlsIssuer: security?.issuer,
-                    at: new Date().toISOString(),
+                    at: capturedAt,
                 })
                 if (response.request().resourceType() === 'document' && /html/i.test(response.headers()['content-type'] || '')) {
                     queueDocumentEvidence(response.text())
@@ -1039,6 +1041,21 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
 function responseDurationMs(timing: { startTime: number; responseEnd: number }) {
     if (!Number.isFinite(timing.startTime) || !Number.isFinite(timing.responseEnd) || timing.responseEnd < 0) return undefined
     return Math.max(0, Math.round(timing.responseEnd))
+}
+
+function elapsedMs(start?: string, end?: string) {
+    const started = Date.parse(start || '')
+    const ended = Date.parse(end || '')
+    if (!Number.isFinite(started) || !Number.isFinite(ended) || ended < started) return undefined
+    return ended - started
+}
+
+function requestInitiator(request: Request) {
+    try {
+        return request.frame()?.url() || 'browser'
+    } catch {
+        return 'browser'
+    }
 }
 
 async function inspectDownload(download: { path: () => Promise<string | null>; suggestedFilename: () => string }) {
