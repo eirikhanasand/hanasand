@@ -167,6 +167,7 @@ const urlquery = payloads.find(payload => payload.type === 'tool_capture' && pay
 assert.equal(urlquery?.toolAnalysis?.alertCount, 4)
 assert.equal(urlquery?.toolAnalysis?.communityCommentCount, 2)
 assert((urlquery?.image || '').length > 1000, 'urlquery parsed capture includes a screenshot')
+assert(!urlquery?.evidence?.comments?.some(comment => /<[^>]+>/.test(comment)), 'provider comments do not leak raw HTML into analyst summaries')
 
 const webcrack = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'webcrack' && payload.webcrackLoad?.loaded === true)
 assert.equal(webcrack?.webcrackLoad?.loaded, true)

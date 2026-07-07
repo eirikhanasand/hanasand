@@ -1556,7 +1556,7 @@ function enrichProviderEvidence<T extends Awaited<ReturnType<typeof collectPageE
     return {
         ...evidence,
         textExcerpt: [evidence.textExcerpt, summary, providerText.replace(/\s+/g, ' ').trim().slice(0, 1800)].filter(Boolean).join('\n'),
-        comments: [...(evidence.comments || []), summary, providerText.slice(0, 12000)].filter(Boolean),
+        comments: [...(evidence.comments || []), summary].filter(Boolean),
     }
 }
 

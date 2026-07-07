@@ -187,12 +187,9 @@ export function extractThreatAssociations(value: string, source: SandboxThreatAs
         const match = term.pattern.exec(normalized)
         if (!match || match.index === undefined) continue
         const evidence = evidenceWindow(normalized, match.index, match[0].length)
-        const confidence = /\b(?:attributed|associated|linked|campaign|operator|ransomware|malware|detected|family|actor)\b/i.test(evidence)
-            ? 'high'
-            : source === 'tool_context'
-                ? 'medium'
-                : 'low'
-        if (source === 'rendered_page' && confidence === 'low') continue
+        const hasThreatContext = /\b(?:attributed|associated|linked|campaign|operator|ransomware|malware|detected|family|actor)\b/i.test(evidence)
+        if (!hasThreatContext && source !== 'decoded_script') continue
+        const confidence = hasThreatContext ? 'high' : 'low'
         found.push({
             name: term.name,
             category: term.category,
