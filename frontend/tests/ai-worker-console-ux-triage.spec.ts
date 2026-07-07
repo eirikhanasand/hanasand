@@ -28,6 +28,9 @@ test('ai worker console focuses operator triage while preserving live telemetry 
     expect(page).toContain('/dashboard/logs?service=')
     expect(page).toContain('id=\'ai-operations\'')
     expect(page).toContain('data-ai-operations')
+    expect(page).toContain('data-ai-lane-table')
+    expect(page).toContain('Lane control table')
+    expect(page).not.toContain('Action queued')
     expect(page).toContain('id=\'ai-clients\'')
     expect(page).toContain('data-ai-clients')
 

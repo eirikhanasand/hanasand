@@ -323,9 +323,6 @@ function EconomicsPanel({ economics, error, aiContainers, containerError }: { ec
                 <div>
                     <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Worker output</p>
                     <h2 className='mt-1 text-xl font-semibold text-ui-text'>Verified work, live capacity, and spend</h2>
-                    <p className='mt-2 max-w-3xl text-sm leading-6 text-ui-muted'>
-                        Primary signal: {operationsCopy(economics.keyMetric)}. Failed platform runs stay visible for operators without being counted as user value.
-                    </p>
                 </div>
                 <span className='w-fit rounded-full bg-ui-primary/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-ui-primary outline outline-ui-primary/20'>
                     {economics.windowDays} day window
@@ -637,89 +634,99 @@ function OperationsPanel({ readiness }: { readiness: AIEconomics['commercialRead
         : readiness.overallState === 'evidence_gaps'
             ? 'bg-ui-primary/10 text-ui-primary outline-ui-primary/25'
             : 'bg-ui-warning/10 text-ui-warning outline-ui-warning/25'
+    const counts = [
+        ['live', readiness.achievedCount],
+        ['review', readiness.partialCount],
+        ['no signal', readiness.internalActionCount],
+        ['tracked', `${readiness.measurableCount}/${readiness.totalCount}`],
+    ]
 
     return (
         <div className='rounded-lg border border-ui-border bg-ui-raised p-4' id='ai-operations' data-ai-operations>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
                 <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Worker operations</p>
-                    <h3 className='mt-1 text-lg font-semibold text-ui-text'>Autonomous job lanes</h3>
-                    <p className='mt-2 max-w-3xl text-sm leading-6 text-ui-muted'>{operationsConclusion(readiness.conclusion)}</p>
+                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-ui-muted'>Operations</p>
+                    <h3 className='mt-1 text-lg font-semibold text-ui-text'>Lane control table</h3>
                 </div>
-                <div className={`rounded-lg px-3 py-2 text-sm font-semibold outline ${tone}`}>
-                    {operationsStateLabel(readiness.overallState)}
-                    <p className='mt-1 text-xs font-normal opacity-80'>
-                        {readiness.achievedCount} live · {readiness.partialCount} under review · {readiness.internalActionCount} operator actions · {readiness.measurableCount}/{readiness.totalCount} tracked
-                    </p>
+                <div className='flex flex-wrap items-center gap-2'>
+                    <span className={`rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] outline ${tone}`}>{operationsStateLabel(readiness.overallState)}</span>
+                    {counts.map(([label, value]) => (
+                        <span key={label} className='rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-xs text-ui-muted'>
+                            <b className='font-semibold text-ui-text'>{value}</b> {label}
+                        </span>
+                    ))}
                 </div>
             </div>
 
-            <div className='mt-4 grid gap-3 xl:grid-cols-2'>
-                {readiness.items.map((item) => (
-                    <article key={item.id} className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-                        <div className='flex items-start justify-between gap-3'>
-                            <div>
-                                <p className='text-xs font-medium uppercase tracking-[0.16em] text-ui-muted'>Lane {item.priority}</p>
-                                <h4 className='mt-1 text-sm font-semibold text-ui-text'>{item.label}</h4>
-                            </div>
-                            <ReadinessBadge status={item.status} measurable={item.measurable} />
-                        </div>
-                        <div className='mt-3 space-y-1.5'>
-                            {item.evidence.slice(0, 3).map((line) => (
-                                <p key={line} className='text-xs leading-5 text-ui-muted'>{operationsCopy(line)}</p>
-                            ))}
-                        </div>
-                        <div className='mt-3 grid gap-2 rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs leading-5'>
-                            <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
-                                <span className='font-medium uppercase tracking-[0.12em] text-ui-muted'>Owner</span>
-                                <span className='text-ui-muted'>{item.owner}</span>
-                            </div>
-                            <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
-                                <span className='font-medium uppercase tracking-[0.12em] text-ui-muted'>Runner</span>
-                                <span className='text-ui-muted'>{operationsCopy(item.control)}</span>
-                            </div>
-                            <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
-                                <span className='font-medium uppercase tracking-[0.12em] text-ui-muted'>Last run</span>
-                                <span className='text-ui-muted'>{item.lastAttempt}</span>
-                            </div>
-                            <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
-                                <span className='font-medium uppercase tracking-[0.12em] text-ui-muted'>Now</span>
-                                <span className='text-ui-muted'>{operationsCopy(item.action)}</span>
-                            </div>
-                        </div>
-                    </article>
-                ))}
+            <div className='mt-4 overflow-x-auto rounded-lg border border-ui-border' data-ai-lane-table>
+                <table className='min-w-[980px] w-full text-left text-xs'>
+                    <thead className='bg-ui-panel text-ui-muted'>
+                        <tr>
+                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Lane</th>
+                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>State</th>
+                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Owner</th>
+                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Runner</th>
+                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Last signal</th>
+                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Next command</th>
+                            <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Controls</th>
+                        </tr>
+                    </thead>
+                    <tbody className='divide-y divide-ui-border'>
+                        {readiness.items.map((item) => (
+                            <tr key={item.id} className='bg-ui-raised align-top'>
+                                <td className='px-3 py-3'>
+                                    <p className='font-semibold text-ui-text'>{item.priority}</p>
+                                    <p className='mt-1 max-w-44 text-ui-muted'>{item.label}</p>
+                                </td>
+                                <td className='px-3 py-3'><ReadinessBadge status={item.status} measurable={item.measurable} /></td>
+                                <td className='px-3 py-3 text-ui-muted'>{item.owner}</td>
+                                <td className='px-3 py-3'>
+                                    <p className='max-w-48 truncate font-mono text-[11px] text-ui-muted' title={item.control}>{operationsCopy(item.control)}</p>
+                                </td>
+                                <td className='px-3 py-3'>
+                                    <p className='max-w-56 truncate text-ui-muted' title={item.lastAttempt}>{item.lastAttempt}</p>
+                                </td>
+                                <td className='px-3 py-3'>
+                                    <p className='max-w-72 truncate text-ui-text' title={item.action}>{operationsCopy(item.action)}</p>
+                                </td>
+                                <td className='px-3 py-3'>
+                                    <div className='flex gap-2'>
+                                        <Link href={`/dashboard/logs?service=${encodeURIComponent(item.control)}`} className='rounded-md border border-ui-border bg-ui-panel px-2.5 py-1.5 font-semibold text-ui-text hover:border-ui-primary/40'>
+                                            Logs
+                                        </Link>
+                                        <a href='#ai-clients' className='rounded-md border border-ui-border bg-ui-panel px-2.5 py-1.5 font-semibold text-ui-text hover:border-ui-primary/40'>
+                                            Clients
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     )
 }
 
 function ReadinessBadge({ status, measurable }: { status: AIEconomics['commercialReadiness']['items'][number]['status'], measurable: boolean }) {
-    const label = status === 'operational' ? 'Live' : status === 'evidence_gap' ? 'Warming up' : 'Action queued'
+    const label = status === 'operational' ? 'Live' : status === 'evidence_gap' ? 'Gap' : 'No signal'
     const tone = status === 'operational'
         ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : status === 'evidence_gap'
             ? 'border-ui-primary/30 bg-ui-primary/10 text-ui-primary'
             : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
     return (
-        <div className='flex flex-col items-end gap-1'>
-            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${tone}`}>{label}</span>
-            <span className='text-[10px] uppercase tracking-[0.12em] text-ui-muted'>{measurable ? 'tracked' : 'connecting'}</span>
+        <div className='flex flex-wrap gap-1.5'>
+            <span className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${tone}`}>{label}</span>
+            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-ui-muted'>{measurable ? 'tracked' : 'metering'}</span>
         </div>
     )
 }
 
-function operationsConclusion(value: string) {
-    return operationsCopy(value)
-        .replace(/\bdesign QA\b/gi, 'design checks')
-        .replace(/\bmeasured production samples\b/gi, 'live production samples')
-        .replace(/\bcommercially strong\b/gi, 'ready for customers')
-}
-
 function operationsStateLabel(value: AIEconomics['commercialReadiness']['overallState']) {
-    if (value === 'commercially_ready') return 'Customer-ready'
-    if (value === 'internal_action_required') return 'Operator action'
-    return 'Operator review'
+    if (value === 'commercially_ready') return 'Nominal'
+    if (value === 'internal_action_required') return 'Needs signal'
+    return 'Review'
 }
 
 function operationsCopy(value: string) {
