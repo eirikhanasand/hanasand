@@ -138,7 +138,7 @@ services:
       HANASAND_AI_CLIENT_NAME: ${HANASAND_AI_CLIENT_NAME:-hanasand-inspur}
       HANASAND_AI_CLIENT_HEALTH_PORT: ${HANASAND_AI_CLIENT_HEALTH_PORT:-18182}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${HANASAND_AI_CLIENT_HEALTH_PORT:-18182}/health"]
+      test: ["CMD-SHELL", "wget -T 2 -t 1 -qO- http://127.0.0.1:${HANASAND_AI_CLIENT_HEALTH_PORT:-18182}/health"]
       interval: 10s
       retries: 5
       start_period: 10s

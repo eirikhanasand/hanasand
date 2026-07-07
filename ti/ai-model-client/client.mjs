@@ -11,14 +11,16 @@ let lastPromptAt = null;
 let lastCompletionAt = null;
 let lastModelCheck = null;
 let heartbeat;
+let modelCheckInFlight = false;
+let modelHealth = { ready: false, blocker: "not_checked", checkedAt: null };
 
 Bun.serve({
   hostname: "0.0.0.0",
   port: HEALTH_PORT,
   async fetch(request) {
     const url = new URL(request.url);
-    if (url.pathname !== "/health") return json({ error: "not_found" }, 404);
-    const modelHealth = await checkModel();
+    if (url.pathname !== "/health" && url.pathname !== "/ready") return json({ error: "not_found" }, 404);
+    refreshModelHealth();
     const ready = connected && modelHealth.ready;
     return json({
       schemaVersion: "hanasand.ai_model_client.health.v1",
@@ -33,11 +35,13 @@ Bun.serve({
       lastCompletionAt,
       lastError,
       modelHealth
-    }, ready ? 200 : 503);
+    }, url.pathname === "/health" ? 200 : ready ? 200 : 503);
   }
 });
 
 connect();
+refreshModelHealth();
+setInterval(refreshModelHealth, 30_000);
 
 function connect() {
   clearInterval(heartbeat);
@@ -49,6 +53,7 @@ function connect() {
   ws.addEventListener("open", () => {
     connected = true;
     lastError = null;
+    refreshModelHealth();
     sendClientUpdate("idle");
     heartbeat = setInterval(() => sendClientUpdate("idle"), 10_000);
   });
@@ -205,6 +210,18 @@ async function checkModel() {
       checkedAt: new Date().toISOString()
     };
   }
+}
+
+function refreshModelHealth() {
+  if (modelCheckInFlight) return;
+  modelCheckInFlight = true;
+  void checkModel()
+    .then((health) => {
+      modelHealth = health;
+    })
+    .finally(() => {
+      modelCheckInFlight = false;
+    });
 }
 
 function messageOf(error) {
