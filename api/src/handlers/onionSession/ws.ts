@@ -853,7 +853,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             if (!isCopyShortcut(message)) editableSelectAllArmed = false
         } else if (message.key.length === 1) {
             editableSelectAllArmed = false
-            await page.keyboard.type(message.key)
+            await page.keyboard.insertText(message.key)
         } else {
             editableSelectAllArmed = false
             await page.keyboard.press(normalizeKey(message.key)).catch(() => undefined)
