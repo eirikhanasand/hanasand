@@ -35,6 +35,8 @@ assert.equal(byId.get('api-agent-automations')?.controlMode, 'safe_control')
 assert.ok(byId.get('api-agent-automations')?.controls.includes('pause'), 'API automation cron should expose persisted pause control.')
 assert.ok(byId.get('api-agent-automations')?.controls.includes('run_now'), 'API automation cron should expose safe run-now control.')
 assert.equal(byId.get('api-hot-cache-refresh')?.controlMode, 'observable_only', 'Fastify cache refresh stays audit-only because it needs server instance state.')
+assert.equal(byId.get('ti-source-pack-worker')?.controlMode, 'run_only', 'Source-pack worker should expose the existing pack_worker_run contract.')
+assert.ok(byId.get('ti-source-pack-worker')?.controls.includes('run_now'), 'Source-pack worker should expose safe run-now control.')
 assert.equal(byId.get('api-vulnerability-scanner')?.controlMode, 'safe_control')
 assert.ok(byId.get('api-vulnerability-scanner')?.controls.includes('run_now'), 'Vulnerability scanner should expose manual run control.')
 assert.equal(byId.get('api-vulnerability-scanner')?.status, 'blocked', 'A never-run vulnerability scanner should be visible as blocked/stale.')
@@ -58,6 +60,7 @@ const tiMock = Bun.serve({
             controlRequests.push({ path: url.pathname, body })
             if (url.pathname === '/v1/ops/collection-scheduler') return json(tiSchedulerPayload())
             if (url.pathname === '/v1/dwm/alerts/rebuild') return json({ ok: true, rebuiltAt: now })
+            if (url.pathname === '/v1/dwm/source-requests' && body.action === 'pack_worker_run') return json({ action: 'pack_worker_run', sourcePackId: body.sourcePackId, run: { id: 'run_default_source_pack_worker', status: 'completed', completedAt: now } })
             return json({ error: 'not found' }, 404)
         }
 
@@ -112,6 +115,7 @@ try {
     assert.equal(liveById.get('ti-exposure-queue-collection')?.logExcerpt, '4 visible claims, 1 need review.')
     assert.equal(liveById.get('ti-exposure-parser')?.averageRuntimeMs, 42)
     assert.equal(liveById.get('ti-dwm-alert-generation')?.controlMode, 'run_only')
+    assert.equal(liveById.get('ti-source-pack-worker')?.controlMode, 'run_only')
     assert.equal(liveById.get('ti-frontier-queue')?.resourceUsage.queueDepth, 7)
     assert.equal(liveById.get('ti-public-canary-collection')?.resourceUsage.memoryRssMb, 321)
 
@@ -134,12 +138,14 @@ try {
     await updateManagedCronJob('ti-public-canary-collection', { enabled: true })
     await updateManagedCronJob('ti-public-canary-collection', { action: 'run_now' })
     await updateManagedCronJob('ti-dwm-alert-generation', { action: 'run_now' })
+    await updateManagedCronJob('ti-source-pack-worker', { action: 'run_now' })
 
     assert.deepEqual(controlRequests.map(request => [request.path, request.body.action]), [
         ['/v1/ops/collection-scheduler', 'pause'],
         ['/v1/ops/collection-scheduler', 'resume'],
         ['/v1/ops/collection-scheduler', 'run_now'],
         ['/v1/dwm/alerts/rebuild', undefined],
+        ['/v1/dwm/source-requests', 'pack_worker_run'],
     ])
 } finally {
     restoreTiBase()

@@ -337,6 +337,10 @@ export async function updateManagedCronJob(id: string, input: ManagedCronUpdate)
         await runTiJob('/v1/dwm/alerts/rebuild', { tenantId: 'default', actor: 'dashboard/system/cron' })
         return (await listUnifiedScheduledJobs()).find(job => job.id === id)!
     }
+    if (id === 'ti-source-pack-worker' && input.action === 'run_now') {
+        await runTiJob('/v1/dwm/source-requests', { action: 'pack_worker_run', sourcePackLabel: 'default', requestedBy: 'dashboard/system/cron', reason: 'Run now requested from Cron Jobs dashboard.' })
+        return (await listUnifiedScheduledJobs()).find(job => job.id === id)!
+    }
     if (canRunApiCronJobNow(id)) {
         if (input.action === 'run_now') {
             void runApiCronJobNow(id).catch(error => {
@@ -607,7 +611,7 @@ function tiExposureQueueJob(result: TiFetchResult, schedulerPayload: Record<stri
         controlMode: 'observable_only',
         resourceUsage,
         costEstimate: costEstimate(75, 'Shares the ti-scraper collection service power estimate.'),
-        assumptions: ['Exposure queue work is produced by the TI collection loop; no separate destructive queue control is exposed.'],
+        assumptions: ['Exposure queue is populated by the Public TI collection loop. Use that job to pause/resume or run collection; this card audits the derived queue only.'],
     }
 }
 
@@ -639,7 +643,7 @@ function tiExposureParserJob(result: TiFetchResult, schedulerPayload: Record<str
         controlMode: 'observable_only',
         resourceUsage,
         costEstimate: costEstimate(null, 'Parser power is included in ti-scraper and optional Hanasand AI services; no separate meter is available.'),
-        assumptions: ['Parser execution is request-driven from ingestion, not a standalone cron.'],
+        assumptions: ['Parser execution is request-driven by exposure ingest and source-pack worker validation. Run the upstream collection/source-pack jobs to create parser work.'],
     }
 }
 
@@ -701,11 +705,11 @@ function tiSourcePackWorkerJob(result: TiFetchResult, resourceUsage: ScheduledJo
         failureCount: arrayValue(readiness.blockers).length,
         lastError: arrayValue(readiness.blockers).join('; ') || result.error,
         logExcerpt: result.ok ? `${record(payload.counts).candidateCount ?? 0} candidates; ${record(payload.counts).packCount ?? 0} packs.` : result.error,
-        controls: [],
-        controlMode: 'observable_only',
+        controls: ['run_now'],
+        controlMode: 'run_only',
         resourceUsage,
         costEstimate: costEstimate(75, 'Shares the ti-scraper service power estimate.'),
-        assumptions: ['Source-pack work is exposed as readiness/status data and is not separately pausable today.'],
+        assumptions: ['Run now calls the existing default source-pack worker contract. Pause is not exposed because source-pack processing is request-driven, not a scheduler loop.'],
     }
 }
 
@@ -737,7 +741,7 @@ function tiFrontierQueueJob(result: TiFetchResult, scheduler: Record<string, unk
         controlMode: 'observable_only',
         resourceUsage,
         costEstimate: costEstimate(75, 'Shares the ti-scraper service power estimate.'),
-        assumptions: ['Frontier queue control is intentionally observable-only here to avoid interrupting leased work.'],
+        assumptions: ['Frontier contains queued and leased collection tasks. Pause/resume belongs on the collection loop; direct queue mutation would risk interrupting leased work.'],
     }
 }
 
@@ -748,7 +752,7 @@ function tiUnavailableJobs(reason: string): UnifiedScheduledJob[] {
         blockedTiJob('ti-exposure-queue-collection', 'DWM exposure queue collection', 'Recurring exposure-claim queue populated by TI captures.', 'ti/scraper/src/api/exposureQueueRoutes.ts', [], unavailable),
         blockedTiJob('ti-exposure-parser', 'Exposure parser bridge', 'Exposure claim parser status for Hanasand AI/local fallback parsing.', 'ti/scraper/src/api/exposureQueueRoutes.ts', [], unavailable),
         blockedTiJob('ti-dwm-alert-generation', 'DWM alert generation readiness', 'Alert candidate and case-generation readiness for DWM workflows.', 'ti/scraper/src/api/dwmWorkflowRoutes.ts', ['run_now'], unavailable, 'Alerts'),
-        blockedTiJob('ti-source-pack-worker', 'DWM source-pack worker', 'Source-pack and parser-family readiness worker.', 'ti/scraper/src/api/dwmSourceRequestRoute.ts', [], unavailable),
+        blockedTiJob('ti-source-pack-worker', 'DWM source-pack worker', 'Source-pack and parser-family readiness worker.', 'ti/scraper/src/api/dwmSourceRequestRoute.ts', ['run_now'], unavailable),
         blockedTiJob('ti-frontier-queue', 'TI frontier queue', 'Internal scraper collection task queue.', 'ti/scraper/src/frontier/frontier.ts', [], unavailable),
     ]
 }

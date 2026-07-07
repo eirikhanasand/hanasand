@@ -155,7 +155,7 @@ export default function CronJobsClient() {
                                                 <StatusPill job={job} />
                                                 <CostPill job={job} />
                                                 <MetaPill icon={<CalendarClock className='h-3.5 w-3.5' />} value={cadenceLabel(job)} />
-                                                <MetaPill icon={<FileText className='h-3.5 w-3.5' />} value={controlLabel(job)} />
+                                                <MetaPill icon={<FileText className='h-3.5 w-3.5' />} value={controlLabel(job)} title={job.assumptions.join(' ')} />
                                             </div>
                                             <p className={`${compact ? 'mt-0.5 line-clamp-1' : 'mt-1'} text-sm leading-5 text-ui-muted`}>{job.description}</p>
                                             <div className={`${compact ? 'hidden' : 'mt-3 grid'} gap-2 sm:grid-cols-3`}>
@@ -178,7 +178,7 @@ export default function CronJobsClient() {
                                                 </button>
                                             )}
                                             {!job.controls.length && (
-                                                <span className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted'>
+                                                <span className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted' title={job.assumptions.join(' ')}>
                                                     Audit only
                                                 </span>
                                             )}
@@ -276,9 +276,9 @@ function CostPill({ job }: { job: ManagedCronJob }) {
     )
 }
 
-function MetaPill({ icon, value }: { icon: ReactNode, value: string }) {
+function MetaPill({ icon, value, title }: { icon: ReactNode, value: string, title?: string }) {
     return (
-        <span className='inline-flex max-w-full items-center gap-1 rounded-full border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'>
+        <span className='inline-flex max-w-full items-center gap-1 rounded-full border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted' title={title}>
             {icon}
             <span className='truncate'>{value}</span>
         </span>

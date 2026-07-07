@@ -37,6 +37,12 @@ test('cron jobs dashboard renders unified scheduled operations and controls', as
         const nextScanner = { ...scanner, status: 'running', running: true }
         await route.fulfill({ json: { job: nextScanner, jobs: fixtureJobs.map(job => job.id === 'api-vulnerability-scanner' ? nextScanner : job) } })
     })
+    await page.route('**/api/backend/system/cron/ti-source-pack-worker**', async route => {
+        updates.push(await route.request().postDataJSON())
+        const sourcePack = fixtureJobs.find(job => job.id === 'ti-source-pack-worker')!
+        const nextSourcePack = { ...sourcePack, status: 'running', running: true }
+        await route.fulfill({ json: { job: nextSourcePack, jobs: fixtureJobs.map(job => job.id === 'ti-source-pack-worker' ? nextSourcePack : job) } })
+    })
     await page.route('**/api/backend/system/cron/forgejo-standby-sync**', async route => {
         const body = await route.request().postDataJSON()
         updates.push(body)
@@ -53,6 +59,7 @@ test('cron jobs dashboard renders unified scheduled operations and controls', as
     await expect(page.getByRole('heading', { name: 'Next safe action' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Public TI collection loop' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Exposure parser bridge' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'DWM source-pack worker' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'DWM alert generation readiness' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Vulnerability image scanner' })).toBeVisible()
     await expect(page.getByRole('link', { name: /Vulnerability image scanner/ })).toContainText('Docker socket is unavailable at /var/run/docker.sock')
@@ -90,6 +97,13 @@ test('cron jobs dashboard renders unified scheduled operations and controls', as
     await expect.poll(() => updates.length).toBe(3)
     expect(updates[2]).toMatchObject({ action: 'run_now' })
     await expect(page.locator('span').filter({ hasText: /^running$/ })).toBeVisible()
+
+    const sourcePackCard = page.locator('#job-ti-source-pack-worker')
+    await expect(sourcePackCard.getByText('Run now supported').first()).toBeVisible()
+    await expect(sourcePackCard.getByText('Audit only')).toBeHidden()
+    await sourcePackCard.getByRole('button', { name: 'Run now' }).click()
+    await expect.poll(() => updates.length).toBe(4)
+    expect(updates[3]).toMatchObject({ action: 'run_now' })
 })
 
 const baseJob = {
@@ -146,6 +160,19 @@ const fixtureJobs = [
         status: 'enabled',
         controls: [],
         controlMode: 'observable_only',
+        assumptions: ['Parser execution is request-driven by exposure ingest and source-pack worker validation. Run the upstream collection/source-pack jobs to create parser work.'],
+    },
+    {
+        ...baseJob,
+        id: 'ti-source-pack-worker',
+        name: 'DWM source-pack worker',
+        category: 'TI / Exposure',
+        schedule: 'On source-pack/status requests',
+        enabled: true,
+        status: 'observable',
+        controls: ['run_now'],
+        controlMode: 'run_only',
+        assumptions: ['Run now calls the existing default source-pack worker contract. Pause is not exposed because source-pack processing is request-driven, not a scheduler loop.'],
     },
     {
         ...baseJob,
