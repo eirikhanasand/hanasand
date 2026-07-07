@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
-test('automations keeps the primary alert route workflow calm and wired', async ({ context, page, baseURL }) => {
+test('automations keeps the primary route workflow calm and wired', async ({ context, page, baseURL }) => {
     const origin = baseURL || 'http://127.0.0.1:3000'
     await context.setExtraHTTPHeaders({ 'x-hanasand-render-proof-auth': 'local-dashboard-render-proof' })
     await context.addCookies([
@@ -50,7 +50,7 @@ test('automations keeps the primary alert route workflow calm and wired', async 
 
         if (request.method() === 'POST' && path.endsWith('/api/backend/automations')) {
             createRequests.push(await request.postDataJSON())
-            await route.fulfill({ status: 201, json: { automation: { ...fixtureAutomations[1], id: 'created-route', name: 'Mail path health alert' } } })
+            await route.fulfill({ status: 201, json: { automation: { ...fixtureAutomations[1], id: 'created-route', name: 'Mail path health automation' } } })
             return
         }
 
@@ -59,7 +59,7 @@ test('automations keeps the primary alert route workflow calm and wired', async 
 
     await page.goto('/dashboard/automations', { waitUntil: 'domcontentloaded' })
 
-    await expect(page.getByRole('heading', { name: 'Alerts' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Automations' })).toBeVisible()
     await expect(page.getByRole('heading', { name: '1 route needs attention' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Mail delivery route' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Healthy system alert' })).toBeVisible()
@@ -70,43 +70,56 @@ test('automations keeps the primary alert route workflow calm and wired', async 
     await expect(page.getByText('Advanced schedule and notification policy')).toBeVisible()
     await expect(page.getByText('Advanced matching rules')).toBeVisible()
     await expect(page.getByText('Run history')).toBeVisible()
-    await expect(page.getByText('Prompt and match policy')).toBeHidden()
+    await expect(page.getByText('Matching instructions')).toBeHidden()
 
     await page.getByText('Templates').click()
     await expect(page.getByRole('button', { name: 'Mail health' })).toBeVisible()
 
     await page.getByText('Advanced matching rules').click()
-    await expect(page.getByText('Prompt and match policy')).toBeVisible()
+    await expect(page.getByText('Matching instructions')).toBeVisible()
+    await expect(page.getByText('The single field controls all advanced matching behavior')).toBeVisible()
 
     await page.getByRole('button', { name: 'Check now' }).click()
     await expect.poll(() => runRequests.length).toBe(1)
 
-    await page.getByRole('button', { name: 'Save alert' }).click()
+    await expect(page.getByText('Logs', { exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'https://ops.example/logs/run-1' }).first()).toBeVisible()
+    await expect(page.getByText('Screenshots', { exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'https://ops.example/screens/run-1.png' }).first()).toBeVisible()
+
+    await page.getByRole('button', { name: 'Save automation' }).click()
     await expect.poll(() => saveRequests.length).toBe(1)
     expect(saveRequests[0]).toMatchObject({ name: 'Mail delivery route', actionType: 'mail_health_check' })
 
     await expect(page.getByRole('button', { name: 'Delete' })).toBeHidden()
-    await page.getByText('Advanced route actions').click()
+    await page.getByText('Automation controls').click()
     await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible()
 
     if (!await page.getByRole('button', { name: 'Mail health' }).isVisible()) {
         await page.getByText('Templates').click()
     }
     await page.getByRole('button', { name: 'Mail health' }).click()
-    await expect(page.getByRole('heading', { name: 'New alert' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'New automation' })).toBeVisible()
     await expect(page.getByText('Route is paused; reactivate to resume checks.')).toBeVisible()
     await page.getByText('Advanced schedule and notification policy').click()
     await page.getByTestId('automation-schedule-settings').getByLabel('Status').selectOption('active')
-    await expect(page.getByText('Add a Discord webhook-file destination before activating this alert.')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Create alert' })).toBeDisabled()
+    await expect(page.getByText('Add a Discord webhook-file destination before activating this automation.')).toBeVisible()
+    const interval = page.getByLabel('Check every')
+    await interval.fill('')
+    await expect(interval).toHaveValue('')
+    await interval.fill('15')
+    await page.getByLabel('First check').fill('2026-07-03T20:15')
+    await expect(page.getByRole('button', { name: 'Create automation' })).toBeDisabled()
 
     await page.getByLabel('Destination').fill('discord-webhook-file:/secure/ops/discord-alerts.url')
-    await expect(page.getByRole('button', { name: 'Create alert' })).toBeEnabled()
-    await page.getByRole('button', { name: 'Create alert' }).click()
+    await expect(page.getByRole('button', { name: 'Create automation' })).toBeEnabled()
+    await page.getByRole('button', { name: 'Create automation' }).click()
     await expect.poll(() => createRequests.length).toBe(1)
     expect(createRequests[0]).toMatchObject({
         actionType: 'mail_health_check',
         status: 'active',
+        intervalMinutes: 15,
+        runAt: '2026-07-03T20:15',
         modelName: 'discord-webhook-file:/secure/ops/discord-alerts.url',
     })
 })
@@ -185,7 +198,7 @@ const fixtureRuns = [
         automationId: 'failing-route',
         status: 'failed',
         result: null,
-        error: 'SMTP health check failed',
+        error: 'SMTP health check failed. Logs: https://ops.example/logs/run-1 Screenshot: https://ops.example/screens/run-1.png',
         provider: 'local',
         model: null,
         startedAt: '2026-07-03T18:10:00.000Z',

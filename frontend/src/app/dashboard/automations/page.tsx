@@ -3,8 +3,8 @@ import AutomationsClient from './pageClient'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Alerts Portal',
-    description: 'Create monitoring, mail, system, and delivery-test alerts and review recent alert runs.',
+    title: 'Automations',
+    description: 'Create monitoring, mail, system, and delivery-test automations and review recent runs.',
 }
 
 export default async function Page({
@@ -18,9 +18,9 @@ export default async function Page({
     return (
         <DashboardPage>
             <DashboardHeader
-                eyebrow='Alert portal'
-                title='Alerts'
-                description='Create monitoring, mail, system, and delivery-test alerts from one operator console.'
+                eyebrow='Automation portal'
+                title='Automations'
+                description='Create monitoring, mail, system, and delivery-test automations from one operator console.'
             />
             <AutomationsClient setup={setup === 'dwm' ? 'dwm' : undefined} />
         </DashboardPage>

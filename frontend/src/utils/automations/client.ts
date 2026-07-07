@@ -4,6 +4,7 @@ import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
 
 export type AgentAutomation = {
     id: string
+    ownerId?: string
     name: string
     prompt: string
     scheduleKind: 'once' | 'interval'
@@ -38,6 +39,8 @@ export type AgentAutomationRun = {
     startedAt: string
     completedAt: string | null
     durationMs: number | null
+    logs?: string[] | null
+    screenshots?: string[] | null
 }
 
 export type AutomationPayload = {

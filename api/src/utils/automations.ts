@@ -45,6 +45,8 @@ export type AutomationRunRow = {
     started_at: string
     completed_at: string | null
     duration_ms: number | null
+    logs?: string[] | null
+    screenshots?: string[] | null
 }
 
 export type AutomationInput = {
@@ -127,6 +129,8 @@ export function toAutomationRun(row: AutomationRunRow) {
         startedAt: row.started_at,
         completedAt: row.completed_at,
         durationMs: row.duration_ms,
+        logs: Array.isArray(row.logs) ? row.logs : extractRunLinks(row.result || row.error || '', /\b(?:log|logs|trace|output)\b/i),
+        screenshots: Array.isArray(row.screenshots) ? row.screenshots : extractRunLinks(row.result || row.error || '', /\b(?:screenshot|image|capture)\b/i),
     }
 }
 
@@ -173,6 +177,7 @@ export function computeNextRunAt({
         return runAt && runAt.getTime() >= from.getTime() - 1000 ? runAt : null
     }
 
+    if (runAt && runAt.getTime() >= from.getTime() - 1000) return runAt
     const minutes = Math.max(1, intervalMinutes || 60)
     return new Date(from.getTime() + minutes * 60_000)
 }
@@ -442,9 +447,9 @@ function parseIntervalMinutes(value: unknown, scheduleKind: AutomationScheduleKi
 }
 
 function parseRunAt(value: unknown, scheduleKind: AutomationScheduleKind) {
-    if (scheduleKind !== 'once') return null
     const raw = clean(value)
-    const date = raw ? new Date(raw) : new Date(Date.now() + 60_000)
+    if (!raw) return scheduleKind === 'once' ? new Date(Date.now() + 60_000) : null
+    const date = new Date(raw)
     if (!Number.isFinite(date.getTime())) {
         throw new Error('Run time must be a valid date.')
     }
@@ -474,4 +479,9 @@ function parseTimezone(value: unknown) {
     } catch {
         throw new Error('Timezone must be a valid IANA timezone, for example Europe/Oslo.')
     }
+}
+
+function extractRunLinks(text: string, hint: RegExp) {
+    if (!hint.test(text)) return []
+    return Array.from(text.matchAll(/https?:\/\/[^\s)]+/g), match => match[0]).slice(0, 5)
 }

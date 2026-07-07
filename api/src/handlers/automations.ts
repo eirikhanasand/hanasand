@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
+import hasRole from '#utils/auth/hasRole.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import {
     executeAutomation,
@@ -19,13 +20,14 @@ export async function getAutomations(req: FastifyRequest, res: FastifyReply) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
+    const includeAll = await canManageAllAutomations(req, res)
     const result = await run(`
         SELECT *
         FROM agent_automations
-        WHERE owner_id = $1
+        WHERE ($1::BOOLEAN OR owner_id = $2)
           AND status <> 'archived'
         ORDER BY updated_at DESC, created_at DESC
-    `, [id])
+    `, [includeAll, id])
 
     return res.send({ automations: (result.rows as AutomationRow[]).map(toAutomation) })
 }
@@ -36,12 +38,13 @@ export async function getAutomation(req: FastifyRequest<{ Params: { id: string }
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const automation = await loadAutomation(req.params.id, ownerId)
+    const includeAll = await canManageAllAutomations(req, res)
+    const automation = await loadAutomation(req.params.id, ownerId, includeAll)
     if (!automation) {
         return res.status(404).send({ error: 'Automation not found.' })
     }
 
-    const runs = await loadRuns(req.params.id, ownerId)
+    const runs = await loadRuns(req.params.id, ownerId, includeAll)
     return res.send({ automation: toAutomation(automation), runs: runs.map(toAutomationRun) })
 }
 
@@ -109,7 +112,8 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const existing = await loadAutomation(req.params.id, ownerId)
+    const manageAll = await canManageAllAutomations(req, res)
+    const existing = await loadAutomation(req.params.id, ownerId, manageAll)
     if (!existing) {
         return res.status(404).send({ error: 'Automation not found.' })
     }
@@ -122,7 +126,7 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
     }
 
     if (input.status === 'active') {
-        const limitError = await activeAutomationLimitError(ownerId, req.params.id)
+        const limitError = await activeAutomationLimitError(existing.owner_id, req.params.id)
         if (limitError) {
             return res.status(409).send({ error: limitError })
         }
@@ -146,11 +150,11 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
                last_status = CASE WHEN last_status = 'running' THEN NULL ELSE last_status END,
                updated_at = NOW()
          WHERE id = $1
-           AND owner_id = $2
+           AND ($2::BOOLEAN OR owner_id = $14)
          RETURNING *
     `, [
         req.params.id,
-        ownerId,
+        manageAll,
         input.name,
         input.prompt,
         input.scheduleKind,
@@ -162,6 +166,7 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         input.modelName,
         input.notifyOn,
         input.nextRunAt,
+        ownerId,
     ])
 
     return res.send({ automation: toAutomation(result.rows[0] as AutomationRow) })
@@ -173,15 +178,16 @@ export async function deleteAutomation(req: FastifyRequest<{ Params: { id: strin
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
+    const manageAll = await canManageAllAutomations(req, res)
     const result = await run(`
         UPDATE agent_automations
            SET status = 'archived',
                next_run_at = NULL,
                updated_at = NOW()
          WHERE id = $1
-           AND owner_id = $2
+           AND ($2::BOOLEAN OR owner_id = $3)
          RETURNING *
-    `, [req.params.id, ownerId])
+    `, [req.params.id, manageAll, ownerId])
 
     if (!result.rows.length) {
         return res.status(404).send({ error: 'Automation not found.' })
@@ -196,7 +202,7 @@ export async function postAutomationRunNow(req: FastifyRequest<{ Params: { id: s
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const automation = await loadAutomation(req.params.id, ownerId)
+    const automation = await loadAutomation(req.params.id, ownerId, await canManageAllAutomations(req, res))
     if (!automation) {
         return res.status(404).send({ error: 'Automation not found.' })
     }
@@ -214,29 +220,34 @@ export async function postAutomationRunNow(req: FastifyRequest<{ Params: { id: s
     return res.status(202).send({ ok: true, message: 'Automation run queued.' })
 }
 
-async function loadAutomation(id: string, ownerId: string) {
+async function loadAutomation(id: string, ownerId: string, includeAll = false) {
     const result = await run(`
         SELECT *
         FROM agent_automations
         WHERE id = $1
-          AND owner_id = $2
+          AND ($2::BOOLEAN OR owner_id = $3)
           AND status <> 'archived'
-    `, [id, ownerId])
+    `, [id, includeAll, ownerId])
 
     return (result.rows as AutomationRow[])[0] || null
 }
 
-async function loadRuns(automationId: string, ownerId: string) {
+async function loadRuns(automationId: string, ownerId: string, includeAll = false) {
     const result = await run(`
         SELECT *
         FROM agent_automation_runs
         WHERE automation_id = $1
-          AND owner_id = $2
+          AND ($2::BOOLEAN OR owner_id = $3)
         ORDER BY started_at DESC
         LIMIT 25
-    `, [automationId, ownerId])
+    `, [automationId, includeAll, ownerId])
 
     return result.rows as AutomationRunRow[]
+}
+
+async function canManageAllAutomations(req: FastifyRequest, res: FastifyReply) {
+    const role = await hasRole(req, res, 'system_admin')
+    return role.valid
 }
 
 async function activeAutomationLimitError(ownerId: string, excludeId?: string) {

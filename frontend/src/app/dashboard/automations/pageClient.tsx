@@ -19,12 +19,12 @@ const defaultRunAt = () => new Date(Date.now() + 5 * 60_000).toISOString().slice
 const defaultTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 const maxActiveAutomations = 10
 const dwmWebhookDraftKey = 'hanasand:dwm-webhook-subscription'
-const draftSelectionId = '__new_alert_draft__'
-const inputClass = 'rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+const draftSelectionId = '__new_automation_draft__'
+const inputClass = 'h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
 const disclosureClass = 'rounded-lg border border-ui-border bg-ui-raised'
 const disclosureSummaryClass = 'flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'
 const newAutomationDraft = (prompt = ''): AutomationPayload => ({
-    name: 'General system alert',
+    name: 'General system automation',
     prompt,
     scheduleKind: 'interval',
     intervalMinutes: 30,
@@ -39,10 +39,10 @@ const newAutomationDraft = (prompt = ''): AutomationPayload => ({
 const newMailAlertDraft = (): AutomationPayload => ({
     ...newAutomationDraft([
         'Check the Hanasand Mail dashboard path and mail service health.',
-        'Send a Discord alert when mailbox overview, DNS, SMTP, TLS, queue, or JMAP checks are warning or failing.',
+        'Send a Discord notification when mailbox overview, DNS, SMTP, TLS, queue, or JMAP checks are warning or failing.',
         'Include the failing check name, status, and operator action.',
     ].join('\n')),
-    name: 'Mail path health alert',
+    name: 'Mail path health automation',
     actionType: 'mail_health_check',
     intervalMinutes: 5,
     status: 'paused',
@@ -51,8 +51,8 @@ const newMailAlertDraft = (): AutomationPayload => ({
 })
 
 const newSystemDiscordDraft = (): AutomationPayload => ({
-    ...newAutomationDraft('Hanasand alert portal smoke: Mail path alert integration is configured with Discord webhook-file delivery.'),
-    name: 'Discord system alert',
+    ...newAutomationDraft('Hanasand automation smoke: Mail path notification integration is configured with Discord webhook-file delivery.'),
+    name: 'Discord system automation',
     actionType: 'system_alert',
     scheduleKind: 'once',
     intervalMinutes: null,
@@ -80,7 +80,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
     const [webhookDraft, setWebhookDraft] = useState<DwmWebhookDraft | null>(null)
     const [draft, setDraft] = useState<AutomationPayload>(() => initialSetup
         ? dwmFallbackDraft()
-        : newAutomationDraft('Check the watchlist for new company, domain, vendor, or actor mentions and summarize any alert-worthy matches.'))
+        : newAutomationDraft('Check the watchlist for new company, domain, vendor, or actor mentions and summarize any automation-worthy matches.'))
 
     const selected = useMemo(() => automations.find(item => item.id === selectedId) || null, [automations, selectedId])
     const activeAutomationCount = useMemo(() => automations.filter(item => item.status === 'active').length, [automations])
@@ -121,9 +121,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             } else {
                 setRuns([])
             }
-            setStatus('Alert routes streaming.')
+            setStatus('Automations loaded.')
         } catch (error) {
-            setStatus(error instanceof Error ? error.message : 'Unable to load alert settings.')
+            setStatus(error instanceof Error ? error.message : 'Unable to load automation settings.')
         } finally {
             setBusy('')
         }
@@ -153,7 +153,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
         try {
             const payloadToSave = {
                 ...draft,
-                runAt: draft.runAt || defaultRunAt(),
+                runAt: draft.runAt || (draft.scheduleKind === 'once' ? defaultRunAt() : null),
             }
             const payload = selected
                 ? await updateAutomation(selected.id, payloadToSave)
@@ -165,9 +165,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             setSelectedId(payload.automation.id)
             setDraft(toDraft(payload.automation))
             await load(payload.automation.id)
-            setStatus(selected ? 'Alert updated.' : 'Alert created.')
+            setStatus(selected ? 'Automation updated.' : 'Automation created.')
         } catch (error) {
-            setStatus(error instanceof Error ? error.message : 'Unable to save alert settings.')
+            setStatus(error instanceof Error ? error.message : 'Unable to save automation settings.')
         } finally {
             setBusy('')
         }
@@ -182,9 +182,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             setRuns([])
             setDraft(newAutomationDraft())
             await load('')
-            setStatus('Alert removed.')
+            setStatus('Automation removed.')
         } catch (error) {
-            setStatus(error instanceof Error ? error.message : 'Unable to remove alert.')
+            setStatus(error instanceof Error ? error.message : 'Unable to remove automation.')
         } finally {
             setBusy('')
         }
@@ -214,14 +214,14 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
         setSelectedId('')
         setRuns([])
         setDraft(newMailAlertDraft())
-        setStatus('Mail alert draft ready.')
+        setStatus('Mail automation draft ready.')
     }
 
     function useSystemAlertTemplate() {
         setSelectedId('')
         setRuns([])
         setDraft(newSystemDiscordDraft())
-        setStatus('Discord alert draft ready.')
+        setStatus('Discord automation draft ready.')
     }
 
     function useWebhookDraft() {
@@ -256,9 +256,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     <div>
                         <p className='text-[10px] font-semibold uppercase text-ui-primary'>Route queue</p>
                         <h2 className='text-sm font-semibold text-ui-text'>{routeQueueHeadline(automations.length, failingAutomationCount)}</h2>
-                        <p className='mt-0.5 text-xs text-ui-muted'>{activeAutomationCount}/{maxActiveAutomations} active routes</p>
+                        <p className='mt-0.5 text-xs text-ui-muted'>{activeAutomationCount}/{maxActiveAutomations} active automations</p>
                     </div>
-                    <button type='button' className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary hover:bg-ui-panel' onClick={newAutomation} title='New alert' aria-label='New alert'>
+                    <button type='button' className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary hover:bg-ui-panel' onClick={newAutomation} title='New automation' aria-label='New automation'>
                         <Plus className='h-4 w-4' />
                     </button>
                 </div>
@@ -272,7 +272,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                             Mail health
                         </button>
                         <button type='button' className='rounded-lg border border-ui-border bg-ui-raised px-2 py-2 text-left text-xs font-semibold text-ui-text hover:border-ui-primary/40 hover:bg-ui-panel' onClick={useSystemAlertTemplate}>
-                            Discord alert
+                            Discord automation
                         </button>
                     </div>
                 </details>
@@ -297,7 +297,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                             </div>
                         </button>
                     ))}
-                    {!automations.length && <p className='p-3 text-sm leading-6 text-ui-muted'>Alert routing is ready. Create a monitoring, mail, system, or delivery-test route to start checks.</p>}
+                    {!automations.length && <p className='p-3 text-sm leading-6 text-ui-muted'>No automations yet. Create a monitoring, mail, system, or delivery-test automation to start checks.</p>}
                 </div>
             </section>
 
@@ -305,8 +305,8 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                 <div className='grid gap-4'>
                     <div className='flex flex-wrap items-center justify-between gap-2'>
                         <div>
-                            <p className='text-[10px] font-semibold uppercase text-ui-primary'>Alert control</p>
-                            <h2 className='text-lg font-semibold text-ui-text'>{selected ? selected.name : 'New alert'}</h2>
+                            <p className='text-[10px] font-semibold uppercase text-ui-primary'>Automation control</p>
+                            <h2 className='text-lg font-semibold text-ui-text'>{selected ? selected.name : 'New automation'}</h2>
                         </div>
                         <div className='flex flex-wrap gap-2'>
                             <IconButton label='Refresh' icon={<RefreshCw className='h-4 w-4' />} onClick={() => void load()} />
@@ -345,7 +345,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                 <div className='min-w-0'>
                                     <p className='text-[10px] font-semibold uppercase text-ui-primary'>Dark web monitoring</p>
                                     <h3 className='mt-1 text-sm font-semibold text-ui-text'>Webhook route ready to create</h3>
-                                    <p className='mt-1 text-sm leading-6 text-ui-muted'>Watch {formatTerms(webhookDraft.terms)} and send matched exposure alerts to {redactWebhookEndpoint(webhookDraft.endpoint)}.</p>
+                                    <p className='mt-1 text-sm leading-6 text-ui-muted'>Watch {formatTerms(webhookDraft.terms)} and send matched exposure notifications to {redactWebhookEndpoint(webhookDraft.endpoint)}.</p>
                                 </div>
                                 <div className='flex shrink-0 flex-wrap gap-2'>
                                     <button type='button' onClick={useWebhookDraft} className='rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90'>
@@ -377,8 +377,8 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     <section className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                         <div className='mb-3 flex items-center justify-between gap-3'>
                             <div>
-                                <h3 className='text-sm font-semibold text-ui-text'>Alert settings</h3>
-                                <p className='mt-0.5 text-xs text-ui-muted'>Start with the route name, alert type, and where notifications should go.</p>
+                                <h3 className='text-sm font-semibold text-ui-text'>Automation settings</h3>
+                                <p className='mt-0.5 text-xs text-ui-muted'>Start with the automation name, type, and where notifications should go.</p>
                             </div>
                             <span className={draft.status === 'active' ? 'rounded-full bg-ui-success/10 px-2 py-1 text-xs font-semibold text-ui-success' : 'rounded-full bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'}>
                                 {draft.status}
@@ -386,15 +386,15 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                         </div>
                         <div className='grid gap-3 md:grid-cols-3'>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-ui-muted'>Alert name</span>
+                                <span className='text-xs font-medium text-ui-muted'>Automation name</span>
                                 <input className={inputClass} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} />
                             </label>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-ui-muted'>Alert type</span>
+                                <span className='text-xs font-medium text-ui-muted'>Automation type</span>
                                 <select className={inputClass} value={draft.actionType} onChange={event => setDraft({ ...draft, actionType: event.target.value as AutomationPayload['actionType'] })}>
                                     <option value='agent_prompt'>Monitoring check</option>
-                                    <option value='mail_health_check'>Mail health alert</option>
-                                    <option value='system_alert'>System alert</option>
+                                    <option value='mail_health_check'>Mail health automation</option>
+                                    <option value='system_alert'>System automation</option>
                                     <option value='echo'>Delivery test</option>
                                 </select>
                             </label>
@@ -420,11 +420,11 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                             </label>
                             <label className='grid gap-1.5'>
                                 <span className='text-xs font-medium text-ui-muted'>Check every</span>
-                                <input className={`${inputClass} disabled:opacity-45`} type='number' min={1} disabled={draft.scheduleKind !== 'interval'} value={draft.intervalMinutes || 30} onChange={event => setDraft({ ...draft, intervalMinutes: Number(event.target.value) })} />
+                                <input className={`${inputClass} disabled:opacity-45`} type='number' min={1} disabled={draft.scheduleKind !== 'interval'} value={draft.intervalMinutes ?? ''} onChange={event => setDraft({ ...draft, intervalMinutes: event.target.value === '' ? null : Number(event.target.value) })} />
                             </label>
                             <label className='grid gap-1.5'>
                                 <span className='text-xs font-medium text-ui-muted'>First check</span>
-                                <input className={`${inputClass} disabled:opacity-45`} type='datetime-local' disabled={draft.scheduleKind !== 'once'} value={draft.runAt || ''} onChange={event => setDraft({ ...draft, runAt: event.target.value })} />
+                                <input className={inputClass} type='datetime-local' value={draft.runAt || ''} onChange={event => setDraft({ ...draft, runAt: event.target.value })} />
                             </label>
                             <label className='grid gap-1.5'>
                                 <span className='text-xs font-medium text-ui-muted'>Status</span>
@@ -451,19 +451,16 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     <details data-testid='automation-matching-rules' className={disclosureClass}>
                         <summary className={disclosureSummaryClass}>
                             <span>Advanced matching rules</span>
-                            <span className='min-w-0 truncate text-right text-xs font-medium text-ui-muted'>{extractRuleTerms(draft.prompt)}</span>
+                            <span className='min-w-0 truncate text-right text-xs font-medium text-ui-muted'>{matchingSummary(draft)}</span>
                         </summary>
                         <div className='grid gap-3 border-t border-ui-border p-3 lg:grid-cols-[1fr_0.55fr]'>
                             <label className='grid gap-1.5'>
-                                <span className='text-xs font-medium text-ui-muted'>Prompt and match policy</span>
-                                <textarea className={`${inputClass} min-h-28 leading-6`} value={draft.prompt} onChange={event => setDraft({ ...draft, prompt: event.target.value })} />
+                                <span className='text-xs font-medium text-ui-muted'>Matching instructions</span>
+                                <textarea className={`${inputClass} h-auto min-h-28 leading-6`} value={draft.prompt} aria-describedby='matching-help' onChange={event => setDraft({ ...draft, prompt: event.target.value })} />
                             </label>
-                            <div className='grid content-start gap-2 rounded-lg border border-ui-border bg-ui-raised p-3 text-xs text-ui-muted'>
-                                <RouteRule label='Terms' value={extractRuleTerms(draft.prompt)} />
-                                <RouteRule label='Payload' value={draft.prompt.toLowerCase().includes('actor') && draft.prompt.toLowerCase().includes('matchedterm') ? 'actor + match fields' : 'custom fields'} />
-                                <RouteRule label='Filter' value={draft.prompt.toLowerCase().includes('only send') ? 'new or updated matches' : 'all matches'} />
-                                <RouteRule label='Category' value={alertCategoryLabel(draft.actionType)} />
-                                <RouteRule label='Destination' value={deliveryTargetLabel(draft.modelName, draft.actionType)} />
+                            <div id='matching-help' className='rounded-lg border border-ui-border bg-ui-raised p-3 text-xs leading-5 text-ui-muted'>
+                                <p>The single field controls all advanced matching behavior: which terms to watch, which payload fields to include, and whether to send every match or only new/materially updated matches.</p>
+                                <p className='mt-2'>Current read: {matchingSummary(draft)}. Category: {alertCategoryLabel(draft.actionType)}. Destination: {deliveryTargetLabel(draft.modelName, draft.actionType)}.</p>
                             </div>
                         </div>
                     </details>
@@ -477,7 +474,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     <div className='flex flex-wrap items-center gap-2'>
                         <button type='button' className='inline-flex items-center gap-2 rounded-lg bg-ui-primary px-3 py-2 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted' onClick={() => void saveAutomation()} disabled={busy === 'save' || Boolean(saveBlocker)} title={saveBlocker || undefined}>
                             <WandSparkles className='h-4 w-4' />
-                            {selected ? 'Save alert' : 'Create alert'}
+                            {selected ? 'Save automation' : 'Create automation'}
                         </button>
                         <button type='button' className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-muted hover:border-ui-primary/40 hover:text-ui-text' onClick={cancelDraft} disabled={busy === 'save'}>
                             Cancel
@@ -488,18 +485,18 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     {selected && (
                         <details className={disclosureClass}>
                             <summary className={disclosureSummaryClass}>
-                                <span>Route controls</span>
+                                <span>Automation controls</span>
                                 <span className='text-xs font-medium text-ui-muted'>Optional</span>
                             </summary>
                             <div className='flex flex-wrap items-center justify-between gap-3 border-t border-ui-border p-3'>
-                                <p className='text-sm text-ui-muted'>Delete this alert route only when the delivery path is no longer owned or useful.</p>
+                                <p className='text-sm text-ui-muted'>Delete this automation only when the delivery path is no longer owned or useful.</p>
                                 <IconButton label='Delete' icon={<Trash2 className='h-4 w-4' />} tone='danger' onClick={() => void removeAutomation(selected.id)} disabled={busy.startsWith('delete-')} />
                             </div>
                         </details>
                     )}
 
                     {selected && (
-                        <details data-testid='automation-run-history' className={disclosureClass}>
+                        <details data-testid='automation-run-history' className={disclosureClass} open>
                             <summary className={disclosureSummaryClass}>
                                 <span>Run history</span>
                                 <span className='text-xs font-medium text-ui-muted'>{selected.runCount} checks · latest {selected.lastStatus || 'checking'}</span>
@@ -521,6 +518,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                             {run.status === 'failed'
                                                 ? <ErrorNotice compact className='mt-2' message={run.error || run.result || 'Run failed.'} />
                                                 : <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-ui-muted'>{run.result || 'Running...'}</p>}
+                                            <RunArtifacts run={run} />
                                         </div>
                                     ))}
                                     {!runs.length && <p className='text-sm leading-6 text-ui-muted'>This route is armed. Use Check now to record the first run, or let the scheduled check write the next row.</p>}
@@ -560,19 +558,36 @@ function InfoCard({ icon, label, value }: { icon: React.ReactNode, label: string
     )
 }
 
+function RunArtifacts({ run }: { run: AgentAutomationRun }) {
+    const logs = run.logs?.length ? run.logs : extractRunLinks(run.result || run.error || '', /\b(?:log|logs|trace|output)\b/i)
+    const screenshots = run.screenshots?.length ? run.screenshots : extractRunLinks(run.result || run.error || '', /\b(?:screenshot|image|capture)\b/i)
+    if (!logs.length && !screenshots.length) {
+        return <p className='mt-2 text-xs text-ui-muted'>No log or screenshot artifact was attached to this trigger.</p>
+    }
+
+    return (
+        <div className='mt-3 grid gap-2 text-xs sm:grid-cols-2'>
+            <ArtifactList label='Logs' items={logs} />
+            <ArtifactList label='Screenshots' items={screenshots} />
+        </div>
+    )
+}
+
+function ArtifactList({ label, items }: { label: string, items: string[] }) {
+    return (
+        <div className='rounded-lg border border-ui-border bg-ui-panel p-2'>
+            <p className='font-semibold text-ui-muted'>{label}</p>
+            {items.length
+                ? items.map(item => <a key={item} className='mt-1 block truncate font-semibold text-ui-primary hover:underline' href={item} target='_blank' rel='noreferrer'>{item}</a>)
+                : <p className='mt-1 text-ui-muted'>None attached</p>}
+        </div>
+    )
+}
+
 function routeHealthToneClass(tone: 'ok' | 'bad' | 'neutral') {
     if (tone === 'bad') return 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
     if (tone === 'ok') return 'border-ui-success/35 bg-ui-success/10 text-ui-success'
     return 'border-ui-border bg-ui-raised text-ui-primary'
-}
-
-function RouteRule({ label, value }: { label: string, value: string }) {
-    return (
-        <div className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
-            <span className='font-semibold text-ui-muted'>{label}</span>
-            <span className='truncate text-right font-semibold text-ui-text' title={value}>{value}</span>
-        </div>
-    )
 }
 
 function QueueFact({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'ok' | 'bad' }) {
@@ -607,12 +622,16 @@ function routeHealthFor(automation: AgentAutomation): { label: string, detail: s
 function routeHealthForDraft(draft: AutomationPayload): { label: string, detail: string, tone: 'ok' | 'bad' | 'neutral' } {
     if (draft.status === 'paused') return { label: 'Paused', detail: 'Route is paused; reactivate to resume checks.', tone: 'neutral' }
     if ((draft.actionType === 'mail_health_check' || draft.actionType === 'system_alert') && !draft.modelName) {
-        return { label: 'Needs destination', detail: 'Add a Discord webhook-file destination before activating this alert.', tone: 'bad' }
+        return { label: 'Needs destination', detail: 'Add a Discord webhook-file destination before activating this automation.', tone: 'bad' }
+    }
+    if (draft.scheduleKind === 'interval' && (!draft.intervalMinutes || draft.intervalMinutes < 1)) {
+        return { label: 'Needs interval', detail: 'Enter how many minutes to wait between checks.', tone: 'bad' }
     }
     return { label: 'Configured', detail: 'Route has a destination and active schedule.', tone: 'ok' }
 }
 
 function activeRouteSaveBlocker(draft: AutomationPayload) {
+    if (draft.scheduleKind === 'interval' && (!draft.intervalMinutes || draft.intervalMinutes < 1)) return 'Enter how many minutes to wait between checks.'
     if (draft.status !== 'active') return ''
     if ((draft.actionType === 'mail_health_check' || draft.actionType === 'system_alert') && !draft.modelName) {
         return 'Add a delivery destination or keep the route paused before saving.'
@@ -636,12 +655,24 @@ function alertCategoryLabel(actionType: AgentAutomation['actionType']) {
 
 function extractRuleTerms(prompt: string) {
     const first = prompt.split('\n').find(line => line.toLowerCase().includes('watch '))
-    if (!first) return 'custom terms'
+    if (!first) return 'custom instructions'
     const afterColon = first.split(':').slice(1).join(':').trim()
     if (!afterColon) return 'company/domain/vendor/product'
     const terms = afterColon.split(',').map(term => term.trim()).filter(Boolean)
     if (terms.length <= 2) return terms.join(', ')
     return `${terms.slice(0, 2).join(', ')} +${terms.length - 2}`
+}
+
+function matchingSummary(draft: AutomationPayload) {
+    const lower = draft.prompt.toLowerCase()
+    const payload = lower.includes('actor') && lower.includes('matched') ? 'actor and match fields' : 'custom payload'
+    const filter = lower.includes('only send') ? 'new or updated matches' : 'all matches'
+    return `${extractRuleTerms(draft.prompt)}; ${payload}; ${filter}`
+}
+
+function extractRunLinks(text: string, hint: RegExp) {
+    if (!hint.test(text)) return []
+    return Array.from(text.matchAll(/https?:\/\/[^\s)]+/g), match => match[0]).slice(0, 5)
 }
 
 function toDraft(automation: AgentAutomation): AutomationPayload {
@@ -650,7 +681,7 @@ function toDraft(automation: AgentAutomation): AutomationPayload {
         prompt: automation.prompt,
         scheduleKind: automation.scheduleKind,
         intervalMinutes: automation.intervalMinutes || 30,
-        runAt: automation.runAt ? new Date(automation.runAt).toISOString().slice(0, 16) : defaultRunAt(),
+        runAt: automation.runAt ? new Date(automation.runAt).toISOString().slice(0, 16) : '',
         status: automation.status === 'paused' ? 'paused' : 'active',
         actionType: automation.actionType,
         timezone: automation.timezone || defaultTimezone(),
@@ -707,7 +738,7 @@ function draftFromWebhook(subscription: DwmWebhookDraft): AutomationPayload {
     return {
         ...newAutomationDraft([
             `Watch these companies, domains, vendors, and products for new ransomware or extortion mentions: ${terms.join(', ')}.`,
-            `Send matching alerts to the configured HTTPS webhook endpoint: ${deliveryTarget}.`,
+            `Send matching notifications to the configured HTTPS webhook endpoint: ${deliveryTarget}.`,
             'Include actor, company, matched watchlist term, alert summary, claim time, source label, source link, source count, review state, recommended action, and investigation pivots.',
             'Only send new or materially updated matches that need review.',
         ].join('\n')),
@@ -722,7 +753,7 @@ function dwmFallbackDraft(): AutomationPayload {
     return {
         ...newAutomationDraft([
             'Watch these companies, domains, vendors, and products for new ransomware or extortion mentions.',
-            'Send matching alerts to the configured HTTPS webhook endpoint.',
+            'Send matching notifications to the configured HTTPS webhook endpoint.',
             'Include actor, company, matched watchlist term, alert summary, claim time, source label, source link, source count, review state, recommended action, and investigation pivots.',
             'Only send new or materially updated matches that need review.',
         ].join('\n')),
@@ -761,6 +792,7 @@ function shortDate(value?: string | null) {
 }
 
 function scheduleShort(automation: Pick<AutomationPayload, 'scheduleKind' | 'intervalMinutes' | 'runAt'>) {
-    if (automation.scheduleKind === 'once') return 'once'
-    return `${automation.intervalMinutes || 0}m`
+    const start = automation.runAt ? `first ${shortDate(automation.runAt)}` : ''
+    if (automation.scheduleKind === 'once') return start || 'once'
+    return [automation.intervalMinutes ? `${automation.intervalMinutes}m` : 'set interval', start].filter(Boolean).join(' · ')
 }
