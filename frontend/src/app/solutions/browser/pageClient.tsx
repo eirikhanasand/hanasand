@@ -2008,7 +2008,8 @@ function buildReviewQueue(input: {
     deobfuscationTasks: NonNullable<SandboxEvidence['deobfuscationTasks']>
 }): ReviewQueueItem[] {
     const items: ReviewQueueItem[] = []
-    const blankFrame = input.pageCaptures.find(capture => capture.frameQuality?.looksBlank)
+    const hasRenderedFrame = input.pageCaptures.some(capture => capture.image && !capture.frameQuality?.looksBlank)
+    const blankFrame = hasRenderedFrame ? undefined : input.pageCaptures.find(capture => capture.frameQuality?.looksBlank)
     if (blankFrame) items.push({
         severity: 'high',
         source: 'browser',
