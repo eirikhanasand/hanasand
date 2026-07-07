@@ -63,6 +63,8 @@ export type ErrorEventSummary = {
     status_counts: Array<{ status_code: number, count: number }>
     surface_counts: Array<{ surface: string, count: number }>
     code_counts: Array<{ error_code: string, count: number }>
+    project_scans: number
+    share_scans: number
 }
 
 export type ErrorEventsResponse = {
@@ -133,6 +135,8 @@ function emptyErrorEvents(): ErrorEventsResponse {
             status_counts: [],
             surface_counts: [],
             code_counts: [],
+            project_scans: 0,
+            share_scans: 0,
         },
         errors: [],
     }
@@ -148,6 +152,8 @@ function normalizeSummary(value: unknown): ErrorEventSummary {
         status_counts: Array.isArray(summary.status_counts) ? summary.status_counts : [],
         surface_counts: Array.isArray(summary.surface_counts) ? summary.surface_counts : [],
         code_counts: Array.isArray(summary.code_counts) ? summary.code_counts : [],
+        project_scans: numberValue(summary.project_scans),
+        share_scans: numberValue(summary.share_scans),
     }
 }
 

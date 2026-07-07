@@ -50,6 +50,7 @@ export async function getErrorEvents(req: FastifyRequest, res: FastifyReply) {
               AND ($3::text IS NULL OR metadata->>'error_code' = $3)
               AND ($4::text IS NULL OR message ILIKE '%' || $4 || '%' OR metadata::text ILIKE '%' || $4 || '%')
               AND ($5::boolean OR NOT ${expectedHttpProbePredicate()})
+              AND ($5::boolean OR NOT ${scannerHttpProbePredicate()})
             ORDER BY created_at DESC
             LIMIT $6
         `, [surface, normalizedStatus, code, q, includeExpected, limit]),
@@ -115,12 +116,13 @@ export async function getErrorEvents(req: FastifyRequest, res: FastifyReply) {
               AND ($3::text IS NULL OR ('http_' || status::text) = $3)
               AND ($4::text IS NULL OR path ILIKE '%' || $4 || '%')
               AND ($5::boolean OR NOT ${expectedTrafficProbePredicate()})
+              AND ($5::boolean OR NOT ${scannerTrafficProbePredicate()})
             ORDER BY created_at DESC
             LIMIT $6
         `, [surface, normalizedStatus, code, q, includeExpected, Math.min(limit, 100)]),
         run(`
-            WITH events AS (
-                SELECT metadata->>'surface' AS surface, NULLIF(metadata->>'status_code', '')::int AS status_code, metadata->>'error_code' AS error_code, created_at
+            WITH raw_events AS (
+                SELECT metadata->>'surface' AS surface, NULLIF(metadata->>'status_code', '')::int AS status_code, metadata->>'error_code' AS error_code, metadata->>'path' AS path, created_at
                 FROM service_logs
                 WHERE metadata->>'category' = 'http_response_error'
                   AND ($1::boolean OR NOT ${expectedHttpProbePredicate()})
@@ -133,14 +135,25 @@ export async function getErrorEvents(req: FastifyRequest, res: FastifyReply) {
                     WHEN reason = 'session_issue_failed' THEN 503
                     WHEN reason = 'unexpected_error' THEN 500
                     ELSE 400
-                END, reason, created_at
+                END, reason, '/api/auth/login/:id', created_at
                 FROM login_events
                 WHERE status <> 'success'
                 UNION ALL
-                SELECT 'website', status, ('http_' || status::text), created_at
+                SELECT 'website', status, ('http_' || status::text), path, created_at
                 FROM traffic_events
                 WHERE status >= 400
                   AND ($1::boolean OR NOT ${expectedTrafficProbePredicate()})
+            ),
+            scanner_stats AS (
+                SELECT
+                    COUNT(*) FILTER (WHERE ${scannerProjectSummaryPredicate()})::int AS project_scans,
+                    COUNT(*) FILTER (WHERE ${scannerShareSummaryPredicate()})::int AS share_scans
+                FROM raw_events
+            ),
+            events AS (
+                SELECT *
+                FROM raw_events
+                WHERE $1::boolean OR NOT (${scannerProjectSummaryPredicate()} OR ${scannerShareSummaryPredicate()})
             ),
             stats AS (
                 SELECT
@@ -181,8 +194,10 @@ export async function getErrorEvents(req: FastifyRequest, res: FastifyReply) {
                 stats.client_errors,
                 status_counts.rows AS status_counts,
                 surface_counts.rows AS surface_counts,
-                code_counts.rows AS code_counts
-            FROM stats, status_counts, surface_counts, code_counts
+                code_counts.rows AS code_counts,
+                scanner_stats.project_scans,
+                scanner_stats.share_scans
+            FROM stats, status_counts, surface_counts, code_counts, scanner_stats
         `, [includeExpected]),
     ])
 
@@ -221,6 +236,36 @@ function expectedTrafficProbePredicate() {
     )`
 }
 
+function scannerHttpProbePredicate() {
+    return `(
+        NULLIF(metadata->>'status_code', '')::int = 404
+        AND (
+            metadata->>'error_code' = 'project_not_found'
+            OR metadata->>'error_code' = 'share_not_found'
+            OR metadata->>'path' ~ '^/api/project/[^/]+$'
+            OR metadata->>'path' ~ '^/api/share(/tree)?/[^/]+$'
+        )
+    )`
+}
+
+function scannerTrafficProbePredicate() {
+    return `(
+        status = 404
+        AND (
+            path ~ '^/api/project/[^/]+$'
+            OR path ~ '^/api/share(/tree)?/[^/]+$'
+        )
+    )`
+}
+
+function scannerProjectSummaryPredicate() {
+    return `(status_code = 404 AND (error_code = 'project_not_found' OR path ~ '^/api/project/[^/]+$'))`
+}
+
+function scannerShareSummaryPredicate() {
+    return `(status_code = 404 AND (error_code = 'share_not_found' OR path ~ '^/api/share(/tree)?/[^/]+$'))`
+}
+
 function normalizeFilter(value: string | undefined) {
     const text = typeof value === 'string' ? value.trim().toLowerCase() : ''
     return text && text !== 'all' ? text.slice(0, 120) : null
@@ -235,5 +280,7 @@ function emptySummary() {
         status_counts: [],
         surface_counts: [],
         code_counts: [],
+        project_scans: 0,
+        share_scans: 0,
     }
 }
