@@ -1,7 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 
 const adminId = process.env.PLAYWRIGHT_ADMIN_ID || 'dashboard-render-proof-user'
-const adminName = process.env.PLAYWRIGHT_ADMIN_NAME || 'Codex Admin'
+const adminName = process.env.PLAYWRIGHT_ADMIN_NAME || 'Rate Limit Owner Picker'
 const adminToken = process.env.PLAYWRIGHT_ADMIN_TOKEN || 'local-dashboard-render-proof-token'
 const adminExpiresAt = process.env.PLAYWRIGHT_ADMIN_EXPIRES_AT || new Date(Date.now() + 60 * 60 * 1000).toISOString()
 

@@ -1,5 +1,4 @@
 import Roles from '@/components/roles/roles'
-import Thoughts from '@/components/thoughts/thoughts'
 import Users from '@/components/users/users'
 import Link from 'next/link'
 import { cookies } from 'next/headers'
@@ -32,24 +31,23 @@ export default async function Page() {
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Admin'
-                title='Management'
-                description='User access, role coverage, reserved accounts, and admin content lanes.'
+                title='User management'
+                description='User access, role coverage, reserved accounts, and support controls.'
             />
             <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                 <AdminMetric icon={<UsersRound className='h-4 w-4' />} label='Users' value={String(users.length)} detail={`${assignedUsers} with role coverage`} tone={users.length ? 'ok' : 'watch'} />
                 <AdminMetric icon={<Shield className='h-4 w-4' />} label='Roles' value={String(roles.length)} detail={priorityRole ? `${priorityRole.name} has top priority` : 'roles are ready'} tone={roles.length ? 'ok' : 'watch'} />
                 <AdminMetric icon={<UserRound className='h-4 w-4' />} label='Reserved' value={String(reservedCount)} detail='system/reserved accounts in the user stream' tone={reservedCount ? 'neutral' : 'ok'} />
-                <AdminMetric icon={<Radio className='h-4 w-4' />} label='Admin controls' value='Live' detail='user, role, and content controls are visible below' tone='ok' />
+                <AdminMetric icon={<Radio className='h-4 w-4' />} label='Admin controls' value='Live' detail='user and role controls are visible below' tone='ok' />
             </section>
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='grid divide-y divide-ui-border md:grid-cols-3 md:divide-x md:divide-y-0'>
                     <AdminAction href='/dashboard/system/impersonation' label='Support access' value='audit trail' />
                     <AdminAction href='/dashboard/system/rate-limits' label='API tokens' value='scoped keys' />
-                    <AdminAction href='/dashboard/articles' label='Publishing' value='editorial queue' />
+                    <AdminAction href='/dashboard/content' label='Content management' value='articles and thoughts' />
                 </div>
             </DashboardPanel>
-            <div className='grid gap-3 xl:grid-cols-2 xl:items-start'>
-                <Thoughts />
+            <div className='grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)] xl:items-start'>
                 <Users roles={roles} initialUsers={users} />
                 <Roles roles={roles} />
             </div>

@@ -4,7 +4,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'https://hanasand.com'
 const apiBase = process.env.PLAYWRIGHT_API_BASE || 'https://api.hanasand.com/api'
 const adminId = process.env.PLAYWRIGHT_ADMIN_ID || ''
 const adminPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD || ''
-const adminName = process.env.PLAYWRIGHT_ADMIN_NAME || 'Codex Admin'
+const adminName = process.env.PLAYWRIGHT_ADMIN_NAME || 'Live Admin Smoke'
 const adminToken = process.env.PLAYWRIGHT_ADMIN_TOKEN || ''
 const adminExpiresAt = process.env.PLAYWRIGHT_ADMIN_EXPIRES_AT || new Date(Date.now() + 60 * 60 * 1000).toISOString()
 const hasAdminToken = Boolean(adminToken && adminId)
@@ -49,7 +49,7 @@ test.describe('live admin smoke', () => {
 
             await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' })
             await expect(page).toHaveURL(/\/dashboard\/management/)
-            await expect(page.getByRole('heading', { name: 'Management', exact: true })).toBeVisible()
+            await expect(page.getByRole('heading', { name: 'User management', exact: true })).toBeVisible()
             const managementHasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
             expect(managementHasHorizontalOverflow).toBeFalsy()
 

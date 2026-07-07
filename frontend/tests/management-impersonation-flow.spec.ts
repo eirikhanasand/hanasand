@@ -141,7 +141,7 @@ async function openManagementPage(browser: Browser) {
     ])
     const page = await context.newPage()
     await page.goto('/dashboard/management', { waitUntil: 'networkidle' })
-    await expect(page.getByRole('heading', { name: 'Management', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'User management', exact: true })).toBeVisible()
     await expect(page.getByText('Target User')).toBeVisible()
     return { context, page }
 }

@@ -83,7 +83,7 @@ async function main() {
 
     const registration = await apiRequest('/user', {
         method: 'POST',
-        body: JSON.stringify({ id: runId, name: 'Codex Smoke', password }),
+        body: JSON.stringify({ id: runId, name: 'Dashboard Runtime Smoke', password }),
     })
     if (registration.response.status !== 201 || !registration.body?.token) {
         throw new Error(`Failed to create smoke user: ${registration.response.status}`)

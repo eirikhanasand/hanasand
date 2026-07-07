@@ -146,7 +146,7 @@ async function main() {
 
     const registration = await request('POST /user', '/user', {
         method: 'POST',
-        body: { id: runId, name: 'Codex Audit', password },
+        body: { id: runId, name: 'API Audit Smoke', password },
         expectStatus: 201,
         expect: body => expectObject(body) && Boolean(body.token),
     })

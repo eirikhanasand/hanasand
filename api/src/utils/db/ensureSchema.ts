@@ -2,6 +2,16 @@ import run from '#db'
 import { reservedUsernames } from '#utils/auth/reservedUsernames.ts'
 
 export default async function ensureSchema() {
+    const ownerUserIds = (process.env.HANASAND_OWNER_USER_IDS || 'eirikhanasand').split(',').map(id => id.trim().toLowerCase()).filter(Boolean)
+    const obsoleteProbeUserNames = [
+        'Browser Proof',
+        'Browser Proof Analyst',
+        'Codex Auth Test',
+        'Codex Org Probe',
+        'Codex Render Probe',
+        'Codex Visual Probe',
+    ].map(name => name.toLowerCase())
+
     await run('CREATE EXTENSION IF NOT EXISTS pgcrypto')
     await run('ALTER TABLE load_tests ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES users(id) ON DELETE SET NULL')
     await run('ALTER TABLE load_tests ADD COLUMN IF NOT EXISTS quota_identity TEXT')
@@ -118,7 +128,12 @@ export default async function ensureSchema() {
                 ELSE name
             END
         WHERE lower(id) = ANY($1::text[])
-    `, [(process.env.HANASAND_OWNER_USER_IDS || 'eirikhanasand').split(',').map(id => id.trim().toLowerCase()).filter(Boolean)])
+    `, [ownerUserIds])
+    await run(`
+        DELETE FROM users
+        WHERE lower(name) = ANY($1::text[])
+          AND NOT (lower(id) = ANY($2::text[]))
+    `, [obsoleteProbeUserNames, ownerUserIds])
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS user_agent TEXT NOT NULL DEFAULT \'\'')
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()')
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ')

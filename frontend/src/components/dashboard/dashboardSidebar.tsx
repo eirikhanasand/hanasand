@@ -76,6 +76,7 @@ export default function DashboardSidebar({
 
     if (canManageContent) {
         contentItems.push(
+            { href: '/dashboard/content', label: 'Content management', icon: <NotebookText className='h-4 w-4' /> },
             { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
             { href: '/dashboard/articles', label: 'Articles', icon: <BookOpen className='h-4 w-4' /> },
             { href: '/dashboard/thoughts', label: 'Thoughts', icon: <BrainCircuit className='h-4 w-4' /> },
@@ -104,7 +105,7 @@ export default function DashboardSidebar({
             { href: '/dashboard/db/backups', label: 'Backup', icon: <DatabaseBackup className='h-4 w-4' /> },
             { href: '/dashboard/system/rate-limits', label: 'Rate Limits', icon: <Gauge className='h-4 w-4' /> },
             { href: '/dashboard/cron-jobs', label: 'Cron Jobs', icon: <CalendarClock className='h-4 w-4' /> },
-            { href: '/dashboard/system/impersonation', label: 'Impersonation', icon: <UserRoundCheck className='h-4 w-4' /> },
+            { href: '/dashboard/system/impersonation', label: 'Helpdesk', icon: <UserRoundCheck className='h-4 w-4' /> },
             { href: '/dashboard/management', label: 'Management', icon: <ShieldCheck className='h-4 w-4' /> },
         )
     }

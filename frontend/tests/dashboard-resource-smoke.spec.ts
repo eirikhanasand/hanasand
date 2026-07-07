@@ -7,7 +7,7 @@ const root = process.cwd()
 const password = `Aa11!!${Date.now()}Bb22!!`
 const adminId = process.env.PLAYWRIGHT_ADMIN_ID || ''
 const adminPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD || ''
-const adminName = process.env.PLAYWRIGHT_ADMIN_NAME || 'Codex Admin'
+const adminName = process.env.PLAYWRIGHT_ADMIN_NAME || 'Dashboard Resource Smoke'
 const adminToken = process.env.PLAYWRIGHT_ADMIN_TOKEN || ''
 const adminExpiresAt = process.env.PLAYWRIGHT_ADMIN_EXPIRES_AT || new Date(Date.now() + 60 * 60 * 1000).toISOString()
 const hasAdminToken = Boolean(adminToken && adminId)
@@ -42,6 +42,7 @@ const privilegedSidebarLinks = [
     'Shares',
     'Mail',
     'Automations',
+    'Content management',
     'Notes',
     'Load testing',
     'Traffic',
