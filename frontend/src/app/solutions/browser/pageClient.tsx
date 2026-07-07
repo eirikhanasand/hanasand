@@ -1644,6 +1644,7 @@ function buildExportReport(input: {
             threatAssociations: input.summary.threatAssociations,
             urlTimeline: input.summary.urlTimeline,
         },
+        analystReport: buildShareableAnalystReport(input),
         captures: input.captures.map(capture => ({
             kind: capture.kind,
             label: capture.label,
@@ -1659,6 +1660,87 @@ function buildExportReport(input: {
             webcrackLoad: capture.webcrackLoad,
         })),
         events: input.events,
+    }
+}
+
+function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>[0]) {
+    const pageCaptures = input.captures.filter(capture => capture.kind === 'page')
+    const toolCaptures = input.captures.filter(capture => capture.kind === 'tool')
+    const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
+    const providerReports = input.profile.tools.map(tool => {
+        const capture = toolCaptures.find(item => matchesTool(item, tool))
+        const analysis = capture?.toolAnalysis
+        return {
+            tool: tool.name,
+            status: providerStatus(capture, analysis),
+            url: capture?.url || resolveToolUrl(tool.url, input.activeUrl || input.target),
+            verdict: analysis?.verdict || 'unknown',
+            vendorFlagged: analysis?.vendorFlagged,
+            vendorTotal: analysis?.vendorTotal,
+            alertCount: analysis?.alertCount,
+            communityCommentCount: analysis?.communityCommentCount,
+            screenshotCaptured: Boolean(capture?.image),
+            signals: analysis?.extractedSignals || [],
+            threatAssociations: analysis?.threatAssociations || [],
+            error: capture?.error,
+        }
+    })
+    const scriptArtifacts = pageCaptures.flatMap(capture => capture.evidence?.deobfuscationTasks || []).map(task => ({
+        scriptId: task.scriptId,
+        source: task.source,
+        sha256: task.sha256,
+        assessment: task.assessment,
+        summary: task.summary,
+        indicators: task.indicators,
+    }))
+    const report = {
+        verdict: input.summary.brief.verdict,
+        target: input.target,
+        finalUrl: input.activeUrl || input.summary.urlTimeline[0]?.url || input.target,
+        exportedAt: new Date().toISOString(),
+        evidenceChecklist: {
+            renderedScreenshots: pageCaptures.filter(capture => capture.image && isUsefulFrameImage(capture.image)).length,
+            providerReports: providerReports.filter(report => report.status === 'Result captured').length,
+            networkRequests: latestNetwork?.requestCount || 0,
+            contactedDomains: latestNetwork?.uniqueDomainCount || 0,
+            redirectStates: input.summary.urlTimeline.length,
+            downloadsHashed: latestNetwork?.downloads?.filter(download => download.sha256).length || 0,
+            scriptHashes: scriptArtifacts.filter(script => script.sha256).length,
+            copyableIndicators: input.summary.indicators.length,
+        },
+        providerReports,
+        networkEvidence: latestNetwork ? {
+            requests: latestNetwork.requestCount,
+            responses: latestNetwork.responseCount,
+            blockedOrFailed: latestNetwork.failedCount,
+            contactedDomains: latestNetwork.domains,
+            redirectChain: latestNetwork.redirectChain,
+            downloads: latestNetwork.downloads,
+            recentRequests: latestNetwork.recentRequests?.slice(-50),
+        } : null,
+        scriptArtifacts,
+        urlTimeline: input.summary.urlTimeline,
+        indicators: input.summary.indicators,
+        threatAssociations: input.summary.threatAssociations,
+        recommendedActions: input.summary.brief.nextSteps,
+    }
+    return {
+        ...report,
+        markdown: [
+            '# Browser sandbox report',
+            `Target: ${report.target}`,
+            `Final URL: ${report.finalUrl}`,
+            `Verdict: ${report.verdict}`,
+            '',
+            '## Evidence',
+            ...Object.entries(report.evidenceChecklist).map(([key, value]) => `- ${key}: ${value}`),
+            '',
+            '## Providers',
+            ...providerReports.map(provider => `- ${provider.tool}: ${provider.status}${provider.verdict ? `, verdict ${provider.verdict}` : ''}`),
+            '',
+            '## Recommended actions',
+            ...report.recommendedActions.map(action => `- ${action}`),
+        ].join('\n'),
     }
 }
 
