@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const liveClient = readSource('src/app/solutions/browser/pageClient.tsx')
 const reportClient = readSource('src/app/solutions/browser/report/pageClient.tsx')
+const backendProxy = readSource('src/app/api/backend/[...path]/route.ts')
 
 for (const token of [
     'function buildExportReport',
@@ -57,6 +58,9 @@ for (const token of [
 
 assertIncludes(reportClient, 'networkPeer(request)', 'network table must expose peer/certificate details')
 assertIncludes(reportClient, 'download.sha256', 'saved browser report must expose download hashes')
+assertIncludes(backendProxy, 'anonymousAllowed', 'browser run reports must be saveable without console auth')
+assertIncludes(backendProxy, 'browser', 'anonymous backend proxy exception must stay scoped to browser routes')
+assertIncludes(backendProxy, 'runs', 'anonymous backend proxy exception must stay scoped to browser runs')
 
 console.log('[browser-report-evidence] browser report evidence contract passed')
 

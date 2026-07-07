@@ -26,12 +26,15 @@ async function handler(req: NextRequest, context: Context) {
     const cookieStore = await cookies()
     const token = cookieStore.get('access_token')?.value || bearerToken(req.headers.get('authorization')) || ''
     const id = cookieStore.get('id')?.value || req.headers.get('id') || ''
-    if (!token || !id) {
+
+    const params = await context.params
+    const pathSegments = params.path || []
+    const anonymousAllowed = pathSegments[0] === 'browser' && pathSegments[1] === 'runs'
+    if ((!token || !id) && !anonymousAllowed) {
         return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
     }
 
-    const params = await context.params
-    const path = (params.path || []).map(segment => encodeURIComponent(segment)).join('/')
+    const path = pathSegments.map(segment => encodeURIComponent(segment)).join('/')
     const target = new URL(`${config.url.api}/${path}`)
     target.search = req.nextUrl.search
 
@@ -42,8 +45,8 @@ async function handler(req: NextRequest, context: Context) {
             headers.set(key, value)
         }
     })
-    headers.set('Authorization', `Bearer ${token}`)
-    headers.set('id', id)
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+    if (id) headers.set('id', id)
 
     const impersonationToken = cookieStore.get('impersonation_token')?.value
     if (impersonationToken) {
