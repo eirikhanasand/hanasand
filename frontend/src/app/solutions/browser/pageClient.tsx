@@ -90,6 +90,7 @@ type BrowserRunHistory = {
     network: BrowserNetwork
     status: string
     startedAt: string
+    checkCount?: number
     title?: string
     providerResults?: Record<string, ProviderRunResult>
     reportUrl?: string
@@ -666,7 +667,7 @@ export default function BrowserPageClient() {
                             Check unknown URLs in a sandbox. Onion addresses are also supported.
                         </p>
                         <div className='grid max-w-xl gap-2 text-sm text-ui-muted sm:grid-cols-3'>
-                            <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'><strong className='text-ui-text'>10</strong> active browsers</span>
+                            <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'><strong className='text-ui-text'>{capacity?.activeSessions ?? 0}/{capacity?.maxSessions ?? 10}</strong> browsers active</span>
                             <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>Queues when full</span>
                             <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>Onion supported</span>
                         </div>
@@ -978,7 +979,7 @@ function ProfilePicker({ profiles, selectedProfileId, onSelect, onDelete }: { pr
                         >
                             {selected ? <Check className='h-4 w-4' /> : null}
                             <span>{profile.name}</span>
-                            <span className='text-xs leading-none text-ui-muted'>{profile.tools.length} tools</span>
+                            <span className='inline-flex items-center self-center text-xs leading-none text-ui-muted'>{profile.tools.length} tools</span>
                         </button>
                         {!locked ? (
                             <button
@@ -1007,12 +1008,14 @@ function HistoryPanel({ history, quota, onRerun, onExpand, embedded = false }: {
                     <h2 className='text-sm font-semibold text-ui-text'>Recent browser runs</h2>
                     <p className='mt-1 text-xs text-ui-muted'>{quota ? `${used}/${limit} ${quota.plan} run${limit === 1 ? '' : 's'} used${quota.resetsAt ? ` · resets ${new Date(quota.resetsAt).toLocaleDateString()}` : ''}.` : 'Anonymous history is saved to this browser and synced when available.'}</p>
                 </div>
-                {quota?.identityKind === 'user' ? <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'>account</span> : null}
             </div>
             <div className='grid max-h-[10.75rem] gap-2 overflow-y-auto pr-1'>
                 {history.map(run => (
                     <div key={run.id} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-2 text-xs md:grid-cols-[minmax(0,1fr)_auto_auto_auto] md:items-center'>
-                        <button type='button' onClick={() => onExpand(run)} className='min-w-0 truncate text-left font-mono text-ui-text'>{run.target}</button>
+                        <button type='button' onClick={() => onExpand(run)} className='min-w-0 truncate text-left font-mono text-ui-text'>
+                            {run.target}
+                            {run.checkCount && run.checkCount > 1 ? <span className='ml-2 font-sans font-semibold text-ui-muted'>({run.checkCount} checks)</span> : null}
+                        </button>
                         <ProviderRunBadges run={run} />
                         <span className='whitespace-nowrap text-ui-muted'>{new Date(run.startedAt).toLocaleString()}</span>
                         <button
@@ -1068,8 +1071,13 @@ function ProviderRunBadges({ run }: { run: BrowserRunHistory }) {
 function ProviderRunBadge({ provider, label, result }: { provider: 'virustotal' | 'urlquery'; label: string; result?: ProviderRunResult }) {
     const clean = !result || result.status === 'clean'
     const icon = provider === 'urlquery' && !clean ? '!' : clean ? '✓' : '!'
-    const text = provider === 'virustotal' ? (result?.label?.includes('/') ? result.label : '0/?') : (result?.label || label)
+    const text = provider === 'virustotal' ? virustotalRunLabel(result?.label) : (result?.label || label)
     return <span className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-semibold ${clean ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}>{provider === 'urlquery' ? <span>{icon}</span> : null}<span>{text}</span></span>
+}
+
+function virustotalRunLabel(label?: string) {
+    if (!label) return '0/? VT'
+    return /\bVT\b/i.test(label) ? label : `${label} VT`
 }
 
 function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity | null; sessionState: SessionState }) {
@@ -1311,10 +1319,10 @@ function EvidenceWorkspace({
                                                 <tr key={`${request.at}-${request.url}-${index}`}>
                                                     <td className='border-b border-ui-border/60 px-2 py-1'>{request.method || 'GET'}{request.resourceType ? ` · ${request.resourceType}` : ''}</td>
                                                     <td className='border-b border-ui-border/60 px-2 py-1'>{request.status || request.failure || ''}</td>
-                                                    <td className='max-w-[9rem] truncate border-b border-ui-border/60 px-2 py-1'>{request.mimeType || ''}</td>
+                                                    <td className='max-w-36 truncate border-b border-ui-border/60 px-2 py-1'>{request.mimeType || ''}</td>
                                                     <td className='border-b border-ui-border/60 px-2 py-1'>{request.durationMs !== undefined ? `${request.durationMs}ms` : ''}</td>
                                                     <td className='border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{networkPeerLabel(request)}</td>
-                                                    <td className='max-w-[12rem] truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{request.initiator || ''}</td>
+                                                    <td className='max-w-48 truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{request.initiator || ''}</td>
                                                     <td className='max-w-[28rem] truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-text'>{request.url}</td>
                                                 </tr>
                                             ))}
@@ -1517,7 +1525,7 @@ function providerRunResult(analysis?: SandboxToolAnalysis, error = ''): Provider
     if (!analysis?.toolKind) return null
     if (analysis.toolKind === 'virustotal') {
         const flagged = analysis.vendorFlagged || 0
-        return { status: flagged > 0 ? 'suspicious' : error ? 'blocked' : 'clean', label: `${flagged}/${analysis.vendorTotal || '?'}` }
+        return { status: flagged > 0 ? 'suspicious' : error ? 'blocked' : 'clean', label: `${flagged}/${analysis.vendorTotal || '?'} VT` }
     }
     if (analysis.toolKind === 'urlquery') {
         const alerts = analysis.alertCount || 0
