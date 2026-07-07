@@ -164,7 +164,7 @@ const profileApiPath = '/api/backend/browser/profiles'
 const historyApiPath = '/api/backend/browser/runs'
 const brokerBaseUrl = process.env.NEXT_PUBLIC_BROWSER_WS || `${config.url.api_client_wss}/ws/browser`
 const defaultTools: SandboxTool[] = [
-    { id: 'virustotal', name: 'VirusTotal', url: 'https://www.virustotal.com/gui/search/{url}' },
+    { id: 'virustotal', name: 'VirusTotal', url: 'https://www.virustotal.com/gui/search/{rawUrl}' },
     { id: 'urlquery', name: 'urlquery', url: 'https://urlquery.net/search?q={url}' },
     { id: 'webcrack', name: 'WebCrack', url: 'https://webcrack.netlify.app/' },
 ]
