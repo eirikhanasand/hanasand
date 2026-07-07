@@ -107,8 +107,11 @@ test.describe('public website routes', () => {
         await expect(page.getByRole('link', { name: 'View all FAQ' })).toHaveAttribute('href', '/faq')
 
         await page.goto('/faq')
-        await expect(page.getByRole('heading', { name: 'Questions security teams ask before trusting a new signal.' })).toBeVisible()
-        await expect(page.getByRole('heading', { name: 'Does an alert mean the company was breached?' })).toBeVisible()
+        await expect(page.getByRole('heading', { name: 'Answers for security teams evaluating Hanasand.' })).toBeVisible()
+        await page.getByRole('button', { name: 'Does an alert mean the company was breached?' }).click()
         await expect(page.getByText('No. An alert means a source made a relevant claim or mention.')).toBeVisible()
+        await expect(page.getByText('Was this useful?')).toBeVisible()
+        await page.getByRole('button', { name: 'Yes' }).click()
+        await expect(page.getByRole('button', { name: 'Yes' })).toHaveAttribute('aria-pressed', 'true')
     })
 })
