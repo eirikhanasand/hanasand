@@ -44,6 +44,19 @@ The recurring failure mode to avoid is "dashboard slop": cards, counters, charts
 
 When the user points at one visible flaw, inspect the whole affected surface for the same class of flaw. If one button background is wrong, check the neighboring buttons. If one label is unclear, check nearby labels, empty states, tooltips, and generated copy. If one page has contrast issues, verify both themes and responsive layouts.
 
+## Fulfill Requested Capabilities
+Ponytail/lazy mode means avoiding fake, speculative, or bloated work. It does not mean refusing product expansion.
+
+If the user explicitly asks for a capability, build the smallest real end-to-end version that fulfills it. Do not stop at "the backend/API/storage does not exist yet" when creating that backend, schema, route, worker, storage, or UI wiring is the work required to make the request real.
+
+- Fake controls are not acceptable.
+- Missing backend support is not a reason to skip the feature.
+- Build the narrowest real implementation that lets the user perform the requested action.
+- Reuse existing patterns, shared choke points, and installed tooling before adding anything new.
+- If only part of the request can be safely implemented, ship that real part and state exactly what remains and why.
+
+Example: if the user asks to make audit-only jobs runnable, do not only relabel or hide "audit-only." Add safe run/pause endpoints for jobs with real runners, persist pause state if pause must survive restart, and leave only unsafe/request-driven jobs non-runnable with a clear reason.
+
 ## Definition Of Done
 Before final response, a task is not done until all applicable items are true:
 

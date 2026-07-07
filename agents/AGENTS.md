@@ -44,6 +44,19 @@ Avoid dashboard slop. If the request is about a product workflow, do not stop at
 
 For SOC, TI, DWM, XDR, monitoring, source operations, incident response, and analyst work, default to an operator portal: prioritized queue, detail/evidence panel, timestamps, source/provenance, objective confidence/reasoning, assignment/notes, route/replay/test/send/close actions where supported, timeline/audit behavior, and honest persistence semantics. Use real API/data wiring where available; if persistence is missing, make the local/session behavior clear and still useful.
 
+## Fulfill Requested Capabilities
+Ponytail/lazy mode means avoiding fake, speculative, or bloated work. It does not mean refusing product expansion.
+
+If the user explicitly asks for a capability, build the smallest real end-to-end version that fulfills it. Do not stop at "the backend/API/storage does not exist yet" when creating that backend, schema, route, worker, storage, or UI wiring is the work required to make the request real.
+
+- Fake controls are not acceptable.
+- Missing backend support is not a reason to skip the feature.
+- Build the narrowest real implementation that lets the user perform the requested action.
+- Reuse existing patterns, shared choke points, and installed tooling before adding anything new.
+- If only part of the request can be safely implemented, ship that real part and state exactly what remains and why.
+
+Example: if the user asks to make audit-only jobs runnable, do not only relabel or hide "audit-only." Add safe run/pause endpoints for jobs with real runners, persist pause state if pause must survive restart, and leave only unsafe/request-driven jobs non-runnable with a clear reason.
+
 ## Token-Saving Workflow
 - Start with `git status --short` and targeted `rg`, not whole-repo reading.
 - For every implementation prompt, write 3-7 acceptance criteria, identify affected routes/files/surfaces, implement the complete presentable slice, verify with focused checks and quick browser check for UI, then commit only the isolated intended diff, push to GitHub and Forgejo, deploy from the real server checkout, and live probe.
