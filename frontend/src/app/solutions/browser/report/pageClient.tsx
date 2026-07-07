@@ -22,14 +22,14 @@ type BrowserReport = {
     analystSummary?: {
         narrative?: string
         indicators?: string[]
-        threatAssociations?: Array<{ name?: string; category?: string; confidence?: string; evidence?: string }>
+        threatAssociations?: Array<{ name?: string; category?: string; confidence?: string; evidence?: string; source?: string }>
         reviewQueue?: Array<{ severity?: string; source?: string; title?: string; detail?: string; evidence?: string }>
         urlTimeline?: Array<{ url?: string; capturedAt?: string; reason?: string; title?: string }>
     }
     analystReport?: {
         verdict?: string
         evidenceChecklist?: Record<string, number>
-        providerReports?: Array<{ tool?: string; status?: string; verdict?: string; url?: string; vendorFlagged?: number; vendorTotal?: number; alertCount?: number; communityCommentCount?: number }>
+        providerReports?: Array<{ tool?: string; status?: string; verdict?: string; url?: string; vendorFlagged?: number; vendorTotal?: number; alertCount?: number; communityCommentCount?: number; screenshotCaptured?: boolean }>
         networkEvidence?: {
             requests?: number
             responses?: number
@@ -112,7 +112,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 {(analystReport.providerReports || []).map(provider => (
                                     <div key={`${provider.tool}-${provider.url}`} className='rounded-md border border-ui-border bg-ui-raised p-3 text-sm'>
                                         <p className='font-semibold'>{provider.tool || 'Provider'} · {provider.status || 'unknown'}</p>
-                                        <p className='mt-1 text-xs text-ui-muted'>{provider.verdict || 'No parsed verdict'}{provider.vendorFlagged !== undefined ? ` · ${provider.vendorFlagged}/${provider.vendorTotal || '?'} vendors` : ''}{provider.alertCount !== undefined ? ` · ${provider.alertCount} alerts` : ''}</p>
+                                        <p className='mt-1 text-xs text-ui-muted'>{provider.verdict || 'No parsed verdict'}{provider.vendorFlagged !== undefined ? ` · ${provider.vendorFlagged}/${provider.vendorTotal || '?'} vendors` : ''}{provider.alertCount !== undefined ? ` · ${provider.alertCount} alerts` : ''}{provider.screenshotCaptured ? ' · screenshot captured' : ''}</p>
                                         {provider.url ? <a href={provider.url} target='_blank' rel='noreferrer noopener' className='mt-1 block truncate font-mono text-xs text-ui-primary underline-offset-2 hover:underline'>{provider.url}</a> : null}
                                     </div>
                                 ))}
@@ -211,6 +211,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 item.name || 'Threat association',
                                 item.category || 'context',
                                 item.confidence ? `${item.confidence} confidence` : '',
+                                item.source ? item.source.replace(/_/g, ' ') : '',
                                 item.evidence || '',
                             ].filter(Boolean).join(' · '))} empty='No threat context saved.' />
                         </ReportPanel>
