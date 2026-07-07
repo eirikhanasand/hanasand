@@ -1,7 +1,7 @@
 'use client'
 
 import { Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, Share2, ShieldCheck, Square, Trash2 } from 'lucide-react'
-import { type KeyboardEvent, type MouseEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 
@@ -626,6 +626,15 @@ export default function BrowserPageClient() {
         sendBrowserInput({ type: 'click', ...point, button: 0 })
     }, [browserPoint, sendBrowserInput])
 
+    const pointerBrowserFrame = useCallback((event: PointerEvent<HTMLImageElement>) => {
+        if (activeTool) return
+        const point = browserPoint(event.clientX, event.clientY)
+        if (!point) return
+        viewportRef.current?.focus()
+        if (event.type === 'pointerdown') event.currentTarget.setPointerCapture(event.pointerId)
+        sendBrowserInput({ type: 'pointer', event: event.type, ...point, button: event.button, buttons: event.buttons })
+    }, [activeTool, browserPoint, sendBrowserInput])
+
     const wheelBrowserFrame = useCallback((event: WheelEvent<HTMLDivElement>) => {
         viewportRef.current?.focus()
         const point = browserPoint(event.clientX, event.clientY)
@@ -843,6 +852,11 @@ export default function BrowserPageClient() {
                                         className='absolute inset-0 h-full w-full cursor-pointer select-none bg-ui-canvas object-contain'
                                         draggable={false}
                                         onClick={clickBrowserFrame}
+                                        onPointerDown={pointerBrowserFrame}
+                                        onPointerMove={event => {
+                                            if (event.buttons) pointerBrowserFrame(event)
+                                        }}
+                                        onPointerUp={pointerBrowserFrame}
                                         onDragStart={event => event.preventDefault()}
                                     />
                                 ) : (
