@@ -50,7 +50,7 @@ type BrowserReportParams = { id: string }
 type BrowserReportQuery = { clientId?: string; token?: string }
 type BrowserReportBody = { clientId?: string; report?: unknown }
 
-const anonymousRunLimit = 3
+const anonymousRunLimit = Math.max(3, Number(process.env.BROWSER_SANDBOX_ANONYMOUS_DAILY_LIMIT || 20) || 20)
 const maxReportBytes = 2_000_000
 const dailyPlanLimits: Record<string, number> = {
     free: 5,
@@ -252,14 +252,17 @@ async function browserRunIdentityForUser(userId: string, clientId?: string): Pro
 function browserRunIdentityForClient(clientId?: string): BrowserRunIdentity | null {
     const clean = cleanClientId(clientId)
     if (!clean) return null
+    const now = new Date()
+    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    const resetsAt = new Date(periodStart.getTime() + 24 * 60 * 60 * 1000)
     return {
         identityKind: 'anonymous',
         quotaIdentity: `browser:anonymous:${hashValue(clean)}`,
         quotaPlan: 'anonymous',
         ownerId: null,
         clientIdHash: hashValue(clean),
-        periodStart: null,
-        resetsAt: null,
+        periodStart,
+        resetsAt,
         limit: anonymousRunLimit,
     }
 }

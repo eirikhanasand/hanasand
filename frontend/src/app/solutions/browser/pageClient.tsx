@@ -214,6 +214,7 @@ export default function BrowserPageClient() {
     const [activeImage, setActiveImage] = useState<string | null>(null)
     const [activeFrame, setActiveFrame] = useState<{ width: number; height: number }>({ width: 1280, height: 720 })
     const [activeUrl, setActiveUrl] = useState('')
+    const [runBlocker, setRunBlocker] = useState('')
     const [events, setEvents] = useState<string[]>(['Sandbox ready.'])
     const [consoleEvents, setConsoleEvents] = useState<string[]>([])
     const [activeSandboxTab, setActiveSandboxTab] = useState('browser')
@@ -437,6 +438,7 @@ export default function BrowserPageClient() {
         setShareStatus('')
         setCaptures([])
         setConsoleEvents([])
+        setRunBlocker('')
         setActiveImage(null)
         setActiveUrl(url)
         setActiveSandboxTab('browser')
@@ -557,7 +559,8 @@ export default function BrowserPageClient() {
                 } else if (statusState === 'capacity_admitted' || statusState === 'launching') {
                     setSessionState('connecting')
                 } else if (statusState === 'quota_exhausted') {
-                    setSessionState('ended')
+                    setSessionState('failed')
+                    setRunBlocker(String(payload.message || 'Browser run limit reached.'))
                 }
                 if (payload.url) setActiveUrl(String(payload.url))
                 pushEvent(String(payload.message || payload.state || 'Browser status updated.'))
@@ -569,6 +572,7 @@ export default function BrowserPageClient() {
             }
             if (payload.type === 'navigation_error' || payload.type === 'error') {
                 setSessionState('failed')
+                setRunBlocker(String(payload.message || 'Sandbox navigation failed.'))
                 pushEvent(String(payload.message || 'Sandbox navigation failed.'))
             }
         }
@@ -588,6 +592,7 @@ export default function BrowserPageClient() {
         setSessionState('prompt')
         setSocketState('closed')
         setCaptures([])
+        setRunBlocker('')
         setActiveImage(null)
         setActiveUrl('')
         setCapacity(null)
@@ -840,8 +845,8 @@ export default function BrowserPageClient() {
                                     <div className='grid h-full place-items-center'>
                                         <div className='grid max-w-md gap-2 text-center'>
                                             <ShieldCheck className='mx-auto h-8 w-8 text-ui-primary' />
-                                            <p className='text-lg font-semibold text-ui-text'>{activeTool ? `${activeTool.name} tab loading` : sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
-                                            <p className='text-sm leading-6 text-ui-muted'>{activeTool ? providerDetail(activeToolCapture?.toolAnalysis, activeToolCapture) : sessionState === 'queued' ? queueCopy(capacity) : 'The remote browser has not sent a screenshot yet. If this persists, rerun the URL or check the broker and provider status below.'}</p>
+                                            <p className='text-lg font-semibold text-ui-text'>{activeTool ? `${activeTool.name} tab loading` : runBlocker ? 'Browser run blocked' : sessionState === 'queued' ? 'Queued for sandbox capacity' : sessionState === 'connecting' ? 'Waiting for first browser frame' : 'No browser frame captured yet'}</p>
+                                            <p className='text-sm leading-6 text-ui-muted'>{activeTool ? providerDetail(activeToolCapture?.toolAnalysis, activeToolCapture) : runBlocker || (sessionState === 'queued' ? queueCopy(capacity) : 'The remote browser has not sent a screenshot yet. If this persists, rerun the URL or check the broker and provider status below.')}</p>
                                         </div>
                                     </div>
                                 )}
