@@ -8,6 +8,7 @@ type BrowserReport = {
     target?: string
     finalUrl?: string
     exportedAt?: string
+    status?: { run?: string; connection?: string; capacity?: { activeSessions?: number; maxSessions?: number; queuedSessions?: number; queuePosition?: number } }
     captures?: Array<{
         kind?: string
         label?: string
@@ -23,6 +24,7 @@ type BrowserReport = {
         indicators?: string[]
         threatAssociations?: Array<{ name?: string; category?: string; confidence?: string; evidence?: string }>
         reviewQueue?: Array<{ severity?: string; source?: string; title?: string; detail?: string; evidence?: string }>
+        urlTimeline?: Array<{ url?: string; capturedAt?: string; reason?: string; title?: string }>
     }
     analystReport?: {
         verdict?: string
@@ -38,6 +40,7 @@ type BrowserReport = {
             recentRequests?: NetworkRequestRow[]
         }
         scriptArtifacts?: Array<{ scriptId?: string; source?: string; sha256?: string; assessment?: string; summary?: string }>
+        urlTimeline?: Array<{ url?: string; capturedAt?: string; reason?: string; title?: string }>
         recommendedActions?: string[]
     }
 }
@@ -81,6 +84,9 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                     <p className='mt-2 break-all font-mono text-xs text-ui-muted'>Final URL: {report.finalUrl || report.target || 'unknown'}</p>
                     <div className='mt-3 flex flex-wrap gap-2 text-xs'>
                         <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>{analystReport.verdict || 'Verdict unavailable'}</span>
+                        {report.status?.run ? <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>Run {report.status.run}</span> : null}
+                        {report.status?.connection ? <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>Connection {report.status.connection}</span> : null}
+                        {report.status?.capacity ? <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>Capacity {report.status.capacity.activeSessions || 0}/{report.status.capacity.maxSessions || '?'}{report.status.capacity.queuePosition ? ` · queue #${report.status.capacity.queuePosition}` : ''}</span> : null}
                         {report.exportedAt ? <span className='rounded border border-ui-border bg-ui-raised px-2 py-1'>Exported {report.exportedAt}</span> : null}
                     </div>
                 </header>
@@ -92,6 +98,14 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                         </ReportPanel>
                         <ReportPanel title='Review list'>
                             <ReportList items={(summary.reviewQueue || []).map(item => `${item.severity || 'review'} · ${item.title || 'Evidence item'} · ${item.detail || item.evidence || item.source || ''}`)} empty='No priority review items saved.' />
+                        </ReportPanel>
+                        <ReportPanel title='URL timeline'>
+                            <ReportList items={reportUrlTimeline(report).map(item => [
+                                item.capturedAt || '',
+                                item.reason || 'capture',
+                                item.url || '',
+                                item.title || '',
+                            ].filter(Boolean).join(' · '))} empty='No URL timeline saved.' />
                         </ReportPanel>
                         <ReportPanel title='Providers'>
                             <div className='grid gap-2'>
@@ -216,6 +230,10 @@ function networkPeer(request: NetworkRequestRow) {
         request.tlsSubject ? `cert ${request.tlsSubject}` : '',
         request.tlsIssuer || '',
     ].filter(Boolean).join(' · ')
+}
+
+function reportUrlTimeline(report: BrowserReport) {
+    return report.analystReport?.urlTimeline?.length ? report.analystReport.urlTimeline : report.analystSummary?.urlTimeline || []
 }
 
 function ReportPanel({ title, children }: { title: string; children: React.ReactNode }) {
