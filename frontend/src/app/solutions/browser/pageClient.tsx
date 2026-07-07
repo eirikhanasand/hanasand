@@ -2168,7 +2168,7 @@ function providerTabStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (analysis?.alertCount !== undefined) return `${analysis.alertCount} alerts`
     if (capture.error === 'provider_navigation_pending') return 'loading'
     if (capture.error) return 'blocked'
-    return analysis?.verdict && analysis.verdict !== 'unknown' ? analysis.verdict : 'captured'
+    return analysis?.verdict && analysis.verdict !== 'unknown' ? analysis.verdict : 'unavailable'
 }
 
 function providerDetail(analysis?: SandboxToolAnalysis, capture?: Capture) {
