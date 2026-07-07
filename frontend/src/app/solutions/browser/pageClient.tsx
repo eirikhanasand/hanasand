@@ -799,11 +799,13 @@ export default function BrowserPageClient() {
                                         ref={activeTool ? undefined : imageRef}
                                         src={activeViewportImage}
                                         alt={activeTool ? `${activeTool.name} provider frame` : 'Live browser sandbox frame'}
-                                        className={`absolute inset-0 h-full w-full select-none object-fill ${activeTool ? '' : 'cursor-pointer'}`}
+                                        className={`absolute inset-0 h-full w-full select-none bg-ui-canvas object-contain ${activeTool ? '' : 'cursor-pointer'}`}
                                         draggable={false}
                                         onClick={activeTool ? undefined : clickBrowserFrame}
                                         onDragStart={event => event.preventDefault()}
                                     />
+                                ) : activeTool && activeToolCapture ? (
+                                    <ProviderViewportEvidence tool={activeTool} capture={activeToolCapture} />
                                 ) : (
                                     <div className='grid h-full place-items-center'>
                                         <div className='grid max-w-md gap-2 text-center'>
@@ -1503,6 +1505,30 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
 
 function StatusPill({ label, value, good }: { label: string; value: string; good: boolean }) {
     return <span className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold ${good ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-border bg-ui-panel text-ui-text'}`}><span className='text-ui-muted'>{label}</span>{value}</span>
+}
+
+function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; capture: Capture }) {
+    const analysis = capture.toolAnalysis
+    const rows = [
+        analysis?.vendorFlagged !== undefined ? `VirusTotal vendors: ${analysis.vendorFlagged}/${analysis.vendorTotal || '?'}` : '',
+        analysis?.alertCount !== undefined ? `urlquery alerts: ${analysis.alertCount}` : '',
+        analysis?.communityCommentCount !== undefined ? `Community comments: ${analysis.communityCommentCount}` : '',
+        analysis?.verdict ? `Verdict: ${analysis.verdict}` : '',
+        capture.error ? `Error: ${capture.error}` : '',
+    ].filter(Boolean)
+    return (
+        <div className='grid h-full place-items-center p-6'>
+            <div className='grid w-full max-w-2xl gap-3 rounded-md border border-ui-border bg-ui-panel p-4 text-left shadow-sm'>
+                <div>
+                    <p className='text-xs font-semibold uppercase text-ui-primary'>Provider result captured</p>
+                    <h2 className='mt-1 text-lg font-semibold text-ui-text'>{tool.name}</h2>
+                    <p className='mt-1 break-all font-mono text-xs text-ui-muted'>{capture.url || tool.url}</p>
+                </div>
+                {rows.length ? <div className='grid gap-1 text-sm text-ui-muted'>{rows.map(row => <p key={row}>{row}</p>)}</div> : <p className='text-sm text-ui-muted'>{providerDetail(analysis, capture)}</p>}
+                {analysis?.extractedSignals?.length ? <pre className='max-h-32 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-canvas p-2 font-mono text-xs text-ui-text'>{analysis.extractedSignals.slice(0, 12).join('\n')}</pre> : null}
+            </div>
+        </div>
+    )
 }
 
 function sessionStateLabel(state: SessionState) {
