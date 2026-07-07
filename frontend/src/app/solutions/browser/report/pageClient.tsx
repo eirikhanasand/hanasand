@@ -41,6 +41,7 @@ type BrowserReport = {
             recentRequests?: NetworkRequestRow[]
         }
         scriptArtifacts?: Array<{ scriptId?: string; source?: string; sha256?: string; assessment?: string; summary?: string }>
+        resourceUrls?: string[]
         urlTimeline?: Array<{ url?: string; capturedAt?: string; reason?: string; title?: string }>
         recommendedActions?: string[]
     }
@@ -251,7 +252,7 @@ function reportUrlTimeline(report: BrowserReport) {
 }
 
 function reportResourceUrls(report: BrowserReport) {
-    return Array.from(new Set((report.captures || []).flatMap(capture => capture.evidence?.sourceUrls || []))).filter(Boolean)
+    return Array.from(new Set([...(report.analystReport?.resourceUrls || []), ...(report.captures || []).flatMap(capture => capture.evidence?.sourceUrls || [])])).filter(Boolean)
 }
 
 function ReportPanel({ title, children }: { title: string; children: React.ReactNode }) {
