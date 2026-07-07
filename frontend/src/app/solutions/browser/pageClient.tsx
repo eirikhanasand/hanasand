@@ -1277,7 +1277,7 @@ function EvidenceWorkspace({
                     )}
                 </EvidencePanel>
 
-                <EvidencePanel title='Analyst review queue' status={`${summary.reviewQueue.length} item${summary.reviewQueue.length === 1 ? '' : 's'}`}>
+                <EvidencePanel title='Analyst review list' status={`${summary.reviewQueue.length} item${summary.reviewQueue.length === 1 ? '' : 's'}`}>
                     {summary.reviewQueue.length ? (
                         <div className='grid gap-2 text-xs text-ui-muted'>
                             {summary.reviewQueue.map(item => (
