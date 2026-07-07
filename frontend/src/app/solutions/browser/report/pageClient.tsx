@@ -99,7 +99,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                     <div key={`${provider.tool}-${provider.url}`} className='rounded-md border border-ui-border bg-ui-raised p-3 text-sm'>
                                         <p className='font-semibold'>{provider.tool || 'Provider'} · {provider.status || 'unknown'}</p>
                                         <p className='mt-1 text-xs text-ui-muted'>{provider.verdict || 'No parsed verdict'}{provider.vendorFlagged !== undefined ? ` · ${provider.vendorFlagged}/${provider.vendorTotal || '?'} vendors` : ''}{provider.alertCount !== undefined ? ` · ${provider.alertCount} alerts` : ''}</p>
-                                        {provider.url ? <p className='mt-1 truncate font-mono text-xs text-ui-muted'>{provider.url}</p> : null}
+                                        {provider.url ? <a href={provider.url} target='_blank' rel='noreferrer noopener' className='mt-1 block truncate font-mono text-xs text-ui-primary underline-offset-2 hover:underline'>{provider.url}</a> : null}
                                     </div>
                                 ))}
                             </div>
@@ -159,6 +159,12 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                     </table>
                                 </div>
                             ) : null}
+                            {analystReport.networkEvidence?.contactedDomains?.length ? (
+                                <>
+                                    <p className='mt-3 text-xs font-semibold uppercase text-ui-muted'>Contacted domains</p>
+                                    <pre className='mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{analystReport.networkEvidence.contactedDomains.join('\n')}</pre>
+                                </>
+                            ) : null}
                             {analystReport.networkEvidence?.downloads?.length ? (
                                 <pre className='mt-3 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{analystReport.networkEvidence.downloads.map(download => [
                                     download.fileName || download.url || 'download',
@@ -183,6 +189,14 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                         </ReportPanel>
                         <ReportPanel title='Actions'>
                             <ReportList items={analystReport.recommendedActions || []} empty='No recommended actions saved.' />
+                        </ReportPanel>
+                        <ReportPanel title='Threat context'>
+                            <ReportList items={(summary.threatAssociations || []).map(item => [
+                                item.name || 'Threat association',
+                                item.category || 'context',
+                                item.confidence ? `${item.confidence} confidence` : '',
+                                item.evidence || '',
+                            ].filter(Boolean).join(' · '))} empty='No threat context saved.' />
                         </ReportPanel>
                         <ReportPanel title='Indicators'>
                             <pre className='max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{(summary.indicators || []).join('\n') || 'No indicators saved.'}</pre>
