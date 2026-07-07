@@ -1750,7 +1750,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             tool: tool.name,
             status: providerStatus(capture, analysis),
             url: capture?.url || resolveToolUrl(tool.url, input.activeUrl || input.target),
-            verdict: analysis?.verdict || 'unknown',
+            verdict: analysis?.verdict && analysis.verdict !== 'unknown' ? analysis.verdict : undefined,
             vendorFlagged: analysis?.vendorFlagged,
             vendorTotal: analysis?.vendorTotal,
             alertCount: analysis?.alertCount,
