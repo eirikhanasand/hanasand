@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Bot, Cpu, Gauge, HardDrive, MemoryStick, Target, Zap } from 'lucide-react'
+import { Bot, Cpu, Gauge, HardDrive, MemoryStick, Zap } from 'lucide-react'
 import DisplayClient from './displayClient'
 import Metric from './metric'
 
@@ -41,7 +41,6 @@ export default function GPT_Content({
                 <SummaryCard title='CPU load' icon={<Cpu className='h-4 w-4' />} metric={totalLoad.cpu} />
                 <SummaryCard title='GPU load' icon={<HardDrive className='h-4 w-4' />} metric={totalLoad.gpu} />
                 <ThroughputCard tps={totalLoad.tps} />
-                <UsefulProgressCard />
                 <CapacityCard active={capacity.active} available={capacity.available} max={capacity.max} lanes={lanes.length} />
                 <PowerCard watts={power.watts} monthlyKwh={power.monthlyKwh} />
                 <div className='rounded-lg bg-ui-panel p-4 border border-ui-border'>
@@ -54,9 +53,6 @@ export default function GPT_Content({
                             <Bot className='h-5 w-5' />
                         </div>
                     </div>
-                    <p className='mt-3 text-sm text-ui-muted'>
-                        Click any client card below to open its per-device RAM, CPU, and GPU metrics.
-                    </p>
                 </div>
             </div>
 
@@ -116,23 +112,6 @@ function ThroughputCard({ tps }: { tps: number }) {
                     Live generation
                 </div>
             </div>
-        </div>
-    )
-}
-
-function UsefulProgressCard() {
-    return (
-        <div className='rounded-lg bg-ui-panel p-4 border border-ui-border'>
-            <div className='flex items-center justify-between text-ui-muted'>
-                <span className='text-xs font-medium uppercase tracking-[0.18em]'>Useful progress</span>
-                <Target className='h-4 w-4' />
-            </div>
-            <div className='mt-3 text-lg font-semibold leading-6 text-ui-text'>
-                Verified progress / min / NOK
-            </div>
-            <p className='mt-2 text-xs leading-5 text-ui-muted'>
-                Key metric: not "tokens/sec." For this product, it is verified useful project progress per minute per NOK.
-            </p>
         </div>
     )
 }

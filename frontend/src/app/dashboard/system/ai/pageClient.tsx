@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Activity, AlertTriangle, ArrowLeft, CheckCircle2, Clock3, Coins, Layers3, LineChart, Server, ShieldCheck, Timer, Zap } from 'lucide-react'
+import { Activity, AlertTriangle, ArrowLeft, CheckCircle2, Coins, Layers3, LineChart, Server, Timer, Zap } from 'lucide-react'
 import GPT_Content from '@components/gpt/content'
 import GPT_EmptyState from '@components/gpt/emptyState'
 import GPT_Header from '@components/gpt/header'
@@ -364,82 +364,6 @@ function EconomicsPanel({ economics, error, aiContainers, containerError }: { ec
             <AIContainerHealth containers={aiContainers} error={containerError} />
             <ReliabilityPanel reliability={economics.reliability} />
             <OperationsPanel readiness={economics.commercialReadiness} />
-
-            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-raised' data-ai-history-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                    <span>Trends, lane configuration, and recent runs</span>
-                    <span className='text-xs font-medium text-ui-muted'>{economics.trend.length} trend buckets, {economics.modes.length} modes, {economics.recentRuns.length} recent runs</span>
-                </summary>
-                <div className='grid gap-4 border-t border-ui-border p-3' data-ai-history-panels>
-                    <div className='grid gap-4 xl:grid-cols-[1.35fr_0.9fr]'>
-                        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-                            <div className='mb-3 flex items-center justify-between'>
-                                <h3 className='text-sm font-semibold text-ui-text'>Worker output over time</h3>
-                                <span className='text-xs text-ui-muted'>tokens · spend · verified outcomes</span>
-                            </div>
-                            <UsageTrendChart trend={economics.trend} />
-                        </div>
-                        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-                            <h3 className='text-sm font-semibold text-ui-text'>Lane controls</h3>
-                            <div className='mt-3 grid gap-2'>
-                                {economics.modes.map((mode) => (
-                                    <div key={mode.id} className='rounded-lg border border-ui-border bg-ui-panel p-3'>
-                                        <div className='flex items-center justify-between gap-3'>
-                                            <span className='text-sm font-medium text-ui-text'>{mode.label}</span>
-                                            <span className='text-xs text-ui-muted'>{mode.concurrency} concurrent</span>
-                                        </div>
-                                        <p className='mt-1 text-xs leading-5 text-ui-muted'>{mode.verification}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className='grid gap-4 xl:grid-cols-2'>
-                        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-                            <h3 className='text-sm font-semibold text-ui-text'>Customer lanes</h3>
-                            <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5'>
-                                {economics.subscriptionTiers.map((tier) => (
-                                    <article key={tier.id} className='rounded-lg border border-ui-border bg-ui-panel p-3'>
-                                        <div className='flex items-center gap-2 text-ui-text'>
-                                            <ShieldCheck className='h-4 w-4 text-ui-primary' />
-                                            <h4 className='text-sm font-semibold'>{tier.label}</h4>
-                                        </div>
-                                        {tier.fit ? <p className='mt-2 text-xs font-medium text-ui-muted'>{tier.fit}</p> : null}
-                                        <p className='mt-1 text-xs leading-5 text-ui-muted'>{tier.outcomeAllowance} verified outcomes, {tier.queuePriority} queue, {tier.concurrency} concurrent job{tier.concurrency === 1 ? '' : 's'}.</p>
-                                        {tier.features?.length ? (
-                                            <div className='mt-2 flex flex-wrap gap-1'>
-                                                {tier.features.map((feature) => (
-                                                    <span key={feature} className='rounded-full border border-ui-border px-2 py-0.5 text-[10px] text-ui-muted'>
-                                                        {feature}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        ) : null}
-                                    </article>
-                                ))}
-                            </div>
-                        </div>
-                        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-                            <h3 className='text-sm font-semibold text-ui-text'>Recent worker runs</h3>
-                            <div className='mt-3 max-h-64 space-y-2 overflow-auto'>
-                                {economics.recentRuns.length ? economics.recentRuns.map((run) => (
-                                    <div key={run.id} className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted sm:grid-cols-[1fr_auto]'>
-                                        <div>
-                                            <p className='font-medium text-ui-text'>{formatKind(run.kind)} · {run.outcome}</p>
-                                            <p className='mt-1'>{formatDate(run.createdAt)} · {formatCompact(run.units)} tokens · {formatCompact(run.billableUnits)} billable</p>
-                                        </div>
-                                        <div className='flex items-center gap-2 text-ui-text sm:justify-end'>
-                                            <Clock3 className='h-3.5 w-3.5 text-ui-primary' />
-                                            {formatNok(run.estimatedCostNok)} NOK
-                                        </div>
-                                    </div>
-                                )) : <p className='text-sm text-ui-muted'>Worker telemetry updates as verified jobs finish.</p>}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </details>
         </section>
     )
 }
@@ -778,51 +702,6 @@ function EconomicsStat({ icon, label, value, detail }: { icon: ReactNode, label:
     )
 }
 
-function UsageTrendChart({ trend }: { trend: AIEconomics['trend'] }) {
-    const rows = trend.length ? trend : [{ bucket: new Date().toISOString(), eventCount: 0, tokenUnits: 0, billableUnits: 0, estimatedCostNok: 0, verifiedUnits: 0, platformErrorUnits: 0 }]
-    const maxTokens = Math.max(1, ...rows.map(row => row.tokenUnits))
-    const maxCost = Math.max(1, ...rows.map(row => row.estimatedCostNok))
-    const maxVerified = Math.max(1, ...rows.map(row => row.verifiedUnits))
-    return (
-        <div className='space-y-3'>
-            <Sparkline rows={rows} max={maxTokens} field='tokenUnits' color='var(--color-ui-primary)' label='Token units' />
-            <Sparkline rows={rows} max={maxCost} field='estimatedCostNok' color='var(--color-ui-success)' label='Cost NOK' />
-            <Sparkline rows={rows} max={maxVerified} field='verifiedUnits' color='var(--color-ui-primary)' label='Verified outcomes' />
-        </div>
-    )
-}
-
-function Sparkline({ rows, field, max, color, label }: { rows: AIEconomics['trend'], field: keyof AIEconomics['trend'][number], max: number, color: string, label: string }) {
-    const width = 420
-    const height = 74
-    const numericRows = rows.map((row, index) => ({
-        index,
-        value: Number(row[field]) || 0,
-        bucket: row.bucket,
-    }))
-    const points = numericRows.map((row) => {
-        const x = numericRows.length === 1 ? 0 : (row.index / (numericRows.length - 1)) * width
-        const y = height - (row.value / max) * (height - 8) - 4
-        return `${x.toFixed(1)},${y.toFixed(1)}`
-    }).join(' ')
-    return (
-        <div>
-            <div className='mb-1 flex items-center justify-between text-xs text-ui-muted'>
-                <span>{label}</span>
-                <span>{formatCompact(numericRows[numericRows.length - 1]?.value || 0)}</span>
-            </div>
-            <svg viewBox={`0 0 ${width} ${height}`} className='h-16 w-full overflow-visible rounded-md bg-ui-raised' role='img' aria-label={`${label} over time`}>
-                <polyline fill='none' stroke={color} strokeWidth='3' strokeLinecap='round' strokeLinejoin='round' points={points} />
-                {numericRows.map((row) => {
-                    const x = numericRows.length === 1 ? 0 : (row.index / (numericRows.length - 1)) * width
-                    const y = height - (row.value / max) * (height - 8) - 4
-                    return <circle key={`${row.bucket}-${field}`} cx={x} cy={y} r='2.5' fill={color} />
-                })}
-            </svg>
-        </div>
-    )
-}
-
 function formatNok(value: number) {
     return value.toLocaleString('nb-NO', { maximumFractionDigits: 2 })
 }
@@ -840,10 +719,6 @@ function formatMetric(value: number) {
 
 function formatKind(kind: string) {
     return kind.replace(/_/g, ' ')
-}
-
-function formatDate(value: string) {
-    return new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function formatDuration(value: number) {

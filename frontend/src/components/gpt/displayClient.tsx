@@ -29,6 +29,9 @@ export default function DisplayClient({
         max: lanes.reduce((sum, lane) => sum + lane.maxRequests, 0),
         available: lanes.reduce((sum, lane) => sum + lane.availableRequests, 0),
     }
+    const sensorCount = client.ram.length + client.cpu.length + client.gpu.length
+    const totalWatts = client.power?.totalWatts || 0
+    const status = operationalState(client, laneCapacity.max, sensorCount)
 
     return (
         <div
@@ -39,28 +42,22 @@ export default function DisplayClient({
                     <div>
                         <h3 className='text-lg font-semibold text-ui-text/90'>{client.name}</h3>
                         <p className='text-sm text-ui-text/50'>
-                            {client.ram.length} RAM, {client.cpu.length} CPU, {client.gpu.length} GPU sensors
+                            {sensorCount ? `${client.ram.length} RAM, ${client.cpu.length} CPU, ${client.gpu.length} GPU sensors` : 'telemetry offline'}
                         </p>
                     </div>
                     <div className='flex flex-wrap items-center gap-2'>
-                        <Metric label='RAM' metric={stats.ram} />
-                        <Metric label='CPU' metric={stats.cpu} />
-                        <Metric label='GPU' metric={stats.gpu} />
-                        <StatPill
-                            label='TPS'
-                            value={`${client.model.tps.toFixed(1)}`}
-                            icon={<Gauge className='h-3.5 w-3.5' />}
-                        />
-                        <StatPill
-                            label='Lanes'
-                            value={`${laneCapacity.available}/${laneCapacity.max || lanes.length}`}
-                            icon={<HardDrive className='h-3.5 w-3.5' />}
-                        />
-                        <StatPill
-                            label='Power'
-                            value={`${(client.power?.totalWatts || 0).toFixed(0)} W`}
-                            icon={<Zap className='h-3.5 w-3.5' />}
-                        />
+                        {client.ram.length ? <Metric label='RAM' metric={stats.ram} /> : null}
+                        {client.cpu.length ? <Metric label='CPU' metric={stats.cpu} /> : null}
+                        {client.gpu.length ? <Metric label='GPU' metric={stats.gpu} /> : null}
+                        {client.model.tps > 0 || laneCapacity.max > 0 ? (
+                            <StatPill label='TPS' value={`${client.model.tps.toFixed(1)}`} icon={<Gauge className='h-3.5 w-3.5' />} />
+                        ) : null}
+                        {laneCapacity.max > 0 ? (
+                            <StatPill label='Lanes' value={`${laneCapacity.available}/${laneCapacity.max}`} icon={<HardDrive className='h-3.5 w-3.5' />} />
+                        ) : null}
+                        {totalWatts > 0 ? (
+                            <StatPill label='Power' value={`${totalWatts.toFixed(0)} W`} icon={<Zap className='h-3.5 w-3.5' />} />
+                        ) : null}
                         <button
                             type='button'
                             onClick={() => setOpen(prev => !prev)}
@@ -78,7 +75,7 @@ export default function DisplayClient({
                             title='Context'
                             value={`${client.model.contextTokens}/${lanes[0]?.contextMaxTokens || client.model.contextMaxTokens || 0}`}
                         />
-                        <ModelStat title='Status' value={operationalStateLabel(client.model.status)} highlight={client.model.status} />
+                        <ModelStat title='Status' value={status.label} highlight={status.tone} />
                     </div>
                     <div className='flex justify-start md:justify-end'>
                         <Button
@@ -166,6 +163,12 @@ function ModelStat({ title, value, highlight }: { title: string, value: string, 
             <div className={`mt-1 text-sm font-semibold ${highlightClass}`}>{value}</div>
         </div>
     )
+}
+
+function operationalState(client: GPT_Client, laneMax: number, sensorCount: number) {
+    if (!sensorCount && !laneMax) return { label: 'no telemetry', tone: 'preparing' }
+    if (client.model.status === 'error' && laneMax > 0) return { label: 'ready', tone: 'idle' }
+    return { label: operationalStateLabel(client.model.status), tone: client.model.status }
 }
 
 function Lane({ lane }: { lane: GPT_ModelLaneMetrics }) {

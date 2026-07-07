@@ -6,6 +6,8 @@ const root = process.cwd()
 
 test('ai worker console focuses operator triage while preserving live telemetry paths', async () => {
     const page = await readFile(path.join(root, 'src/app/dashboard/system/ai/pageClient.tsx'), 'utf8')
+    const content = await readFile(path.join(root, 'src/components/gpt/content.tsx'), 'utf8')
+    const client = await readFile(path.join(root, 'src/components/gpt/displayClient.tsx'), 'utf8')
     const popup = await readFile(path.join(root, 'src/components/gpt/testClientPopup.tsx'), 'utf8')
 
     expect(page).toContain('aiClientRequest(\'/ai/economics?days=30\')')
@@ -36,10 +38,13 @@ test('ai worker console focuses operator triage while preserving live telemetry 
 
     expect(page).toContain('data-ai-economics-disclosure')
     expect(page).toContain('data-ai-economics-metrics')
-    expect(page).toContain('data-ai-history-disclosure')
-    expect(page).toContain('data-ai-history-panels')
     expect(page.indexOf('data-ai-economics-disclosure')).toBeLessThan(page.indexOf('data-ai-economics-metrics'))
-    expect(page.indexOf('data-ai-history-disclosure')).toBeLessThan(page.indexOf('data-ai-history-panels'))
+    expect(page).not.toContain('data-ai-history-disclosure')
+    expect(page).not.toContain('Trends, lane configuration, and recent runs')
+    expect(content).not.toContain('Useful progress')
+    expect(content).not.toContain('Click any client card')
+    expect(client).toContain('telemetry offline')
+    expect(client).toContain('no telemetry')
 
     expect(popup).toContain('Test client')
     expect(popup).toContain('Current tokens')
