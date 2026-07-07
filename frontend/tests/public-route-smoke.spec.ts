@@ -11,6 +11,7 @@ const publicRoutes = [
     '/trust/dpa-and-data',
     '/trust/subprocessors',
     '/trust/sla-onboarding',
+    '/faq',
     '/support',
     '/articles',
     '/articles/bot',
@@ -97,5 +98,17 @@ test.describe('public website routes', () => {
         const serviceChecks = page.getByRole('link', { name: /Service Checks/i }).first()
         await expect(serviceChecks).toBeVisible()
         await expect(serviceChecks).toHaveAttribute('href', '/test')
+    })
+
+    test('homepage and FAQ explain threat intelligence basics', async ({ page }) => {
+        await page.goto('/')
+        await expect(page.getByRole('heading', { name: 'Clear answers before teams trust a signal.' })).toBeVisible()
+        await expect(page.getByRole('heading', { name: 'What is a threat actor?' })).toBeVisible()
+        await expect(page.getByRole('link', { name: 'View all FAQ' })).toHaveAttribute('href', '/faq')
+
+        await page.goto('/faq')
+        await expect(page.getByRole('heading', { name: 'Questions security teams ask before trusting a new signal.' })).toBeVisible()
+        await expect(page.getByRole('heading', { name: 'Does an alert mean the company was breached?' })).toBeVisible()
+        await expect(page.getByText('No. An alert means a source made a relevant claim or mention.')).toBeVisible()
     })
 })

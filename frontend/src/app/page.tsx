@@ -5,6 +5,7 @@ import LogoutClient from '@/components/logout/logoutClient'
 import Marquee from '@/components/shared/marquee'
 import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
 import { buildRouteMetadata } from './seo'
+import { homepageFaqs } from './faqData'
 import HomeExposureQueueClient from './homeExposureQueueClient'
 
 export const dynamic = 'force-dynamic'
@@ -314,6 +315,27 @@ export default async function Page({
 
             <section className='bg-ui-canvas'>
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8'>
+                    <div className='grid gap-6'>
+                        <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
+                            <div className='grid gap-2'>
+                                <p className='text-sm font-semibold uppercase text-ui-primary'>FAQ</p>
+                                <h2 className='text-3xl font-semibold text-ui-text'>Clear answers before teams trust a signal.</h2>
+                            </div>
+                            <Link href='/faq' className='inline-flex w-fit items-center gap-2 rounded-lg border border-ui-border px-4 py-2.5 text-sm font-semibold text-ui-primary transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
+                                View all FAQ
+                                <ArrowRight className='h-4 w-4' />
+                            </Link>
+                        </div>
+                        <div className='grid gap-3 md:grid-cols-2 lg:grid-cols-3'>
+                            {homepageFaqs.map(item => (
+                                <article key={item.question} className='landing-surface-border rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm'>
+                                    <h3 className='text-base font-semibold text-ui-text'>{item.question}</h3>
+                                    <p className='mt-2 text-sm leading-6 text-ui-muted'>{item.answer}</p>
+                                </article>
+                            ))}
+                        </div>
+                    </div>
+
                     <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
                         <div className='grid gap-2'>
                             <p className='text-sm font-semibold uppercase text-ui-primary'>Solutions</p>

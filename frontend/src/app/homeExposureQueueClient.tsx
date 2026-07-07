@@ -103,7 +103,7 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                 </div>
             </div>
             <div className='max-h-[34rem] min-w-0 overflow-auto'>
-                <div className='min-w-[56rem]'>
+                <div className='w-full min-w-[56rem]'>
                     <div className='landing-surface-divider sticky top-0 z-10 grid grid-cols-[7rem_minmax(12rem,1fr)_11rem_9rem_9rem_11rem] gap-3 border-b border-ui-border bg-ui-panel px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted' data-home-exposure-panel-table-header='true'>
                         <span>Group</span>
                         <span>Company</span>
@@ -112,9 +112,9 @@ export default function HomeExposureQueueClient({ initialQueue }: Props) {
                         <span>Country</span>
                         <span>Seen</span>
                     </div>
-                    <div className='divide-y landing-surface-divider'>
+                    <div>
                         {items.length ? items.map(({ id, actor, company, claimedData, claimedDataSize, country, claimTime, collectedAt }) => (
-                            <div key={id} className='grid min-w-0 grid-cols-[7rem_minmax(12rem,1fr)_11rem_9rem_9rem_11rem] items-center gap-3 px-4 py-3 text-sm'>
+                            <div key={id} className='grid min-w-0 grid-cols-[7rem_minmax(12rem,1fr)_11rem_9rem_9rem_11rem] items-center gap-3 border-b border-ui-border px-4 py-3 text-sm last:border-b-0'>
                                 <Marquee text={actor} innerClassName='font-semibold text-ui-text' />
                                 <Marquee text={company} innerClassName='text-ui-text' />
                                 <Marquee text={claimedData} innerClassName='text-ui-muted' />

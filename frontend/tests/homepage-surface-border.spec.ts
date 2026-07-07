@@ -149,11 +149,13 @@ test.describe('homepage surface border theme tokens', () => {
 test('homepage exposure queue empty state reads like monitoring product copy', async () => {
     const source = await readFile(path.join(root, 'src/app/homeExposureQueueClient.tsx'), 'utf8')
 
+    expect(source).toContain('className=\'w-full min-w-[56rem]\'')
+    expect(source).toContain('border-b border-ui-border px-4 py-3 text-sm last:border-b-0')
     expect(source).toContain('Monitoring company mentions across exposure sources.')
     expect(source).toContain('Monitoring exposure sources.')
     expect(source).toContain('Live exposure feed is temporarily unavailable.')
     expect(source).toContain('Exposure feed temporarily unavailable.')
-    expect(source).toMatch(/if \(status === 'unavailable'\) return 'Unavailable'/)
+    expect(source).toMatch(/if \(status === 'unavailable'\) return 'Exposure feed temporarily unavailable\.'/)
     expect(source).not.toContain('Checking for new company mentions...')
     expect(source).not.toContain('Checking for new company mentions.')
 })
