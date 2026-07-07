@@ -6,6 +6,16 @@ type BrowserReport = {
     target?: string
     finalUrl?: string
     exportedAt?: string
+    captures?: Array<{
+        kind?: string
+        label?: string
+        url?: string
+        title?: string
+        capturedAt?: string
+        reason?: string
+        image?: string | null
+        frameQuality?: { looksBlank?: boolean; visibleTextLength?: number; elementCount?: number }
+    }>
     analystSummary?: {
         narrative?: string
         indicators?: string[]
@@ -84,6 +94,22 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 ))}
                             </div>
                         </ReportPanel>
+                        <ReportPanel title='Screenshot timeline'>
+                            <div className='grid gap-3 sm:grid-cols-2'>
+                                {(report.captures || []).filter(capture => capture.image).slice(0, 8).map(capture => (
+                                    <article key={`${capture.kind}-${capture.capturedAt}-${capture.url}`} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-3'>
+                                        <div className='min-w-0'>
+                                            <p className='text-sm font-semibold'>{capture.label || capture.kind || 'Capture'}</p>
+                                            <p className='truncate font-mono text-xs text-ui-muted'>{capture.url || capture.title || ''}</p>
+                                        </div>
+                                        {capture.image ? <img src={capture.image} alt={`${capture.label || 'Browser'} screenshot`} className='max-h-64 w-full rounded border border-ui-border object-contain' /> : null}
+                                        {capture.frameQuality ? <p className={`text-xs font-semibold ${capture.frameQuality.looksBlank ? 'text-ui-danger' : 'text-ui-success'}`}>{capture.frameQuality.looksBlank ? 'Blank-looking frame' : 'Rendered frame'} · {capture.frameQuality.visibleTextLength || 0} chars · {capture.frameQuality.elementCount || 0} elements</p> : null}
+                                        <p className='text-xs text-ui-muted'>{capture.capturedAt || ''}{capture.reason ? ` · ${capture.reason}` : ''}</p>
+                                    </article>
+                                ))}
+                            </div>
+                            {!(report.captures || []).some(capture => capture.image) ? <p className='text-sm text-ui-muted'>No screenshots saved.</p> : null}
+                        </ReportPanel>
                         <ReportPanel title='Network evidence'>
                             <ReportList items={[
                                 `${analystReport.networkEvidence?.requests || 0} requests`,
@@ -91,6 +117,14 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 `${analystReport.networkEvidence?.blockedOrFailed || 0} blocked/failed`,
                                 ...((analystReport.networkEvidence?.redirectChain || []).map(url => `redirect: ${url}`)),
                             ]} empty='No network evidence saved.' />
+                        </ReportPanel>
+                        <ReportPanel title='Script artifacts'>
+                            <ReportList items={(analystReport.scriptArtifacts || []).map(script => [
+                                script.assessment || 'script',
+                                script.scriptId || script.source || 'sample',
+                                script.sha256 ? `sha256 ${script.sha256}` : '',
+                                script.summary || '',
+                            ].filter(Boolean).join(' · '))} empty='No script artifacts saved.' />
                         </ReportPanel>
                     </div>
                     <aside className='grid content-start gap-4'>
