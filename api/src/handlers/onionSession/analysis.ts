@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 export type SandboxThreatAssociation = {
     name: string
     category: 'actor' | 'malware' | 'ransomware' | 'tool' | 'campaign'
@@ -13,6 +15,7 @@ export type InspectedSandboxScript = {
     obfuscationScore: number
     reasons: string[]
     sample: string
+    sha256: string
 }
 
 const MAX_SCRIPT_SAMPLE = 3200
@@ -103,6 +106,7 @@ export function summarizeDeobfuscationTask(script: InspectedSandboxScript) {
         source: script.src || 'inline',
         webcrackReady: Boolean(script.sample),
         sample: script.sample,
+        sha256: script.sha256,
         decodedPreview: decoded.preview,
         decodedTransforms: decoded.transforms,
         indicators,
@@ -165,6 +169,7 @@ export function inspectScript(script: { src: string; inline: string }, index: nu
             charCodeCount ? 'character-code construction' : '',
         ].filter(Boolean),
         sample: value ? value.slice(0, MAX_SCRIPT_SAMPLE) : '',
+        sha256: createHash('sha256').update(script.src || value).digest('hex'),
     }
 }
 

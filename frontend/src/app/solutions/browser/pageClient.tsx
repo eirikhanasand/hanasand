@@ -122,14 +122,15 @@ type SandboxEvidence = {
         urls?: string[]
     }
     forms?: Array<{ action?: string; method?: string; sensitiveInputCount?: number; inputCount?: number }>
-    scripts?: Array<{ id?: string; src?: string; inlineBytes?: number; obfuscationScore?: number; reasons?: string[]; sample?: string }>
-    obfuscatedScripts?: Array<{ id?: string; src?: string; inlineBytes?: number; obfuscationScore?: number; reasons?: string[]; sample?: string }>
+    scripts?: Array<{ id?: string; src?: string; inlineBytes?: number; obfuscationScore?: number; reasons?: string[]; sample?: string; sha256?: string }>
+    obfuscatedScripts?: Array<{ id?: string; src?: string; inlineBytes?: number; obfuscationScore?: number; reasons?: string[]; sample?: string; sha256?: string }>
     threatAssociations?: SandboxThreatAssociation[]
     deobfuscationTasks?: Array<{
         scriptId?: string
         source?: string
         webcrackReady?: boolean
         sample?: string
+        sha256?: string
         decodedPreview?: string
         decodedTransforms?: string[]
         indicators?: { domains?: string[]; ips?: string[]; urls?: string[] }
@@ -1286,6 +1287,7 @@ function EvidenceWorkspace({
                             {summary.deobfuscationTasks.slice(0, 4).map(task => (
                                 <div key={`${task.scriptId}-${task.source}`} className='rounded-md border border-ui-border bg-ui-panel p-2'>
                                     <p className='font-semibold text-ui-text'>{task.scriptId || 'script sample'} · {task.assessment || 'review required'}</p>
+                                    {task.sha256 ? <p className='mt-1 break-all font-mono text-[11px] text-ui-text'>sha256 {task.sha256}</p> : null}
                                     <p className='mt-1 leading-5'>{task.summary || task.decodedPreview || 'Decoded summary unavailable.'}</p>
                                 </div>
                             ))}

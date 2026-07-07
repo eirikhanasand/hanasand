@@ -921,6 +921,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 obfuscationScore: 3,
                 reasons: ['cached from document HTML'],
                 sample: task.sample || task.decodedPreview || '',
+                sha256: task.sha256 || createHash('sha256').update(task.source || task.sample || task.decodedPreview || '').digest('hex'),
             }))
         }
         if (cachedThreatAssociations.length && !evidence.threatAssociations.length) evidence.threatAssociations = cachedThreatAssociations

