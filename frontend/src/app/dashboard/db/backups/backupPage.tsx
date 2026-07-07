@@ -199,8 +199,8 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
 
                         {presentation.restoreDisabledReason && (
                             <div className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>
-                        <p>{presentation.restoreDisabledReason}</p>
-                        <p className='mt-1'>Use the action above to create or refresh restore points for this target.</p>
+                                <p>{presentation.restoreDisabledReason}</p>
+                                <p className='mt-1'>Use the action above to create or refresh restore points for this target.</p>
                             </div>
                         )}
 
@@ -294,7 +294,7 @@ function RestoreProof({ proof }: { proof: BackupPresentation['restoreProof'] }) 
                     <div key={check.id} className='rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs'>
                         <p className='font-semibold uppercase text-ui-muted'>{check.label}</p>
                         <p className='mt-1 wrap-break-word text-ui-text'>{check.value}</p>
-                        <p className={`mt-1 font-semibold ${check.state === 'ready' ? 'text-ui-success' : check.state === 'needs_action' ? 'text-ui-warning' : 'text-ui-muted'}`}>{check.state === 'needs_action' ? 'needs action' : check.state}</p>
+                        <p className={`mt-1 font-semibold ${check.state === 'ready' ? 'text-ui-success' : check.state === 'needs_action' ? 'text-ui-warning' : 'text-ui-muted'}`}>{check.state === 'needs_action' ? 'review' : check.state}</p>
                     </div>
                 ))}
             </div>
