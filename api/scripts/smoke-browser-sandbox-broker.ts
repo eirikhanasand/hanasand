@@ -47,6 +47,7 @@ type BrokerPayload = {
     }
     networkSummary?: {
         recentRequests?: Array<{ method?: string; resourceType?: string; status?: number; host?: string; mimeType?: string; initiator?: string; durationMs?: number; url?: string; asn?: string }>
+        downloads?: Array<{ url?: string; fileName?: string; bytes?: number; sha256?: string; hashStatus?: string }>
     }
     receivedAt?: number
 }
@@ -56,6 +57,8 @@ const playwrightChromium = chromium.executablePath()
 if (!process.env.CHROMIUM_BIN && existsSync(playwrightChromium)) process.env.CHROMIUM_BIN = playwrightChromium
 
 const payloadDomain = 'payload.example.test'
+const downloadBody = 'sandbox download hash fixture\n'
+const downloadHash = '93389713f66d8ccf6a7968f98a05ad61b3f9bf02667bfd499b9300fa0bb25569'
 const encoded = Buffer.from(`fetch("https://${payloadDomain}/stage2"); document.body.insertAdjacentHTML("beforeend", "<p>LockBit payload</p>");`).toString('base64')
 const pages = new Map<string, string>([
     ['/start', `<!doctype html>
@@ -66,6 +69,7 @@ const pages = new Map<string, string>([
     <p>LockBit ransomware campaign associated with this lure.</p>
     <button id="click-proof" style="position:fixed;left:20px;top:20px;width:220px;height:54px;z-index:2" onclick="document.title='Interactive click received';document.getElementById('interaction-proof').textContent='Interactive click received'">Confirm invoice</button>
     <input id="type-proof" style="position:fixed;left:20px;top:88px;width:220px;height:40px;z-index:2" oninput="document.title='Typed proof: ' + this.value;document.getElementById('type-result').textContent='Typed proof: ' + this.value">
+    <a id="download-proof" href="/payload.bin" download="invoice-payload.bin" style="position:fixed;left:20px;top:140px;width:220px;height:40px;z-index:2">Download invoice payload</a>
     <p id="interaction-proof" style="margin-top:140px">Interaction pending</p>
     <p id="type-result">Typed proof pending</p>
     <form action="https://credential.example.test/login"><input name="email"><input name="password" type="password"></form>
@@ -94,6 +98,15 @@ document.querySelector('button').addEventListener('click', () => {
 
 const httpServer = http.createServer((request, response) => {
     const url = new URL(request.url || '/', 'http://127.0.0.1')
+    if (url.pathname === '/payload.bin') {
+        response.writeHead(200, {
+            'content-type': 'application/octet-stream',
+            'content-disposition': 'attachment; filename="invoice-payload.bin"',
+            'cache-control': 'no-store',
+        })
+        response.end(downloadBody)
+        return
+    }
     const body = pages.get(url.pathname) || pages.get('/start') || ''
     response.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
@@ -147,6 +160,8 @@ await waitForPayload(payloads, payload => payload.type === 'frame' && payload.ti
 client.send(JSON.stringify({ type: 'click', x: 80, y: 108, button: 0 }))
 for (const key of 'abc') client.send(JSON.stringify({ type: 'key', key }))
 await waitForPayload(payloads, payload => payload.type === 'frame' && payload.title === 'Typed proof: abc', 8_000)
+client.send(JSON.stringify({ type: 'click', x: 80, y: 155, button: 0 }))
+await waitForPayload(payloads, payload => payload.type === 'status' && payload.state === 'download_blocked', 8_000)
 await waitForPayload(payloads, payload => payload.type === 'frame' && payload.url?.endsWith('/final'), 25_000)
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'virustotal' && payload.toolAnalysis.vendorFlagged !== undefined)
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery' && payload.toolAnalysis.alertCount !== undefined)
@@ -164,6 +179,7 @@ assert(pageFrames.some(payload => payload.url?.endsWith('/final')), 'captures fi
 assert(pageFrames.some(payload => (payload.image || '').length > 1000), 'captures non-empty screenshots')
 assert(pageFrames.some(payload => payload.frameQuality?.looksBlank === false && (payload.frameQuality.visibleTextLength || 0) > 20 && (payload.frameQuality.elementCount || 0) > 5), 'captures rendered non-blank frame quality metadata')
 assert(pageFrames.some(payload => payload.networkSummary?.recentRequests?.some(request => request.status === 200 && request.method === 'GET' && request.host === '127.0.0.1' && request.mimeType?.includes('text/html') && request.durationMs !== undefined && request.initiator)), 'exposes analyst-grade network request columns')
+assert(pageFrames.some(payload => payload.networkSummary?.downloads?.some(download => download.fileName === 'invoice-payload.bin' && download.bytes === downloadBody.length && download.sha256 === downloadHash && download.hashStatus === 'hashed_and_deleted')), 'hashes downloaded files and reports deletion status')
 
 const initialEvidence = pageFrames.find(payload => payload.url?.endsWith('/start') && payload.evidence?.obfuscatedScripts?.length)?.evidence
 assert(initialEvidence?.obfuscatedScripts?.length, 'extracts obfuscated script candidates')
