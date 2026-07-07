@@ -333,7 +333,7 @@ async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<
     company: clean(parsed.company || parsed.victimName || item.company || item.victimName || ""),
     claimedData: clean(parsed.claimedData || item.claimedData || "Not disclosed by TA"),
     claimedDataSize: clean(parsed.claimedDataSize || item.claimedDataSize || dataSizeFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"),
-    country: clean(parsed.country || parsed.claimedCountry || item.country || item.claimedCountry || countryFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"),
+    country: clean(parsed.country || parsed.claimedCountry || item.country || item.claimedCountry || countryFromText([item.title, item.text].filter(Boolean).join(" ")) || countryFromCompanyDomain(parsed.company || parsed.victimName || item.company || item.victimName || "") || "Not disclosed by TA"),
     claimTime: parsed.claimTime || item.publishedAt || item.capturedAt || at,
     capturedAt: item.capturedAt || at,
     confidence,
@@ -368,7 +368,7 @@ function fallbackParse(item: ExposureClaimItem, at: string) {
   const actor = cleanActorName(item.actor || match(text, /^([A-Z][A-Za-z0-9_.-]{2,40})\b/) || item.sourceName || "Unknown actor");
   const claimedData = meaningfulClaimedData(item.claimedData) || claimedDataFromText(text) || "Not disclosed by TA";
   const claimedDataSize = item.claimedDataSize || dataSizeFromText(text) || "Not disclosed by TA";
-  const country = item.country || item.claimedCountry || countryFromText(text) || "Not disclosed by TA";
+  const country = item.country || item.claimedCountry || countryFromText(text) || countryFromCompanyDomain(victim || "") || "Not disclosed by TA";
   const confidence = victim && actor !== "Unknown actor" ? 0.78 : 0.58;
   return {
     actor,
@@ -439,7 +439,7 @@ function exposureClaimFromCapture(capture: any, source?: any) {
     company: leak.victimName || capture.metadata?.victimName || parsedTitle?.company || "Unknown company",
     claimedData: meaningfulClaimedData(leak.claimedDataCategory) || claimedDataFromText(text) || "Not disclosed by TA",
     claimedDataSize: leak.claimedDataSize || leak.dataSize || dataSizeFromText(text) || "Not disclosed by TA",
-    country: clean(leak.claimedCountry || leak.country || capture.metadata?.country || countryFromText(text) || "Not disclosed by TA"),
+    country: clean(leak.claimedCountry || leak.country || capture.metadata?.country || countryFromText(text) || countryFromCompanyDomain(leak.victimName || capture.metadata?.victimName || parsedTitle?.company || "") || "Not disclosed by TA"),
     claimType: leak.claimType || "ransomware_victim_publication",
     claimTime: firstSeen,
     collectedAt: capture.collectedAt,
@@ -458,8 +458,9 @@ function exposureCountryBackfillCandidates(store: any) {
   for (const capture of store.listCaptures?.() ?? []) {
     const source = store.getSource?.(capture.sourceId);
     if (!shouldShowExposureQueueCapture(capture, source)) continue;
+    const leak = capture.metadata?.leakSite ?? {};
+    if (!missingCountry(leak.claimedCountry || leak.country || capture.metadata?.country)) continue;
     const item = exposureClaimFromCapture(capture, source);
-    if (!missingCountry(item.country)) continue;
     rows.push({ captureId: capture.id, company: item.company, actor: item.actor, sourceName: item.sourceName });
   }
   return rows.filter((row) => row.company && row.company !== "Unknown company");
@@ -490,10 +491,13 @@ export async function resolveCompanyCountryFromPublicRecords(company: string, fe
   const counts = new Map<string, number>();
   for (const item of evidence) counts.set(item.country, (counts.get(item.country) ?? 0) + 1);
   const [country, count] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
+  const domainCountry = country || countryFromCompanyDomain(company);
   return {
-    country,
-    confidence: country ? Math.min(0.95, count >= 2 ? 0.86 : 0.72) : 0,
-    evidence: evidence.filter((item) => item.country === country).slice(0, 3).map(({ country: _country, ...item }) => item)
+    country: domainCountry,
+    confidence: country ? Math.min(0.95, count >= 2 ? 0.86 : 0.72) : domainCountry ? 0.68 : 0,
+    evidence: country
+      ? evidence.filter((item) => item.country === country).slice(0, 3).map(({ country: _country, ...item }) => item)
+      : domainCountry ? [{ source: "Public domain registry", title: `${company} uses a country-code domain for ${domainCountry}` }] : []
   };
 }
 
@@ -576,6 +580,18 @@ function simplifyCompanyName(value: string) {
 
 function missingCountry(value: unknown) {
   return !clean(value) || /^not disclosed by ta$/i.test(clean(value));
+}
+
+function countryFromCompanyDomain(value: unknown) {
+  const host = clean(value).toLowerCase().match(/\b(?:[a-z0-9-]+\.)+([a-z]{2,})\b/)?.[0];
+  const suffix = host?.split(".").pop() ?? "";
+  if (suffix === "gov" || suffix === "mil") return "United States";
+  if (suffix.length !== 2) return "";
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" }).of(suffix.toUpperCase()) ?? "";
+  } catch {
+    return ({ br: "Brazil", no: "Norway", uk: "United Kingdom", us: "United States", ca: "Canada", au: "Australia" } as Record<string, string>)[suffix] ?? "";
+  }
 }
 
 function decodeXml(value: string) {

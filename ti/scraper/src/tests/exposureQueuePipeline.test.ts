@@ -290,4 +290,20 @@ describe("DWM exposure queue pipeline", () => {
     const queueBody = await queue.json() as any;
     expect(queueBody.items[0]).toMatchObject({ company: "Contoso Energy", country: "Norway" });
   });
+
+  test("enriches domain-only victim names from public country-code domains", async () => {
+    const store = new InMemoryScraperStore();
+    const options = { store, frontier: new FocusedFrontier(), port: 0, fetch: async () => new Response(JSON.stringify({ articles: [] })) } as any;
+    store.saveSource(source({ id: "src_ransomwarelive", name: "Ransomware.live Victim Feed", metadata: { sourceFamily: "public_actor_claims" } }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_old_domain_country",
+      sourceId: "src_ransomwarelive",
+      title: "Incransom has just published a new victim: carvalima.com.br",
+      metadata: { leakSite: { actorName: "Incransom", victimName: "carvalima.com.br", claimedDataCategory: "Documents", claimedDataSize: "20 GB" } }
+    }));
+
+    const enriched = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue/enrich-countries", { method: "POST", body: "{}" }), options);
+    const enrichedBody = await enriched.json() as any;
+    expect(enrichedBody.rows[0]).toMatchObject({ company: "carvalima.com.br", country: "Brazil", status: "updated" });
+  });
 });
