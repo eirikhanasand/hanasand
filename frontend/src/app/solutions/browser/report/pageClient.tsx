@@ -40,7 +40,7 @@ type BrowserReport = {
             downloads?: Array<{ url?: string; fileName?: string; bytes?: number; sha256?: string; hashStatus?: string }>
             recentRequests?: NetworkRequestRow[]
         }
-        scriptArtifacts?: Array<{ scriptId?: string; source?: string; sha256?: string; assessment?: string; summary?: string }>
+        scriptArtifacts?: Array<{ scriptId?: string; source?: string; sha256?: string; assessment?: string; summary?: string; indicators?: { domains?: string[]; ips?: string[]; urls?: string[] } }>
         resourceUrls?: string[]
         urlTimeline?: Array<{ url?: string; capturedAt?: string; reason?: string; title?: string }>
         reviewQueue?: Array<{ severity?: string; source?: string; title?: string; detail?: string; evidence?: string }>
@@ -206,6 +206,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 script.scriptId || script.source || 'sample',
                                 script.sha256 ? `sha256 ${script.sha256}` : '',
                                 script.summary || '',
+                                ...scriptIndicatorList(script).slice(0, 6),
                             ].filter(Boolean).join(' · '))} empty='No script artifacts saved.' />
                         </ReportPanel>
                         <ReportPanel title='Resource URLs'>
@@ -274,6 +275,10 @@ function reportThreatAssociations(report: BrowserReport) {
 
 function reportReviewQueue(report: BrowserReport) {
     return report.analystReport?.reviewQueue?.length ? report.analystReport.reviewQueue : report.analystSummary?.reviewQueue || []
+}
+
+function scriptIndicatorList(script: NonNullable<NonNullable<BrowserReport['analystReport']>['scriptArtifacts']>[number]) {
+    return [...(script.indicators?.domains || []), ...(script.indicators?.ips || []), ...(script.indicators?.urls || [])]
 }
 
 function ReportPanel({ title, children }: { title: string; children: React.ReactNode }) {
