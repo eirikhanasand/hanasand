@@ -686,7 +686,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     : [providerBodies(), await withTimeout(collectFastRenderedText(toolPage), 1000, '')].filter(Boolean).join('\n')
                 if (providerText && hasParsedProviderData(tool, providerText)) {
                     navigationError = ''
-                    const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText)
+                    const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText, tool.name || toolUrl)
                     const parsedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 1500 }), 1500, openedImage)
                     send({
                         type: 'tool_capture',
@@ -710,7 +710,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 }
                 await toolPage.waitForTimeout(webcrackLoad?.loaded ? 150 : 1200).catch(() => undefined)
                 if (webcrackTool) {
-                    const evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 400, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies())
+                    const evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 400, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies(), tool.name || toolUrl)
                     const image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 500 }), 500, null)
                     send({
                         type: 'tool_capture',
@@ -729,7 +729,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     })
                     return
                 }
-                const initialEvidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 2500, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies())
+                const initialEvidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 2500, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies(), tool.name || toolUrl)
                 const initialImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 2500 }), 2500, null)
                 const initialAnalysis = analyzeToolEvidence(tool.name || toolUrl, initialEvidence)
                 let image = initialImage
@@ -745,7 +745,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     : initialAnalysis
                 if (webcrackTool) {
                     image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 500 }), 500, image)
-                    evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 500, evidence), providerBodies())
+                    evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 500, evidence), providerBodies(), tool.name || toolUrl)
                     toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
                 }
                 send({
@@ -1631,9 +1631,9 @@ function providerResponseUrl(toolName: string, url: string) {
         || lower.includes('urlquery') && /\/(?:api\/htmx\/search|search\?)/i.test(url)
 }
 
-function enrichProviderEvidence<T extends Awaited<ReturnType<typeof collectPageEvidence>>>(evidence: T, providerText: string): T {
+function enrichProviderEvidence<T extends Awaited<ReturnType<typeof collectPageEvidence>>>(evidence: T, providerText: string, providerHint = ''): T {
     if (!providerText) return evidence
-    const summary = providerSummaryText(providerText)
+    const summary = providerSummaryText(providerText, providerHint)
     const cleanProviderText = cleanAnalystText(providerText, 1800)
     return {
         ...evidence,
@@ -1642,12 +1642,13 @@ function enrichProviderEvidence<T extends Awaited<ReturnType<typeof collectPageE
     }
 }
 
-export function providerSummaryText(providerText: string) {
+export function providerSummaryText(providerText: string, providerHint = '') {
+    const lowerHint = providerHint.toLowerCase()
     const vt = parseVirusTotalStats(providerText)
     const uq = parseUrlQueryScores(providerText)
     return [
-        vt ? `${vt.flagged}/${vt.total || '?'} security vendors flagged this URL.` : '',
-        uq ? `${uq.alerts} urlquery alerts were found.` : '',
+        !lowerHint.includes('urlquery') && vt ? `${vt.flagged}/${vt.total || '?'} security vendors flagged this URL.` : '',
+        !lowerHint.includes('virustotal') && uq ? `${uq.alerts} urlquery alerts were found.` : '',
     ].filter(Boolean).join('\n')
 }
 
@@ -1903,17 +1904,19 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         || text.match(/(\d{1,3})\s+out of\s+(\d{1,3})\s+engines?/i)
     const urlqueryNoAlertText = /no\s+(?:alerts?|detections?|results?|matches?|hits?)\s+(?:were|was)?\s*(?:found|detected)?/i.test(text) || /0\s+alerts?/i.test(text)
     const vtNoDetectionsText = /\b(?:no\s+detections?|0\s*\/\s*\d+\s+security\s+vendors?|no detections|undetected|clean)\b/i.test(text)
-    const alertMatch = text.match(/(\d{1,3})\s+(?:alerts?|detections?|blacklists?|malicious requests?)/i)
-        || text.match(/Found\s+(\d{1,3})\s+(?:alert|alerts)/i)
     const communityMatch = text.match(/(\d{1,3})\s+(?:community\s*)?(?:comments?|votes?|reviews?)/i)
     const isVirusTotal = /virus\s*total|virustotal/.test(tool) || /virustotal\.com/i.test(text)
-    const isUrlQuery = /urlquery|urlquery\.net/.test(tool) || /urlquery\.net/i.test(text)
+    const isUrlQuery = !isVirusTotal && (/urlquery|urlquery\.net/.test(tool) || /urlquery\.net/i.test(text))
+    const alertMatch = isUrlQuery
+        ? text.match(/(\d{1,3})\s+(?:alerts?|detections?|blacklists?|malicious requests?)/i)
+            || text.match(/Found\s+(\d{1,3})\s+(?:alert|alerts)/i)
+        : null
     const vtStats = parseVirusTotalStats(text)
     const urlqueryScores = parseUrlQueryScores(text)
     const rawFlagged = vtStats ? vtStats.flagged : vendorMatch ? Number(vendorMatch[1]) : undefined
     const flagged = Number.isFinite(rawFlagged) ? rawFlagged : vtNoDetectionsText ? 0 : undefined
     const total = vtStats?.total || (vendorMatch?.[2] ? Number(vendorMatch[2]) : undefined)
-    const alertCount = Number.isFinite(urlqueryScores?.alerts) ? urlqueryScores?.alerts : alertMatch ? Number(alertMatch[1]) : urlqueryNoAlertText ? 0 : undefined
+    const alertCount = isUrlQuery ? Number.isFinite(urlqueryScores?.alerts) ? urlqueryScores?.alerts : alertMatch ? Number(alertMatch[1]) : urlqueryNoAlertText ? 0 : undefined : undefined
     const cleanComments = (evidence.comments || []).map(comment => cleanAnalystText(comment, 500)).filter(Boolean)
     const communityCommentCount = communityMatch ? Number(communityMatch[1]) : cleanComments.length || undefined
     const hasProviderNoDetectionText = /(?:no\s+(?:detections|alerts?|results?|matches?|issues)\s+(?:found)?|undetected|clean|harmless)/i.test(text)
