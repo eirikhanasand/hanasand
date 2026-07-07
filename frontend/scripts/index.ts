@@ -82,6 +82,11 @@ const tasks: TestTask[] = [
         command: [bun, 'scripts/check-dwm-analyst-brief.mjs'],
     },
     {
+        id: 'browser-report-evidence',
+        title: 'Browser report evidence contract',
+        command: [bun, 'scripts/check-browser-report-evidence.mjs'],
+    },
+    {
         id: 'public-archive',
         title: 'Public archive route smoke',
         command: [bun, 'scripts/check-public-archive.mjs'],
