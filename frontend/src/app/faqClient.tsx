@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, Minus, Plus, ThumbsDown, ThumbsUp } from 'lucide-react'
 import type { faqs, faqCategories } from './faqData'
 
@@ -13,14 +13,32 @@ type Props = {
 }
 
 type Feedback = 'yes' | 'no'
+const feedbackStorageKey = 'hanasand-faq-feedback'
 
 export default function FAQClient({ categories, faqs }: Props) {
     const [openQuestion, setOpenQuestion] = useState<string>(faqs[0]?.question || '')
     const [feedback, setFeedback] = useState<Record<string, Feedback>>({})
+    const [feedbackLoaded, setFeedbackLoaded] = useState(false)
     const grouped = useMemo(() => categories.map(category => ({
         category,
         items: faqs.filter(item => item.category === category),
     })).filter(group => group.items.length), [categories, faqs])
+
+    useEffect(() => {
+        try {
+            const stored = window.localStorage.getItem(feedbackStorageKey)
+            if (stored) setFeedback(JSON.parse(stored) as Record<string, Feedback>)
+        } catch {
+            setFeedback({})
+        } finally {
+            setFeedbackLoaded(true)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!feedbackLoaded) return
+        window.localStorage.setItem(feedbackStorageKey, JSON.stringify(feedback))
+    }, [feedback, feedbackLoaded])
 
     return (
         <div className='mx-auto grid w-full max-w-6xl gap-10 px-4 py-12 md:grid-cols-[13rem_1fr] md:px-8 md:py-16'>
