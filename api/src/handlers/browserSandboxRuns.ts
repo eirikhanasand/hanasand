@@ -21,6 +21,7 @@ export type BrowserRunRecord = {
     network: BrowserNetwork
     status: string
     startedAt: string
+    checkCount?: number
     title?: string
     reportUrl?: string
 }
@@ -86,16 +87,28 @@ export async function getBrowserRuns(req: FastifyRequest<{ Querystring: { client
             ? [identity.ownerId, identity.clientIdHash]
             : [identity.clientIdHash]
         const result = await run(identity.ownerId ? `
-            SELECT id, target, network, status, title, created_at, metadata
-            FROM browser_runs
-            WHERE owner_id = $1
-               OR ($2::text IS NOT NULL AND client_id_hash = $2)
+            SELECT *
+            FROM (
+                SELECT DISTINCT ON (target)
+                    id, target, network, status, title, created_at, metadata,
+                    COUNT(*) OVER (PARTITION BY target)::int AS check_count
+                FROM browser_runs
+                WHERE owner_id = $1
+                   OR ($2::text IS NOT NULL AND client_id_hash = $2)
+                ORDER BY target, created_at DESC
+            ) latest_runs
             ORDER BY created_at DESC
             LIMIT 12
         ` : `
-            SELECT id, target, network, status, title, created_at, metadata
-            FROM browser_runs
-            WHERE client_id_hash = $1
+            SELECT *
+            FROM (
+                SELECT DISTINCT ON (target)
+                    id, target, network, status, title, created_at, metadata,
+                    COUNT(*) OVER (PARTITION BY target)::int AS check_count
+                FROM browser_runs
+                WHERE client_id_hash = $1
+                ORDER BY target, created_at DESC
+            ) latest_runs
             ORDER BY created_at DESC
             LIMIT 12
         `, params)
@@ -284,6 +297,7 @@ function rowToRunRecord(row: Record<string, any>): BrowserRunRecord {
         network: row.network === 'tor' ? 'tor' : 'regular',
         status: String(row.status || 'running'),
         startedAt: new Date(row.created_at || Date.now()).toISOString(),
+        checkCount: Math.max(1, Number(row.check_count || 1)),
         title: String(row.title || ''),
         reportUrl: reportToken ? `/backend/browser/runs/${encodeURIComponent(String(row.id || ''))}/report?token=${encodeURIComponent(String(reportToken))}` : undefined,
     }
