@@ -43,6 +43,7 @@ type BrowserReport = {
         scriptArtifacts?: Array<{ scriptId?: string; source?: string; sha256?: string; assessment?: string; summary?: string }>
         resourceUrls?: string[]
         urlTimeline?: Array<{ url?: string; capturedAt?: string; reason?: string; title?: string }>
+        reviewQueue?: Array<{ severity?: string; source?: string; title?: string; detail?: string; evidence?: string }>
         indicators?: string[]
         threatAssociations?: Array<{ name?: string; category?: string; confidence?: string; evidence?: string; source?: string }>
         recommendedActions?: string[]
@@ -101,7 +102,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                             <p className='text-sm leading-6 text-ui-muted'>{summary.narrative || 'No analyst summary was saved with this report.'}</p>
                         </ReportPanel>
                         <ReportPanel title='Review list'>
-                            <ReportList items={(summary.reviewQueue || []).map(item => `${item.severity || 'review'} · ${item.title || 'Evidence item'} · ${item.detail || item.evidence || item.source || ''}`)} empty='No priority review items saved.' />
+                            <ReportList items={reportReviewQueue(report).map(item => `${item.severity || 'review'} · ${item.title || 'Evidence item'} · ${item.detail || item.evidence || item.source || ''}`)} empty='No priority review items saved.' />
                         </ReportPanel>
                         <ReportPanel title='URL timeline'>
                             <ReportList items={reportUrlTimeline(report).map(item => [
@@ -263,6 +264,10 @@ function reportIndicators(report: BrowserReport) {
 
 function reportThreatAssociations(report: BrowserReport) {
     return report.analystReport?.threatAssociations?.length ? report.analystReport.threatAssociations : report.analystSummary?.threatAssociations || []
+}
+
+function reportReviewQueue(report: BrowserReport) {
+    return report.analystReport?.reviewQueue?.length ? report.analystReport.reviewQueue : report.analystSummary?.reviewQueue || []
 }
 
 function ReportPanel({ title, children }: { title: string; children: React.ReactNode }) {
