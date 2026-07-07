@@ -578,7 +578,7 @@ function ArtifactList({ label, items }: { label: string, items: string[] }) {
         <div className='rounded-lg border border-ui-border bg-ui-panel p-2'>
             <p className='font-semibold text-ui-muted'>{label}</p>
             {items.length
-                ? items.map(item => <a key={item} className='mt-1 block truncate font-semibold text-ui-primary hover:underline' href={item} target='_blank' rel='noreferrer'>{item}</a>)
+                ? items.map(item => <a key={item} className='mt-1 block truncate font-semibold text-ui-primary hover:underline' href={item} target='_blank' rel='noopener noreferrer'>{item}</a>)
                 : <p className='mt-1 text-ui-muted'>None attached</p>}
         </div>
     )
