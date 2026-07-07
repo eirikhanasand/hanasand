@@ -45,6 +45,7 @@ type SandboxNetworkEvent = {
     method?: string
     resourceType?: string
     status?: number
+    host?: string
     mimeType?: string
     initiator?: string
     durationMs?: number
@@ -507,6 +508,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     method: request.method(),
                     resourceType: request.resourceType(),
                     status: response.status(),
+                    host: domainFromUrl(response.url()),
                     mimeType: response.headers()['content-type'],
                     initiator: requestInitiator(request),
                     durationMs: responseDurationMs(request.timing()) ?? elapsedMs(startedAt, capturedAt),
@@ -993,6 +995,7 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
             method: event.method,
             resourceType: event.resourceType,
             status: event.status,
+            host: event.host || domainFromUrl(event.url),
             mimeType: event.mimeType,
             initiator: event.initiator,
             durationMs: event.durationMs,
