@@ -130,7 +130,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                         </ReportPanel>
                         <ReportPanel title='Screenshot timeline'>
                             <div className='grid gap-3 sm:grid-cols-2'>
-                                {(report.captures || []).filter(capture => capture.image).slice(0, 8).map(capture => (
+                                {(report.captures || []).filter(capture => capture.image).map(capture => (
                                     <article key={`${capture.kind}-${capture.capturedAt}-${capture.url}`} className='grid gap-2 rounded-md border border-ui-border bg-ui-raised p-3'>
                                         <div className='min-w-0'>
                                             <p className='text-sm font-semibold'>{capture.label || capture.kind || 'Capture'}</p>
