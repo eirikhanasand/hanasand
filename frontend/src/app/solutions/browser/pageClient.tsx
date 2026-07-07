@@ -1527,7 +1527,7 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
                         <div className='flex items-start justify-between gap-3'>
                             <div className='min-w-0'>
                                 <p className='text-sm font-semibold text-ui-text'>{capture.label}</p>
-                                <p className='mt-1 truncate font-mono text-xs text-ui-muted'>{capture.url || capture.error}</p>
+                                <p className='mt-1 truncate font-mono text-xs text-ui-muted'>{capture.url || providerErrorText(capture.error)}</p>
                             </div>
                             <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>{capture.kind}</span>
                         </div>
@@ -1583,7 +1583,7 @@ function ProviderReportDetails({ tool, capture, compact = false }: { tool: Sandb
         analysis?.communityCommentCount !== undefined ? ['Comments', String(analysis.communityCommentCount)] : undefined,
         analysis?.verdict && analysis.verdict !== 'unknown' ? ['Verdict', analysis.verdict] : undefined,
         capture.image ? ['Screenshot', 'captured'] : undefined,
-        capture.error && capture.error !== 'provider_navigation_pending' ? `Error: ${capture.error}` : '',
+        capture.error && capture.error !== 'provider_navigation_pending' ? `Error: ${providerErrorText(capture.error)}` : '',
     ].filter(Boolean) as Array<string | [string, string]>
     return (
         <div className={`grid w-full gap-3 rounded-md border border-ui-border bg-ui-panel text-left shadow-sm ${compact ? 'p-2 text-xs' : 'max-w-3xl p-4'}`}>
@@ -1722,7 +1722,7 @@ function buildExportReport(input: {
             title: capture.title,
             capturedAt: capture.capturedAt,
             reason: capture.reason,
-            error: capture.error,
+            error: providerErrorText(capture.error),
             image: capture.image,
             frameQuality: capture.frameQuality,
             evidence: capture.evidence,
@@ -1754,7 +1754,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             screenshotCaptured: Boolean(capture?.image),
             signals: analysis?.extractedSignals || [],
             threatAssociations: analysis?.threatAssociations || [],
-            error: capture?.error,
+            error: providerErrorText(capture?.error),
         }
     })
     const scriptArtifacts = [
@@ -2015,7 +2015,7 @@ function buildReviewQueue(input: {
         severity: 'medium',
         source: capture.label,
         title: 'Provider failed or blocked',
-        detail: capture.error || 'Provider returned no usable evidence.',
+        detail: providerErrorText(capture.error) || 'Provider returned no usable evidence.',
         evidence: capture.url,
     }))
     if ((input.latestNetwork?.failedCount || 0) > 0) items.push({
@@ -2176,9 +2176,18 @@ function providerDetail(analysis?: SandboxToolAnalysis, capture?: Capture) {
     if (analysis?.alertCount !== undefined) return `urlquery alerts: ${analysis.alertCount}${analysis.communityCommentCount !== undefined ? ` · Community comments: ${analysis.communityCommentCount}` : ''}`
     if (analysis?.extractedSignals?.length) return analysis.extractedSignals.slice(0, 2).join(' · ')
     if (capture?.error === 'provider_navigation_pending') return 'Provider tab is open and loading in the sandbox.'
-    if (capture?.error) return `Provider blocked or failed: ${capture.error}`
+    if (capture?.error) return `Provider blocked or failed: ${providerErrorText(capture.error)}`
     if (capture) return 'Provider tab captured, but no parsed verdict was returned.'
     return 'Provider tab has not returned a capture yet.'
+}
+
+function providerErrorText(error?: string) {
+    if (!error || error === 'provider_navigation_pending') return ''
+    const lower = error.toLowerCase()
+    if (lower.includes('screenshot') && lower.includes('timeout')) return 'Provider screenshot timed out.'
+    if (lower.includes('timeout')) return 'Provider timed out.'
+    if (lower.includes('net::err')) return 'Provider network request failed.'
+    return error.split('\n')[0].slice(0, 140)
 }
 
 function hasParsedProviderResult(analysis?: SandboxToolAnalysis) {
