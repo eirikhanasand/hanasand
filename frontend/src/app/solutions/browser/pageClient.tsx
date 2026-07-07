@@ -2163,6 +2163,7 @@ function safeToolKey(value: string) {
 function providerStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (!capture) return 'Unavailable'
     if (capture.error === 'provider_navigation_pending') return 'Loading'
+    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false && /no obfuscated script sample/i.test(analysis.webcrackLoadReason || '')) return 'No sample needed'
     if (hasParsedProviderResult(analysis)) return 'Result captured'
     if (capture.error) return 'Provider error'
     return 'Result unavailable'
@@ -2172,6 +2173,8 @@ function providerTabStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (!capture) return 'waiting'
     if (analysis?.vendorFlagged !== undefined) return `${analysis.vendorFlagged}/${analysis.vendorTotal || '?'} vendors`
     if (analysis?.alertCount !== undefined) return `${analysis.alertCount} alerts`
+    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === true) return 'sample loaded'
+    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false) return /no obfuscated script sample/i.test(analysis.webcrackLoadReason || '') ? 'no sample' : 'not loaded'
     if (capture.error === 'provider_navigation_pending') return 'loading'
     if (capture.error) return 'blocked'
     return analysis?.verdict && analysis.verdict !== 'unknown' ? analysis.verdict : 'unavailable'
@@ -2180,6 +2183,7 @@ function providerTabStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
 function providerDetail(analysis?: SandboxToolAnalysis, capture?: Capture) {
     if (analysis?.vendorFlagged !== undefined) return `VirusTotal vendors: ${analysis.vendorFlagged}/${analysis.vendorTotal || '?'}${analysis.communityCommentCount !== undefined ? ` · Community comments: ${analysis.communityCommentCount}` : ''}`
     if (analysis?.alertCount !== undefined) return `urlquery alerts: ${analysis.alertCount}${analysis.communityCommentCount !== undefined ? ` · Community comments: ${analysis.communityCommentCount}` : ''}`
+    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false && /no obfuscated script sample/i.test(analysis.webcrackLoadReason || '')) return 'No obfuscated script sample was extracted from this page; WebCrack was not required for this run.'
     if (analysis?.extractedSignals?.length) return analysis.extractedSignals.slice(0, 2).join(' · ')
     if (capture?.error === 'provider_navigation_pending') return 'Provider tab is open and loading in the sandbox.'
     if (capture?.error) return `Provider blocked or failed: ${providerErrorText(capture.error)}`
@@ -2200,6 +2204,7 @@ function hasParsedProviderResult(analysis?: SandboxToolAnalysis) {
     return analysis?.vendorFlagged !== undefined
         || analysis?.alertCount !== undefined
         || Boolean(analysis?.verdict && analysis.verdict !== 'unknown')
+        || Boolean(analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded !== undefined)
 }
 
 function extractIndicators(value: string) {

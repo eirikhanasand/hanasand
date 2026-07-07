@@ -38,6 +38,7 @@ assertIncludes(liveClient, 'Hashed downloads', 'live browser workspace must expo
 assertIncludes(liveClient, 'Script hashes', 'live browser workspace must expose script hash evidence')
 assertIncludes(liveClient, 'Copyable indicators', 'live browser workspace must expose IOC count')
 assertIncludes(liveClient, 'aspect-[16/9] w-full', 'live browser viewport must stay full-width 16:9')
+assertIncludes(liveClient, 'No sample needed', 'WebCrack no-sample runs must not look unavailable')
 
 for (const token of [
     'Browser sandbox report',
