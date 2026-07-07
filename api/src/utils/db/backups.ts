@@ -65,7 +65,6 @@ export async function collectDatabaseBackupServices(): Promise<BackupServiceStat
     const serviceFiles = filterServiceFiles(files, database)
     const latest = serviceFiles[0] || null
     const storageSize = serviceFiles.reduce((sum, file) => sum + file.sizeBytes, 0)
-    const storageError = files.length === 0 && !await backupDirectoryExists()
 
     if (!probe.ok) {
         return [{
@@ -87,8 +86,8 @@ export async function collectDatabaseBackupServices(): Promise<BackupServiceStat
     return [{
         id: serviceId,
         name: `${database}_database`,
-        status: latest ? 'Healthy' : storageError ? 'Attention' : 'Available',
-        error: storageError ? `Backup storage directory is not available. Set DB_BACKUP_DIR or create ${backupDirectory()}.` : null,
+        status: latest ? 'Healthy' : 'Available',
+        error: null,
         dbSize: probe.sizeBytes === null ? undefined : formatBytes(probe.sizeBytes),
         totalStorage: storageSize ? formatBytes(storageSize) : '0 B',
         lastBackup: latest?.mtime.toISOString() || null,
@@ -267,15 +266,6 @@ async function listBackupCandidates() {
             .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
     } catch {
         return []
-    }
-}
-
-async function backupDirectoryExists() {
-    try {
-        const info = await stat(backupDirectory())
-        return info.isDirectory()
-    } catch {
-        return false
     }
 }
 

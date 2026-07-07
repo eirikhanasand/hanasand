@@ -43,6 +43,7 @@ export type DatabaseOverview = {
             sizeBytes: number
             tableCount: number | null
             activeConnections: number
+            tables?: Array<{ schema: string, name: string, estimatedRows: number | null }>
         }>
     }>
 }
@@ -71,6 +72,12 @@ type ActivityRow = {
     query: string | null
 }
 
+type TableRow = {
+    schema_name: string
+    table_name: string
+    estimated_rows: string | number | null
+}
+
 export async function collectLiveDatabaseOverview() {
     const { queryOnce } = await import('#db')
     return collectDatabaseOverview(async <T extends Record<string, unknown>>(query: string, params?: QueryParams) => {
@@ -84,7 +91,7 @@ export async function collectDatabaseOverview(query: MetricsQuery, now = new Dat
     const longRunningThresholdSeconds = Math.max(Number(process.env.DB_LONG_QUERY_SECONDS || 60), 1)
 
     try {
-        const [server, databases] = await Promise.all([
+        const [server, databases, tables] = await Promise.all([
             query<ServerRow>(`
                 SELECT
                     current_database() AS current_database,
@@ -117,6 +124,14 @@ export async function collectDatabaseOverview(query: MetricsQuery, now = new Dat
                   AND NOT d.datistemplate
                 ORDER BY d.datname ASC
             `),
+            query<TableRow>(`
+                SELECT
+                    schemaname AS schema_name,
+                    relname AS table_name,
+                    n_live_tup::text AS estimated_rows
+                FROM pg_stat_user_tables
+                ORDER BY schemaname ASC, relname ASC
+            `),
         ])
         const activity = await query<ActivityRow>(`
             SELECT
@@ -137,11 +152,17 @@ export async function collectDatabaseOverview(query: MetricsQuery, now = new Dat
         `)
 
         const serverRow = server.rows[0]
+        const tableRows = tables.rows.map(row => ({
+            schema: String(row.schema_name),
+            name: String(row.table_name),
+            estimatedRows: toNumber(row.estimated_rows),
+        }))
         const databaseRows = databases.rows.map(row => ({
             name: String(row.name),
             sizeBytes: toNumber(row.size_bytes),
             tableCount: row.table_count === null ? null : toNumber(row.table_count),
             activeConnections: toNumber(row.active_connections),
+            tables: String(row.name) === String(server.rows[0]?.current_database || '') ? tableRows : [],
         }))
         const queryRows = activity.rows.map(row => toQueryActivity(row, longRunningThresholdSeconds))
         const activeRows = queryRows.filter(row => row.state === 'active')

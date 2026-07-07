@@ -78,6 +78,7 @@ import postVmFailover from './handlers/vms/postFailover.ts'
 import getMetrics from './handlers/metrics/getMetrics.ts'
 import getDatabaseOverview from './handlers/database/getOverview.ts'
 import { getDatabaseBackupFiles, getDatabaseBackups, postDatabaseBackup, postDatabaseBackupRestore } from './handlers/database/backups.ts'
+import { getDatabaseHealth, getDatabaseRows, postDatabaseQuery } from './handlers/database/query.ts'
 import getDocker from './handlers/docker/getDocker.ts'
 import { getVulnerabilities, postVulnerabilityScan } from './handlers/vulnerabilities.ts'
 import vmAction from './handlers/vms/action.ts'
@@ -428,6 +429,9 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     // Server metrics
     fastify.get('/metrics', getMetrics)
     fastify.get('/db', getDatabaseOverview)
+    fastify.get('/db/health', getDatabaseHealth)
+    fastify.get('/db/rows', getDatabaseRows)
+    fastify.post('/db/query', postDatabaseQuery)
     fastify.get('/backup', getDatabaseBackups)
     fastify.post('/backup', postDatabaseBackup)
     fastify.get('/backup/files', getDatabaseBackupFiles)

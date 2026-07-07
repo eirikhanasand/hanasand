@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { DatabaseDashboard } from '../src/app/dashboard/db/databaseDashboard.tsx'
 import type { DatabaseOverview } from '../src/utils/db/internal'
+
+const frontendApi = await readFile(new URL('../src/utils/db/internal.ts', import.meta.url), 'utf8')
+const apiRoutes = await readFile(new URL('../../api/src/routes.ts', import.meta.url), 'utf8')
 
 const healthyOverview: DatabaseOverview = {
     status: 'healthy',
@@ -44,7 +48,7 @@ const healthyOverview: DatabaseOverview = {
         totalSizeBytes: 113246208,
         databaseCount: 2,
         databases: [
-            { name: 'hanasand', sizeBytes: 104857600, tableCount: 42, activeConnections: 4 },
+            { name: 'hanasand', sizeBytes: 104857600, tableCount: 42, activeConnections: 4, tables: [{ schema: 'public', name: 'users', estimatedRows: 12 }] },
             { name: 'postgres', sizeBytes: 8388608, tableCount: null, activeConnections: 1 },
         ],
     }],
@@ -58,6 +62,11 @@ assert.match(healthyMarkup, /hanasand/)
 assert.match(healthyMarkup, /42/)
 assert.match(healthyMarkup, /Backups/)
 assert.match(healthyMarkup, /Restore/)
+assert.match(healthyMarkup, /Database workbench/)
+assert.match(healthyMarkup, /Execute SQL/)
+assert.match(healthyMarkup, /Inspect rows/)
+assert.match(healthyMarkup, /Check live/)
+assert.match(healthyMarkup, /public\.users/)
 assert.doesNotMatch(healthyMarkup, /Clusters<\/span><\/div><p[^>]*>0</)
 
 const unavailableMarkup = renderToStaticMarkup(React.createElement(DatabaseDashboard, {
@@ -85,5 +94,12 @@ assert.match(unavailableMarkup, /Database metrics unavailable/)
 assert.match(unavailableMarkup, /Unavailable/)
 assert.match(unavailableMarkup, /Query telemetry unavailable/)
 assert.doesNotMatch(unavailableMarkup, /password authentication failed/i)
+
+assert.match(frontendApi, /requestService<DatabaseHealth>\('internal', 'db\/health'\)/, 'frontend should call the Hanasand liveness endpoint')
+assert.match(frontendApi, /requestService<DatabaseQueryResult>\('internal', 'db\/query'/, 'frontend should call the Hanasand SQL endpoint')
+assert.match(frontendApi, /requestService<DatabaseQueryResult>\('internal', `db\/rows\?/, 'frontend should call the Hanasand row inspection endpoint')
+assert.match(apiRoutes, /fastify\.get\('\/db\/health', getDatabaseHealth\)/, 'API should expose GET /db/health')
+assert.match(apiRoutes, /fastify\.get\('\/db\/rows', getDatabaseRows\)/, 'API should expose GET /db/rows')
+assert.match(apiRoutes, /fastify\.post\('\/db\/query', postDatabaseQuery\)/, 'API should expose POST /db/query')
 
 console.log('Database dashboard render checks passed.')

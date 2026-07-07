@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import ErrorNotice from '@/components/error/errorNotice'
 import type { DatabaseOverview, DatabaseQueryActivity } from '@/utils/db/internal'
+import DatabaseWorkbench from './databaseWorkbench'
 
 export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) {
     const unavailable = overview.status === 'unavailable'
@@ -161,6 +162,8 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                     )}
                 </DashboardPanel>
             </div>
+
+            {!unavailable && <DatabaseWorkbench overview={overview} />}
 
             <div className='grid gap-4 xl:grid-cols-[1fr_0.7fr]'>
                 <DashboardPanel className='p-4' id='storage-inventory'>

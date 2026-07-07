@@ -21,8 +21,8 @@ The expected behavior is: "Implement the share functionality from the website" s
 - Hanasand API: `/Users/eirikhanasand/Desktop/personal/hanasand/api`
 - Nucleus app: `/Users/eirikhanasand/Desktop/Login/nucleus`
 - Beehive website: `/Users/eirikhanasand/Desktop/Login/beehive`
-- Queenbee website/admin: `/Users/eirikhanasand/Desktop/Login/queenbee`
-- Beekeeper API: `/Users/eirikhanasand/Desktop/Login/beekeeper/api`
+- Hanasand dashboard frontend: `/Users/eirikhanasand/Desktop/personal/hanasand/frontend`
+- Hanasand API: `/Users/eirikhanasand/Desktop/personal/hanasand/api`
 - App notification API: `/Users/eirikhanasand/Desktop/Login/app_api`
 
 Hanasand app and Nucleus are both Expo/React Native apps, but they have different design systems. Do not copy UI literally across them. Copy behavior and data contracts, then adapt to the target app's local primitives.
@@ -142,7 +142,7 @@ Key files:
 - screen route types: `src/types/screenTypes.ts`
 - shared layout: `src/components/shared/parent.tsx`, `src/components/shared/cluster.tsx`, `src/components/shared/text.tsx`
 - shared marquee: `src/components/shared/marquee.tsx`
-- Login/Queenbee API helpers: `src/utils/queenbeeApi.ts`, `src/utils/queenbeeApi/*`
+- Hanasand dashboard API helpers: `frontend/src/utils/**` and API handlers under `api/src/handlers/**`
 - Beehive/discovery helpers: `src/utils/discoveryApi.ts`, `src/utils/fetch.ts`
 - auth/profile helpers: `src/utils/auth.ts`, `src/utils/authProfile.ts`
 - tests: `src/tests/*.test.ts`
@@ -152,7 +152,7 @@ Rules:
 - Use existing shared components and style modules. Do not create full-width text walls or left/right text layouts on mobile.
 - Every user-facing string added to a durable page needs English and Norwegian translations.
 - Validate every endpoint response before mapping it. The previous `clients.map is not a function` bug came from trusting payload shape.
-- If implementing Queenbee parity, use the existing `queenbeeApi` request helpers and role gate.
+- Implement Hanasand functionality in this repo first. Do not route new dashboard work through Login, Queenbee, or Beekeeper.
 - If implementing Beehive parity, inspect Beehive first, then move only the behavior and needed data into Nucleus.
 - For long titles in compact list rows, use the shared `Marquee` component instead of letting text escape.
 - For native navigation or deep linking, update both route types and navigation config.
@@ -181,11 +181,11 @@ Use this recipe for features like share management, events, ads, music, status, 
 1. Find the web feature.
    - Hanasand: search `frontend/src`.
    - Login public site: search `beehive/src`.
-   - Queenbee admin: search `queenbee/src`.
+   - Hanasand dashboard: search `frontend/src`.
 2. Find the API helper used by the web feature.
    - Hanasand share helpers are in `frontend/src/utils/share`.
    - Hanasand API routes are in `api/src/routes.ts` and `api/src/handlers`.
-   - Queenbee/Nucleus helpers are under `nucleus/src/utils/queenbeeApi*`.
+   - Hanasand API helpers and routes are under `frontend/src/utils`, `api/src/handlers`, and `api/src/routes.ts`.
 3. Find the exact request contract.
    - Look for URL, method, headers, query params, body, and response shape.
    - Read backend handlers when available.

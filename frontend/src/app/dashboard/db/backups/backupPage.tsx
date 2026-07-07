@@ -43,7 +43,7 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
     const presentations = backups.map((backup) => ({ backup, presentation: presentBackup(backup) }))
     const healthyCount = presentations.filter(({ presentation }) => presentation.healthTone === 'ok').length
     const restoreReadyCount = presentations.filter(({ presentation }) => presentation.restoreReady).length
-    const attentionTarget = presentations.find(({ presentation }) => presentation.healthTone !== 'ok')
+    const attentionTarget = presentations.find(({ presentation }) => presentation.healthTone === 'bad')
     const nextBackup = backups.find(backup => backup.nextBackup)?.nextBackup
     const lastBackup = backups.find(backup => backup.lastBackup)?.lastBackup
     const firstRestoreReady = presentations.find(({ presentation }) => presentation.restoreReady)
@@ -53,7 +53,7 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
         : !backups.length
             ? 'Create the first verified backup'
             : attentionTarget
-                ? `Review ${attentionTarget.backup.name}`
+                ? `Open logs for ${attentionTarget.backup.name}`
                 : restoreReadyCount
                     ? 'Restore files are ready'
                     : hasRestoreTargets
@@ -64,7 +64,7 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
         : !backups.length
             ? 'No backup targets are reporting yet. Start a backup check to establish the first restore point.'
             : attentionTarget
-                ? attentionTarget.presentation.safeError || attentionTarget.presentation.restoreDisabledReason || attentionTarget.presentation.summary
+                ? attentionTarget.presentation.safeError || attentionTarget.presentation.summary
                 : restoreReadyCount
                     ? `${restoreReadyCount} target${restoreReadyCount === 1 ? '' : 's'} can open restore files. Last backup: ${formatRelative(lastBackup)}.`
                     : 'Backup targets are visible, but no verified restore file is indexed yet. Run a backup first, then return for restore validation.'
@@ -99,14 +99,14 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                         Open logs
                     </Link>
                 ) : attentionTarget ? (
-                    <a
-                        href='#backup-targets'
+                    <Link
+                        href='/dashboard/logs'
                         className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:bg-ui-primary/90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
                         data-backup-primary-action
                     >
-                        <AlertTriangle className='h-4 w-4' />
-                        Review target
-                    </a>
+                        <ListChecks className='h-4 w-4' />
+                        Open logs
+                    </Link>
                 ) : primaryRestoreHref ? (
                     <Link
                         href={primaryRestoreHref}
@@ -169,8 +169,8 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                                 <button
                                     type='button'
                                     onClick={handleRun}
-                                    disabled={isPending || Boolean(presentation.safeError)}
-                                    title={presentation.safeError ? 'Fix the backup configuration blocker before running a new backup.' : 'Run a backup for this target.'}
+                                    disabled={isPending}
+                                    title='Run a backup for this target.'
                                     className='inline-flex items-center gap-2 rounded-lg border border-ui-primary bg-ui-primary/15 px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
                                 >
                                     <DatabaseBackup className='h-4 w-4' />
@@ -182,26 +182,25 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                                         className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary hover:bg-ui-raised'
                                     >
                                         <RotateCcw className='h-4 w-4' />
-                                        View restore files
+                                        Restore
                                     </Link>
                                 ) : (
-                                    <button
-                                        type='button'
-                                        disabled
+                                    <Link
+                                        href={`/dashboard/db/restore?service=${encodeURIComponent(backupServiceSlug(backup))}`}
                                         title={presentation.restoreDisabledReason}
-                                        className='inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm font-semibold text-ui-muted'
+                                        className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary hover:bg-ui-raised'
                                     >
                                         <RotateCcw className='h-4 w-4' />
-                                        View restore files
-                                    </button>
+                                        Open restore index
+                                    </Link>
                                 )}
                             </div>
                         </div>
 
                         {presentation.restoreDisabledReason && (
                             <div className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>
-                                <p>{presentation.restoreDisabledReason}</p>
-                                <p className='mt-1'>If no verified backup exists yet, run backup for this target, then validate restore points here.</p>
+                        <p>{presentation.restoreDisabledReason}</p>
+                        <p className='mt-1'>Use the action above to create or refresh restore points for this target.</p>
                             </div>
                         )}
 
@@ -245,8 +244,8 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                             <button
                                 type='button'
                                 onClick={handleRun}
-                                disabled={isPending || Boolean(loadBlocker)}
-                                title={loadBlocker ? 'Fix the backup configuration blocker before running a new backup.' : 'Try to create the first backup.'}
+                                disabled={isPending}
+                                title='Try to create the first backup.'
                                 className='inline-flex items-center gap-2 rounded-lg border border-ui-primary bg-ui-primary/15 px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
                             >
                                 <DatabaseBackup className='h-4 w-4' />
@@ -285,7 +284,7 @@ function RestoreProof({ proof }: { proof: BackupPresentation['restoreProof'] }) 
     return (
         <div className='mt-4 rounded-lg border border-ui-border bg-ui-panel p-3' data-backup-restore-proof={proof.state}>
             <div className='flex flex-wrap items-center justify-between gap-2'>
-                <p className='text-sm font-semibold text-ui-text'>Restore checks</p>
+                <p className='text-sm font-semibold text-ui-text'>Restore actions</p>
                 <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${proof.state === 'ready' ? 'border-ui-success bg-ui-success/15 text-ui-success' : 'border-ui-warning bg-ui-warning/15 text-ui-warning'}`}>
                     {proof.state === 'ready' ? 'Ready' : 'Review'}
                 </span>
@@ -295,7 +294,7 @@ function RestoreProof({ proof }: { proof: BackupPresentation['restoreProof'] }) 
                     <div key={check.id} className='rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs'>
                         <p className='font-semibold uppercase text-ui-muted'>{check.label}</p>
                         <p className='mt-1 wrap-break-word text-ui-text'>{check.value}</p>
-                        <p className={`mt-1 font-semibold ${check.state === 'ready' ? 'text-ui-success' : check.state === 'blocked' ? 'text-ui-warning' : 'text-ui-muted'}`}>{check.state}</p>
+                        <p className={`mt-1 font-semibold ${check.state === 'ready' ? 'text-ui-success' : check.state === 'needs_action' ? 'text-ui-warning' : 'text-ui-muted'}`}>{check.state === 'needs_action' ? 'needs action' : check.state}</p>
                     </div>
                 ))}
             </div>

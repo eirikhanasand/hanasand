@@ -40,12 +40,12 @@ const unavailable = presentBackup({
 })
 
 assert.equal(unavailable.healthLabel, 'Unavailable', 'auth failure should report unavailable')
-assert.equal(unavailable.restoreReady, false, 'auth failure should disable restore')
-assert.equal(unavailable.restoreProof.state, 'blocked', 'auth failure should block restore proof')
+assert.equal(unavailable.restoreReady, false, 'auth failure should require an action before restore')
+assert.equal(unavailable.restoreProof.state, 'needs_action', 'auth failure should mark restore proof as action-needed')
 assert.ok(unavailable.restoreProof.blockers.some(blocker => /cannot authenticate/i.test(blocker)), 'auth failure should appear as a restore proof blocker')
 assert.match(unavailable.safeError || '', /cannot authenticate to the database/i, 'auth failure should be summarized safely')
 assert.doesNotMatch(unavailable.safeError || '', /password authentication failed|hanasand/i, 'safe error should not dump raw postgres auth internals')
-assert.match(unavailable.restoreDisabledReason || '', /until backup status and files can be verified/i, 'auth failure should explain disabled restore')
+assert.match(unavailable.restoreDisabledReason || '', /Fix backup status/i, 'auth failure should explain the next restore action')
 
 const empty = presentBackup({
     id: 'primary_database',
@@ -55,11 +55,11 @@ const empty = presentBackup({
     nextBackup: null,
 })
 
-assert.equal(empty.restoreReady, false, 'no-backups-yet state should disable restore')
-assert.equal(empty.restoreProof.state, 'blocked', 'no-backups-yet should block restore proof')
+assert.equal(empty.restoreReady, false, 'no-backups-yet state should require creating a backup first')
+assert.equal(empty.restoreProof.state, 'needs_action', 'no-backups-yet should mark restore proof as action-needed')
 assert.ok(empty.restoreProof.blockers.some(blocker => /No completed backup timestamp/i.test(blocker)), 'no-backups-yet should explain missing timestamp')
 assert.ok(empty.restoreProof.blockers.some(blocker => /No indexed backup file/i.test(blocker)), 'no-backups-yet should explain missing indexed file')
-assert.match(empty.restoreDisabledReason || '', /until at least one backup file exists/i, 'no-backups-yet should explain disabled restore')
+assert.match(empty.restoreDisabledReason || '', /Run backup now/i, 'no-backups-yet should point to backup creation')
 assert.equal(empty.latestFile, 'Not reported', 'unsupported latest file should be honest observable-only state')
 
 const timestampOnly = presentBackup({
@@ -77,7 +77,7 @@ assert.match(loadError.safeError, /cannot authenticate to the database/i, 'route
 assert.equal(redactBackupDetails('password authentication failed for user "hanasand"'), 'password authentication failed for configured database user', 'technical details should redact postgres user')
 assert.match(presentBackupLoadError('Backup storage directory is not available. Set DB_BACKUP_DIR.').safeError, /Backup storage is not configured/i, 'storage blocker should be actionable')
 assert.match(presentBackupLoadError('pg_dump exited with code 1').safeError, /cannot run pg_dump/i, 'missing pg_dump should be actionable')
-assert.match(presentBackupLoadError('Restore is disabled until DB_RESTORE_ENABLED=true is set for the API service.').safeError, /Restore is disabled in the API service/i, 'restore-disabled API blocker should be actionable')
+assert.match(presentBackupLoadError('Restore is disabled until DB_RESTORE_ENABLED=true is set for the API service.').safeError, /Enable DB_RESTORE_ENABLED=true/i, 'restore API guard should be actionable')
 
 assert.match(routePage, /<DashboardHeader[\s\S]*title='Database Backups'/, 'route should own the single page header')
 assert.doesNotMatch(backupPage, /DashboardHeader/, 'client page should not render a duplicate page header')
@@ -91,9 +91,9 @@ assert.match(apiRoutes, /fastify\.post\('\/backup', postDatabaseBackup\)/, 'API 
 assert.match(apiRoutes, /fastify\.get\('\/backup\/files', getDatabaseBackupFiles\)/, 'API should expose GET /backup/files')
 assert.match(apiRoutes, /fastify\.post\('\/backup\/restore', postDatabaseBackupRestore\)/, 'API should expose POST /backup/restore')
 assert.match(backupPage, /presentations\.map/, 'backup actions should render inside each backup target card')
-assert.match(backupPage, /restoreDisabledReason/, 'restore disabled state should carry a visible reason')
+assert.match(backupPage, /restoreDisabledReason/, 'restore action state should carry a visible reason')
 assert.match(backupPage, /data-backup-restore-proof/, 'backup page should surface restore check state per target')
-assert.match(backupPage, /Restore checks/, 'backup page should label the restore checks section')
+assert.match(backupPage, /Restore actions/, 'backup page should label the restore action section')
 assert.match(backupPage, /Technical details/, 'raw details should be behind progressive disclosure')
 assert.match(backupPage, /Open logs/, 'error state should link operators to logs')
 assert.match(backupPage, /return 'Never'/, 'missing last backup should render as never, not a loading promise')

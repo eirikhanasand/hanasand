@@ -19,12 +19,12 @@ export type BackupPresentation = {
 
 export type BackupRestoreProof = {
     schemaVersion: 'hanasand.backup.restore_readiness.v1'
-    state: 'ready' | 'blocked'
+    state: 'ready' | 'needs_action'
     checks: Array<{
         id: 'status' | 'last_backup' | 'indexed_file' | 'storage'
         label: string
         value: string
-        state: 'ready' | 'blocked' | 'unknown'
+        state: 'ready' | 'needs_action' | 'unknown'
     }>
     blockers: string[]
 }
@@ -60,10 +60,10 @@ export function presentBackup(backup: BackupService): BackupPresentation {
         restoreDisabledReason: restoreReady
             ? undefined
             : safeError
-                ? 'Restore is disabled until backup status and files can be verified.'
+                ? 'Fix backup status and refresh files before restoring.'
                 : hasLastBackup
-                    ? 'Restore is disabled until an indexed backup file is verified.'
-                    : 'Restore is disabled until at least one backup file exists.',
+                    ? 'Refresh restore files so the indexed backup file can be selected.'
+                    : 'Run backup now to create the first restore point.',
         retention: backup.retention || 'Not reported',
         storageTarget: backup.storageTarget || backup.totalStorage || 'Not reported',
         latestFile: backup.latestFile || 'Not reported',
@@ -92,26 +92,26 @@ function buildRestoreProof(input: {
 
     return {
         schemaVersion: 'hanasand.backup.restore_readiness.v1',
-        state: input.restoreReady ? 'ready' : 'blocked',
+        state: input.restoreReady ? 'ready' : 'needs_action',
         blockers,
         checks: [
             {
                 id: 'status',
                 label: 'Backup status',
                 value: input.safeError ? 'Unavailable' : input.backup.status || 'Not reported',
-                state: input.isUnavailable ? 'blocked' : 'ready',
+                state: input.isUnavailable ? 'needs_action' : 'ready',
             },
             {
                 id: 'last_backup',
                 label: 'Completed backup',
                 value: input.backup.lastBackup || 'Not reported',
-                state: input.hasLastBackup ? 'ready' : 'blocked',
+                state: input.hasLastBackup ? 'ready' : 'needs_action',
             },
             {
                 id: 'indexed_file',
                 label: 'Indexed file',
                 value: input.backup.latestFile || 'Not reported',
-                state: input.hasIndexedFile ? 'ready' : 'blocked',
+                state: input.hasIndexedFile ? 'ready' : 'needs_action',
             },
             {
                 id: 'storage',
@@ -147,7 +147,7 @@ export function summarizeBackupError(message: string) {
     }
 
     if (lower.includes('restore is disabled')) {
-        return 'Restore is disabled in the API service until an operator enables DB_RESTORE_ENABLED after reviewing the backup file.'
+        return 'Enable DB_RESTORE_ENABLED=true after reviewing the selected backup file, then run restore.'
     }
 
     return 'The backup service needs attention. Open the service logs for the exact failure before running another backup.'

@@ -33,6 +33,7 @@ export type DatabaseOverview = {
             sizeBytes: number
             tableCount: number | null
             activeConnections?: number
+            tables?: Array<{ schema: string, name: string, estimatedRows: number | null }>
         }>
     }>
 }
@@ -73,8 +74,37 @@ export type BackupFile = {
     location?: 'local' | 'remote'
 }
 
+export type DatabaseQueryResult = {
+    rows: Record<string, unknown>[]
+    rowCount: number
+    fields: string[]
+}
+
+export type DatabaseHealth = {
+    ok: boolean
+    database?: string
+    checked_at?: string
+    message?: string
+}
+
 export async function getDatabaseOverview() {
     return await requestService<DatabaseOverview>('internal', 'db')
+}
+
+export async function getDatabaseHealth() {
+    return await requestService<DatabaseHealth>('internal', 'db/health')
+}
+
+export async function runDatabaseSql(sql: string) {
+    return await requestService<DatabaseQueryResult>('internal', 'db/query', {
+        method: 'POST',
+        body: JSON.stringify({ sql }),
+    })
+}
+
+export async function getDatabaseRows(schema: string, table: string, limit: number) {
+    const params = new URLSearchParams({ schema, table, limit: String(limit) })
+    return await requestService<DatabaseQueryResult>('internal', `db/rows?${params.toString()}`)
 }
 
 export async function getBackupServices() {
