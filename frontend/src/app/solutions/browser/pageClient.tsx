@@ -812,18 +812,18 @@ export default function BrowserPageClient() {
                                 onKeyDown={keyBrowserFrame}
                                 onWheel={activeTool ? undefined : wheelBrowserFrame}
                             >
-                                {activeViewportImage ? (
+                                {activeTool && activeToolCapture ? (
+                                    <ProviderViewportEvidence tool={activeTool} capture={activeToolCapture} />
+                                ) : activeViewportImage ? (
                                     <img
-                                        ref={activeTool ? undefined : imageRef}
+                                        ref={imageRef}
                                         src={activeViewportImage}
-                                        alt={activeTool ? `${activeTool.name} provider frame` : 'Live browser sandbox frame'}
-                                        className={`absolute inset-0 h-full w-full select-none bg-ui-canvas object-contain ${activeTool ? '' : 'cursor-pointer'}`}
+                                        alt='Live browser sandbox frame'
+                                        className='absolute inset-0 h-full w-full cursor-pointer select-none bg-ui-canvas object-contain'
                                         draggable={false}
-                                        onClick={activeTool ? undefined : clickBrowserFrame}
+                                        onClick={clickBrowserFrame}
                                         onDragStart={event => event.preventDefault()}
                                     />
-                                ) : activeTool && activeToolCapture ? (
-                                    <ProviderViewportEvidence tool={activeTool} capture={activeToolCapture} />
                                 ) : (
                                     <div className='grid h-full place-items-center'>
                                         <div className='grid max-w-md gap-2 text-center'>
@@ -1561,8 +1561,9 @@ function ProviderReportDetails({ tool, capture, compact = false }: { tool: Sandb
             <div>
                 <p className='text-xs font-semibold uppercase text-ui-primary'>Provider result captured</p>
                 <h2 className={`${compact ? 'text-sm' : 'text-lg'} mt-1 font-semibold text-ui-text`}>{tool.name}</h2>
-                <p className='mt-1 break-all font-mono text-xs text-ui-muted'>{capture.url || tool.url}</p>
+                <a href={capture.url || tool.url} target='_blank' rel='noreferrer noopener' className='mt-1 block break-all font-mono text-xs text-ui-primary underline-offset-2 hover:underline'>{capture.url || tool.url}</a>
             </div>
+            {capture.image && !compact ? <img src={capture.image} alt={`${tool.name} provider screenshot`} className='max-h-80 w-full rounded border border-ui-border bg-ui-canvas object-contain' /> : null}
             {facts.length ? (
                 <div className='grid gap-2 sm:grid-cols-2'>
                     {facts.map((fact) => Array.isArray(fact)
