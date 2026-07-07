@@ -1729,14 +1729,28 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             error: capture?.error,
         }
     })
-    const scriptArtifacts = pageCaptures.flatMap(capture => capture.evidence?.deobfuscationTasks || []).map(task => ({
-        scriptId: task.scriptId,
-        source: task.source,
-        sha256: task.sha256,
-        assessment: task.assessment,
-        summary: task.summary,
-        indicators: task.indicators,
-    }))
+    const scriptArtifacts = [
+        ...pageCaptures.flatMap(capture => capture.evidence?.scripts || []).map(script => ({
+            scriptId: script.id,
+            source: script.src || 'inline',
+            sha256: script.sha256,
+            assessment: (script.obfuscationScore || 0) >= 3 ? 'suspicious' : 'observed',
+            summary: [
+                script.inlineBytes !== undefined ? `${script.inlineBytes} inline bytes` : '',
+                script.obfuscationScore !== undefined ? `obfuscation score ${script.obfuscationScore}` : '',
+                ...(script.reasons || []),
+            ].filter(Boolean).join(' · '),
+        })),
+        ...pageCaptures.flatMap(capture => capture.evidence?.deobfuscationTasks || []).map(task => ({
+            scriptId: task.scriptId,
+            source: task.source,
+            sha256: task.sha256,
+            assessment: task.assessment,
+            summary: task.summary,
+            indicators: task.indicators,
+        })),
+    ]
+    const scriptHashCount = new Set(scriptArtifacts.map(script => script.sha256).filter(Boolean)).size
     const report = {
         verdict: input.summary.brief.verdict,
         target: input.target,
@@ -1749,7 +1763,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             contactedDomains: latestNetwork?.uniqueDomainCount || 0,
             redirectStates: input.summary.urlTimeline.length,
             downloadsHashed: latestNetwork?.downloads?.filter(download => download.sha256).length || 0,
-            scriptHashes: scriptArtifacts.filter(script => script.sha256).length,
+            scriptHashes: scriptHashCount,
             copyableIndicators: input.summary.indicators.length,
         },
         providerReports,
@@ -1782,6 +1796,9 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             '',
             '## Providers',
             ...providerReports.map(provider => `- ${provider.tool}: ${provider.status}${provider.verdict ? `, verdict ${provider.verdict}` : ''}`),
+            '',
+            '## Script artifacts',
+            ...scriptArtifacts.slice(0, 12).map(script => `- ${script.assessment || 'script'}: ${script.scriptId || script.source || 'sample'}${script.sha256 ? `, sha256 ${script.sha256}` : ''}`),
             '',
             '## Recommended actions',
             ...report.recommendedActions.map(action => `- ${action}`),
