@@ -779,10 +779,12 @@ export default function BrowserPageClient() {
                                 <Share2 className='h-4 w-4' />
                                 {shareStatus === 'saving' ? 'Saving' : shareStatus === 'copied' ? 'Copied' : 'Share'}
                             </button>
-                            <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
-                                <Square className='h-4 w-4' />
-                                Stop
-                            </button>
+                            {sessionState !== 'ended' ? (
+                                <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
+                                    <Square className='h-4 w-4' />
+                                    Stop
+                                </button>
+                            ) : null}
                             <button type='button' onClick={resetRun} className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary' aria-label='New sandbox run'>
                                 <RotateCcw className='h-4 w-4' />
                             </button>
