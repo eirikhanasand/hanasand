@@ -1798,7 +1798,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             ...Object.entries(report.evidenceChecklist).map(([key, value]) => `- ${key}: ${value}`),
             '',
             '## Providers',
-            ...providerReports.map(provider => `- ${provider.tool}: ${provider.status}${provider.verdict ? `, verdict ${provider.verdict}` : ''}${provider.signals.length ? `, signals ${provider.signals.slice(0, 4).join(' | ')}` : ''}${provider.error ? `, error ${provider.error}` : ''}`),
+            ...providerReports.map(provider => `- ${provider.tool}: ${provider.status}${provider.verdict ? `, verdict ${provider.verdict}` : ''}${provider.communitySummary ? `, ${provider.communitySummary}` : ''}${provider.signals.length ? `, signals ${provider.signals.slice(0, 4).join(' | ')}` : ''}${provider.error ? `, error ${provider.error}` : ''}`),
             '',
             '## Network',
             `- requests: ${latestNetwork?.requestCount || 0}`,
