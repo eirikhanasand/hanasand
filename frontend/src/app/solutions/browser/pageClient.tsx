@@ -1750,6 +1750,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             indicators: task.indicators,
         })),
     ]
+    const resourceUrls = Array.from(new Set(pageCaptures.flatMap(capture => capture.evidence?.sourceUrls || []))).filter(Boolean)
     const scriptHashCount = new Set(scriptArtifacts.map(script => script.sha256).filter(Boolean)).size
     const report = {
         verdict: input.summary.brief.verdict,
@@ -1777,6 +1778,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             recentRequests: latestNetwork.recentRequests?.slice(-50),
         } : null,
         scriptArtifacts,
+        resourceUrls,
         urlTimeline: input.summary.urlTimeline,
         reviewQueue: input.summary.reviewQueue,
         indicators: input.summary.indicators,
@@ -1795,7 +1797,18 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             ...Object.entries(report.evidenceChecklist).map(([key, value]) => `- ${key}: ${value}`),
             '',
             '## Providers',
-            ...providerReports.map(provider => `- ${provider.tool}: ${provider.status}${provider.verdict ? `, verdict ${provider.verdict}` : ''}`),
+            ...providerReports.map(provider => `- ${provider.tool}: ${provider.status}${provider.verdict ? `, verdict ${provider.verdict}` : ''}${provider.signals.length ? `, signals ${provider.signals.slice(0, 4).join(' | ')}` : ''}${provider.error ? `, error ${provider.error}` : ''}`),
+            '',
+            '## Network',
+            `- requests: ${latestNetwork?.requestCount || 0}`,
+            `- responses: ${latestNetwork?.responseCount || 0}`,
+            `- blocked/failed: ${latestNetwork?.failedCount || 0}`,
+            ...((latestNetwork?.domains || []).slice(0, 20).map(domain => `- domain: ${domain}`)),
+            ...((latestNetwork?.redirectChain || []).slice(0, 10).map(url => `- redirect: ${url}`)),
+            ...((latestNetwork?.downloads || []).slice(0, 10).map(download => `- download: ${[download.fileName || download.url || 'file', download.sha256 ? `sha256 ${download.sha256}` : download.hashStatus || '', download.bytes !== undefined ? `${download.bytes} bytes` : ''].filter(Boolean).join(', ')}`)),
+            '',
+            '## Resource URLs',
+            ...resourceUrls.slice(0, 40).map(url => `- ${url}`),
             '',
             '## Script artifacts',
             ...scriptArtifacts.slice(0, 12).map(script => `- ${script.assessment || 'script'}: ${script.scriptId || script.source || 'sample'}${script.sha256 ? `, sha256 ${script.sha256}` : ''}`),
