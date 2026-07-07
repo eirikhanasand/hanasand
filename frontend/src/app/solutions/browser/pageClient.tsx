@@ -769,7 +769,7 @@ export default function BrowserPageClient() {
                 </header>
                 <div className='mx-auto grid w-full max-w-[96rem] gap-4 px-4 py-4'>
                     <div className='grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]'>
-                        <section className='grid h-[min(56vh,38rem)] min-h-96 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
+                        <section className='grid overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
                             <SandboxTabStrip
                                 activeTab={activeSandboxTab}
                                 tools={selectedProfile.tools}
@@ -784,7 +784,7 @@ export default function BrowserPageClient() {
                             </div>
                             <div
                                 ref={viewportRef}
-                                className='relative min-h-0 overflow-hidden bg-ui-canvas outline-none focus:ring-2 focus:ring-ui-primary/30'
+                                className='relative aspect-video overflow-hidden bg-ui-canvas outline-none focus:ring-2 focus:ring-ui-primary/30'
                                 tabIndex={0}
                                 role='application'
                                 aria-label='Interactive isolated browser viewport'
