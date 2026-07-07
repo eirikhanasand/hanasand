@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
-import type { ServiceStatus } from '@/utils/status/getStatus'
+import type { ServiceIncident, ServiceStatus } from '@/utils/status/getStatus'
 import { AlertCircle, CheckCircle, Clock, RefreshCw } from 'lucide-react'
 
 type DashboardProps = {
@@ -150,7 +150,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                 <div className='flex flex-wrap items-center justify-between gap-3'>
                     <div className='flex items-center gap-3'>
                         {currentStatus.overall === 'up' ? <CheckCircle className='h-5 w-5' /> : <AlertCircle className='h-5 w-5' />}
-                        <h1 className='text-xl font-semibold'>{headline}</h1>
+                        <h1 className='text-lg font-medium'>{headline}</h1>
                     </div>
                     <div className='flex flex-wrap items-center gap-3'>
                         <Link href='/status/incidents' className='inline-flex h-9 items-center rounded-md bg-white/15 px-3 text-sm font-semibold text-white transition hover:bg-white/25'>
@@ -169,10 +169,10 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
 
             <section>
                 <div className='flex flex-wrap items-end justify-between gap-2'>
-                    <h2 className='text-2xl font-semibold text-ui-text'>Current Status: Hanasand.com</h2>
+                    <h2 className='text-xl font-medium text-ui-text'>Current Status: Hanasand.com</h2>
                     <p className='text-sm text-ui-muted'>Uptime over the past {UPTIME_WINDOW}.</p>
                 </div>
-                <div className='mt-4 divide-y divide-ui-border overflow-hidden rounded-md border border-ui-border bg-ui-panel'>
+                <div className='mt-4 divide-y divide-ui-border overflow-hidden rounded-md border border-ui-border bg-[#0d1826]'>
                     {checks.map((check) => (
                         <div key={`${check.service}-${check.check_name}`} className='grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center'>
                             <div className='min-w-0'>
@@ -180,17 +180,17 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
                                     <h3 className='font-semibold text-ui-text'>{check.check_name}</h3>
                                     <span className='text-sm text-ui-muted'>{check.service}</span>
                                 </div>
-                                <div className='mt-3 flex h-8 items-stretch gap-px' aria-label={`${check.check_name} ${formatUptime(check.uptime_30d)} uptime`}>
+                                <div className='mt-3 flex h-8 items-stretch gap-0.5' aria-label={`${check.check_name} ${formatUptime(check.uptime_30d)} uptime`}>
                                     {historyDaysFor(currentStatus, check).map((day) => (
                                         day.incident ? (
                                             <Link
                                                 key={day.date}
                                                 href={`/status/incidents/${day.incident.id}`}
                                                 title={`${formatDate(day.date)}: ${day.incident.title}. ${day.incident.summary}`}
-                                                className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.status)}`}
+                                                className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.displayStatus)}`}
                                             />
                                         ) : (
-                                            <span key={day.date} title={`No incidents on ${formatDate(day.date)}`} className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.status)}`} />
+                                            <span key={day.date} title={`No incidents on ${formatDate(day.date)}`} className={`min-w-0 flex-1 rounded-[1px] ${barClass(day.displayStatus)}`} />
                                         )
                                     ))}
                                 </div>
@@ -289,12 +289,19 @@ function historyDaysFor(status: ServiceStatus, check: ServiceStatus['checks'][nu
     return lastDays(UPTIME_DAYS).map(date => {
         const row = rowsByDate.get(date)
         const incident = row?.incident_ids.map(id => incidentsById.get(id)).find(Boolean) || null
+        const rowStatus = row?.status || 'up'
         return {
             date,
-            status: row?.status || 'up',
+            status: rowStatus,
+            displayStatus: dayDisplayStatus(rowStatus, incident),
             incident,
         }
     })
+}
+
+function dayDisplayStatus(status: ServiceStatus['checks'][number]['status'], incident: ServiceIncident | null): ServiceStatus['checks'][number]['status'] {
+    if (status !== 'down') return status
+    return incident?.impact === 'Outage' ? 'down' : 'degraded'
 }
 
 function lastDays(count: number) {
