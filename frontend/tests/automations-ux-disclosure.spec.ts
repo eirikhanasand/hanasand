@@ -83,9 +83,9 @@ test('automations keeps the primary route workflow calm and wired', async ({ con
     await expect.poll(() => runRequests.length).toBe(1)
 
     await expect(page.getByText('Logs', { exact: true })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'https://ops.example/logs/run-1' }).first()).toBeVisible()
+    await expect(page.getByText('SMTP health check failed').nth(1)).toBeVisible()
     await expect(page.getByText('Screenshots', { exact: true })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'https://ops.example/screens/run-1.png' }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: 'mail-run-1.png' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Save automation' }).click()
     await expect.poll(() => saveRequests.length).toBe(1)
@@ -128,6 +128,7 @@ test('automation delivery templates do not ship developer-local destinations', a
     const root = process.cwd()
     const pageClient = await readFile(path.join(root, 'src/app/dashboard/automations/pageClient.tsx'), 'utf8')
     const automationUtils = await readFile(path.join(root, '../api/src/utils/automations.ts'), 'utf8')
+    const ensureSchema = await readFile(path.join(root, '../api/src/utils/db/ensureSchema.ts'), 'utf8')
 
     expect(pageClient).not.toContain('/Users/eirikhanasand/Desktop/webhooktoday.txt')
     expect(pageClient).not.toContain('const discordWebhookFileDestination')
@@ -139,6 +140,10 @@ test('automation delivery templates do not ship developer-local destinations', a
     expect(pageClient).not.toContain('matchedTerm, claimSummary, claimedAt, sourceName, sourceUrl, sourceCount, reviewState, recommendedAction, and pivots')
     expect(automationUtils).toContain('status === \'active\' && actionType === \'system_alert\' && !modelName')
     expect(automationUtils).toContain('status === \'active\' && actionType === \'mail_health_check\' && notifyOn !== \'never\' && !modelName')
+    expect(ensureSchema).toContain('ALTER TABLE agent_automation_runs ADD COLUMN IF NOT EXISTS artifacts JSONB')
+    expect(automationUtils).toContain('artifacts = $6::jsonb')
+    expect(automationUtils).toContain('artifacts,')
+    expect(pageClient).not.toContain('extractRunLinks')
 })
 
 const fixtureAutomations = [
@@ -198,9 +203,13 @@ const fixtureRuns = [
         automationId: 'failing-route',
         status: 'failed',
         result: null,
-        error: 'SMTP health check failed. Logs: https://ops.example/logs/run-1 Screenshot: https://ops.example/screens/run-1.png',
+        error: 'SMTP health check failed',
         provider: 'local',
         model: null,
+        artifacts: [
+            { type: 'log', label: 'Run log', text: 'SMTP health check failed', href: null, createdAt: '2026-07-03T18:10:02.000Z' },
+            { type: 'screenshot', label: 'mail-run-1.png', href: 'https://ops.example/screens/run-1.png', text: null, createdAt: '2026-07-03T18:10:02.000Z' },
+        ],
         startedAt: '2026-07-03T18:10:00.000Z',
         completedAt: '2026-07-03T18:10:02.000Z',
         durationMs: 2000,

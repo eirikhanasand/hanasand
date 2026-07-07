@@ -11,6 +11,7 @@ import {
     updateAutomation,
     type AgentAutomation,
     type AgentAutomationRun,
+    type AutomationRunArtifact,
     type AutomationPayload,
 } from '@/utils/automations/client'
 import ErrorNotice from '@/components/error/errorNotice'
@@ -559,8 +560,9 @@ function InfoCard({ icon, label, value }: { icon: React.ReactNode, label: string
 }
 
 function RunArtifacts({ run }: { run: AgentAutomationRun }) {
-    const logs = run.logs?.length ? run.logs : extractRunLinks(run.result || run.error || '', /\b(?:log|logs|trace|output)\b/i)
-    const screenshots = run.screenshots?.length ? run.screenshots : extractRunLinks(run.result || run.error || '', /\b(?:screenshot|image|capture)\b/i)
+    const artifacts = Array.isArray(run.artifacts) ? run.artifacts : []
+    const logs = artifacts.filter(artifact => artifact.type === 'log' || artifact.type === 'link')
+    const screenshots = artifacts.filter(artifact => artifact.type === 'screenshot')
     if (!logs.length && !screenshots.length) {
         return <p className='mt-2 text-xs text-ui-muted'>No log or screenshot artifact was attached to this trigger.</p>
     }
@@ -573,12 +575,14 @@ function RunArtifacts({ run }: { run: AgentAutomationRun }) {
     )
 }
 
-function ArtifactList({ label, items }: { label: string, items: string[] }) {
+function ArtifactList({ label, items }: { label: string, items: AutomationRunArtifact[] }) {
     return (
         <div className='rounded-lg border border-ui-border bg-ui-panel p-2'>
             <p className='font-semibold text-ui-muted'>{label}</p>
             {items.length
-                ? items.map(item => <a key={item} className='mt-1 block truncate font-semibold text-ui-primary hover:underline' href={item} target='_blank' rel='noopener noreferrer'>{item}</a>)
+                ? items.map(item => item.href
+                    ? <a key={`${item.type}-${item.href}`} className='mt-1 block truncate font-semibold text-ui-primary hover:underline' href={item.href} target='_blank' rel='noopener noreferrer'>{item.label || item.href}</a>
+                    : <p key={`${item.type}-${item.label}-${item.createdAt}`} className='mt-1 whitespace-pre-wrap text-ui-text'>{item.text || item.label}</p>)
                 : <p className='mt-1 text-ui-muted'>None attached</p>}
         </div>
     )
@@ -668,11 +672,6 @@ function matchingSummary(draft: AutomationPayload) {
     const payload = lower.includes('actor') && lower.includes('matched') ? 'actor and match fields' : 'custom payload'
     const filter = lower.includes('only send') ? 'new or updated matches' : 'all matches'
     return `${extractRuleTerms(draft.prompt)}; ${payload}; ${filter}`
-}
-
-function extractRunLinks(text: string, hint: RegExp) {
-    if (!hint.test(text)) return []
-    return Array.from(text.matchAll(/https?:\/\/[^\s)]+/g), match => match[0]).slice(0, 5)
 }
 
 function toDraft(automation: AgentAutomation): AutomationPayload {

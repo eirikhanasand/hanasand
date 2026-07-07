@@ -42,11 +42,18 @@ export type AutomationRunRow = {
     error: string | null
     provider: string | null
     model: string | null
+    artifacts: unknown
     started_at: string
     completed_at: string | null
     duration_ms: number | null
-    logs?: string[] | null
-    screenshots?: string[] | null
+}
+
+export type AutomationRunArtifact = {
+    type: 'log' | 'screenshot' | 'link'
+    label: string
+    href: string | null
+    text: string | null
+    createdAt: string
 }
 
 export type AutomationInput = {
@@ -117,6 +124,7 @@ export function toAutomation(row: AutomationRow) {
 }
 
 export function toAutomationRun(row: AutomationRunRow) {
+    const artifacts = normalizeRunArtifacts(row.artifacts)
     return {
         id: row.id,
         automationId: row.automation_id,
@@ -129,8 +137,9 @@ export function toAutomationRun(row: AutomationRunRow) {
         startedAt: row.started_at,
         completedAt: row.completed_at,
         durationMs: row.duration_ms,
-        logs: Array.isArray(row.logs) ? row.logs : extractRunLinks(row.result || row.error || '', /\b(?:log|logs|trace|output)\b/i),
-        screenshots: Array.isArray(row.screenshots) ? row.screenshots : extractRunLinks(row.result || row.error || '', /\b(?:screenshot|image|capture)\b/i),
+        artifacts,
+        logs: artifacts.filter(artifact => artifact.type === 'log').map(artifact => artifact.href || artifact.text || artifact.label),
+        screenshots: artifacts.filter(artifact => artifact.type === 'screenshot').map(artifact => artifact.href || artifact.text || artifact.label),
     }
 }
 
@@ -214,12 +223,13 @@ export async function recoverStaleAutomationRuns() {
         UPDATE agent_automation_runs
            SET status = 'failed',
                error = 'Automation exceeded the maximum runtime and was recovered by the scheduler.',
+               artifacts = $2::jsonb,
                completed_at = NOW(),
                duration_ms = EXTRACT(EPOCH FROM (NOW() - started_at))::INT * 1000
          WHERE status = 'running'
            AND started_at < $1
          RETURNING automation_id
-    `, [staleAfter])
+    `, [staleAfter, JSON.stringify(runArtifacts('Automation exceeded the maximum runtime and was recovered by the scheduler.'))])
 
     if (!staleRuns.rows.length) return
 
@@ -272,9 +282,10 @@ export async function executeAutomation(automation: AutomationRow) {
                    provider = $3,
                    model = $4,
                    completed_at = NOW(),
-                   duration_ms = $5
+                   duration_ms = $5,
+                   artifacts = $6::jsonb
              WHERE id = $1
-        `, [runId, result.message, result.provider, result.model, durationMs])
+        `, [runId, result.message, result.provider, result.model, durationMs, JSON.stringify(runArtifacts(result.message, result.artifacts))])
         await run(`
             UPDATE agent_automations
                SET next_run_at = $2,
@@ -304,9 +315,10 @@ export async function executeAutomation(automation: AutomationRow) {
                SET status = 'failed',
                    error = $2,
                    completed_at = NOW(),
-                   duration_ms = $3
+                   duration_ms = $3,
+                   artifacts = $4::jsonb
              WHERE id = $1
-        `, [runId, message, durationMs])
+        `, [runId, message, durationMs, JSON.stringify(runArtifacts(message))])
         await run(`
             UPDATE agent_automations
                SET status = CASE WHEN consecutive_failures + 1 >= 3 AND schedule_kind = 'interval' THEN 'paused' ELSE status END,
@@ -406,6 +418,7 @@ async function runAutomationAction(automation: AutomationRow) {
         provider: 'hanasand-ai',
         model: preferredClient.name,
         message: completion.content || 'Automation completed without a text result.',
+        artifacts: Array.isArray(completion.artifacts) ? completion.artifacts : [],
     }
 }
 
@@ -481,7 +494,39 @@ function parseTimezone(value: unknown) {
     }
 }
 
-function extractRunLinks(text: string, hint: RegExp) {
-    if (!hint.test(text)) return []
-    return Array.from(text.matchAll(/https?:\/\/[^\s)]+/g), match => match[0]).slice(0, 5)
+function runArtifacts(message: string, artifacts: unknown[] = []): AutomationRunArtifact[] {
+    return normalizeRunArtifacts([
+        { type: 'log', label: 'Run log', text: message },
+        ...artifacts,
+    ])
+}
+
+function normalizeRunArtifacts(value: unknown): AutomationRunArtifact[] {
+    const items = Array.isArray(value) ? value : []
+    return items.flatMap(item => {
+        const record = isRecord(item) ? item : { text: String(item || '') }
+        const href = firstString(record.href, record.url, record.path, record.screenshotPath)
+        const text = firstString(record.text, record.message, record.content)
+        const label = firstString(record.label, record.name, record.title) || (href ? href.split('/').pop() || href : text.slice(0, 80)) || 'Artifact'
+        const rawType = firstString(record.type, record.kind)
+        const type: AutomationRunArtifact['type'] = rawType === 'screenshot' || rawType === 'log' || rawType === 'link'
+            ? rawType
+            : /screenshot|image|capture/i.test(`${label} ${href}`) ? 'screenshot' : href ? 'link' : 'log'
+        if (!href && !text) return []
+        return [{
+            type,
+            label,
+            href: href || null,
+            text: text || null,
+            createdAt: firstString(record.createdAt, record.created_at, record.at) || new Date().toISOString(),
+        }]
+    }).slice(0, 20)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function firstString(...values: unknown[]) {
+    return values.find(value => typeof value === 'string' && value.trim()) as string | undefined || ''
 }

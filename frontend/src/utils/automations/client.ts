@@ -39,8 +39,17 @@ export type AgentAutomationRun = {
     startedAt: string
     completedAt: string | null
     durationMs: number | null
+    artifacts?: AutomationRunArtifact[] | null
     logs?: string[] | null
     screenshots?: string[] | null
+}
+
+export type AutomationRunArtifact = {
+    type: 'log' | 'screenshot' | 'link'
+    label: string
+    href: string | null
+    text: string | null
+    createdAt: string
 }
 
 export type AutomationPayload = {

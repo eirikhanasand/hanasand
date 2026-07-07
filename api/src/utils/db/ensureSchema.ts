@@ -514,11 +514,13 @@ export default async function ensureSchema() {
             error TEXT,
             provider TEXT,
             model TEXT,
+            artifacts JSONB NOT NULL DEFAULT '[]'::jsonb,
             started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             completed_at TIMESTAMPTZ,
             duration_ms INT
         )
     `)
+    await run('ALTER TABLE agent_automation_runs ADD COLUMN IF NOT EXISTS artifacts JSONB NOT NULL DEFAULT \'[]\'::jsonb')
     await run('CREATE INDEX IF NOT EXISTS idx_agent_automation_runs_automation_started ON agent_automation_runs(automation_id, started_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_agent_automation_runs_owner_started ON agent_automation_runs(owner_id, started_at DESC)')
     await run(`
