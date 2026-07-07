@@ -1583,12 +1583,12 @@ function ProviderReportDetails({ tool, capture, compact = false }: { tool: Sandb
         analysis?.communityCommentCount !== undefined ? ['Comments', String(analysis.communityCommentCount)] : undefined,
         analysis?.verdict ? ['Verdict', analysis.verdict] : undefined,
         capture.image ? ['Screenshot', 'captured'] : undefined,
-        capture.error ? `Error: ${capture.error}` : '',
+        capture.error && capture.error !== 'provider_navigation_pending' ? `Error: ${capture.error}` : '',
     ].filter(Boolean) as Array<string | [string, string]>
     return (
         <div className={`grid w-full gap-3 rounded-md border border-ui-border bg-ui-panel text-left shadow-sm ${compact ? 'p-2 text-xs' : 'max-w-3xl p-4'}`}>
             <div>
-                <p className='text-xs font-semibold uppercase text-ui-primary'>Provider result captured</p>
+                <p className='text-xs font-semibold uppercase text-ui-primary'>{providerStatus(capture, analysis)}</p>
                 <h2 className={`${compact ? 'text-sm' : 'text-lg'} mt-1 font-semibold text-ui-text`}>{tool.name}</h2>
                 <a href={capture.url || tool.url} target='_blank' rel='noreferrer noopener' className='mt-1 block break-all font-mono text-xs text-ui-primary underline-offset-2 hover:underline'>{capture.url || tool.url}</a>
             </div>
