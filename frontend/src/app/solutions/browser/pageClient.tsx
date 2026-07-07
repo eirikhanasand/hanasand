@@ -1723,6 +1723,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             vendorTotal: analysis?.vendorTotal,
             alertCount: analysis?.alertCount,
             communityCommentCount: analysis?.communityCommentCount,
+            communitySummary: analysis?.communitySummary,
             screenshotCaptured: Boolean(capture?.image),
             signals: analysis?.extractedSignals || [],
             threatAssociations: analysis?.threatAssociations || [],
