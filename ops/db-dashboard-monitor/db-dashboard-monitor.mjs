@@ -11,6 +11,10 @@ const discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL || ''
 const discordMention = process.env.HANASAND_DB_MONITOR_DISCORD_MENTION || '@here'
 const statePath = process.env.HANASAND_DB_MONITOR_STATE || '/home/hanasand/monitor-state/db-dashboard-monitor.json'
 const failureScreenshotPath = process.env.HANASAND_DB_MONITOR_SCREENSHOT || '/home/hanasand/monitor-state/db-dashboard-monitor-failure.png'
+const cdnBaseUrl = trimSlash(process.env.HANASAND_DB_MONITOR_CDN_BASE_URL || 'https://cdn.hanasand.com/api')
+const cdnUploadFolder = trimSlashes(process.env.HANASAND_DB_MONITOR_CDN_FOLDER || 'monitor/db-dashboard')
+const cdnUploadUser = process.env.HANASAND_DB_MONITOR_CDN_USER || ''
+const cdnUploadToken = process.env.HANASAND_DB_MONITOR_CDN_TOKEN || ''
 const timeoutMs = Number(process.env.HANASAND_DB_MONITOR_TIMEOUT_MS || 30_000)
 const repeatAlertMinutes = Number(process.env.HANASAND_DB_MONITOR_REPEAT_ALERT_MINUTES || 15)
 const failureThreshold = Math.max(Number(process.env.HANASAND_DB_MONITOR_FAILURE_THRESHOLD || 2), 1)
@@ -179,6 +183,7 @@ async function handleResult(result) {
         dashboardPath,
         username,
         failureScreenshotPath: result.ok ? undefined : failureScreenshotPath,
+        failureScreenshotUrl: result.failureScreenshotUrl,
         lastAlertAt: previous.lastAlertAt || null,
         failureCount: result.ok ? 0 : Number(previous.failureCount || 0) + 1,
         failureThreshold,
@@ -200,6 +205,14 @@ async function handleResult(result) {
         const shouldAlert = next.failureCount >= failureThreshold
             && (previous.ok !== false || minutesSince(previous.lastAlertAt) >= repeatAlertMinutes)
         if (shouldAlert) {
+            const failureScreenshotUrl = await uploadFailureScreenshot().catch(error => {
+                alertErrors.push(error instanceof Error ? error.message : String(error))
+                return ''
+            })
+            if (failureScreenshotUrl) {
+                result.failureScreenshotUrl = failureScreenshotUrl
+                next.failureScreenshotUrl = failureScreenshotUrl
+            }
             const sent = await trySendDiscord({
                 status: 'DOWN',
                 color: 0xef4444,
@@ -225,6 +238,32 @@ async function handleResult(result) {
     }
 }
 
+async function uploadFailureScreenshot() {
+    const image = await readFile(failureScreenshotPath)
+    if (!image.length) return ''
+    const timestamp = now.toISOString().replace(/[-:.]/g, '').replace('T', '-').replace('Z', 'Z')
+    const path = `${cdnUploadFolder}/db-dashboard-monitor-failure-${timestamp}.png`
+    const form = new FormData()
+    form.set('name', `db-dashboard-monitor-failure-${timestamp}.png`)
+    form.set('description', 'Database dashboard monitor failure screenshot')
+    form.set('path', path)
+    form.set('type', 'image/png')
+    form.set('file', new Blob([image], { type: 'image/png' }), `db-dashboard-monitor-failure-${timestamp}.png`)
+    const headers = cdnUploadUser && cdnUploadToken
+        ? { Authorization: `Bearer ${cdnUploadToken}`, id: cdnUploadUser }
+        : undefined
+    const response = await fetch(`${cdnBaseUrl}/files`, {
+        method: 'POST',
+        headers,
+        body: form,
+    })
+    if (!response.ok) {
+        const body = await response.text().catch(() => '')
+        throw new Error(`CDN screenshot upload failed ${response.status}: ${truncate(body, 240)}`)
+    }
+    return `${cdnBaseUrl}/files/path/${encodeURIComponent(path)}`
+}
+
 async function sendDiscord({ status, color, title, description, fields }) {
     if (!discordWebhookUrl) {
         throw new Error(`DISCORD_WEBHOOK_URL is required to alert database dashboard monitor status=${status}`)
@@ -248,10 +287,11 @@ function buildDiscordPayload({ status, color, title, description, fields }) {
     const cause = fieldMap.get('Cause') || fieldMap.get('What failed') || reasonLabel(status)
     const action = fieldMap.get('Action') || fieldMap.get('Operator action') || 'Open the monitor evidence and rerun the check.'
     const evidence = fieldMap.get('Evidence') || fieldMap.get('URL') || `${baseUrl}${dashboardPath}`
+    const screenshotUrl = fieldMap.get('Screenshot') || ''
     const impact = truncate(cleanSentence(description), 82)
     const actionText = truncate(cleanSentence(action), 56)
     const conciseContent = status === 'DOWN'
-        ? `${discordMention} ${title}. ${impact} Next: ${actionText}.`
+        ? `${discordMention} ${title}. ${impact} Next: ${actionText}.${screenshotUrl ? `\n${screenshotUrl}` : ''}`
         : undefined
 
     return {
@@ -266,7 +306,7 @@ function buildDiscordPayload({ status, color, title, description, fields }) {
                 { name: 'Impact', value: truncate(description, 300), inline: false },
                 { name: 'Action', value: truncate(action, 260), inline: false },
                 { name: 'Evidence', value: truncate(evidence, 260), inline: false },
-                ...(fields || []).filter(field => !['Cause', 'What failed', 'Action', 'Operator action', 'Evidence', 'URL'].includes(field.name)),
+                ...(fields || []).filter(field => !['Cause', 'What failed', 'Action', 'Operator action', 'Evidence', 'URL', 'Screenshot'].includes(field.name)),
             ],
         }],
     }
@@ -274,10 +314,12 @@ function buildDiscordPayload({ status, color, title, description, fields }) {
 
 function resultFields(result) {
     const metrics = result.metrics || {}
+    const screenshot = result.failureScreenshotUrl || failureScreenshotPath
     return [
         { name: 'Cause', value: reasonLabel(result.reason), inline: true },
         { name: 'Action', value: operatorAction(result.reason), inline: false },
-        { name: 'Evidence', value: result.ok ? `${baseUrl}${dashboardPath}` : `${baseUrl}${dashboardPath}\nScreenshot: ${failureScreenshotPath}`, inline: false },
+        { name: 'Evidence', value: result.ok ? `${baseUrl}${dashboardPath}` : `${baseUrl}${dashboardPath}\nScreenshot: ${screenshot}`, inline: false },
+        ...(result.ok || !result.failureScreenshotUrl ? [] : [{ name: 'Screenshot', value: result.failureScreenshotUrl, inline: false }]),
         { name: 'Clusters', value: String(metrics.clusters ?? 'unknown'), inline: true },
         { name: 'Databases', value: String(metrics.databases ?? 'unknown'), inline: true },
         { name: 'Storage', value: metrics.storageBytes ? formatBytes(metrics.storageBytes) : 'unknown', inline: true },
@@ -380,6 +422,10 @@ function trimSlash(value) {
     return value.replace(/\/$/, '')
 }
 
+function trimSlashes(value) {
+    return String(value || '').replace(/^\/+|\/+$/g, '')
+}
+
 function truncate(value, max) {
     const text = String(value || '')
     return text.length > max ? `${text.slice(0, max - 1)}...` : text
@@ -446,14 +492,16 @@ function runSelfTest() {
         color: 0xef4444,
         title: `Database dashboard unavailable: ${reasonLabel(unavailable.reason)}`,
         description: `${failureImpact(unavailable.reason)} ${unavailable.detail}`,
-        fields: resultFields({ ...unavailable, latencyMs: 123 }),
+        fields: resultFields({ ...unavailable, latencyMs: 123, failureScreenshotUrl: 'https://cdn.hanasand.com/api/files/path/monitor%2Fdb-dashboard%2Fdb-dashboard-monitor-failure-20260708-120000000Z.png' }),
     })
     assert.match(discordPayload.content, /Database dashboard unavailable: unavailable/)
     assert.match(discordPayload.content, /unavailable or reconnecting telemetry state/)
+    assert.match(discordPayload.content, /\nhttps:\/\/cdn\.hanasand\.com\/api\/files\/path\//)
     assert.doesNotMatch(discordPayload.content, /check failed/i)
-    assert.ok(discordPayload.content.length < 220)
+    assert.ok(discordPayload.content.length < 340)
     assert.ok(discordPayload.embeds[0].fields.some(field => field.name === 'Action' && /API auth|PostgreSQL telemetry/.test(field.value)))
-    assert.ok(discordPayload.embeds[0].fields.some(field => field.name === 'Evidence' && /db-dashboard-monitor-failure\.png/.test(field.value)))
+    assert.ok(discordPayload.embeds[0].fields.some(field => field.name === 'Evidence' && /https:\/\/cdn\.hanasand\.com\/api\/files\/path\//.test(field.value)))
+    assert.ok(!discordPayload.embeds[0].fields.some(field => field.name === 'Screenshot'))
 
     const shell = evaluateDashboardText(`
         Operations
