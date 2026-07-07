@@ -1266,15 +1266,7 @@ function EvidenceWorkspace({
                         return (
                             <EvidencePanel key={tool.id} title={tool.name} status={providerStatus(capture, analysis)}>
                                 {capture ? (
-                                    <div className='grid gap-1 text-xs text-ui-muted'>
-                                        <p>{capture.capturedAt}</p>
-                                        <p className='break-all font-mono text-ui-text'>{capture.url || tool.url}</p>
-                                        {analysis?.vendorFlagged !== undefined ? <p>VirusTotal vendors: {analysis.vendorFlagged}/{analysis.vendorTotal || '?'}</p> : null}
-                                        {analysis?.alertCount !== undefined ? <p>urlquery alerts: {analysis.alertCount}</p> : null}
-                                        {analysis?.communityCommentCount !== undefined ? <p>Community comments: {analysis.communityCommentCount}</p> : null}
-                                        {analysis?.verdict ? <p>Provider verdict: {analysis.verdict}</p> : <p>Result unavailable: no parsed provider verdict was returned.</p>}
-                                        {capture.error ? <p>Error: {capture.error}</p> : null}
-                                    </div>
+                                    <ProviderReportDetails tool={tool} capture={capture} compact />
                                 ) : (
                                     <p className='text-xs leading-5 text-ui-muted'>Provider unavailable: this profile tool has not returned a capture or parsed result for this run.</p>
                                 )}
@@ -1508,25 +1500,44 @@ function StatusPill({ label, value, good }: { label: string; value: string; good
 }
 
 function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; capture: Capture }) {
-    const analysis = capture.toolAnalysis
-    const rows = [
-        analysis?.vendorFlagged !== undefined ? `VirusTotal vendors: ${analysis.vendorFlagged}/${analysis.vendorTotal || '?'}` : '',
-        analysis?.alertCount !== undefined ? `urlquery alerts: ${analysis.alertCount}` : '',
-        analysis?.communityCommentCount !== undefined ? `Community comments: ${analysis.communityCommentCount}` : '',
-        analysis?.verdict ? `Verdict: ${analysis.verdict}` : '',
-        capture.error ? `Error: ${capture.error}` : '',
-    ].filter(Boolean)
     return (
-        <div className='grid h-full place-items-center p-6'>
-            <div className='grid w-full max-w-2xl gap-3 rounded-md border border-ui-border bg-ui-panel p-4 text-left shadow-sm'>
-                <div>
-                    <p className='text-xs font-semibold uppercase text-ui-primary'>Provider result captured</p>
-                    <h2 className='mt-1 text-lg font-semibold text-ui-text'>{tool.name}</h2>
-                    <p className='mt-1 break-all font-mono text-xs text-ui-muted'>{capture.url || tool.url}</p>
-                </div>
-                {rows.length ? <div className='grid gap-1 text-sm text-ui-muted'>{rows.map(row => <p key={row}>{row}</p>)}</div> : <p className='text-sm text-ui-muted'>{providerDetail(analysis, capture)}</p>}
-                {analysis?.extractedSignals?.length ? <pre className='max-h-32 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-canvas p-2 font-mono text-xs text-ui-text'>{analysis.extractedSignals.slice(0, 12).join('\n')}</pre> : null}
+        <div className='grid h-full place-items-center overflow-auto p-6'>
+            <ProviderReportDetails tool={tool} capture={capture} />
+        </div>
+    )
+}
+
+function ProviderReportDetails({ tool, capture, compact = false }: { tool: SandboxTool; capture: Capture; compact?: boolean }) {
+    const analysis = capture.toolAnalysis
+    const facts = [
+        analysis?.vendorFlagged !== undefined ? ['Vendors', `${analysis.vendorFlagged}/${analysis.vendorTotal || '?'}`] : undefined,
+        analysis?.alertCount !== undefined ? ['urlquery alerts', String(analysis.alertCount)] : undefined,
+        analysis?.communityCommentCount !== undefined ? ['Comments', String(analysis.communityCommentCount)] : undefined,
+        analysis?.verdict ? ['Verdict', analysis.verdict] : undefined,
+        capture.image ? ['Screenshot', 'captured'] : undefined,
+        capture.error ? `Error: ${capture.error}` : '',
+    ].filter(Boolean) as Array<string | [string, string]>
+    return (
+        <div className={`grid w-full gap-3 rounded-md border border-ui-border bg-ui-panel text-left shadow-sm ${compact ? 'p-2 text-xs' : 'max-w-3xl p-4'}`}>
+            <div>
+                <p className='text-xs font-semibold uppercase text-ui-primary'>Provider result captured</p>
+                <h2 className={`${compact ? 'text-sm' : 'text-lg'} mt-1 font-semibold text-ui-text`}>{tool.name}</h2>
+                <p className='mt-1 break-all font-mono text-xs text-ui-muted'>{capture.url || tool.url}</p>
             </div>
+            {facts.length ? (
+                <div className='grid gap-2 sm:grid-cols-2'>
+                    {facts.map((fact) => Array.isArray(fact)
+                        ? <div key={fact[0]} className='rounded-md border border-ui-border bg-ui-canvas p-2'><p className='text-[10px] font-semibold uppercase text-ui-muted'>{fact[0]}</p><p className='mt-1 font-semibold text-ui-text'>{fact[1]}</p></div>
+                        : <p key={fact} className='text-ui-danger'>{fact}</p>)}
+                </div>
+            ) : <p className='text-sm text-ui-muted'>{providerDetail(analysis, capture)}</p>}
+            {analysis?.communitySummary ? <p className='text-xs leading-5 text-ui-muted'>{analysis.communitySummary}</p> : null}
+            {analysis?.threatAssociations?.length ? (
+                <div className='flex flex-wrap gap-1'>
+                    {analysis.threatAssociations.slice(0, 4).map(item => <span key={`${item.name}-${item.source}`} className='rounded-md border border-ui-warning/30 bg-ui-warning/10 px-2 py-1 text-[11px] font-semibold text-ui-warning'>{item.name} · {item.confidence || 'low'}</span>)}
+                </div>
+            ) : null}
+            {analysis?.extractedSignals?.length ? <pre className={`${compact ? 'max-h-24' : 'max-h-40'} overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-canvas p-2 font-mono text-xs text-ui-text`}>{analysis.extractedSignals.slice(0, compact ? 6 : 16).join('\n')}</pre> : null}
         </div>
     )
 }
