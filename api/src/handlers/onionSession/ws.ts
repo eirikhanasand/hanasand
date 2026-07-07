@@ -1692,7 +1692,7 @@ function hasParsedProviderData(tool: { id?: string; name?: string; url?: string 
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T) {
     return Promise.race([
-        promise,
+        promise.catch(() => fallback),
         new Promise<T>(resolve => setTimeout(() => resolve(fallback), timeoutMs)),
     ])
 }
