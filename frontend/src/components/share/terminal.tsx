@@ -1,4 +1,4 @@
-import { type Dispatch, type FormEvent, type MouseEvent as ReactMouseEvent, type SetStateAction, useCallback, useEffect, useRef, useState } from 'react'
+import { type Dispatch, type SyntheticEvent, type MouseEvent as ReactMouseEvent, type SetStateAction, useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, Eye, Power, RefreshCw, Send, Wifi, WifiOff } from 'lucide-react'
 import TerminalViewer from './terminalViewer'
 import useTerminal, { type TerminalCredentials, type TerminalLifecycle } from '@/hooks/useTerminal'
@@ -141,7 +141,7 @@ export default function Terminal({
         lastOpenRef.current = open
     }, [open, shareTerminalHeight])
 
-    function handleCommandSubmit(event: FormEvent<HTMLFormElement>) {
+    function handleCommandSubmit(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const nextCommand = command.trim()
         if (!nextCommand) {

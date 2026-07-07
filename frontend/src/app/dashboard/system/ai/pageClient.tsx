@@ -583,7 +583,7 @@ function OperationsPanel({ readiness }: { readiness: AIEconomics['commercialRead
             </div>
 
             <div className='mt-4 overflow-x-auto rounded-lg border border-ui-border' data-ai-lane-table>
-                <table className='min-w-[980px] w-full text-left text-xs'>
+                <table className='min-w-245 w-full text-left text-xs'>
                     <thead className='bg-ui-panel text-ui-muted'>
                         <tr>
                             <th className='px-3 py-2 font-semibold uppercase tracking-[0.12em]'>Lane</th>

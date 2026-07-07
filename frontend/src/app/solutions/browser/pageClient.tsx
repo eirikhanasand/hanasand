@@ -1865,7 +1865,6 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
 }
 
 function isUsefulFrameImage(image: string) {
-    // ponytail: tiny JPEGs here are blank white Chromium frames; decode pixels if this becomes noisy.
     return image.length > 24_000
 }
 

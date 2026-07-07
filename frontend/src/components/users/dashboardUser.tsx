@@ -54,7 +54,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
         setImpersonationReasonError('')
     }
 
-    async function handleConfirmImpersonation(e: React.FormEvent<HTMLFormElement>) {
+    async function handleConfirmImpersonation(e: React.SyntheticEvent<HTMLFormElement>) {
         e.stopPropagation()
         e.preventDefault()
         const auditReason = impersonationReason.trim().replace(/\s+/g, ' ')

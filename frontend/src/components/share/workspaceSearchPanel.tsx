@@ -162,7 +162,7 @@ export default function WorkspaceSearchPanel({
     }
 
     return (
-        <section className='flex h-full w-[min(22rem,calc(100vw-5rem))] flex-col overflow-hidden rounded-xl border border-ui-border bg-ui-panel shadow-2xl backdrop-blur-md md:min-w-[310px] md:max-w-[420px]'>
+        <section className='flex h-full w-[min(22rem,calc(100vw-5rem))] flex-col overflow-hidden rounded-xl border border-ui-border bg-ui-panel shadow-2xl backdrop-blur-md md:min-w-77.5 md:max-w-105'>
             <header className='flex items-center justify-between border-b border-ui-border px-3 py-3'>
                 <div>
                     <p className='text-[11px] font-semibold uppercase tracking-[0.22em] text-ui-muted'>Search</p>

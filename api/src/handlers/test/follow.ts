@@ -61,7 +61,6 @@ async function pumpLoadTestQueue() {
             )
             const id = next.rows[0]?.id
             if (!id) return
-            // ponytail: single API-process worker; use advisory locks or a separate worker if multiple API replicas run k6.
             await followTest(id, true)
         }
     } finally {

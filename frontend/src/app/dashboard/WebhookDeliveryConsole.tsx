@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useMemo, useState } from 'react'
+import { SyntheticEvent, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, Edit3, Loader2, Pause, Play, Send, Webhook } from 'lucide-react'
 
@@ -129,7 +129,7 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
         ? `${activeCount} active destination${activeCount === 1 ? '' : 's'}`
         : 'Destination required'
 
-    async function submitDestination(event: FormEvent<HTMLFormElement>) {
+    async function submitDestination(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         if (!organization) return
         setBusy('save-destination')

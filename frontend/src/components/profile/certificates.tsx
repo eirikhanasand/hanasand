@@ -25,7 +25,7 @@ export default function Certificates({ certificates: serverCertificates }: { cer
         setFormData(prev => ({ ...prev, [name]: value }))
     }
 
-    async function handleSubmit(e: React.FormEvent) {
+    async function handleSubmit(e: React.SyntheticEvent) {
         e.preventDefault()
         const result = await postCertificate(formData)
 

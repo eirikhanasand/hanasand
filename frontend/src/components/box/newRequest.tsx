@@ -10,7 +10,7 @@ import {
     withRequestDetails,
 } from '@/utils/box/requestTool'
 import { Bot, ChevronDown, Clock3, ImageIcon, Play, Plus, Search, Server, Trash2 } from 'lucide-react'
-import type { ClipboardEvent, FormEvent } from 'react'
+import type { ClipboardEvent, SyntheticEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadScopedRequestVariables, saveScopedRequestVariables } from './storage'
 import { HeaderRow, RequestDraft, RequestHistoryEntry, ToolResponse, VariableRow } from './types'
@@ -111,7 +111,7 @@ export default function NewRequest({
             ? 'Workspace API'
             : 'Browser mode'
 
-    const send = useCallback(async (e?: FormEvent) => {
+    const send = useCallback(async (e?: SyntheticEvent) => {
         e?.preventDefault()
         const token = getCookie('access_token')
         const id = getCookie('id')

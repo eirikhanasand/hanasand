@@ -1,6 +1,6 @@
 'use client'
 
-/* eslint-disable @typescript-eslint/no-unused-vars -- ponytail: dormant TI workbench sections are parked while the simplified public result view ships. */
+/* eslint-disable @typescript-eslint/no-unused-vars -- dormant TI workbench sections are unused while the simplified public result view ships. */
 
 import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, countryFromValue, victimObservationsFor } from '@/utils/ti/actorProfile'
@@ -13,7 +13,7 @@ import mapData from '@parent/public/world.json'
 import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Search, Send, ShieldAlert, ShieldCheck, UserPlus, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { SyntheticEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
 
 const TI_WORKBENCH_PREVIEW_ROWS = 1
@@ -98,7 +98,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         return () => window.clearTimeout(timer)
     }, [result])
 
-    async function submit(event: FormEvent<HTMLFormElement>) {
+    async function submit(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
         const clean = String(form.get('q') ?? inputRef.current?.value ?? query).trim()
@@ -1599,7 +1599,7 @@ function ActorOperationsMatrix({
             </div>
             <div className='grid min-w-0 lg:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='min-w-0 overflow-x-auto'>
-                    <table className='min-w-[680px] w-full border-collapse text-left text-xs'>
+                    <table className='min-w-170 w-full border-collapse text-left text-xs'>
                         <thead className='bg-ui-panel text-[11px] uppercase text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>
                             <tr>
                                 <th className='px-3 py-2 font-semibold'>Type</th>
@@ -1753,7 +1753,7 @@ function SourceCoverageWorkbench({
             </div>
             <div className='grid min-w-0 xl:grid-cols-[minmax(0,1fr)_19rem]'>
                 <div className='min-w-0 overflow-x-auto'>
-                    <table className='min-w-[860px] w-full border-collapse text-left text-xs'>
+                    <table className='min-w-215 w-full border-collapse text-left text-xs'>
                         <thead className='bg-ui-panel text-[11px] uppercase text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>
                             <tr>
                                 <th className='px-3 py-2 font-semibold'>Source</th>
@@ -2476,7 +2476,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
             </div>
             <div className='grid min-w-0 xl:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='min-w-0 overflow-x-auto'>
-                    <table className='min-w-[700px] w-full border-collapse text-left text-xs'>
+                    <table className='min-w-175 w-full border-collapse text-left text-xs'>
                         <thead className='bg-ui-panel text-[11px] uppercase text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>
                             <tr>
                                 <th className='px-3 py-2 font-semibold'>Detail</th>
@@ -2820,8 +2820,8 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
                     </div>
                 ))}
             </div>
-            <div className='overflow-x-auto max-md:!hidden md:block'>
-                <table className='min-w-[720px] w-full border-collapse text-left text-xs max-md:!hidden'>
+            <div className='overflow-x-auto max-md:hidden! md:block'>
+                <table className='min-w-180 w-full border-collapse text-left text-xs max-md:hidden!'>
                     <thead className='bg-ui-panel text-[11px] uppercase text-ui-muted dark:bg-ui-panel dark:text-ui-muted'>
                         <tr>
                             <th className='px-3 py-2 font-semibold'>Source</th>
@@ -3250,7 +3250,7 @@ function WatchlistRelevanceWorkbench({
             </div>
             <div className='grid min-w-0 xl:grid-cols-[minmax(0,1fr)_19rem]'>
                 <div className='min-w-0 overflow-x-auto'>
-                    <table className='min-w-[850px] w-full border-collapse text-left text-xs'>
+                    <table className='min-w-212.5 w-full border-collapse text-left text-xs'>
                         <thead className='bg-ui-panel text-[11px] uppercase text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>
                             <tr>
                                 <th className='px-3 py-2 font-semibold'>Term</th>
@@ -4784,7 +4784,7 @@ function EnrichmentGapWorkbench({
                     {selectedRow ? <CopyPayloadButton label='Source review question' payload={selectedRow.payload} /> : null}
                 </div>
                 <div className='max-h-96 min-w-0 overflow-auto rounded-lg border border-ui-border dark:border-ui-border'>
-                    <table className='min-w-[680px] w-full border-collapse text-left text-xs'>
+                    <table className='min-w-170 w-full border-collapse text-left text-xs'>
                         <thead className='bg-ui-panel text-[11px] uppercase text-ui-muted dark:bg-ui-raised dark:text-ui-muted'>
                             <tr>
                                 <th className='px-3 py-2 font-semibold'>Open question</th>

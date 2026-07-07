@@ -6,7 +6,7 @@ import { findTreeFileId, listTreePaths } from '@/components/ai/shareTree'
 import { updateShare } from '@/utils/share/put'
 import postShare from '@/utils/share/post'
 import { AlertTriangle, ArrowUp, Check, ChevronRight, ClipboardCheck, ExternalLink, Eye, FileText, Gauge, Globe2, Loader2, RotateCw, ScanSearch, ShieldCheck, Sparkles } from 'lucide-react'
-import { Dispatch, FormEvent, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from 'react'
+import { Dispatch, SyntheticEvent, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from 'react'
 import ErrorNotice from '@/components/error/errorNotice'
 
 type ShareChatProps = {
@@ -334,7 +334,7 @@ export default function ShareChat({
         return () => window.clearInterval(interval)
     }, [startedAt])
 
-    async function submit(event?: FormEvent<HTMLFormElement>) {
+    async function submit(event?: SyntheticEvent<HTMLFormElement>) {
         event?.preventDefault()
         const currentForm = event?.currentTarget
         await submitPrompt(readSubmittedPrompt(currentForm))

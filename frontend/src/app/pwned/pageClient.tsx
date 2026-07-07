@@ -5,7 +5,7 @@ import PwnedSearch from '@/components/pwned/pwnedSearch'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import postBloomHashLookup from '@/utils/pwned/checkHash'
 import { ArrowLeft, Eye, Search, ShieldCheck, ShieldX } from 'lucide-react'
-import { FormEvent, useState } from 'react'
+import { SyntheticEvent, useState } from 'react'
 
 export default function PwnedPageClient() {
     const [hashInput, setHashInput] = useState('')
@@ -16,7 +16,7 @@ export default function PwnedPageClient() {
     const [busy, setBusy] = useState(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
 
-    async function handleSubmit(e: FormEvent<HTMLElement>) {
+    async function handleSubmit(e: SyntheticEvent<HTMLElement>) {
         e.preventDefault()
         setError(null)
 

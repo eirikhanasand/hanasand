@@ -1,6 +1,6 @@
 'use client'
 
-import type { FormEvent, ReactNode } from 'react'
+import type { SyntheticEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Clock3, DatabaseZap, FileSearch, Gauge, GitBranch, History, ListChecks, PauseCircle, PlayCircle, RefreshCcw, RotateCcw, Search, SlidersHorizontal, UserRound, Workflow, XCircle } from 'lucide-react'
 
@@ -169,7 +169,7 @@ export default function TiScraperControlClient() {
         }
     }
 
-    function submit(event: FormEvent<HTMLFormElement>) {
+    function submit(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const clean = query.trim() || defaultQuery
         setQuery(clean)

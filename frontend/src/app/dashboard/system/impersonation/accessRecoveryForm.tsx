@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { FormEvent, useState } from 'react'
+import { SyntheticEvent, useState } from 'react'
 
 type RecoveryPayload = {
     recovery?: {
@@ -218,7 +218,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
     const [inspectionMessage, setInspectionMessage] = useState('')
     const [submitting, setSubmitting] = useState('')
 
-    async function submitInspection(event: FormEvent<HTMLFormElement>) {
+    async function submitInspection(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
         const targetType = String(form.get('targetType') || 'organization')
@@ -256,7 +256,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
         }
     }
 
-    async function submitRecovery(event: FormEvent<HTMLFormElement>) {
+    async function submitRecovery(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
         const organizationId = String(form.get('organizationId') || '').trim()
@@ -297,7 +297,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
         }
     }
 
-    async function submitDecision(event: FormEvent<HTMLFormElement>) {
+    async function submitDecision(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
         const requestId = String(form.get('requestId') || '').trim()
@@ -335,7 +335,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
         }
     }
 
-    async function submitInviteAction(event: FormEvent<HTMLFormElement>) {
+    async function submitInviteAction(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
         const organizationId = String(form.get('organizationId') || '').trim()
@@ -379,7 +379,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
         }
     }
 
-    async function submitMemberRoleRecovery(event: FormEvent<HTMLFormElement>) {
+    async function submitMemberRoleRecovery(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
         const organizationId = String(form.get('organizationId') || '').trim()
@@ -421,7 +421,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
         }
     }
 
-    async function submitApiUsageReset(event: FormEvent<HTMLFormElement>) {
+    async function submitApiUsageReset(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
         const apiKeyId = String(form.get('apiKeyId') || '').trim()
@@ -455,7 +455,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
         }
     }
 
-    async function submitSearch(event: FormEvent<HTMLFormElement>) {
+    async function submitSearch(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
         const query = new URLSearchParams()
@@ -483,7 +483,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
         }
     }
 
-    async function submitImpersonation(event: FormEvent<HTMLFormElement>) {
+    async function submitImpersonation(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
         const scope = form.getAll('scope').map(value => String(value)).filter(Boolean)
@@ -524,7 +524,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
         }
     }
 
-    async function stopImpersonation(event: FormEvent<HTMLFormElement>) {
+    async function stopImpersonation(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
         const reason = String(form.get('reason') || '').trim()

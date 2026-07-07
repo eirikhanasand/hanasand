@@ -61,7 +61,7 @@ export default function TrafficDashboard({
         setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
     }
 
-    async function handleBlockSubmit(e: React.FormEvent) {
+    async function handleBlockSubmit(e: React.SyntheticEvent) {
         e.preventDefault()
         try {
             const data = await postBlocklist(editingBlock, form)

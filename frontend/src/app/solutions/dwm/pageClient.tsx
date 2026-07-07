@@ -18,7 +18,7 @@ import {
     TicketCheck,
     Webhook,
 } from 'lucide-react'
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { SyntheticEvent, useEffect, useMemo, useState } from 'react'
 
 const snapshot = demoDwmProductSnapshot()
 const activeSourceCount = snapshot.sourceCoverage.reduce((sum, source) => sum + source.activeCount, 0)
@@ -251,7 +251,7 @@ export default function DarkWebMonitoringPage() {
         }
     }
 
-    function submitCollectionRequest(event: FormEvent<HTMLFormElement>) {
+    function submitCollectionRequest(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         const target = requestTarget.trim()
         if (!target) {

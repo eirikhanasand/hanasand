@@ -455,7 +455,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                                 {evidence.slice(0, DWM_CASE_EVIDENCE_PREVIEW_ROWS).map((row, index) => <EvidenceMobileRow key={row.id || index} row={row} />)}
                                             </div>
                                             <div className='hidden overflow-x-auto md:block'>
-                                                <table className='w-full min-w-[760px] text-left text-xs' data-dwm-case-evidence-desktop-table='true'>
+                                                <table className='w-full min-w-190 text-left text-xs' data-dwm-case-evidence-desktop-table='true'>
                                                     <thead className='bg-ui-canvas text-ui-muted'>
                                                         <tr>
                                                             <th className='px-3 py-2 font-semibold'>Source</th>

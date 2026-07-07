@@ -79,7 +79,7 @@ export default function SubscriptionPage() {
                             <h2 className='mt-2 text-lg font-semibold text-ui-text'>Current access</h2>
                             <p className='mt-1 max-w-3xl text-sm leading-5 text-ui-muted'>You can test monitoring, delivery, and scoped API keys now. Upgrade when you need more watch terms, review priority, or API-driven delivery.</p>
                         </div>
-                        <div className='grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[520px]'>
+                        <div className='grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-130'>
                             <AccessMetric label='Watch terms' value='Trial' />
                             <AccessMetric label='Delivery' value='Live' />
                             <AccessMetric label='API' value='Scoped' />

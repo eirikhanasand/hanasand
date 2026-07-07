@@ -38,7 +38,6 @@ export default function ActivityClient({ initialQueue }: Props) {
     const fetchQueue = useCallback(async (offset = 0) => {
         const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
         if (filters.q) params.set('q', filters.q)
-        // ponytail: backend only supports q today; these stay in the URL until server-side indexes are worth owning.
         for (const key of ['company', 'actor', 'category', 'size', 'country', 'from', 'to'] as const) {
             if (filters[key]) params.set(key, filters[key])
         }

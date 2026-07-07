@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { FormEvent, useRef, useState } from 'react'
+import { SyntheticEvent, useRef, useState } from 'react'
 import { Activity, BellRing, Loader2, Plus, RefreshCw, Send, ShieldCheck } from 'lucide-react'
 import { formatClaimSummary } from '@/utils/dwm/display'
 import type { DwmSourceFamily } from '@/utils/dwm/product'
@@ -106,12 +106,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
     }
 
-    async function saveWatchlist(event: FormEvent<HTMLFormElement>) {
+    async function saveWatchlist(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         await saveAndRebuildWatchlist()
     }
 
-    async function ingestMetadataClaim(event: FormEvent<HTMLFormElement>) {
+    async function ingestMetadataClaim(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         setBusyAction('claim')
         setResult(null)
@@ -362,7 +362,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
     }
 
-    async function submitSource(event: FormEvent<HTMLFormElement>) {
+    async function submitSource(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         setBusyAction('source')
         setResult(null)

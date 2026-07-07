@@ -9,7 +9,7 @@ import { postTest } from '@/utils/test/postTest'
 import { ArrowLeft, ArrowRight, BarChart3, CheckCircle2, Copy, Flame, Gauge, Globe2, Inbox, Search, Timer, UserRound } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { FormEvent, KeyboardEvent, useEffect, useState } from 'react'
+import { SyntheticEvent, KeyboardEvent, useEffect, useState } from 'react'
 
 const freeTryLimit = 5
 const freeTryStorageKey = 'hanasand:load-testing-free-tries-v2'
@@ -54,7 +54,7 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
         setFreeTriesUsed(readFreeTriesUsed())
     }, [])
 
-    async function handleSubmit(e: FormEvent<HTMLElement>) {
+    async function handleSubmit(e: SyntheticEvent<HTMLElement>) {
         e.preventDefault()
         await startCheck()
     }

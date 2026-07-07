@@ -6,7 +6,7 @@ import copy from '@/utils/copy'
 import { postLink } from '@/utils/links/post'
 import { Check, Copy, LinkIcon, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { FormEvent, useState } from 'react'
+import { SyntheticEvent, useState } from 'react'
 
 export default function LinkPageClient({ serverId, created }: { serverId?: string, created?: string }) {
     const router = useRouter()
@@ -26,7 +26,7 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
     const canSubmit = Boolean(normalizedShortcut && normalizedPath && !busy)
     const fullUrl = `https://hanasand.com/g/${serverId}`
 
-    async function handleSubmit(e: FormEvent<HTMLElement>) {
+    async function handleSubmit(e: SyntheticEvent<HTMLElement>) {
         e.preventDefault()
         setError(null)
 

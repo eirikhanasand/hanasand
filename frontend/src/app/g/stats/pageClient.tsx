@@ -6,7 +6,7 @@ import { getLink } from '@/utils/links/get'
 import prettyDate from '@/utils/date/prettyDate'
 import { ArrowLeft, ChartColumn, Eye, Globe, Rocket, Search, Watch } from 'lucide-react'
 import Link from 'next/link'
-import { FormEvent, useState } from 'react'
+import { SyntheticEvent, useState } from 'react'
 import { normalizeShortcut } from '../pageClient'
 
 export default function LinkStatsPageClient() {
@@ -17,7 +17,7 @@ export default function LinkStatsPageClient() {
     const shortcut = normalizeShortcut(query)
     const canSearch = Boolean(shortcut && !busy)
 
-    async function handleSubmit(e: FormEvent<HTMLElement>) {
+    async function handleSubmit(e: SyntheticEvent<HTMLElement>) {
         e.preventDefault()
         setError(null)
 

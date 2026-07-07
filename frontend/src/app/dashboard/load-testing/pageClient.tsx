@@ -7,7 +7,7 @@ import { postTest } from '@/utils/test/postTest'
 import { Activity, AlertTriangle, ArrowRight, CheckCircle2, Gauge, Globe2, Search, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { FormEvent, ReactNode } from 'react'
+import type { SyntheticEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 
 const scenarioPresets = [
@@ -81,7 +81,7 @@ export default function LoadTestingOperations() {
     const p95 = latestP95(latest)
     const visibleHistory = historyView === 'mine' ? myScans : recentScans
 
-    async function startCheck(event: FormEvent<HTMLFormElement>) {
+    async function startCheck(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         if (!canStart || isStarting) return
         setIsStarting(true)

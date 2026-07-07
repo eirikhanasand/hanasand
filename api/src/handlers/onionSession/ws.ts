@@ -111,7 +111,6 @@ function allowLocalSandboxTargets() {
 
 function chromiumHeadless() {
     if (process.env.BROWSER_SANDBOX_HEADLESS) return process.env.BROWSER_SANDBOX_HEADLESS !== '0'
-    // ponytail: Linux containers usually have no display; set BROWSER_SANDBOX_HEADLESS=0 for xvfb/real display hosts.
     return process.platform === 'linux' && !process.env.DISPLAY
 }
 

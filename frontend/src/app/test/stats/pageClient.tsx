@@ -8,7 +8,7 @@ import { fetchRecentTests } from '@/utils/test/fetchRecentTests'
 import prettyDate from '@/utils/date/prettyDate'
 import { ArrowLeft, ArrowRight, ChartColumn, Eye, Globe, Rocket, Watch } from 'lucide-react'
 import Link from 'next/link'
-import { FormEvent, ReactNode, useEffect, useState } from 'react'
+import { SyntheticEvent, ReactNode, useEffect, useState } from 'react'
 
 export default function TestStatsPageClient() {
     const [query, setQuery] = useState('')
@@ -41,7 +41,7 @@ export default function TestStatsPageClient() {
         }
     }, [])
 
-    async function handleSubmit(e: FormEvent<HTMLElement>) {
+    async function handleSubmit(e: SyntheticEvent<HTMLElement>) {
         e.preventDefault()
 
         if (!canSearch) {

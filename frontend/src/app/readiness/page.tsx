@@ -40,7 +40,7 @@ export default async function Page({
                                 Track the live lanes that keep monitoring, alerts, delivery, analyst work, and support actions moving.
                             </p>
                         </div>
-                        <div className='grid gap-2 sm:grid-cols-2 lg:min-w-[560px] lg:grid-cols-4'>
+                        <div className='grid gap-2 sm:grid-cols-2 lg:min-w-140 lg:grid-cols-4'>
                             <SummaryBox label='Rows ready' value={`${scoreboard.readyRows}/${scoreboard.totalRows}`} />
                             <SummaryBox label='Checked' value={formatChecked(scoreboard.generatedAt)} />
                             <SummaryBox label='Live feed' value={stateLabel(scoreboard.progressSource.state)} />

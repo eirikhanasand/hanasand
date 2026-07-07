@@ -50,7 +50,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const redirectPath = safeRedirectPath(path)
 
-    function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
         const formData = new FormData(e.currentTarget)
         const id = String(formData.get('username') || '').trim()
         const password = String(formData.get('password') || '')
@@ -75,7 +75,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         setBusy(true)
     }
 
-    async function handleManagedSetup(e: React.FormEvent<HTMLFormElement>) {
+    async function handleManagedSetup(e: React.SyntheticEvent<HTMLFormElement>) {
         e.preventDefault()
         setManagedSetupResult(null)
         setSetupError(null)
