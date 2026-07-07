@@ -43,6 +43,8 @@ type BrowserReport = {
         scriptArtifacts?: Array<{ scriptId?: string; source?: string; sha256?: string; assessment?: string; summary?: string }>
         resourceUrls?: string[]
         urlTimeline?: Array<{ url?: string; capturedAt?: string; reason?: string; title?: string }>
+        indicators?: string[]
+        threatAssociations?: Array<{ name?: string; category?: string; confidence?: string; evidence?: string; source?: string }>
         recommendedActions?: string[]
     }
 }
@@ -214,7 +216,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                             <ReportList items={analystReport.recommendedActions || []} empty='No recommended actions saved.' />
                         </ReportPanel>
                         <ReportPanel title='Threat context'>
-                            <ReportList items={(summary.threatAssociations || []).map(item => [
+                            <ReportList items={reportThreatAssociations(report).map(item => [
                                 item.name || 'Threat association',
                                 item.category || 'context',
                                 item.confidence ? `${item.confidence} confidence` : '',
@@ -223,7 +225,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                             ].filter(Boolean).join(' · '))} empty='No threat context saved.' />
                         </ReportPanel>
                         <ReportPanel title='Indicators'>
-                            <pre className='max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{(summary.indicators || []).join('\n') || 'No indicators saved.'}</pre>
+                            <pre className='max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-canvas p-3 text-xs text-ui-text'>{reportIndicators(report).join('\n') || 'No indicators saved.'}</pre>
                         </ReportPanel>
                     </aside>
                 </section>
@@ -253,6 +255,14 @@ function reportUrlTimeline(report: BrowserReport) {
 
 function reportResourceUrls(report: BrowserReport) {
     return Array.from(new Set([...(report.analystReport?.resourceUrls || []), ...(report.captures || []).flatMap(capture => capture.evidence?.sourceUrls || [])])).filter(Boolean)
+}
+
+function reportIndicators(report: BrowserReport) {
+    return Array.from(new Set([...(report.analystReport?.indicators || []), ...(report.analystSummary?.indicators || [])])).filter(Boolean)
+}
+
+function reportThreatAssociations(report: BrowserReport) {
+    return report.analystReport?.threatAssociations?.length ? report.analystReport.threatAssociations : report.analystSummary?.threatAssociations || []
 }
 
 function ReportPanel({ title, children }: { title: string; children: React.ReactNode }) {
