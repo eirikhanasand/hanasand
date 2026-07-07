@@ -25,10 +25,10 @@ export default async function Shares() {
     return (
         <div className='grid gap-3'>
             <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
-                <ShareMetric icon={<FileCode2 className='h-4 w-4' />} label='Shares' value={String(shareRows.length)} detail='code surfaces indexed for this account' tone={shareRows.length ? 'ok' : 'watch'} />
-                <ShareMetric icon={<LockKeyhole className='h-4 w-4' />} label='Access' value={`${lockedCount} locked`} detail={`${Math.max(shareRows.length - lockedCount, 0)} open share${shareRows.length - lockedCount === 1 ? '' : 's'}`} tone={lockedCount ? 'watch' : 'ok'} />
-                <ShareMetric icon={<Text className='h-4 w-4' />} label='Inventory' value={totalWords ? `${totalWords.toLocaleString('en-US')} words` : 'Metering'} detail='snippet and workspace content indexed' tone='neutral' />
-                <ShareMetric icon={<Clock3 className='h-4 w-4' />} label='Latest movement' value={latestShare ? shortDate(latestShare.timestamp) : 'Open'} detail={latestShare?.alias || latestShare?.path || 'Create a share to start the stream'} tone={latestShare ? 'ok' : 'neutral'} />
+                <ShareMetric icon={<FileCode2 className='h-4 w-4' />} label='Shares' value={String(shareRows.length)} detail='total shares' tone={shareRows.length ? 'ok' : 'watch'} />
+                <ShareMetric icon={<LockKeyhole className='h-4 w-4' />} label='Locked' value={String(lockedCount)} detail={`${Math.max(shareRows.length - lockedCount, 0)} unlocked`} tone={lockedCount ? 'watch' : 'ok'} />
+                <ShareMetric icon={<Text className='h-4 w-4' />} label='Words' value={totalWords.toLocaleString('en-US')} detail='total words shared' tone='neutral' />
+                <ShareMetric icon={<Clock3 className='h-4 w-4' />} label='Latest share' value={latestShare ? shortDate(latestShare.timestamp) : 'None'} detail={latestShare?.alias || latestShare?.path || 'No shares yet'} tone={latestShare ? 'ok' : 'neutral'} />
             </section>
 
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
@@ -36,10 +36,10 @@ export default async function Shares() {
                     <div>
                         <div className='flex items-center gap-2'>
                             <Radio className='h-4 w-4 text-ui-primary' />
-                            <h2 className='text-base font-semibold text-ui-text'>Share queue</h2>
+                            <h2 className='text-base font-semibold text-ui-text'>Shares</h2>
                         </div>
                         <p className='mt-1 text-sm text-ui-muted'>
-                            {typeof shares === 'string' ? 'Share inventory is retrying.' : `${shareRows.length} code share${shareRows.length === 1 ? '' : 's'} in the review stream.`}
+                            {typeof shares === 'string' ? 'Could not load shares.' : `${shareRows.length} share${shareRows.length === 1 ? '' : 's'}.`}
                         </p>
                     </div>
                     <Link prefetch={false} href='/s' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'>
@@ -52,7 +52,7 @@ export default async function Shares() {
                         ? <ErrorNotice compact message={shares} />
                         : shareRows.length
                             ? shareRows.map((share) => <DashboardShare key={share.id} share={share} />)
-                            : <p className='rounded-lg border border-dashed border-ui-border bg-ui-canvas p-4 text-sm text-ui-muted'>Share queue is clear. Create a file, snippet, or project workspace to start the stream.</p>}
+                            : <p className='rounded-lg border border-dashed border-ui-border bg-ui-canvas p-4 text-sm text-ui-muted'>No shares.</p>}
                 </div>
             </DashboardPanel>
         </div>

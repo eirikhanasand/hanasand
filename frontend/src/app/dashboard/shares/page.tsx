@@ -7,9 +7,9 @@ export default function Page() {
     return (
         <DashboardPage>
             <DashboardHeader
-                eyebrow='Code sharing'
-                title='Code shares and projects'
-                description='Shared code rows, workspace links, access state, and recent movement.'
+                eyebrow='Shares'
+                title='Shares'
+                description='Create and manage shared code.'
             />
             <Shares />
         </DashboardPage>
