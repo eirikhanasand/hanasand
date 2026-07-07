@@ -778,12 +778,13 @@ function MailSyncStatus({
     issue?: string
     full?: boolean
 }) {
-    const label = lastSuccessAt ? `Last sync ${formatRelativeTime(lastSuccessAt, now)} ago` : 'Waiting for first sync'
+    const intervalSeconds = POLL_INTERVAL_MS / 1000
+    const label = lastSuccessAt ? `updated ${formatRelativeTime(lastSuccessAt, now)} ago` : 'waiting for first sync'
     const tone = issue ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning' : 'border-ui-border bg-ui-raised text-ui-muted'
     return (
         <div className={`${full ? 'mb-3 flex' : 'hidden sm:flex'} min-w-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] ${tone}`} data-mail-sync-status>
             <Clock3 className='h-3.5 w-3.5 shrink-0' />
-            <span className='truncate'>{issue ? `Reconnecting; ${label.toLowerCase()}` : label}</span>
+            <span className='truncate'>{issue ? `Reconnecting; syncs every ${intervalSeconds}s, ${label}` : `Syncs every ${intervalSeconds}s · ${label}`}</span>
         </div>
     )
 }
@@ -797,12 +798,6 @@ function MailPrimaryFlow({ overview, visibleCount, selectedMessage, stale, onCom
     onReply: () => void
 }) {
     const unreadCount = overview?.mailboxes.reduce((sum, mailbox) => sum + (mailbox.unreadEmails || 0), 0) ?? 0
-    const health = overview?.health?.status || 'unknown'
-    const healthTone = health === 'healthy'
-        ? 'border-ui-success/35 bg-ui-success/10 text-ui-success'
-        : health === 'warning'
-            ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
-            : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
     const title = selectedMessage
         ? `Reply or triage "${selectedMessage.subject || 'selected message'}"`
         : unreadCount
@@ -818,10 +813,8 @@ function MailPrimaryFlow({ overview, visibleCount, selectedMessage, stale, onCom
         <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_auto]' data-mail-primary-flow>
             <div className='min-w-0'>
                 <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
-                    <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>Recommended next</span>
                     <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{unreadCount} unread</span>
                     <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{visibleCount} visible</span>
-                    <span className={`rounded-md border px-2 py-1 ${healthTone}`}>health {health}</span>
                     {stale ? <span className='rounded-md border border-ui-danger/35 bg-ui-danger/10 px-2 py-1 text-ui-danger'>stale</span> : null}
                 </div>
                 <h2 className='mt-3 wrap-break-word text-lg font-semibold text-ui-text'>{title}</h2>
@@ -836,7 +829,7 @@ function MailPrimaryFlow({ overview, visibleCount, selectedMessage, stale, onCom
                 ) : null}
                 <button type='button' onClick={onCompose} disabled={!overview} className='inline-flex min-h-10 items-center gap-2 rounded-md border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-50' data-mail-compose-primary>
                     <MailPlus className='h-4 w-4' />
-                    Compose
+                    Create
                 </button>
             </div>
         </section>

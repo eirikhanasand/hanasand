@@ -1,17 +1,19 @@
 'use client'
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Activity, AlertTriangle, CalendarClock, ChevronDown, Clock3, Cpu, FileText, PauseCircle, PlayCircle, RefreshCcw, Save, ServerCog, TerminalSquare, Zap } from 'lucide-react'
+import { Activity, AlertTriangle, CalendarClock, ChevronDown, Clock3, Cpu, FileText, Maximize2, Minimize2, PauseCircle, PlayCircle, RefreshCcw, Save, ServerCog, TerminalSquare, Zap } from 'lucide-react'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import { fetchManagedCronJobs, updateManagedCronJob, type ManagedCronJob } from '@/utils/systemCron/client'
 
 const categories: ManagedCronJob['category'][] = ['TI / Exposure', 'Alerts', 'Mail', 'Backup/Database', 'Forgejo', 'Other/System']
+const densityStorageKey = 'dashboard-cron-density'
 
 export default function CronJobsClient() {
     const [jobs, setJobs] = useState<ManagedCronJob[]>([])
     const [drafts, setDrafts] = useState<Record<string, string>>({})
     const [busy, setBusy] = useState('')
     const [message, setMessage] = useState('')
+    const [compact, setCompact] = useState(false)
 
     const summary = useMemo(() => {
         const enabled = jobs.filter(job => job.enabled).length
@@ -26,7 +28,13 @@ export default function CronJobsClient() {
 
     useEffect(() => {
         void load()
+        setCompact(localStorage.getItem(densityStorageKey) === 'compact')
     }, [])
+
+    function setDensity(nextCompact: boolean) {
+        setCompact(nextCompact)
+        localStorage.setItem(densityStorageKey, nextCompact ? 'compact' : 'spacious')
+    }
 
     async function load() {
         setBusy('load')
@@ -68,10 +76,20 @@ export default function CronJobsClient() {
                         <h2 className='mt-1 text-lg font-semibold text-ui-text'>{primaryHeadline(summary)}</h2>
                         <p className='mt-1 text-sm text-ui-muted'>{summary.total ? `${summary.enabled}/${summary.total} enabled · ${summary.running} running · ${money(summary.daily)}/day estimate` : 'Waiting for the cron inventory.'}</p>
                     </div>
-                    <button onClick={() => void load()} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:border-ui-primary hover:bg-ui-panel'>
-                        <RefreshCcw className='h-4 w-4' />
-                        {busy === 'load' ? 'Refreshing' : 'Refresh'}
-                    </button>
+                    <div className='flex items-center gap-2'>
+                        <div className='flex rounded-lg border border-ui-border bg-ui-raised p-1'>
+                            <button onClick={() => setDensity(true)} aria-label='Compact density' title='Compact density' aria-pressed={compact} className={`grid h-8 w-8 place-items-center rounded-md transition ${compact ? 'bg-ui-primary text-ui-canvas' : 'text-ui-muted hover:bg-ui-panel hover:text-ui-text'}`}>
+                                <Minimize2 className='h-4 w-4' />
+                            </button>
+                            <button onClick={() => setDensity(false)} aria-label='Spacious density' title='Spacious density' aria-pressed={!compact} className={`grid h-8 w-8 place-items-center rounded-md transition ${!compact ? 'bg-ui-primary text-ui-canvas' : 'text-ui-muted hover:bg-ui-panel hover:text-ui-text'}`}>
+                                <Maximize2 className='h-4 w-4' />
+                            </button>
+                        </div>
+                        <button onClick={() => void load()} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text hover:border-ui-primary hover:bg-ui-panel'>
+                            <RefreshCcw className='h-4 w-4' />
+                            {busy === 'load' ? 'Refreshing' : 'Refresh'}
+                        </button>
+                    </div>
                 </div>
 
                 <div className='grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]'>
@@ -128,16 +146,19 @@ export default function CronJobsClient() {
                         </div>
                         <div className='grid gap-2'>
                             {rows.map(job => (
-                                <DashboardPanel key={job.id} id={`job-${job.id}`} className='grid gap-3 p-4'>
-                                    <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start'>
+                                <DashboardPanel key={job.id} id={`job-${job.id}`} className={`grid ${compact ? 'gap-2 p-3' : 'gap-3 p-4'}`}>
+                                    <div className={`grid ${compact ? 'gap-2' : 'gap-3'} lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start`}>
                                         <div className='min-w-0'>
                                             <div className='flex flex-wrap items-center gap-2'>
                                                 <ServerCog className='h-4 w-4 text-ui-muted' />
                                                 <h3 className='text-base font-semibold text-ui-text'>{job.name}</h3>
                                                 <StatusPill job={job} />
+                                                <CostPill job={job} />
+                                                <MetaPill icon={<CalendarClock className='h-3.5 w-3.5' />} value={cadenceLabel(job)} />
+                                                <MetaPill icon={<FileText className='h-3.5 w-3.5' />} value={controlLabel(job)} />
                                             </div>
-                                            <p className='mt-1 text-sm leading-5 text-ui-muted'>{job.description}</p>
-                                            <div className='mt-3 grid gap-2 sm:grid-cols-3'>
+                                            <p className={`${compact ? 'mt-0.5 line-clamp-1' : 'mt-1'} text-sm leading-5 text-ui-muted`}>{job.description}</p>
+                                            <div className={`${compact ? 'hidden' : 'mt-3 grid'} gap-2 sm:grid-cols-3`}>
                                                 <Info icon={<CalendarClock className='h-4 w-4' />} label='Schedule' value={job.schedule} />
                                                 <Info icon={<Clock3 className='h-4 w-4' />} label='Next run' value={timeLabel(job.nextRunAt)} />
                                                 <Info icon={<AlertTriangle className='h-4 w-4' />} label='Reliability' value={reliabilityLabel(job)} />
@@ -158,7 +179,7 @@ export default function CronJobsClient() {
                                             )}
                                             {!job.controls.length && (
                                                 <span className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-muted'>
-                                                    Observable only
+                                                    Audit only
                                                 </span>
                                             )}
                                         </div>
@@ -191,7 +212,7 @@ export default function CronJobsClient() {
 
                                     <details className='group rounded-lg border border-ui-border bg-ui-raised'>
                                         <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary'>
-                                            <span>Runtime, cost, and log details</span>
+                                            <span>Runtime, audit, and log details</span>
                                             <ChevronDown className='h-4 w-4 text-ui-muted transition group-open:rotate-180' />
                                         </summary>
                                         <div className='grid gap-2 border-t border-ui-border p-3 md:grid-cols-2'>
@@ -200,6 +221,8 @@ export default function CronJobsClient() {
                                             <Info icon={<Cpu className='h-4 w-4' />} label='Resources' value={resourceLabel(job)} />
                                             <Info icon={<Zap className='h-4 w-4' />} label='Cost' value={`${money(job.costEstimate.hourlyUsd)}/hr · ${money(job.costEstimate.dailyUsd)}/day`} />
                                             <Info icon={<FileText className='h-4 w-4' />} label='Control' value={controlLabel(job)} />
+                                            <Info icon={<FileText className='h-4 w-4' />} label='Definition' value={`${job.source} · ${job.service}`} mono />
+                                            <Info icon={<FileText className='h-4 w-4' />} label='Fallback' value={job.assumptions.join(' ')} />
                                             <Info icon={<TerminalSquare className='h-4 w-4' />} label='Log' value={job.logExcerpt || 'Log stream live; no recent line.'} mono />
                                         </div>
                                     </details>
@@ -236,6 +259,32 @@ function StatusPill({ job }: { job: ManagedCronJob }) {
     return <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${tone}`}>{operationalStateLabel(job.status)}</span>
 }
 
+function CostPill({ job }: { job: ManagedCronJob }) {
+    const daily = job.costEstimate.dailyUsd
+    const tone = daily === null
+        ? 'border-ui-border bg-ui-raised text-ui-muted'
+        : daily >= 1
+            ? 'border-ui-danger bg-ui-danger/15 text-ui-danger'
+            : daily >= 0.25
+                ? 'border-ui-warning bg-ui-warning/15 text-ui-warning'
+                : 'border-ui-success bg-ui-success/15 text-ui-success'
+    return (
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold ${tone}`} title={job.costEstimate.assumption}>
+            <Zap className='h-3.5 w-3.5' />
+            {money(daily)}/day
+        </span>
+    )
+}
+
+function MetaPill({ icon, value }: { icon: ReactNode, value: string }) {
+    return (
+        <span className='inline-flex max-w-full items-center gap-1 rounded-full border border-ui-border bg-ui-raised px-2 py-1 text-xs font-semibold text-ui-muted'>
+            {icon}
+            <span className='truncate'>{value}</span>
+        </span>
+    )
+}
+
 function Info({ icon, label, value, mono = false }: { icon: ReactNode, label: string, value: string, mono?: boolean }) {
     return (
         <div className='grid gap-1 rounded-lg border border-ui-border bg-ui-raised p-3'>
@@ -248,8 +297,21 @@ function Info({ icon, label, value, mono = false }: { icon: ReactNode, label: st
     )
 }
 
+function cadenceLabel(job: ManagedCronJob) {
+    if (job.cadenceSeconds) return secondsSchedule(job.cadenceSeconds)
+    return job.schedule
+}
+
+function secondsSchedule(seconds: number) {
+    if (seconds < 60) return `${seconds}s`
+    const minutes = Math.round(seconds / 60)
+    if (minutes < 60) return `${minutes}m`
+    const hours = Math.round(minutes / 60)
+    return `${hours}h`
+}
+
 function controlLabel(job: ManagedCronJob) {
-    if (job.controlMode === 'observable_only') return 'Observable only'
+    if (job.controlMode === 'observable_only') return 'Audit only'
     if (job.controlMode === 'run_only') return 'Run now supported'
     if (job.controlMode === 'editable') return 'Pause/resume and schedule edit'
     return job.controls.includes('run_now') ? 'Safe pause/resume and run now' : 'Safe pause/resume'

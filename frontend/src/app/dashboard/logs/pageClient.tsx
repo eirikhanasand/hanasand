@@ -3,7 +3,7 @@
 import { AlertTriangle, Activity, ArrowRight, Database, Server, ShieldAlert, TerminalSquare, Bug } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import config from '@/config'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
 import type { ErrorEventsResponse, LogRealtimeResponse, RuntimeLog, ServiceLog, LogService } from '@/utils/logs/getLogs'
@@ -24,7 +24,7 @@ const viewOptions: Array<{ key: LogsView, label: string }> = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'errors', label: 'Error Codes' },
     { key: 'live', label: 'Live Feed' },
-    { key: 'stored', label: 'Stored Errors' },
+    { key: 'stored', label: 'Stored Sample' },
 ]
 
 function when(value: string) {
@@ -290,7 +290,7 @@ export default function LogsPageClient({
             )}
 
             {view === 'errors' && (
-                <ErrorCodesPanel events={errorEvents} />
+                <ErrorCodesPanel events={errorEvents} expanded={expanded} onToggle={toggleLog} />
             )}
 
             {view === 'live' && (
@@ -298,13 +298,21 @@ export default function LogsPageClient({
             )}
 
             {view === 'stored' && (
-                <LogFeedCard title='Stored and searchable error records' icon={<Database className='h-4 w-4 text-ui-warning' />} logs={storedLogs} empty='Stored error stream is clear.' tall expanded={expanded} onToggle={toggleLog} />
+                <LogFeedCard title='Latest stored error records' icon={<Database className='h-4 w-4 text-ui-warning' />} logs={storedLogs} empty='Stored error stream is clear.' tall expanded={expanded} onToggle={toggleLog} />
             )}
         </div>
     )
 }
 
-function ErrorCodesPanel({ events }: { events: ErrorEventsResponse }) {
+function ErrorCodesPanel({
+    events,
+    expanded,
+    onToggle,
+}: {
+    events: ErrorEventsResponse
+    expanded: Record<string, boolean>
+    onToggle: (id: string | number) => void
+}) {
     const topCodes = events.summary.code_counts.slice(0, 8)
     const topSurfaces = events.summary.surface_counts.slice(0, 8)
 
@@ -322,43 +330,69 @@ function ErrorCodesPanel({ events }: { events: ErrorEventsResponse }) {
                 <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Client errors' value={String(events.summary.client_errors)} note='HTTP 4xx' />
             </div>
 
-            <section className='grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)]'>
-                <div className={`${dashboardPanelClass} overflow-hidden`} data-logs-error-table>
+            <section className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,0.34fr)]'>
+                <div className={`${dashboardPanelClass} min-w-0 overflow-hidden`} data-logs-error-table>
                     <div className='border-b border-ui-border px-4 py-3'>
                         <h2 className='text-base font-semibold text-ui-text'>Recent error codes</h2>
-                        <p className='mt-1 text-xs leading-5 text-ui-muted'>Normalized from API responses, login failures, and website status rows.</p>
+                        <p className='mt-1 text-xs leading-5 text-ui-muted'>Showing {events.errors.length} recent rows from {events.summary.total} tracked failures. Select a row for context.</p>
                     </div>
                     <div className='overflow-x-auto'>
-                        <table className='min-w-full divide-y divide-ui-border text-left text-sm'>
+                        <table className='min-w-full table-fixed divide-y divide-ui-border text-left text-sm'>
                             <thead className='bg-ui-raised text-xs text-ui-muted'>
                                 <tr>
-                                    <th className='px-3 py-2.5 font-semibold'>Time</th>
-                                    <th className='px-3 py-2.5 font-semibold'>Surface</th>
-                                    <th className='px-3 py-2.5 font-semibold'>Status</th>
-                                    <th className='px-3 py-2.5 font-semibold'>Code</th>
-                                    <th className='px-3 py-2.5 font-semibold'>Route</th>
-                                    <th className='px-3 py-2.5 font-semibold'>User</th>
-                                    <th className='px-3 py-2.5 font-semibold'>Message</th>
+                                    <th className='w-40 px-3 py-2 font-semibold'>Time</th>
+                                    <th className='w-24 px-3 py-2 font-semibold'>Surface</th>
+                                    <th className='w-20 px-3 py-2 font-semibold'>Status</th>
+                                    <th className='px-3 py-2 font-semibold'>Code</th>
+                                    <th className='w-[28%] px-3 py-2 font-semibold'>Route</th>
+                                    <th className='w-28 px-3 py-2 font-semibold'>User</th>
                                 </tr>
                             </thead>
                             <tbody className='divide-y divide-ui-border'>
-                                {events.errors.map((event) => (
-                                    <tr key={event.id} className='align-top hover:bg-ui-raised/70'>
-                                        <td className='whitespace-nowrap px-3 py-2.5 text-xs text-ui-muted'>{when(event.created_at)}</td>
-                                        <td className='px-3 py-2.5'>
-                                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-text'>{event.surface || event.source}</span>
-                                        </td>
-                                        <td className='px-3 py-2.5'>
-                                            <span className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${event.status_code >= 500 ? 'border-ui-danger bg-ui-danger/15 text-ui-danger' : 'border-ui-warning bg-ui-warning/15 text-ui-warning'}`}>
-                                                {event.status_code || 'unreported'}
-                                            </span>
-                                        </td>
-                                        <td className='px-3 py-2.5 font-mono text-xs text-ui-text'>{event.error_code || 'uncategorized'}</td>
-                                        <td className='max-w-72 px-3 py-2.5 font-mono text-xs text-ui-muted'>{event.method} {event.path}</td>
-                                        <td className='px-3 py-2.5 text-xs text-ui-muted'>{event.user_id || 'anonymous'}</td>
-                                        <td className='max-w-sm px-3 py-2.5 text-xs leading-5 text-ui-text'>{event.message || event.request_id || 'No message captured'}</td>
-                                    </tr>
-                                ))}
+                                {events.errors.map((event) => {
+                                    const isOpen = expanded[event.id] ?? false
+
+                                    return (
+                                        <Fragment key={event.id}>
+                                            <tr className='align-top hover:bg-ui-raised/70'>
+                                                <td className='whitespace-nowrap px-3 py-2 text-xs text-ui-muted'>{when(event.created_at)}</td>
+                                                <td className='px-3 py-2'>
+                                                    <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-text'>{event.surface || event.source}</span>
+                                                </td>
+                                                <td className='px-3 py-2'>
+                                                    <span className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${event.status_code >= 500 ? 'border-ui-danger bg-ui-danger/15 text-ui-danger' : 'border-ui-warning bg-ui-warning/15 text-ui-warning'}`}>
+                                                        {event.status_code || 'unreported'}
+                                                    </span>
+                                                </td>
+                                                <td className='px-3 py-2'>
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => onToggle(event.id)}
+                                                        aria-expanded={isOpen}
+                                                        className='block max-w-full break-all text-left font-mono text-xs text-ui-text hover:text-ui-primary'
+                                                    >
+                                                        {event.error_code || 'uncategorized'}
+                                                    </button>
+                                                </td>
+                                                <td className='break-all px-3 py-2 font-mono text-xs text-ui-muted'>{event.method} {event.path}</td>
+                                                <td className='break-all px-3 py-2 text-xs text-ui-muted'>{event.user_id || 'anonymous'}</td>
+                                            </tr>
+                                            {isOpen && (
+                                                <tr className='bg-ui-raised/60'>
+                                                    <td colSpan={6} className='px-3 py-2'>
+                                                        <pre className='max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md border border-ui-border bg-ui-panel p-3 font-mono text-xs leading-5 text-ui-text'>
+                                                            {[
+                                                                event.message || 'No message captured',
+                                                                event.request_id ? `request_id=${event.request_id}` : '',
+                                                                `${event.method} ${event.path}`,
+                                                            ].filter(Boolean).join('\n')}
+                                                        </pre>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </Fragment>
+                                    )
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -369,7 +403,7 @@ function ErrorCodesPanel({ events }: { events: ErrorEventsResponse }) {
                     )}
                 </div>
 
-                <section className='grid gap-4 content-start'>
+                <section className='grid min-w-0 content-start gap-4'>
                     <BreakdownCard title='Top codes' rows={topCodes.map(row => ({ label: row.error_code || 'uncategorized', count: row.count }))} />
                     <BreakdownCard title='Top surfaces' rows={topSurfaces.map(row => ({ label: row.surface || 'api', count: row.count }))} />
                 </section>
@@ -380,12 +414,12 @@ function ErrorCodesPanel({ events }: { events: ErrorEventsResponse }) {
 
 function BreakdownCard({ title, rows }: { title: string, rows: Array<{ label: string, count: number }> }) {
     return (
-        <div className={`${dashboardPanelClass} p-4`}>
+        <div className={`${dashboardPanelClass} min-w-0 p-4`}>
             <h3 className='text-base font-semibold text-ui-text'>{title}</h3>
             <div className='mt-3 grid gap-1.5'>
                 {rows.map((row) => (
-                    <div key={row.label} className='flex items-center justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
-                        <span className='truncate font-mono text-xs text-ui-text'>{row.label}</span>
+                    <div key={row.label} className='flex min-w-0 items-center justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'>
+                        <span className='min-w-0 break-all font-mono text-xs text-ui-text'>{row.label}</span>
                         <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-muted'>{row.count}</span>
                     </div>
                 ))}
@@ -455,7 +489,7 @@ function LogFeedCard({
                                         {'source' in log && log.source ? <span>{log.source}</span> : null}
                                         <span>{when(log.created_at)}</span>
                                     </div>
-                                    <pre className='mt-1 whitespace-pre-wrap wrap-break-word font-mono text-xs leading-5 text-ui-text'>{log.message}</pre>
+                                    <pre className='mt-1 whitespace-pre-wrap break-all font-mono text-xs leading-5 text-ui-text'>{log.message}</pre>
                                     {hasMetadata && (
                                         <p className='mt-1 text-xs text-ui-muted'>
                                             {isOpen ? 'Hide request context' : 'Show request context'}
@@ -477,7 +511,7 @@ function LogFeedCard({
                                     <div className='border-b border-ui-border px-3 py-2 text-xs font-semibold text-ui-muted'>
                                         Request context
                                     </div>
-                                    <pre className='max-w-full overflow-auto whitespace-pre-wrap wrap-break-word p-3 font-mono text-xs leading-5 text-ui-text'>
+                                    <pre className='max-w-full overflow-auto whitespace-pre-wrap break-all p-3 font-mono text-xs leading-5 text-ui-text'>
                                         {JSON.stringify(log.metadata, null, 2)}
                                     </pre>
                                 </div>

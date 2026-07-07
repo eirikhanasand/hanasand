@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
-import { normalizeApiKeyTier, updateApiKey, validateApiKeyScopes } from '#utils/auth/apiKeys.ts'
+import { normalizeApiKeyTier, updateApiKey, validateApiKeyFields, validateApiKeyScopes } from '#utils/auth/apiKeys.ts'
 
 export default async function putApiKeyHandler(req: FastifyRequest, res: FastifyReply) {
     res.header('Cache-Control', 'no-store')
@@ -17,9 +17,14 @@ export default async function putApiKeyHandler(req: FastifyRequest, res: Fastify
     }
 
     const { id } = req.params as { id: string }
-    const body = req.body as Partial<ApiKeySummary> & { scopes?: ApiKeyScopeRule[] }
-    if (!id || !body?.name || !body?.ownerId) {
-        return res.status(400).send({ error: 'Missing id, ownerId, or name.' })
+    const body = (req.body || {}) as Partial<ApiKeySummary> & { scopes?: ApiKeyScopeRule[] }
+    if (!id) {
+        return res.status(400).send({ error: 'Missing id.' })
+    }
+
+    const fieldValidation = validateApiKeyFields(body)
+    if (!fieldValidation.valid) {
+        return res.status(400).send({ error: fieldValidation.error || 'Missing required API key fields.' })
     }
 
     const scopeValidation = validateApiKeyScopes(body.scopes)
@@ -28,12 +33,12 @@ export default async function putApiKeyHandler(req: FastifyRequest, res: Fastify
     }
 
     const updated = await updateApiKey(id, {
-        ownerId: body.ownerId || '',
-        name: body.name,
+        ownerId: String(body.ownerId).trim(),
+        name: String(body.name).trim(),
         tier: normalizeApiKeyTier(body.tier),
-        description: body.description || null,
+        description: String(body.description).trim(),
         enabled: body.enabled !== false,
-        expiresAt: body.expiresAt || null,
+        expiresAt: String(body.expiresAt).trim(),
         scopes: scopeValidation.scopes,
     })
 

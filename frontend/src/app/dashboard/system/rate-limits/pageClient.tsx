@@ -122,6 +122,10 @@ export default function RateLimitsPageClient({
         () => validateScopeSet(draft.scopes),
         [draft.scopes]
     )
+    const draftRequiredValidation = useMemo(
+        () => validateKeyFields(draft),
+        [draft]
+    )
 
     const routeOptions = useMemo(
         () => routes.map((route) => `${route.method} ${route.route}`),
@@ -133,14 +137,12 @@ export default function RateLimitsPageClient({
     )
     const routeCount = routes.length
     const overrideCount = settings.overrides.filter((override) => override.enabled).length
-    const draftReady = Boolean(draft.ownerId.trim() && draft.name.trim() && draftScopeValidation.valid)
-    const draftReadiness = !draft.ownerId.trim()
-        ? 'Choose an owner'
-        : !draft.name.trim()
-            ? 'Name the key'
-            : !draftScopeValidation.valid
-                ? draftScopeValidation.message
-                : 'Ready to issue'
+    const draftReady = draftRequiredValidation.valid && draftScopeValidation.valid
+    const draftReadiness = !draftRequiredValidation.valid
+        ? draftRequiredValidation.message
+        : !draftScopeValidation.valid
+            ? draftScopeValidation.message
+            : 'Ready to issue'
 
     const loadOwnerUsers = useCallback(async () => {
         const token = getCookie('access_token')
@@ -229,8 +231,8 @@ export default function RateLimitsPageClient({
             return
         }
 
-        if (!draft.ownerId.trim() || !draft.name.trim()) {
-            setKeyMessage('Choose an owner and enter a key name.')
+        if (!draftRequiredValidation.valid) {
+            setKeyMessage(draftRequiredValidation.message)
             return
         }
 
@@ -540,11 +542,11 @@ export default function RateLimitsPageClient({
                                 </button>
                             </div>
                         </>
-                    ) : (
+                    ) : draft.ownerId || draft.name || draft.description || draft.expiresAt || draft.scopes.length ? (
                         <div className={`rounded-lg border px-3 py-2 text-sm sm:ml-auto ${draftReady ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'}`}>
                             {draftReadiness}
                         </div>
-                    )}
+                    ) : null}
                 </div>
                 <div className='mt-3 flex flex-wrap items-center gap-3 text-xs text-ui-muted'>
                     {settings.updatedBy ? <span>saved by `{settings.updatedBy}`</span> : null}
@@ -672,7 +674,7 @@ export default function RateLimitsPageClient({
                     </div>
 
                     <div className='mt-4 rounded-lg border border-ui-border bg-ui-panel p-4'>
-                        <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+                        <div className='grid gap-3 md:grid-cols-2 md:items-end xl:grid-cols-4'>
                             <OwnerUserPicker
                                 label='Owner'
                                 value={draft.ownerId}
@@ -689,7 +691,7 @@ export default function RateLimitsPageClient({
                                 options={tierPresetIds}
                                 onChange={(value) => applyDraftTierPreset(value)}
                             />
-                            <TextField label='Expires at (ISO)' value={draft.expiresAt} onChange={(value) => setDraft((prev) => ({ ...prev, expiresAt: value }))} />
+                            <DateField label='Expires at' value={draft.expiresAt} onChange={(value) => setDraft((prev) => ({ ...prev, expiresAt: value }))} />
                         </div>
                         <div className='mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end'>
                             <TextField label='Description' value={draft.description} onChange={(value) => setDraft((prev) => ({ ...prev, description: value }))} />
@@ -748,7 +750,7 @@ export default function RateLimitsPageClient({
                                 </div>
                             )}
                         </div>
-                        {!draftScopeValidation.valid ? (
+                        {draft.scopes.length && !draftScopeValidation.valid ? (
                             <div className='mt-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
                                 {draftScopeValidation.message}
                             </div>
@@ -762,7 +764,7 @@ export default function RateLimitsPageClient({
                                 className='inline-flex items-center gap-2 rounded-lg border border-ui-primary/30 bg-ui-primary/10 px-3 py-2 text-sm text-ui-primary transition-colors hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'
                             >
                                 <Save className='h-4 w-4' />
-                                {saving ? 'Issuing...' : 'Issue API key'}
+                                {saving ? 'Creating...' : 'Create Key'}
                             </button>
                             {issuedSecret ? (
                                 <button
@@ -851,6 +853,16 @@ function ApiKeyCard({
         () => validateScopeSet(apiKey.scopes),
         [apiKey.scopes]
     )
+    const fieldValidation = useMemo(
+        () => validateKeyFields({
+            ownerId: apiKey.ownerId,
+            name: apiKey.name,
+            tier: apiKey.tier,
+            description: apiKey.description || '',
+            expiresAt: apiKey.expiresAt || '',
+        }),
+        [apiKey.description, apiKey.expiresAt, apiKey.name, apiKey.ownerId, apiKey.tier]
+    )
     const tierPreset = tierPresetMap[apiKey.tier] || tierPresetMap.custom || fallbackTierPresets[fallbackTierPresets.length - 1]
 
     return (
@@ -884,7 +896,7 @@ function ApiKeyCard({
                     <button
                         type='button'
                         onClick={() => updateKey(apiKey)}
-                        disabled={saving || !scopeValidation.valid}
+                        disabled={saving || !fieldValidation.valid || !scopeValidation.valid}
                         className='inline-flex items-center gap-2 rounded-lg border border-ui-primary/30 bg-ui-primary/10 px-3 py-2 text-sm text-ui-primary transition-colors hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'
                     >
                         <Save className='h-4 w-4' />
@@ -923,7 +935,7 @@ function ApiKeyCard({
                         onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, ownerId: value } : entry))}
                         onRefresh={reloadOwnerUsers}
                     />
-                    <TextField label='Expires at (ISO)' value={apiKey.expiresAt || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, expiresAt: value || null } : entry))} />
+                    <DateField label='Expires at' value={apiKey.expiresAt || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, expiresAt: value || null } : entry))} />
                     <div className='md:col-span-2 xl:col-span-4'>
                         <TextField label='Description' value={apiKey.description || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, description: value || null } : entry))} />
                     </div>
@@ -966,9 +978,9 @@ function ApiKeyCard({
                     )}
                 </div>
             </details>
-            {!scopeValidation.valid ? (
+            {!fieldValidation.valid || !scopeValidation.valid ? (
                 <div className='mt-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
-                    {scopeValidation.message}
+                    {fieldValidation.valid ? scopeValidation.message : fieldValidation.message}
                 </div>
             ) : null}
         </div>
@@ -999,6 +1011,20 @@ function validateScopeSet(scopes: ApiKeyScopeRule[]) {
         valid: true,
         message: '',
     }
+}
+
+function validateKeyFields(input: Pick<DraftApiKey, 'ownerId' | 'name' | 'tier' | 'description' | 'expiresAt'>) {
+    const missing = [
+        [input.ownerId, 'Choose an owner'],
+        [input.name, 'Name the key'],
+        [input.tier, 'Choose a tier'],
+        [input.expiresAt, 'Pick an expiry date'],
+        [input.description, 'Add a description'],
+    ].find(([value]) => !String(value).trim())
+
+    return missing
+        ? { valid: false, message: String(missing[1]) }
+        : { valid: true, message: '' }
 }
 
 function validateOverrideSet(overrides: RateLimitOverride[]) {
@@ -1119,7 +1145,29 @@ function TextField({
             <input
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
-                className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
+                className='h-10 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
+            />
+        </label>
+    )
+}
+
+function DateField({
+    label,
+    value,
+    onChange,
+}: {
+    label: string
+    value: string
+    onChange: (value: string) => void
+}) {
+    return (
+        <label className='grid gap-1.5 text-sm text-ui-muted'>
+            <span>{label}</span>
+            <input
+                type='date'
+                value={isoToDateInput(value)}
+                onChange={(event) => onChange(dateInputToIso(event.target.value))}
+                className='h-10 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
             />
         </label>
     )
@@ -1144,7 +1192,7 @@ function NumberField({
                 min={min}
                 value={value}
                 onChange={(event) => onChange(Number(event.target.value || 0))}
-                className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
+                className='h-10 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
             />
         </label>
     )
@@ -1167,7 +1215,7 @@ function SelectField({
             <select
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
-                className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
+                className='h-10 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
             >
                 {options.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
@@ -1197,7 +1245,6 @@ function OwnerUserPicker({
     const [query, setQuery] = useState('')
     const [open, setOpen] = useState(false)
     const selectedUser = users.find((user) => user.id === value.trim())
-    const exactFallback = value.trim() && !selectedUser ? value.trim() : ''
     const filteredUsers = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase()
         if (!normalizedQuery) return users.slice(0, 8)
@@ -1239,21 +1286,14 @@ function OwnerUserPicker({
                         if (event.key === 'Escape') setOpen(false)
                     }}
                     placeholder='Search users or paste exact ID'
-                    className='w-full rounded-lg border border-ui-border bg-ui-raised py-2 pl-9 pr-3 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
+                    className='h-10 w-full rounded-lg border border-ui-border bg-ui-raised pl-9 pr-3 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
                 />
             </div>
-            {selectedUser ? (
-                <div className='text-xs text-ui-muted'>Selected {formatOwnerUser(selectedUser)}</div>
-            ) : exactFallback ? (
-                <div className='text-xs text-ui-muted'>Using exact ID `{exactFallback}`</div>
-            ) : (
-                <div className='text-xs text-ui-muted'>Select a user or paste a known user ID.</div>
-            )}
             {open ? (
                 <div
                     id={listId}
                     role='listbox'
-                    className='absolute left-0 right-0 top-[4.6rem] z-30 max-h-64 overflow-auto rounded-lg border border-ui-border bg-ui-panel p-1 shadow-2xl shadow-ui-canvas/30'
+                    className='absolute left-0 right-0 top-[4.35rem] z-30 max-h-64 overflow-auto rounded-lg border border-ui-border bg-ui-panel p-1 shadow-2xl shadow-ui-canvas/30'
                 >
                     {loading ? (
                         <div className='px-3 py-2 text-xs text-ui-muted'>Loading users...</div>
@@ -1317,10 +1357,18 @@ function RouteChooser({
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={routeOptions[0] || 'GET /api/'}
-                className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
+                className='h-10 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition-colors focus:border-ui-primary/35'
             />
         </label>
     )
+}
+
+function isoToDateInput(value: string) {
+    return value && !Number.isNaN(Date.parse(value)) ? value.slice(0, 10) : ''
+}
+
+function dateInputToIso(value: string) {
+    return value ? `${value}T23:59:59.999Z` : ''
 }
 
 function normalizeOwnerUser(value: unknown): OwnerUserOption | null {

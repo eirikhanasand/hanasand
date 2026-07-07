@@ -75,7 +75,7 @@ export type ErrorEventsResponse = {
 
 export async function getLogs({ token, id, service, level = 'error' }: { token?: string, id?: string, service?: string, level?: string }) {
     if (!token || !id) return []
-    const params = new URLSearchParams({ level, limit: '200' })
+    const params = new URLSearchParams({ level, limit: '500' })
     if (service) params.set('service', service)
     try {
         const response = await fetch(`${config.url.api}/logs?${params.toString()}`, {

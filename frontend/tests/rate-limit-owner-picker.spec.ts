@@ -27,9 +27,10 @@ test.describe('rate-limit owner picker', () => {
 
         await expect(page.getByRole('heading', { name: 'Tiered tokens' })).toBeVisible()
         await expect(page.getByRole('group', { name: 'Rate-limit workspace' })).toBeVisible()
-        await expect(page.getByText('Choose an owner')).toBeVisible()
+        await expect(page.getByText('Choose an owner')).toHaveCount(0)
         await expect(page.getByText(/Global API pressure|now live in the same surface|Issue owner-linked keys|tuned independently/i)).toHaveCount(0)
         await expect(page.getByText('Owner user ID')).toHaveCount(0)
+        await expect(page.getByText('Add at least one scoped endpoint before issuing or saving this token.')).toHaveCount(0)
 
         await typeOwnerQuery(page, 'no-such-user')
         await expect(page.getByText('No matching users. Paste an exact ID to use it.')).toBeVisible()
@@ -37,17 +38,22 @@ test.describe('rate-limit owner picker', () => {
         await fillDraftOwner(page, 'northwind', 'Blair Chen')
         await expect(page.getByText('Name the key')).toBeVisible()
         await page.getByLabel('Key name').first().fill('Blair integration')
+        await page.getByLabel('Expires at').first().fill('2026-12-31')
+        await page.getByLabel('Description').first().fill('Blair scoped integration')
         await page.getByRole('button', { name: 'Add first scope' }).click()
         await expect(page.getByText('Ready to issue')).toBeVisible()
-        await page.getByRole('button', { name: 'Issue API key' }).click()
+        await page.getByRole('button', { name: 'Create Key' }).click()
         await expect.poll(() => submittedPayloads.length).toBe(1)
         expect(submittedPayloads[0].ownerId).toBe('user_blair')
+        expect(submittedPayloads[0].description).toBe('Blair scoped integration')
+        expect(Date.parse(String(submittedPayloads[0].expiresAt))).toBeGreaterThan(Date.now())
 
         await typeOwnerQuery(page, 'manual-owner-77')
-        await expect(page.getByText('Using exact ID `manual-owner-77`')).toBeVisible()
         await page.getByLabel('Key name').first().fill('Manual integration')
+        await page.getByLabel('Expires at').first().fill('2026-12-31')
+        await page.getByLabel('Description').first().fill('Manual scoped integration')
         await page.getByRole('button', { name: 'Add first scope' }).click()
-        await page.getByRole('button', { name: 'Issue API key' }).click()
+        await page.getByRole('button', { name: 'Create Key' }).click()
         await expect.poll(() => submittedPayloads.length).toBe(2)
         expect(submittedPayloads[1].ownerId).toBe('manual-owner-77')
     })
@@ -99,7 +105,7 @@ test.describe('rate-limit owner picker', () => {
 async function fillDraftOwner(page: Page, query: string, option: string) {
     await typeOwnerQuery(page, query)
     await page.getByRole('option', { name: new RegExp(option) }).click()
-    await expect(page.getByText(new RegExp(`Selected ${option}`))).toBeVisible()
+    await expect(page.getByRole('combobox', { name: 'Owner' }).first()).toHaveValue(new RegExp(option))
 }
 
 async function typeOwnerQuery(page: Page, query: string) {

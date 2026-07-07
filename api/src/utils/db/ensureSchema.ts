@@ -274,6 +274,13 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_http_errors ON service_logs((metadata->>\'category\'), created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_http_error_code ON service_logs((metadata->>\'error_code\'), created_at DESC) WHERE metadata->>\'category\' = \'http_response_error\'')
     await run(`
+        CREATE TABLE IF NOT EXISTS scheduled_job_controls (
+            id TEXT PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'enabled' CHECK (status IN ('enabled', 'paused')),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run(`
         CREATE TABLE IF NOT EXISTS ti_actor_enrichment_runs (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             actor_key TEXT NOT NULL,

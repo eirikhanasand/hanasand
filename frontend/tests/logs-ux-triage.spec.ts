@@ -22,4 +22,7 @@ test('logs dashboard keeps real streams while focusing the primary triage flow',
     expect(page).toContain('router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })')
     expect(page).toContain('data-logs-service-filter')
     expect(page).toContain('data-logs-tabs')
+    expect(page).toContain('Stored Sample')
+    expect(page).toContain('Showing {events.errors.length} recent rows from {events.summary.total} tracked failures')
+    expect(page).toContain('break-all')
 })

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { queryOnce } from '../src/utils/db.ts'
 import { listUnifiedScheduledJobs, updateManagedCronJob } from '../src/utils/systemCron.ts'
 
 const previousTiBase = process.env.TI_SCRAPER_API_BASE
@@ -30,6 +31,10 @@ assert.equal(byId.get('db-dashboard-monitor')?.schedule, '* * * * *')
 assert.ok(byId.get('db-dashboard-monitor')?.controls.includes('edit_schedule'), 'Database monitor schedule editing should stay available.')
 assert.ok(byId.get('ti-public-canary-collection')?.controls.length, 'TI collection should expose safe controls.')
 assert.ok(byId.get('ti-public-canary-collection')?.controls.includes('run_now'), 'TI collection should expose safe run-now control.')
+assert.equal(byId.get('api-agent-automations')?.controlMode, 'safe_control')
+assert.ok(byId.get('api-agent-automations')?.controls.includes('pause'), 'API automation cron should expose persisted pause control.')
+assert.ok(byId.get('api-agent-automations')?.controls.includes('run_now'), 'API automation cron should expose safe run-now control.')
+assert.equal(byId.get('api-hot-cache-refresh')?.controlMode, 'observable_only', 'Fastify cache refresh stays audit-only because it needs server instance state.')
 assert.equal(byId.get('api-vulnerability-scanner')?.controlMode, 'safe_control')
 assert.ok(byId.get('api-vulnerability-scanner')?.controls.includes('run_now'), 'Vulnerability scanner should expose manual run control.')
 assert.equal(byId.get('api-vulnerability-scanner')?.status, 'blocked', 'A never-run vulnerability scanner should be visible as blocked/stale.')
@@ -110,6 +115,21 @@ try {
     assert.equal(liveById.get('ti-frontier-queue')?.resourceUsage.queueDepth, 7)
     assert.equal(liveById.get('ti-public-canary-collection')?.resourceUsage.memoryRssMb, 321)
 
+    const controlDbAvailable = await scheduledJobControlsAvailable()
+    if (controlDbAvailable) {
+        try {
+            let apiJob = await updateManagedCronJob('api-agent-automations', { enabled: false })
+            assert.equal(apiJob.status, 'paused')
+            assert.ok(apiJob.controls.includes('resume'), 'Paused API cron should expose resume control.')
+            apiJob = await updateManagedCronJob('api-agent-automations', { enabled: true })
+            assert.ok(apiJob.controls.includes('pause'), 'Resumed API cron should expose pause control.')
+        } finally {
+            await updateManagedCronJob('api-agent-automations', { enabled: true }).catch(() => undefined)
+        }
+        const apiJob = await updateManagedCronJob('api-agent-automations', { action: 'run_now' })
+        assert.ok(apiJob.controls.includes('run_now'), 'Manual API cron run should stay available after triggering.')
+    }
+
     await updateManagedCronJob('ti-public-canary-collection', { enabled: false })
     await updateManagedCronJob('ti-public-canary-collection', { enabled: true })
     await updateManagedCronJob('ti-public-canary-collection', { action: 'run_now' })
@@ -127,6 +147,15 @@ try {
 }
 
 console.log(`Scheduled job registry smoke passed with ${jobs.length} offline jobs and live TI scraper mapping.`)
+
+async function scheduledJobControlsAvailable() {
+    try {
+        const result = await queryOnce('SELECT to_regclass($1) AS table_name', ['scheduled_job_controls'])
+        return result.rows[0]?.table_name === 'scheduled_job_controls'
+    } catch {
+        return false
+    }
+}
 
 function tiSchedulerPayload() {
     return {

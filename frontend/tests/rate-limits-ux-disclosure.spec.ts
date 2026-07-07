@@ -16,6 +16,8 @@ test('rate limits separates policy from key issuance workflow', async () => {
     expect(page).toContain('Add first scope')
     expect(page).toContain('Ready to issue')
     expect(page).toContain('disabled={saving || !draftReady}')
+    expect(page).toContain('type=\'date\'')
+    expect(page).toContain('Create Key')
     expect(page).toContain('<span>Key settings</span>')
     expect(page).toContain('<span>Endpoint scopes</span>')
 })

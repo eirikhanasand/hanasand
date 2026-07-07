@@ -157,6 +157,29 @@ export function validateApiKeyScopes(scopes: unknown) {
     }
 }
 
+export function validateApiKeyFields(input: {
+    ownerId?: unknown
+    name?: unknown
+    tier?: unknown
+    description?: unknown
+    expiresAt?: unknown
+}) {
+    const missing = [
+        [input.ownerId, 'ownerId'],
+        [input.name, 'name'],
+        [input.tier, 'tier'],
+        [input.expiresAt, 'expiresAt'],
+        [input.description, 'description'],
+    ].find(([value]) => typeof value !== 'string' || !value.trim())
+    if (missing) return { valid: false, error: `Missing required API key field: ${missing[1]}.` }
+
+    if (Number.isNaN(Date.parse(String(input.expiresAt)))) {
+        return { valid: false, error: 'expiresAt must be a valid date.' }
+    }
+
+    return { valid: true, error: null }
+}
+
 export async function createApiKey(input: {
     ownerId: string
     name: string

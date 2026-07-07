@@ -178,6 +178,8 @@ async function main() {
             ownerId: runId,
             name: 'Invalid duplicate scope key',
             tier: 'starter',
+            description: 'Duplicate scope smoke test token',
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             scopes: [
                 {
                     id: 'dup_one',
@@ -206,6 +208,7 @@ async function main() {
             name: 'Smoke status key',
             tier: 'starter',
             description: 'Scoped smoke test token',
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             enabled: true,
             scopes: [{
                 id: 'scope_status_smoke',

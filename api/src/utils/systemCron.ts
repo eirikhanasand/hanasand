@@ -3,6 +3,7 @@ import { readFile, stat, writeFile, chmod, chown } from 'node:fs/promises'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { getBackgroundJobRuntime, type BackgroundJobRuntime } from './backgroundJobRuntime.ts'
+import { canRunApiCronJobNow, isApiCronJobPaused, runApiCronJobNow, setApiCronJobPaused } from './cron.ts'
 import { getVulnerabilityReport, isVulnerabilityScanActive, setVulnerabilityScannerPaused, startTrackedVulnerabilityScan, VULNERABILITY_SCAN_CADENCE_SECONDS, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
 
 const execFileAsync = promisify(execFile)
@@ -336,6 +337,17 @@ export async function updateManagedCronJob(id: string, input: ManagedCronUpdate)
         await runTiJob('/v1/dwm/alerts/rebuild', { tenantId: 'default', actor: 'dashboard/system/cron' })
         return (await listUnifiedScheduledJobs()).find(job => job.id === id)!
     }
+    if (canRunApiCronJobNow(id)) {
+        if (input.action === 'run_now') {
+            void runApiCronJobNow(id).catch(error => {
+                console.error(`Failed to run API cron job ${id} from Cron Jobs dashboard`, error)
+            })
+        }
+        if (input.enabled !== undefined) {
+            await setApiCronJobPaused(id, !input.enabled)
+        }
+        return (await listUnifiedScheduledJobs()).find(job => job.id === id)!
+    }
 
     const definition = managedCronDefinitions.find(job => job.id === id)
     if (!definition) {
@@ -399,8 +411,11 @@ function managedHostCronJob(job: ManagedCronJob): UnifiedScheduledJob {
     }
 }
 
-function apiBackgroundJob(definition: typeof apiBackgroundJobDefinitions[number]): UnifiedScheduledJob {
+async function apiBackgroundJob(definition: typeof apiBackgroundJobDefinitions[number]): Promise<UnifiedScheduledJob> {
     const telemetry = getBackgroundJobRuntime(definition.id)
+    const hasRunner = canRunApiCronJobNow(definition.id)
+    const enabled = hasRunner ? !await isApiCronJobPaused(definition.id) : true
+    const controls: ScheduledJobControl[] = hasRunner ? [enabled ? 'pause' : 'resume', 'run_now'] : definition.controls
     return {
         id: definition.id,
         name: definition.name,
@@ -410,9 +425,9 @@ function apiBackgroundJob(definition: typeof apiBackgroundJobDefinitions[number]
         service: 'hanasand-api',
         schedule: definition.schedule,
         cadenceSeconds: definition.cadenceSeconds,
-        enabled: true,
+        enabled,
         running: telemetry.running,
-        status: telemetry.running ? 'running' : telemetry.lastError ? 'failed' : 'enabled',
+        status: telemetry.running ? 'running' : !enabled ? 'paused' : telemetry.lastError ? 'failed' : 'enabled',
         lastRunAt: telemetry.lastRunAt,
         lastSuccessAt: telemetry.lastSuccessAt,
         lastFinishedAt: telemetry.lastFinishedAt,
@@ -422,8 +437,8 @@ function apiBackgroundJob(definition: typeof apiBackgroundJobDefinitions[number]
         failureCount: telemetry.failureCount,
         lastError: telemetry.lastError,
         logExcerpt: telemetry.logExcerpt,
-        controls: definition.controls,
-        controlMode: definition.controls.length ? 'safe_control' : 'observable_only',
+        controls,
+        controlMode: controls.length ? 'safe_control' : 'observable_only',
         resourceUsage: {
             scope: 'service',
             cpuPercent: null,
@@ -433,7 +448,10 @@ function apiBackgroundJob(definition: typeof apiBackgroundJobDefinitions[number]
             note: 'API process-level memory; per-cron task CPU/RAM is not available without a worker wrapper.',
         },
         costEstimate: costEstimate(18, 'Estimated shared API process draw; cost is service-level, not per cron task.'),
-        assumptions: ['The API minute cron runs all subjobs in one process, so CPU/RAM and power are service-level estimates.'],
+        assumptions: [
+            'The API minute cron runs subjobs in one process, so CPU/RAM and power are service-level estimates.',
+            hasRunner ? 'Pause/resume is persisted in scheduled_job_controls; run now uses the same tracked job function as the minute cron.' : 'No standalone safe runner is exposed for this API job.',
+        ],
     }
 }
 
