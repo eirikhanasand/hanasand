@@ -67,6 +67,7 @@ const pages = new Map<string, string>([
   <main>
     <h1>Acme invoice verification</h1>
     <p>LockBit ransomware campaign associated with this lure.</p>
+    <p>Benign API text: document.createElement object.assign el.style should not become copied indicators.</p>
     <button id="click-proof" style="position:fixed;left:20px;top:20px;width:220px;height:54px;z-index:2" onclick="document.title='Interactive click received';document.getElementById('interaction-proof').textContent='Interactive click received'">Confirm invoice</button>
     <input id="type-proof" style="position:fixed;left:20px;top:88px;width:220px;height:40px;z-index:2" oninput="document.title='Typed proof: ' + this.value;document.getElementById('type-result').textContent='Typed proof: ' + this.value">
     <a id="download-proof" href="/payload.bin" download="invoice-payload.bin" style="position:fixed;left:20px;top:140px;width:220px;height:40px;z-index:2">Download invoice payload</a>
@@ -182,6 +183,12 @@ assert(pageFrames.some(payload => payload.networkSummary?.recentRequests?.some(r
 assert(pageFrames.some(payload => payload.networkSummary?.downloads?.some(download => download.fileName === 'invoice-payload.bin' && download.bytes === downloadBody.length && download.sha256 === downloadHash && download.hashStatus === 'hashed_and_deleted')), 'hashes downloaded files and reports deletion status')
 
 const initialEvidence = pageFrames.find(payload => payload.url?.endsWith('/start') && payload.evidence?.obfuscatedScripts?.length)?.evidence
+const evidenceIndicators = pageFrames.flatMap(payload => [
+    ...(payload.evidence?.indicators?.domains || []),
+    ...(payload.evidence?.indicators?.ips || []),
+    ...(payload.evidence?.indicators?.urls || []),
+]).map(item => item.toLowerCase())
+assert(!evidenceIndicators.includes('document.createelement') && !evidenceIndicators.includes('object.assign') && !evidenceIndicators.includes('el.style'), 'does not promote generic DOM/API strings to indicators')
 assert(initialEvidence?.obfuscatedScripts?.length, 'extracts obfuscated script candidates')
 assert(initialEvidence?.deobfuscationTasks?.some(task => task.assessment === 'suspicious'), 'summarizes suspicious decoded script')
 assert(initialEvidence?.deobfuscationTasks?.some(task => task.indicators?.domains?.includes(payloadDomain)), 'decoded script exposes second-stage domain')
