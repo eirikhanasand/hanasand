@@ -55,7 +55,7 @@ type SandboxNetworkSummary = {
     failedCount?: number
     uniqueDomainCount?: number
     domains?: string[]
-    recentRequests?: Array<{ url?: string; method?: string; resourceType?: string; status?: number; ip?: string; port?: number; protocol?: string; tlsIssuer?: string; failure?: string; at?: string }>
+    recentRequests?: Array<{ url?: string; method?: string; resourceType?: string; status?: number; mimeType?: string; initiator?: string; durationMs?: number; ip?: string; port?: number; protocol?: string; tlsIssuer?: string; failure?: string; at?: string }>
     statusCounts?: Record<string, number>
     redirectChain?: string[]
     downloads?: Array<{ url?: string; fileName?: string; bytes?: number; sha256?: string; hashStatus?: string; at?: string }>
@@ -1297,18 +1297,24 @@ function EvidenceWorkspace({
                                     <table className='w-full min-w-[42rem] border-collapse text-left text-[11px]'>
                                         <thead className='sticky top-0 bg-ui-raised text-ui-muted'>
                                             <tr>
-                                                <th className='border-b border-ui-border px-2 py-1'>Type</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>Method</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>Status</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>MIME</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>Time</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>IP / TLS</th>
+                                                <th className='border-b border-ui-border px-2 py-1'>Initiator</th>
                                                 <th className='border-b border-ui-border px-2 py-1'>URL</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {latestNetwork.recentRequests.slice(-30).map((request, index) => (
                                                 <tr key={`${request.at}-${request.url}-${index}`}>
-                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.resourceType || request.method || 'request'}</td>
+                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.method || 'GET'}{request.resourceType ? ` · ${request.resourceType}` : ''}</td>
                                                     <td className='border-b border-ui-border/60 px-2 py-1'>{request.status || request.failure || ''}</td>
+                                                    <td className='max-w-[9rem] truncate border-b border-ui-border/60 px-2 py-1'>{request.mimeType || ''}</td>
+                                                    <td className='border-b border-ui-border/60 px-2 py-1'>{request.durationMs !== undefined ? `${request.durationMs}ms` : ''}</td>
                                                     <td className='border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{networkPeerLabel(request)}</td>
+                                                    <td className='max-w-[12rem] truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-muted'>{request.initiator || ''}</td>
                                                     <td className='max-w-[28rem] truncate border-b border-ui-border/60 px-2 py-1 font-mono text-ui-text'>{request.url}</td>
                                                 </tr>
                                             ))}

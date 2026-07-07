@@ -40,6 +40,9 @@ type BrokerPayload = {
         sampleBytes?: number
         reason?: string
     }
+    networkSummary?: {
+        recentRequests?: Array<{ method?: string; resourceType?: string; status?: number; mimeType?: string; initiator?: string; durationMs?: number; url?: string }>
+    }
     receivedAt?: number
 }
 
@@ -143,6 +146,7 @@ assert(pageFrames.some(payload => payload.reason === 'load'), 'captures loaded b
 assert(pageFrames.some(payload => payload.url?.endsWith('/start')), 'captures initial URL before redirect')
 assert(pageFrames.some(payload => payload.url?.endsWith('/final')), 'captures final URL after redirect')
 assert(pageFrames.some(payload => (payload.image || '').length > 1000), 'captures non-empty screenshots')
+assert(pageFrames.some(payload => payload.networkSummary?.recentRequests?.some(request => request.status === 200 && request.method === 'GET' && request.mimeType?.includes('text/html') && request.durationMs !== undefined && request.initiator)), 'exposes analyst-grade network request columns')
 
 const initialEvidence = pageFrames.find(payload => payload.url?.endsWith('/start') && payload.evidence?.obfuscatedScripts?.length)?.evidence
 assert(initialEvidence?.obfuscatedScripts?.length, 'extracts obfuscated script candidates')

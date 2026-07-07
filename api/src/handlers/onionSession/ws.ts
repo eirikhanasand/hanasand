@@ -45,6 +45,9 @@ type SandboxNetworkEvent = {
     method?: string
     resourceType?: string
     status?: number
+    mimeType?: string
+    initiator?: string
+    durationMs?: number
     ip?: string
     port?: number
     protocol?: string
@@ -495,10 +498,16 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     response.serverAddr().catch(() => null),
                     response.securityDetails().catch(() => null),
                 ])
+                const request = response.request()
                 trackNetwork({
                     kind: 'response',
                     url: response.url(),
+                    method: request.method(),
+                    resourceType: request.resourceType(),
                     status: response.status(),
+                    mimeType: response.headers()['content-type'],
+                    initiator: request.frame()?.url(),
+                    durationMs: responseDurationMs(request.timing()),
                     ip: server?.ipAddress,
                     port: server?.port,
                     protocol: security?.protocol,
@@ -981,6 +990,9 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
             method: event.method,
             resourceType: event.resourceType,
             status: event.status,
+            mimeType: event.mimeType,
+            initiator: event.initiator,
+            durationMs: event.durationMs,
             ip: event.ip,
             port: event.port,
             protocol: event.protocol,
@@ -1022,6 +1034,11 @@ function summarizeNetworkEvents(events: SandboxNetworkEvent[]) {
         })),
         lastUpdatedAt: events.at(-1)?.at,
     }
+}
+
+function responseDurationMs(timing: { startTime: number; responseEnd: number }) {
+    if (!Number.isFinite(timing.startTime) || !Number.isFinite(timing.responseEnd) || timing.responseEnd < 0) return undefined
+    return Math.max(0, Math.round(timing.responseEnd))
 }
 
 async function inspectDownload(download: { path: () => Promise<string | null>; suggestedFilename: () => string }) {
