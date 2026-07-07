@@ -916,6 +916,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         if (!force && image === lastFrame) return
         lastFrame = image
         const viewport = page.viewportSize()
+        const frameQuality = await collectFrameQuality(page, viewport?.width || DEFAULT_WIDTH, viewport?.height || DEFAULT_HEIGHT)
         const evidence = await collectPageEvidence(page)
         if (!evidence.deobfuscationTasks.length && cachedDeobfuscationTasks.length) {
             evidence.deobfuscationTasks = cachedDeobfuscationTasks
@@ -949,9 +950,40 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             title: await page.title().catch(() => ''),
             capturedAt: new Date().toISOString(),
             reason,
+            frameQuality,
             evidence,
             networkSummary: summarizeNetworkEvents(networkEvents),
         })
+    }
+
+    async function collectFrameQuality(targetPage: Page, viewportWidth: number, viewportHeight: number) {
+        return await targetPage.evaluate(({ viewportWidth, viewportHeight }) => {
+            const text = (document.body?.innerText || '').replace(/\s+/g, ' ').trim()
+            const elementCount = document.body ? document.body.querySelectorAll('*').length : 0
+            const bodyHeight = Math.max(
+                document.body?.scrollHeight || 0,
+                document.documentElement?.scrollHeight || 0,
+            )
+            const visibleMedia = document.querySelectorAll('img, video, canvas, svg, picture').length
+            const looksBlank = text.length < 20 && elementCount < 5 && visibleMedia === 0
+            return {
+                looksBlank,
+                visibleTextLength: text.length,
+                elementCount,
+                visibleMedia,
+                bodyHeight,
+                viewportWidth,
+                viewportHeight,
+            }
+        }, { viewportWidth, viewportHeight }).catch(() => ({
+            looksBlank: true,
+            visibleTextLength: 0,
+            elementCount: 0,
+            visibleMedia: 0,
+            bodyHeight: 0,
+            viewportWidth,
+            viewportHeight,
+        }))
     }
 
     function rememberDeobfuscationTasks(evidence: { deobfuscationTasks?: SandboxDeobfuscationTask[] } | null) {

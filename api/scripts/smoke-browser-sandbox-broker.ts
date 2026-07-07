@@ -13,6 +13,7 @@ type BrokerPayload = {
     url?: string
     target?: string
     image?: string | null
+    frameQuality?: { looksBlank?: boolean; visibleTextLength?: number; elementCount?: number }
     torProxyConfigured?: boolean
     evidence?: {
         textExcerpt?: string
@@ -148,6 +149,7 @@ assert(pageFrames.some(payload => payload.reason === 'load'), 'captures loaded b
 assert(pageFrames.some(payload => payload.url?.endsWith('/start')), 'captures initial URL before redirect')
 assert(pageFrames.some(payload => payload.url?.endsWith('/final')), 'captures final URL after redirect')
 assert(pageFrames.some(payload => (payload.image || '').length > 1000), 'captures non-empty screenshots')
+assert(pageFrames.some(payload => payload.frameQuality?.looksBlank === false && (payload.frameQuality.visibleTextLength || 0) > 20 && (payload.frameQuality.elementCount || 0) > 5), 'captures rendered non-blank frame quality metadata')
 assert(pageFrames.some(payload => payload.networkSummary?.recentRequests?.some(request => request.status === 200 && request.method === 'GET' && request.host === '127.0.0.1' && request.mimeType?.includes('text/html') && request.durationMs !== undefined && request.initiator)), 'exposes analyst-grade network request columns')
 
 const initialEvidence = pageFrames.find(payload => payload.url?.endsWith('/start') && payload.evidence?.obfuscatedScripts?.length)?.evidence

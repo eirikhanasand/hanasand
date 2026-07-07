@@ -35,11 +35,21 @@ type Capture = {
     image?: string | null
     frameWidth?: number
     frameHeight?: number
+    frameQuality?: FrameQuality
     error?: string
     evidence?: SandboxEvidence
     toolAnalysis?: SandboxToolAnalysis
     networkSummary?: SandboxNetworkSummary
     webcrackLoad?: SandboxWebCrackLoad
+}
+type FrameQuality = {
+    looksBlank?: boolean
+    visibleTextLength?: number
+    elementCount?: number
+    visibleMedia?: number
+    bodyHeight?: number
+    viewportWidth?: number
+    viewportHeight?: number
 }
 type SandboxWebCrackLoad = {
     loaded?: boolean
@@ -490,6 +500,7 @@ export default function BrowserPageClient() {
                     image,
                     frameWidth,
                     frameHeight,
+                    frameQuality: frameQualityValue(payload.frameQuality),
                     evidence,
                     networkSummary: networkSummaryValue(payload.networkSummary),
                 }))
@@ -1465,6 +1476,7 @@ function CaptureTimeline({ captures }: { captures: Capture[] }) {
                             <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted'>{capture.kind}</span>
                         </div>
                         {capture.image ? <img src={capture.image} alt={`${capture.label} screenshot`} className='max-h-64 w-full rounded border border-ui-border object-contain' /> : null}
+                        {capture.frameQuality ? <p className={`text-[11px] font-semibold ${capture.frameQuality.looksBlank ? 'text-ui-danger' : 'text-ui-success'}`}>{capture.frameQuality.looksBlank ? 'Blank-looking frame' : 'Rendered frame'} · {capture.frameQuality.visibleTextLength || 0} chars · {capture.frameQuality.elementCount || 0} elements</p> : null}
                         <SourceCodeDisclosure evidence={capture.evidence} />
                         {cleanEvidenceExcerpt(capture.evidence?.textExcerpt) ? <p className='line-clamp-3 text-xs leading-5 text-ui-muted'>{cleanEvidenceExcerpt(capture.evidence?.textExcerpt)}</p> : null}
                         {capture.networkSummary ? (
@@ -1654,6 +1666,7 @@ function buildExportReport(input: {
             reason: capture.reason,
             error: capture.error,
             image: capture.image,
+            frameQuality: capture.frameQuality,
             evidence: capture.evidence,
             networkSummary: capture.networkSummary,
             toolAnalysis: capture.toolAnalysis,
@@ -1699,7 +1712,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
         finalUrl: input.activeUrl || input.summary.urlTimeline[0]?.url || input.target,
         exportedAt: new Date().toISOString(),
         evidenceChecklist: {
-            renderedScreenshots: pageCaptures.filter(capture => capture.image && isUsefulFrameImage(capture.image)).length,
+            renderedScreenshots: pageCaptures.filter(capture => capture.image && isUsefulFrameImage(capture.image) && !capture.frameQuality?.looksBlank).length,
             providerReports: providerReports.filter(report => report.status === 'Result captured').length,
             networkRequests: latestNetwork?.requestCount || 0,
             contactedDomains: latestNetwork?.uniqueDomainCount || 0,
@@ -2063,6 +2076,11 @@ function networkSummaryValue(value: unknown): SandboxNetworkSummary | undefined 
 function webcrackLoadValue(value: unknown): SandboxWebCrackLoad | undefined {
     if (!value || typeof value !== 'object') return undefined
     return value as SandboxWebCrackLoad
+}
+
+function frameQualityValue(value: unknown): FrameQuality | undefined {
+    if (!value || typeof value !== 'object') return undefined
+    return value as FrameQuality
 }
 
 function capacityValue(value: unknown): SandboxCapacity | null {
