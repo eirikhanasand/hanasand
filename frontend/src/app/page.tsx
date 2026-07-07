@@ -132,7 +132,7 @@ type ExposureQueueItem = {
     company: string
     claimedData: string
     claimedDataSize: string
-    country: string
+    country?: string
     claimTime?: string
     collectedAt?: string
     status: string

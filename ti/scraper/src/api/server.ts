@@ -12,7 +12,7 @@ import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./
 import { createCase, createCaseFromDwmAlert, exportCaseActionReplay, exportCaseEvidence, getCaseDetail, getCaseWebhookReplayReadiness, listCaseHandoffActions, listCaseWorkflowTransitions, listCases, recordCaseCustomerNotification, recordCaseHandoffAction, updateCase } from "./caseRoutes.ts";
 import { collectionSchedulerStatus, updateCollectionSchedulerControl } from "./collectionSchedulerStatus.ts";
 import { contractIndex } from "./contractsRoute.ts";
-import { exposureParserHealth, ingestExposureClaims, listExposureQueue } from "./exposureQueueRoutes.ts";
+import { enrichExposureQueueCountries, exposureParserHealth, ingestExposureClaims, listExposureQueue } from "./exposureQueueRoutes.ts";
 import { error, json, numberQuery, page, readJson } from "./http.ts";
 import { handleOrgAlertCaseActionLedgerRequest } from "./orgAlertCaseActionLedgerRoutes.ts";
 import { createOrganization, createOrganizationInvites, createWebhookDestination, disableWebhookDestination, listOrganizationMembers, listOrganizations, listWebhookDestinations, resolveOrganizationScope, testOrganizationWebhook, updateWebhookDestination } from "./organizationRoutes.ts";
@@ -92,6 +92,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/darkweb/status") return json({ status: buildDarkwebIndexStatus({ sources: options.store.listSources(), captures: options.store.listCaptures() } as any) });
     if (url.pathname === "/v1/darkweb/search") return json(searchDarkwebIndex({ query: url.searchParams.get("q") ?? "", sources: options.store.listSources(), captures: options.store.listCaptures(), limit: numberQuery(url.searchParams.get("limit")) ?? 50 } as any));
     if ((url.pathname === "/v1/dwm/exposure-queue" || url.pathname === "/api/dwm/exposure-queue") && request.method === "GET") return listExposureQueue(url, options);
+    if ((url.pathname === "/v1/dwm/exposure-queue/enrich-countries" || url.pathname === "/api/dwm/exposure-queue/enrich-countries") && request.method === "POST") return enrichExposureQueueCountries(request, options);
     if ((url.pathname === "/v1/dwm/exposure-claims/ingest" || url.pathname === "/api/dwm/exposure-claims/ingest") && request.method === "POST") return ingestExposureClaims(request, options);
     if ((url.pathname === "/v1/dwm/exposure-parser/health" || url.pathname === "/api/dwm/exposure-parser/health") && request.method === "GET") return exposureParserHealth();
     if ((url.pathname === "/v1/dwm/product" || url.pathname === "/api/dwm/product") && request.method === "GET") {

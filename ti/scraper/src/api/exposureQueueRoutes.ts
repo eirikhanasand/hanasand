@@ -117,6 +117,34 @@ export async function ingestExposureClaims(request: Request, options: ApiServerO
   });
 }
 
+export async function enrichExposureQueueCountries(request: Request, options: ApiServerOptions) {
+  const body = request.method === "POST" ? await readJson(request).catch(() => ({})) : {};
+  const limit = Math.min(100, Math.max(1, Math.floor(Number(body.limit ?? 25))));
+  const dryRun = body.dryRun === true;
+  const fetcher = typeof options.fetch === "function" ? options.fetch as typeof fetch : fetch;
+  const candidates = exposureCountryBackfillCandidates(options.store).slice(0, limit);
+  const rows: Array<Record<string, unknown>> = [];
+
+  for (const candidate of candidates) {
+    const enrichment = await resolveCompanyCountryFromPublicRecords(candidate.company, fetcher);
+    if (!enrichment.country) {
+      rows.push({ ...candidate, status: "unresolved" });
+      continue;
+    }
+    if (!dryRun) applyCountryEnrichment(options.store, candidate.captureId, enrichment);
+    rows.push({ ...candidate, status: dryRun ? "would_update" : "updated", ...enrichment });
+  }
+
+  return json({
+    schemaVersion: "dwm.exposure_country_enrichment.v1",
+    generatedAt: nowIso(),
+    dryRun,
+    checked: rows.length,
+    updated: rows.filter((row) => row.status === "updated").length,
+    rows
+  });
+}
+
 export async function exposureParserHealth() {
   const base = Bun.env.HANASAND_AI_API_BASE;
   const path = Bun.env.HANASAND_AI_HEALTH_PATH || "/health";
@@ -423,6 +451,139 @@ function exposureClaimFromCapture(capture: any, source?: any) {
     summary: capture.metadata?.safeExcerpt || capture.title || "",
     provenanceHash: hashContent(capture.id)
   };
+}
+
+function exposureCountryBackfillCandidates(store: any) {
+  const rows: Array<{ captureId: string; company: string; actor: string; sourceName: string }> = [];
+  for (const capture of store.listCaptures?.() ?? []) {
+    const source = store.getSource?.(capture.sourceId);
+    if (!shouldShowExposureQueueCapture(capture, source)) continue;
+    const item = exposureClaimFromCapture(capture, source);
+    if (!missingCountry(item.country)) continue;
+    rows.push({ captureId: capture.id, company: item.company, actor: item.actor, sourceName: item.sourceName });
+  }
+  return rows.filter((row) => row.company && row.company !== "Unknown company");
+}
+
+function applyCountryEnrichment(store: any, captureId: string, enrichment: CountryEnrichment) {
+  store.updateCaptureMetadata?.(captureId, (metadata: any) => ({
+    ...metadata,
+    countryEnrichment: {
+      provider: "public_news_records",
+      country: enrichment.country,
+      confidence: enrichment.confidence,
+      evidence: enrichment.evidence,
+      updatedAt: nowIso()
+    },
+    leakSite: {
+      ...(metadata.leakSite ?? {}),
+      claimedCountry: enrichment.country
+    }
+  }));
+}
+
+type CountryEnrichment = { country: string; confidence: number; evidence: Array<{ source: string; title: string; url?: string }> };
+
+export async function resolveCompanyCountryFromPublicRecords(company: string, fetcher: typeof fetch = fetch): Promise<CountryEnrichment> {
+  const records = await publicCountryRecords(company, fetcher);
+  const evidence = records.flatMap((record) => countryEvidenceFromRecord(company, record));
+  const counts = new Map<string, number>();
+  for (const item of evidence) counts.set(item.country, (counts.get(item.country) ?? 0) + 1);
+  const [country, count] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
+  return {
+    country,
+    confidence: country ? Math.min(0.95, count >= 2 ? 0.86 : 0.72) : 0,
+    evidence: evidence.filter((item) => item.country === country).slice(0, 3).map(({ country: _country, ...item }) => item)
+  };
+}
+
+async function publicCountryRecords(company: string, fetcher: typeof fetch) {
+  const query = `"${company}" ("headquartered in" OR "based in" OR "located in" OR "incorporated in")`;
+  const urls = [
+    `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(query)}&mode=ArtList&format=json&maxrecords=10&sort=DateDesc`,
+    `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`
+  ];
+  const responses = await Promise.all(urls.map((url) => fetchText(url, fetcher)));
+  return [
+    ...gdeltRecords(responses[0] ?? ""),
+    ...googleNewsRecords(responses[1] ?? "")
+  ];
+}
+
+async function fetchText(url: string, fetcher: typeof fetch) {
+  try {
+    const response = await fetcher(url, { headers: { "user-agent": "HanasandCountryEnrichment/1.0" }, signal: AbortSignal.timeout(5000) } as RequestInit);
+    return response.ok ? await response.text() : "";
+  } catch {
+    return "";
+  }
+}
+
+function gdeltRecords(text: string) {
+  try {
+    const json = JSON.parse(text);
+    return Array.isArray(json.articles) ? json.articles.map((item: any) => ({ source: "GDELT", title: clean(item.title), url: clean(item.url) })) : [];
+  } catch {
+    return [];
+  }
+}
+
+function googleNewsRecords(xml: string) {
+  return [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)].map(([item]) => ({
+    source: "Google News",
+    title: decodeXml(item.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>|<title>([\s\S]*?)<\/title>/i)?.[1] ?? item.match(/<title>([\s\S]*?)<\/title>/i)?.[1] ?? ""),
+    url: decodeXml(item.match(/<link>([\s\S]*?)<\/link>/i)?.[1] ?? "")
+  }));
+}
+
+function countryEvidenceFromRecord(company: string, record: { source: string; title: string; url?: string }) {
+  const text = clean(record.title);
+  if (!containsCompany(text, company)) return [];
+  return countryNames().flatMap((country) => countryMentionIsCompanyLocation(text, country) ? [{ ...record, country }] : []);
+}
+
+function containsCompany(text: string, company: string) {
+  const normalizedText = simplifyCompanyName(text);
+  const normalizedCompany = simplifyCompanyName(company);
+  return normalizedCompany.length >= 3 && normalizedText.includes(normalizedCompany);
+}
+
+function countryMentionIsCompanyLocation(text: string, country: string) {
+  const c = escapeRegex(country);
+  return new RegExp(`\\b(?:headquartered|based|located|incorporated)\\s+(?:in|at)\\s+(?:the\\s+)?${c}\\b`, "i").test(text)
+    || new RegExp(`\\b${c}\\s*-\\s*based\\b`, "i").test(text)
+    || new RegExp(`\\b(?:${c})\\s+(?:company|firm|business|organization|hospital|school|manufacturer|provider)\\b`, "i").test(text);
+}
+
+let cachedCountryNames: string[] | undefined;
+function countryNames() {
+  if (cachedCountryNames) return cachedCountryNames;
+  const names = new Set(["United States", "United Kingdom", "Norway", "Canada", "Australia", "Germany", "France", "Italy", "Spain", "Netherlands", "Sweden", "Denmark", "Finland", "Ireland", "India", "Japan", "China", "Brazil", "Mexico"]);
+  try {
+    const display = new Intl.DisplayNames(["en"], { type: "region" });
+    for (const code of Intl.supportedValuesOf("region" as any)) {
+      const name = display.of(code);
+      if (name && /^[A-Za-z .'-]+$/.test(name)) names.add(name);
+    }
+  } catch {}
+  cachedCountryNames = [...names].sort((a, b) => b.length - a.length);
+  return cachedCountryNames;
+}
+
+function simplifyCompanyName(value: string) {
+  return value.toLowerCase().replace(/\b(?:inc|llc|ltd|limited|corp|corporation|company|co|group|plc|sa|ag|as|bv|gmbh)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function missingCountry(value: unknown) {
+  return !clean(value) || /^not disclosed by ta$/i.test(clean(value));
+}
+
+function decodeXml(value: string) {
+  return value.replace(/&amp;/g, "&").replace(/&quot;/g, "\"").replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function parseVictimClaimTitle(title: string) {

@@ -259,4 +259,35 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items[0].claimedData).toBe("Corporate data");
     expect(queueBody.items[0].claimedDataSize).toBe("15 GB");
   });
+
+  test("enriches old exposure rows with country from public news records", async () => {
+    const store = new InMemoryScraperStore();
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      port: 0,
+      fetch: async (url: string) => new Response(String(url).includes("gdelt")
+        ? JSON.stringify({ articles: [{ title: "Contoso Energy is a Norway-based company after public breach review", url: "https://news.example.test/contoso-country" }] })
+        : "<rss><channel><item><title>Contoso Energy headquartered in Norway confirms records review</title><link>https://news.example.test/contoso-norway</link></item></channel></rss>")
+    } as any;
+
+    await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ items: [{ sourceName: "Example actor leak monitor", title: "BlackSuit has just published a new victim: Contoso Energy", text: "BlackSuit victim: Contoso Energy. 82 GB claimed.", publishedAt: new Date().toISOString() }] })
+    }), options);
+
+    const enriched = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue/enrich-countries", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ limit: 5 })
+    }), options);
+    const enrichedBody = await enriched.json() as any;
+    expect(enrichedBody.updated).toBe(1);
+    expect(enrichedBody.rows[0].country).toBe("Norway");
+
+    const queue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?country=Norway"), options);
+    const queueBody = await queue.json() as any;
+    expect(queueBody.items[0]).toMatchObject({ company: "Contoso Energy", country: "Norway" });
+  });
 });
