@@ -30,6 +30,15 @@ const overview = await collectDatabaseOverview(async (query) => {
         }
     }
 
+    if (query.includes('FROM pg_stat_user_tables')) {
+        return {
+            rows: [
+                { schema_name: 'public', table_name: 'users', estimated_rows: '12' },
+                { schema_name: 'public', table_name: 'audit_log', estimated_rows: '34' },
+            ],
+        }
+    }
+
     if (query.includes('FROM pg_stat_activity')) {
         activityStartedAfterInventory = inventoryFinished
         return {
@@ -70,6 +79,7 @@ assert.equal(overview.longestQuery?.isLongRunning, true)
 assert.match(overview.longestQuery?.query || '', /token=\[redacted\]/)
 assert.equal(overview.queries[1]?.durationSeconds, 0)
 assert.equal(overview.clusters[0]?.databases[0]?.tableCount, 42)
+assert.deepEqual(overview.clusters[0]?.databases[0]?.tables?.[0], { schema: 'public', name: 'users', estimatedRows: 12 })
 assert.equal(activityStartedAfterInventory, true, 'Activity sampling should run after inventory queries to avoid self-noise.')
 
 const unavailable = await collectDatabaseOverview(async () => {
