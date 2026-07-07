@@ -215,6 +215,7 @@ export default function BrowserPageClient() {
     const [activeFrame, setActiveFrame] = useState<{ width: number; height: number }>({ width: 1280, height: 720 })
     const [activeUrl, setActiveUrl] = useState('')
     const [events, setEvents] = useState<string[]>(['Sandbox ready.'])
+    const [consoleEvents, setConsoleEvents] = useState<string[]>([])
     const [activeSandboxTab, setActiveSandboxTab] = useState('browser')
     const [customProfileName, setCustomProfileName] = useState('')
     const [customToolName, setCustomToolName] = useState('')
@@ -244,6 +245,9 @@ export default function BrowserPageClient() {
     const pushEvent = useCallback((event: string) => {
         setEvents(current => [event, ...current].slice(0, 8))
     }, [])
+    const pushConsoleEvent = useCallback((event: string) => {
+        setConsoleEvents(current => [event, ...current].slice(0, 20))
+    }, [])
 
     const exportReport = useCallback(() => {
         const blob = new Blob([JSON.stringify(buildExportReport({
@@ -255,6 +259,7 @@ export default function BrowserPageClient() {
             summary,
             captures,
             events,
+            consoleEvents,
             capacity,
         }), null, 2)], { type: 'application/json' })
         const url = URL.createObjectURL(blob)
@@ -263,7 +268,7 @@ export default function BrowserPageClient() {
         link.download = `browser-sandbox-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
         link.click()
         URL.revokeObjectURL(url)
-    }, [activeUrl, capacity, captures, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
+    }, [activeUrl, capacity, captures, consoleEvents, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
 
     const saveReport = useCallback(async () => {
         if (!currentRunId || !captures.length) return
@@ -283,6 +288,7 @@ export default function BrowserPageClient() {
                     summary,
                     captures,
                     events,
+                    consoleEvents,
                     capacity,
                 }),
             }),
@@ -296,7 +302,7 @@ export default function BrowserPageClient() {
         if (reportUrl) await navigator.clipboard?.writeText(reportUrl).catch(() => undefined)
         setHistory(current => persistHistory(current.map(run => run.id === currentRunId ? { ...run, reportUrl } : run)))
         setShareStatus(reportUrl ? 'copied' : 'saved')
-    }, [activeUrl, capacity, captures, currentRunId, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
+    }, [activeUrl, capacity, captures, consoleEvents, currentRunId, events, normalizedTarget, selectedProfile, sessionState, socketState, summary])
 
     useEffect(() => {
         let cancelled = false
@@ -430,6 +436,7 @@ export default function BrowserPageClient() {
         setCurrentRunId(id)
         setShareStatus('')
         setCaptures([])
+        setConsoleEvents([])
         setActiveImage(null)
         setActiveUrl(url)
         setActiveSandboxTab('browser')
@@ -557,7 +564,7 @@ export default function BrowserPageClient() {
                 return
             }
             if (payload.type === 'console') {
-                pushEvent(cleanConsoleEvent(stringValue(payload.text)))
+                pushConsoleEvent(cleanConsoleEvent(stringValue(payload.text)))
                 return
             }
             if (payload.type === 'navigation_error' || payload.type === 'error') {
@@ -565,7 +572,7 @@ export default function BrowserPageClient() {
                 pushEvent(String(payload.message || 'Sandbox navigation failed.'))
             }
         }
-    }, [pushEvent, selectedProfile.tools, selectedProfileId, target])
+    }, [pushConsoleEvent, pushEvent, selectedProfile.tools, selectedProfileId, target])
 
     const stopRun = useCallback(() => {
         socketRef.current?.send(JSON.stringify({ type: 'end' }))
@@ -848,7 +855,7 @@ export default function BrowserPageClient() {
                         </aside>
                     </div>
                     <div className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)]'>
-                        <EvidenceWorkspace captures={captures} profile={selectedProfile} summary={summary} events={events} />
+                        <EvidenceWorkspace captures={captures} profile={selectedProfile} summary={summary} events={events} consoleEvents={consoleEvents} />
                         <aside className='grid min-w-0 gap-4'>
                             <AnalystSummary summary={summary} captures={captures} />
                             <CaptureTimeline captures={captures} />
@@ -1105,8 +1112,13 @@ function ProviderRunBadge({ provider, label, result }: { provider: 'virustotal' 
 }
 
 function virustotalRunLabel(label?: string) {
-    if (!label) return '0/? VT'
+    if (!label) return 'VT'
     return /\bVT\b/i.test(label) ? label : `${label} VT`
+}
+
+function virusTotalVendorLabel(analysis: Pick<SandboxToolAnalysis, 'vendorFlagged' | 'vendorTotal'>) {
+    const flagged = analysis.vendorFlagged ?? 0
+    return analysis.vendorTotal ? `${flagged}/${analysis.vendorTotal}` : `${flagged} flagged`
 }
 
 function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity | null; sessionState: SessionState }) {
@@ -1253,11 +1265,13 @@ function EvidenceWorkspace({
     profile,
     summary,
     events,
+    consoleEvents,
 }: {
     captures: Capture[]
     profile: SandboxProfile
     summary: ReturnType<typeof buildAnalystSummary>
     events: string[]
+    consoleEvents: string[]
 }) {
     const pageCaptures = captures.filter(capture => capture.kind === 'page')
     const toolCaptures = captures.filter(capture => capture.kind === 'tool')
@@ -1291,6 +1305,8 @@ function EvidenceWorkspace({
                     <div className='grid gap-2 text-xs text-ui-muted sm:grid-cols-2'>
                         <EvidenceFact label='Final URL' value={summary.urlTimeline.at(-1)?.url || latestPage?.url || 'unknown'} mono />
                         <EvidenceFact label='URL states' value={String(summary.urlTimeline.length || pageCaptures.length || 0)} />
+                        <EvidenceFact label='Redirects' value={String(latestNetwork?.redirectChain?.length || 0)} />
+                        <EvidenceFact label='Contacted domains' value={latestNetwork?.domains?.slice(0, 4).join('  ') || 'none yet'} mono />
                         <EvidenceFact label='DNS / IP / certificate peers' value={String(networkPeerSummary(latestNetwork).length)} />
                         <EvidenceFact label='Network requests' value={String(latestNetwork?.requestCount || 0)} />
                         <EvidenceFact label='Hashed downloads' value={String(latestNetwork?.downloads?.filter(download => download.sha256).length || 0)} />
@@ -1415,10 +1431,20 @@ function EvidenceWorkspace({
                     )}
                 </EvidencePanel>
 
-                <EvidencePanel title='Console logs' status={`${events.length} event${events.length === 1 ? '' : 's'}`}>
+                <EvidencePanel title='Activity' status={`${events.length} event${events.length === 1 ? '' : 's'}`}>
                     <div className='grid gap-1 text-xs text-ui-muted'>
                         {events.slice(0, 6).map(event => <p key={event} className='wrap-break-word'>{event}</p>)}
                     </div>
+                </EvidencePanel>
+
+                <EvidencePanel title='Console logs' status={`${consoleEvents.length} log${consoleEvents.length === 1 ? '' : 's'}`}>
+                    {consoleEvents.length ? (
+                        <div className='grid gap-1 text-xs text-ui-muted'>
+                            {consoleEvents.slice(0, 10).map((event, index) => <p key={`${index}-${event}`} className='wrap-break-word font-mono'>{event}</p>)}
+                        </div>
+                    ) : (
+                        <p className='text-xs leading-5 text-ui-muted'>No console output was emitted by the inspected page.</p>
+                    )}
                 </EvidencePanel>
 
                 <EvidencePanel title='Indicators' status={`${summary.indicators.length} copied-ready`}>
@@ -1573,8 +1599,18 @@ function StatusPill({ label, value, good }: { label: string; value: string; good
 }
 
 function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; capture: Capture }) {
+    if (capture.image) {
+        return (
+            <div className='relative h-full w-full bg-ui-canvas'>
+                <img src={capture.image} alt={`${tool.name} provider screenshot`} className='absolute inset-0 h-full w-full bg-ui-canvas object-contain' />
+                <div className='absolute inset-x-3 bottom-3 max-h-[45%] overflow-auto'>
+                    <ProviderReportDetails tool={tool} capture={capture} compact />
+                </div>
+            </div>
+        )
+    }
     return (
-        <div className='grid h-full place-items-center overflow-auto p-6'>
+        <div className='grid h-full w-full overflow-auto p-4'>
             <ProviderReportDetails tool={tool} capture={capture} />
         </div>
     )
@@ -1583,7 +1619,7 @@ function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; captur
 function ProviderReportDetails({ tool, capture, compact = false }: { tool: SandboxTool; capture: Capture; compact?: boolean }) {
     const analysis = capture.toolAnalysis
     const facts = [
-        analysis?.vendorFlagged !== undefined ? ['Vendors', `${analysis.vendorFlagged}/${analysis.vendorTotal || '?'}`] : undefined,
+        analysis?.vendorFlagged !== undefined ? ['Vendors', virusTotalVendorLabel(analysis)] : undefined,
         analysis?.alertCount !== undefined ? ['urlquery alerts', String(analysis.alertCount)] : undefined,
         analysis?.communityCommentCount !== undefined ? ['Comments', String(analysis.communityCommentCount)] : undefined,
         analysis?.verdict && analysis.verdict !== 'unknown' ? ['Verdict', analysis.verdict] : undefined,
@@ -1597,7 +1633,7 @@ function ProviderReportDetails({ tool, capture, compact = false }: { tool: Sandb
                 <h2 className={`${compact ? 'text-sm' : 'text-lg'} mt-1 font-semibold text-ui-text`}>{tool.name}</h2>
                 <a href={capture.url || tool.url} target='_blank' rel='noreferrer noopener' className='mt-1 block break-all font-mono text-xs text-ui-primary underline-offset-2 hover:underline'>{capture.url || tool.url}</a>
             </div>
-            {capture.image && !compact ? <img src={capture.image} alt={`${tool.name} provider screenshot`} className='max-h-80 w-full rounded border border-ui-border bg-ui-canvas object-contain' /> : null}
+            {capture.image && !compact ? <img src={capture.image} alt={`${tool.name} provider screenshot`} className='max-h-[32rem] w-full rounded border border-ui-border bg-ui-canvas object-contain' /> : null}
             {facts.length ? (
                 <div className='grid gap-2 sm:grid-cols-2'>
                     {facts.map((fact) => Array.isArray(fact)
@@ -1643,7 +1679,7 @@ function providerRunResult(analysis?: SandboxToolAnalysis, error = ''): Provider
     if (!analysis?.toolKind) return null
     if (analysis.toolKind === 'virustotal') {
         const flagged = analysis.vendorFlagged || 0
-        return { status: flagged > 0 ? 'suspicious' : error ? 'blocked' : 'clean', label: `${flagged}/${analysis.vendorTotal || '?'} VT` }
+        return { status: flagged > 0 ? 'suspicious' : error ? 'blocked' : 'clean', label: `${virusTotalVendorLabel(analysis)} VT` }
     }
     if (analysis.toolKind === 'urlquery') {
         const alerts = analysis.alertCount || 0
@@ -1698,6 +1734,7 @@ function buildExportReport(input: {
     summary: ReturnType<typeof buildAnalystSummary>
     captures: Capture[]
     events: string[]
+    consoleEvents: string[]
     capacity: SandboxCapacity | null
 }) {
     return {
@@ -1735,6 +1772,8 @@ function buildExportReport(input: {
             toolAnalysis: capture.toolAnalysis,
             webcrackLoad: capture.webcrackLoad,
         })),
+        activityEvents: input.events,
+        consoleEvents: input.consoleEvents,
         events: input.events,
     }
 }
@@ -1981,7 +2020,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         rows: [
             { label: 'Page captures', value: String(pageCaptures.length) },
             { label: 'Profile tools', value: `${capturedToolCount}/${profile.tools.length}` },
-            { label: 'VirusTotal vendors', value: virusTotal?.vendorFlagged !== undefined ? `${virusTotal.vendorFlagged}/${virusTotal.vendorTotal || '?'}` : 'unknown' },
+            { label: 'VirusTotal vendors', value: virusTotal?.vendorFlagged !== undefined ? virusTotalVendorLabel(virusTotal) : 'unknown' },
             { label: 'urlquery alerts', value: urlquery?.alertCount !== undefined ? String(urlquery.alertCount) : 'unknown' },
             { label: 'Community comments', value: String(Math.max(virusTotal?.communityCommentCount || 0, urlquery?.communityCommentCount || 0, comments.length)) },
             { label: 'Redirect observed', value: redirected ? 'yes' : 'no' },
@@ -2171,7 +2210,7 @@ function providerStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
 
 function providerTabStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (!capture) return 'waiting'
-    if (analysis?.vendorFlagged !== undefined) return `${analysis.vendorFlagged}/${analysis.vendorTotal || '?'} vendors`
+    if (analysis?.vendorFlagged !== undefined) return `${virusTotalVendorLabel(analysis)} vendors`
     if (analysis?.alertCount !== undefined) return `${analysis.alertCount} alerts`
     if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === true) return 'sample loaded'
     if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false) return /no obfuscated script sample/i.test(analysis.webcrackLoadReason || '') ? 'no sample' : 'not loaded'
@@ -2181,7 +2220,7 @@ function providerTabStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
 }
 
 function providerDetail(analysis?: SandboxToolAnalysis, capture?: Capture) {
-    if (analysis?.vendorFlagged !== undefined) return `VirusTotal vendors: ${analysis.vendorFlagged}/${analysis.vendorTotal || '?'}${analysis.communityCommentCount !== undefined ? ` · Community comments: ${analysis.communityCommentCount}` : ''}`
+    if (analysis?.vendorFlagged !== undefined) return `VirusTotal vendors: ${virusTotalVendorLabel(analysis)}${analysis.communityCommentCount !== undefined ? ` · Community comments: ${analysis.communityCommentCount}` : ''}`
     if (analysis?.alertCount !== undefined) return `urlquery alerts: ${analysis.alertCount}${analysis.communityCommentCount !== undefined ? ` · Community comments: ${analysis.communityCommentCount}` : ''}`
     if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false && /no obfuscated script sample/i.test(analysis.webcrackLoadReason || '')) return 'No obfuscated script sample was extracted from this page; WebCrack was not required for this run.'
     if (analysis?.extractedSignals?.length) return analysis.extractedSignals.slice(0, 2).join(' · ')

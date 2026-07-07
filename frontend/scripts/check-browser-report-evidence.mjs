@@ -39,6 +39,9 @@ assertIncludes(liveClient, 'Script hashes', 'live browser workspace must expose 
 assertIncludes(liveClient, 'Copyable indicators', 'live browser workspace must expose IOC count')
 assertIncludes(liveClient, 'aspect-[16/9] w-full', 'live browser viewport must stay full-width 16:9')
 assertIncludes(liveClient, 'No sample needed', 'WebCrack no-sample runs must not look unavailable')
+assertIncludes(liveClient, 'consoleEvents', 'page console output must be separated from broker activity')
+assertIncludes(liveClient, 'title=\'Activity\'', 'broker status messages must render as activity, not console logs')
+assertIncludes(liveClient, 'virusTotalVendorLabel', 'VirusTotal labels must avoid broken 0/? totals')
 
 for (const token of [
     'Browser sandbox report',

@@ -121,7 +121,7 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 {(analystReport.providerReports || []).map(provider => (
                                     <div key={`${provider.tool}-${provider.url}`} className='rounded-md border border-ui-border bg-ui-raised p-3 text-sm'>
                                         <p className='font-semibold'>{provider.tool || 'Provider'} · {provider.status || 'unknown'}</p>
-                                        <p className='mt-1 text-xs text-ui-muted'>{provider.verdict || 'No parsed verdict'}{provider.vendorFlagged !== undefined ? ` · ${provider.vendorFlagged}/${provider.vendorTotal || '?'} vendors` : ''}{provider.alertCount !== undefined ? ` · ${provider.alertCount} alerts` : ''}{provider.screenshotCaptured ? ' · screenshot captured' : ''}</p>
+                                        <p className='mt-1 text-xs text-ui-muted'>{provider.verdict || 'No parsed verdict'}{provider.vendorFlagged !== undefined ? ` · ${providerVendorLabel(provider)} vendors` : ''}{provider.alertCount !== undefined ? ` · ${provider.alertCount} alerts` : ''}{provider.screenshotCaptured ? ' · screenshot captured' : ''}</p>
                                         {provider.url ? <a href={provider.url} target='_blank' rel='noreferrer noopener' className='mt-1 block truncate font-mono text-xs text-ui-primary underline-offset-2 hover:underline'>{provider.url}</a> : null}
                                         {provider.error ? <p className='mt-2 text-xs text-ui-danger'>{provider.error}</p> : null}
                                         {provider.communitySummary ? <p className='mt-2 text-xs leading-5 text-ui-muted'>{provider.communitySummary}</p> : null}
@@ -259,6 +259,11 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
             </section>
         </main>
     )
+}
+
+function providerVendorLabel(provider: { vendorFlagged?: number; vendorTotal?: number }) {
+    const flagged = provider.vendorFlagged ?? 0
+    return provider.vendorTotal ? `${flagged}/${provider.vendorTotal}` : `${flagged} flagged`
 }
 
 function networkPeer(request: NetworkRequestRow) {
