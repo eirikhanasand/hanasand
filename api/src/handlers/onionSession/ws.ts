@@ -1570,6 +1570,8 @@ function officialProviderKind(resolvedUrl: string) {
 
 function providerStartUrl(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string, target: string) {
     const kind = officialProviderKind(resolvedUrl)
+        || (isVirusTotalTool(tool, resolvedUrl) ? 'virustotal' : '')
+        || (isUrlQueryTool(tool, resolvedUrl) ? 'urlquery' : '')
     if (kind === 'virustotal') return `https://www.virustotal.com/gui/url/${virusTotalUrlId(target)}`
     if (kind === 'urlquery') return `https://urlquery.net/api/htmx/search/?limit=24&offset=0&q=${encodeURIComponent(target)}&type=reports`
     return resolvedUrl
