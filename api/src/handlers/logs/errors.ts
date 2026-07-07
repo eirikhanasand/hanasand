@@ -259,11 +259,11 @@ function scannerTrafficProbePredicate() {
 }
 
 function scannerProjectSummaryPredicate() {
-    return `(status_code = 404 AND (error_code = 'project_not_found' OR path ~ '^/api/project/[^/]+$'))`
+    return '(status_code = 404 AND (error_code = \'project_not_found\' OR path ~ \'^/api/project/[^/]+$\'))'
 }
 
 function scannerShareSummaryPredicate() {
-    return `(status_code = 404 AND (error_code = 'share_not_found' OR path ~ '^/api/share(/tree)?/[^/]+$'))`
+    return '(status_code = 404 AND (error_code = \'share_not_found\' OR path ~ \'^/api/share(/tree)?/[^/]+$\'))'
 }
 
 function normalizeFilter(value: string | undefined) {
