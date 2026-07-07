@@ -4,6 +4,7 @@ export type ExposureQueueItem = {
     company: string
     claimedData: string
     claimedDataSize: string
+    country?: string
     claimTime?: string
     collectedAt?: string
     status: string
@@ -52,6 +53,7 @@ export function normalizeExposureQueue(value: unknown): ExposureQueue {
             company: String(item.company || 'Unknown company'),
             claimedData: String(item.claimedData || 'Not disclosed by TA'),
             claimedDataSize: String(item.claimedDataSize || 'Not disclosed by TA'),
+            country: String(item.country || 'Not disclosed by TA'),
             claimTime: typeof item.claimTime === 'string' ? item.claimTime : undefined,
             collectedAt: typeof item.collectedAt === 'string' ? item.collectedAt : undefined,
             status: String(item.status || 'parsed'),

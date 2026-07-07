@@ -160,6 +160,7 @@ async function parseExposureClaim(request) {
   const actor = clean(parsed.actor ?? parsed.threatActor ?? hints.actor ?? item?.actor ?? item?.sourceName ?? "Unknown actor");
   const company = clean(parsed.company ?? parsed.victimName ?? parsed.victim ?? hints.company ?? item?.company ?? item?.victimName ?? "");
   const claimedData = clean(parsed.claimedData ?? parsed.dataClaim ?? hints.claimedData ?? item?.claimedData ?? "new victim claim");
+  const country = clean(parsed.country ?? parsed.claimedCountry ?? hints.country ?? item?.country ?? item?.claimedCountry ?? "");
   const confidence = clamp(Number(parsed.confidence ?? (company && actor !== "Unknown actor" ? 0.84 : 0.66)));
   const summary = clean(parsed.summary ?? hints.summary ?? item?.title ?? "").slice(0, 320);
 
@@ -168,6 +169,7 @@ async function parseExposureClaim(request) {
     company,
     victimName: company,
     claimedData,
+    country,
     claimType: clean(parsed.claimType ?? item?.claimType ?? "ransomware_victim_publication"),
     claimTime: parsed.claimTime ?? item?.publishedAt ?? item?.capturedAt ?? new Date().toISOString(),
     summary,
@@ -185,7 +187,7 @@ async function callToolsAi(item, hints) {
   const prompt = [
     "Parse this public CTI exposure item for a SOC exposure queue.",
     "Return only a JSON object. No markdown.",
-    "Required keys: actor, company, claimedData, claimType, claimTime, summary, confidence.",
+    "Required keys: actor, company, claimedData, country, claimType, claimTime, summary, confidence.",
     "Use metadata-only wording. Do not include leaked content, credentials, private data, or raw file names.",
     "",
     JSON.stringify({ item: compactItem(item), fallbackHints: hints }).slice(0, 5000)
@@ -215,7 +217,7 @@ async function callOpenAi(item, hints) {
   const source = clean(item?.sourceName ?? item?.sourceId ?? item?.sourceUrl ?? item?.url ?? "");
   const prompt = [
     "Extract metadata-only exposure claim fields from this public CTI/news/victim-feed item.",
-    "Return only compact JSON with keys actor, company, claimedData, claimType, claimTime, summary, confidence.",
+    "Return only compact JSON with keys actor, company, claimedData, country, claimType, claimTime, summary, confidence.",
     "Do not include leaked content, credentials, file names, or raw private material.",
     "",
     `source: ${source.slice(0, 240)}`,
@@ -254,10 +256,12 @@ function deterministicHints(item) {
     match(text, /:\s*([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})$/);
   const actor = clean(item?.actor) || match(text, /^([A-Z][A-Za-z0-9_. -]{2,50})\b/) || clean(item?.sourceName) || "Unknown actor";
   const claimedData = clean(item?.claimedData) || match(text, /\b(\d+(?:\.\d+)?\s*(?:GB|TB|MB)\s+(?:claimed|leaked|stolen|exfiltrated|data))/i) || "new victim claim";
+  const country = clean(item?.country ?? item?.claimedCountry) || match(text, /\bcountry\s*:?\s*([A-Z][A-Za-z .'-]{1,60}|[A-Z]{2})\b/i);
   return {
     actor,
     company: victim,
     claimedData,
+    country,
     summary: text.slice(0, 300),
     confidence: victim && actor !== "Unknown actor" ? 0.78 : 0.58
   };
@@ -275,6 +279,8 @@ function compactItem(item) {
     company: item?.company,
     victimName: item?.victimName,
     claimedData: item?.claimedData,
+    country: item?.country,
+    claimedCountry: item?.claimedCountry,
     capturedAt: item?.capturedAt,
     publishedAt: item?.publishedAt
   };

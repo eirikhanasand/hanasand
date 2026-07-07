@@ -17,6 +17,7 @@ type Filters = {
     actor: string
     category: string
     size: string
+    country: string
     from: string
     to: string
 }
@@ -38,7 +39,7 @@ export default function ActivityClient({ initialQueue }: Props) {
         const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
         if (filters.q) params.set('q', filters.q)
         // ponytail: backend only supports q today; these stay in the URL until server-side indexes are worth owning.
-        for (const key of ['company', 'actor', 'category', 'size', 'from', 'to'] as const) {
+        for (const key of ['company', 'actor', 'category', 'size', 'country', 'from', 'to'] as const) {
             if (filters[key]) params.set(key, filters[key])
         }
         const response = await fetch(`/api/dwm/exposure-queue?${params.toString()}`, { cache: 'no-store' })
@@ -132,12 +133,13 @@ export default function ActivityClient({ initialQueue }: Props) {
             </section>
 
             <section className='sticky top-0 z-20 border-b border-ui-border bg-ui-panel/95 px-4 py-3 backdrop-blur md:px-6'>
-                <div className='grid gap-2 lg:grid-cols-[1.1fr_0.9fr_0.9fr_0.9fr_0.9fr_8rem_8rem_auto]'>
+                <div className='grid gap-2 lg:grid-cols-[1.1fr_0.9fr_0.9fr_0.9fr_0.8fr_0.8fr_8rem_8rem_auto]'>
                     <FilterInput icon={<Search className='h-4 w-4' />} label='Search' value={filters.q} onChange={q => setFilters(current => ({ ...current, q }))} placeholder='Any text' />
                     <FilterInput label='Company' value={filters.company} onChange={company => setFilters(current => ({ ...current, company }))} placeholder='Company' />
                     <FilterInput label='Actor' value={filters.actor} onChange={actor => setFilters(current => ({ ...current, actor }))} placeholder='Group' />
-                    <FilterInput label='Category' value={filters.category} onChange={category => setFilters(current => ({ ...current, category }))} placeholder='Database' />
+                    <FilterInput label='Category' value={filters.category} onChange={category => setFilters(current => ({ ...current, category }))} placeholder='Documents' />
                     <FilterInput label='Size' value={filters.size} onChange={size => setFilters(current => ({ ...current, size }))} placeholder='5GB' />
+                    <FilterInput label='Country' value={filters.country} onChange={country => setFilters(current => ({ ...current, country }))} placeholder='Norway' />
                     <DateInput label='From' value={filters.from} onChange={from => setFilters(current => ({ ...current, from }))} />
                     <DateInput label='To' value={filters.to} onChange={to => setFilters(current => ({ ...current, to }))} />
                     <div className='grid gap-1'>
@@ -151,13 +153,14 @@ export default function ActivityClient({ initialQueue }: Props) {
             </section>
 
             <section className='min-h-0 flex-1 overflow-auto'>
-                <div className='min-w-[68rem]'>
-                    <div className='sticky top-0 z-10 grid grid-cols-[8rem_minmax(14rem,1fr)_minmax(14rem,1fr)_12rem_10rem_12rem] gap-3 border-b border-ui-border bg-ui-raised px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted md:px-6'>
+                <div className='min-w-[76rem]'>
+                    <div className='sticky top-0 z-10 grid grid-cols-[8rem_minmax(14rem,1fr)_minmax(14rem,1fr)_12rem_10rem_9rem_12rem] gap-3 border-b border-ui-border bg-ui-raised px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted md:px-6'>
                         <span>Seen</span>
                         <span>Actor</span>
                         <span>Company</span>
                         <span>Data</span>
                         <span>Size</span>
+                        <span>Country</span>
                         <span>Source</span>
                     </div>
                     <div className='divide-y divide-ui-border bg-ui-panel'>
@@ -181,12 +184,13 @@ export default function ActivityClient({ initialQueue }: Props) {
 
 function ActivityRow({ item }: { item: ExposureQueueItem }) {
     return (
-        <div className='grid grid-cols-[8rem_minmax(14rem,1fr)_minmax(14rem,1fr)_12rem_10rem_12rem] items-center gap-3 px-4 py-3 text-sm transition hover:bg-ui-raised md:px-6'>
+        <div className='grid grid-cols-[8rem_minmax(14rem,1fr)_minmax(14rem,1fr)_12rem_10rem_9rem_12rem] items-center gap-3 px-4 py-3 text-sm transition hover:bg-ui-raised md:px-6'>
             <time dateTime={item.claimTime || item.collectedAt} className='text-xs font-semibold text-ui-muted'>{formatClaimTime(item.claimTime || item.collectedAt)}</time>
             <Marquee text={item.actor} innerClassName='font-semibold text-ui-text' />
             <Marquee text={item.company} innerClassName='font-semibold text-ui-text' />
             <Marquee text={item.claimedData} innerClassName='text-ui-muted' />
             <Marquee text={item.claimedDataSize} innerClassName='text-ui-muted' />
+            <Marquee text={item.country || 'Not disclosed by TA'} innerClassName='text-ui-muted' />
             <Marquee text={item.sourceName || 'Exposure source'} innerClassName='text-ui-muted' />
         </div>
     )
@@ -219,17 +223,19 @@ function applyFilters(items: ExposureQueueItem[], filters: Filters) {
     const actor = filters.actor.trim().toLowerCase()
     const category = filters.category.trim().toLowerCase()
     const size = filters.size.trim().toLowerCase()
+    const country = filters.country.trim().toLowerCase()
     const from = filters.from ? Date.parse(`${filters.from}T00:00:00.000Z`) : null
     const to = filters.to ? Date.parse(`${filters.to}T23:59:59.999Z`) : null
 
     return items.filter(item => {
         const time = Date.parse(item.claimTime || item.collectedAt || '')
-        const haystack = [item.actor, item.company, item.claimedData, item.claimedDataSize, item.sourceName].join(' ').toLowerCase()
+        const haystack = [item.actor, item.company, item.claimedData, item.claimedDataSize, item.country, item.sourceName].join(' ').toLowerCase()
         if (q && !haystack.includes(q)) return false
         if (company && !item.company.toLowerCase().includes(company)) return false
         if (actor && !item.actor.toLowerCase().includes(actor)) return false
         if (category && !item.claimedData.toLowerCase().includes(category)) return false
         if (size && !item.claimedDataSize.toLowerCase().includes(size)) return false
+        if (country && !(item.country || '').toLowerCase().includes(country)) return false
         if (from !== null && (!Number.isFinite(time) || time < from)) return false
         if (to !== null && (!Number.isFinite(time) || time > to)) return false
         return true
@@ -243,6 +249,7 @@ function filtersFromUrl(params: URLSearchParams): Filters {
         actor: params.get('actor') || '',
         category: params.get('category') || params.get('data') || '',
         size: params.get('size') || '',
+        country: params.get('country') || '',
         from: params.get('from') || '',
         to: params.get('to') || '',
     }
@@ -257,5 +264,5 @@ function filtersToUrl(filters: Filters) {
 }
 
 function emptyFilters(): Filters {
-    return { q: '', company: '', actor: '', category: '', size: '', from: '', to: '' }
+    return { q: '', company: '', actor: '', category: '', size: '', country: '', from: '', to: '' }
 }

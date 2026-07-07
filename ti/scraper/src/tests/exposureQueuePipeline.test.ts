@@ -9,6 +9,7 @@ describe("DWM exposure queue pipeline", () => {
       sourceName: "Example actor leak monitor",
       title: "BlackSuit has just published a new victim: Contoso Energy",
       text: "BlackSuit victim: Contoso Energy. 82 GB claimed from manufacturing systems.",
+      country: "Norway",
       publishedAt: new Date().toISOString(),
       url: "https://news.example.test/contoso-energy"
     };
@@ -28,7 +29,16 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.status).toBe("live");
     expect(queueBody.items[0].actor).toBe("BlackSuit");
     expect(queueBody.items[0].company).toBe("Contoso Energy");
+    expect(queueBody.items[0].country).toBe("Norway");
     expect(queueBody.items[0].metadataOnly).toBe(true);
+
+    const countryQueue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?country=Norway&category=Documents"), options);
+    const countryQueueBody = await countryQueue.json() as any;
+    expect(countryQueueBody.items).toHaveLength(0);
+
+    const filteredQueue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?country=Norway&size=82"), options);
+    const filteredQueueBody = await filteredQueue.json() as any;
+    expect(filteredQueueBody.items[0]).toMatchObject({ company: "Contoso Energy", country: "Norway" });
 
     const search = await handleApiRequest(new Request("http://local/v1/intel/search?q=Contoso%20Energy"), options);
     expect(search.status).toBe(200);

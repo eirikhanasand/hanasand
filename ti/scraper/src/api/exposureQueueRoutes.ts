@@ -15,6 +15,8 @@ type ExposureClaimItem = {
   victimName?: string;
   claimedData?: string;
   claimedDataSize?: string;
+  country?: string;
+  claimedCountry?: string;
   claimType?: string;
   capturedAt?: string;
   publishedAt?: string;
@@ -27,6 +29,7 @@ type ParsedExposureClaim = ExposureClaimItem & {
   company: string;
   claimedData: string;
   claimedDataSize: string;
+  country: string;
   claimTime: string;
   capturedAt: string;
   confidence: number;
@@ -39,10 +42,10 @@ type ParsedExposureClaim = ExposureClaimItem & {
 export async function listExposureQueue(url: URL, options: ApiServerOptions) {
   const limit = numberQuery(url.searchParams.get("limit")) ?? 25;
   const offset = Math.max(0, Math.floor(numberQuery(url.searchParams.get("offset")) ?? 0));
-  const query = url.searchParams.get("q") ?? "";
+  const filters = exposureQueueFilters(url);
   const at = nowIso();
-  const allItems = exposureClaimsFromStore(options.store, query);
-  const items = exposureClaimsFromStore(options.store, query, { limit, offset });
+  const allItems = exposureClaimsFromStore(options.store, filters);
+  const items = exposureClaimsFromStore(options.store, filters, { limit, offset });
   const latestClaimAt = latestTime(allItems.map((item: any) => item.claimTime));
   const latestCollectedAt = latestTime(allItems.map((item: any) => item.collectedAt));
   const claimAgeMinutes = ageMinutes(at, latestClaimAt);
@@ -110,7 +113,7 @@ export async function ingestExposureClaims(request: Request, options: ApiServerO
       fallbackUsed: parsed.some((claim) => claim.parserMode !== "hanasand-ai")
     },
     captures: accepted.map((capture) => ({ id: capture.id, sourceId: capture.sourceId, collectedAt: capture.collectedAt })),
-    queue: exposureClaimsFromStore(options.store, "", { limit: 25 })
+    queue: exposureClaimsFromStore(options.store, {}, { limit: 25 })
   });
 }
 
@@ -166,8 +169,31 @@ export async function saveExposureClaimFromCollectedItem(store: any, item: any, 
   return saveExposureClaim(store, claim, at);
 }
 
-export function exposureClaimsFromStore(store: any, query = "", options: { limit?: number; offset?: number } = {}) {
-  const needle = query.trim().toLowerCase();
+type ExposureQueueFilters = { q?: string; company?: string; actor?: string; category?: string; size?: string; country?: string; from?: string; to?: string };
+
+function exposureQueueFilters(url: URL): ExposureQueueFilters {
+  return {
+    q: url.searchParams.get("q") ?? "",
+    company: url.searchParams.get("company") ?? "",
+    actor: url.searchParams.get("actor") ?? "",
+    category: url.searchParams.get("category") ?? url.searchParams.get("data") ?? "",
+    size: url.searchParams.get("size") ?? "",
+    country: url.searchParams.get("country") ?? "",
+    from: url.searchParams.get("from") ?? "",
+    to: url.searchParams.get("to") ?? ""
+  };
+}
+
+export function exposureClaimsFromStore(store: any, filters: string | ExposureQueueFilters = "", options: { limit?: number; offset?: number } = {}) {
+  const filter = typeof filters === "string" ? { q: filters } : filters;
+  const needle = String(filter.q ?? "").trim().toLowerCase();
+  const company = String(filter.company ?? "").trim().toLowerCase();
+  const actor = String(filter.actor ?? "").trim().toLowerCase();
+  const category = String(filter.category ?? "").trim().toLowerCase();
+  const size = String(filter.size ?? "").trim().toLowerCase();
+  const country = String(filter.country ?? "").trim().toLowerCase();
+  const from = filter.from ? Date.parse(`${filter.from}T00:00:00.000Z`) : undefined;
+  const to = filter.to ? Date.parse(`${filter.to}T23:59:59.999Z`) : undefined;
   const limit = Number(options.limit ?? 0);
   const boundedLimit = Number.isFinite(limit) && limit > 0 ? Math.min(250, Math.max(1, Math.floor(limit))) : undefined;
   const offset = Math.max(0, Math.floor(Number(options.offset ?? 0)));
@@ -178,7 +204,15 @@ export function exposureClaimsFromStore(store: any, query = "", options: { limit
     if (!(capture?.metadata?.exposureClaim || capture?.metadata?.leakSite || isTrustedVictimFeedCapture(capture, source))) continue;
     if (!shouldShowExposureQueueCapture(capture, source)) continue;
     const item = exposureClaimFromCapture(capture, source);
-    if (needle && ![item.actor, item.company, item.claimedData, item.sourceName, item.summary].join(" ").toLowerCase().includes(needle)) continue;
+    const time = epoch(item.claimTime ?? item.collectedAt);
+    if (needle && ![item.actor, item.company, item.claimedData, item.claimedDataSize, item.country, item.sourceName, item.summary].join(" ").toLowerCase().includes(needle)) continue;
+    if (company && !item.company.toLowerCase().includes(company)) continue;
+    if (actor && !item.actor.toLowerCase().includes(actor)) continue;
+    if (category && !item.claimedData.toLowerCase().includes(category)) continue;
+    if (size && !item.claimedDataSize.toLowerCase().includes(size)) continue;
+    if (country && !item.country.toLowerCase().includes(country)) continue;
+    if (from !== undefined && (!time || time < from)) continue;
+    if (to !== undefined && (!time || time > to)) continue;
     items.push(item);
   }
 
@@ -248,6 +282,7 @@ function saveExposureClaim(store: any, claim: any, at: string) {
         victimName: claim.company,
         claimedDataCategory: claim.claimedData || "Not disclosed by TA",
         claimedDataSize: claim.claimedDataSize || "Not disclosed by TA",
+        claimedCountry: claim.country || "Not disclosed by TA",
         firstSeenAt: claimTime,
         claimType: claim.claimType || "ransomware_victim_publication"
       },
@@ -270,6 +305,7 @@ async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<
     company: clean(parsed.company || parsed.victimName || item.company || item.victimName || ""),
     claimedData: clean(parsed.claimedData || item.claimedData || "Not disclosed by TA"),
     claimedDataSize: clean(parsed.claimedDataSize || item.claimedDataSize || dataSizeFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"),
+    country: clean(parsed.country || parsed.claimedCountry || item.country || item.claimedCountry || countryFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"),
     claimTime: parsed.claimTime || item.publishedAt || item.capturedAt || at,
     capturedAt: item.capturedAt || at,
     confidence,
@@ -304,12 +340,14 @@ function fallbackParse(item: ExposureClaimItem, at: string) {
   const actor = item.actor || match(text, /^([A-Z][A-Za-z0-9_.-]{2,40})\b/) || item.sourceName || "Unknown actor";
   const claimedData = meaningfulClaimedData(item.claimedData) || claimedDataFromText(text) || "Not disclosed by TA";
   const claimedDataSize = item.claimedDataSize || dataSizeFromText(text) || "Not disclosed by TA";
+  const country = item.country || item.claimedCountry || countryFromText(text) || "Not disclosed by TA";
   const confidence = victim && actor !== "Unknown actor" ? 0.78 : 0.58;
   return {
     actor,
     company: victim,
     claimedData,
     claimedDataSize,
+    country,
     claimTime: item.publishedAt || item.capturedAt || at,
     summary: text.slice(0, 300),
     confidence
@@ -373,6 +411,7 @@ function exposureClaimFromCapture(capture: any, source?: any) {
     company: leak.victimName || capture.metadata?.victimName || parsedTitle?.company || "Unknown company",
     claimedData: meaningfulClaimedData(leak.claimedDataCategory) || claimedDataFromText(text) || "Not disclosed by TA",
     claimedDataSize: leak.claimedDataSize || leak.dataSize || dataSizeFromText(text) || "Not disclosed by TA",
+    country: clean(leak.claimedCountry || leak.country || capture.metadata?.country || countryFromText(text) || "Not disclosed by TA"),
     claimType: leak.claimType || "ransomware_victim_publication",
     claimTime: firstSeen,
     collectedAt: capture.collectedAt,
@@ -434,6 +473,10 @@ function claimedDataFromText(text: string) {
 function dataSizeFromText(text: string) {
   const found = text.match(/\b(\d+(?:\.\d+)?)\s*(GB|TB|MB)\b/i);
   return found ? clean(`${found[1]} ${found[2].toUpperCase()}`) : "";
+}
+
+function countryFromText(text: string) {
+  return match(text, /\bcountry\s*:?\s*([A-Z][A-Za-z .'-]{1,60}|[A-Z]{2})\b/i);
 }
 
 function meaningfulClaimedData(value: unknown) {
