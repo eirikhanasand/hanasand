@@ -286,7 +286,7 @@ function RestoreProof({ proof }: { proof: BackupPresentation['restoreProof'] }) 
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <p className='text-sm font-semibold text-ui-text'>Restore actions</p>
                 <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${proof.state === 'ready' ? 'border-ui-success bg-ui-success/15 text-ui-success' : 'border-ui-warning bg-ui-warning/15 text-ui-warning'}`}>
-                    {proof.state === 'ready' ? 'Ready' : 'Review'}
+                    {proof.state === 'ready' ? 'Ready' : 'Run backup'}
                 </span>
             </div>
             <div className='mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4'>
@@ -294,7 +294,7 @@ function RestoreProof({ proof }: { proof: BackupPresentation['restoreProof'] }) 
                     <div key={check.id} className='rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs'>
                         <p className='font-semibold uppercase text-ui-muted'>{check.label}</p>
                         <p className='mt-1 wrap-break-word text-ui-text'>{check.value}</p>
-                        <p className={`mt-1 font-semibold ${check.state === 'ready' ? 'text-ui-success' : check.state === 'needs_action' ? 'text-ui-warning' : 'text-ui-muted'}`}>{check.state === 'needs_action' ? 'review' : check.state}</p>
+                        <p className={`mt-1 font-semibold ${check.state === 'ready' ? 'text-ui-success' : check.state === 'needs_action' ? 'text-ui-warning' : 'text-ui-muted'}`}>{check.state === 'needs_action' ? 'run backup' : check.state}</p>
                     </div>
                 ))}
             </div>
