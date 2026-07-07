@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { Activity, Database, PlayCircle, Search } from 'lucide-react'
+import { Activity, PlayCircle, Search } from 'lucide-react'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
 import type { DatabaseOverview, DatabaseQueryResult } from '@/utils/db/internal'
 import { databaseHealthAction, databaseRowsAction, databaseSqlAction } from './actions'
