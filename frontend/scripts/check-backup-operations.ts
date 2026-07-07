@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises'
 import { presentBackup, presentBackupLoadError, redactBackupDetails } from '../src/app/dashboard/db/backups/backupPresentation.ts'
 
 const backupPage = await readFile(new URL('../src/app/dashboard/db/backups/backupPage.tsx', import.meta.url), 'utf8')
+const restoreClient = await readFile(new URL('../src/app/dashboard/db/restore/restoreClient.tsx', import.meta.url), 'utf8')
+const restorePage = await readFile(new URL('../src/app/dashboard/db/restore/page.tsx', import.meta.url), 'utf8')
 const routePage = await readFile(new URL('../src/app/dashboard/db/backups/page.tsx', import.meta.url), 'utf8')
 const legacyRedirect = await readFile(new URL('../src/app/dashboard/backup/page.tsx', import.meta.url), 'utf8')
 const frontendApi = await readFile(new URL('../src/utils/db/internal.ts', import.meta.url), 'utf8')
@@ -102,5 +104,9 @@ assert.match(backupPage, /return 'Never'/, 'missing last backup should render as
 assert.match(backupPage, /return 'No schedule configured'/, 'missing next backup should render as a configured-state message')
 assert.doesNotMatch(backupPage, /password authentication failed for user/, 'main UI should not hard-code raw postgres auth errors')
 assert.match(legacyRedirect, /redirect\('\/dashboard\/db\/backups'\)/, '/dashboard/backup should land on the backup operations page')
+assert.match(restorePage, /loadError=\{typeof backups === 'string' \? backups : ''\}/, 'restore page should preserve backup file index errors')
+assert.match(restoreClient, /triggerBackupAction/, 'restore page should create a backup when the index is empty')
+assert.match(restoreClient, /router\.refresh\(\)/, 'restore page should refresh the restore index after backup creation')
+assert.match(restoreClient, /Run backup now/, 'restore empty state should expose the backup action directly')
 
 console.log('Backup operations checks passed.')

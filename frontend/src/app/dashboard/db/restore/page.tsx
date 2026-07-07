@@ -13,7 +13,7 @@ export default async function DatabaseRestorePage({
     return (
         <DashboardPage>
             <DashboardHeader eyebrow='Operations' title='Restore Backup' />
-            <RestoreClient backups={typeof backups === 'string' ? [] : backups} />
+            <RestoreClient backups={typeof backups === 'string' ? [] : backups} loadError={typeof backups === 'string' ? backups : ''} />
         </DashboardPage>
     )
 }

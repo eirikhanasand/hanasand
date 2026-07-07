@@ -3,8 +3,7 @@
 import { useMemo, useState, useTransition } from 'react'
 import { RotateCcw, Search, X } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
-import { restoreBackupAction } from '../actions'
+import { restoreBackupAction, triggerBackupAction } from '../actions'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
 import type { BackupFile } from '@/utils/db/internal'
 
@@ -16,7 +15,7 @@ function formatDate(value?: string | null) {
     return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
-export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
+export default function RestoreClient({ backups, loadError = '' }: { backups: BackupFile[], loadError?: string }) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -49,18 +48,22 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
         return Number.isFinite(backupTime) && backupTime > safeNewestTime ? backup : newest
     }, null), [groupedBackups])
     const activeFilterCount = Number(Boolean(serviceFilter)) + Number(Boolean(dateFilter))
-    const primaryTitle = groupedBackups.length
-        ? 'Select a restore point'
-        : activeFilterCount
-            ? 'No restore points match the filters'
-            : 'Restore index is empty'
-    const primaryDetail = groupedBackups.length
-        ? `${groupedBackups.length} restore point${groupedBackups.length === 1 ? '' : 's'} across ${serviceCount} service${serviceCount === 1 ? '' : 's'}. Newest file: ${newestBackup?.file || 'syncing'}.`
-        : activeFilterCount
-            ? 'Clear filters or adjust the service/date search to widen the restore set.'
-            : 'Restore files appear here after the backup service indexes a verified file. If none exist, return to Backup and create one.'
+    const primaryTitle = loadError
+        ? 'Restore index unavailable'
+        : groupedBackups.length
+            ? 'Select a restore point'
+            : activeFilterCount
+                ? 'No restore points match the filters'
+                : 'Restore index is empty'
+    const primaryDetail = loadError
+        ? loadError.replace(/^Error:\s*/i, '')
+        : groupedBackups.length
+            ? `${groupedBackups.length} restore point${groupedBackups.length === 1 ? '' : 's'} across ${serviceCount} service${serviceCount === 1 ? '' : 's'}. Newest file: ${newestBackup?.file || 'syncing'}.`
+            : activeFilterCount
+                ? 'Clear filters or adjust the service/date search to widen the restore set.'
+                : 'No indexed restore file exists yet. Run backup now to create one.'
     const primaryHref = groupedBackups.length ? '#restore-points' : activeFilterCount ? '#restore-filters' : '/dashboard/db/backups'
-    const primaryActionLabel = groupedBackups.length ? 'Review restore points' : activeFilterCount ? 'Adjust filters' : 'Open backup health'
+    const primaryActionLabel = groupedBackups.length ? 'Review restore points' : activeFilterCount ? 'Adjust filters' : 'Run backup now'
 
     function updateParam(key: string, value: string) {
         const params = new URLSearchParams(searchParams.toString())
@@ -86,6 +89,14 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
         })
     }
 
+    function handleRunBackup() {
+        startTransition(async () => {
+            const response = await triggerBackupAction()
+            setMessage(typeof response === 'string' ? response.replace(/^Error:\s*/i, '') : response.message)
+            router.refresh()
+        })
+    }
+
     return (
         <div className='grid gap-4'>
             <section className={`${dashboardPanelClass} grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center`} data-restore-primary-flow>
@@ -98,13 +109,25 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                     <h2 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h2>
                     <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
                 </div>
-                <a
-                    href={primaryHref}
-                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
-                    data-restore-primary-action
-                >
-                    {primaryActionLabel}
-                </a>
+                {groupedBackups.length || activeFilterCount ? (
+                    <a
+                        href={primaryHref}
+                        className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
+                        data-restore-primary-action
+                    >
+                        {primaryActionLabel}
+                    </a>
+                ) : (
+                    <button
+                        type='button'
+                        onClick={handleRunBackup}
+                        disabled={isPending}
+                        className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 disabled:opacity-60 sm:w-auto'
+                        data-restore-primary-action
+                    >
+                        {isPending ? 'Running backup...' : primaryActionLabel}
+                    </button>
+                )}
             </section>
 
             <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' open={activeFilterCount > 0} id='restore-filters' data-restore-filters-disclosure>
@@ -203,7 +226,7 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                         {activeFilterCount > 0 ? (
                             <p className='mt-1 text-sm text-ui-muted'>No matches found. Clear filters or return to Backup to create a verified restore point.</p>
                         ) : (
-                            <p className='mt-1 text-sm text-ui-muted'>No verified files are available. Run a backup first, then come back to restore from it.</p>
+                            <p className='mt-1 text-sm text-ui-muted'>No verified files are available. Run backup now to create and index one.</p>
                         )}
 
                         {activeFilterCount > 0 ? (
@@ -216,12 +239,14 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                                 Clear filters
                             </button>
                         ) : (
-                            <Link
-                                href='/dashboard/db/backups'
-                                className='mt-3 inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'
+                            <button
+                                type='button'
+                                onClick={handleRunBackup}
+                                disabled={isPending}
+                                className='mt-3 inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 disabled:opacity-60'
                             >
-                                Open backup health
-                            </Link>
+                                {isPending ? 'Running backup...' : 'Run backup now'}
+                            </button>
                         )}
                     </article>
                 )}
