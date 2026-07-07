@@ -142,7 +142,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     const visible = result
 
     return (
-        <div className={visible ? 'mx-auto grid w-full max-w-7xl gap-6' : 'mx-auto grid min-h-[calc(100vh-9rem)] w-full max-w-[45rem] place-content-center gap-5 py-10'}>
+        <div className={visible ? 'mx-auto grid w-full max-w-7xl gap-6' : 'mx-auto grid min-h-[calc(100vh-9rem)] w-full max-w-180 place-content-center gap-5 py-10'}>
             <form onSubmit={submit} className={visible ? 'grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm md:p-3' : 'grid gap-3'}>
                 {!visible ? (
                     <div className='text-center'>
@@ -9102,7 +9102,7 @@ function EmptyState() {
                 </Link>
             </div>
             {showSearchHelp ? (
-                <div className='fixed inset-0 z-[1100] grid place-items-center bg-black/45 px-4 py-6' role='dialog' aria-modal='true' aria-labelledby='ti-search-help-title'>
+                <div className='fixed inset-0 z-1100 grid place-items-center bg-black/45 px-4 py-6' role='dialog' aria-modal='true' aria-labelledby='ti-search-help-title'>
                     <div className='absolute inset-0' onClick={() => setShowSearchHelp(false)} aria-hidden='true' />
                     <div className='relative grid w-full max-w-2xl gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 text-left shadow-2xl dark:border-ui-border dark:bg-ui-panel'>
                         <div className='flex items-start justify-between gap-3'>
