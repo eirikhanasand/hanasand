@@ -794,6 +794,7 @@ export default function BrowserPageClient() {
                         <section className='grid overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
                             <SandboxTabStrip
                                 activeTab={activeSandboxTab}
+                                sessionState={sessionState}
                                 tools={selectedProfile.tools}
                                 toolCaptures={toolCaptures}
                                 onSelect={setActiveSandboxTab}
@@ -859,11 +860,13 @@ export default function BrowserPageClient() {
 
 function SandboxTabStrip({
     activeTab,
+    sessionState,
     tools,
     toolCaptures,
     onSelect,
 }: {
     activeTab: string
+    sessionState: SessionState
     tools: SandboxTool[]
     toolCaptures: Capture[]
     onSelect: (tab: string) => void
@@ -873,7 +876,7 @@ function SandboxTabStrip({
             <SandboxTabButton
                 active={activeTab === 'browser'}
                 label='Browser'
-                status='live frame'
+                status={sessionState === 'live' ? 'live frame' : sessionState === 'ended' ? 'captured frame' : sessionStateLabel(sessionState)}
                 onClick={() => onSelect('browser')}
             />
             {tools.map(tool => {
