@@ -19,6 +19,7 @@ type Test = {
     timeout: number
     stages: object & { default: boolean }
     status: string
+    queue_position?: number
     logs: object[]
     errors: object[]
     duration: { milliseconds: number }
@@ -27,6 +28,7 @@ type Test = {
     exit_code: number
     visits: number
     summary: any
+    started_at?: string
     latest_run_summary?: any
     previous_run_summary?: any
     latest_run_number?: number

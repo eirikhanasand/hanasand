@@ -1,5 +1,6 @@
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
+import { getOrCreateLoadTestClientId } from './postTest'
 
 export async function fetchRecentTests(scope: 'recent' | 'mine', limit = 12): Promise<Test[]> {
     const controller = new AbortController()
@@ -8,12 +9,10 @@ export async function fetchRecentTests(scope: 'recent' | 'mine', limit = 12): Pr
     try {
         const headers: Record<string, string> = {}
         const id = getCookie('id')
-        if (scope === 'mine' && !id) {
-            return []
-        }
-
         if (scope === 'mine' && id) {
             headers.id = id
+        } else if (scope === 'mine') {
+            headers['x-load-test-client-id'] = getOrCreateLoadTestClientId()
         }
 
         const response = await fetch(`${config.url.api}/tests/${scope === 'mine' ? 'mine' : 'recent'}?limit=${limit}`, {

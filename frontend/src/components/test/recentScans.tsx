@@ -66,6 +66,9 @@ export default function RecentScans({ title, readyMessage, scans, mine = false, 
                                     <div className={`mt-2 flex min-w-0 flex-wrap items-center gap-2 text-xs ${mutedClass}`}>
                                         <span className={`inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border px-2 py-1 ${badgeClass}`}><Fingerprint className='h-3.5 w-3.5 shrink-0' /> <span className='min-w-0 break-all'>{scan.id}</span></span>
                                         <StatusPill status={scan.status} surface={surface} />
+                                        {scan.status.toLowerCase() === 'queued' && typeof scan.queue_position === 'number' && scan.queue_position > 0 && (
+                                            <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 ${badgeClass}`}>#{scan.queue_position} queued</span>
+                                        )}
                                         <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 ${badgeClass}`}><Eye className='h-3.5 w-3.5 shrink-0' /> {scan.visits}</span>
                                         {mine && <span className='flex items-center gap-1'><UserRound className='h-3.5 w-3.5 shrink-0' /> mine</span>}
                                     </div>

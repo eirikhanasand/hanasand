@@ -27,6 +27,7 @@ import putArticle from './handlers/articles/put.ts'
 import getTest from './handlers/test/get.ts'
 import postTest from './handlers/test/post.ts'
 import rerunTest from './handlers/test/rerun.ts'
+import { startLoadTestQueue } from './handlers/test/follow.ts'
 import { getMyRecentTests, getRecentTests } from './handlers/test/list.ts'
 import restartHandler from './handlers/restart/getRestart.ts'
 import getRoles from './handlers/roles/getRoles.ts'
@@ -213,6 +214,7 @@ import { getBrowserRunReport, getBrowserRuns, postBrowserRunReport } from './han
  */
 export default async function apiRoutes(fastify: FastifyInstance, options: FastifyPluginOptions) {
     void options
+    startLoadTestQueue()
 
     // Index handler
     fastify.get('/', indexHandler)

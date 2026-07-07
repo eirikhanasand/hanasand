@@ -1,8 +1,10 @@
 import run from '#db'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { createHash } from 'node:crypto'
+import { enqueueLoadTestRun } from './follow.ts'
 
 const freeLoadTestLimit = 5
+const defaultStages: Stage[] = [{ duration: '30s', target: 1 }]
 
 type BodyProps = {
     url: string
@@ -26,6 +28,8 @@ export default async function postTest(req: FastifyRequest, res: FastifyReply) {
     if (!targetUrl) {
         return res.status(400).send({ error: 'Only http and https urls can be tested.' })
     }
+    const safeStages = normalizeStages(stages)
+    const safeTimeout = normalizeTimeout(timeout)
 
     const quota = await getLoadTestQuota(req, ownerId)
     if (quota.remaining <= 0) {
@@ -45,17 +49,17 @@ export default async function postTest(req: FastifyRequest, res: FastifyReply) {
         placeholders.push(`$${values.length}`)
     }
 
-    if (timeout !== undefined) {
-        fields.push('timeout')
-        values.push(timeout)
-        placeholders.push(`$${values.length}`)
-    }
+    fields.push('timeout')
+    values.push(safeTimeout)
+    placeholders.push(`$${values.length}`)
 
-    if (stages !== undefined && stages !== null) {
-        fields.push('stages')
-        values.push(JSON.stringify(stages))
-        placeholders.push(`$${values.length}`)
-    }
+    fields.push('stages')
+    values.push(JSON.stringify(safeStages))
+    placeholders.push(`$${values.length}`)
+
+    fields.push('status')
+    values.push('queued')
+    placeholders.push(`$${values.length}`)
 
     const sql = `
         INSERT INTO load_tests (${fields.join(', ')})
@@ -64,8 +68,11 @@ export default async function postTest(req: FastifyRequest, res: FastifyReply) {
     `
 
     const result = await run(sql, values)
+    const test = result.rows[0]
+    await enqueueLoadTestRun(test.id)
+    const queued = await run('SELECT * FROM load_tests WHERE id = $1', [test.id])
     return res.send({
-        ...result.rows[0],
+        ...queued.rows[0],
         quota: {
             ...quota,
             used: quota.used + 1,
@@ -85,6 +92,24 @@ function normalizeUrl(url: string) {
     } catch {
         return null
     }
+}
+
+export function normalizeTimeout(value: unknown) {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric) || numeric <= 0) return 30
+    const seconds = numeric > 1000 ? Math.ceil(numeric / 1000) : numeric
+    return Math.min(Math.max(Math.round(seconds), 1), 120)
+}
+
+export function normalizeStages(value: unknown) {
+    if (!Array.isArray(value)) return defaultStages
+    const stages = value
+        .map((stage) => ({
+            duration: typeof stage?.duration === 'string' && /^\d+[smh]$/.test(stage.duration.trim()) ? stage.duration.trim() : '',
+            target: Number(stage?.target),
+        }))
+        .filter((stage) => stage.duration && Number.isInteger(stage.target) && stage.target >= 0 && stage.target <= 100)
+    return stages.length ? stages.slice(0, 8) : defaultStages
 }
 
 async function getLoadTestQuota(req: FastifyRequest, ownerId: string | undefined) {

@@ -73,6 +73,8 @@ export default function LoadTestingOperations() {
     }, [])
 
     const allScans = useMemo(() => dedupeScans([...myScans, ...recentScans]), [myScans, recentScans])
+    const queuedScans = allScans.filter(scan => scan.status.toLowerCase() === 'queued')
+    const runningScans = allScans.filter(scan => scan.status.toLowerCase() === 'running')
     const activeScans = allScans.filter(scan => !['done', 'failed', 'error'].includes(scan.status.toLowerCase()))
     const failedScans = allScans.filter(scan => ['failed', 'error'].includes(scan.status.toLowerCase()))
     const latest = allScans[0]
@@ -171,7 +173,8 @@ export default function LoadTestingOperations() {
                     </div>
                     <aside className='grid content-start gap-3 border-t border-ui-border bg-ui-raised p-4 lg:border-l lg:border-t-0'>
                         <h3 className='text-sm font-semibold text-ui-text'>Operations snapshot</h3>
-                        <SnapshotRow icon={<Activity className='h-4 w-4' />} label='Now' value={activeScans.length ? `${activeScans.length} running` : 'No active checks'} tone={activeScans.length ? 'watch' : 'ok'} />
+                        <SnapshotRow icon={<Activity className='h-4 w-4' />} label='Now' value={runningScans.length ? `${runningScans.length} running` : 'No active checks'} tone={runningScans.length ? 'watch' : 'ok'} />
+                        <SnapshotRow icon={<Gauge className='h-4 w-4' />} label='Queue' value={queuedScans.length ? `${queuedScans.length} waiting` : 'Clear'} tone={queuedScans.length ? 'watch' : 'ok'} />
                         <SnapshotRow icon={<CheckCircle2 className='h-4 w-4' />} label='History' value={allScans.length ? `${allScans.length} recent` : 'No runs yet'} tone='neutral' />
                         <SnapshotRow icon={<Gauge className='h-4 w-4' />} label='Latest p95' value={p95 ? `${p95}ms` : 'Waiting for a run'} tone={p95 && p95 > 1000 ? 'watch' : 'ok'} />
                         <SnapshotRow icon={<AlertTriangle className='h-4 w-4' />} label='Failures' value={failedScans.length ? String(failedScans.length) : 'Clear'} tone={failedScans.length ? 'bad' : 'ok'} />
@@ -186,6 +189,50 @@ export default function LoadTestingOperations() {
                             </div>
                         </details>
                     </aside>
+                </div>
+            </DashboardPanel>
+
+            <DashboardPanel className='overflow-hidden rounded-lg border-ui-border bg-ui-panel p-0 shadow-sm'>
+                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-4 py-3'>
+                    <div>
+                        <h2 className='text-base font-semibold text-ui-text'>Run management</h2>
+                        <p className='mt-1 text-sm text-ui-subtle'>Queued and running checks from the persisted load-test lane.</p>
+                    </div>
+                    <div className='flex flex-wrap gap-2 text-xs font-semibold text-ui-muted'>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2.5 py-1'>{queuedScans.length} queued</span>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2.5 py-1'>{runningScans.length} running</span>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2.5 py-1'>{selectedScenario.label} selected</span>
+                    </div>
+                </div>
+                <div className='overflow-x-auto'>
+                    <table className='min-w-full divide-y divide-ui-border text-sm'>
+                        <thead className='bg-ui-panel text-left text-xs font-semibold uppercase text-ui-muted'>
+                            <tr>
+                                <th className='px-4 py-3'>Status</th>
+                                <th className='px-4 py-3'>Target</th>
+                                <th className='px-4 py-3'>Queue</th>
+                                <th className='px-4 py-3'>p95</th>
+                                <th className='px-4 py-3 text-right'>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className='divide-y divide-ui-border bg-ui-panel'>
+                            {activeScans.length ? activeScans.map((scan) => (
+                                <tr key={scan.id} className='hover:bg-ui-raised'>
+                                    <td className='px-4 py-3 font-semibold text-ui-text'>{scan.status}</td>
+                                    <td className='max-w-[28rem] truncate px-4 py-3 text-ui-muted'>{scan.url}</td>
+                                    <td className='px-4 py-3 text-ui-muted'>{scan.status.toLowerCase() === 'queued' ? `#${scan.queue_position || 1}` : 'running'}</td>
+                                    <td className='px-4 py-3 text-ui-muted'>{latestP95(scan) ? `${latestP95(scan)}ms` : 'collecting'}</td>
+                                    <td className='px-4 py-3 text-right'>
+                                        <Link href={`/test/${scan.id}`} className='inline-flex h-8 items-center justify-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>Open</Link>
+                                    </td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan={5} className='px-4 py-8 text-center text-sm text-ui-muted'>No queued or running checks.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </DashboardPanel>
 

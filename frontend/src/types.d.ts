@@ -255,10 +255,12 @@ type Test = {
     timeout: number
     stages: object & { default: boolean }
     status: string
+    queue_position?: number
     logs: string[]
     errors: string[]
     duration: { milliseconds: number }
     created_at: string
+    started_at?: string
     finished_at: string
     exit_code: number
     visits: number

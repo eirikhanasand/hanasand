@@ -1,5 +1,6 @@
 import run from '#db'
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import { createHash } from 'node:crypto'
 
 type QueryProps = {
     limit?: string
@@ -21,15 +22,14 @@ export async function getMyRecentTests(req: FastifyRequest, res: FastifyReply) {
     res.header('Cache-Control', 'no-store')
     const ownerId = req.headers.id as string | undefined
     const { limit } = (req.query as QueryProps) ?? {}
-    if (!ownerId) {
-        return res.status(400).send({ error: 'Missing user id.' })
-    }
+    const quotaIdentity = ownerId ? null : anonymousQuotaIdentity(req)
+    if (!ownerId && !quotaIdentity) return res.status(400).send({ error: 'Missing user id.' })
 
     const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50)
     const result = await run(
-        `${selectRecentTestsSql('WHERE tests.owner_id = $1')}
+        `${selectRecentTestsSql(ownerId ? 'WHERE tests.owner_id = $1' : 'WHERE tests.quota_identity = $1')}
          LIMIT $2`,
-        [ownerId, safeLimit]
+        [ownerId || quotaIdentity, safeLimit]
     )
     return res.send(result.rows)
 }
@@ -68,4 +68,23 @@ function selectRecentTestsSql(where = '') {
         ${where}
         ORDER BY tests.created_at DESC
     `
+}
+
+function anonymousQuotaIdentity(req: FastifyRequest) {
+    const clientId = headerValue(req.headers['x-load-test-client-id'])
+    if (!clientId) return null
+    return `anon:${createHash('sha256').update([
+        clientId,
+        clientIp(req),
+        headerValue(req.headers['user-agent']),
+    ].join('|')).digest('hex').slice(0, 32)}`
+}
+
+function headerValue(value: string | string[] | undefined) {
+    return Array.isArray(value) ? value[0] || '' : value || ''
+}
+
+function clientIp(req: FastifyRequest) {
+    const forwarded = headerValue(req.headers['x-forwarded-for'])
+    return forwarded.split(',')[0]?.trim() || req.ip || 'unknown'
 }

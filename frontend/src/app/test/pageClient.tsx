@@ -26,6 +26,7 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
     const [freeTriesUsed, setFreeTriesUsed] = useState(0)
     const [loadTestQuota, setLoadTestQuota] = useState<LoadTestQuota | null>(null)
     const [scenarioId, setScenarioId] = useState(scenarioPresets[0].id)
+    const [isStarting, setIsStarting] = useState(false)
     const selectedScenario = scenarioPresets.find((scenario) => scenario.id === scenarioId) ?? scenarioPresets[0]
     const fullUrl = `${config.url.link}/${serverId}`
     const remainingChecks = loadTestQuota?.remaining ?? Math.max(0, freeTryLimit - freeTriesUsed)
@@ -65,6 +66,7 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
     }
 
     async function startCheck() {
+        if (isStarting) return
         setError(null)
 
         const url = normalizeEndpoint(path)
@@ -73,7 +75,9 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
             return
         }
 
+        setIsStarting(true)
         const result = await postTest({ url, timeout: selectedScenario.timeout, stages: selectedScenario.stages })
+        setIsStarting(false)
         if (!result.ok) {
             if (result.quota) {
                 setLoadTestQuota(result.quota)
@@ -186,9 +190,9 @@ export default function TestPageClient({ serverId, created, missingTestId }: { s
                             <CompactFact icon={<BarChart3 className='h-3.5 w-3.5' />} label='logs and result link' />
                         </div>
 
-                        <button type='submit' className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:bg-ui-primary/90'>
+                        <button type='submit' disabled={isStarting} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:bg-ui-primary/90 disabled:cursor-not-allowed disabled:opacity-70'>
                             <Search className='h-4 w-4' />
-                            Start check
+                            {isStarting ? 'Queueing check' : 'Start check'}
                         </button>
                     </form>
 

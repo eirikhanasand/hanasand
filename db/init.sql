@@ -210,12 +210,14 @@ CREATE TABLE IF NOT EXISTS load_tests (
     timeout INTEGER DEFAULT 1,
     stages JSONB NOT NULL DEFAULT '{"default": true}',
     status TEXT DEFAULT 'pending',
+    queue_position INT NOT NULL DEFAULT 0,
     visits INT NOT NULL DEFAULT 0,
     logs TEXT[] DEFAULT '{}',
     errors TEXT[] DEFAULT '{}',
     exit_code INT,
     summary JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP DEFAULT NOW(),
+    started_at TIMESTAMP,
     finished_at TIMESTAMP,
     duration INTERVAL
 );
@@ -223,6 +225,7 @@ CREATE TABLE IF NOT EXISTS load_tests (
 CREATE INDEX IF NOT EXISTS idx_load_tests_created_at ON load_tests(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_load_tests_owner_created_at ON load_tests(owner_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_load_tests_quota_identity_created_at ON load_tests(quota_identity, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_load_tests_queue ON load_tests(status, queue_position, created_at);
 
 CREATE TABLE IF NOT EXISTS load_test_subscriptions (
     owner_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

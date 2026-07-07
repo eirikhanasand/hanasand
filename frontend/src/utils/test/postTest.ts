@@ -4,14 +4,14 @@ import { getCookie } from '@/utils/cookies/cookies'
 type PostTestProps = {
     url: string
     timeout?: number
-    stages?: object
+    stages?: Array<{ duration: string, target: number }>
 }
 
 type PostTestResult =
     | { ok: true, test: Test }
     | { ok: false, error: string, quota?: LoadTestQuota }
 
-const loadTestClientIdStorageKey = 'hanasand:load-testing-client-id'
+export const loadTestClientIdStorageKey = 'hanasand:load-testing-client-id'
 
 export async function postTest({ url, timeout, stages }: PostTestProps): Promise<PostTestResult> {
     const controller = new AbortController()
@@ -52,7 +52,7 @@ export async function postTest({ url, timeout, stages }: PostTestProps): Promise
     }
 }
 
-function getOrCreateLoadTestClientId() {
+export function getOrCreateLoadTestClientId() {
     try {
         const existing = window.localStorage.getItem(loadTestClientIdStorageKey)
         if (existing) {

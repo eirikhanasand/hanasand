@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import followTest from './follow.ts'
+import { enqueueLoadTestRun } from './follow.ts'
 
 export default async function rerunTest(req: FastifyRequest, res: FastifyReply) {
     res.header('Cache-Control', 'no-store')
@@ -15,13 +15,11 @@ export default async function rerunTest(req: FastifyRequest, res: FastifyReply) 
         return res.status(404).send({ error: 'Test not found.' })
     }
 
-    if (test.status === 'running') {
+    if (test.status === 'queued' || test.status === 'running') {
         return res.status(409).send({ error: 'Test is already running.' })
     }
 
-    followTest(id, true).catch((error) => {
-        console.error(`Failed to rerun test ${id}: ${error}`)
-    })
+    await enqueueLoadTestRun(id, true)
 
-    return res.send({ ok: true, status: 'running' })
+    return res.send({ ok: true, status: 'queued' })
 }

@@ -16,9 +16,12 @@ export default async function ensureSchema() {
     await run('ALTER TABLE load_tests ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES users(id) ON DELETE SET NULL')
     await run('ALTER TABLE load_tests ADD COLUMN IF NOT EXISTS quota_identity TEXT')
     await run('ALTER TABLE load_tests ADD COLUMN IF NOT EXISTS quota_plan TEXT NOT NULL DEFAULT \'free\'')
+    await run('ALTER TABLE load_tests ADD COLUMN IF NOT EXISTS queue_position INT NOT NULL DEFAULT 0')
+    await run('ALTER TABLE load_tests ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ')
     await run('CREATE INDEX IF NOT EXISTS idx_load_tests_created_at ON load_tests(created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_load_tests_owner_created_at ON load_tests(owner_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_load_tests_quota_identity_created_at ON load_tests(quota_identity, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_load_tests_queue ON load_tests(status, queue_position, created_at)')
     await run(`
         CREATE TABLE IF NOT EXISTS load_test_subscriptions (
             owner_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

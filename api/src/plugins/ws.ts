@@ -8,7 +8,7 @@ import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
 import { handleMessage } from '#utils/ws/handleMessage.ts'
 import config from '#constants'
-import followTest from '../handlers/test/follow.ts'
+import { enqueueLoadTestRun, startLoadTestQueue } from '../handlers/test/follow.ts'
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import { handleOnionSessionSocket } from '../handlers/onionSession/ws.ts'
@@ -78,13 +78,13 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         const id = (req.params as { id: string}).id
         registerClient(id, connection, testClients)
 
-        followTest(id)
+        startLoadTestQueue()
 
         connection.on('message', (msg) => {
             try {
                 const parsed = JSON.parse(msg.toString()) as { type?: string }
                 if (parsed.type === 'rerun') {
-                    followTest(id, true)
+                    void enqueueLoadTestRun(id, true)
                 }
             } catch (error) {
                 void recordWebsocketFailure('test-message', id, error)
