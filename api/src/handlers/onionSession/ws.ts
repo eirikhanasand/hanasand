@@ -683,7 +683,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 })
                 const providerText = officialProviderKind(preparedUrl)
                     ? await waitForProviderData(tool, toolPage, providerBodies)
-                    : [providerBodies(), await collectFastRenderedText(toolPage)].filter(Boolean).join('\n')
+                    : [providerBodies(), await withTimeout(collectFastRenderedText(toolPage), 1000, '')].filter(Boolean).join('\n')
                 if (providerText && hasParsedProviderData(tool, providerText)) {
                     navigationError = ''
                     const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText)
