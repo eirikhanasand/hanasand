@@ -1621,9 +1621,10 @@ function providerResponseUrl(toolName: string, url: string) {
 function enrichProviderEvidence<T extends Awaited<ReturnType<typeof collectPageEvidence>>>(evidence: T, providerText: string): T {
     if (!providerText) return evidence
     const summary = providerSummaryText(providerText)
+    const cleanProviderText = cleanAnalystText(providerText, 1800)
     return {
         ...evidence,
-        textExcerpt: [evidence.textExcerpt, summary, providerText.replace(/\s+/g, ' ').trim().slice(0, 1800)].filter(Boolean).join('\n'),
+        textExcerpt: [evidence.textExcerpt, summary, cleanProviderText].filter(Boolean).join('\n'),
         comments: [...(evidence.comments || []), summary].filter(Boolean),
     }
 }
@@ -1635,6 +1636,17 @@ export function providerSummaryText(providerText: string) {
         vt ? `${vt.flagged}/${vt.total || '?'} security vendors flagged this URL.` : '',
         uq ? `${uq.alerts} urlquery alerts were found.` : '',
     ].filter(Boolean).join('\n')
+}
+
+function cleanAnalystText(value: string, maxLength = 900) {
+    return value
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&(?:nbsp|amp|lt|gt|quot|#39);/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, maxLength)
 }
 
 async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, page: Page, providerText: () => string) {
@@ -1851,7 +1863,7 @@ async function collectPageEvidence(page: Page) {
         indicators,
         sourceCode: snapshot.sourceCode,
         sourceUrls: sourceIndicators.urls.filter(url => url !== page.url()).slice(0, 40),
-        comments: snapshot.comments.slice(0, 8),
+        comments: snapshot.comments.map(comment => cleanAnalystText(comment, 500)).filter(Boolean).slice(0, 8),
         forms,
         scripts,
         obfuscatedScripts,
@@ -1889,7 +1901,8 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
     const flagged = Number.isFinite(rawFlagged) ? rawFlagged : vtNoDetectionsText ? 0 : undefined
     const total = vtStats?.total || (vendorMatch?.[2] ? Number(vendorMatch[2]) : undefined)
     const alertCount = Number.isFinite(urlqueryScores?.alerts) ? urlqueryScores?.alerts : alertMatch ? Number(alertMatch[1]) : urlqueryNoAlertText ? 0 : undefined
-    const communityCommentCount = communityMatch ? Number(communityMatch[1]) : evidence.comments?.length || undefined
+    const cleanComments = (evidence.comments || []).map(comment => cleanAnalystText(comment, 500)).filter(Boolean)
+    const communityCommentCount = communityMatch ? Number(communityMatch[1]) : cleanComments.length || undefined
     const hasProviderNoDetectionText = /(?:no\s+(?:detections|alerts?|results?|matches?|issues)\s+(?:found)?|undetected|clean|harmless)/i.test(text)
     const hasVendorDetections = flagged !== undefined && Number.isFinite(flagged) && flagged > 0
     const hasUrlQueryAlerts = alertCount !== undefined && Number.isFinite(alertCount) && alertCount > 0
@@ -1924,7 +1937,7 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         vendorTotal: Number.isFinite(total) ? total : undefined,
         alertCount: Number.isFinite(alertCount) ? alertCount : undefined,
         communityCommentCount: Number.isFinite(communityCommentCount) ? communityCommentCount : undefined,
-        communitySummary: evidence.comments?.slice(0, 3).join(' ') || undefined,
+        communitySummary: cleanComments.slice(0, 3).join(' ') || undefined,
         verdict,
         threatAssociations: extractThreatAssociations(text, 'tool_context'),
         extractedSignals: [

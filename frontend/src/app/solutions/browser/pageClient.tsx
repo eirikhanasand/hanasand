@@ -1072,7 +1072,7 @@ function RunDetailModal({ run, onClose, onRerun }: { run: BrowserRunHistory; onC
                 <div className='mt-3 grid gap-2 text-sm'>
                     <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Started</span><span className='text-ui-text'>{new Date(run.startedAt).toLocaleString()}</span></div>
                     <div className='flex justify-between gap-3 rounded-md border border-ui-border bg-ui-raised px-3 py-2'><span className='text-ui-muted'>Providers</span><ProviderRunBadges run={run} /></div>
-                    {run.reportUrl ? <a href={run.reportUrl} className='rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-ui-primary hover:border-ui-primary'>Open saved report JSON</a> : null}
+                    {run.reportUrl ? <a href={run.reportUrl} className='rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-ui-primary hover:border-ui-primary'>Open saved report</a> : null}
                 </div>
                 <button type='button' onClick={() => onRerun(run)} className='mt-4 inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text hover:border-ui-primary'>
                     <RotateCcw className='h-4 w-4' />
