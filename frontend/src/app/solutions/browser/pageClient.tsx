@@ -570,6 +570,10 @@ export default function BrowserPageClient() {
                 pushConsoleEvent(cleanConsoleEvent(stringValue(payload.text)))
                 return
             }
+            if (payload.type === 'pageerror') {
+                pushConsoleEvent(cleanConsoleEvent(`pageerror: ${stringValue(payload.message)}`))
+                return
+            }
             if (payload.type === 'navigation_error' || payload.type === 'error') {
                 setSessionState('failed')
                 setRunBlocker(String(payload.message || 'Sandbox navigation failed.'))
@@ -852,6 +856,7 @@ export default function BrowserPageClient() {
                                 )}
                             </div>
                         </section>
+                        <QuickTriageStrip summary={summary} toolCaptures={toolCaptures} toolCount={selectedProfile.tools.length} />
                         <aside className='grid gap-4 xl:grid-cols-3'>
                             <CapacityPanel capacity={capacity} sessionState={sessionState} />
                             <ProviderStatusPanel tools={selectedProfile.tools} toolCaptures={toolCaptures} onSelect={setActiveSandboxTab} />
@@ -1479,6 +1484,21 @@ function EvidencePanel({ title, status, children }: { title: string; status: str
     )
 }
 
+function QuickTriageStrip({ summary, toolCaptures, toolCount }: { summary: ReturnType<typeof buildAnalystSummary>; toolCaptures: Capture[]; toolCount: number }) {
+    const latestNetwork = summary.latestNetwork
+    const finalUrl = summary.urlTimeline.at(-1)?.url || 'unknown'
+    return (
+        <section className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted md:grid-cols-3 xl:grid-cols-6'>
+            <EvidenceFact label='Final URL' value={finalUrl} mono />
+            <EvidenceFact label='Redirects' value={String(latestNetwork?.redirectChain?.length || 0)} />
+            <EvidenceFact label='Contacted domains' value={latestNetwork?.domains?.slice(0, 3).join('  ') || 'none yet'} mono />
+            <EvidenceFact label='Requests' value={String(latestNetwork?.requestCount || 0)} />
+            <EvidenceFact label='Providers' value={`${toolCaptures.filter(capture => capture.error !== 'provider_navigation_pending').length}/${toolCount}`} />
+            <EvidenceFact label='Review items' value={String(summary.reviewQueue.length)} />
+        </section>
+    )
+}
+
 function EvidenceFact({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
     return (
         <div className='min-w-0 rounded-md border border-ui-border bg-ui-panel p-2'>
@@ -2020,6 +2040,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         brief,
         indicators: allIndicators,
         threatAssociations,
+        latestNetwork,
         urlTimeline,
         reviewQueue,
         deobfuscationTasks,
