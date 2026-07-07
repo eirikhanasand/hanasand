@@ -14,6 +14,8 @@ type BrokerPayload = {
     target?: string
     title?: string
     image?: string | null
+    width?: number
+    height?: number
     frameQuality?: { looksBlank?: boolean; visibleTextLength?: number; elementCount?: number }
     torProxyConfigured?: boolean
     evidence?: {
@@ -156,6 +158,7 @@ assert.equal(ready?.torProxyConfigured, false, 'regular browser sandbox should n
 const pageFrames = payloads.filter(payload => payload.type === 'frame')
 assert(pageFrames.some(payload => payload.reason === 'domcontentloaded'), 'captures DOM-ready browser state')
 assert(pageFrames.some(payload => payload.reason === 'load'), 'captures loaded browser state')
+assert(pageFrames.every(payload => !payload.width || payload.height === Math.round(payload.width * 9 / 16)), 'browser frames stay 16:9')
 assert(pageFrames.some(payload => payload.url?.endsWith('/start')), 'captures initial URL before redirect')
 assert(pageFrames.some(payload => payload.url?.endsWith('/final')), 'captures final URL after redirect')
 assert(pageFrames.some(payload => (payload.image || '').length > 1000), 'captures non-empty screenshots')

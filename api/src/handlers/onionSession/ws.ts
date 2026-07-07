@@ -76,7 +76,7 @@ type WebCrackLoadResult = {
 }
 const DEFAULT_TARGET = 'http://sample-intel-source.onion'
 const DEFAULT_WIDTH = 1280
-const DEFAULT_HEIGHT = 760
+const DEFAULT_HEIGHT = 720
 const MAX_DURATION_MS = 60 * 60 * 1000
 const FRAME_INTERVAL_MS = 900
 const DEFAULT_BROWSER_MAX_SESSIONS = 10
@@ -384,10 +384,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }
 
         if (message.type === 'resize') {
-            await page.setViewportSize({
-                width: clampNumber(message.width, 640, 2400, DEFAULT_WIDTH),
-                height: clampNumber(message.height, 420, 1600, DEFAULT_HEIGHT),
-            })
+            await page.setViewportSize(browserViewportForMessage(message))
             await sendFrame(true)
         }
     }
@@ -456,10 +453,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             ownsBrowser = Boolean(proxy || network !== 'regular')
             browser = ownsBrowser ? await chromium.launch(chromiumLaunchOptions(proxy)) : await regularBrowser()
             context = await browser.newContext({
-                viewport: {
-                    width: clampNumber(message.width, 640, 2400, DEFAULT_WIDTH),
-                    height: clampNumber(message.height, 420, 1600, DEFAULT_HEIGHT),
-                },
+                viewport: browserViewportForMessage(message),
                 ignoreHTTPSErrors: true,
                 userAgent: CHROME_USER_AGENT,
                 locale: 'en-US',
@@ -2017,6 +2011,11 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
     const numeric = Number(value)
     if (!Number.isFinite(numeric)) return fallback
     return Math.max(min, Math.min(max, Math.round(numeric)))
+}
+
+function browserViewportForMessage(message: Pick<BrokerMessage, 'width'>) {
+    const width = clampNumber(message.width, 640, 2400, DEFAULT_WIDTH)
+    return { width, height: Math.round(width * 9 / 16) }
 }
 
 function mouseButton(value: unknown): 'left' | 'right' | 'middle' {

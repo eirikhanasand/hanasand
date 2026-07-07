@@ -197,9 +197,10 @@ function resolveToolUrl(template: string, target: string) {
 function browserViewportSize(element: HTMLElement | null) {
     const rect = element?.getBoundingClientRect()
     if (!rect?.width || !rect.height) return null
+    const width = Math.round(rect.width)
     return {
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
+        width,
+        height: Math.round(width * 9 / 16),
     }
 }
 
@@ -211,7 +212,7 @@ export default function BrowserPageClient() {
     const [selectedProfileId, setSelectedProfileId] = useState(defaultProfiles[0].id)
     const [captures, setCaptures] = useState<Capture[]>([])
     const [activeImage, setActiveImage] = useState<string | null>(null)
-    const [activeFrame, setActiveFrame] = useState<{ width: number; height: number }>({ width: 1280, height: 760 })
+    const [activeFrame, setActiveFrame] = useState<{ width: number; height: number }>({ width: 1280, height: 720 })
     const [activeUrl, setActiveUrl] = useState('')
     const [events, setEvents] = useState<string[]>(['Sandbox ready.'])
     const [activeSandboxTab, setActiveSandboxTab] = useState('browser')
@@ -492,7 +493,7 @@ export default function BrowserPageClient() {
                 if (isUsefulFrameImage(image)) setActiveImage(image)
                 const urlValue = String(payload.url || url)
                 const frameWidth = finiteNumber(payload.width) || 1280
-                const frameHeight = finiteNumber(payload.height) || 760
+                const frameHeight = finiteNumber(payload.height) || 720
                 setActiveUrl(urlValue)
                 setActiveFrame({ width: frameWidth, height: frameHeight })
                 const reason = stringValue(payload.reason)
