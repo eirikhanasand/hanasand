@@ -2435,10 +2435,17 @@ function sanitizeTools(value: unknown): SandboxTool[] {
         const tool = item as Partial<SandboxTool>
         const id = typeof tool.id === 'string' ? tool.id.trim() : ''
         const name = typeof tool.name === 'string' ? tool.name.trim() : ''
-        const url = typeof tool.url === 'string' ? tool.url.trim() : ''
+        const url = normalizeToolUrl(id, name, typeof tool.url === 'string' ? tool.url.trim() : '')
         if (!id || !name || !/^https?:\/\//i.test(url)) return []
         return [{ id, name, url }]
     }).slice(0, 8)
+}
+
+function normalizeToolUrl(id: string, name: string, url: string) {
+    if (/virus\s*total|virustotal/i.test(`${id} ${name} ${url}`) && url.includes('/gui/search/{rawUrl}')) {
+        return 'https://www.virustotal.com/gui/search/{url}'
+    }
+    return url
 }
 
 function isDefaultProfile(id: string) {
