@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 
-type NetworkRequestRow = { url?: string; method?: string; status?: number; failure?: string; host?: string; mimeType?: string; durationMs?: number; initiator?: string; ip?: string; asn?: string; port?: number; protocol?: string; tlsSubject?: string; tlsIssuer?: string }
+type NetworkRequestRow = { url?: string; method?: string; status?: number; failure?: string; host?: string; mimeType?: string; durationMs?: number; initiator?: string; ip?: string; asn?: string; port?: number; protocol?: string; tlsSubject?: string; tlsIssuer?: string; tlsValidFrom?: number; tlsValidTo?: number }
 
 type BrowserReport = {
     target?: string
@@ -231,7 +231,12 @@ function networkPeer(request: NetworkRequestRow) {
         request.protocol || '',
         request.tlsSubject ? `cert ${request.tlsSubject}` : '',
         request.tlsIssuer || '',
+        request.tlsValidTo ? `expires ${formatEpochDate(request.tlsValidTo)}` : '',
     ].filter(Boolean).join(' · ')
+}
+
+function formatEpochDate(value: number) {
+    return new Date(value * 1000).toISOString().slice(0, 10)
 }
 
 function reportUrlTimeline(report: BrowserReport) {
