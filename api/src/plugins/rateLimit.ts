@@ -18,6 +18,19 @@ type RateLimitActor = {
 
 const buckets = new Map<string, Bucket>()
 
+export function resetApiKeyRateLimitBuckets(apiKeyId: string) {
+    let resetCount = 0
+    const prefix = `api_key:${apiKeyId}:`
+    // ponytail: in-memory limiter only; use shared Redis/DB counters before multi-node resets matter.
+    for (const key of buckets.keys()) {
+        if (key.startsWith(prefix)) {
+            buckets.delete(key)
+            resetCount += 1
+        }
+    }
+    return resetCount
+}
+
 export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
     fastify.addHook('onRoute', (routeOptions: RouteOptions) => {
         const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method]

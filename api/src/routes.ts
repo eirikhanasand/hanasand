@@ -137,6 +137,7 @@ import getApiKeysHandler from './handlers/rateLimit/getApiKeys.ts'
 import postApiKeyHandler from './handlers/rateLimit/postApiKey.ts'
 import putApiKeyHandler from './handlers/rateLimit/putApiKey.ts'
 import deleteApiKeyHandler from './handlers/rateLimit/deleteApiKey.ts'
+import resetApiKeyUsageHandler from './handlers/rateLimit/resetApiKeyUsage.ts'
 import { getDesktopAgentPresence, postDesktopAgentPresence } from './handlers/desktopAgent/presence.ts'
 import { deleteAutomation, getAutomation, getAutomations, postAutomation, postAutomationRunNow, putAutomation } from './handlers/automations.ts'
 import { getSystemCronJobs, putSystemCronJob } from './handlers/systemCron.ts'
@@ -463,6 +464,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/rate-limit/keys', getApiKeysHandler)
     fastify.post('/rate-limit/keys', postApiKeyHandler)
     fastify.put('/rate-limit/keys/:id', putApiKeyHandler)
+    fastify.post('/rate-limit/keys/:id/reset-usage', resetApiKeyUsageHandler)
     fastify.delete('/rate-limit/keys/:id', deleteApiKeyHandler)
 
     // Coding tools

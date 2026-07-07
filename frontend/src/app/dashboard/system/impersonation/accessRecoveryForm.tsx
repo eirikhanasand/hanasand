@@ -45,6 +45,39 @@ type DecisionPayload = {
     error?: string
 }
 
+type InviteActionPayload = {
+    inviteAction?: {
+        requestId: string
+        action: string
+        outcome: string
+        audit?: { query?: string, actionType?: string }
+        invite?: { email?: string, status?: string, role?: string }
+    }
+    error?: string
+}
+
+type MemberRolePayload = {
+    memberRoleRecovery?: {
+        requestId: string
+        outcome: string
+        requestedRole?: string
+        audit?: { query?: string, actionType?: string }
+        member?: { name?: string, role?: string, status?: string }
+    }
+    error?: string
+}
+
+type ApiUsageResetPayload = {
+    reset?: {
+        apiKeyId: string
+        ownerId: string
+        keyPrefix: string
+        resetBucketCount: number
+        auditAction: string
+    }
+    error?: string
+}
+
 type ApprovalSearchPayload = {
     approvals?: DecisionDetail[]
     error?: string
@@ -80,7 +113,7 @@ type InspectionPayload = {
     error?: string
 }
 
-type SupportOperation = 'inspect' | 'impersonation' | 'recovery' | 'decision' | 'queue'
+type SupportOperation = 'inspect' | 'impersonation' | 'recovery' | 'decision' | 'queue' | 'invite' | 'member' | 'apiUsage'
 type InspectionUserMember = NonNullable<InspectionPayload['members']>[number]
 type InspectionOrganizationMembership = NonNullable<InspectionPayload['memberships']>[number]
 type InspectionMember = InspectionUserMember | InspectionOrganizationMembership
@@ -94,6 +127,9 @@ const operationTabs: Array<{ id: SupportOperation, label: string, detail: string
     { id: 'inspect', label: 'Inspect', detail: 'Members, invites, audit' },
     { id: 'impersonation', label: 'Session', detail: 'Start or end scoped access' },
     { id: 'recovery', label: 'Recovery', detail: 'Generate an invite' },
+    { id: 'invite', label: 'Invite', detail: 'Resend or revoke' },
+    { id: 'member', label: 'Role', detail: 'Recover member role' },
+    { id: 'apiUsage', label: 'API usage', detail: 'Reset live buckets' },
     { id: 'decision', label: 'Review', detail: 'Approve or deny' },
     { id: 'queue', label: 'Queue', detail: 'Find recovery requests' },
 ]
@@ -166,10 +202,16 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
     const [inspectionResult, setInspectionResult] = useState<InspectionPayload | null>(null)
     const [recoveryResult, setRecoveryResult] = useState<RecoveryPayload | null>(null)
     const [decisionResult, setDecisionResult] = useState<DecisionPayload | null>(null)
+    const [inviteActionResult, setInviteActionResult] = useState<InviteActionPayload | null>(null)
+    const [memberRoleResult, setMemberRoleResult] = useState<MemberRolePayload | null>(null)
+    const [apiUsageResetResult, setApiUsageResetResult] = useState<ApiUsageResetPayload | null>(null)
     const [searchResult, setSearchResult] = useState<ApprovalSearchPayload | null>(null)
     const [impersonationResult, setImpersonationResult] = useState<ImpersonationPayload | null>(null)
     const [recoveryMessage, setRecoveryMessage] = useState('')
     const [decisionMessage, setDecisionMessage] = useState('')
+    const [inviteActionMessage, setInviteActionMessage] = useState('')
+    const [memberRoleMessage, setMemberRoleMessage] = useState('')
+    const [apiUsageResetMessage, setApiUsageResetMessage] = useState('')
     const [searchMessage, setSearchMessage] = useState('')
     const [impersonationMessage, setImpersonationMessage] = useState('')
     const [inspectionMessage, setInspectionMessage] = useState('')
@@ -292,6 +334,126 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
         }
     }
 
+    async function submitInviteAction(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        const form = new FormData(event.currentTarget)
+        const organizationId = String(form.get('organizationId') || '').trim()
+        const inviteId = String(form.get('inviteId') || '').trim()
+        const action = String(form.get('action') || 'resend') === 'revoke' ? 'revoke' : 'resend'
+        const payload = {
+            action,
+            reason: String(form.get('reason') || '').trim(),
+            context: String(form.get('context') || '').trim(),
+            supportSessionId: String(form.get('supportSessionId') || '').trim(),
+            idempotencyKey: String(form.get('idempotencyKey') || '').trim(),
+            expiresAt: String(form.get('expiresAt') || '').trim() || undefined,
+            scope: [action === 'revoke' ? 'invite:revoke' : 'invite:resend'],
+        }
+        if (!supportReasonIsSpecific(payload.reason)) {
+            setInviteActionMessage(minimumAuditReasonMessage)
+            return
+        }
+
+        setSubmitting('invite')
+        setInviteActionMessage('')
+        setInviteActionResult(null)
+        try {
+            const response = await fetch(`/api/backend/admin/support/organizations/${encodeURIComponent(organizationId)}/invites/${encodeURIComponent(inviteId)}/actions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            })
+            const body = await response.json().catch(() => ({})) as InviteActionPayload
+            if (!response.ok) {
+                setInviteActionMessage(body.error || 'Invite action failed.')
+                setInviteActionResult(body)
+                return
+            }
+            setInviteActionResult(body)
+            setInviteActionMessage(action === 'revoke' ? 'Invite revoked.' : 'Invite resent.')
+        } catch (error) {
+            setInviteActionMessage(error instanceof Error ? error.message : 'Invite action failed.')
+        } finally {
+            setSubmitting('')
+        }
+    }
+
+    async function submitMemberRoleRecovery(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        const form = new FormData(event.currentTarget)
+        const organizationId = String(form.get('organizationId') || '').trim()
+        const userId = String(form.get('userId') || '').trim()
+        const payload = {
+            role: String(form.get('role') || 'admin'),
+            reason: String(form.get('reason') || '').trim(),
+            context: String(form.get('context') || '').trim(),
+            supportSessionId: String(form.get('supportSessionId') || '').trim(),
+            idempotencyKey: String(form.get('idempotencyKey') || '').trim(),
+            scope: ['member:role_recovery'],
+        }
+        if (!supportReasonIsSpecific(payload.reason)) {
+            setMemberRoleMessage(minimumAuditReasonMessage)
+            return
+        }
+
+        setSubmitting('member')
+        setMemberRoleMessage('')
+        setMemberRoleResult(null)
+        try {
+            const response = await fetch(`/api/backend/admin/support/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(userId)}/role-recovery`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            })
+            const body = await response.json().catch(() => ({})) as MemberRolePayload
+            if (!response.ok) {
+                setMemberRoleMessage(body.error || 'Member role recovery failed.')
+                setMemberRoleResult(body)
+                return
+            }
+            setMemberRoleResult(body)
+            setMemberRoleMessage('Member role recovered.')
+        } catch (error) {
+            setMemberRoleMessage(error instanceof Error ? error.message : 'Member role recovery failed.')
+        } finally {
+            setSubmitting('')
+        }
+    }
+
+    async function submitApiUsageReset(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        const form = new FormData(event.currentTarget)
+        const apiKeyId = String(form.get('apiKeyId') || '').trim()
+        const payload = { reason: String(form.get('reason') || '').trim() }
+        if (!supportReasonIsSpecific(payload.reason)) {
+            setApiUsageResetMessage(minimumAuditReasonMessage)
+            return
+        }
+
+        setSubmitting('apiUsage')
+        setApiUsageResetMessage('')
+        setApiUsageResetResult(null)
+        try {
+            const response = await fetch(`/api/backend/rate-limit/keys/${encodeURIComponent(apiKeyId)}/reset-usage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            })
+            const body = await response.json().catch(() => ({})) as ApiUsageResetPayload
+            if (!response.ok) {
+                setApiUsageResetMessage(body.error || 'API usage reset failed.')
+                setApiUsageResetResult(body)
+                return
+            }
+            setApiUsageResetResult(body)
+            setApiUsageResetMessage('API usage buckets reset.')
+        } catch (error) {
+            setApiUsageResetMessage(error instanceof Error ? error.message : 'API usage reset failed.')
+        } finally {
+            setSubmitting('')
+        }
+    }
+
     async function submitSearch(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
@@ -398,8 +560,8 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
             <div data-testid='support-primary-operation' className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3'>
                 <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
                     <div>
-                        <h3 className='text-sm font-semibold text-ui-text'>Inspect first</h3>
-                        <p className='mt-1 text-xs leading-5 text-ui-muted'>Load the customer, user, roles, invites, and recent audit before using higher-risk controls.</p>
+                        <h3 className='text-sm font-semibold text-ui-text'>Customer lookup</h3>
+                        <p className='mt-1 text-xs leading-5 text-ui-muted'>Load customer state, then use any audited action below when the case already has enough context.</p>
                     </div>
                     <button
                         type='button'
@@ -414,8 +576,8 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
 
             <details data-testid='support-secondary-operations' className='group rounded-md border border-ui-border bg-ui-canvas' open={operation !== 'inspect'}>
                 <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
-                    <span>Privileged support actions</span>
-                    <span className='text-xs font-medium text-ui-muted group-open:hidden'>Session, recovery, review</span>
+                    <span>Audited support actions</span>
+                    <span className='text-xs font-medium text-ui-muted group-open:hidden'>Sessions, invites, roles, API usage</span>
                     <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide actions</span>
                 </summary>
                 <div className='grid gap-2 border-t border-ui-border p-3 sm:grid-cols-2' role='group' aria-label='Support operation'>
@@ -434,7 +596,7 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
             {operation === 'inspect' && <section className='grid gap-3'>
                 <div>
                     <h3 className='text-sm font-semibold text-ui-text'>Support inspection</h3>
-                    <p className='mt-1 text-xs leading-5 text-ui-muted'>Load organization or user state before recovery, role changes, or impersonation.</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>Shows what is real: organization/user state, invites, memberships, webhooks, watchlists, and recent support audit.</p>
                 </div>
                 <form className='grid gap-2' onSubmit={submitInspection}>
                     <div className='grid gap-2 sm:grid-cols-[8rem_minmax(0,1fr)]'>
@@ -496,6 +658,87 @@ export default function AccessRecoveryForm({ initialOperation = 'inspect' }: { i
                                 ))}
                             </div>
                         ) : null}
+                    </div>
+                ) : null}
+            </section>}
+
+            {operation === 'invite' && <section className='grid gap-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-ui-text'>Invite support</h3>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>Resend or revoke an organization invite with support session scope and audit replay.</p>
+                </div>
+                <form className='grid gap-2' onSubmit={submitInviteAction}>
+                    <div className='grid gap-2 sm:grid-cols-2'>
+                        <input className={inputClass} name='organizationId' placeholder='Organization ID' required />
+                        <input className={inputClass} name='inviteId' placeholder='Invite ID' required />
+                        <select className={inputClass} name='action' defaultValue='resend'>
+                            <option value='resend'>Resend</option>
+                            <option value='revoke'>Revoke</option>
+                        </select>
+                        <input className={inputClass} name='expiresAt' placeholder='Resend expiry ISO timestamp' />
+                        <input className={inputClass} name='supportSessionId' placeholder='Support session ID' />
+                        <input className={inputClass} name='idempotencyKey' placeholder='Idempotency key' />
+                    </div>
+                    <input className={inputClass} name='context' placeholder='Case context' />
+                    <textarea className={textAreaClass} name='reason' placeholder='Audit reason with requester and case' minLength={10} required />
+                    <button className={primaryButton} disabled={submitting === 'invite'} type='submit'>{submitting === 'invite' ? 'Applying...' : 'Apply invite action'}</button>
+                </form>
+                <Message value={inviteActionMessage} tone={inviteActionResult?.error ? 'error' : inviteActionMessage ? 'success' : 'neutral'} />
+                {inviteActionResult?.inviteAction ? (
+                    <div className='grid gap-1 rounded-md border border-ui-border bg-ui-canvas p-3 text-sm text-ui-muted'>
+                        <div className='font-semibold text-ui-text'>{inviteActionResult.inviteAction.action} · {inviteActionResult.inviteAction.outcome}</div>
+                        <div>{inviteActionResult.inviteAction.invite?.email || 'invite'} · {inviteActionResult.inviteAction.invite?.status || 'status'}</div>
+                        <a className='text-sm font-semibold text-ui-primary hover:opacity-80' href={auditHref(inviteActionResult.inviteAction.requestId, inviteActionResult.inviteAction.audit?.actionType)}>Open invite audit</a>
+                    </div>
+                ) : null}
+            </section>}
+
+            {operation === 'member' && <section className='grid gap-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-ui-text'>Member role recovery</h3>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>Change one active membership role when org administration is unavailable.</p>
+                </div>
+                <form className='grid gap-2' onSubmit={submitMemberRoleRecovery}>
+                    <div className='grid gap-2 sm:grid-cols-2'>
+                        <input className={inputClass} name='organizationId' placeholder='Organization ID' required />
+                        <input className={inputClass} name='userId' placeholder='User ID' required />
+                        <select className={inputClass} name='role' defaultValue='admin'>
+                            <option value='admin'>Admin</option>
+                            <option value='member'>Member</option>
+                        </select>
+                        <input className={inputClass} name='supportSessionId' placeholder='Support session ID' />
+                        <input className={inputClass} name='idempotencyKey' placeholder='Idempotency key' />
+                    </div>
+                    <input className={inputClass} name='context' placeholder='Case context' />
+                    <textarea className={textAreaClass} name='reason' placeholder='Audit reason with requester and case' minLength={10} required />
+                    <button className={primaryButton} disabled={submitting === 'member'} type='submit'>{submitting === 'member' ? 'Recovering...' : 'Recover member role'}</button>
+                </form>
+                <Message value={memberRoleMessage} tone={memberRoleResult?.error ? 'error' : memberRoleMessage ? 'success' : 'neutral'} />
+                {memberRoleResult?.memberRoleRecovery ? (
+                    <div className='grid gap-1 rounded-md border border-ui-border bg-ui-canvas p-3 text-sm text-ui-muted'>
+                        <div className='font-semibold text-ui-text'>{memberRoleResult.memberRoleRecovery.outcome} · {memberRoleResult.memberRoleRecovery.member?.name || 'member'}</div>
+                        <div>role {memberRoleResult.memberRoleRecovery.member?.role || memberRoleResult.memberRoleRecovery.requestedRole || 'updated'}</div>
+                        <a className='text-sm font-semibold text-ui-primary hover:opacity-80' href={auditHref(memberRoleResult.memberRoleRecovery.requestId, memberRoleResult.memberRoleRecovery.audit?.actionType)}>Open role audit</a>
+                    </div>
+                ) : null}
+            </section>}
+
+            {operation === 'apiUsage' && <section className='grid gap-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-ui-text'>API usage reset</h3>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>Resets live API-key rate-limit buckets and records a warning audit event; durable quota/billing adjustments still belong in Rate Limits.</p>
+                </div>
+                <form className='grid gap-2' onSubmit={submitApiUsageReset}>
+                    <input className={inputClass} name='apiKeyId' placeholder='API key ID' required />
+                    <textarea className={textAreaClass} name='reason' placeholder='Audit reason with customer approval and case' minLength={10} required />
+                    <button className={primaryButton} disabled={submitting === 'apiUsage'} type='submit'>{submitting === 'apiUsage' ? 'Resetting...' : 'Reset API usage buckets'}</button>
+                </form>
+                <a className='text-sm font-semibold text-ui-primary hover:opacity-80' href='/dashboard/system/rate-limits'>Open API keys and limit policy</a>
+                <Message value={apiUsageResetMessage} tone={apiUsageResetResult?.error ? 'error' : apiUsageResetMessage ? 'success' : 'neutral'} />
+                {apiUsageResetResult?.reset ? (
+                    <div className='rounded-md border border-ui-border bg-ui-canvas p-3 text-xs leading-5 text-ui-muted'>
+                        <div className='font-semibold text-ui-text'>{apiUsageResetResult.reset.keyPrefix}</div>
+                        <div>{apiUsageResetResult.reset.resetBucketCount} live buckets reset · audit {apiUsageResetResult.reset.auditAction}</div>
                     </div>
                 ) : null}
             </section>}

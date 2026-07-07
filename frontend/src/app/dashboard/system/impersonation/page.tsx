@@ -28,7 +28,7 @@ type AdminAuditEvent = {
     created_at: string
 }
 
-type SupportMode = 'inspect' | 'impersonation' | 'recovery' | 'decision' | 'queue'
+type SupportMode = 'inspect' | 'impersonation' | 'recovery' | 'decision' | 'queue' | 'invite' | 'member' | 'apiUsage'
 
 type AuditSearchParams = {
     q?: string | string[]
@@ -57,9 +57,17 @@ const limits = ['50', '100', '200', '500']
 const supportActions = [
     { action: 'support.organization.access_recovery', label: 'Access recovery' },
     { action: 'support.organization.invite', label: 'Organization invite' },
+    { action: 'support.organization.invite_resend', label: 'Invite resend' },
+    { action: 'support.organization.invite_revoke', label: 'Invite revoke' },
     { action: 'support.organization.member_role_recovery', label: 'Role recovery' },
+    { action: 'support.api_key.usage_reset', label: 'API usage reset' },
     { action: 'impersonation.start', label: 'Session started' },
     { action: 'impersonation.stop', label: 'Session ended' },
+]
+const supportCapabilityCards = [
+    { title: 'Can fix now', body: 'Inspect org/user state, create recovery invites, review approvals, resend/revoke invites, recover member roles, reset live API-key buckets, and start scoped impersonation.' },
+    { title: 'Abuse controls', body: 'Every privileged action requires a reason; high-risk paths write admin audit events with actor, target, request, entity, IP, user agent, and outcome.' },
+    { title: 'Not pretend-fixed', body: 'Billing credits, durable quota changes, cross-node limiter resets, secret exposure, and silent org spying stay outside this console unless backend support exists.' },
 ]
 
 function formatTime(value: string) {
@@ -153,7 +161,8 @@ function auditSnapshotHeadline(eventCount: number, eventStats: ReturnType<typeof
 
 function resolveSupportMode(value: string): SupportMode {
     const normalized = value.trim().toLowerCase()
-    return normalized === 'impersonation' || normalized === 'recovery' || normalized === 'decision' || normalized === 'queue'
+    if (normalized === 'apiusage' || normalized === 'api-usage' || normalized === 'api_usage') return 'apiUsage'
+    return normalized === 'impersonation' || normalized === 'recovery' || normalized === 'decision' || normalized === 'queue' || normalized === 'invite' || normalized === 'member'
         ? normalized
         : 'inspect'
 }
@@ -199,7 +208,7 @@ export default async function ImpersonationAuditPage({
             <DashboardHeader
                 eyebrow='Support'
                 title='Helpdesk operations'
-                description='Inspect scoped support activity, recover access, and review impersonation audit trails from one workbench.'
+                description='Find the customer, run real audited fixes, and review support activity from one workbench.'
                 actions={(
                     <div className='flex flex-wrap gap-2'>
                         <Link className={quietButtonClass} href='/dashboard'>Dashboard</Link>
@@ -261,6 +270,14 @@ export default async function ImpersonationAuditPage({
                             ) : null}
                         </form>
                     </DashboardPanel>
+                    <section className='grid gap-2 md:grid-cols-3'>
+                        {supportCapabilityCards.map(card => (
+                            <DashboardPanel className='p-4' key={card.title}>
+                                <h2 className='text-sm font-semibold text-ui-text'>{card.title}</h2>
+                                <p className='mt-2 text-xs leading-5 text-ui-muted'>{card.body}</p>
+                            </DashboardPanel>
+                        ))}
+                    </section>
                     {responseError ? (
                         <DashboardPanel className='border-ui-warning/35 bg-ui-warning/10 p-4 text-sm text-ui-warning'>
                             {responseError} Check API availability or narrow the query.
@@ -367,13 +384,13 @@ export default async function ImpersonationAuditPage({
                     <DashboardPanel className='p-0' id='support-actions'>
                         <div className='border-b border-ui-border px-4 py-3'>
                             <h2 className='text-sm font-semibold text-ui-text'>Support actions</h2>
-                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Choose one task, complete the required audit fields, then return to the timeline.</p>
+                            <p className='mt-1 text-xs leading-5 text-ui-muted'>Pick the action the case needs. Inspection helps, but valid audited fixes are not hidden behind it.</p>
                         </div>
-                        <details className='group' open={supportMode !== 'inspect'}>
+                        <details className='group' open>
                             <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
-                                <span>Session support tasks</span>
-                                <span className='text-xs font-medium text-ui-muted group-open:hidden'>Open optional tasks</span>
-                                <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide optional tasks</span>
+                                <span>Task controls</span>
+                                <span className='text-xs font-medium text-ui-muted group-open:hidden'>Open controls</span>
+                                <span className='hidden text-xs font-medium text-ui-muted group-open:inline'>Hide controls</span>
                             </summary>
                             <div className='border-t border-ui-border p-4'>
                                 <AccessRecoveryForm initialOperation={supportMode} />
