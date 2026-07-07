@@ -18,6 +18,7 @@ type BrowserReport = {
         reason?: string
         image?: string | null
         frameQuality?: { looksBlank?: boolean; visibleTextLength?: number; elementCount?: number }
+        evidence?: { sourceUrls?: string[] }
     }>
     analystSummary?: {
         narrative?: string
@@ -198,6 +199,9 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 script.summary || '',
                             ].filter(Boolean).join(' · '))} empty='No script artifacts saved.' />
                         </ReportPanel>
+                        <ReportPanel title='Resource URLs'>
+                            <ReportList items={reportResourceUrls(report).slice(0, 80)} empty='No resource URLs saved.' />
+                        </ReportPanel>
                     </div>
                     <aside className='grid content-start gap-4'>
                         <ReportPanel title='Evidence checklist'>
@@ -242,6 +246,10 @@ function formatEpochDate(value: number) {
 
 function reportUrlTimeline(report: BrowserReport) {
     return report.analystReport?.urlTimeline?.length ? report.analystReport.urlTimeline : report.analystSummary?.urlTimeline || []
+}
+
+function reportResourceUrls(report: BrowserReport) {
+    return Array.from(new Set((report.captures || []).flatMap(capture => capture.evidence?.sourceUrls || []))).filter(Boolean)
 }
 
 function ReportPanel({ title, children }: { title: string; children: React.ReactNode }) {
