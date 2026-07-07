@@ -1753,6 +1753,8 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
         })),
     ]
     const resourceUrls = Array.from(new Set(pageCaptures.flatMap(capture => capture.evidence?.sourceUrls || []))).filter(Boolean)
+    const urlStates = Array.from(new Set(input.summary.urlTimeline.map(item => item.url).filter(Boolean)))
+    const peerSummary = networkPeerSummary(latestNetwork)
     const scriptHashCount = new Set(scriptArtifacts.map(script => script.sha256).filter(Boolean)).size
     const report = {
         verdict: input.summary.brief.verdict,
@@ -1775,7 +1777,10 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             responses: latestNetwork.responseCount,
             blockedOrFailed: latestNetwork.failedCount,
             contactedDomains: latestNetwork.domains,
+            finalUrl: input.activeUrl || input.summary.urlTimeline.at(-1)?.url || input.target,
             redirectChain: latestNetwork.redirectChain,
+            urlStates,
+            peerSummary,
             downloads: latestNetwork.downloads,
             recentRequests: latestNetwork.recentRequests?.slice(-50),
         } : null,
@@ -1805,6 +1810,9 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             `- requests: ${latestNetwork?.requestCount || 0}`,
             `- responses: ${latestNetwork?.responseCount || 0}`,
             `- blocked/failed: ${latestNetwork?.failedCount || 0}`,
+            `- final URL: ${report.finalUrl}`,
+            ...urlStates.slice(0, 12).map(url => `- URL state: ${url}`),
+            ...peerSummary.slice(0, 12).map(peer => `- peer: ${[peer.host, peer.ip, peer.asn ? `AS${peer.asn}` : '', peer.protocol || '', peer.tlsSubject ? `cert ${peer.tlsSubject}` : '', peer.tlsIssuer || '', peer.tlsValidTo ? `expires ${formatEpochDate(peer.tlsValidTo)}` : ''].filter(Boolean).join(', ')}`),
             ...((latestNetwork?.domains || []).slice(0, 20).map(domain => `- domain: ${domain}`)),
             ...((latestNetwork?.redirectChain || []).slice(0, 10).map(url => `- redirect: ${url}`)),
             ...((latestNetwork?.downloads || []).slice(0, 10).map(download => `- download: ${[download.fileName || download.url || 'file', download.sha256 ? `sha256 ${download.sha256}` : download.hashStatus || '', download.bytes !== undefined ? `${download.bytes} bytes` : ''].filter(Boolean).join(', ')}`)),
@@ -1833,6 +1841,16 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
 function isUsefulFrameImage(image: string) {
     // ponytail: tiny JPEGs here are blank white Chromium frames; decode pixels if this becomes noisy.
     return image.length > 24_000
+}
+
+function networkPeerSummary(network?: SandboxNetworkSummary) {
+    const peers = new Map<string, NonNullable<SandboxNetworkSummary['recentRequests']>[number]>()
+    for (const request of network?.recentRequests || []) {
+        if (!request.ip && !request.asn && !request.tlsSubject && !request.tlsIssuer) continue
+        const key = [request.host, request.ip, request.asn, request.protocol, request.tlsSubject, request.tlsIssuer, request.tlsValidTo].filter(Boolean).join('|')
+        if (!peers.has(key)) peers.set(key, request)
+    }
+    return Array.from(peers.values()).slice(0, 40)
 }
 
 function buildAnalystSummary(target: string, captures: Capture[], profile: SandboxProfile) {

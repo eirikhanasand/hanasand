@@ -36,7 +36,10 @@ type BrowserReport = {
             responses?: number
             blockedOrFailed?: number
             contactedDomains?: string[]
+            finalUrl?: string
             redirectChain?: string[]
+            urlStates?: string[]
+            peerSummary?: NetworkRequestRow[]
             downloads?: Array<{ url?: string; fileName?: string; bytes?: number; sha256?: string; hashStatus?: string }>
             recentRequests?: NetworkRequestRow[]
         }
@@ -149,8 +152,24 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                 `${analystReport.networkEvidence?.requests || 0} requests`,
                                 `${analystReport.networkEvidence?.responses || 0} responses`,
                                 `${analystReport.networkEvidence?.blockedOrFailed || 0} blocked/failed`,
+                                `final URL: ${analystReport.networkEvidence?.finalUrl || report.finalUrl || report.target || 'unknown'}`,
+                                ...((analystReport.networkEvidence?.urlStates || []).map(url => `URL state: ${url}`)),
                                 ...((analystReport.networkEvidence?.redirectChain || []).map(url => `redirect: ${url}`)),
                             ]} empty='No network evidence saved.' />
+                            {analystReport.networkEvidence?.peerSummary?.length ? (
+                                <>
+                                    <p className='mt-3 text-xs font-semibold uppercase text-ui-muted'>DNS / IP / certificate evidence</p>
+                                    <ReportList items={analystReport.networkEvidence.peerSummary.map(peer => [
+                                        peer.host || peer.url || 'peer',
+                                        peer.ip ? `${peer.ip}${peer.port ? `:${peer.port}` : ''}` : '',
+                                        peer.asn ? `AS${peer.asn}` : '',
+                                        peer.protocol || '',
+                                        peer.tlsSubject ? `cert ${peer.tlsSubject}` : '',
+                                        peer.tlsIssuer || '',
+                                        peer.tlsValidTo ? `expires ${formatEpochDate(peer.tlsValidTo)}` : '',
+                                    ].filter(Boolean).join(' · '))} empty='No peer evidence saved.' />
+                                </>
+                            ) : null}
                             {analystReport.networkEvidence?.recentRequests?.length ? (
                                 <div className='mt-3 max-h-96 overflow-auto rounded-md border border-ui-border'>
                                     <table className='w-full min-w-[56rem] border-collapse text-left text-xs'>
