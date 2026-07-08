@@ -8,9 +8,9 @@ const requiredEnvironmentVariables = [
     'VM_API_TOKEN',
 ]
 
-const missingVariables = requiredEnvironmentVariables.filter(
-    (key) => !process.env[key]
-)
+const missingVariables = process.env.BROWSER_SANDBOX_WORKER_ONLY === '1'
+    ? []
+    : requiredEnvironmentVariables.filter((key) => !process.env[key])
 
 if (missingVariables.length > 0) {
     throw new Error(

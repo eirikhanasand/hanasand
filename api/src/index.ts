@@ -19,6 +19,7 @@ const fastify = Fastify({
     logger: true
 })
 const port = Number(process.env.PORT) || 8081
+const browserWorkerOnly = process.env.BROWSER_SANDBOX_WORKER_ONLY === '1'
 
 fastify.decorate('cachedIPMetrics', { status: 200, data: Buffer.from(JSON.stringify([])) })
 fastify.removeContentTypeParser('application/json')
@@ -42,66 +43,70 @@ fastify.register(cors, {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD']
 })
 
-fastify.register(fp)
+if (!browserWorkerOnly) fastify.register(fp)
 fastify.register(ws)
-fastify.register(rateLimit)
-fastify.addHook('onSend', async (req, res, payload) => {
-    await recordHttpErrorResponse(req, res, payload)
-    return payload
-})
-fastify.addHook('onResponse', async (req, res) => {
-    recordTraffic(req, res)
-})
-fastify.register(apiRoutes, { prefix: '/api' })
+if (!browserWorkerOnly) {
+    fastify.register(rateLimit)
+    fastify.addHook('onSend', async (req, res, payload) => {
+        await recordHttpErrorResponse(req, res, payload)
+        return payload
+    })
+    fastify.addHook('onResponse', async (req, res) => {
+        recordTraffic(req, res)
+    })
+    fastify.register(apiRoutes, { prefix: '/api' })
+}
 fastify.get('/', IndexHandler)
-fastify.addHook('onResponse', async (req, res) => {
-    if (res.statusCode < 400) {
-        return
-    }
-    if (res.statusCode === 401 || res.statusCode === 403) {
-        return
-    }
+if (!browserWorkerOnly) {
+    fastify.addHook('onResponse', async (req, res) => {
+        if (res.statusCode < 400) {
+            return
+        }
+        if (res.statusCode === 401 || res.statusCode === 403) {
+            return
+        }
 
-    const referer = req.headers.referer || req.headers.referrer || ''
-    const refererText = Array.isArray(referer) ? referer.join(', ') : referer
-    const isSharePageRequest = /\/(?:s|p)\//.test(refererText)
-    const isVmRequest = req.url.startsWith('/api/vms')
-    const category = isSharePageRequest
-        ? 'share_page_http'
-        : isVmRequest && /(?:connection|agent-target|sync-access)/.test(req.url)
-            ? 'terminal_failure'
-            : isVmRequest
-                ? 'vm_provisioning_error'
-                : null
+        const referer = req.headers.referer || req.headers.referrer || ''
+        const refererText = Array.isArray(referer) ? referer.join(', ') : referer
+        const isSharePageRequest = /\/(?:s|p)\//.test(refererText)
+        const isVmRequest = req.url.startsWith('/api/vms')
+        const category = isSharePageRequest
+            ? 'share_page_http'
+            : isVmRequest && /(?:connection|agent-target|sync-access)/.test(req.url)
+                ? 'terminal_failure'
+                : isVmRequest
+                    ? 'vm_provisioning_error'
+                    : null
 
-    if (!category) {
-        return
-    }
+        if (!category) {
+            return
+        }
 
-    await recordLog({
-        service: category === 'share_page_http' ? 'hanasand-frontend' : 'hanasand-api',
-        level: res.statusCode >= 500 ? 'error' : 'warn',
-        message: `${req.method} ${req.url} returned ${res.statusCode}`,
-        metadata: {
-            category,
-            method: req.method,
-            url: req.url,
-            statusCode: res.statusCode,
-            referer: refererText,
-        },
-    }).catch(error => fastify.log.error(error, 'Failed to persist production monitor signal'))
-})
-fastify.addHook('onError', async (req, _res, error) => {
-    await recordLog({
-        level: 'error',
-        message: error.message,
-        metadata: {
-            method: req.method,
-            url: req.url,
-            stack: error.stack,
-        },
-    }).catch(logError => fastify.log.error(logError, 'Failed to persist request error log'))
-})
+        await recordLog({
+            service: category === 'share_page_http' ? 'hanasand-frontend' : 'hanasand-api',
+            level: res.statusCode >= 500 ? 'error' : 'warn',
+            message: `${req.method} ${req.url} returned ${res.statusCode}`,
+            metadata: {
+                category,
+                method: req.method,
+                url: req.url,
+                statusCode: res.statusCode,
+                referer: refererText,
+            },
+        }).catch(error => fastify.log.error(error, 'Failed to persist production monitor signal'))
+    })
+    fastify.addHook('onError', async (req, _res, error) => {
+        await recordLog({
+            level: 'error',
+            message: error.message,
+            metadata: {
+                method: req.method,
+                url: req.url,
+                stack: error.stack,
+            },
+        }).catch(logError => fastify.log.error(logError, 'Failed to persist request error log'))
+    })
+}
 
 process.on('unhandledRejection', reason => {
     void recordLog({
@@ -113,8 +118,8 @@ process.on('unhandledRejection', reason => {
 
 async function start() {
     try {
-        await ensureSchema()
-        if (process.env.SKIP_MAIL_PROVISIONING !== '1') {
+        if (!browserWorkerOnly) await ensureSchema()
+        if (!browserWorkerOnly && process.env.SKIP_MAIL_PROVISIONING !== '1') {
             await provisionExistingMailAccounts().catch(error => {
                 if (isMailAdminConfigError(error)) {
                     fastify.log.debug('Mail account startup provisioning skipped because mail administration is not configured')
@@ -125,6 +130,7 @@ async function start() {
             })
         }
         await fastify.listen({ port, host: '0.0.0.0' })
+        if (browserWorkerOnly) return
         void warmThreatActorProfileCache(8).catch(error => {
             recordThreatActorProfileWarmFailure(error)
             fastify.log.warn({ error }, 'Failed to warm threat actor profile cache')
@@ -146,7 +152,7 @@ function isMailAdminConfigError(error: unknown) {
 
 function main() {
     start()
-    cron()
+    if (!browserWorkerOnly) cron()
 }
 
 main()

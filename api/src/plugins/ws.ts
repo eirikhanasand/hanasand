@@ -171,19 +171,58 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
 
     // unified browser session
     fastify.get<{ Params: { id: string } }>('/api/ws/browser/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
+        if (proxyBrowserSocket(connection, req.params.id, 'browser')) return
         handleOnionSessionSocket(connection, req.params.id, 'regular')
     })
 
     // remote onion browser session
     fastify.get<{ Params: { id: string } }>('/api/ws/onion-session/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
+        if (proxyBrowserSocket(connection, req.params.id, 'onion-session')) return
         handleOnionSessionSocket(connection, req.params.id)
     })
 
     // regular-web sandbox browser session
     fastify.get<{ Params: { id: string } }>('/api/ws/browser-sandbox/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
+        if (proxyBrowserSocket(connection, req.params.id, 'browser-sandbox')) return
         handleOnionSessionSocket(connection, req.params.id, 'regular')
     })
 })
+
+function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' | 'browser-sandbox' | 'onion-session') {
+    if (process.env.BROWSER_SANDBOX_WORKER_ONLY === '1') return false
+    const base = process.env.BROWSER_SANDBOX_WORKER_WS
+    if (!base) return false
+
+    const upstream = new WebSocket(`${base.replace(/\/$/, '')}/${route}/${encodeURIComponent(id)}`)
+    const pending: RawData[] = []
+    let closed = false
+
+    upstream.on('open', () => {
+        while (pending.length && upstream.readyState === WebSocket.OPEN) upstream.send(pending.shift()!)
+    })
+    upstream.on('message', message => {
+        if (connection.readyState === WebSocket.OPEN) connection.send(message)
+    })
+    connection.on('message', message => {
+        if (upstream.readyState === WebSocket.OPEN) upstream.send(message)
+        else pending.push(message)
+    })
+    const closeBoth = () => {
+        if (closed) return
+        closed = true
+        if (connection.readyState === WebSocket.OPEN) connection.close()
+        if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) upstream.close()
+    }
+    connection.on('close', closeBoth)
+    upstream.on('close', closeBoth)
+    connection.on('error', error => void recordWebsocketFailure(`browser-proxy-client-${route}`, id, error))
+    upstream.on('error', error => {
+        void recordWebsocketFailure(`browser-proxy-upstream-${route}`, id, error)
+        closeBoth()
+    })
+
+    return true
+}
 
 type ShareTerminal = {
     label: string

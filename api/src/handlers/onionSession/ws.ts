@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { resolveTxt } from 'node:dns/promises'
+import { lookup, resolveTxt } from 'node:dns/promises'
 import { readFile, stat } from 'node:fs/promises'
 import WebSocket, { type RawData } from 'ws'
 import { chromium, type Browser, type BrowserContext, type Frame, type Page, type Request } from 'playwright'
@@ -82,6 +82,7 @@ const FRAME_INTERVAL_MS = 900
 const DEFAULT_BROWSER_MAX_SESSIONS = 10
 const MAX_DOWNLOAD_HASH_BYTES = 5 * 1024 * 1024
 const asnCache = new Map<string, Promise<string | undefined>>()
+const sandboxDnsSafetyCache = new Map<string, Promise<{ ok: true } | { ok: false; reason: string }>>()
 const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
 type SandboxAdmissionStatus = {
@@ -115,17 +116,18 @@ function chromiumHeadless() {
 }
 
 function chromiumLaunchOptions(proxy?: string) {
+    const args = [
+        '--disable-dev-shm-usage',
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-blink-features=AutomationControlled',
+    ]
+    if (process.env.BROWSER_SANDBOX_CHROMIUM_SANDBOX !== '1') args.unshift('--no-sandbox')
     return {
         headless: chromiumHeadless(),
         executablePath: process.env.CHROMIUM_BIN || '/usr/bin/chromium',
         proxy: proxy ? { server: proxy } : undefined,
-        args: [
-            '--no-sandbox',
-            '--disable-dev-shm-usage',
-            '--no-first-run',
-            '--no-default-browser-check',
-            '--disable-blink-features=AutomationControlled',
-        ],
+        args,
     }
 }
 
@@ -405,14 +407,21 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         const network = message.network === 'regular' || message.network === 'tor' ? message.network : defaultNetwork
         const proxy = network === 'tor' ? process.env.ONION_SESSION_PROXY || process.env.TOR_SOCKS_PROXY || '' : ''
         const durationMs = Math.min(MAX_DURATION_MS, Math.max(60_000, (message.durationMinutes || 15) * 60_000))
-        const browserRun = await prepareBrowserRun({
-            id: sessionId,
-            target,
-            network,
-            clientId: message.clientId,
-            userId: message.userId,
-            sessionToken: message.sessionToken,
-        })
+        const skipRunDb = process.env.BROWSER_SANDBOX_SKIP_RUN_DB === '1'
+        const browserRun = skipRunDb
+            ? {
+                allowed: true,
+                run: null,
+                quota: null,
+            }
+            : await prepareBrowserRun({
+                id: sessionId,
+                target,
+                network,
+                clientId: message.clientId,
+                userId: message.userId,
+                sessionToken: message.sessionToken,
+            })
         if (!browserRun.allowed) {
             send({
                 type: 'status',
@@ -420,7 +429,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 sessionId,
                 network,
                 quota: browserRun.quota,
-                message: `Browser run limit reached for ${browserRun.quota.plan}.`,
+                message: `Browser run limit reached for ${browserRun.quota?.plan || 'this account'}.`,
             })
             send({ type: 'ended', reason: 'quota_exhausted', sessionId })
             connection.close()
@@ -470,7 +479,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             page = await context.newPage()
             await page.route('**/*', async (route) => {
                 const requestUrl = route.request().url()
-                const safety = sandboxUrlSafety(requestUrl, { allowLocalTargets: allowLocalSandboxTargets() })
+                const safety = await sandboxRequestSafety(requestUrl)
                 if (!safety.ok) {
                     trackNetwork({
                         kind: 'failed',
@@ -821,7 +830,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     async function navigate(value: string) {
         if (!page) return
         const target = normalizeTarget(value)
-        const safety = sandboxUrlSafety(target, { allowLocalTargets: allowLocalSandboxTargets() })
+        const safety = await sandboxRequestSafety(target)
         if (!safety.ok) {
             send({ type: 'navigation_error', target, message: `Blocked unsafe sandbox target: ${safety.reason}.` })
             send({ type: 'status', state: 'unsafe_target_blocked', url: target, message: `Blocked unsafe sandbox target: ${safety.reason}.` })
@@ -1602,6 +1611,35 @@ function domainFromUrl(value: string) {
     } catch {
         return ''
     }
+}
+
+async function sandboxRequestSafety(value: string) {
+    const literalSafety = sandboxUrlSafety(value, { allowLocalTargets: allowLocalSandboxTargets() })
+    if (!literalSafety.ok || allowLocalSandboxTargets()) return literalSafety
+    let host: string
+    try {
+        host = new URL(value).hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    } catch {
+        return literalSafety
+    }
+    if (!host || /^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':')) return literalSafety
+    let resolved = sandboxDnsSafetyCache.get(host)
+    if (!resolved) {
+        resolved = lookup(host, { all: true })
+            .then(addresses => {
+                for (const item of addresses) {
+                    const addressUrl = item.family === 6 ? `http://[${item.address}]/` : `http://${item.address}/`
+                    const safety = sandboxUrlSafety(addressUrl)
+                    if (!safety.ok) return { ok: false as const, reason: `hostname resolves to ${safety.reason}` }
+                }
+                return { ok: true as const }
+            })
+            .catch(() => ({ ok: true as const }))
+        sandboxDnsSafetyCache.set(host, resolved)
+        const oldestHost = sandboxDnsSafetyCache.keys().next().value
+        if (sandboxDnsSafetyCache.size > 512 && oldestHost) sandboxDnsSafetyCache.delete(oldestHost)
+    }
+    return resolved
 }
 
 function isWebCrackTool(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string) {

@@ -20,6 +20,8 @@ services:
       MAIL_INBOX_PASSWORD: ${MAIL_INBOX_PASSWORD:-}
     ports:
       - "3000:3000"
+    volumes:
+      - prompt_portal_state:/var/lib/hanasand-prompt
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000"]
       start_period: 30s
@@ -68,6 +70,7 @@ services:
       MANAGED_CRON_GID: ${MANAGED_CRON_GID:-990}
       VM_HOST_ID: ${VM_HOST_ID:-ovhcloud}
       ONION_SESSION_PROXY: ${ONION_SESSION_PROXY:-socks5://onion-tor:9050}
+      BROWSER_SANDBOX_WORKER_WS: ${BROWSER_SANDBOX_WORKER_WS:-ws://browser-worker:8081/api/ws}
       VULNERABILITY_SCAN_STATE_PATH: ${VULNERABILITY_SCAN_STATE_PATH:-/var/lib/hanasand/vulnerability-scan.json}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api"]
@@ -83,6 +86,52 @@ services:
         condition: service_started
       ti-scraper:
         condition: service_healthy
+      onion-tor:
+        condition: service_started
+      browser-worker:
+        condition: service_healthy
+
+  browser-worker:
+    container_name: hanasand_browser_worker
+    image: hanasand_api
+    mem_limit: 2g
+    cpus: "2.0"
+    restart: always
+    build:
+      context: ./api
+      dockerfile: ./Dockerfile
+    command: >
+      sh -c 'export DISPLAY="$${DISPLAY:-:99}";
+      Xvfb "$$DISPLAY" -screen 0 1920x1080x24 >/tmp/xvfb.log 2>&1 &
+      bun start'
+    user: "bun"
+    environment:
+      NODE_ENV: production
+      PORT: 8081
+      HOME: /tmp
+      BROWSER_SANDBOX_WORKER_ONLY: "1"
+      BROWSER_SANDBOX_SKIP_RUN_DB: "1"
+      BROWSER_SANDBOX_CHROMIUM_SANDBOX: "1"
+      BROWSER_SANDBOX_PREWARM: "1"
+      ONION_SESSION_PROXY: ${ONION_SESSION_PROXY:-socks5://onion-tor:9050}
+    expose:
+      - "8081"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=768m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081"]
+      interval: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - hanasandnet
+    depends_on:
       onion-tor:
         condition: service_started
 
@@ -251,6 +300,7 @@ services:
 
 volumes:
   api_state:
+  prompt_portal_state:
   postgres_data:
     external: true
     name: hanasand_postgres_data
