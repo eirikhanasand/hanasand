@@ -22,6 +22,8 @@ assert.match(ws, /function sendErrorThenClose/, 'browser proxy should flush star
 assert.match(ws, /connection\.send\(JSON\.stringify\(\{ type: 'error', message \}\), \(\) =>/, 'browser proxy should not race error delivery against websocket close')
 assert.match(onionWs, /Production browser sessions must run in isolated browser workers\./, 'browser handler should reject production launches outside worker-only containers')
 assert.match(onionWs, /Production browser workers require Chromium sandbox\./, 'browser handler should require Chromium sandbox in production workers')
+assert.match(onionWs, /process\.env\.NODE_ENV !== 'production' && process\.env\.BROWSER_SANDBOX_PREWARM !== '0'/, 'browser prewarm should be unavailable in production API containers')
+assert.doesNotMatch(onionWs, /process\.env\.NODE_ENV === 'production'[\s\S]{0,120}regularBrowser\(\)/, 'production code should not prewarm Chromium in the main API process')
 assert.doesNotMatch(onionWs, /sandboxDnsSafetyCache/, 'DNS safety should not cache successful host checks because that permits DNS rebinding')
 assert.match(onionWs, /serviceWorkers:\s*'block'/, 'browser context should block service workers so request safety routing cannot be bypassed')
 assert.match(onionWs, /context\.route\('\*\*\/\*'/, 'request safety routing should apply to all context pages, including provider tabs')
