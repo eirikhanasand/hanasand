@@ -537,7 +537,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 })
             })
             page.on('download', (download) => {
-                void inspectDownload(download).then(evidence => {
+                void inspectDownload(download).then(async evidence => {
                     trackNetwork({
                         kind: 'download',
                         url: download.url(),
@@ -546,6 +546,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         ...evidence,
                     })
                     send({ type: 'status', state: 'download_blocked', url: download.url(), message: 'Download hashed for evidence and deleted.' })
+                    await sendFrame(true, 'download')
                 })
                     .catch(() => {
                         trackNetwork({
@@ -555,6 +556,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                             at: new Date().toISOString(),
                         })
                         send({ type: 'status', state: 'download_blocked', url: download.url(), message: 'Download blocked for sandbox safety.' })
+                        void sendFrame(true, 'download')
                     })
                     .finally(() => void download.delete().catch(() => undefined))
             })
