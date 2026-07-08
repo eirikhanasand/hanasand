@@ -123,7 +123,7 @@ services:
     cap_drop:
       - ALL
     security_opt:
-      - seccomp=unconfined
+      - seccomp=./ops/browser-worker/seccomp-chromium.json
     shm_size: "1gb"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081"]
