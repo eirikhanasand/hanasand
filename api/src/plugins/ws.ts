@@ -12,6 +12,7 @@ import { enqueueLoadTestRun, startLoadTestQueue } from '../handlers/test/follow.
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import { handleOnionSessionSocket } from '../handlers/onionSession/ws.ts'
+import { createRuntimeContainer, getRuntimeContainer, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
 
 type PendingUpdates = {
     content: string
@@ -190,6 +191,10 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
 
 function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' | 'browser-sandbox' | 'onion-session') {
     if (process.env.BROWSER_SANDBOX_WORKER_ONLY === '1') return false
+    if (process.env.BROWSER_SANDBOX_PER_SESSION_WORKER !== '0') {
+        proxyEphemeralBrowserSocket(connection, id, route)
+        return true
+    }
     const base = process.env.BROWSER_SANDBOX_WORKER_WS
     if (!base) return false
 
@@ -222,6 +227,103 @@ function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' 
     })
 
     return true
+}
+
+function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: 'browser' | 'browser-sandbox' | 'onion-session') {
+    const pending: RawData[] = []
+    let upstream: WebSocket | null = null
+    let containerId = ''
+    let closed = false
+
+    const closeBoth = () => {
+        if (closed) return
+        closed = true
+        if (connection.readyState === WebSocket.OPEN) connection.close()
+        if (upstream && (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING)) upstream.close()
+        if (containerId) void removeRuntimeContainer(containerId).catch(error => recordWebsocketFailure(`browser-session-remove-${route}`, id, error))
+    }
+
+    connection.on('message', message => {
+        if (upstream?.readyState === WebSocket.OPEN) upstream.send(message)
+        else pending.push(message)
+    })
+    connection.on('close', closeBoth)
+    connection.on('error', error => void recordWebsocketFailure(`browser-session-client-${route}`, id, error))
+
+    void startEphemeralBrowserWorker(id)
+        .then(({ containerId: nextContainerId, wsUrl }) => {
+            if (closed) {
+                void removeRuntimeContainer(nextContainerId).catch(() => undefined)
+                return
+            }
+            containerId = nextContainerId
+            upstream = new WebSocket(`${wsUrl.replace(/\/$/, '')}/${route}/${encodeURIComponent(id)}`)
+            upstream.on('open', () => {
+                while (pending.length && upstream?.readyState === WebSocket.OPEN) upstream.send(pending.shift()!)
+            })
+            upstream.on('message', message => {
+                if (connection.readyState === WebSocket.OPEN) connection.send(message)
+            })
+            upstream.on('close', closeBoth)
+            upstream.on('error', error => {
+                void recordWebsocketFailure(`browser-session-upstream-${route}`, id, error)
+                closeBoth()
+            })
+        })
+        .catch(error => {
+            const message = error instanceof Error ? error.message : String(error)
+            if (connection.readyState === WebSocket.OPEN) {
+                connection.send(JSON.stringify({ type: 'error', message: `Failed to start isolated browser worker: ${message}` }))
+            }
+            void recordWebsocketFailure(`browser-session-create-${route}`, id, error)
+            closeBoth()
+        })
+}
+
+async function startEphemeralBrowserWorker(sessionId: string) {
+    const containerName = `hanasand_browser_session_${sessionId.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 64)}`
+    const networkName = process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_hanasandnet'
+    const seccompPath = process.env.BROWSER_SANDBOX_SECCOMP_PATH || '/home/hanasand/hanasand/ops/browser-worker/seccomp-chromium.json'
+    const containerId = await createRuntimeContainer(containerName, {
+        Image: process.env.BROWSER_SANDBOX_WORKER_IMAGE || 'hanasand_api',
+        User: 'bun',
+        Cmd: ['sh', '-c', 'export DISPLAY="${DISPLAY:-:99}"; Xvfb "$DISPLAY" -screen 0 1920x1080x24 >/tmp/xvfb.log 2>&1 & bun start'],
+        Env: [
+            'NODE_ENV=production',
+            'PORT=8081',
+            'HOME=/tmp',
+            'BROWSER_SANDBOX_WORKER_ONLY=1',
+            'BROWSER_SANDBOX_SKIP_RUN_DB=1',
+            'BROWSER_SANDBOX_CHROMIUM_SANDBOX=1',
+            'BROWSER_SANDBOX_PREWARM=0',
+            `ONION_SESSION_PROXY=${process.env.ONION_SESSION_PROXY || 'socks5://hanasand_onion_tor:9050'}`,
+        ],
+        ExposedPorts: { '8081/tcp': {} },
+        HostConfig: {
+            NetworkMode: networkName,
+            ReadonlyRootfs: true,
+            Tmpfs: { '/tmp': 'rw,noexec,nosuid,size=768m' },
+            CapDrop: ['ALL'],
+            SecurityOpt: [`seccomp=${seccompPath}`, 'no-new-privileges'],
+            ShmSize: 1024 * 1024 * 1024,
+            Memory: 2 * 1024 * 1024 * 1024,
+            NanoCpus: 2_000_000_000,
+        },
+        Labels: {
+            'com.hanasand.role': 'browser-session-worker',
+            'com.hanasand.session': sessionId,
+        },
+    })
+
+    try {
+        await startRuntimeContainer(containerId)
+        const inspect = await getRuntimeContainer(containerId)
+        const ip = inspect.NetworkSettings?.Networks?.[networkName]?.IPAddress
+        return { containerId, wsUrl: `ws://${ip || containerName}:8081/api/ws` }
+    } catch (error) {
+        await removeRuntimeContainer(containerId).catch(() => undefined)
+        throw error
+    }
 }
 
 type ShareTerminal = {

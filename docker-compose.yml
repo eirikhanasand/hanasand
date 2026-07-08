@@ -71,6 +71,9 @@ services:
       VM_HOST_ID: ${VM_HOST_ID:-ovhcloud}
       ONION_SESSION_PROXY: ${ONION_SESSION_PROXY:-socks5://onion-tor:9050}
       BROWSER_SANDBOX_WORKER_WS: ${BROWSER_SANDBOX_WORKER_WS:-ws://browser-worker:8081/api/ws}
+      BROWSER_SANDBOX_PER_SESSION_WORKER: ${BROWSER_SANDBOX_PER_SESSION_WORKER:-1}
+      BROWSER_SANDBOX_WORKER_NETWORK: ${BROWSER_SANDBOX_WORKER_NETWORK:-hanasand_hanasandnet}
+      BROWSER_SANDBOX_SECCOMP_PATH: ${BROWSER_SANDBOX_SECCOMP_PATH:-/home/hanasand/hanasand/ops/browser-worker/seccomp-chromium.json}
       VULNERABILITY_SCAN_STATE_PATH: ${VULNERABILITY_SCAN_STATE_PATH:-/var/lib/hanasand/vulnerability-scan.json}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api"]

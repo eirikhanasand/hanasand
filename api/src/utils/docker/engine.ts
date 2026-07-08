@@ -59,12 +59,19 @@ type DockerContainerResponse = {
 }
 
 type DockerInspectResponse = {
+    Id?: string
     RestartCount?: number
     State?: {
+        Running?: boolean
         StartedAt?: string
         Health?: {
             Status?: string
         }
+    }
+    NetworkSettings?: {
+        Networks?: Record<string, {
+            IPAddress?: string
+        }>
     }
 }
 
@@ -116,18 +123,23 @@ function resolveDockerSocketPath() {
     return candidates.find((candidate) => existsSync(candidate)) || candidates[0]
 }
 
-function requestDocker(path: string) {
+function requestDocker(path: string, options: { method?: string; body?: unknown; timeoutMs?: number } = {}) {
     return new Promise<Buffer>((resolve, reject) => {
         if (!canUseDockerSocket()) {
             reject(new Error(`Docker socket is unavailable at ${DEFAULT_SOCKET_PATH}`))
             return
         }
 
+        const body = options.body === undefined ? null : Buffer.from(JSON.stringify(options.body))
         const req = http.request(
             {
                 socketPath: DEFAULT_SOCKET_PATH,
                 path,
-                method: 'GET',
+                method: options.method || 'GET',
+                headers: body ? {
+                    'Content-Type': 'application/json',
+                    'Content-Length': String(body.length),
+                } : undefined,
             },
             (res) => {
                 const chunks: Buffer[] = []
@@ -148,7 +160,9 @@ function requestDocker(path: string) {
             }
         )
 
+        req.setTimeout(options.timeoutMs || 4_000, () => req.destroy(new Error(`Docker API timed out for ${path}`)))
         req.on('error', reject)
+        if (body) req.write(body)
         req.end()
     })
 }
@@ -205,6 +219,25 @@ function parseStats(stats: DockerStatsResponse): RuntimeContainerStats {
 async function inspectRuntimeContainer(id: string) {
     const body = await requestDocker(`/containers/${id}/json`)
     return JSON.parse(body.toString('utf8')) as DockerInspectResponse
+}
+
+export async function createRuntimeContainer(name: string, body: Record<string, unknown>) {
+    const response = await requestDocker(`/containers/create?name=${encodeURIComponent(name)}`, { method: 'POST', body, timeoutMs: 8_000 })
+    const parsed = JSON.parse(response.toString('utf8')) as { Id?: string }
+    if (!parsed.Id) throw new Error('Docker did not return a container id.')
+    return parsed.Id
+}
+
+export async function startRuntimeContainer(id: string) {
+    await requestDocker(`/containers/${encodeURIComponent(id)}/start`, { method: 'POST', timeoutMs: 8_000 })
+}
+
+export async function removeRuntimeContainer(id: string) {
+    await requestDocker(`/containers/${encodeURIComponent(id)}?force=1&v=1`, { method: 'DELETE', timeoutMs: 8_000 })
+}
+
+export async function getRuntimeContainer(id: string) {
+    return inspectRuntimeContainer(id)
 }
 
 async function statsRuntimeContainer(id: string) {
