@@ -10,7 +10,7 @@ import { removeClient } from '#utils/ws/removeClient.ts'
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import { handleOnionSessionSocket } from '../handlers/onionSession/ws.ts'
-import { updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../handlers/browserSandboxRuns.ts'
+import { finishBrowserRun, prepareBrowserRun, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../handlers/browserSandboxRuns.ts'
 import { createRuntimeContainer, getRuntimeContainer, getRuntimeContainerLogs, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
 
 const browserWorkerSeccompProfile = fs.readFileSync(new URL('../../seccomp-chromium.json', import.meta.url), 'utf8')
@@ -257,6 +257,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     let upstream: WebSocket | null = null
     let containerId = ''
     let closed = false
+    let runPrepared = false
 
     const closeBoth = () => {
         if (closed) return
@@ -268,7 +269,15 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             .catch(error => recordWebsocketFailure(`browser-session-remove-${route}`, id, error))
     }
 
-    connection.on('message', message => {
+    connection.on('message', async message => {
+        if (!runPrepared) {
+            const allowed = await prepareProxiedBrowserRun(id, message, connection).catch(error => {
+                void recordWebsocketFailure(`browser-session-prepare-${route}`, id, error)
+                return false
+            })
+            if (!allowed) return
+            runPrepared = true
+        }
         if (upstream?.readyState === WebSocket.OPEN) upstream.send(message)
         else pending.push(message)
     })
@@ -303,6 +312,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             while (pending.length && upstream.readyState === WebSocket.OPEN) upstream.send(pending.shift()!)
             upstream.on('message', message => {
                 void persistBrowserProviderResult(id, message)
+                void finishProxiedBrowserRun(id, message)
                 if (connection.readyState === WebSocket.OPEN) connection.send(message)
             })
             upstream.on('close', () => {
@@ -329,18 +339,56 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
         })
 }
 
-function persistBrowserProviderResult(id: string, message: RawData) {
-    const text = Buffer.isBuffer(message) ? message.toString('utf8') : String(message)
-    let payload: any
-    try {
-        payload = JSON.parse(text)
-    } catch {
-        return
+async function prepareProxiedBrowserRun(id: string, message: RawData, connection: WebSocket) {
+    const payload = parseSocketMessage(message)
+    if (payload?.type !== 'start') return true
+    const target = typeof payload.target === 'string' ? payload.target : ''
+    const network = payload.network === 'tor' ? 'tor' : 'regular'
+    const result = await prepareBrowserRun({
+        id,
+        target,
+        network,
+        clientId: typeof payload.clientId === 'string' ? payload.clientId : undefined,
+        userId: typeof payload.userId === 'string' ? payload.userId : undefined,
+        sessionToken: typeof payload.sessionToken === 'string' ? payload.sessionToken : undefined,
+    })
+    if (result.allowed) return true
+    if (connection.readyState === WebSocket.OPEN) {
+        connection.send(JSON.stringify({
+            type: 'status',
+            state: 'quota_exhausted',
+            sessionId: id,
+            network,
+            quota: result.quota,
+            message: `Browser run limit reached for ${result.quota?.plan || 'this account'}.`,
+        }))
+        connection.send(JSON.stringify({ type: 'ended', reason: 'quota_exhausted', sessionId: id }))
+        connection.close()
     }
+    return false
+}
+
+function persistBrowserProviderResult(id: string, message: RawData) {
+    const payload = parseSocketMessage(message)
     if (payload?.type !== 'tool_capture') return
     const result = providerRunResultValue(payload.toolAnalysis, String(payload.error || ''))
     if (!result) return
     void updateBrowserRunProviderResult(id, String(payload.toolAnalysis.toolKind), result).catch(() => undefined)
+}
+
+async function finishProxiedBrowserRun(id: string, message: RawData) {
+    const payload = parseSocketMessage(message)
+    if (payload?.type === 'ended') await finishBrowserRun(id, 'ended')
+    if (payload?.type === 'error') await finishBrowserRun(id, 'failed')
+}
+
+function parseSocketMessage(message: RawData): any {
+    const text = Buffer.isBuffer(message) ? message.toString('utf8') : String(message)
+    try {
+        return JSON.parse(text)
+    } catch {
+        return null
+    }
 }
 
 function providerRunResultValue(analysis: any, error = ''): BrowserProviderRunResult | null {
