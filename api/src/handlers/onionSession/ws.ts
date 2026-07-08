@@ -4,7 +4,7 @@ import { readFile, stat } from 'node:fs/promises'
 import WebSocket, { type RawData } from 'ws'
 import { chromium, type Browser, type BrowserContext, type Frame, type Page, type Request } from 'playwright'
 import recordLog from '#utils/logs/recordLog.ts'
-import { finishBrowserRun, prepareBrowserRun } from '../browserSandboxRuns.ts'
+import { finishBrowserRun, prepareBrowserRun, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../browserSandboxRuns.ts'
 import {
     extractIndicators,
     extractThreatAssociations,
@@ -66,6 +66,7 @@ type SandboxNetworkEvent = {
     at: string
 }
 type SandboxDeobfuscationTask = ReturnType<typeof summarizeDeobfuscationTask>
+type SandboxToolAnalysis = ReturnType<typeof analyzeToolEvidence>
 type WebCrackLoadResult = {
     loaded: boolean
     scriptId?: string
@@ -777,7 +778,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         providerText = [providerText, reportText].filter(Boolean).join('\n')
                     }
                     const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText, tool.name || toolUrl)
+                    const parsedAnalysis = analyzeToolEvidence(tool.name || toolUrl, parsedEvidence)
                     const parsedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 1500 }), 1500, openedImage)
+                    void persistProviderRunResult(parsedAnalysis)
                     send({
                         type: 'tool_capture',
                         sessionId,
@@ -788,7 +791,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         capturedAt: startedAt,
                         image: parsedImage ? parsedImage.toString('base64') : null,
                         evidence: parsedEvidence,
-                        toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, parsedEvidence),
+                        toolAnalysis: parsedAnalysis,
                         target,
                     })
                     if (officialProviderKind(preparedUrl)) return
@@ -801,6 +804,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await toolPage.waitForTimeout(webcrackLoad?.loaded ? 150 : 1200).catch(() => undefined)
                 if (webcrackTool) {
                     const evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 400, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies(), tool.name || toolUrl)
+                    const toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
                     const image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 500 }), 500, null)
                     send({
                         type: 'tool_capture',
@@ -812,7 +816,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         capturedAt: startedAt,
                         image: image ? image.toString('base64') : null,
                         evidence,
-                        toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad),
+                        toolAnalysis,
                         webcrackLoad,
                         target,
                         error: navigationError || undefined,
@@ -853,6 +857,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     target,
                     error: navigationError || undefined,
                 })
+                void persistProviderRunResult(toolAnalysis, navigationError)
             } catch (error) {
                 send({
                     type: 'tool_capture',
@@ -868,6 +873,13 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await toolPage.close().catch(() => undefined)
             }
         }))
+    }
+
+    function persistProviderRunResult(analysis?: SandboxToolAnalysis, error = '') {
+        if (!currentRunId || !analysis?.toolKind) return
+        const result = providerRunResult(analysis, error)
+        if (!result) return
+        void updateBrowserRunProviderResult(currentRunId, analysis.toolKind, result).catch(() => undefined)
     }
 
     function trackNetwork(event: SandboxNetworkEvent) {
@@ -2176,6 +2188,21 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         webcrackSampleBytes: webcrackLoad?.sampleBytes,
         webcrackLoadReason: webcrackLoad?.reason,
     }
+}
+
+function providerRunResult(analysis: SandboxToolAnalysis, error = ''): BrowserProviderRunResult | null {
+    if (analysis.toolKind === 'virustotal') {
+        if (!analysis.vendorTotal) return null
+        const flagged = analysis.vendorFlagged || 0
+        const label = `${flagged}/${analysis.vendorTotal} VT`
+        return { status: flagged > 0 ? 'suspicious' : error ? 'blocked' : 'clean', label }
+    }
+    if (analysis.toolKind === 'urlquery') {
+        if (analysis.alertCount === undefined) return null
+        const alerts = analysis.alertCount || 0
+        return { status: alerts > 0 ? 'suspicious' : error ? 'blocked' : 'clean', label: alerts > 0 ? `${alerts}` : 'urlquery' }
+    }
+    return null
 }
 
 function parseVirusTotalStats(text: string) {

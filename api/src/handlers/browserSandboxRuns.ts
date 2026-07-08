@@ -23,7 +23,12 @@ export type BrowserRunRecord = {
     startedAt: string
     checkCount?: number
     title?: string
+    providerResults?: Record<string, BrowserProviderRunResult>
     reportUrl?: string
+}
+export type BrowserProviderRunResult = {
+    status: 'clean' | 'suspicious' | 'blocked' | 'loading'
+    label: string
 }
 
 type BrowserRunIdentity = {
@@ -214,6 +219,16 @@ export async function finishBrowserRun(id: string, status: 'ended' | 'failed' = 
     `, [id, status, title])
 }
 
+export async function updateBrowserRunProviderResult(id: string, provider: string, result: BrowserProviderRunResult) {
+    if (!id || !/^[a-z0-9_-]+$/i.test(provider)) return
+    await run(`
+        UPDATE browser_runs
+        SET metadata = jsonb_set(metadata, ARRAY['providerResults', $2], $3::jsonb, true),
+            updated_at = NOW()
+        WHERE id = $1
+    `, [id, provider, JSON.stringify(result)])
+}
+
 async function browserRunIdentityForSocket(input: { clientId?: string; userId?: string; sessionToken?: string }) {
     const sessionToken = cleanText(input.sessionToken)
     const userId = cleanText(input.userId)
@@ -302,8 +317,21 @@ function rowToRunRecord(row: Record<string, any>): BrowserRunRecord {
         startedAt: new Date(row.created_at || Date.now()).toISOString(),
         checkCount: Math.max(1, Number(row.check_count || 1)),
         title: String(row.title || ''),
+        providerResults: providerResultsValue(row.metadata?.providerResults),
         reportUrl: reportToken ? browserReportViewerUrl(String(row.id || ''), String(reportToken)) : undefined,
     }
+}
+
+function providerResultsValue(value: unknown): Record<string, BrowserProviderRunResult> | undefined {
+    if (!value || typeof value !== 'object') return undefined
+    const out: Record<string, BrowserProviderRunResult> = {}
+    for (const [key, result] of Object.entries(value as Record<string, any>)) {
+        if (!/^[a-z0-9_-]+$/i.test(key) || !result || typeof result !== 'object') continue
+        const status = ['clean', 'suspicious', 'blocked', 'loading'].includes(result.status) ? result.status : 'loading'
+        const label = cleanText(result.label)
+        if (label) out[key] = { status, label }
+    }
+    return Object.keys(out).length ? out : undefined
 }
 
 async function loadAccessibleBrowserRun(req: FastifyRequest, id: string, clientId?: string, token?: string) {

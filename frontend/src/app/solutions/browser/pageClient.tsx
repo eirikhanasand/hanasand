@@ -764,11 +764,10 @@ export default function BrowserPageClient() {
                         >
                             <div className='flex items-start justify-between gap-3'>
                                 <div>
-                                    <h2 className='text-lg font-semibold text-ui-text'>Start sandbox</h2>
+                                    <h2 className='text-lg font-semibold text-ui-text'>Investigate</h2>
                                 </div>
                                 <Globe2 className='h-5 w-5 shrink-0 text-ui-primary' />
                             </div>
-                            <label className='text-sm font-semibold text-ui-text' htmlFor='sandbox-url'>URL to investigate</label>
                             <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]'>
                                 <input
                                     id='sandbox-url'
@@ -779,7 +778,7 @@ export default function BrowserPageClient() {
                                 />
                                 <button type='submit' disabled={!normalizedTarget} className='inline-flex h-12 items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                                     <Play className='h-4 w-4' />
-                                    Start sandbox
+                                    Start
                                 </button>
                             </div>
                             <details className='grid gap-3 rounded-md border border-ui-border bg-ui-raised p-3'>
@@ -1170,7 +1169,7 @@ function ProviderRunBadges({ run }: { run: BrowserRunHistory }) {
 function ProviderRunBadge({ provider, label, result }: { provider: 'virustotal' | 'urlquery'; label: string; result?: ProviderRunResult }) {
     const clean = !result || result.status === 'clean'
     const icon = provider === 'urlquery' && !clean ? '!' : clean ? '✓' : '!'
-    const text = provider === 'virustotal' ? virustotalRunLabel(result?.label) : (result?.label || label)
+    const text = provider === 'virustotal' ? virustotalRunLabel(result?.label || label) : (result?.label || label)
     return <span className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-semibold ${clean ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/40 bg-ui-warning/10 text-ui-warning'}`}>{provider === 'urlquery' ? <span>{icon}</span> : null}<span>{text}</span></span>
 }
 
