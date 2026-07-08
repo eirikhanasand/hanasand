@@ -106,7 +106,7 @@ const browserSessionQueue: SandboxAdmissionRequest[] = []
 let warmRegularBrowser: Promise<Browser> | null = null
 
 function allowLocalSandboxTargets() {
-    return process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS === '1'
+    return process.env.NODE_ENV !== 'production' && process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS === '1'
 }
 
 function chromiumHeadless() {
