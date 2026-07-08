@@ -72,7 +72,7 @@ services:
       ONION_SESSION_PROXY: ${ONION_SESSION_PROXY:-socks5://onion-tor:9050}
       BROWSER_SANDBOX_WORKER_WS: ${BROWSER_SANDBOX_WORKER_WS:-ws://browser-worker:8081/api/ws}
       BROWSER_SANDBOX_PER_SESSION_WORKER: ${BROWSER_SANDBOX_PER_SESSION_WORKER:-1}
-      BROWSER_SANDBOX_WORKER_NETWORK: ${BROWSER_SANDBOX_WORKER_NETWORK:-hanasand_hanasandnet}
+      BROWSER_SANDBOX_WORKER_NETWORK: ${BROWSER_SANDBOX_WORKER_NETWORK:-hanasand_browsernet}
       BROWSER_SANDBOX_PREWARM: "0"
       VULNERABILITY_SCAN_STATE_PATH: ${VULNERABILITY_SCAN_STATE_PATH:-/var/lib/hanasand/vulnerability-scan.json}
     healthcheck:
@@ -82,6 +82,7 @@ services:
     networks:
       - hanasandnet
       - pwnednet
+      - browsernet
     depends_on:
       postgres:
         condition: service_healthy
@@ -150,6 +151,7 @@ services:
       - "9050"
     networks:
       - hanasandnet
+      - browsernet
 
   ai-parser-bridge:
     container_name: hanasand_ai_parser_bridge
@@ -316,4 +318,7 @@ networks:
   pwnednet:
     external: true
   hanasandnet:
+    driver: bridge
+  browsernet:
+    name: hanasand_browsernet
     driver: bridge
