@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 
 const ws = readFileSync(new URL('../src/plugins/ws.ts', import.meta.url), 'utf8')
+const onionWs = readFileSync(new URL('../src/handlers/onionSession/ws.ts', import.meta.url), 'utf8')
 const composeUrl = new URL('../../docker-compose.yml', import.meta.url)
 
 assert.match(ws, /BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only'/, 'browser proxy should require per-session workers unless an unsafe dev-only override is set')
@@ -9,6 +10,8 @@ assert.doesNotMatch(ws, /BROWSER_SANDBOX_PER_SESSION_WORKER !== '0'/, 'browser p
 assert.match(ws, /createRuntimeContainer/, 'browser proxy should create an isolated worker container')
 assert.match(ws, /connectBrowserWorkerSocket/, 'browser proxy should wait for the worker websocket before failing the session')
 assert.match(ws, /Shared browser worker is disabled; isolated per-session workers are required in production\./, 'main API should fail closed instead of running a browser locally when shared worker config is missing')
+assert.match(onionWs, /Production browser sessions must run in isolated browser workers\./, 'browser handler should reject production launches outside worker-only containers')
+assert.match(onionWs, /Production browser workers require Chromium sandbox\./, 'browser handler should require Chromium sandbox in production workers')
 assert.match(ws, /Init:\s*true/, 'session worker should run with Docker init enabled')
 assert.match(ws, /ReadonlyRootfs:\s*true/, 'session worker root filesystem should be read-only')
 assert.match(ws, /CapDrop:\s*\['ALL'\]/, 'session worker should drop Linux capabilities')

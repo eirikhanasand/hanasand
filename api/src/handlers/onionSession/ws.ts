@@ -145,6 +145,12 @@ function regularBrowser() {
     return warmRegularBrowser
 }
 
+function assertProductionBrowserWorker() {
+    if (process.env.NODE_ENV !== 'production') return
+    if (process.env.BROWSER_SANDBOX_WORKER_ONLY !== '1') throw new Error('Production browser sessions must run in isolated browser workers.')
+    if (process.env.BROWSER_SANDBOX_CHROMIUM_SANDBOX !== '1') throw new Error('Production browser workers require Chromium sandbox.')
+}
+
 if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_WORKER_ONLY !== '1' && process.env.BROWSER_SANDBOX_PREWARM !== '0') {
     setTimeout(() => void regularBrowser().catch(() => undefined), 1000).unref()
 }
@@ -397,6 +403,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
 
     async function startBrowser(message: BrokerMessage) {
         await cleanup()
+        assertProductionBrowserWorker()
         closed = false
         remoteClipboard = ''
         networkEvents = []
