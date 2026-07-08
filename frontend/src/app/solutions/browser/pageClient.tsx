@@ -2215,7 +2215,13 @@ function dedupeThreatAssociations(input: SandboxThreatAssociation[]) {
 }
 
 function cleanEvidenceExcerpt(value?: string) {
-    const cleaned = value?.replace(/\s+/g, ' ').trim() || ''
+    const cleaned = value
+        ?.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&(?:nbsp|amp|lt|gt|quot|#39);/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim() || ''
     if (!cleaned || /^(ads do fetching\.?\s*){2,}/i.test(cleaned)) return ''
     return cleaned.length > 260 ? `${cleaned.slice(0, 257)}...` : cleaned
 }

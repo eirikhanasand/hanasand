@@ -1682,7 +1682,7 @@ export function providerSummaryText(providerText: string, providerHint = '') {
     const vt = parseVirusTotalStats(providerText)
     const uq = parseUrlQueryScores(providerText)
     return [
-        !lowerHint.includes('urlquery') && vt ? `${vt.flagged}/${vt.total || '?'} security vendors flagged this URL.` : '',
+        !lowerHint.includes('urlquery') && vt ? Number.isFinite(vt.total) ? `${vt.flagged}/${vt.total} security vendors flagged this URL.` : `${vt.flagged} security vendors flagged this URL.` : '',
         !lowerHint.includes('virustotal') && uq ? `${uq.alerts} urlquery alerts were found.` : '',
     ].filter(Boolean).join('\n')
 }

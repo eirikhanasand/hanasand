@@ -43,6 +43,7 @@ assertIncludes(liveClient, 'consoleEvents', 'page console output must be separat
 assertIncludes(liveClient, 'title=\'Activity\'', 'broker status messages must render as activity, not console logs')
 assertIncludes(liveClient, 'virusTotalVendorLabel', 'VirusTotal labels must avoid broken 0/? totals')
 assertIncludes(liveClient, 'ANALYSIS_TOOL_DOMAINS', 'copyable indicators must exclude analysis provider URLs')
+assertIncludes(liveClient, '.replace(/<[^>]+>/g, \' \')', 'analyst evidence excerpts must strip leaked HTML tags')
 
 for (const token of [
     'Browser sandbox report',
