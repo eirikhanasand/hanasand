@@ -1670,7 +1670,7 @@ function ProviderReportDetails({ tool, capture, compact = false }: { tool: Sandb
         capture.error && capture.error !== 'provider_navigation_pending' ? `Error: ${providerErrorText(capture.error)}` : '',
     ].filter(Boolean) as Array<string | [string, string]>
     return (
-        <div className={`grid w-full gap-3 text-left ${compact ? 'text-xs' : 'max-w-3xl rounded-md border border-ui-border bg-ui-panel p-4 shadow-sm'}`}>
+        <div className={`grid w-full gap-3 text-left ${compact ? 'text-xs' : 'h-full rounded-md border border-ui-border bg-ui-panel p-4 shadow-sm'}`}>
             <div>
                 <p className='text-xs font-semibold uppercase text-ui-primary'>{providerStatus(capture, analysis)}</p>
                 <h2 className={`${compact ? 'text-sm' : 'text-lg'} mt-1 font-semibold text-ui-text`}>{tool.name}</h2>
