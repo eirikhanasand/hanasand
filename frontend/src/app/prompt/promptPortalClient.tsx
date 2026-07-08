@@ -198,7 +198,7 @@ function PromptItem({ item }: { item: PortalItem }) {
                 <span className='text-xs font-semibold uppercase text-ui-muted'>{item.priority === 'now' ? 'Now' : 'Next'} · {item.status}</span>
                 <time className='text-xs text-ui-muted'>{new Date(item.createdAt).toLocaleString()}</time>
             </div>
-            <p className='whitespace-pre-wrap break-words text-sm leading-6 text-ui-text'>{item.prompt}</p>
+            <p className='whitespace-pre-wrap wrap-break-word text-sm leading-6 text-ui-text'>{item.prompt}</p>
             {item.files.length ? <p className='text-xs font-semibold text-ui-muted'>{item.files.length} image{item.files.length === 1 ? '' : 's'} attached</p> : null}
             {item.result ? <pre className='max-h-80 overflow-auto whitespace-pre-wrap rounded-lg border border-ui-border bg-ui-canvas p-3 text-sm leading-6 text-ui-text'>{item.result}</pre> : null}
         </article>
