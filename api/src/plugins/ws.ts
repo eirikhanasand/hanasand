@@ -206,8 +206,7 @@ function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' 
     if (!base) {
         const message = 'Shared browser worker is disabled; isolated per-session workers are required in production.'
         if (connection.readyState === WebSocket.OPEN) {
-            connection.send(JSON.stringify({ type: 'error', message }))
-            connection.close()
+            sendErrorThenClose(connection, message)
         }
         void recordLog({
             level: 'error',
@@ -301,11 +300,18 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
         .catch(error => {
             const message = error instanceof Error ? error.message : String(error)
             if (connection.readyState === WebSocket.OPEN) {
-                connection.send(JSON.stringify({ type: 'error', message: `Failed to start isolated browser worker: ${message}` }))
+                sendErrorThenClose(connection, `Failed to start isolated browser worker: ${message}`)
+            } else {
+                closeBoth()
             }
             void recordWebsocketFailure(`browser-session-create-${route}`, id, error)
-            closeBoth()
         })
+}
+
+function sendErrorThenClose(connection: WebSocket, message: string) {
+    connection.send(JSON.stringify({ type: 'error', message }), () => {
+        if (connection.readyState === WebSocket.OPEN) connection.close()
+    })
 }
 
 function connectBrowserWorkerSocket(url: string, attempts = 20): Promise<WebSocket> {
