@@ -35,8 +35,8 @@ const emptyState: PortalState = {
     items: [],
 }
 
-export default function PromptPortalClient() {
-    const [state, setState] = useState<PortalState>(emptyState)
+export default function PromptPortalClient({ initialState = emptyState }: { initialState?: PortalState }) {
+    const [state, setState] = useState<PortalState>(initialState)
     const [code, setCode] = useState('')
     const [prompt, setPrompt] = useState('')
     const [priority, setPriority] = useState<'now' | 'next'>('next')
