@@ -64,6 +64,13 @@ for forbidden in DB_PASSWORD DB_HOST VM_API_TOKEN MAIL_ADMIN_PASSWORD API_SSH_KE
     fi
 done
 
+printf '%s\n' "$env" | while IFS='=' read -r name _; do
+    case "$name" in
+        NODE_ENV|PORT|HOME|BROWSER_SANDBOX_WORKER_ONLY|BROWSER_SANDBOX_SKIP_RUN_DB|BROWSER_SANDBOX_CHROMIUM_SANDBOX|BROWSER_SANDBOX_MAX_SESSIONS|BROWSER_SANDBOX_PREWARM|ONION_SESSION_PROXY|PATH|HOSTNAME) ;;
+        *) fail "unexpected browser worker environment variable present: $name" ;;
+    esac
+done
+
 printf '%s\n' "$env" | grep -q '^BROWSER_SANDBOX_MAX_SESSIONS=1$' || fail "browser worker must enforce one browser session per container"
 
 for forbidden_binary in docker ssh git trivy k6; do

@@ -29,6 +29,7 @@ for (const value of [
     'VM_API_TOKEN',
     'MAIL_ADMIN_PASSWORD',
     'API_SSH_KEY',
+    'unexpected browser worker environment variable present',
     'browser worker must enforce one browser session per container',
     'forbidden operational tool is installed in browser worker',
     'DOCKER-USER',
