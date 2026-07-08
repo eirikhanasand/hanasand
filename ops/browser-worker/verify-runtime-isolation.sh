@@ -110,7 +110,7 @@ done
 
 if command -v ip6tables >/dev/null 2>&1; then
     for blocked in ::ffff:0:0/96 64:ff9b::/96 fc00::/7 fe80::/10; do
-        ip6tables -S "$FIREWALL_CHAIN" 2>/dev/null | grep -q -- "-d $blocked" || fail "IPv6 firewall chain does not block $blocked"
+        ip6tables -C "$FIREWALL_CHAIN" -d "$blocked" -j REJECT 2>/dev/null || fail "IPv6 firewall chain does not block $blocked"
     done
 fi
 
