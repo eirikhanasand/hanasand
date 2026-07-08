@@ -46,7 +46,6 @@ import {
     buildDwmWebhookDeliveryRetryContract,
     createDwmWebhookDestination,
     buildDwmWebhookDeliveryReadiness,
-    deliverDwmAlertNotification,
     triggerDwmAlertWebhookNotification,
     filterDwmWebhookDeliveryEvidenceForVisibility,
     listDwmWebhookAuditEvents,
