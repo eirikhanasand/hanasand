@@ -478,6 +478,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 locale: 'en-US',
                 extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
                 acceptDownloads: true,
+                serviceWorkers: 'block',
                 permissions: network === 'regular' ? [] : ['clipboard-read', 'clipboard-write'],
             })
             await context.addInitScript(() => {

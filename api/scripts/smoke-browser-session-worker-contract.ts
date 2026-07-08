@@ -21,6 +21,7 @@ assert.match(ws, /Shared browser worker is disabled; isolated per-session worker
 assert.match(onionWs, /Production browser sessions must run in isolated browser workers\./, 'browser handler should reject production launches outside worker-only containers')
 assert.match(onionWs, /Production browser workers require Chromium sandbox\./, 'browser handler should require Chromium sandbox in production workers')
 assert.doesNotMatch(onionWs, /sandboxDnsSafetyCache/, 'DNS safety should not cache successful host checks because that permits DNS rebinding')
+assert.match(onionWs, /serviceWorkers:\s*'block'/, 'browser context should block service workers so request safety routing cannot be bypassed')
 assert.match(ws, /Init:\s*true/, 'session worker should run with Docker init enabled')
 assert.match(ws, /ReadonlyRootfs:\s*true/, 'session worker root filesystem should be read-only')
 assert.match(ws, /CapDrop:\s*\['ALL'\]/, 'session worker should drop Linux capabilities')
