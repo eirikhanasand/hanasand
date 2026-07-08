@@ -86,11 +86,12 @@ export function promptPortalIdleExpiresAt(state: PromptPortalState) {
 }
 
 export function publicPromptPortalState(state: PromptPortalState, sessionId?: string): PromptPortalPublicState {
+    const authenticated = Boolean(sessionId && state.sessions[sessionId])
     return {
-        authenticated: Boolean(sessionId && state.sessions[sessionId]),
-        readOnly: promptPortalReadOnly(state),
-        items: [...state.items].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
-        idleExpiresAt: promptPortalIdleExpiresAt(state),
+        authenticated,
+        readOnly: authenticated && promptPortalReadOnly(state),
+        items: authenticated ? [...state.items].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)) : [],
+        idleExpiresAt: authenticated ? promptPortalIdleExpiresAt(state) : undefined,
     }
 }
 

@@ -25,4 +25,5 @@ test('prompt portal keeps unauthenticated access code gated and queue based', as
     expect(store).toContain('PROMPT_PORTAL_WORKER_TOKEN')
     expect(store).toContain('const IDLE_MS = 15 * 60 * 1000')
     expect(store).toContain('timingSafeEqual')
+    expect(store).toContain('items: authenticated ?')
 })
