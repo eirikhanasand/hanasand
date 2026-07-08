@@ -707,7 +707,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 if (providerText && hasParsedProviderData(tool, providerText)) {
                     navigationError = ''
                     const reportUrl = isUrlQueryTool(tool, toolPage.url()) && !/\/report\//i.test(toolPage.url())
-                        ? await firstUrlQueryReportUrl(toolPage)
+                        ? await firstUrlQueryReportUrl(toolPage, target)
                         : ''
                     if (reportUrl) {
                         await toolPage.goto(reportUrl, { waitUntil: 'domcontentloaded', timeout: providerTimeoutMs(tool) }).catch(() => undefined)
@@ -1638,11 +1638,20 @@ async function interactWithProvider(page: Page, tool: { id?: string; name?: stri
     return ''
 }
 
-async function firstUrlQueryReportUrl(page: Page) {
-    return page.evaluate(() => {
-        const link = Array.from(document.links).find(item => /\/report\/[a-f0-9-]{24,}/i.test(item.href))
-        return link?.href || ''
-    }).catch(() => '')
+async function firstUrlQueryReportUrl(page: Page, target: string) {
+    const host = domainFromUrl(target)?.replace(/^www\./, '').toLowerCase() || ''
+    return page.evaluate((targetHost) => {
+        const links = Array.from(document.links).filter(item => /\/report\/[a-f0-9-]{24,}/i.test(item.href))
+        const matching = links.find(item => {
+            const rowText = [
+                item.href,
+                item.textContent || '',
+                item.closest('tr,li,article,section,div')?.textContent || '',
+            ].join(' ').toLowerCase()
+            return targetHost && rowText.includes(targetHost)
+        })
+        return (matching || links[0])?.href || ''
+    }, host).catch(() => '')
 }
 
 function collectProviderResponses(page: Page, toolName: string) {

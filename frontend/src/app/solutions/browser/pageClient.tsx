@@ -619,14 +619,15 @@ export default function BrowserPageClient() {
         return { x, y }
     }, [activeFrame.height, activeFrame.width])
 
-    const clickBrowserFrame = useCallback((event: MouseEvent<HTMLImageElement>) => {
+    const clickBrowserFrame = useCallback((event: MouseEvent<HTMLDivElement>) => {
+        if (activeTool) return
         viewportRef.current?.focus()
         const point = browserPoint(event.clientX, event.clientY)
         if (!point) return
         sendBrowserInput({ type: 'click', ...point, button: 0 })
-    }, [browserPoint, sendBrowserInput])
+    }, [activeTool, browserPoint, sendBrowserInput])
 
-    const pointerBrowserFrame = useCallback((event: PointerEvent<HTMLImageElement>) => {
+    const pointerBrowserFrame = useCallback((event: PointerEvent<HTMLDivElement>) => {
         if (activeTool) return
         const point = browserPoint(event.clientX, event.clientY)
         if (!point) return
@@ -840,6 +841,12 @@ export default function BrowserPageClient() {
                                 role='application'
                                 aria-label='Interactive isolated browser viewport'
                                 onKeyDown={keyBrowserFrame}
+                                onClick={clickBrowserFrame}
+                                onPointerDown={pointerBrowserFrame}
+                                onPointerMove={event => {
+                                    if (event.buttons) pointerBrowserFrame(event)
+                                }}
+                                onPointerUp={pointerBrowserFrame}
                                 onWheel={activeTool ? undefined : wheelBrowserFrame}
                             >
                                 {activeTool && activeToolCapture ? (
@@ -849,14 +856,8 @@ export default function BrowserPageClient() {
                                         ref={imageRef}
                                         src={activeViewportImage}
                                         alt='Live browser sandbox frame'
-                                        className='absolute inset-0 h-full w-full cursor-pointer select-none bg-ui-canvas object-contain'
+                                        className='pointer-events-none absolute inset-0 h-full w-full cursor-pointer select-none bg-ui-canvas object-contain'
                                         draggable={false}
-                                        onClick={clickBrowserFrame}
-                                        onPointerDown={pointerBrowserFrame}
-                                        onPointerMove={event => {
-                                            if (event.buttons) pointerBrowserFrame(event)
-                                        }}
-                                        onPointerUp={pointerBrowserFrame}
                                         onDragStart={event => event.preventDefault()}
                                     />
                                 ) : (
@@ -1661,29 +1662,33 @@ function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; captur
 
 function ProviderReportDetails({ tool, capture, compact = false }: { tool: SandboxTool; capture: Capture; compact?: boolean }) {
     const analysis = capture.toolAnalysis
+    const commentCount = analysis?.communityCommentCount
     const facts = [
         analysis?.vendorFlagged !== undefined ? ['Vendors', virusTotalVendorLabel(analysis)] : undefined,
         analysis?.alertCount !== undefined ? ['urlquery alerts', String(analysis.alertCount)] : undefined,
-        analysis?.communityCommentCount !== undefined ? ['Comments', String(analysis.communityCommentCount)] : undefined,
+        commentCount !== undefined ? [commentCount === 1 ? 'Comment' : 'Comments', String(commentCount)] : undefined,
         analysis?.verdict && analysis.verdict !== 'unknown' ? ['Verdict', analysis.verdict] : undefined,
         capture.image ? ['Screenshot', 'captured'] : undefined,
         capture.error && capture.error !== 'provider_navigation_pending' ? `Error: ${providerErrorText(capture.error)}` : '',
     ].filter(Boolean) as Array<string | [string, string]>
     return (
-        <div className={`grid w-full gap-3 text-left ${compact ? 'text-xs' : 'h-full rounded-md border border-ui-border bg-ui-panel p-4 shadow-sm'}`}>
-            <div>
-                <p className='text-xs font-semibold uppercase text-ui-primary'>{providerStatus(capture, analysis)}</p>
-                <h2 className={`${compact ? 'text-sm' : 'text-lg'} mt-1 font-semibold text-ui-text`}>{tool.name}</h2>
-                <a href={capture.url || tool.url} target='_blank' rel='noreferrer noopener' className='mt-1 block break-all font-mono text-xs text-ui-primary underline-offset-2 hover:underline'>{capture.url || tool.url}</a>
+        <div className={`grid w-full content-start gap-3 text-left ${compact ? 'text-xs' : 'rounded-md border border-ui-border bg-ui-panel p-4 shadow-sm'}`}>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-ui-primary'>{providerStatus(capture, analysis)}</p>
+                    <h2 className={`${compact ? 'text-sm' : 'text-lg'} mt-1 font-semibold text-ui-text`}>{tool.name}</h2>
+                    <a href={capture.url || tool.url} target='_blank' rel='noreferrer noopener' className='mt-1 block break-all font-mono text-xs text-ui-primary underline-offset-2 hover:underline'>{capture.url || tool.url}</a>
+                </div>
+                {facts.length ? (
+                    <div className='flex max-w-full flex-wrap justify-end gap-2'>
+                        {facts.map((fact) => Array.isArray(fact)
+                            ? <div key={fact[0]} className='min-w-24 rounded-md border border-ui-border bg-ui-canvas px-2 py-1.5'><p className='text-[10px] font-semibold uppercase text-ui-muted'>{fact[0]}</p><p className='mt-0.5 font-semibold text-ui-text'>{fact[1]}</p></div>
+                            : <p key={fact} className='text-ui-danger'>{fact}</p>)}
+                    </div>
+                ) : null}
             </div>
             {capture.image && !compact ? <img src={capture.image} alt={`${tool.name} provider screenshot`} className='max-h-[32rem] w-full rounded border border-ui-border bg-ui-canvas object-contain' /> : null}
-            {facts.length ? (
-                <div className='grid gap-2 sm:grid-cols-2'>
-                    {facts.map((fact) => Array.isArray(fact)
-                        ? <div key={fact[0]} className='rounded-md border border-ui-border bg-ui-canvas p-2'><p className='text-[10px] font-semibold uppercase text-ui-muted'>{fact[0]}</p><p className='mt-1 font-semibold text-ui-text'>{fact[1]}</p></div>
-                        : <p key={fact} className='text-ui-danger'>{fact}</p>)}
-                </div>
-            ) : <p className='text-sm text-ui-muted'>{providerDetail(analysis, capture)}</p>}
+            {!facts.length ? <p className='text-sm text-ui-muted'>{providerDetail(analysis, capture)}</p> : null}
             {analysis?.communitySummary ? <p className='text-xs leading-5 text-ui-muted'>{analysis.communitySummary}</p> : null}
             {analysis?.threatAssociations?.length ? (
                 <div className='flex flex-wrap gap-1'>
