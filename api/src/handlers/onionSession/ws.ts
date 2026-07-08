@@ -292,7 +292,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }
     }
 
-    const cleanup = async () => {
+    const cleanup = async (runStatus: 'ended' | 'failed' = 'ended') => {
         closed = true
         cancelAdmission?.()
         cancelAdmission = null
@@ -306,7 +306,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         currentRunId = null
         if (runId) {
             const title = page ? await page.title().catch(() => '') : ''
-            await finishBrowserRun(runId, 'ended', title).catch(() => undefined)
+            await finishBrowserRun(runId, runStatus, title).catch(() => undefined)
         }
         cachedDeobfuscationTasks = []
         cachedThreatAssociations = []
@@ -639,7 +639,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const message = error instanceof Error ? error.message : String(error)
             send({ type: 'status', state: 'failed', sessionId, message })
             send({ type: 'ended', reason: 'launch_failed', sessionId, message })
-            await cleanup()
+            await cleanup('failed')
         }
     }
 
@@ -1686,8 +1686,6 @@ function officialProviderKind(resolvedUrl: string) {
 
 function providerStartUrl(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string, target: string) {
     const kind = officialProviderKind(resolvedUrl)
-        || (isVirusTotalTool(tool, resolvedUrl) ? 'virustotal' : '')
-        || (isUrlQueryTool(tool, resolvedUrl) ? 'urlquery' : '')
     if (kind === 'virustotal') return `https://www.virustotal.com/gui/url/${virusTotalUrlId(target)}`
     if (kind === 'urlquery') return `https://urlquery.net/api/htmx/search/?limit=24&offset=0&q=${encodeURIComponent(target)}&type=reports`
     return resolvedUrl

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { homedir } from 'node:os'
+import path from 'node:path'
 import WebSocket, { WebSocketServer } from 'ws'
 import { chromium } from 'playwright'
-import { handleOnionSessionSocket } from '../src/handlers/onionSession/ws.ts'
-import { extractThreatAssociations } from '../src/handlers/onionSession/analysis.ts'
 
 type BrokerPayload = {
     type?: string
@@ -54,8 +54,29 @@ type BrokerPayload = {
 }
 
 process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS = '1'
-const playwrightChromium = chromium.executablePath()
-if (!process.env.CHROMIUM_BIN && existsSync(playwrightChromium)) process.env.CHROMIUM_BIN = playwrightChromium
+const chromiumCandidate = [
+    process.env.CHROMIUM_BIN || '',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    chromium.executablePath(),
+    ...cachedChromiumCandidates(),
+].find(candidate => candidate && existsSync(candidate))
+if (chromiumCandidate) process.env.CHROMIUM_BIN = chromiumCandidate
+
+const { handleOnionSessionSocket } = await import('../src/handlers/onionSession/ws.ts')
+const { extractThreatAssociations } = await import('../src/handlers/onionSession/analysis.ts')
+
+function cachedChromiumCandidates() {
+    const cacheRoot = path.join(homedir(), 'Library', 'Caches', 'ms-playwright')
+    try {
+        return readdirSync(cacheRoot, { withFileTypes: true })
+            .filter(entry => entry.isDirectory() && entry.name.startsWith('chromium_headless_shell-'))
+            .map(entry => path.join(cacheRoot, entry.name, 'chrome-headless-shell-mac-arm64', 'chrome-headless-shell'))
+    } catch {
+        return []
+    }
+}
 
 const payloadDomain = 'payload.example.test'
 const downloadBody = 'sandbox download hash fixture\n'

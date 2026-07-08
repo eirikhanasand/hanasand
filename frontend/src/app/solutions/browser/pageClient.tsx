@@ -567,6 +567,9 @@ export default function BrowserPageClient() {
                 } else if (statusState === 'quota_exhausted') {
                     setSessionState('failed')
                     setRunBlocker(String(payload.message || 'Browser run limit reached.'))
+                } else if (statusState === 'failed') {
+                    setSessionState('failed')
+                    setRunBlocker(String(payload.message || 'Sandbox launch failed.'))
                 }
                 if (payload.url) setActiveUrl(String(payload.url))
                 pushEvent(String(payload.message || payload.state || 'Browser status updated.'))
@@ -855,6 +858,7 @@ export default function BrowserPageClient() {
                                 sessionState={sessionState}
                                 tools={selectedProfile.tools}
                                 toolCaptures={toolCaptures}
+                                target={normalizedTarget}
                                 browserCaptured={Boolean(activeImage || captures.some(capture => capture.kind === 'page' && capture.image && !capture.frameQuality?.looksBlank))}
                                 onSelect={setActiveSandboxTab}
                             />
@@ -903,14 +907,14 @@ export default function BrowserPageClient() {
                         <QuickTriageStrip summary={summary} toolCaptures={toolCaptures} toolCount={selectedProfile.tools.length} />
                         <aside className='grid gap-4 xl:grid-cols-3'>
                             <CapacityPanel capacity={capacity} sessionState={sessionState} />
-                            <ProviderStatusPanel tools={selectedProfile.tools} toolCaptures={toolCaptures} onSelect={setActiveSandboxTab} />
+                            <ProviderStatusPanel tools={selectedProfile.tools} toolCaptures={toolCaptures} target={normalizedTarget} onSelect={setActiveSandboxTab} />
                             <div className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted'>
                                 Latest event: {events[0]}
                             </div>
                         </aside>
                     </div>
                     <div className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)]'>
-                        <EvidenceWorkspace captures={captures} profile={selectedProfile} summary={summary} events={events} consoleEvents={consoleEvents} />
+                        <EvidenceWorkspace captures={captures} profile={selectedProfile} target={normalizedTarget} summary={summary} events={events} consoleEvents={consoleEvents} />
                         <aside className='grid min-w-0 gap-4'>
                             <AnalystSummary summary={summary} captures={captures} />
                             <CaptureTimeline captures={captures} />
@@ -927,6 +931,7 @@ function SandboxTabStrip({
     sessionState,
     tools,
     toolCaptures,
+    target,
     browserCaptured,
     onSelect,
 }: {
@@ -934,6 +939,7 @@ function SandboxTabStrip({
     sessionState: SessionState
     tools: SandboxTool[]
     toolCaptures: Capture[]
+    target: string
     browserCaptured: boolean
     onSelect: (tab: string) => void
 }) {
@@ -946,7 +952,7 @@ function SandboxTabStrip({
                 onClick={() => onSelect('browser')}
             />
             {tools.map(tool => {
-                const capture = selectToolCapture(toolCaptures, tool)
+                const capture = selectToolCapture(toolCaptures, tool, target)
                 return (
                     <SandboxTabButton
                         key={tool.id}
@@ -974,13 +980,13 @@ function SandboxTabButton({ active, label, status, onClick }: { active: boolean;
     )
 }
 
-function ProviderStatusPanel({ tools, toolCaptures, onSelect }: { tools: SandboxTool[]; toolCaptures: Capture[]; onSelect: (tab: string) => void }) {
+function ProviderStatusPanel({ tools, toolCaptures, target, onSelect }: { tools: SandboxTool[]; toolCaptures: Capture[]; target: string; onSelect: (tab: string) => void }) {
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
             <h2 className='text-sm font-semibold uppercase text-ui-primary'>Provider tabs</h2>
             <div className='mt-3 grid gap-2'>
                 {tools.length ? tools.map(tool => {
-                    const capture = selectToolCapture(toolCaptures, tool)
+                    const capture = selectToolCapture(toolCaptures, tool, target)
                     const analysis = capture?.toolAnalysis
                     return (
                         <button
@@ -1320,12 +1326,14 @@ function AnalystSummary({ summary, captures }: { summary: ReturnType<typeof buil
 function EvidenceWorkspace({
     captures,
     profile,
+    target,
     summary,
     events,
     consoleEvents,
 }: {
     captures: Capture[]
     profile: SandboxProfile
+    target: string
     summary: ReturnType<typeof buildAnalystSummary>
     events: string[]
     consoleEvents: string[]
@@ -1395,7 +1403,7 @@ function EvidenceWorkspace({
 
                 <div className='grid gap-3 md:grid-cols-3'>
                     {profile.tools.map(tool => {
-                        const capture = selectToolCapture(toolCaptures, tool)
+                        const capture = selectToolCapture(toolCaptures, tool, target)
                         const analysis = capture?.toolAnalysis
                         return (
                             <EvidencePanel key={tool.id} title={tool.name} status={providerStatus(capture, analysis)}>
@@ -1864,7 +1872,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
     const toolCaptures = input.captures.filter(capture => capture.kind === 'tool')
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
     const providerReports = input.profile.tools.map(tool => {
-        const capture = selectToolCapture(toolCaptures, tool)
+        const capture = selectToolCapture(toolCaptures, tool, input.target)
         const analysis = capture?.toolAnalysis
         return {
             tool: tool.name,
