@@ -61,7 +61,7 @@
   --page-wash-bottom: #050b14;
   --dot-grid: rgba(117, 148, 205, 0.46);
   --ambient-primary: rgba(48, 86, 211, 0.105);
-  --ambient-secondary: rgba(20, 163, 90, 0.024);
+  --ambient-secondary: rgba(20, 163, 90, 0.009);
   --ambient-neutral: rgba(157, 182, 255, 0.055);
   --panel-border: rgba(247, 248, 242, 0.10);
   --panel-surface: rgba(13, 15, 12, 0.78);
@@ -113,7 +113,7 @@ body {
   color: var(--foreground);
   background:
     radial-gradient(ellipse 58rem 34rem at 86% -8%, var(--ambient-neutral) 0%, transparent 72%),
-    radial-gradient(ellipse 52rem 36rem at 8% 94%, var(--ambient-secondary) 0%, transparent 76%),
+    radial-gradient(ellipse 74rem 50rem at 0% 100%, var(--ambient-secondary) 0%, transparent 86%),
     linear-gradient(180deg, var(--page-wash-top), var(--background) 46%, var(--page-wash-bottom));
   font-family: var(--font-sans);
   transition: background 0.4s, color 0.4s;
@@ -255,7 +255,7 @@ button:not(:disabled),
   opacity: 0.68;
   background:
     radial-gradient(ellipse 56rem 38rem at 82% 10%, var(--ambient-primary) 0%, transparent 76%),
-    radial-gradient(ellipse 50rem 42rem at 11% 72%, var(--ambient-secondary) 0%, transparent 78%),
+    radial-gradient(ellipse 72rem 54rem at 6% 82%, var(--ambient-secondary) 0%, transparent 88%),
     radial-gradient(ellipse 70rem 46rem at 55% 34%, var(--ambient-neutral) 0%, transparent 82%);
   filter: blur(48px);
 }
