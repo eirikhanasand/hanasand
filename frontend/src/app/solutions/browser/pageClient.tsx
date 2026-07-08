@@ -2338,9 +2338,11 @@ const GENERIC_DOTTED_INDICATORS = new Set([
     'el.textcontent',
     'element.style',
 ])
+const ANALYSIS_TOOL_DOMAINS = new Set(['virustotal.com', 'www.virustotal.com', 'urlquery.net', 'www.urlquery.net', 'webcrack.netlify.app'])
 
 function isUsefulDomainIndicator(value: string) {
     const normalized = value.toLowerCase()
+    if (ANALYSIS_TOOL_DOMAINS.has(normalized)) return false
     if (GENERIC_DOTTED_INDICATORS.has(normalized)) return false
     return !/^(?:document|window|object|array|string|number|console|json|math|element|el|node|event|navigator|location|history|localstorage|sessionstorage)\./i.test(normalized)
 }

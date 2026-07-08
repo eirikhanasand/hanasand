@@ -42,6 +42,7 @@ assertIncludes(liveClient, 'No sample needed', 'WebCrack no-sample runs must not
 assertIncludes(liveClient, 'consoleEvents', 'page console output must be separated from broker activity')
 assertIncludes(liveClient, 'title=\'Activity\'', 'broker status messages must render as activity, not console logs')
 assertIncludes(liveClient, 'virusTotalVendorLabel', 'VirusTotal labels must avoid broken 0/? totals')
+assertIncludes(liveClient, 'ANALYSIS_TOOL_DOMAINS', 'copyable indicators must exclude analysis provider URLs')
 
 for (const token of [
     'Browser sandbox report',
