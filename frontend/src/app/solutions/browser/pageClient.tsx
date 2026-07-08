@@ -500,6 +500,7 @@ export default function BrowserPageClient() {
                 const image = `data:image/jpeg;base64,${payload.image}`
                 const evidence = evidenceValue(payload.evidence)
                 if (isUsefulFrameImage(image)) setActiveImage(image)
+                setSessionState(current => current === 'connecting' || current === 'queued' ? 'live' : current)
                 const urlValue = String(payload.url || url)
                 const frameWidth = finiteNumber(payload.width) || 1280
                 const frameHeight = finiteNumber(payload.height) || 720
@@ -575,6 +576,11 @@ export default function BrowserPageClient() {
                 return
             }
             if (payload.type === 'navigation_error' || payload.type === 'error') {
+                if (payload.type === 'navigation_error' && isDegradedNavigationError(stringValue(payload.message))) {
+                    setRunBlocker(String(payload.message || 'Target navigation did not complete; showing captured browser/provider evidence.'))
+                    pushEvent(String(payload.message || 'Target navigation did not complete; showing captured browser/provider evidence.'))
+                    return
+                }
                 setSessionState('failed')
                 setRunBlocker(String(payload.message || 'Sandbox navigation failed.'))
                 pushEvent(String(payload.message || 'Sandbox navigation failed.'))
@@ -1752,6 +1758,10 @@ function providerRunResult(analysis?: SandboxToolAnalysis, error = ''): Provider
         return { status: alerts > 0 ? 'suspicious' : error ? 'blocked' : 'clean', label: alerts > 0 ? `${alerts}` : 'urlquery' }
     }
     return null
+}
+
+function isDegradedNavigationError(message = '') {
+    return /timeout|net::err_(?:connection_timed_out|timed_out|name_not_resolved|connection_refused|address_unreachable)/i.test(message)
 }
 
 function cleanConsoleEvent(value: string) {
