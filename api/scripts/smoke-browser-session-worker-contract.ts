@@ -12,6 +12,8 @@ assert.doesNotMatch(ws, /BROWSER_SANDBOX_PER_SESSION_WORKER !== '0'/, 'browser p
 assert.match(ws, /createRuntimeContainer/, 'browser proxy should create an isolated worker container')
 assert.match(ws, /connectBrowserWorkerSocket/, 'browser proxy should wait for the worker websocket before failing the session')
 assert.match(ws, /BROWSER_SANDBOX_WORKER_IMAGE \|\| 'hanasand_browser_worker'/, 'ephemeral workers should use the browser-worker image, not the privileged API image')
+assert.match(ws, /BROWSER_SANDBOX_WORKER_NETWORK \|\| 'hanasand_browsernet'/, 'ephemeral workers should fall back to the dedicated browser network')
+assert.doesNotMatch(ws, /BROWSER_SANDBOX_WORKER_NETWORK \|\| 'hanasand_hanasandnet'/, 'ephemeral workers must not fall back to the app network')
 assert.match(ws, /Shared browser worker is disabled; isolated per-session workers are required in production\./, 'main API should fail closed instead of running a browser locally when shared worker config is missing')
 assert.match(onionWs, /Production browser sessions must run in isolated browser workers\./, 'browser handler should reject production launches outside worker-only containers')
 assert.match(onionWs, /Production browser workers require Chromium sandbox\./, 'browser handler should require Chromium sandbox in production workers')

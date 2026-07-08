@@ -338,7 +338,7 @@ function connectBrowserWorkerSocket(url: string, attempts = 20): Promise<WebSock
 
 async function startEphemeralBrowserWorker(sessionId: string) {
     const containerName = `hanasand_browser_session_${sessionId.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 64)}`
-    const networkName = process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_hanasandnet'
+    const networkName = process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_browsernet'
     const containerId = await createRuntimeContainer(containerName, {
         Image: process.env.BROWSER_SANDBOX_WORKER_IMAGE || 'hanasand_browser_worker',
         User: 'bun',
