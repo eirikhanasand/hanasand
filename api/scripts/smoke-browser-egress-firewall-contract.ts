@@ -26,6 +26,8 @@ assert.match(script, /DOCKER-USER/, 'browser egress firewall should hook Docker 
 assert.match(script, /HANASAND-BROWSER-EGRESS/, 'browser egress firewall should isolate rules in its own chain')
 assert.match(script, /TOR_PORT.*9050/, 'browser egress firewall should preserve Tor SOCKS access')
 assert.match(script, /HANASAND_BROWSER_API_CONTAINER:-hanasand_api/, 'browser egress firewall should identify the API container on the browser network')
+assert.match(script, /could not resolve Tor container/, 'browser egress firewall should fail closed when Tor is not on the browser network')
+assert.match(script, /could not resolve API container/, 'browser egress firewall should fail closed when API is not on the browser network')
 assert.match(script, /! -s "\$api_ip" -d "\$api_ip" -j REJECT/, 'browser egress firewall should block browser-worker initiated traffic to the privileged API container')
 assert.match(script, /-s "\$api_ip" -p tcp --dport 8081 -j RETURN/, 'browser egress firewall should still allow API-initiated worker websocket control traffic')
 assert.match(script, /conntrack --ctstate RELATED,ESTABLISHED/, 'browser egress firewall should allow established control responses')

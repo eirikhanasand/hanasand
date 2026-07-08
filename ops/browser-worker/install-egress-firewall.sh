@@ -76,6 +76,8 @@ install_ipv6() {
 bridge="$(bridge_name)"
 tor_ip="$(container_ip "$TOR_CONTAINER")"
 api_ip="$(container_ip "$API_CONTAINER")"
+[ -n "$tor_ip" ] || { printf 'FAIL: could not resolve Tor container %s on %s\n' "$TOR_CONTAINER" "$NETWORK" >&2; exit 1; }
+[ -n "$api_ip" ] || { printf 'FAIL: could not resolve API container %s on %s\n' "$API_CONTAINER" "$NETWORK" >&2; exit 1; }
 install_ipv4 "$bridge" "$tor_ip" "$api_ip"
 install_ipv6 "$bridge"
 
