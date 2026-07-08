@@ -729,7 +729,24 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     if (reportUrl) {
                         await toolPage.goto(reportUrl, { waitUntil: 'domcontentloaded', timeout: providerTimeoutMs(tool) }).catch(() => undefined)
                         await withTimeout(dismissCookieOverlays(toolPage), 800, undefined).catch(() => undefined)
-                        providerText = [providerText, providerBodies(), await collectRenderedText(toolPage)].filter(Boolean).join('\n')
+                        const reportText = [providerBodies(), await collectRenderedText(toolPage)].filter(Boolean).join('\n')
+                        if (!urlQueryReportMatchesTarget(reportText, target)) {
+                            send({
+                                type: 'tool_capture',
+                                sessionId,
+                                id: tool.id || safeToolId(tool.name || toolUrl),
+                                name: tool.name || toolUrl,
+                                url: toolPage.url() || reportUrl,
+                                title: await toolPage.title().catch(() => ''),
+                                capturedAt: startedAt,
+                                evidence: providerPendingEvidence(toolPage.url() || reportUrl, tool.name || toolUrl, target),
+                                toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, providerPendingEvidence(toolPage.url() || reportUrl, tool.name || toolUrl, target)),
+                                target,
+                                error: `urlquery report did not match submitted target ${target}`,
+                            })
+                            return
+                        }
+                        providerText = [providerText, reportText].filter(Boolean).join('\n')
                     }
                     const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText, tool.name || toolUrl)
                     const parsedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 1500 }), 1500, openedImage)
@@ -1720,6 +1737,12 @@ async function firstUrlQueryReportUrl(page: Page, target: string) {
         })
         return matching?.href || ''
     }, host).catch(() => '')
+}
+
+function urlQueryReportMatchesTarget(reportText: string, target: string) {
+    const host = domainFromUrl(target).replace(/^www\./, '').toLowerCase()
+    if (!host) return false
+    return reportText.toLowerCase().includes(host)
 }
 
 function collectProviderResponses(page: Page, toolName: string) {

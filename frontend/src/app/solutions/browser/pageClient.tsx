@@ -29,6 +29,7 @@ type Capture = {
     kind: 'page' | 'tool'
     label: string
     url: string
+    target?: string
     title?: string
     capturedAt: string
     reason?: string
@@ -239,7 +240,7 @@ export default function BrowserPageClient() {
     const summary = useMemo(() => buildAnalystSummary(normalizedTarget, captures, selectedProfile), [captures, normalizedTarget, selectedProfile])
     const toolCaptures = useMemo(() => captures.filter(capture => capture.kind === 'tool'), [captures])
     const activeTool = useMemo(() => selectedProfile.tools.find(tool => tool.id === activeSandboxTab), [activeSandboxTab, selectedProfile.tools])
-    const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool) : undefined
+    const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool, normalizedTarget) : undefined
     const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage
     const activeViewportUrl = activeTool ? activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : activeUrl || normalizedTarget
 
@@ -466,16 +467,19 @@ export default function BrowserPageClient() {
             }))
         }
         socket.onclose = () => {
+            if (socketRef.current !== socket) return
             setSocketState('closed')
             setSessionState(current => current === 'prompt' || current === 'failed' ? current : 'ended')
             pushEvent('Sandbox broker closed.')
         }
         socket.onerror = () => {
+            if (socketRef.current !== socket) return
             setSocketState('error')
             setSessionState('failed')
             pushEvent('Sandbox broker errored.')
         }
         socket.onmessage = (message) => {
+            if (socketRef.current !== socket) return
             if (typeof message.data !== 'string') return
             const payload = parsePayload(message.data)
             if (!payload) return
@@ -533,6 +537,7 @@ export default function BrowserPageClient() {
                     kind: 'tool',
                     label: stringValue(payload.name) || 'Profile tool',
                     url: stringValue(payload.url) || '',
+                    target: stringValue(payload.target),
                     title: stringValue(payload.title),
                     capturedAt: stringValue(payload.capturedAt) || new Date().toISOString(),
                     image,
@@ -2278,12 +2283,25 @@ function matchesTool(capture: Capture, tool: SandboxTool) {
     return label.includes(toolId) || label.includes(tool.name.toLowerCase()) || kind === toolId
 }
 
-function selectToolCapture(captures: Capture[], tool: SandboxTool) {
-    const matches = captures.filter(capture => matchesTool(capture, tool))
+function selectToolCapture(captures: Capture[], tool: SandboxTool, target = '') {
+    const normalizedHost = target ? hostWithoutWww(target) : ''
+    const matches = captures.filter(capture => {
+        if (!matchesTool(capture, tool)) return false
+        if (!normalizedHost || !capture.target) return true
+        return hostWithoutWww(capture.target) === normalizedHost
+    })
     return matches.find(capture => hasParsedProviderResult(capture.toolAnalysis) && capture.error !== 'provider_navigation_pending' && capture.image)
         || matches.find(capture => hasParsedProviderResult(capture.toolAnalysis) && capture.error !== 'provider_navigation_pending')
         || matches.find(capture => capture.error !== 'provider_navigation_pending' && capture.image)
         || matches[0]
+}
+
+function hostWithoutWww(value: string) {
+    try {
+        return new URL(value).hostname.toLowerCase().replace(/^www\./, '')
+    } catch {
+        return value.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
+    }
 }
 
 function safeToolKey(value: string) {
