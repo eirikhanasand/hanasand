@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+
+const script = readFileSync(new URL('../../ops/browser-worker/verify-runtime-isolation.sh', import.meta.url), 'utf8')
+
+for (const value of [
+    'com.hanasand.role=browser-session-worker',
+    'hanasand_browsernet',
+    'ReadonlyRootfs',
+    'CapDrop',
+    'SecurityOpt',
+    'seccomp=',
+    'apparmor=docker-default',
+    'no-new-privileges',
+    'json .Mounts',
+    '--no-sandbox',
+    'DB_PASSWORD',
+    'VM_API_TOKEN',
+    'MAIL_ADMIN_PASSWORD',
+    'API_SSH_KEY',
+    'DOCKER-USER',
+    'HANASAND-BROWSER-EGRESS',
+    'HANASAND_API_CONTAINER',
+    'Chromium is running inside the main API container',
+]) {
+    assert(script.includes(value), `runtime isolation verifier should check ${value}`)
+}
+
+for (const value of ['10.0.0.0/8', '169.254.0.0/16', '192.168.0.0/16', '::ffff:0:0/96', 'fc00::/7']) {
+    assert(script.includes(value), `runtime isolation verifier should check firewall block for ${value}`)
+}
+
+console.log('Browser runtime isolation verifier contract passed.')
