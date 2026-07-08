@@ -69,6 +69,7 @@ if (existsSync(composeUrl)) {
     const serviceBlock = (name: string) => new RegExp(`\\n  ${name}:\\n([\\s\\S]*?)(?=\\n  [a-zA-Z0-9_-]+:\\n|\\nvolumes:)`).exec(compose)?.[1] || ''
     assert.doesNotMatch(compose, /BROWSER_SANDBOX_PER_SESSION_WORKER/, 'compose should not expose a production switch back to shared browser workers')
     assert.match(compose, /BROWSER_SANDBOX_WORKER_NETWORK:\s*\$\{BROWSER_SANDBOX_WORKER_NETWORK:-hanasand_browsernet\}/, 'ephemeral browser workers should not join the app network by default')
+    assert.match(serviceBlock('api'), /BROWSER_SANDBOX_EGRESS_FIREWALL_READY:\s*\$\{BROWSER_SANDBOX_EGRESS_FIREWALL_READY:-0\}/, 'API should receive the browser egress firewall readiness gate from compose env')
     assert.doesNotMatch(serviceBlock('api'), /BROWSER_SANDBOX_WORKER_WS/, 'API should not default to a shared browser worker websocket in production')
     assert.doesNotMatch(serviceBlock('api'), /browser-worker:\s*\n\s*condition:/, 'API should not depend on the dev-only shared browser worker')
     assert.match(serviceBlock('browser-worker'), /profiles:\s*\n\s*-\s*unsafe-dev-only/, 'shared browser worker should be opt-in dev-only')
