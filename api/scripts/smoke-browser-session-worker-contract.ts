@@ -48,6 +48,8 @@ if (existsSync(composeUrl)) {
     assert.match(serviceBlock('browser-worker'), /profiles:\s*\n\s*-\s*unsafe-dev-only/, 'shared browser worker should be opt-in dev-only')
     assert.match(serviceBlock('browser-worker'), /image:\s*hanasand_browser_worker/, 'shared dev worker should use the browser-worker image')
     assert.match(serviceBlock('browser-worker'), /target:\s*browser-runtime/, 'browser-worker image should build the Chromium-enabled Docker target')
+    assert.match(serviceBlock('browser-worker'), /networks:[\s\S]*?- browsernet/, 'shared dev browser worker should still use the dedicated browser network')
+    assert.doesNotMatch(serviceBlock('browser-worker'), /networks:[\s\S]*?- hanasandnet/, 'shared dev browser worker should not join the app network')
     assert.match(compose, /BROWSER_SANDBOX_PREWARM:\s*"0"/, 'compose should not prewarm Chromium in the privileged API container')
     assert.match(compose, /browsernet:\s*\n\s*name:\s*hanasand_browsernet/, 'compose should define a dedicated browser worker network')
     assert.match(serviceBlock('browser-worker'), /pids_limit:\s*512/, 'shared browser worker should cap process creation')
