@@ -671,12 +671,19 @@ export default function BrowserPageClient() {
         const wheelBrowserFrame = (event: globalThis.WheelEvent) => {
             const rect = viewport.getBoundingClientRect()
             if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return
+            const scrollRoot = document.scrollingElement
+            const scrollLeft = scrollRoot?.scrollLeft ?? window.scrollX
+            const scrollTop = scrollRoot?.scrollTop ?? window.scrollY
             viewport.focus()
             const point = browserPoint(event.clientX, event.clientY)
             if (!point) return
             event.preventDefault()
             event.stopPropagation()
             sendBrowserInput({ type: 'wheel', ...point, deltaX: event.deltaX, deltaY: event.deltaY })
+            requestAnimationFrame(() => {
+                if (scrollRoot) scrollRoot.scrollTo(scrollLeft, scrollTop)
+                else window.scrollTo(scrollLeft, scrollTop)
+            })
         }
         window.addEventListener('wheel', wheelBrowserFrame, { capture: true, passive: false })
         return () => window.removeEventListener('wheel', wheelBrowserFrame, { capture: true })
