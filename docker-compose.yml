@@ -120,9 +120,12 @@ services:
       ONION_SESSION_PROXY: ${ONION_SESSION_PROXY:-socks5://onion-tor:9050}
     expose:
       - "8081"
+    privileged: false
+    ipc: private
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=768m
+    cap_add: []
     cap_drop:
       - ALL
     security_opt:
