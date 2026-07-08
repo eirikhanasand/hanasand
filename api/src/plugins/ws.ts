@@ -203,7 +203,19 @@ function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' 
         return true
     }
     const base = process.env.BROWSER_SANDBOX_WORKER_WS
-    if (!base) return false
+    if (!base) {
+        const message = 'Shared browser worker is disabled; isolated per-session workers are required in production.'
+        if (connection.readyState === WebSocket.OPEN) {
+            connection.send(JSON.stringify({ type: 'error', message }))
+            connection.close()
+        }
+        void recordLog({
+            level: 'error',
+            message,
+            metadata: { category: 'browser_sandbox_worker', route, sessionId: id },
+        }).catch(() => {})
+        return true
+    }
 
     const upstream = new WebSocket(`${base.replace(/\/$/, '')}/${route}/${encodeURIComponent(id)}`)
     const pending: RawData[] = []

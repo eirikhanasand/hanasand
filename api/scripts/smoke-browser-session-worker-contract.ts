@@ -8,6 +8,7 @@ assert.match(ws, /BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only'/, 'b
 assert.doesNotMatch(ws, /BROWSER_SANDBOX_PER_SESSION_WORKER !== '0'/, 'browser proxy should not expose a production-safe switch back to shared workers')
 assert.match(ws, /createRuntimeContainer/, 'browser proxy should create an isolated worker container')
 assert.match(ws, /connectBrowserWorkerSocket/, 'browser proxy should wait for the worker websocket before failing the session')
+assert.match(ws, /Shared browser worker is disabled; isolated per-session workers are required in production\./, 'main API should fail closed instead of running a browser locally when shared worker config is missing')
 assert.match(ws, /Init:\s*true/, 'session worker should run with Docker init enabled')
 assert.match(ws, /ReadonlyRootfs:\s*true/, 'session worker root filesystem should be read-only')
 assert.match(ws, /CapDrop:\s*\['ALL'\]/, 'session worker should drop Linux capabilities')
@@ -21,6 +22,9 @@ if (existsSync(composeUrl)) {
     const serviceBlock = (name: string) => new RegExp(`\\n  ${name}:\\n([\\s\\S]*?)(?=\\n  [a-zA-Z0-9_-]+:\\n|\\nvolumes:)`).exec(compose)?.[1] || ''
     assert.doesNotMatch(compose, /BROWSER_SANDBOX_PER_SESSION_WORKER/, 'compose should not expose a production switch back to shared browser workers')
     assert.match(compose, /BROWSER_SANDBOX_WORKER_NETWORK:\s*\$\{BROWSER_SANDBOX_WORKER_NETWORK:-hanasand_browsernet\}/, 'ephemeral browser workers should not join the app network by default')
+    assert.doesNotMatch(serviceBlock('api'), /BROWSER_SANDBOX_WORKER_WS/, 'API should not default to a shared browser worker websocket in production')
+    assert.doesNotMatch(serviceBlock('api'), /browser-worker:\s*\n\s*condition:/, 'API should not depend on the dev-only shared browser worker')
+    assert.match(serviceBlock('browser-worker'), /profiles:\s*\n\s*-\s*unsafe-dev-only/, 'shared browser worker should be opt-in dev-only')
     assert.match(compose, /BROWSER_SANDBOX_PREWARM:\s*"0"/, 'compose should not prewarm Chromium in the privileged API container')
     assert.match(compose, /browsernet:\s*\n\s*name:\s*hanasand_browsernet/, 'compose should define a dedicated browser worker network')
     assert.match(serviceBlock('browser-worker'), /pids_limit:\s*512/, 'shared browser worker should cap process creation')

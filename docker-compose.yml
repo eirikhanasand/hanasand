@@ -70,7 +70,6 @@ services:
       MANAGED_CRON_GID: ${MANAGED_CRON_GID:-990}
       VM_HOST_ID: ${VM_HOST_ID:-ovhcloud}
       ONION_SESSION_PROXY: ${ONION_SESSION_PROXY:-socks5://onion-tor:9050}
-      BROWSER_SANDBOX_WORKER_WS: ${BROWSER_SANDBOX_WORKER_WS:-ws://browser-worker:8081/api/ws}
       BROWSER_SANDBOX_WORKER_NETWORK: ${BROWSER_SANDBOX_WORKER_NETWORK:-hanasand_browsernet}
       BROWSER_SANDBOX_PREWARM: "0"
       VULNERABILITY_SCAN_STATE_PATH: ${VULNERABILITY_SCAN_STATE_PATH:-/var/lib/hanasand/vulnerability-scan.json}
@@ -91,11 +90,11 @@ services:
         condition: service_healthy
       onion-tor:
         condition: service_started
-      browser-worker:
-        condition: service_healthy
 
   browser-worker:
     container_name: hanasand_browser_worker
+    profiles:
+      - unsafe-dev-only
     image: hanasand_api
     mem_limit: 2g
     cpus: "2.0"
