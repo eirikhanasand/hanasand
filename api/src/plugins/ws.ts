@@ -356,6 +356,7 @@ async function startEphemeralBrowserWorker(sessionId: string) {
         ExposedPorts: { '8081/tcp': {} },
         HostConfig: {
             NetworkMode: networkName,
+            AutoRemove: true,
             Init: true,
             ReadonlyRootfs: true,
             Tmpfs: { '/tmp': 'rw,noexec,nosuid,size=768m' },

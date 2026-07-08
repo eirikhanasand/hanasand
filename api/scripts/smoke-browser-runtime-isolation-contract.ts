@@ -7,6 +7,8 @@ for (const value of [
     'com.hanasand.role=browser-session-worker',
     'hanasand_browsernet',
     'HostConfig.Init',
+    'HostConfig.AutoRemove',
+    'browser worker does not auto-remove after exit',
     'ReadonlyRootfs',
     'Docker init is not enabled',
     'PidsLimit',

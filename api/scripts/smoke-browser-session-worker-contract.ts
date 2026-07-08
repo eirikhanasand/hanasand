@@ -31,6 +31,7 @@ assert.match(ws, /PidsLimit:\s*512/, 'session worker should cap process creation
 assert.match(ws, /browserWorkerSeccompProfile/, 'session worker should load the bundled seccomp profile')
 assert.match(ws, /SecurityOpt:\s*\[`seccomp=\$\{browserWorkerSeccompProfile\}`,\s*'apparmor=docker-default',\s*'no-new-privileges'\]/, 'session worker should keep seccomp, AppArmor, and no-new-privileges')
 assert.match(ws, /BROWSER_SANDBOX_WORKER_ONLY=1/, 'session worker should boot in browser-worker-only mode')
+assert.match(ws, /AutoRemove:\s*true/, 'session worker should auto-remove so failed malicious sessions do not linger after Docker exits them')
 assert.doesNotMatch(ws, /DB_PASSWORD=|VM_API_TOKEN=|MAIL_ADMIN_PASSWORD=|API_SSH_KEY=|\/var\/run\/docker\.sock|lxd\/unix\.socket/, 'session worker should not receive app secrets or host control sockets')
 assert.match(dockerfile, /FROM app-runtime AS browser-runtime[\s\S]*apk add --no-cache chromium xvfb/, 'Chromium should live only in the browser-worker image target')
 assert.doesNotMatch(appRuntimeStage, /\b(chromium|xvfb)\b/, 'main API image should not install Chromium or Xvfb')
