@@ -223,7 +223,7 @@ export async function updateBrowserRunProviderResult(id: string, provider: strin
     if (!id || !/^[a-z0-9_-]+$/i.test(provider)) return
     await run(`
         UPDATE browser_runs
-        SET metadata = jsonb_set(metadata, ARRAY['providerResults', $2], $3::jsonb, true),
+        SET metadata = metadata || jsonb_build_object('providerResults', COALESCE(metadata->'providerResults', '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb)),
             updated_at = NOW()
         WHERE id = $1
     `, [id, provider, JSON.stringify(result)])
