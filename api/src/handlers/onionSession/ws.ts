@@ -82,7 +82,6 @@ const FRAME_INTERVAL_MS = 900
 const DEFAULT_BROWSER_MAX_SESSIONS = 10
 const MAX_DOWNLOAD_HASH_BYTES = 5 * 1024 * 1024
 const asnCache = new Map<string, Promise<string | undefined>>()
-const sandboxDnsSafetyCache = new Map<string, Promise<{ ok: true } | { ok: false; reason: string }>>()
 const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
 type SandboxAdmissionStatus = {
@@ -1650,16 +1649,9 @@ async function sandboxRequestSafety(value: string) {
         return literalSafety
     }
     if (!host || /^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':')) return literalSafety
-    let resolved = sandboxDnsSafetyCache.get(host)
-    if (!resolved) {
-        resolved = lookup(host, { all: true })
-            .then(sandboxResolvedAddressSafety)
-            .catch(() => ({ ok: false as const, reason: 'hostname could not be resolved safely' }))
-        sandboxDnsSafetyCache.set(host, resolved)
-        const oldestHost = sandboxDnsSafetyCache.keys().next().value
-        if (sandboxDnsSafetyCache.size > 512 && oldestHost) sandboxDnsSafetyCache.delete(oldestHost)
-    }
-    return resolved
+    return lookup(host, { all: true })
+        .then(sandboxResolvedAddressSafety)
+        .catch(() => ({ ok: false as const, reason: 'hostname could not be resolved safely' }))
 }
 
 export function sandboxResolvedAddressSafety(addresses: Array<{ address: string; family: number }>) {
