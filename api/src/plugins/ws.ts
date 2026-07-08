@@ -8,7 +8,6 @@ import path from 'node:path'
 import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
 import { handleMessage } from '#utils/ws/handleMessage.ts'
-import config from '#constants'
 import { enqueueLoadTestRun, startLoadTestQueue } from '../handlers/test/follow.ts'
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
@@ -41,7 +40,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
 
         registerClient(id, connection, pwnedClients)
 
-        const internalWs = new WebSocket(`${config.pwned_ws}/${id}`)
+        const internalWs = new WebSocket(`${process.env.PWNED_WS_URL || 'ws://pwned:8080/api/pwned/ws'}/${id}`)
 
         internalWs.on('message', (msg) => {
             connection.send(msg)

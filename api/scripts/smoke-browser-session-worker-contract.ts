@@ -14,6 +14,7 @@ assert.match(ws, /BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only'/, 'b
 assert.doesNotMatch(ws, /BROWSER_SANDBOX_PER_SESSION_WORKER !== '0'/, 'browser proxy should not expose a production-safe switch back to shared workers')
 assert.match(ws, /if \(process\.env\.BROWSER_SANDBOX_WORKER_ONLY === '1'\) \{\s*registerBrowserSessionRoutes\(fastify\)\s*return\s*\}/, 'browser-worker-only API process should register only browser websocket routes')
 assert.match(ws, /function registerBrowserSessionRoutes/, 'browser routes should be isolated so worker-only mode can keep a small route surface')
+assert.doesNotMatch(ws, /#constants/, 'browser websocket plugin should not import the full app constants module in browser-worker-only processes')
 assert.match(index, /browserWorkerOnly[\s\S]*service: 'browser-worker'[\s\S]*IndexHandler/, 'browser-worker-only root endpoint should be a small health response instead of exposing the API route table')
 assert.match(onionWs, /process\.env\.NODE_ENV !== 'production' && process\.env\.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS === '1'/, 'local target override should be unavailable in production')
 assert.match(ws, /createRuntimeContainer/, 'browser proxy should create an isolated worker container')
