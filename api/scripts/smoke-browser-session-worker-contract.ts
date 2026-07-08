@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 
 const ws = readFileSync(new URL('../src/plugins/ws.ts', import.meta.url), 'utf8')
+const index = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
 const onionWs = readFileSync(new URL('../src/handlers/onionSession/ws.ts', import.meta.url), 'utf8')
 const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8')
 const appRuntimeStage = /FROM oven\/bun:1\.3\.11-alpine AS app-runtime\n([\s\S]*?)\nFROM app-runtime AS browser-runtime/.exec(dockerfile)?.[1] || ''
@@ -13,6 +14,7 @@ assert.match(ws, /BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only'/, 'b
 assert.doesNotMatch(ws, /BROWSER_SANDBOX_PER_SESSION_WORKER !== '0'/, 'browser proxy should not expose a production-safe switch back to shared workers')
 assert.match(ws, /if \(process\.env\.BROWSER_SANDBOX_WORKER_ONLY === '1'\) \{\s*registerBrowserSessionRoutes\(fastify\)\s*return\s*\}/, 'browser-worker-only API process should register only browser websocket routes')
 assert.match(ws, /function registerBrowserSessionRoutes/, 'browser routes should be isolated so worker-only mode can keep a small route surface')
+assert.match(index, /browserWorkerOnly[\s\S]*service: 'browser-worker'[\s\S]*IndexHandler/, 'browser-worker-only root endpoint should be a small health response instead of exposing the API route table')
 assert.match(onionWs, /process\.env\.NODE_ENV !== 'production' && process\.env\.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS === '1'/, 'local target override should be unavailable in production')
 assert.match(ws, /createRuntimeContainer/, 'browser proxy should create an isolated worker container')
 assert.match(ws, /randomUUID\(\)\.slice\(0, 8\)/, 'browser session worker container names should stay fresh even if a session id is reused')

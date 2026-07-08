@@ -56,7 +56,11 @@ if (!browserWorkerOnly) {
     })
     fastify.register(apiRoutes, { prefix: '/api' })
 }
-fastify.get('/', IndexHandler)
+if (browserWorkerOnly) {
+    fastify.get('/', async () => ({ ok: true, service: 'browser-worker' }))
+} else {
+    fastify.get('/', IndexHandler)
+}
 if (!browserWorkerOnly) {
     fastify.addHook('onResponse', async (req, res) => {
         if (res.statusCode < 400) {
