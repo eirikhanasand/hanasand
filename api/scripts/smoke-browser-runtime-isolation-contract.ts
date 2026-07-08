@@ -7,6 +7,7 @@ for (const value of [
     'com.hanasand.role=browser-session-worker',
     'hanasand_browsernet',
     'ReadonlyRootfs',
+    'PidsLimit',
     'CapDrop',
     'SecurityOpt',
     'seccomp=',
@@ -21,6 +22,7 @@ for (const value of [
     'DOCKER-USER',
     'HANASAND-BROWSER-EGRESS',
     'HANASAND_API_CONTAINER',
+    'HANASAND_BROWSER_PIDS_LIMIT',
     'Chromium is running inside the main API container',
 ]) {
     assert(script.includes(value), `runtime isolation verifier should check ${value}`)

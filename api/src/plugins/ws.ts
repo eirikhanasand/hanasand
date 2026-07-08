@@ -351,6 +351,7 @@ async function startEphemeralBrowserWorker(sessionId: string) {
             ShmSize: 1024 * 1024 * 1024,
             Memory: 2 * 1024 * 1024 * 1024,
             NanoCpus: 2_000_000_000,
+            PidsLimit: 512,
         },
         Labels: {
             'com.hanasand.role': 'browser-session-worker',

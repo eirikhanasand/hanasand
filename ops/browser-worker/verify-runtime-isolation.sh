@@ -5,6 +5,7 @@ LABEL="${HANASAND_BROWSER_SESSION_LABEL:-com.hanasand.role=browser-session-worke
 NETWORK="${HANASAND_BROWSER_NETWORK:-hanasand_browsernet}"
 FIREWALL_CHAIN="${HANASAND_BROWSER_EGRESS_CHAIN:-HANASAND-BROWSER-EGRESS}"
 API_CONTAINER="${HANASAND_API_CONTAINER:-hanasand_api}"
+PIDS_LIMIT="${HANASAND_BROWSER_PIDS_LIMIT:-512}"
 
 fail() {
     printf 'FAIL: %s\n' "$*" >&2
@@ -32,6 +33,7 @@ mounts="$(docker inspect -f '{{ json .Mounts }}' "$container_id")"
 env="$(docker inspect -f '{{ range .Config.Env }}{{ . }}{{ "\n" }}{{ end }}' "$container_id")"
 security="$(docker inspect -f '{{ json .HostConfig.SecurityOpt }}' "$container_id")"
 cap_drop="$(docker inspect -f '{{ json .HostConfig.CapDrop }}' "$container_id")"
+pids_limit="$(docker inspect -f '{{ .HostConfig.PidsLimit }}' "$container_id")"
 
 [ "$user" = "bun" ] || fail "browser worker user is $user, expected bun"
 [ "$readonly_root" = "true" ] || fail "root filesystem is not read-only"
@@ -41,6 +43,7 @@ contains "$security" 'seccomp=' || fail "seccomp profile is missing"
 contains "$security" 'apparmor=docker-default' || fail "AppArmor profile is missing"
 contains "$security" 'no-new-privileges' || fail "no-new-privileges is missing"
 contains "$mounts" '[]' || fail "browser worker has host mounts: $mounts"
+[ "$pids_limit" = "$PIDS_LIMIT" ] || fail "browser worker PID limit is $pids_limit, expected $PIDS_LIMIT"
 
 for forbidden in DB_PASSWORD DB_HOST VM_API_TOKEN MAIL_ADMIN_PASSWORD API_SSH_KEY DOCKER_HOST; do
     if printf '%s\n' "$env" | grep -q "^$forbidden="; then
