@@ -484,8 +484,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             await context.addInitScript(() => {
                 Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
             })
-            page = await context.newPage()
-            await page.route('**/*', async (route) => {
+            await context.route('**/*', async (route) => {
                 const requestUrl = route.request().url()
                 const safety = await sandboxRequestSafety(requestUrl)
                 if (!safety.ok) {
@@ -503,6 +502,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 }
                 await route.continue().catch(() => undefined)
             })
+            page = await context.newPage()
             page.on('console', (entry) => send({ type: 'console', level: entry.type(), text: entry.text() }))
             page.on('pageerror', (error) => send({ type: 'pageerror', message: error.message }))
             page.on('request', (request) => {
