@@ -727,6 +727,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, parsedEvidence),
                         target,
                     })
+                    if (officialProviderKind(preparedUrl)) return
                 }
                 let webcrackLoad: WebCrackLoadResult | undefined
                 if (webcrackTool) {
