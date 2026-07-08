@@ -53,6 +53,9 @@ contains "$security" 'seccomp=' || fail "seccomp profile is missing"
 contains "$security" 'apparmor=docker-default' || fail "AppArmor profile is missing"
 contains "$security" 'no-new-privileges' || fail "no-new-privileges is missing"
 contains "$mounts" '[]' || fail "browser worker has host mounts: $mounts"
+case "$mounts" in
+    *docker.sock*|*lxd*unix.socket*) fail "browser worker has a host control socket mount: $mounts" ;;
+esac
 [ "$pids_limit" = "$PIDS_LIMIT" ] || fail "browser worker PID limit is $pids_limit, expected $PIDS_LIMIT"
 
 for forbidden in DB_PASSWORD DB_HOST VM_API_TOKEN MAIL_ADMIN_PASSWORD API_SSH_KEY DOCKER_HOST; do

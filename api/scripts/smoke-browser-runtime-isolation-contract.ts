@@ -23,6 +23,7 @@ for (const value of [
     'apparmor=docker-default',
     'no-new-privileges',
     'json .Mounts',
+    'browser worker has a host control socket mount',
     '--no-sandbox',
     'DB_PASSWORD',
     'VM_API_TOKEN',
