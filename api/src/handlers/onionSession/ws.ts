@@ -272,6 +272,10 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let cachedDeobfuscationTasks: SandboxDeobfuscationTask[] = []
     let cachedThreatAssociations: ReturnType<typeof extractThreatAssociations> = []
     let cachedIndicators: ReturnType<typeof extractIndicators> | null = null
+    let cachedFrameQuality: Awaited<ReturnType<typeof collectFrameQuality>> | null = null
+    let cachedPageEvidence: Awaited<ReturnType<typeof collectPageEvidence>> | null = null
+    let lastHeavyFrameAt = 0
+    let fastFrameInFlight = false
     let documentEvidencePromises: Promise<void>[] = []
 
     const send = (payload: Record<string, unknown>) => {
@@ -857,7 +861,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await page.mouse.down({ button: mouseButton(message.button) }).catch(() => undefined)
             }
         }
-        await sendFrame(false)
+        void sendFrame(false, 'input').catch(() => undefined)
     }
 
     async function handleWheel(message: BrokerMessage) {
@@ -869,7 +873,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }
         await page.mouse.wheel(deltaX, deltaY)
         await page.waitForTimeout(80).catch(() => undefined)
-        await sendFrame(false)
+        void sendFrame(false, 'wheel').catch(() => undefined)
     }
 
     async function handleKey(message: BrokerMessage) {
@@ -900,7 +904,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             editableSelectAllArmed = false
             await page.keyboard.press(normalizeKey(message.key)).catch(() => undefined)
         }
-        await sendFrame(false)
+        void sendFrame(false, 'key').catch(() => undefined)
     }
 
     async function readRemoteClipboard() {
@@ -952,50 +956,64 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
 
     async function sendFrame(force: boolean, reason = 'interval') {
         if (!page || closed || connection.readyState !== connection.OPEN) return
-        const buffer = await page.screenshot({ type: 'jpeg', quality: 68, animations: 'disabled' }).catch(() => null)
-        if (!buffer) return
-        const image = buffer.toString('base64')
-        if (!force && image === lastFrame) return
-        lastFrame = image
-        const viewport = page.viewportSize()
-        const frameQuality = await collectFrameQuality(page, viewport?.width || DEFAULT_WIDTH, viewport?.height || DEFAULT_HEIGHT)
-        const evidence = await collectPageEvidence(page)
-        if (!evidence.deobfuscationTasks.length && cachedDeobfuscationTasks.length) {
-            evidence.deobfuscationTasks = cachedDeobfuscationTasks
-            evidence.obfuscatedScripts = cachedDeobfuscationTasks.map(task => ({
-                id: task.scriptId || 'cached_script',
-                src: task.source || 'inline',
-                inlineBytes: Buffer.byteLength(task.sample || task.decodedPreview || ''),
-                obfuscationScore: 3,
-                reasons: ['cached from document HTML'],
-                sample: task.sample || task.decodedPreview || '',
-                sha256: task.sha256 || createHash('sha256').update(task.source || task.sample || task.decodedPreview || '').digest('hex'),
-            }))
-        }
-        if (cachedThreatAssociations.length && !evidence.threatAssociations.length) evidence.threatAssociations = cachedThreatAssociations
-        if (cachedIndicators) {
-            evidence.indicators = {
-                domains: Array.from(new Set([...evidence.indicators.domains, ...cachedIndicators.domains])).slice(0, 80),
-                ips: Array.from(new Set([...evidence.indicators.ips, ...cachedIndicators.ips])).slice(0, 80),
-                urls: Array.from(new Set([...evidence.indicators.urls, ...cachedIndicators.urls])).slice(0, 80),
+        if (!force && fastFrameInFlight) return
+        fastFrameInFlight = !force
+        try {
+            const buffer = await page.screenshot({ type: 'jpeg', quality: 68, animations: 'disabled' }).catch(() => null)
+            if (!buffer) return
+            const image = buffer.toString('base64')
+            if (!force && image === lastFrame) return
+            lastFrame = image
+            const viewport = page.viewportSize()
+            const heavyFrame = force || !cachedPageEvidence || Date.now() - lastHeavyFrameAt > 5_000
+            let frameQuality = cachedFrameQuality
+            let evidence = cachedPageEvidence
+            if (heavyFrame) {
+                frameQuality = await collectFrameQuality(page, viewport?.width || DEFAULT_WIDTH, viewport?.height || DEFAULT_HEIGHT)
+                evidence = await collectPageEvidence(page)
+                if (!evidence.deobfuscationTasks.length && cachedDeobfuscationTasks.length) {
+                    evidence.deobfuscationTasks = cachedDeobfuscationTasks
+                    evidence.obfuscatedScripts = cachedDeobfuscationTasks.map(task => ({
+                        id: task.scriptId || 'cached_script',
+                        src: task.source || 'inline',
+                        inlineBytes: Buffer.byteLength(task.sample || task.decodedPreview || ''),
+                        obfuscationScore: 3,
+                        reasons: ['cached from document HTML'],
+                        sample: task.sample || task.decodedPreview || '',
+                        sha256: task.sha256 || createHash('sha256').update(task.source || task.sample || task.decodedPreview || '').digest('hex'),
+                    }))
+                }
+                if (cachedThreatAssociations.length && !evidence.threatAssociations.length) evidence.threatAssociations = cachedThreatAssociations
+                if (cachedIndicators) {
+                    evidence.indicators = {
+                        domains: Array.from(new Set([...evidence.indicators.domains, ...cachedIndicators.domains])).slice(0, 80),
+                        ips: Array.from(new Set([...evidence.indicators.ips, ...cachedIndicators.ips])).slice(0, 80),
+                        urls: Array.from(new Set([...evidence.indicators.urls, ...cachedIndicators.urls])).slice(0, 80),
+                    }
+                }
+                rememberDeobfuscationTasks(evidence)
+                cachedFrameQuality = frameQuality
+                cachedPageEvidence = evidence
+                lastHeavyFrameAt = Date.now()
             }
+            send({
+                type: 'frame',
+                encoding: 'jpeg',
+                image,
+                width: viewport?.width || DEFAULT_WIDTH,
+                height: viewport?.height || DEFAULT_HEIGHT,
+                sessionId,
+                url: page.url(),
+                title: await page.title().catch(() => ''),
+                capturedAt: new Date().toISOString(),
+                reason,
+                frameQuality,
+                evidence,
+                networkSummary: summarizeNetworkEvents(networkEvents),
+            })
+        } finally {
+            fastFrameInFlight = false
         }
-        rememberDeobfuscationTasks(evidence)
-        send({
-            type: 'frame',
-            encoding: 'jpeg',
-            image,
-            width: viewport?.width || DEFAULT_WIDTH,
-            height: viewport?.height || DEFAULT_HEIGHT,
-            sessionId,
-            url: page.url(),
-            title: await page.title().catch(() => ''),
-            capturedAt: new Date().toISOString(),
-            reason,
-            frameQuality,
-            evidence,
-            networkSummary: summarizeNetworkEvents(networkEvents),
-        })
     }
 
     async function collectFrameQuality(targetPage: Page, viewportWidth: number, viewportHeight: number) {
@@ -1615,9 +1633,9 @@ function providerStartUrl(tool: { id?: string; name?: string; url?: string }, re
 
 function virusTotalUrlId(target: string) {
     try {
-        return createHash('sha256').update(new URL(target).href).digest('hex')
+        return Buffer.from(new URL(target).href).toString('base64url')
     } catch {
-        return createHash('sha256').update(target).digest('hex')
+        return Buffer.from(target).toString('base64url')
     }
 }
 

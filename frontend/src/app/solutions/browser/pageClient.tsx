@@ -2301,8 +2301,8 @@ function providerTabStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
 }
 
 function providerDetail(analysis?: SandboxToolAnalysis, capture?: Capture) {
-    if (analysis?.vendorFlagged !== undefined) return `VirusTotal vendors: ${virusTotalVendorLabel(analysis)}${analysis.communityCommentCount !== undefined ? ` · Community comments: ${analysis.communityCommentCount}` : ''}`
-    if (analysis?.alertCount !== undefined) return `urlquery alerts: ${analysis.alertCount}${analysis.communityCommentCount !== undefined ? ` · Community comments: ${analysis.communityCommentCount}` : ''}`
+    if (analysis?.vendorFlagged !== undefined) return `VirusTotal vendors: ${virusTotalVendorLabel(analysis)}${analysis.communityCommentCount !== undefined ? ` · ${communityCommentLabel(analysis.communityCommentCount)}` : ''}`
+    if (analysis?.alertCount !== undefined) return `urlquery alerts: ${analysis.alertCount}${analysis.communityCommentCount !== undefined ? ` · ${communityCommentLabel(analysis.communityCommentCount)}` : ''}`
     if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false && /no obfuscated script sample/i.test(analysis.webcrackLoadReason || '')) return 'No obfuscated script sample was extracted from this page; WebCrack was not required for this run.'
     if (analysis?.extractedSignals?.length) return analysis.extractedSignals.slice(0, 2).join(' · ')
     if (capture?.error === 'provider_navigation_pending') return 'Provider tab is open and loading in the sandbox.'
@@ -2318,6 +2318,10 @@ function providerErrorText(error?: string) {
     if (lower.includes('timeout')) return 'Provider timed out.'
     if (lower.includes('net::err')) return 'Provider network request failed.'
     return error.split('\n')[0].slice(0, 140)
+}
+
+function communityCommentLabel(count: number) {
+    return `${count} community comment${count === 1 ? '' : 's'}`
 }
 
 function hasParsedProviderResult(analysis?: SandboxToolAnalysis) {
