@@ -25,12 +25,9 @@ COPY --from=deps /app/node_modules /app/node_modules
 COPY . .
 
 # Build-time tests import the runtime constants module, but Docker builds do
-# not receive the compose env_file. These placeholders are only available while
-# proving the image; compose still injects the real runtime values.
-ENV DB_PASSWORD=build-test \
-    DB_HOST=localhost \
-    VM_API_TOKEN=build-test
-RUN bun run test
+# not receive the compose env_file. Keep placeholders scoped to this check so
+# browser-worker containers do not inherit fake app credentials.
+RUN DB_PASSWORD=build-test DB_HOST=localhost VM_API_TOKEN=build-test bun run test
 RUN bun run lint
 
 RUN chmod +x /app/entrypoint.sh
