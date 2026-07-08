@@ -65,6 +65,9 @@ if docker ps --format '{{.Names}}' | grep -qx "$API_CONTAINER"; then
     if docker exec "$API_CONTAINER" sh -lc "ps -ef | grep chromium | grep -v grep" >/dev/null 2>&1; then
         fail "Chromium is running inside the main API container"
     fi
+    if docker exec "$API_CONTAINER" sh -lc "command -v chromium || command -v chromium-browser" >/dev/null 2>&1; then
+        fail "Chromium is installed inside the main API container"
+    fi
 fi
 
 if ! iptables -S DOCKER-USER 2>/dev/null | grep -q "$FIREWALL_CHAIN"; then

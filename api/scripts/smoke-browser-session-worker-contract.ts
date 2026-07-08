@@ -3,12 +3,15 @@ import { existsSync, readFileSync } from 'node:fs'
 
 const ws = readFileSync(new URL('../src/plugins/ws.ts', import.meta.url), 'utf8')
 const onionWs = readFileSync(new URL('../src/handlers/onionSession/ws.ts', import.meta.url), 'utf8')
+const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8')
+const appRuntimeStage = /FROM oven\/bun:1\.3\.11-alpine AS app-runtime\n([\s\S]*?)\nFROM app-runtime AS browser-runtime/.exec(dockerfile)?.[1] || ''
 const composeUrl = new URL('../../docker-compose.yml', import.meta.url)
 
 assert.match(ws, /BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only'/, 'browser proxy should require per-session workers unless an unsafe dev-only override is set')
 assert.doesNotMatch(ws, /BROWSER_SANDBOX_PER_SESSION_WORKER !== '0'/, 'browser proxy should not expose a production-safe switch back to shared workers')
 assert.match(ws, /createRuntimeContainer/, 'browser proxy should create an isolated worker container')
 assert.match(ws, /connectBrowserWorkerSocket/, 'browser proxy should wait for the worker websocket before failing the session')
+assert.match(ws, /BROWSER_SANDBOX_WORKER_IMAGE \|\| 'hanasand_browser_worker'/, 'ephemeral workers should use the browser-worker image, not the privileged API image')
 assert.match(ws, /Shared browser worker is disabled; isolated per-session workers are required in production\./, 'main API should fail closed instead of running a browser locally when shared worker config is missing')
 assert.match(onionWs, /Production browser sessions must run in isolated browser workers\./, 'browser handler should reject production launches outside worker-only containers')
 assert.match(onionWs, /Production browser workers require Chromium sandbox\./, 'browser handler should require Chromium sandbox in production workers')
@@ -20,6 +23,8 @@ assert.match(ws, /browserWorkerSeccompProfile/, 'session worker should load the 
 assert.match(ws, /SecurityOpt:\s*\[`seccomp=\$\{browserWorkerSeccompProfile\}`,\s*'apparmor=docker-default',\s*'no-new-privileges'\]/, 'session worker should keep seccomp, AppArmor, and no-new-privileges')
 assert.match(ws, /BROWSER_SANDBOX_WORKER_ONLY=1/, 'session worker should boot in browser-worker-only mode')
 assert.doesNotMatch(ws, /DB_PASSWORD=|VM_API_TOKEN=|MAIL_ADMIN_PASSWORD=|API_SSH_KEY=|\/var\/run\/docker\.sock|lxd\/unix\.socket/, 'session worker should not receive app secrets or host control sockets')
+assert.match(dockerfile, /FROM app-runtime AS browser-runtime[\s\S]*apk add --no-cache chromium xvfb/, 'Chromium should live only in the browser-worker image target')
+assert.doesNotMatch(appRuntimeStage, /\b(chromium|xvfb)\b/, 'main API image should not install Chromium or Xvfb')
 if (existsSync(composeUrl)) {
     const compose = readFileSync(composeUrl, 'utf8')
     const serviceBlock = (name: string) => new RegExp(`\\n  ${name}:\\n([\\s\\S]*?)(?=\\n  [a-zA-Z0-9_-]+:\\n|\\nvolumes:)`).exec(compose)?.[1] || ''
@@ -28,6 +33,8 @@ if (existsSync(composeUrl)) {
     assert.doesNotMatch(serviceBlock('api'), /BROWSER_SANDBOX_WORKER_WS/, 'API should not default to a shared browser worker websocket in production')
     assert.doesNotMatch(serviceBlock('api'), /browser-worker:\s*\n\s*condition:/, 'API should not depend on the dev-only shared browser worker')
     assert.match(serviceBlock('browser-worker'), /profiles:\s*\n\s*-\s*unsafe-dev-only/, 'shared browser worker should be opt-in dev-only')
+    assert.match(serviceBlock('browser-worker'), /image:\s*hanasand_browser_worker/, 'shared dev worker should use the browser-worker image')
+    assert.match(serviceBlock('browser-worker'), /target:\s*browser-runtime/, 'browser-worker image should build the Chromium-enabled Docker target')
     assert.match(compose, /BROWSER_SANDBOX_PREWARM:\s*"0"/, 'compose should not prewarm Chromium in the privileged API container')
     assert.match(compose, /browsernet:\s*\n\s*name:\s*hanasand_browsernet/, 'compose should define a dedicated browser worker network')
     assert.match(serviceBlock('browser-worker'), /pids_limit:\s*512/, 'shared browser worker should cap process creation')

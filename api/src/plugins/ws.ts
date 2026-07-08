@@ -340,7 +340,7 @@ async function startEphemeralBrowserWorker(sessionId: string) {
     const containerName = `hanasand_browser_session_${sessionId.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 64)}`
     const networkName = process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_hanasandnet'
     const containerId = await createRuntimeContainer(containerName, {
-        Image: process.env.BROWSER_SANDBOX_WORKER_IMAGE || 'hanasand_api',
+        Image: process.env.BROWSER_SANDBOX_WORKER_IMAGE || 'hanasand_browser_worker',
         User: 'bun',
         Cmd: ['sh', '-c', 'export DISPLAY="${DISPLAY:-:99}"; Xvfb "$DISPLAY" -screen 0 1920x1080x24 >/tmp/xvfb.log 2>&1 & bun start'],
         Env: [

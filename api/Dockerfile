@@ -7,10 +7,10 @@ WORKDIR /app
 COPY package.json bun.lock* bunfig.toml ./
 RUN bun install
 
-FROM oven/bun:1.3.11-alpine
+FROM oven/bun:1.3.11-alpine AS app-runtime
 
 ARG TRIVY_VERSION=0.72.0
-RUN apk add --no-cache varnish git openssh-client chromium xvfb ttf-freefont font-noto docker-cli curl tar \
+RUN apk add --no-cache varnish git openssh-client docker-cli curl tar \
     && curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
         | tar -xz -C /usr/local/bin trivy \
     && chmod +x /usr/local/bin/trivy
@@ -33,5 +33,11 @@ RUN bun run lint
 RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8080
+
+FROM app-runtime AS browser-runtime
+RUN apk add --no-cache chromium xvfb ttf-freefont font-noto
+ENV CHROMIUM_BIN=/usr/bin/chromium
+
+FROM app-runtime
 
 CMD chmod +x /app/entrypoint.sh; /app/entrypoint.sh

@@ -26,6 +26,7 @@ for (const value of [
     'HANASAND_API_CONTAINER',
     'HANASAND_BROWSER_PIDS_LIMIT',
     'Chromium is running inside the main API container',
+    'Chromium is installed inside the main API container',
 ]) {
     assert(script.includes(value), `runtime isolation verifier should check ${value}`)
 }

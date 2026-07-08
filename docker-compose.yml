@@ -95,7 +95,7 @@ services:
     container_name: hanasand_browser_worker
     profiles:
       - unsafe-dev-only
-    image: hanasand_api
+    image: hanasand_browser_worker
     mem_limit: 2g
     cpus: "2.0"
     init: true
@@ -103,6 +103,7 @@ services:
     build:
       context: ./api
       dockerfile: ./Dockerfile
+      target: browser-runtime
     command: >
       sh -c 'export DISPLAY="$${DISPLAY:-:99}";
       Xvfb "$$DISPLAY" -screen 0 1920x1080x24 >/tmp/xvfb.log 2>&1 &
