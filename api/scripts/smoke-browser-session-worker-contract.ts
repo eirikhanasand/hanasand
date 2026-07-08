@@ -8,6 +8,7 @@ assert.match(ws, /BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only'/, 'b
 assert.doesNotMatch(ws, /BROWSER_SANDBOX_PER_SESSION_WORKER !== '0'/, 'browser proxy should not expose a production-safe switch back to shared workers')
 assert.match(ws, /createRuntimeContainer/, 'browser proxy should create an isolated worker container')
 assert.match(ws, /connectBrowserWorkerSocket/, 'browser proxy should wait for the worker websocket before failing the session')
+assert.match(ws, /Init:\s*true/, 'session worker should run with Docker init enabled')
 assert.match(ws, /ReadonlyRootfs:\s*true/, 'session worker root filesystem should be read-only')
 assert.match(ws, /CapDrop:\s*\['ALL'\]/, 'session worker should drop Linux capabilities')
 assert.match(ws, /PidsLimit:\s*512/, 'session worker should cap process creation')

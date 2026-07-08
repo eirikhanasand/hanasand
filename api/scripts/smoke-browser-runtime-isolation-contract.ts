@@ -6,7 +6,9 @@ const script = readFileSync(new URL('../../ops/browser-worker/verify-runtime-iso
 for (const value of [
     'com.hanasand.role=browser-session-worker',
     'hanasand_browsernet',
+    'HostConfig.Init',
     'ReadonlyRootfs',
+    'Docker init is not enabled',
     'PidsLimit',
     'CapDrop',
     'SecurityOpt',
