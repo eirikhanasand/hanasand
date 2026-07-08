@@ -264,10 +264,19 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
                 return
             }
             containerId = nextContainerId
-            upstream = new WebSocket(`${wsUrl.replace(/\/$/, '')}/${route}/${encodeURIComponent(id)}`)
+            return connectBrowserWorkerSocket(`${wsUrl.replace(/\/$/, '')}/${route}/${encodeURIComponent(id)}`)
+        })
+        .then(nextUpstream => {
+            if (!nextUpstream) return
+            if (closed) {
+                nextUpstream.close()
+                return
+            }
+            upstream = nextUpstream
             upstream.on('open', () => {
                 while (pending.length && upstream?.readyState === WebSocket.OPEN) upstream.send(pending.shift()!)
             })
+            while (pending.length && upstream.readyState === WebSocket.OPEN) upstream.send(pending.shift()!)
             upstream.on('message', message => {
                 if (connection.readyState === WebSocket.OPEN) connection.send(message)
             })
@@ -285,6 +294,34 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             void recordWebsocketFailure(`browser-session-create-${route}`, id, error)
             closeBoth()
         })
+}
+
+function connectBrowserWorkerSocket(url: string, attempts = 20): Promise<WebSocket> {
+    return new Promise((resolve, reject) => {
+        let attempt = 0
+        const connect = () => {
+            const socket = new WebSocket(url)
+            let settled = false
+            const retry = (error: unknown) => {
+                if (settled) return
+                settled = true
+                socket.terminate()
+                attempt += 1
+                if (attempt >= attempts) {
+                    reject(error instanceof Error ? error : new Error(String(error)))
+                    return
+                }
+                setTimeout(connect, 500).unref()
+            }
+            socket.once('open', () => {
+                settled = true
+                resolve(socket)
+            })
+            socket.once('error', retry)
+            socket.once('close', () => retry(new Error('Browser worker websocket closed before opening.')))
+        }
+        connect()
+    })
 }
 
 async function startEphemeralBrowserWorker(sessionId: string) {

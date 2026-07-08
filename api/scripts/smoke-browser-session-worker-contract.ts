@@ -6,6 +6,7 @@ const composeUrl = new URL('../../docker-compose.yml', import.meta.url)
 
 assert.match(ws, /BROWSER_SANDBOX_PER_SESSION_WORKER !== '0'/, 'browser proxy should default to per-session workers')
 assert.match(ws, /createRuntimeContainer/, 'browser proxy should create an isolated worker container')
+assert.match(ws, /connectBrowserWorkerSocket/, 'browser proxy should wait for the worker websocket before failing the session')
 assert.match(ws, /ReadonlyRootfs:\s*true/, 'session worker root filesystem should be read-only')
 assert.match(ws, /CapDrop:\s*\['ALL'\]/, 'session worker should drop Linux capabilities')
 assert.match(ws, /browserWorkerSeccompProfile/, 'session worker should load the bundled seccomp profile')
