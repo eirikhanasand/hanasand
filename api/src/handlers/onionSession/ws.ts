@@ -885,10 +885,15 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             return
         }
         send({ type: 'status', state: 'navigating', target })
-        const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 25_000 }).catch((error) => {
-            send({ type: 'navigation_error', target, message: error instanceof Error ? error.message : String(error) })
-            return null
-        })
+        const heartbeat = setInterval(() => {
+            send({ type: 'status', state: 'navigating', target, message: 'Navigation is still pending.' })
+        }, 5_000)
+        const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 25_000 })
+            .catch((error) => {
+                send({ type: 'navigation_error', target, message: error instanceof Error ? error.message : String(error) })
+                return null
+            })
+            .finally(() => clearInterval(heartbeat))
         if (response && /html/i.test(response.headers()['content-type'] || '')) {
             await queueDocumentEvidence(response.text())
         }
