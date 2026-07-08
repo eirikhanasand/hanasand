@@ -10,6 +10,7 @@ import { removeClient } from '#utils/ws/removeClient.ts'
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import { handleOnionSessionSocket } from '../handlers/onionSession/ws.ts'
+import { updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../handlers/browserSandboxRuns.ts'
 import { createRuntimeContainer, getRuntimeContainer, getRuntimeContainerLogs, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
 
 const browserWorkerSeccompProfile = fs.readFileSync(new URL('../../seccomp-chromium.json', import.meta.url), 'utf8')
@@ -301,6 +302,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             })
             while (pending.length && upstream.readyState === WebSocket.OPEN) upstream.send(pending.shift()!)
             upstream.on('message', message => {
+                void persistBrowserProviderResult(id, message)
                 if (connection.readyState === WebSocket.OPEN) connection.send(message)
             })
             upstream.on('close', () => {
@@ -325,6 +327,35 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             }
             void recordWebsocketFailure(`browser-session-create-${route}`, id, error)
         })
+}
+
+function persistBrowserProviderResult(id: string, message: RawData) {
+    const text = Buffer.isBuffer(message) ? message.toString('utf8') : String(message)
+    let payload: any
+    try {
+        payload = JSON.parse(text)
+    } catch {
+        return
+    }
+    if (payload?.type !== 'tool_capture') return
+    const result = providerRunResultValue(payload.toolAnalysis, String(payload.error || ''))
+    if (!result) return
+    void updateBrowserRunProviderResult(id, String(payload.toolAnalysis.toolKind), result).catch(() => undefined)
+}
+
+function providerRunResultValue(analysis: any, error = ''): BrowserProviderRunResult | null {
+    if (analysis?.toolKind === 'virustotal') {
+        const total = Number(analysis.vendorTotal)
+        if (!Number.isFinite(total) || total <= 0) return null
+        const flagged = Number.isFinite(Number(analysis.vendorFlagged)) ? Number(analysis.vendorFlagged) : 0
+        return { status: flagged > 0 ? 'suspicious' : error ? 'blocked' : 'clean', label: `${flagged}/${total} VT` }
+    }
+    if (analysis?.toolKind === 'urlquery') {
+        const alerts = Number(analysis.alertCount)
+        if (!Number.isFinite(alerts)) return null
+        return { status: alerts > 0 ? 'suspicious' : error ? 'blocked' : 'clean', label: alerts > 0 ? `${alerts}` : 'urlquery' }
+    }
+    return null
 }
 
 async function recordBrowserWorkerLogs(containerId: string, route: string, id: string) {
