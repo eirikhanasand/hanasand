@@ -13,6 +13,7 @@ assert.match(ws, /BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only'/, 'b
 assert.doesNotMatch(ws, /BROWSER_SANDBOX_PER_SESSION_WORKER !== '0'/, 'browser proxy should not expose a production-safe switch back to shared workers')
 assert.match(onionWs, /process\.env\.NODE_ENV !== 'production' && process\.env\.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS === '1'/, 'local target override should be unavailable in production')
 assert.match(ws, /createRuntimeContainer/, 'browser proxy should create an isolated worker container')
+assert.match(ws, /randomUUID\(\)\.slice\(0, 8\)/, 'browser session worker container names should stay fresh even if a session id is reused')
 assert.match(ws, /connectBrowserWorkerSocket/, 'browser proxy should wait for the worker websocket before failing the session')
 assert.match(ws, /BROWSER_SANDBOX_WORKER_IMAGE \|\| 'hanasand_browser_worker'/, 'ephemeral workers should use the browser-worker image, not the privileged API image')
 assert.match(ws, /BROWSER_SANDBOX_WORKER_NETWORK \|\| 'hanasand_browsernet'/, 'ephemeral workers should fall back to the dedicated browser network')
