@@ -996,8 +996,11 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         if (!force && fastFrameInFlight) return
         fastFrameInFlight = !force
         try {
-            const buffer = await page.screenshot({ type: 'jpeg', quality: 68, animations: 'disabled' }).catch(() => null)
-            if (!buffer) return
+            const buffer = await withTimeout(page.screenshot({ type: 'jpeg', quality: 68, animations: 'disabled', timeout: 2_000 }), 2_200, null)
+            if (!buffer) {
+                send({ type: 'status', state: 'frame_capture_failed', sessionId, reason, message: 'Browser frame capture timed out.' })
+                return
+            }
             const image = buffer.toString('base64')
             if (!force && image === lastFrame) return
             lastFrame = image
@@ -1006,8 +1009,16 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             let frameQuality = cachedFrameQuality
             let evidence = cachedPageEvidence
             if (heavyFrame) {
-                frameQuality = await collectFrameQuality(page, viewport?.width || DEFAULT_WIDTH, viewport?.height || DEFAULT_HEIGHT)
-                evidence = await collectPageEvidence(page)
+                frameQuality = await withTimeout(collectFrameQuality(page, viewport?.width || DEFAULT_WIDTH, viewport?.height || DEFAULT_HEIGHT), 1_200, cachedFrameQuality || {
+                    looksBlank: false,
+                    visibleTextLength: 0,
+                    elementCount: 0,
+                    visibleMedia: 0,
+                    bodyHeight: 0,
+                    viewportWidth: viewport?.width || DEFAULT_WIDTH,
+                    viewportHeight: viewport?.height || DEFAULT_HEIGHT,
+                })
+                evidence = await withTimeout(collectPageEvidence(page), 1_800, cachedPageEvidence || emptyPageEvidence())
                 if (!evidence.deobfuscationTasks.length && cachedDeobfuscationTasks.length) {
                     evidence.deobfuscationTasks = cachedDeobfuscationTasks
                     evidence.obfuscatedScripts = cachedDeobfuscationTasks.map(task => ({
@@ -1048,6 +1059,15 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 evidence,
                 networkSummary: summarizeNetworkEvents(networkEvents),
             })
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            send({ type: 'status', state: 'frame_capture_failed', sessionId, reason, message })
+            void recordLog({
+                level: 'warn',
+                service: 'hanasand-api',
+                message: `Browser frame capture failed for ${sessionId}: ${message}`,
+                metadata: { category: 'browser_sandbox_frame', sessionId, reason },
+            }).catch(() => undefined)
         } finally {
             fastFrameInFlight = false
         }
@@ -2030,6 +2050,25 @@ async function collectPageEvidence(page: Page) {
         reasons: suspiciousReasons.length ? suspiciousReasons : ['No high-signal malicious pattern was extracted from the rendered page yet.'],
         threatAssociations: extractThreatAssociations(joined, 'rendered_page'),
         deobfuscationTasks: obfuscatedScripts.map(script => summarizeDeobfuscationTask(script)),
+    }
+}
+
+function emptyPageEvidence(): Awaited<ReturnType<typeof collectPageEvidence>> {
+    return {
+        url: '',
+        textExcerpt: '',
+        indicators: { domains: [], ips: [], urls: [] },
+        sourceCode: '',
+        sourceUrls: [],
+        comments: [],
+        forms: [],
+        scripts: [],
+        obfuscatedScripts: [],
+        verdict: 'unknown',
+        confidence: 0,
+        reasons: ['Page evidence timed out before analysis completed.'],
+        threatAssociations: [],
+        deobfuscationTasks: [],
     }
 }
 
