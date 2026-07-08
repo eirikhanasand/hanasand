@@ -14,6 +14,8 @@ import recordLog from '#utils/logs/recordLog.ts'
 import { handleOnionSessionSocket } from '../handlers/onionSession/ws.ts'
 import { createRuntimeContainer, getRuntimeContainer, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
 
+const browserWorkerSeccompProfile = fs.readFileSync(new URL('../../seccomp-chromium.json', import.meta.url), 'utf8')
+
 type PendingUpdates = {
     content: string
     timer: NodeJS.Timeout
@@ -283,7 +285,6 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
 async function startEphemeralBrowserWorker(sessionId: string) {
     const containerName = `hanasand_browser_session_${sessionId.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 64)}`
     const networkName = process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_hanasandnet'
-    const seccompPath = process.env.BROWSER_SANDBOX_SECCOMP_PATH || '/home/hanasand/hanasand/ops/browser-worker/seccomp-chromium.json'
     const containerId = await createRuntimeContainer(containerName, {
         Image: process.env.BROWSER_SANDBOX_WORKER_IMAGE || 'hanasand_api',
         User: 'bun',
@@ -304,7 +305,7 @@ async function startEphemeralBrowserWorker(sessionId: string) {
             ReadonlyRootfs: true,
             Tmpfs: { '/tmp': 'rw,noexec,nosuid,size=768m' },
             CapDrop: ['ALL'],
-            SecurityOpt: [`seccomp=${seccompPath}`, 'no-new-privileges'],
+            SecurityOpt: [`seccomp=${browserWorkerSeccompProfile}`, 'no-new-privileges'],
             ShmSize: 1024 * 1024 * 1024,
             Memory: 2 * 1024 * 1024 * 1024,
             NanoCpus: 2_000_000_000,

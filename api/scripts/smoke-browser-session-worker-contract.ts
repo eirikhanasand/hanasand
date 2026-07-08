@@ -8,7 +8,8 @@ assert.match(ws, /BROWSER_SANDBOX_PER_SESSION_WORKER !== '0'/, 'browser proxy sh
 assert.match(ws, /createRuntimeContainer/, 'browser proxy should create an isolated worker container')
 assert.match(ws, /ReadonlyRootfs:\s*true/, 'session worker root filesystem should be read-only')
 assert.match(ws, /CapDrop:\s*\['ALL'\]/, 'session worker should drop Linux capabilities')
-assert.match(ws, /SecurityOpt:\s*\[`seccomp=\$\{seccompPath\}`,\s*'no-new-privileges'\]/, 'session worker should keep seccomp and no-new-privileges')
+assert.match(ws, /browserWorkerSeccompProfile/, 'session worker should load the bundled seccomp profile')
+assert.match(ws, /SecurityOpt:\s*\[`seccomp=\$\{browserWorkerSeccompProfile\}`,\s*'no-new-privileges'\]/, 'session worker should keep seccomp and no-new-privileges')
 assert.match(ws, /BROWSER_SANDBOX_WORKER_ONLY=1/, 'session worker should boot in browser-worker-only mode')
 if (existsSync(composeUrl)) {
     const compose = readFileSync(composeUrl, 'utf8')
