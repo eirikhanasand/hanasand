@@ -171,7 +171,8 @@ function isBunWebSocketErrorEvent(error: unknown) {
     if (!error || typeof error !== 'object') return false
     const event = error as { constructor?: { name?: string }, isTrusted?: unknown, type?: unknown }
     return event.constructor?.name === 'ErrorEvent'
-        || (event.isTrusted !== undefined && typeof event.type === 'string')
+        || event.isTrusted !== undefined
+        || String(error).includes('ErrorEvent')
 }
 
 function describeUnknownError(error: unknown) {
