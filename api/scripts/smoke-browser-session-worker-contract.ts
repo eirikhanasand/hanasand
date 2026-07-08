@@ -43,6 +43,8 @@ assert.doesNotMatch(appRuntimeStage, /\b(chromium|xvfb)\b/, 'main API image shou
 for (const source of [handoff, runbook]) {
     assert.match(source, /--profile unsafe-dev-only build api browser-worker/, 'browser deploy path should build the separate browser-worker image')
     assert.match(source, /up -d --no-deps api/, 'browser deploy path should restart API without starting the dev-only shared worker')
+    assert.match(source, /install-egress-firewall\.sh hanasand_browsernet/, 'browser deploy path should install the browser egress firewall before sandbox traffic')
+    assert.match(source, /verify-runtime-isolation\.sh/, 'browser deploy notes should include the live runtime isolation verifier')
 }
 if (existsSync(composeUrl)) {
     const compose = readFileSync(composeUrl, 'utf8')
