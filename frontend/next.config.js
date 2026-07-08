@@ -26,6 +26,35 @@ const nextConfig = {
             },
         ]
     },
+    async redirects() {
+        return [
+            {
+                source: '/solutions/dwm',
+                destination: '/dwm',
+                permanent: true,
+            },
+            {
+                source: '/solutions/browser',
+                destination: '/browser',
+                permanent: true,
+            },
+            {
+                source: '/solutions/browser-sandbox',
+                destination: '/browser',
+                permanent: true,
+            },
+            {
+                source: '/solutions/onion-session',
+                destination: '/browser',
+                permanent: true,
+            },
+            {
+                source: '/solutions/browser/report',
+                destination: '/browser/report',
+                permanent: true,
+            },
+        ]
+    },
     turbopack: {
         root: __dirname,
     },
