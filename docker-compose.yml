@@ -96,7 +96,6 @@ services:
     image: hanasand_api
     mem_limit: 2g
     cpus: "2.0"
-    init: true
     restart: always
     build:
       context: ./api
