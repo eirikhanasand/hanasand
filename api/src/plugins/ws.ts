@@ -381,6 +381,9 @@ function connectBrowserWorkerSocket(url: string, attempts = 20): Promise<WebSock
 }
 
 async function startEphemeralBrowserWorker(sessionId: string) {
+    if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_EGRESS_FIREWALL_READY !== '1') {
+        throw new Error('Browser sandbox egress firewall is not marked ready. Run ops/browser-worker/install-egress-firewall.sh before enabling production browser sessions.')
+    }
     const containerName = `hanasand_browser_session_${sessionId.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 48)}_${randomUUID().slice(0, 8)}`
     const networkName = process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_browsernet'
     const containerId = await createRuntimeContainer(containerName, {

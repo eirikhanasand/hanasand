@@ -29,6 +29,7 @@ assert.match(ws, /connectBrowserWorkerSocket/, 'browser proxy should wait for th
 assert.match(ws, /BROWSER_SANDBOX_WORKER_IMAGE \|\| 'hanasand_browser_worker'/, 'ephemeral workers should use the browser-worker image, not the privileged API image')
 assert.match(ws, /BROWSER_SANDBOX_WORKER_NETWORK \|\| 'hanasand_browsernet'/, 'ephemeral workers should fall back to the dedicated browser network')
 assert.doesNotMatch(ws, /BROWSER_SANDBOX_WORKER_NETWORK \|\| 'hanasand_hanasandnet'/, 'ephemeral workers must not fall back to the app network')
+assert.match(ws, /BROWSER_SANDBOX_EGRESS_FIREWALL_READY !== '1'/, 'production browser sessions should fail closed until the host egress firewall is marked ready')
 assert.match(ws, /Shared browser worker is disabled; isolated per-session workers are required in production\./, 'main API should fail closed instead of running a browser locally when shared worker config is missing')
 assert.match(ws, /function sendErrorThenClose/, 'browser proxy should flush startup errors to the client before closing the websocket')
 assert.match(ws, /connection\.send\(JSON\.stringify\(\{ type: 'error', message \}\), \(\) =>/, 'browser proxy should not race error delivery against websocket close')
