@@ -627,10 +627,28 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         const plannedTools = tools.slice(0, 6).filter(tool => tool.url)
         if (process.env.BROWSER_SANDBOX_PROVIDER_TABS === '0') return
         await Promise.all(plannedTools.map(async (tool) => {
-            const toolPage = await context.newPage().catch(() => null)
-            if (!toolPage) return
             const startedAt = new Date().toISOString()
             const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
+            const webcrackTool = isWebCrackTool(tool, toolUrl)
+            if (webcrackTool && !deobfuscationTasks.some(task => task.sample || task.decodedPreview)) {
+                const webcrackLoad: WebCrackLoadResult = { loaded: false, reason: 'no obfuscated script sample extracted from target page' }
+                const evidence = providerPendingEvidence(toolUrl, tool.name || toolUrl, target)
+                send({
+                    type: 'tool_capture',
+                    sessionId,
+                    id: tool.id || safeToolId(tool.name || toolUrl),
+                    name: tool.name || toolUrl,
+                    url: toolUrl,
+                    capturedAt: startedAt,
+                    evidence,
+                    toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad),
+                    webcrackLoad,
+                    target,
+                })
+                return
+            }
+            const toolPage = await context.newPage().catch(() => null)
+            if (!toolPage) return
             const providerBodies = collectProviderResponses(toolPage, tool.name || toolUrl)
             try {
                 toolPage.setDefaultTimeout(providerTimeoutMs(tool))
@@ -702,7 +720,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         target,
                     })
                 }
-                const webcrackTool = isWebCrackTool(tool, toolUrl)
                 let webcrackLoad: WebCrackLoadResult | undefined
                 if (webcrackTool) {
                     const tasks = await webCrackTasks(deobfuscationTasks)
@@ -1959,7 +1976,7 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         verdict,
         threatAssociations: extractThreatAssociations(text, 'tool_context'),
         extractedSignals: [
-            isVirusTotal && Number.isFinite(flagged) ? `${flagged}/${total || '?'} vendors flagged` : '',
+            isVirusTotal && Number.isFinite(flagged) ? (Number.isFinite(total) ? `${flagged}/${total} vendors flagged` : `${flagged} vendors flagged`) : '',
             isUrlQuery && Number.isFinite(alertCount) ? `${alertCount} urlquery alert${alertCount === 1 ? '' : 's'}` : '',
             communityCommentCount ? `${communityCommentCount} community comment${communityCommentCount === 1 ? '' : 's'}` : '',
             webcrackLoad?.loaded ? `WebCrack loaded ${webcrackLoad.scriptId || 'script sample'}` : '',

@@ -239,7 +239,7 @@ export default function BrowserPageClient() {
     const summary = useMemo(() => buildAnalystSummary(normalizedTarget, captures, selectedProfile), [captures, normalizedTarget, selectedProfile])
     const toolCaptures = useMemo(() => captures.filter(capture => capture.kind === 'tool'), [captures])
     const activeTool = useMemo(() => selectedProfile.tools.find(tool => tool.id === activeSandboxTab), [activeSandboxTab, selectedProfile.tools])
-    const activeToolCapture = activeTool ? toolCaptures.find(capture => matchesTool(capture, activeTool)) : undefined
+    const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool) : undefined
     const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage
     const activeViewportUrl = activeTool ? activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : activeUrl || normalizedTarget
 
@@ -916,7 +916,7 @@ function SandboxTabStrip({
                 onClick={() => onSelect('browser')}
             />
             {tools.map(tool => {
-                const capture = toolCaptures.find(item => matchesTool(item, tool))
+                const capture = selectToolCapture(toolCaptures, tool)
                 return (
                     <SandboxTabButton
                         key={tool.id}
@@ -950,7 +950,7 @@ function ProviderStatusPanel({ tools, toolCaptures, onSelect }: { tools: Sandbox
             <h2 className='text-sm font-semibold uppercase text-ui-primary'>Provider tabs</h2>
             <div className='mt-3 grid gap-2'>
                 {tools.length ? tools.map(tool => {
-                    const capture = toolCaptures.find(item => matchesTool(item, tool))
+                    const capture = selectToolCapture(toolCaptures, tool)
                     const analysis = capture?.toolAnalysis
                     return (
                         <button
@@ -1501,13 +1501,14 @@ function EvidencePanel({ title, status, children }: { title: string; status: str
 function QuickTriageStrip({ summary, toolCaptures, toolCount }: { summary: ReturnType<typeof buildAnalystSummary>; toolCaptures: Capture[]; toolCount: number }) {
     const latestNetwork = summary.latestNetwork
     const finalUrl = summary.urlTimeline.at(-1)?.url || 'unknown'
+    const parsedProviders = new Set(toolCaptures.filter(capture => hasParsedProviderResult(capture.toolAnalysis) && capture.error !== 'provider_navigation_pending').map(capture => capture.toolAnalysis?.toolKind || capture.label)).size
     return (
         <section className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted md:grid-cols-3 xl:grid-cols-6'>
             <EvidenceFact label='Final URL' value={finalUrl} mono />
             <EvidenceFact label='Redirects' value={String(latestNetwork?.redirectChain?.length || 0)} />
             <EvidenceFact label='Contacted domains' value={latestNetwork?.domains?.slice(0, 3).join('  ') || 'none yet'} mono />
             <EvidenceFact label='Requests' value={String(latestNetwork?.requestCount || 0)} />
-            <EvidenceFact label='Providers' value={`${toolCaptures.filter(capture => capture.error !== 'provider_navigation_pending').length}/${toolCount}`} />
+            <EvidenceFact label='Providers' value={`${parsedProviders}/${toolCount}`} />
             <EvidenceFact label='Review items' value={String(summary.reviewQueue.length)} />
         </section>
     )
@@ -1643,9 +1644,9 @@ function StatusPill({ label, value, good }: { label: string; value: string; good
 function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; capture: Capture }) {
     if (capture.image) {
         return (
-            <div className='relative h-full w-full bg-ui-canvas'>
-                <img src={capture.image} alt={`${tool.name} provider screenshot`} className='absolute inset-0 h-full w-full bg-ui-canvas object-contain' />
-                <div className='absolute inset-x-3 bottom-3 max-h-[45%] overflow-auto'>
+            <div className='grid h-full w-full min-w-0 bg-ui-canvas lg:grid-cols-[minmax(0,1fr)_20rem]'>
+                <img src={capture.image} alt={`${tool.name} provider screenshot`} className='h-full w-full min-w-0 bg-ui-canvas object-cover' />
+                <div className='min-h-0 overflow-auto border-t border-ui-border bg-ui-panel/95 p-3 lg:border-l lg:border-t-0'>
                     <ProviderReportDetails tool={tool} capture={capture} compact />
                 </div>
             </div>
@@ -1669,7 +1670,7 @@ function ProviderReportDetails({ tool, capture, compact = false }: { tool: Sandb
         capture.error && capture.error !== 'provider_navigation_pending' ? `Error: ${providerErrorText(capture.error)}` : '',
     ].filter(Boolean) as Array<string | [string, string]>
     return (
-        <div className={`grid w-full gap-3 rounded-md border border-ui-border bg-ui-panel text-left shadow-sm ${compact ? 'p-2 text-xs' : 'max-w-3xl p-4'}`}>
+        <div className={`grid w-full gap-3 text-left ${compact ? 'text-xs' : 'max-w-3xl rounded-md border border-ui-border bg-ui-panel p-4 shadow-sm'}`}>
             <div>
                 <p className='text-xs font-semibold uppercase text-ui-primary'>{providerStatus(capture, analysis)}</p>
                 <h2 className={`${compact ? 'text-sm' : 'text-lg'} mt-1 font-semibold text-ui-text`}>{tool.name}</h2>
@@ -1825,7 +1826,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
     const toolCaptures = input.captures.filter(capture => capture.kind === 'tool')
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
     const providerReports = input.profile.tools.map(tool => {
-        const capture = toolCaptures.find(item => matchesTool(item, tool))
+        const capture = selectToolCapture(toolCaptures, tool)
         const analysis = capture?.toolAnalysis
         return {
             tool: tool.name,
@@ -2236,6 +2237,14 @@ function matchesTool(capture: Capture, tool: SandboxTool) {
     const label = capture.label.toLowerCase()
     const kind = capture.toolAnalysis?.toolKind?.toLowerCase()
     return label.includes(toolId) || label.includes(tool.name.toLowerCase()) || kind === toolId
+}
+
+function selectToolCapture(captures: Capture[], tool: SandboxTool) {
+    const matches = captures.filter(capture => matchesTool(capture, tool))
+    return matches.find(capture => hasParsedProviderResult(capture.toolAnalysis) && capture.error !== 'provider_navigation_pending' && capture.image)
+        || matches.find(capture => hasParsedProviderResult(capture.toolAnalysis) && capture.error !== 'provider_navigation_pending')
+        || matches.find(capture => capture.error !== 'provider_navigation_pending' && capture.image)
+        || matches[0]
 }
 
 function safeToolKey(value: string) {
