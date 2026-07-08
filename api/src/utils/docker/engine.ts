@@ -240,6 +240,12 @@ export async function getRuntimeContainer(id: string) {
     return inspectRuntimeContainer(id)
 }
 
+export async function getRuntimeContainerLogs(id: string, tail = 120) {
+    const normalizedTail = Math.min(Math.max(tail, 20), 400)
+    const body = await requestDocker(`/containers/${encodeURIComponent(id)}/logs?stdout=1&stderr=1&timestamps=1&tail=${normalizedTail}`)
+    return parseFrameBuffer(body).join('\n').trim()
+}
+
 async function statsRuntimeContainer(id: string) {
     const body = await requestDocker(`/containers/${id}/stats?stream=false`)
     return parseStats(JSON.parse(body.toString('utf8')) as DockerStatsResponse)

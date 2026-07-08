@@ -10,7 +10,7 @@ import { removeClient } from '#utils/ws/removeClient.ts'
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import { handleOnionSessionSocket } from '../handlers/onionSession/ws.ts'
-import { createRuntimeContainer, getRuntimeContainer, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
+import { createRuntimeContainer, getRuntimeContainer, getRuntimeContainerLogs, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
 
 const browserWorkerSeccompProfile = fs.readFileSync(new URL('../../seccomp-chromium.json', import.meta.url), 'utf8')
 
@@ -262,7 +262,9 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
         closed = true
         if (connection.readyState === WebSocket.OPEN) connection.close()
         if (upstream && (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING)) upstream.close()
-        if (containerId) void removeRuntimeContainer(containerId).catch(error => recordWebsocketFailure(`browser-session-remove-${route}`, id, error))
+        if (containerId) void recordBrowserWorkerLogs(containerId, route, id)
+            .finally(() => removeRuntimeContainer(containerId))
+            .catch(error => recordWebsocketFailure(`browser-session-remove-${route}`, id, error))
     }
 
     connection.on('message', message => {
@@ -302,7 +304,10 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
                 if (connection.readyState === WebSocket.OPEN) connection.send(message)
             })
             upstream.on('close', () => {
-                if (connection.readyState === WebSocket.OPEN) sendErrorThenClose(connection, 'Isolated browser worker closed before completing the run.')
+                if (connection.readyState === WebSocket.OPEN) {
+                    void recordBrowserWorkerLogs(containerId, route, id)
+                    sendErrorThenClose(connection, 'Isolated browser worker closed before completing the run.')
+                }
                 else closeBoth()
             })
             upstream.on('error', error => {
@@ -320,6 +325,21 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             }
             void recordWebsocketFailure(`browser-session-create-${route}`, id, error)
         })
+}
+
+async function recordBrowserWorkerLogs(containerId: string, route: string, id: string) {
+    const logs = await getRuntimeContainerLogs(containerId).catch(error => `Could not read browser worker logs: ${error instanceof Error ? error.message : String(error)}`)
+    if (!logs) return
+    await recordLog({
+        level: 'warn',
+        message: `Browser worker logs before ${route} session ${id} closed:\n${logs.slice(-4000)}`,
+        metadata: {
+            category: 'browser_sandbox_worker',
+            route,
+            sessionId: id,
+            containerId,
+        },
+    }).catch(() => {})
 }
 
 function sendStatus(connection: WebSocket, state: string, message: string) {
