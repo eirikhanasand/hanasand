@@ -194,6 +194,11 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
 function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' | 'browser-sandbox' | 'onion-session') {
     if (process.env.BROWSER_SANDBOX_WORKER_ONLY === '1') return false
     if (process.env.BROWSER_SANDBOX_PER_SESSION_WORKER !== '0') {
+        void recordLog({
+            level: 'info',
+            message: `Starting isolated browser worker for ${route} session ${id}`,
+            metadata: { category: 'browser_sandbox_worker', route, sessionId: id },
+        }).catch(() => {})
         proxyEphemeralBrowserSocket(connection, id, route)
         return true
     }

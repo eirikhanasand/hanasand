@@ -14,6 +14,7 @@ assert.match(ws, /BROWSER_SANDBOX_WORKER_ONLY=1/, 'session worker should boot in
 if (existsSync(composeUrl)) {
     const compose = readFileSync(composeUrl, 'utf8')
     assert.match(compose, /BROWSER_SANDBOX_PER_SESSION_WORKER:\s*\$\{BROWSER_SANDBOX_PER_SESSION_WORKER:-1\}/, 'compose should enable per-session workers by default')
+    assert.match(compose, /BROWSER_SANDBOX_PREWARM:\s*"0"/, 'compose should not prewarm Chromium in the privileged API container')
 }
 
 console.log('Browser per-session worker isolation contract passed.')
