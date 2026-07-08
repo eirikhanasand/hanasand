@@ -28,7 +28,7 @@ Infer "Hanasand server" from local context before asking the parent agent:
 - OpenResty path: `/home/hanasand/openresty`
 - expected app deploy path: `cd /home/hanasand/hanasand-deploy-64d9339 && git fetch github main && git pull --ff-only github main`
 - expected app restart from the deploy checkout: `docker compose -p hanasand up -d --build`
-- browser sandbox changes must build the separate worker image, restart API, and reinstall the browser egress firewall before traffic is sent to the sandbox: `docker compose -p hanasand --profile unsafe-dev-only build api browser-worker && docker compose -p hanasand up -d --no-deps api && sudo ops/browser-worker/install-egress-firewall.sh hanasand_browsernet`
+- browser sandbox changes must build the separate worker image, reinstall and verify the browser egress firewall, then restart API with `BROWSER_SANDBOX_EGRESS_FIREWALL_READY=1` before traffic is sent to the sandbox: `docker compose -p hanasand --profile unsafe-dev-only build api browser-worker && sudo ops/browser-worker/install-egress-firewall.sh hanasand_browsernet && sudo ops/browser-worker/verify-egress-firewall.sh hanasand_browsernet && docker compose -p hanasand up -d --no-deps api`
 - after starting a browser sandbox session, verify the live worker isolation with: `sudo ops/browser-worker/verify-runtime-isolation.sh`
 - if only the web/API images need replacing after a successful build, use `docker compose -p hanasand up -d --no-deps frontend api`
 - expected public archive smoke after app deploy: `cd /home/hanasand/hanasand-deploy-64d9339/frontend && PUBLIC_ARCHIVE_BASE_URL=http://127.0.0.1:3000 bun run test:public-archive`

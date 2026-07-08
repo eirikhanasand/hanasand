@@ -2,11 +2,13 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 
 const scriptUrl = new URL('../../ops/browser-worker/install-egress-firewall.sh', import.meta.url)
+const verifyScriptUrl = new URL('../../ops/browser-worker/verify-egress-firewall.sh', import.meta.url)
 if (!existsSync(scriptUrl)) {
     console.log('Browser egress firewall contract skipped outside the repository root.')
     process.exit(0)
 }
 const script = readFileSync(scriptUrl, 'utf8')
+const verifyScript = readFileSync(verifyScriptUrl, 'utf8')
 
 for (const value of [
     '0.0.0.0/8',
@@ -36,5 +38,9 @@ assert.match(script, /could not resolve API container/, 'browser egress firewall
 assert.match(script, /! -s "\$api_ip" -d "\$api_ip" -j REJECT/, 'browser egress firewall should block browser-worker initiated traffic to the privileged API container')
 assert.match(script, /-s "\$api_ip" -p tcp --dport 8081 -j RETURN/, 'browser egress firewall should still allow API-initiated worker websocket control traffic')
 assert.match(script, /conntrack --ctstate RELATED,ESTABLISHED/, 'browser egress firewall should allow established control responses')
+assert.match(verifyScript, /DOCKER-USER/, 'browser egress verifier should check Docker forwarding')
+assert.match(verifyScript, /HANASAND-BROWSER-EGRESS/, 'browser egress verifier should check the dedicated chain')
+assert.match(verifyScript, /does not block browser-worker initiated API access/, 'browser egress verifier should prove workers cannot call the privileged API')
+assert.match(verifyScript, /Browser egress firewall verified/, 'browser egress verifier should print a clear success line')
 
 console.log('Browser egress firewall contract passed.')
