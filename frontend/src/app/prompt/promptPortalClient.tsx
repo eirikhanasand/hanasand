@@ -101,7 +101,7 @@ export default function PromptPortalClient() {
                 <header className='flex flex-col gap-3 border-b border-ui-border pb-4 md:flex-row md:items-end md:justify-between'>
                     <div>
                         <p className='text-xs font-semibold uppercase tracking-[0.16em] text-ui-primary'>Remote access</p>
-                        <h1 className='mt-2 text-3xl font-semibold tracking-normal'>Login</h1>
+                        <h1 className='mt-2 text-3xl font-semibold tracking-normal'>{state.authenticated ? 'Prompt' : 'Login'}</h1>
                     </div>
                     <div className={`inline-flex h-9 items-center gap-2 self-start rounded-lg border px-3 text-sm font-semibold ${state.readOnly ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning' : state.authenticated ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-border bg-ui-panel text-ui-muted'}`}>
                         {state.authenticated ? <ShieldCheck className='h-4 w-4' /> : <LockKeyhole className='h-4 w-4' />}
@@ -173,7 +173,7 @@ export default function PromptPortalClient() {
                             </div>
                             <button disabled={busy || state.readOnly || !prompt.trim()} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas disabled:cursor-not-allowed disabled:opacity-60'>
                                 <Send className='h-4 w-4' />
-                                Queue instruction
+                                Send
                             </button>
                         </form>
 
