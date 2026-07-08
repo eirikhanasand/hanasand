@@ -669,6 +669,8 @@ export default function BrowserPageClient() {
         const viewport = viewportRef.current
         if (!viewport || activeTool) return
         const wheelBrowserFrame = (event: globalThis.WheelEvent) => {
+            const rect = viewport.getBoundingClientRect()
+            if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return
             viewport.focus()
             const point = browserPoint(event.clientX, event.clientY)
             if (!point) return
@@ -676,8 +678,8 @@ export default function BrowserPageClient() {
             event.stopPropagation()
             sendBrowserInput({ type: 'wheel', ...point, deltaX: event.deltaX, deltaY: event.deltaY })
         }
-        viewport.addEventListener('wheel', wheelBrowserFrame, { passive: false })
-        return () => viewport.removeEventListener('wheel', wheelBrowserFrame)
+        window.addEventListener('wheel', wheelBrowserFrame, { capture: true, passive: false })
+        return () => window.removeEventListener('wheel', wheelBrowserFrame, { capture: true })
     }, [activeTool, browserPoint, sendBrowserInput])
 
     const saveProfile = useCallback(() => {
