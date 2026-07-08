@@ -30,6 +30,11 @@ export const shareClients = new Map<string, Set<WebSocket>>()
 export const pendingUpdates = new Map<string, PendingUpdates>()
 
 export default fp(async function wsPlugin(fastify: FastifyInstance) {
+    if (process.env.BROWSER_SANDBOX_WORKER_ONLY === '1') {
+        registerBrowserSessionRoutes(fastify)
+        return
+    }
+
     // pwned
     fastify.get('/api/ws/pwned/:id', { websocket: true }, (connection, req: FastifyRequest) => {
         const id = (req.params as { id: string}).id
@@ -173,24 +178,25 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         })
     })
 
-    // unified browser session
+    registerBrowserSessionRoutes(fastify)
+})
+
+function registerBrowserSessionRoutes(fastify: FastifyInstance) {
     fastify.get<{ Params: { id: string } }>('/api/ws/browser/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
         if (proxyBrowserSocket(connection, req.params.id, 'browser')) return
         handleOnionSessionSocket(connection, req.params.id, 'regular')
     })
 
-    // remote onion browser session
     fastify.get<{ Params: { id: string } }>('/api/ws/onion-session/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
         if (proxyBrowserSocket(connection, req.params.id, 'onion-session')) return
         handleOnionSessionSocket(connection, req.params.id)
     })
 
-    // regular-web sandbox browser session
     fastify.get<{ Params: { id: string } }>('/api/ws/browser-sandbox/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
         if (proxyBrowserSocket(connection, req.params.id, 'browser-sandbox')) return
         handleOnionSessionSocket(connection, req.params.id, 'regular')
     })
-})
+}
 
 function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' | 'browser-sandbox' | 'onion-session') {
     if (process.env.BROWSER_SANDBOX_WORKER_ONLY === '1') return false

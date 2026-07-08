@@ -11,6 +11,8 @@ const composeUrl = new URL('../../docker-compose.yml', import.meta.url)
 
 assert.match(ws, /BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only'/, 'browser proxy should require per-session workers unless an unsafe dev-only override is set')
 assert.doesNotMatch(ws, /BROWSER_SANDBOX_PER_SESSION_WORKER !== '0'/, 'browser proxy should not expose a production-safe switch back to shared workers')
+assert.match(ws, /if \(process\.env\.BROWSER_SANDBOX_WORKER_ONLY === '1'\) \{\s*registerBrowserSessionRoutes\(fastify\)\s*return\s*\}/, 'browser-worker-only API process should register only browser websocket routes')
+assert.match(ws, /function registerBrowserSessionRoutes/, 'browser routes should be isolated so worker-only mode can keep a small route surface')
 assert.match(onionWs, /process\.env\.NODE_ENV !== 'production' && process\.env\.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS === '1'/, 'local target override should be unavailable in production')
 assert.match(ws, /createRuntimeContainer/, 'browser proxy should create an isolated worker container')
 assert.match(ws, /randomUUID\(\)\.slice\(0, 8\)/, 'browser session worker container names should stay fresh even if a session id is reused')
