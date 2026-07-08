@@ -1,7 +1,7 @@
 'use client'
 
 import { ArrowUp, ImageIcon, LockKeyhole, RefreshCw, Send, ShieldCheck } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 type PortalFile = {
     id: string
@@ -43,6 +43,8 @@ export default function PromptPortalClient() {
     const [files, setFiles] = useState<FileList | null>(null)
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
+    const codeInputRef = useRef<HTMLInputElement>(null)
+    const codeDigits = code.padEnd(6, ' ').split('')
     const pending = useMemo(() => state.items.filter(item => item.status === 'queued' || item.status === 'running'), [state.items])
     const completed = useMemo(() => state.items.filter(item => item.status === 'done' || item.status === 'error'), [state.items])
 
@@ -98,8 +100,8 @@ export default function PromptPortalClient() {
             <div className='mx-auto grid max-w-6xl gap-4'>
                 <header className='flex flex-col gap-3 border-b border-ui-border pb-4 md:flex-row md:items-end md:justify-between'>
                     <div>
-                        <p className='text-xs font-semibold uppercase tracking-[0.16em] text-ui-primary'>Prompt portal</p>
-                        <h1 className='mt-2 text-3xl font-semibold tracking-normal'>Remote prompt queue</h1>
+                        <p className='text-xs font-semibold uppercase tracking-[0.16em] text-ui-primary'>Remote access</p>
+                        <h1 className='mt-2 text-3xl font-semibold tracking-normal'>Login</h1>
                     </div>
                     <div className={`inline-flex h-9 items-center gap-2 self-start rounded-lg border px-3 text-sm font-semibold ${state.readOnly ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning' : state.authenticated ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-border bg-ui-panel text-ui-muted'}`}>
                         {state.authenticated ? <ShieldCheck className='h-4 w-4' /> : <LockKeyhole className='h-4 w-4' />}
@@ -110,17 +112,25 @@ export default function PromptPortalClient() {
                 {error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-sm font-semibold text-ui-danger'>{error}</p> : null}
 
                 {!state.authenticated ? (
-                    <form onSubmit={login} className='grid max-w-sm gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'>
+                    <form onSubmit={login} className='mx-auto mt-16 grid w-full max-w-md gap-5 rounded-lg border border-ui-border bg-ui-panel p-6 shadow-2xl shadow-black/20'>
                         <label className='grid gap-2 text-sm font-semibold'>
                             Access code
                             <input
+                                ref={codeInputRef}
                                 value={code}
                                 onChange={event => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
                                 inputMode='numeric'
                                 autoComplete='one-time-code'
-                                className='h-11 rounded-lg border border-ui-border bg-ui-canvas px-3 text-lg font-semibold tracking-[0.24em] outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/25'
+                                className='sr-only'
                                 placeholder='000000'
                             />
+                            <button type='button' onClick={() => codeInputRef.current?.focus()} className='grid grid-cols-6 gap-2'>
+                                {codeDigits.map((digit, index) => (
+                                    <span key={index} className={`flex aspect-square items-center justify-center rounded-lg border bg-ui-canvas text-2xl font-semibold tabular-nums ${digit.trim() ? 'border-ui-primary/50 text-ui-text' : 'border-ui-border text-ui-muted'}`}>
+                                        {digit.trim() || ' '}
+                                    </span>
+                                ))}
+                            </button>
                         </label>
                         <button disabled={busy || code.length !== 6} className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas disabled:cursor-not-allowed disabled:opacity-60'>
                             <LockKeyhole className='h-4 w-4' />
