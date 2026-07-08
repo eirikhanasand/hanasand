@@ -40,6 +40,7 @@ const coreTasks: TestTask[] = [
     scriptTask('browser-sandbox-profiles', 'Browser sandbox profile persistence contract', 'smoke-browser-sandbox-profiles.ts'),
     scriptTask('browser-sandbox-analysis', 'Browser sandbox analysis contract', 'smoke-browser-sandbox-analysis.ts'),
     scriptTask('browser-session-worker', 'Browser per-session worker isolation contract', 'smoke-browser-session-worker-contract.ts'),
+    scriptTask('browser-egress-firewall', 'Browser egress firewall contract', 'smoke-browser-egress-firewall-contract.ts'),
     {
         ...scriptTask('browser-sandbox-broker', 'Browser sandbox broker runtime contract', 'smoke-browser-sandbox-broker.ts'),
         requires: 'playwright',
