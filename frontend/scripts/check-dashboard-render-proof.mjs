@@ -162,7 +162,6 @@ for (const attr of [
     'data-readiness-detail-href',
     'data-readiness-source-reference',
     'data-readiness-detail-source-reference',
-    'data-readiness-scorecard-link',
 ]) {
     assert.ok(workbenchSource.includes(attr), `Missing DOM proof attribute ${attr}`)
 }
@@ -211,7 +210,6 @@ for (const requiredToken of [
     '/dashboard/ti/workbench',
     '/dashboard/system/cron',
     '/dashboard/vulnerabilities',
-    '/readiness',
     '/dashboard/traffic',
     '/dashboard/system',
     '/dashboard/db',
@@ -251,7 +249,6 @@ for (const requiredToken of [
     'waitFor({ state: \'attached\'',
     '[role="listbox"][aria-label="Analyst case list"]',
     'readiness detail missing',
-    'data-readiness-scorecard-link="/readiness"',
 ]) {
     assert.ok(renderDomSource.includes(requiredToken), `Rendered proof command missing ${requiredToken}`)
 }

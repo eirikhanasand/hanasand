@@ -53,7 +53,7 @@ const solutions = [
     {
         title: 'Browser',
         detail: 'Short-lived isolated Regular and Tor browser workspaces with capture, profiles, and source tracking.',
-        href: '/solutions/browser',
+        href: '/browser',
     },
     {
         title: 'Trust and Procurement',
@@ -342,7 +342,7 @@ export default async function Page({
                             <h2 className='text-3xl font-semibold text-ui-text'>Monitoring and response tools in one place.</h2>
                         </div>
                         <Link href='/dashboard/overview' className='landing-primary-action inline-flex w-fit items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold shadow-sm transition'>
-                            Go to Console
+                            Go to Dashboard
                             <ArrowRight className='h-4 w-4' />
                         </Link>
                     </div>

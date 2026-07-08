@@ -42,7 +42,6 @@ import {
     buildDwmWebhookDeliveryRetryWorkOrders,
     buildDwmWebhookDestinationContracts,
     filterDwmWebhookDeliveryEvidenceForVisibility,
-    filterDwmWebhookDestinationHealthForVisibility,
     normalizeDwmWebhookDestinationInput,
     planDwmWebhookDeliveryRetry,
     redactWebhookEndpoint,
@@ -1962,14 +1961,6 @@ const destinationHealth = buildDwmWebhookDestinationHealth({
         },
     ],
 })
-const memberHealthVisibility = filterDwmWebhookDestinationHealthForVisibility({
-    destinationHealth,
-    visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
-})
-const nonmemberHealthVisibility = filterDwmWebhookDestinationHealthForVisibility({
-    destinationHealth,
-    visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
-})
 const lifecycleStateDestinations = [
     ...auditDestinationRows,
     {
@@ -3266,8 +3257,6 @@ expect(replayHealth?.idempotencyCoverage.duplicateKeyCount === 1, 'Destination h
 expect(retryHealth?.retry.retryable === true && retryHealth.retry.errorClass === 'upstream_5xx' && retryHealth.lastFailure?.auditEventId === 'audit_live_retry_contract', 'Destination health should expose failure retry/backoff state.', retryHealth)
 expect(disabledHealth?.enabled === false && disabledHealth.health === 'disabled' && disabledHealth.auditEventIds.includes('audit_destination_archived_contract'), 'Destination health should expose disabled state and audit ids.', disabledHealth)
 expect(skippedHealth?.lastLiveDisabled?.errorClass === 'live_delivery_disabled' && skippedHealth.lastLiveDisabled.retryable === false, 'Destination health should expose live-disabled skipped attempts without retrying.', skippedHealth)
-expect(memberHealthVisibility.decision.allowed === true && memberHealthVisibility.destinationHealth.length === destinationHealth.length, 'Members policy should allow active members to inspect safe destination health.', memberHealthVisibility)
-expect(nonmemberHealthVisibility.decision.allowed === false && nonmemberHealthVisibility.destinationHealth.length === 0, 'Destination health visibility should deny nonmembers without leaking metadata.', nonmemberHealthVisibility)
 expect(!JSON.stringify(destinationHealth).includes(secret), 'Destination health should not leak endpoint, response, or audit secrets.', destinationHealth)
 expect(adminReplayLifecycle?.view === 'admin' && adminReplayLifecycle.access.canUpdate === true && adminReplayLifecycle.access.canTest === true && adminReplayLifecycle.access.canDisable === true, 'Destination lifecycle should expose admin capabilities for owner/admin users.', adminReplayLifecycle)
 expect(adminReplayLifecycle?.lifecycle.created?.actorId === 'owner_contract' && adminReplayLifecycle.auditEventContracts.length > 0, 'Admin lifecycle should expose audit actors and redacted audit event contracts.', adminReplayLifecycle)

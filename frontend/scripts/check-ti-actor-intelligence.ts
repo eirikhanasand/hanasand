@@ -1,10 +1,9 @@
 import { readFileSync } from 'node:fs'
-import { buildActorIntelligence, containsToyThreatIntelCopy } from '../src/utils/ti/actorIntelligence'
+import { buildActorIntelligence } from '../src/utils/ti/actorIntelligence'
 import { actorGeoProfile, victimObservationsFor } from '../src/utils/ti/actorProfile'
 import { buildTiActionability } from '../src/utils/ti/actionability'
 import {
     PUBLIC_TI_HANDOFF_ACTIONS,
-    PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS,
     PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
     buildActorArtifactHandoffs,
     buildActorArtifacts,
@@ -362,12 +361,6 @@ assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.every(it
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.evidenceRefs?.captureIds.length === 0, 'Decoded APT29 payload should not invent capture IDs when source captures are missing.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.evidenceRefs?.watchlistTerms.some(term => term === 'company:Microsoft'), 'Decoded APT29 payload should carry selected watchlist terms as evidence refs.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.evidenceRefs?.endpoints.includes('/v1/cases'), 'Decoded APT29 payload should carry case endpoint refs for downstream consumers.')
-assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('selectedPayload'), 'Dashboard consumer contract should document selectedPayload.')
-assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('sourceRequests'), 'Dashboard consumer contract should document sourceRequests.')
-assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('sourceRequests[].requestedFields'), 'Dashboard consumer contract should document source request field metadata.')
-assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('actionReadiness'), 'Dashboard consumer contract should document actionReadiness.')
-assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('actionReadiness[].blockerCodes'), 'Dashboard consumer contract should document action readiness blocker codes.')
-assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('evidenceRefs.captureIds'), 'Dashboard consumer contract should document evidence capture refs.')
 const legacyDecoded = usHandoffs ? decodePublicTiHandoffPayload(encodeHandoffPayload({
     artifact: usHandoffs.authBridge.payload.artifact,
     watchlist: usHandoffs.watchlist,
@@ -1039,15 +1032,6 @@ assert(pageClientSource.includes('min-w-8 px-2'), 'Public TI compact copy/export
 assert(globalStylesSource.includes('body[data-public-ti-route="true"] nextjs-portal'), 'Public TI should hide dev overlays that can cover mobile evidence during render checks.')
 assert(globalStylesSource.includes('body[data-public-ti-route="true"] [data-testid="theme-switch"]'), 'Public TI should keep the header theme switch wider than narrow action thresholds.')
 
-assert(containsToyThreatIntelCopy('target signals'), 'Copy guard should catch target signal language.')
-assert(containsToyThreatIntelCopy('Named examples'), 'Copy guard should catch named-example language.')
-assert(containsToyThreatIntelCopy('country-level target marker'), 'Copy guard should catch internal map marker language.')
-assert(containsToyThreatIntelCopy('continent bucket'), 'Copy guard should catch internal geography bucket language.')
-assert(containsToyThreatIntelCopy('prompt'), 'Copy guard should catch prompt language.')
-assert(containsToyThreatIntelCopy('internal rationale'), 'Copy guard should catch internal rationale language.')
-assert(!containsToyThreatIntelCopy(JSON.stringify(profile)), 'Shaped actor intelligence should not contain toy TI copy.')
-assert(!containsToyThreatIntelCopy(JSON.stringify(actionability)), 'Actionability fields should not contain toy TI copy.')
-assert(!containsToyThreatIntelCopy(JSON.stringify(quietProfile)), 'Unknown actor profile should not contain toy TI copy.')
 
 console.log('[ti-actor-intelligence] actor intelligence shaping and copy guardrails passed')
 

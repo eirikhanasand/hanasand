@@ -9,10 +9,53 @@ export function feedItems(source: any, task: any, fetched: string, at: string, m
     const telegram = telegramItems(source, task, fetched, at, metadata, maxItems);
     if (telegram.length) return telegram;
   }
+  if (source.type === "json_api") {
+    const json = jsonItems(source, task, fetched, at, metadata, maxItems);
+    if (json.length) return json;
+  }
   const blocks = [...fetched.matchAll(ITEM_RE)].map((m) => m[0]);
   if (!blocks.length) blocks.push(...[...fetched.matchAll(ENTRY_RE)].map((m) => m[0]));
   const items = blocks.slice(0, maxItems).map((block, index) => item(source, task, block, at, metadata, index)).filter((row) => row.rawText.length > 24);
   return items.length ? items : [fallback(source, task, fetched, at, metadata)];
+}
+
+function jsonItems(source: any, task: any, fetched: string, at: string, metadata: any, maxItems: number) {
+  const parsed = safeJson(fetched);
+  const rows = jsonRows(parsed).slice(0, maxItems);
+  return rows.map((entry, index) => jsonItem(source, task, entry, at, metadata, index)).filter((item) => item.rawText.length > 24);
+}
+
+function jsonItem(source: any, task: any, entry: any, at: string, metadata: any, index: number) {
+  const title = stringField(entry, ["post_title", "title", "cveID", "id", "name", "group_name", "vendorProject"]) || source.name;
+  const publishedAt = stringField(entry, ["discovered", "dateAdded", "published", "publishedDate", "lastModified", "lastModifiedDate", "updated"]);
+  const url = stringField(entry, ["post_url", "link", "url", "source", "reference"]) || task.targetUrl;
+  const rawText = [source.name, title, jsonSummary(entry)].filter(Boolean).join("\n").slice(0, 24_000);
+  return row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true }, index, false);
+}
+
+function jsonRows(value: any): any[] {
+  if (Array.isArray(value)) return value;
+  for (const key of ["vulnerabilities", "vulnerabilitiesList", "items", "posts", "data", "results"]) {
+    const rows = value?.[key];
+    if (Array.isArray(rows)) return rows.map((row) => row?.cve ?? row);
+  }
+  return value && typeof value === "object" ? [value] : [];
+}
+
+function jsonSummary(value: any) {
+  return JSON.stringify(value, (_key, item) => typeof item === "string" && item.length > 800 ? `${item.slice(0, 800)}...` : item);
+}
+
+function safeJson(value: string) {
+  try { return JSON.parse(value); } catch { return undefined; }
+}
+
+function stringField(row: any, fields: string[]) {
+  for (const field of fields) {
+    const value = field.split(".").reduce((current, key) => current?.[key], row);
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
 }
 
 function telegramItems(source: any, task: any, fetched: string, at: string, metadata: any, maxItems: number) {

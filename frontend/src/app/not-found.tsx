@@ -21,7 +21,7 @@ const recoveryLinks = [
     {
         title: 'Dark web monitoring',
         body: 'See the monitoring product, webhook flow, and buyer use cases.',
-        href: '/solutions/dwm',
+        href: '/dwm',
         icon: Radar,
     },
     {

@@ -29,7 +29,7 @@ const pageSpecs = [
     {
         id: 'dashboard',
         path: '/dashboard',
-        requiredSelectors: ['[data-readiness-row-id]', '[data-readiness-owner-lane]', '[data-readiness-operator-action]', '[data-readiness-workflow-blocker]', '[data-readiness-customer-impact]', '[data-readiness-source-reference]', '[data-readiness-action-count]', '[data-readiness-backend-contract-version]', '[data-readiness-priority]', '[data-readiness-detail]', '[data-readiness-detail-actions]', '[data-readiness-scorecard-link="/readiness"]'],
+        requiredSelectors: ['[data-readiness-row-id]', '[data-readiness-owner-lane]', '[data-readiness-operator-action]', '[data-readiness-workflow-blocker]', '[data-readiness-customer-impact]', '[data-readiness-source-reference]', '[data-readiness-action-count]', '[data-readiness-backend-contract-version]', '[data-readiness-priority]', '[data-readiness-detail]', '[data-readiness-detail-actions]'],
     },
     {
         id: 'dashboard_ti_control',
@@ -67,11 +67,6 @@ const pageSpecs = [
         id: 'vulnerabilities',
         path: '/dashboard/vulnerabilities',
         requiredSelectors: ['main'],
-    },
-    {
-        id: 'readiness',
-        path: '/readiness',
-        requiredSelectors: ['main', '[data-north-star-readiness-ledger]'],
     },
     {
         id: 'traffic',

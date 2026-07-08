@@ -13,7 +13,7 @@ const footerGroups = [
     {
         title: 'Product',
         links: [
-            { label: 'Dark Web Monitoring', href: '/solutions/dwm', icon: BellRing },
+            { label: 'Dark Web Monitoring', href: '/dwm', icon: BellRing },
             { label: 'Threat Intelligence', href: '/ti', icon: Radar },
             { label: 'Organizations', href: '/organizations', icon: ShieldCheck },
             { label: 'Actor Overview', href: '/ti', icon: Waypoints },
@@ -23,7 +23,7 @@ const footerGroups = [
         title: 'Solutions',
         links: [
             { label: 'All Solutions', href: '/solutions', icon: ShieldCheck },
-            { label: 'Browser', href: '/solutions/browser', icon: Network },
+            { label: 'Browser', href: '/browser', icon: Network },
             { label: 'API docs', href: '/developers', icon: Code2 },
             { label: 'Pricing', href: '/pricing', icon: Activity },
         ],

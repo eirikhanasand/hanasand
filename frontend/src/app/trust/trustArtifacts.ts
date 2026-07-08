@@ -63,7 +63,7 @@ export const trustArtifacts: TrustArtifact[] = [
                 ['Authentication', 'Password accounts and protected dashboard routes', '/login, /register, protected dashboard routes'],
                 ['Organization administration', 'Members, roles, watchlists, and alert scope exist in product surfaces', '/organizations and dashboard organization APIs'],
                 ['Webhook delivery', 'Destinations, delivery state, and lifecycle APIs are represented', '/developers and dashboard automation routes'],
-                ['Monitoring boundary', 'Metadata-first collection and safe alert fields', '/solutions/dwm and /ti'],
+                ['Monitoring boundary', 'Metadata-first collection and safe alert fields', '/dwm and /ti'],
                 ['Certifications', 'No SOC 2 or ISO 27001 certification today', '/trust'],
             ],
         },

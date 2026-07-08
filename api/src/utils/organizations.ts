@@ -8448,10 +8448,6 @@ function organizationWatchlistMatchProvenanceHash(term: OrganizationWatchlistTer
     return `orgprov_${(hash >>> 0).toString(16).padStart(8, '0')}`
 }
 
-export function slugForOrganization(value: string) {
-    return slugFor(value)
-}
-
 function normalizeInviteRole(value: unknown): OrganizationRole {
     const role = cleanText(value).toLowerCase() || 'member'
     if (!inviteRoles.has(role as OrganizationRole)) {

@@ -8,9 +8,7 @@ const here = new URL('.', import.meta.url)
 const workbenchSource = readFileSync(new URL('../src/app/dashboard/ti/workbench/workbenchClient.tsx', here), 'utf8')
 const dashboardModelSource = readFileSync(new URL('../src/app/dashboard/operatorConsoleModel.ts', here), 'utf8')
 const dashboardPageSource = readFileSync(new URL('../src/app/dashboard/page.tsx', here), 'utf8')
-const readinessPageSource = readFileSync(new URL('../src/app/readiness/page.tsx', here), 'utf8')
 const productProgressRouteSource = readFileSync(new URL('../src/app/api/product-progress/route.ts', here), 'utf8')
-const productReadinessRouteSource = readFileSync(new URL('../src/app/api/product-readiness/route.ts', here), 'utf8')
 const organizationAlertReadinessRouteSource = readFileSync(new URL('../src/app/api/organizations/[id]/alert-readiness/route.ts', here), 'utf8')
 const caseCustomerNotificationProxySource = readFileSync(new URL('../src/app/api/cases/[id]/customer-notification/route.ts', here), 'utf8')
 const caseExportProxySource = readFileSync(new URL('../src/app/api/cases/[id]/export/route.ts', here), 'utf8')
@@ -961,7 +959,6 @@ for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria'
     assert.equal(workbenchSource.toLowerCase().includes(bannedCopy), false, `Dashboard workbench includes banned copy: ${bannedCopy}`)
     assert.equal(dashboardModelSource.toLowerCase().includes(bannedCopy), false, `Dashboard model includes banned copy: ${bannedCopy}`)
     assert.equal(dashboardPageSource.toLowerCase().includes(bannedCopy), false, `Dashboard page includes banned copy: ${bannedCopy}`)
-    assert.equal(readinessPageSource.toLowerCase().includes(bannedCopy), false, `Readiness page includes banned copy: ${bannedCopy}`)
 }
 
 for (const scopedProgressToken of [
@@ -999,17 +996,6 @@ for (const scopedProgressToken of [
     assert.ok(productProgressRouteSource.includes(scopedProgressToken), `Product-progress route missing scoped readiness token: ${scopedProgressToken}`)
 }
 
-for (const scopedReadinessToken of [
-    'copyScopedParams(request, target)',
-    '/api/product-progress',
-    'buildProductNorthStarScoreboard',
-    'organizationId',
-    'userEmail',
-    'actor',
-]) {
-    assert.ok(productReadinessRouteSource.includes(scopedReadinessToken), `Product-readiness route missing scoped bridge token: ${scopedReadinessToken}`)
-}
-
 for (const orgReadinessRouteToken of [
     '/organizations/${encodeURIComponent(id)}/alert-readiness',
     'proxyOrganizationApiRequest',
@@ -1017,14 +1003,6 @@ for (const orgReadinessRouteToken of [
     'force-dynamic',
 ]) {
     assert.ok(organizationAlertReadinessRouteSource.includes(orgReadinessRouteToken), `Organization alert-readiness proxy missing token: ${orgReadinessRouteToken}`)
-}
-
-for (const visibleExample of ['APT29', 'LockBit', 'dashboard slop', 'how this feeds', '/ti/<query>']) {
-    assert.equal(readinessPageSource.includes(visibleExample), false, `Readiness page includes prompt/example copy: ${visibleExample}`)
-}
-
-for (const readinessRouteToken of ['data-north-star-row-id', 'data-north-star-owner-lane', 'data-north-star-backend-proof-contract-version', 'watchlist terms', 'Open']) {
-    assert.ok(readinessPageSource.includes(readinessRouteToken), `Readiness route missing product proof token: ${readinessRouteToken}`)
 }
 
 for (const bannedClass of ['border-white/', 'bg-white/10', 'bg-white/15']) {
@@ -1035,8 +1013,7 @@ assert.ok(workbenchSource.includes('data-readiness-detail-href'), 'Readiness det
 assert.ok(workbenchSource.includes('Open workflow'), 'Readiness detail should deep-link to the backed workflow.')
 assert.ok(workbenchSource.includes('readinessPrioritySort'), 'Dashboard readiness rows should be prioritized by blocker state.')
 assert.ok(workbenchSource.includes('data-readiness-priority'), 'Dashboard readiness rows should expose priority for DOM proof.')
-assert.ok(workbenchSource.includes('href=\'/readiness\''), 'Dashboard readiness detail should link to the product scorecard.')
-assert.ok(workbenchSource.includes('Open scorecard'), 'Dashboard readiness detail should expose the product scorecard action.')
+assert.ok(workbenchSource.includes('href=\'/dashboard/dwm\''), 'Dashboard readiness detail should link to the DWM workflow.')
 assert.ok(workbenchSource.includes('inspect_org_members'), 'Org readiness should expose the backed members drill-in.')
 assert.ok(workbenchSource.includes('/api/organizations/${encodeURIComponent(orgContext.organization.id)}/members'), 'Org readiness should link to the scoped members API.')
 assert.ok(workbenchSource.includes('inspect_org_alert_readiness'), 'Org readiness should expose alert-readiness proof.')

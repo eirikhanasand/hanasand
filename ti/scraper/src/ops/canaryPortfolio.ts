@@ -12,6 +12,8 @@ export const canaryQueries = ["APT29", "APT42", "Turla", "Volt Typhoon", "Scatte
 export const PUBLIC_CANARY_SOURCE_PORTFOLIO = [
   src("src_canary_cisa_alerts", "CISA Cybersecurity Alerts", "rss", "https://www.cisa.gov/cybersecurity-advisories/all.xml", ["APT29", "Volt Typhoon", "CVE"], "government"),
   src("src_canary_cisa_known_exploited", "CISA Known Exploited Vulnerabilities", "static_web", "https://www.cisa.gov/known-exploited-vulnerabilities-catalog", ["CVE"], "government"),
+  src("src_canary_cisa_known_exploited_json", "CISA KEV JSON Feed", "json_api", "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json", ["CVE", "exploited in the wild", "known exploited"], "government"),
+  src("src_canary_nvd_recent", "NVD Recent CVE API", "json_api", "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=40", ["CVE", "vulnerability", "exploit"], "government"),
   src("src_canary_microsoft_threat_intelligence", "Microsoft Threat Intelligence Blog", "rss", "https://www.microsoft.com/en-us/security/blog/topic/threat-intelligence/feed/", ["APT29", "APT42", "Volt Typhoon", "Scattered Spider"], "vendor"),
   src("src_canary_google_cloud_threat_intel", "Google Cloud Threat Intelligence Blog", "rss", "https://cloud.google.com/blog/products/identity-security/rss", ["APT42", "Turla", "Akira"], "vendor"),
   src("src_canary_mandiant", "Mandiant Threat Intelligence Blog", "rss", "https://cloud.google.com/blog/topics/threat-intelligence/rss", ["APT29", "APT42", "Turla"], "vendor"),

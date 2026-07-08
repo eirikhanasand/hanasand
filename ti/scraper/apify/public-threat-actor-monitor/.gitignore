@@ -1,6 +1,0 @@
-.apify-smoke-storage/
-apify_storage/
-storage/
-output.json
-node_modules/
-package-lock.json

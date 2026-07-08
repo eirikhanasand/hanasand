@@ -22,41 +22,6 @@ export const PUBLIC_TI_HANDOFF_ROUTES = {
     enrichment: '/dashboard/ti/enrichment',
 } as const
 
-export const PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS = [
-    'schemaVersion',
-    'source',
-    'action',
-    'query',
-    'artifactId',
-    'artifact',
-    'selectedPayload',
-    'actionPayloads',
-    'orgRequired',
-    'sourceRequired',
-    'stale',
-    'missing',
-    'blockers',
-    'sourceRequests',
-    'actionReadiness',
-    'actionReadiness[].action',
-    'actionReadiness[].route',
-    'actionReadiness[].endpoint',
-    'actionReadiness[].backedRoute',
-    'actionReadiness[].ready',
-    'actionReadiness[].blockerCodes',
-    'actionReadiness[].ownerLane',
-    'actionReadiness[].sourceRequestCount',
-    'evidenceRefs',
-    'evidenceRefs.captureIds',
-    'evidenceRefs.alertIds',
-    'evidenceRefs.casePaths',
-    'evidenceRefs.watchlistTerms',
-    'sourceRequests[].ownerLane',
-    'sourceRequests[].route',
-    'sourceRequests[].sourceFamily',
-    'sourceRequests[].requestedFields',
-] as const
-
 export type ActorArtifactKind = 'country' | 'tool' | 'campaign' | 'infrastructure' | 'technique'
 export type PublicTiHandoffAction = typeof PUBLIC_TI_HANDOFF_ACTIONS[keyof typeof PUBLIC_TI_HANDOFF_ACTIONS]
 type PublicTiHandoffActionBlockerCode = 'org_required' | 'source_required' | 'stale_evidence' | 'missing_watchlist_term' | 'action_blocked'

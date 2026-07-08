@@ -254,7 +254,7 @@ export interface TiCollectionStrategy {
     }
     distribution: {
         primarySurface: 'hanasand.com'
-        secondarySurface: 'apify'
+        secondarySurface: 'none'
         summary: string
     }
 }

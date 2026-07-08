@@ -19,7 +19,7 @@ test('public DWM webhook copy separates delivery preview from endpoint delivery'
 })
 
 test('public DWM webhook preview validates delivery shape without creating a tenant subscription', async ({ page }) => {
-    await page.goto('/solutions/dwm#webhooks', { waitUntil: 'domcontentloaded' })
+    await page.goto('/dwm#webhooks', { waitUntil: 'domcontentloaded' })
     const preview = page.locator('#webhooks')
     await preview.scrollIntoViewIfNeeded()
 

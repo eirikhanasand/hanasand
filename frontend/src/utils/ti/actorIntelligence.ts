@@ -226,10 +226,6 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
     }
 }
 
-export function containsToyThreatIntelCopy(value: string) {
-    return /\btarget signal(s)?\b|\bsignal language\b|\bnamed examples\b|\bexample(s)?\b|target marker|continent bucket|prompt answer|\bprompt\b|internal rationale|as an ai|toy|demo|coming soon/i.test(value)
-}
-
 function buildProvenanceRows(result: TiSearchResponse, fallback: TiActorIntelligenceFallback): TiActorSourceProvenance[] {
     const contractRows = result.actorIntelligence?.structuredProvenance ?? []
     const actionabilityRows = result.actionability?.sourceProvenance ?? []

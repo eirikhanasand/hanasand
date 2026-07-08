@@ -1,7 +1,0 @@
-node_modules/
-package-lock.json
-.apify-smoke-storage/
-apify_storage/
-storage/
-output.json
-.DS_Store

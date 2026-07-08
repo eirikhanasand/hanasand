@@ -17,16 +17,16 @@ import { useState } from 'react'
 
 const productItems = [
     { title: 'Organizations', detail: 'Manage members, shared watchlists, alert scope, and destinations.', href: '/organizations', icon: ShieldCheck },
-    { title: 'Dark Web Monitoring', detail: 'Watch companies, vendors, domains, and brands for reviewable exposure alerts.', href: '/solutions/dwm', icon: BellRing },
+    { title: 'Dark Web Monitoring', detail: 'Watch companies, vendors, domains, and brands for reviewable exposure alerts.', href: '/dwm', icon: BellRing },
     { title: 'Search', detail: 'Search companies, groups, source changes, and alert context.', href: '/ti', icon: Search },
     { title: 'API and Webhooks', detail: 'Route reviewed alert fields into customer tools and analyst workflows.', href: '/developers', icon: Code2 },
 ]
 
 const solutionItems = [
     { title: 'All Solutions', detail: 'Company exposure monitoring, API delivery, and review workflows.', href: '/solutions', icon: ShieldCheck },
-    { title: 'Dark Web Monitoring', detail: 'Company and vendor alerts from watched exposure sources.', href: '/solutions/dwm', icon: BellRing },
+    { title: 'Dark Web Monitoring', detail: 'Company and vendor alerts from watched exposure sources.', href: '/dwm', icon: BellRing },
     { title: 'Threat Search', detail: 'Open the public intelligence workspace for companies and groups.', href: '/ti', icon: Radar },
-    { title: 'Browser', detail: 'Regular and Tor browser runs with isolated capture, profiles, and queueing.', href: '/solutions/browser', icon: Network },
+    { title: 'Browser', detail: 'Regular and Tor browser runs with isolated capture, profiles, and queueing.', href: '/browser', icon: Network },
 ]
 
 const resourceItems = [
@@ -67,13 +67,13 @@ function PublicDropdown({ label, items }: { label: string, items: Array<{ title:
 
 const mobilePublicLinks = [
     { label: 'Organizations', href: '/organizations' },
-    { label: 'Dark web monitoring', href: '/solutions/dwm' },
+    { label: 'Dark web monitoring', href: '/dwm' },
     { label: 'Threat search', href: '/ti' },
     { label: 'Solutions', href: '/solutions' },
     { label: 'Pricing', href: '/pricing' },
     { label: 'Trust center', href: '/trust' },
     { label: 'Developers', href: '/developers' },
-    { label: 'Browser', href: '/solutions/browser' },
+    { label: 'Browser', href: '/browser' },
     { label: 'Hash exposure lookup', href: '/pwned' },
     { label: 'Status', href: '/status' },
     { label: 'Service checks', href: '/test' },
@@ -84,7 +84,7 @@ function PublicMobileMenu({ token }: { token: boolean }) {
     const [open, setOpen] = useState(false)
     const links = token
         ? mobilePublicLinks.map(item => {
-            if (item.href === '/solutions/dwm') return { ...item, href: '/dashboard/dwm' }
+            if (item.href === '/dwm') return { ...item, href: '/dashboard/dwm' }
             if (item.href === '/pricing') return { ...item, href: '/dashboard/subscription' }
             return item
         })
@@ -132,7 +132,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
     const isLoggedInConsoleProduct = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
     const isOrganizations = pathname.startsWith('/organizations')
     const isAppSurface = isLoggedInConsoleProduct || (!isPublicProduct && (isShare || isAI || isDashboard || isProfile || isOrganizations))
-    const darkWebHref = token ? '/dashboard/dwm' : '/solutions/dwm'
+    const darkWebHref = token ? '/dashboard/dwm' : '/dwm'
     const pricingHref = token ? '/dashboard/subscription' : '/pricing'
 
     if (!isAppSurface) {
@@ -142,8 +142,8 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     <BrandLogo />
 
                     <nav className='hidden items-center gap-5 lg:flex'>
-                        <PublicDropdown label='Product' items={token ? productItems.map(item => item.href === '/solutions/dwm' ? { ...item, href: '/dashboard/dwm' } : item) : productItems} />
-                        <PublicDropdown label='Solutions' items={token ? solutionItems.map(item => item.href === '/solutions/dwm' ? { ...item, href: '/dashboard/dwm' } : item) : solutionItems} />
+                        <PublicDropdown label='Product' items={token ? productItems.map(item => item.href === '/dwm' ? { ...item, href: '/dashboard/dwm' } : item) : productItems} />
+                        <PublicDropdown label='Solutions' items={token ? solutionItems.map(item => item.href === '/dwm' ? { ...item, href: '/dashboard/dwm' } : item) : solutionItems} />
                         <Link href='/developers' className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>
                             Developers
                             <Code2 className='h-4 w-4 text-ui-muted' />
@@ -156,7 +156,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                         <ThemeSwitch />
                         <Link href='/support' className='hidden h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text md:inline-flex'>Support</Link>
                         <Link href={token ? '/dashboard/overview' : '/login'} className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90'>
-                            Go to Console
+                            Go to Dashboard
                         </Link>
                         <Link href='/ti' aria-label='Search intelligence' className='hidden h-11 w-11 place-items-center rounded-lg border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text sm:grid lg:hidden'>
                             <Search className='h-5 w-5' />
@@ -176,10 +176,10 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     {!isDashboard && !isProfile && !isOrganizations && (
                         <nav className='hidden items-center gap-1 lg:flex'>
                             {token ? (
-                                <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Console</Link>
+                                <Link href='/dashboard/overview' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Dashboard</Link>
                             ) : null}
                             <Link href='/ti' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Threat search</Link>
-                            <Link href='/solutions/browser' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Browser</Link>
+                            <Link href='/browser' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Browser</Link>
                             <Link href={darkWebHref} className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Dark web</Link>
                             <Link href='/developers' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>API docs</Link>
                             <Link href={pricingHref} className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text'>Pricing</Link>

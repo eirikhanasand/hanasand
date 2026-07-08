@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
-export default function LegacyBrowserSandboxPage() {
+export default function BrowserSandboxPage() {
     redirect('/browser')
 }

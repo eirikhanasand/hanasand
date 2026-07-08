@@ -47,6 +47,7 @@ import {
     createDwmWebhookDestination,
     buildDwmWebhookDeliveryReadiness,
     deliverDwmAlertNotification,
+    triggerDwmAlertWebhookNotification,
     filterDwmWebhookDeliveryEvidenceForVisibility,
     listDwmWebhookAuditEvents,
     listDwmWebhookDeliveries,
@@ -1001,7 +1002,7 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
         return res.status(permissionError.status).send({ error: permissionError.message })
     }
 
-    const deliveries = await deliverDwmAlertNotification(userId, { ...input, orgId })
+    const deliveries = await triggerDwmAlertWebhookNotification(userId, { ...input.alert, ...input, orgId }, input)
     const destinations = await listDwmWebhookDestinations(userId, orgId)
     const ledgerDeliveries = await listDwmWebhookDeliveries(userId, orgId)
     const auditEvents = await listDwmWebhookAuditEvents(userId, orgId)

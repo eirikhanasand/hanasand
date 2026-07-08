@@ -4295,20 +4295,6 @@ export function buildDwmWebhookDestinationHealth({
     })
 }
 
-export function filterDwmWebhookDestinationHealthForVisibility({
-    destinationHealth,
-    visibility,
-}: {
-    destinationHealth: ReturnType<typeof buildDwmWebhookDestinationHealth>
-    visibility: DwmWebhookEvidenceVisibilityInput
-}) {
-    const decision = organizationVisibilityDecision(visibility)
-    return {
-        decision,
-        destinationHealth: decision.allowed ? destinationHealth : [],
-    }
-}
-
 export function buildDwmWebhookDashboardReadinessAdapter({
     destinations,
     deliveries = [],

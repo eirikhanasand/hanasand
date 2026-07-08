@@ -1415,10 +1415,10 @@ export function buildProductReadinessAggregate(input: Array<{
         routeHandler: "website.product_surface",
         storageModule: "product_readiness.website_surface",
         proofRowId: "website_product_surface",
-        testName: "check-product-north-star.ts",
+        testName: "check-product-progress-contract.ts",
         expectedAdapter: "websiteProductReadinessProof",
         payloadShape: ["route", "checkedAt", "proofArtifactId", "passed", "blockers"],
-        proofCommand: "cd frontend && /Users/eirikhanasand/.bun/bin/bun scripts/check-product-north-star.ts"
+        proofCommand: "cd frontend && /Users/eirikhanasand/.bun/bin/bun scripts/check-product-progress-contract.ts"
       }
     })
   ];

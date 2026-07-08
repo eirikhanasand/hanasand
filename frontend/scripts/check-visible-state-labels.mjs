@@ -9,7 +9,6 @@ const roots = [
 ]
 
 const allowedFiles = new Set([
-    'src/app/readiness/page.tsx',
 ])
 
 const allowedLinePatterns = [

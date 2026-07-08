@@ -15,7 +15,7 @@ const primarySolutions = [
         title: 'Dark Web Monitoring',
         eyebrow: 'Monitoring',
         detail: 'Watch companies, domains, executives, brands, and vendors across leak-site updates, public indexes, advisories, and approved source records.',
-        href: '/solutions/dwm',
+        href: '/dwm',
         icon: ShieldCheck,
         points: ['Mapped source coverage with active health checks', 'Company, vendor, group, and source-change signals', 'Alert with confidence, source context, and next action'],
         price: 'From $49/mo',
@@ -24,7 +24,7 @@ const primarySolutions = [
         title: 'Browser',
         eyebrow: 'URL analysis',
         detail: 'Open untrusted regular-web and onion URLs in one isolated browser workspace with automatic routing, redirect capture, and saved SOC triage profiles.',
-        href: '/solutions/browser',
+        href: '/browser',
         icon: Globe2,
         points: ['Regular and Tor modes under one queue', 'Saved VirusTotal, urlquery, and WebCrack profiles', 'Screenshot timeline with analyst summary'],
         price: 'Bundled with monitoring',
@@ -81,7 +81,7 @@ export default function SolutionsPage() {
                             Hanasand turns leak sites, public indexes, and watched sources into alerts and API records that show your team who was mentioned, what data was listed, when it changed, and what to review next.
                         </p>
                         <div className='flex flex-wrap gap-3'>
-                            <Link href='/solutions/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                            <Link href='/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
                                 View dark web monitoring
                                 <ArrowRight className='h-4 w-4' />
                             </Link>

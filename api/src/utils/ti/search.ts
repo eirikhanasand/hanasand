@@ -250,7 +250,7 @@ export interface TiCollectionStrategy {
     }
     distribution: {
         primarySurface: 'hanasand.com'
-        secondarySurface: 'apify'
+        secondarySurface: 'none'
         summary: string
     }
 }
@@ -1079,8 +1079,8 @@ export function collectionStrategy(): TiCollectionStrategy {
         },
         distribution: {
             primarySurface: 'hanasand.com',
-            secondarySurface: 'apify',
-            summary: 'hanasand.com is the product surface for monitoring, notifications, and actor overview. Apify is secondary distribution only and should not dictate the product shape.'
+            secondarySurface: 'none',
+            summary: 'hanasand.com is the product surface for monitoring, notifications, actor overview, and public-source reporting.'
         }
     }
 }

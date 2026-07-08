@@ -1,11 +1,11 @@
 import { buildLiveProductSloDashboard, type LiveProductProofMode } from "../ops/productSlo.ts";
 import type { MetricsResponse } from "../types.ts";
 import { nowIso } from "../utils.ts";
-import { booleanQuery, numberQuery } from "./http.ts";
+import { numberQuery } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 
 export function productSlo(options: ApiServerOptions, url: URL) {
-  return buildLiveProductSloDashboard({ generatedAt: url.searchParams.get("generatedAt") ?? undefined, proofMode: proofMode(url.searchParams.get("proofMode")), runs: options.store.listRuns(), sources: options.store.listSources(), captures: options.store.listCaptures(), incidents: options.store.listIncidents(), frontier: options.frontier.groupedSnapshot(), actorRun: actorRun(url), marketplace: marketplace(url) });
+  return buildLiveProductSloDashboard({ generatedAt: url.searchParams.get("generatedAt") ?? undefined, proofMode: proofMode(url.searchParams.get("proofMode")), runs: options.store.listRuns(), sources: options.store.listSources(), captures: options.store.listCaptures(), incidents: options.store.listIncidents(), frontier: options.frontier.groupedSnapshot(), actorRun: actorRun(url) });
 }
 
 export function metrics(options: ApiServerOptions): MetricsResponse {
@@ -17,10 +17,6 @@ export function metrics(options: ApiServerOptions): MetricsResponse {
 
 function actorRun(url: URL) {
   return { rowCount: numberQuery(url.searchParams.get("actorRowCount")) ?? null, usefulRowCount: numberQuery(url.searchParams.get("actorUsefulRowCount")) ?? null, freshRowCount: numberQuery(url.searchParams.get("actorFreshRowCount")) ?? null, sellableRowCount: numberQuery(url.searchParams.get("actorSellableRows")) ?? null, targetSellableRows: numberQuery(url.searchParams.get("actorTargetSellableRows")) ?? 100 };
-}
-
-function marketplace(url: URL) {
-  return { actorViewCount: numberQuery(url.searchParams.get("apifyActorViewCount")) ?? null, actorRunCount: numberQuery(url.searchParams.get("apifyActorRunCount")) ?? null, uniqueUserCount: numberQuery(url.searchParams.get("apifyUniqueUserCount")) ?? null, trialRunCount: numberQuery(url.searchParams.get("apifyTrialRunCount")) ?? null, paidRunCount: numberQuery(url.searchParams.get("apifyPaidRunCount")) ?? null, beneficiaryVerified: booleanQuery(url.searchParams.get("apifyBeneficiaryVerified")), payoutMethodReady: booleanQuery(url.searchParams.get("apifyPayoutMethodReady")), withdrawalReady: booleanQuery(url.searchParams.get("apifyWithdrawalReady")) };
 }
 
 function proofMode(value: string | null): LiveProductProofMode {
