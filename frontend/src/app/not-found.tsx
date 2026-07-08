@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArrowRight, Radar, Search, ShieldCheck } from 'lucide-react'
 import type { Metadata } from 'next'
 import { buildRouteMetadata } from './seo'
+import NotFoundSuggestions from './not-found-suggestions'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Page Not Found',
@@ -71,6 +72,8 @@ export default function NotFound() {
                         )
                     })}
                 </div>
+
+                <NotFoundSuggestions />
             </section>
         </main>
     )
