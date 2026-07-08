@@ -15,6 +15,19 @@ import { recordHttpErrorResponse } from '#utils/logs/httpErrors.ts'
 import { provisionExistingMailAccounts } from '#utils/mail/accounts.ts'
 import { recordThreatActorProfileWarmFailure, warmThreatActorProfileCache } from '#utils/ti/search.ts'
 
+process.on('uncaughtException', error => {
+    if (isBunWebSocketErrorEvent(error)) {
+        void recordLog({
+            level: 'warn',
+            service: 'hanasand-api',
+            message: 'Suppressed Bun WebSocket ErrorEvent so the API process stays alive.',
+            metadata: { category: 'websocket_error_event', error: describeUnknownError(error) },
+        }).catch(() => undefined)
+        return
+    }
+    throw error
+})
+
 const fastify = Fastify({
     logger: true
 })
@@ -152,6 +165,20 @@ async function start() {
 
 function isMailAdminConfigError(error: unknown) {
     return error instanceof Error && error.message.includes('MAIL_ADMIN_PASSWORD is required')
+}
+
+function isBunWebSocketErrorEvent(error: unknown) {
+    if (!error || typeof error !== 'object') return false
+    return (error as { constructor?: { name?: string } }).constructor?.name === 'ErrorEvent'
+}
+
+function describeUnknownError(error: unknown) {
+    if (error instanceof Error) return error.message
+    try {
+        return JSON.stringify(error)
+    } catch {
+        return String(error)
+    }
 }
 
 function main() {

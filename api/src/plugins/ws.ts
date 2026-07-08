@@ -270,7 +270,12 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
         else pending.push(message)
     })
     connection.on('close', closeBoth)
-    connection.on('error', error => void recordWebsocketFailure(`browser-session-client-${route}`, id, error))
+    connection.on('error', error => {
+        void recordWebsocketFailure(`browser-session-client-${route}`, id, error)
+        closeBoth()
+    })
+
+    sendStatus(connection, 'launching_worker', 'Starting isolated browser worker.')
 
     void startEphemeralBrowserWorker(id)
         .then(({ containerId: nextContainerId, wsUrl }) => {
@@ -288,6 +293,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
                 return
             }
             upstream = nextUpstream
+            sendStatus(connection, 'worker_connected', 'Isolated browser worker connected.')
             upstream.on('open', () => {
                 while (pending.length && upstream?.readyState === WebSocket.OPEN) upstream.send(pending.shift()!)
             })
@@ -298,7 +304,8 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             upstream.on('close', closeBoth)
             upstream.on('error', error => {
                 void recordWebsocketFailure(`browser-session-upstream-${route}`, id, error)
-                closeBoth()
+                if (connection.readyState === WebSocket.OPEN) sendErrorThenClose(connection, `Isolated browser worker connection failed: ${error instanceof Error ? error.message : String(error)}`)
+                else closeBoth()
             })
         })
         .catch(error => {
@@ -310,6 +317,10 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             }
             void recordWebsocketFailure(`browser-session-create-${route}`, id, error)
         })
+}
+
+function sendStatus(connection: WebSocket, state: string, message: string) {
+    if (connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify({ type: 'status', state, message }))
 }
 
 function sendErrorThenClose(connection: WebSocket, message: string) {
