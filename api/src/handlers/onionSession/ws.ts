@@ -708,6 +708,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 let providerText = officialProviderKind(preparedUrl)
                     ? await waitForProviderData(tool, toolPage, providerBodies)
                     : [providerBodies(), await withTimeout(collectFastRenderedText(toolPage), 1000, '')].filter(Boolean).join('\n')
+                navigationError ||= providerAccessIssue(providerText)
                 if (providerText && hasParsedProviderData(tool, providerText)) {
                     navigationError = ''
                     const reportUrl = isUrlQueryTool(tool, toolPage.url()) && !/\/report\//i.test(toolPage.url())
@@ -1758,6 +1759,11 @@ function hasParsedProviderData(tool: { id?: string; name?: string; url?: string 
     if (isVirusTotalTool(tool) && parseVirusTotalStats(text)) return true
     if (isUrlQueryTool(tool) && parseUrlQueryScores(text)) return true
     return false
+}
+
+function providerAccessIssue(text: string) {
+    if (/recaptcharequired|recaptcha validation failed|captcha/i.test(text)) return 'Provider blocked automated capture with a reCAPTCHA challenge.'
+    return ''
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T) {
