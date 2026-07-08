@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 
+function readOptional(url: URL) {
+    return existsSync(url) ? readFileSync(url, 'utf8') : ''
+}
+
 const ws = readFileSync(new URL('../src/plugins/ws.ts', import.meta.url), 'utf8')
 const index = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
 const onionWs = readFileSync(new URL('../src/handlers/onionSession/ws.ts', import.meta.url), 'utf8')
 const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8')
 const appRuntimeStage = /FROM oven\/bun:1\.3\.11-alpine AS app-runtime\n([\s\S]*?)\nFROM app-runtime AS browser-runtime/.exec(dockerfile)?.[1] || ''
-const handoff = readFileSync(new URL('../../agents/scripts/handoff-context.mjs', import.meta.url), 'utf8')
-const runbook = readFileSync(new URL('../../agents/HANDOFF_RUNBOOK.md', import.meta.url), 'utf8')
+const handoff = readOptional(new URL('../../agents/scripts/handoff-context.mjs', import.meta.url))
+const runbook = readOptional(new URL('../../agents/HANDOFF_RUNBOOK.md', import.meta.url))
 const composeUrl = new URL('../../docker-compose.yml', import.meta.url)
 
 assert.match(ws, /BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only'/, 'browser proxy should require per-session workers unless an unsafe dev-only override is set')
@@ -53,7 +57,7 @@ assert.match(dockerfile, /FROM app-runtime AS browser-runtime[\s\S]*apk add --no
 assert.match(dockerfile, /apk del varnish git openssh-client docker-cli curl tar/, 'browser-worker image should strip API operational tools before installing Chromium')
 assert.match(dockerfile, /rm -f \/usr\/local\/bin\/trivy \/usr\/bin\/k6/, 'browser-worker image should remove copied operational scanners/load tools')
 assert.doesNotMatch(appRuntimeStage, /\b(chromium|xvfb)\b/, 'main API image should not install Chromium or Xvfb')
-for (const source of [handoff, runbook]) {
+for (const source of [handoff, runbook].filter(Boolean)) {
     assert.match(source, /--profile unsafe-dev-only build api browser-worker/, 'browser deploy path should build the separate browser-worker image')
     assert.match(source, /up -d --no-deps api/, 'browser deploy path should restart API without starting the dev-only shared worker')
     assert.match(source, /install-egress-firewall\.sh hanasand_browsernet/, 'browser deploy path should install the browser egress firewall before sandbox traffic')
