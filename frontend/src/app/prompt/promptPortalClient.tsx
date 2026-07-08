@@ -138,8 +138,8 @@ export default function PromptPortalClient({ initialState = emptyState }: { init
                         </button>
                     </form>
                 ) : (
-                    <section className='grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]'>
-                        <form onSubmit={enqueue} className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4'>
+                    <section className='grid gap-4 lg:max-h-[calc(100vh-13rem)] lg:grid-cols-3 lg:overflow-hidden'>
+                        <form onSubmit={enqueue} className='grid min-h-0 gap-3 overflow-y-auto rounded-lg border border-ui-border bg-ui-panel p-4'>
                             <div className='flex items-center justify-between gap-2'>
                                 <h2 className='text-sm font-semibold'>New instruction</h2>
                                 <button type='button' onClick={refresh} className='inline-flex h-8 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-2.5 text-xs font-semibold text-ui-muted hover:text-ui-text'>
@@ -176,11 +176,8 @@ export default function PromptPortalClient({ initialState = emptyState }: { init
                                 Send
                             </button>
                         </form>
-
-                        <div className='grid gap-4'>
-                            <Queue title='Input queue' items={pending} empty='No queued instructions.' />
-                            <Queue title='Output queue' items={completed} empty='No completed results yet.' />
-                        </div>
+                        <Queue title='Input queue' items={pending} empty='No queued instructions.' />
+                        <Queue title='Output queue' items={completed} empty='No completed results yet.' />
                     </section>
                 )}
             </div>
@@ -190,11 +187,11 @@ export default function PromptPortalClient({ initialState = emptyState }: { init
 
 function Queue({ title, items, empty }: { title: string, items: PortalItem[], empty: string }) {
     return (
-        <section className='rounded-lg border border-ui-border bg-ui-panel'>
+        <section className='flex min-h-0 flex-col rounded-lg border border-ui-border bg-ui-panel'>
             <div className='border-b border-ui-border px-4 py-3'>
                 <h2 className='text-sm font-semibold'>{title}</h2>
             </div>
-            <div className='grid gap-2 p-3'>
+            <div className='grid min-h-0 gap-2 overflow-y-auto p-3'>
                 {items.length ? items.map(item => <PromptItem key={item.id} item={item} />) : <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-4 text-sm text-ui-muted'>{empty}</p>}
             </div>
         </section>

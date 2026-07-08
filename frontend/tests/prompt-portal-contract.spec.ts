@@ -14,6 +14,8 @@ test('prompt portal keeps unauthenticated access code gated and queue based', as
     expect(page).toContain('PromptPortalClient')
     expect(client).toContain('Input queue')
     expect(client).toContain('Output queue')
+    expect(client).toContain('lg:grid-cols-3')
+    expect(client).toContain('overflow-y-auto')
     expect(client).toContain('type=\'file\' accept=\'image/*\' multiple')
     expect(client).toContain('priority === \'now\'')
     expect(route).toContain('action !== \'login\'')
