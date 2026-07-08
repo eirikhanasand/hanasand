@@ -708,7 +708,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 let providerText = officialProviderKind(preparedUrl)
                     ? await waitForProviderData(tool, toolPage, providerBodies)
                     : [providerBodies(), await withTimeout(collectFastRenderedText(toolPage), 1000, '')].filter(Boolean).join('\n')
-                navigationError ||= providerAccessIssue(providerText)
+                navigationError ||= providerAccessIssue(tool, providerText, toolPage.url())
                 if (providerText && hasParsedProviderData(tool, providerText)) {
                     navigationError = ''
                     const reportUrl = isUrlQueryTool(tool, toolPage.url()) && !/\/report\//i.test(toolPage.url())
@@ -1761,8 +1761,9 @@ function hasParsedProviderData(tool: { id?: string; name?: string; url?: string 
     return false
 }
 
-function providerAccessIssue(text: string) {
+function providerAccessIssue(tool: { id?: string; name?: string; url?: string }, text: string, currentUrl = '') {
     if (/recaptcharequired|recaptcha validation failed|captcha/i.test(text)) return 'Provider blocked automated capture with a reCAPTCHA challenge.'
+    if (isVirusTotalTool(tool, currentUrl) && /\/gui\/home\/(?:upload|search)/i.test(currentUrl)) return 'VirusTotal did not open a URL report; provider redirected to its upload/search home.'
     return ''
 }
 
