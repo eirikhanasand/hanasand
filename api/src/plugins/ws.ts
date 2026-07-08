@@ -347,7 +347,7 @@ async function startEphemeralBrowserWorker(sessionId: string) {
             ReadonlyRootfs: true,
             Tmpfs: { '/tmp': 'rw,noexec,nosuid,size=768m' },
             CapDrop: ['ALL'],
-            SecurityOpt: [`seccomp=${browserWorkerSeccompProfile}`, 'no-new-privileges'],
+            SecurityOpt: [`seccomp=${browserWorkerSeccompProfile}`, 'apparmor=docker-default', 'no-new-privileges'],
             ShmSize: 1024 * 1024 * 1024,
             Memory: 2 * 1024 * 1024 * 1024,
             NanoCpus: 2_000_000_000,
