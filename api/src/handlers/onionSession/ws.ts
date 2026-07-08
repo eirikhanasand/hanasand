@@ -145,7 +145,7 @@ function regularBrowser() {
     return warmRegularBrowser
 }
 
-if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_PREWARM !== '0') {
+if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_WORKER_ONLY !== '1' && process.env.BROWSER_SANDBOX_PREWARM !== '0') {
     setTimeout(() => void regularBrowser().catch(() => undefined), 1000).unref()
 }
 
@@ -463,7 +463,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     : proxy ? 'Launching isolated browser through configured Tor proxy.' : 'Launching isolated browser without Tor proxy; configure ONION_SESSION_PROXY or TOR_SOCKS_PROXY for onion routing.',
             })
 
-            ownsBrowser = Boolean(proxy || network !== 'regular')
+            ownsBrowser = Boolean(proxy || network !== 'regular' || process.env.BROWSER_SANDBOX_WORKER_ONLY === '1')
             browser = ownsBrowser ? await chromium.launch(chromiumLaunchOptions(proxy)) : await regularBrowser()
             context = await browser.newContext({
                 viewport: browserViewportForMessage(message),
