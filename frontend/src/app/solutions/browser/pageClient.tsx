@@ -1645,7 +1645,7 @@ function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; captur
     if (capture.image) {
         return (
             <div className='grid h-full w-full min-w-0 bg-ui-canvas lg:grid-cols-[minmax(0,1fr)_20rem]'>
-                <img src={capture.image} alt={`${tool.name} provider screenshot`} className='h-full w-full min-w-0 bg-ui-canvas object-cover' />
+                <img src={capture.image} alt={`${tool.name} provider screenshot`} className='h-full w-full min-w-0 bg-white object-contain' />
                 <div className='min-h-0 overflow-auto border-t border-ui-border bg-ui-panel/95 p-3 lg:border-l lg:border-t-0'>
                     <ProviderReportDetails tool={tool} capture={capture} compact />
                 </div>

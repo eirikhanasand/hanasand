@@ -699,11 +699,19 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     target,
                     error: navigationError || 'Provider tab opened; verdict parsing is still running.',
                 })
-                const providerText = officialProviderKind(preparedUrl)
+                let providerText = officialProviderKind(preparedUrl)
                     ? await waitForProviderData(tool, toolPage, providerBodies)
                     : [providerBodies(), await withTimeout(collectFastRenderedText(toolPage), 1000, '')].filter(Boolean).join('\n')
                 if (providerText && hasParsedProviderData(tool, providerText)) {
                     navigationError = ''
+                    const reportUrl = isUrlQueryTool(tool, toolPage.url()) && !/\/report\//i.test(toolPage.url())
+                        ? await firstUrlQueryReportUrl(toolPage)
+                        : ''
+                    if (reportUrl) {
+                        await toolPage.goto(reportUrl, { waitUntil: 'domcontentloaded', timeout: providerTimeoutMs(tool) }).catch(() => undefined)
+                        await withTimeout(dismissCookieOverlays(toolPage), 800, undefined).catch(() => undefined)
+                        providerText = [providerText, providerBodies(), await collectRenderedText(toolPage)].filter(Boolean).join('\n')
+                    }
                     const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText, tool.name || toolUrl)
                     const parsedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 1500 }), 1500, openedImage)
                     send({
@@ -1625,6 +1633,13 @@ async function interactWithProvider(page: Page, tool: { id?: string; name?: stri
         return error instanceof Error ? error.message : String(error)
     }
     return ''
+}
+
+async function firstUrlQueryReportUrl(page: Page) {
+    return page.evaluate(() => {
+        const link = Array.from(document.links).find(item => /\/report\/[a-f0-9-]{24,}/i.test(item.href))
+        return link?.href || ''
+    }).catch(() => '')
 }
 
 function collectProviderResponses(page: Page, toolName: string) {
