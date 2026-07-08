@@ -126,6 +126,7 @@ function chromiumLaunchOptions(proxy?: string) {
     return {
         headless: chromiumHeadless(),
         executablePath: process.env.CHROMIUM_BIN || '/usr/bin/chromium',
+        chromiumSandbox: process.env.BROWSER_SANDBOX_CHROMIUM_SANDBOX === '1',
         proxy: proxy ? { server: proxy } : undefined,
         args,
     }
