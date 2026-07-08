@@ -28,6 +28,7 @@ for (const value of [
     'VM_API_TOKEN',
     'MAIL_ADMIN_PASSWORD',
     'API_SSH_KEY',
+    'forbidden operational tool is installed in browser worker',
     'DOCKER-USER',
     'HANASAND-BROWSER-EGRESS',
     'HANASAND_API_CONTAINER',

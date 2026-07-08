@@ -39,6 +39,8 @@ assert.match(ws, /BROWSER_SANDBOX_WORKER_ONLY=1/, 'session worker should boot in
 assert.match(ws, /AutoRemove:\s*true/, 'session worker should auto-remove so failed malicious sessions do not linger after Docker exits them')
 assert.doesNotMatch(ws, /DB_PASSWORD=|VM_API_TOKEN=|MAIL_ADMIN_PASSWORD=|API_SSH_KEY=|\/var\/run\/docker\.sock|lxd\/unix\.socket/, 'session worker should not receive app secrets or host control sockets')
 assert.match(dockerfile, /FROM app-runtime AS browser-runtime[\s\S]*apk add --no-cache chromium xvfb/, 'Chromium should live only in the browser-worker image target')
+assert.match(dockerfile, /apk del varnish git openssh-client docker-cli curl tar/, 'browser-worker image should strip API operational tools before installing Chromium')
+assert.match(dockerfile, /rm -f \/usr\/local\/bin\/trivy \/usr\/bin\/k6/, 'browser-worker image should remove copied operational scanners/load tools')
 assert.doesNotMatch(appRuntimeStage, /\b(chromium|xvfb)\b/, 'main API image should not install Chromium or Xvfb')
 for (const source of [handoff, runbook]) {
     assert.match(source, /--profile unsafe-dev-only build api browser-worker/, 'browser deploy path should build the separate browser-worker image')

@@ -61,6 +61,12 @@ for forbidden in DB_PASSWORD DB_HOST VM_API_TOKEN MAIL_ADMIN_PASSWORD API_SSH_KE
     fi
 done
 
+for forbidden_binary in docker ssh git trivy k6; do
+    if docker exec "$container_id" sh -lc "command -v $forbidden_binary" >/dev/null 2>&1; then
+        fail "forbidden operational tool is installed in browser worker: $forbidden_binary"
+    fi
+done
+
 if docker exec "$container_id" sh -lc "ps -ef | grep chromium | grep -v grep | grep -- --no-sandbox" >/dev/null 2>&1; then
     fail "Chromium is running with --no-sandbox"
 fi

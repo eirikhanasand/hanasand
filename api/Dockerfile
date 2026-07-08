@@ -35,7 +35,9 @@ RUN chmod +x /app/entrypoint.sh
 EXPOSE 8080
 
 FROM app-runtime AS browser-runtime
-RUN apk add --no-cache chromium xvfb ttf-freefont font-noto
+RUN apk del varnish git openssh-client docker-cli curl tar \
+    && rm -f /usr/local/bin/trivy /usr/bin/k6 \
+    && apk add --no-cache chromium xvfb ttf-freefont font-noto
 ENV CHROMIUM_BIN=/usr/bin/chromium
 
 FROM app-runtime
