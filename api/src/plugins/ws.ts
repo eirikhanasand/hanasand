@@ -7,8 +7,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
-import { handleMessage } from '#utils/ws/handleMessage.ts'
-import { enqueueLoadTestRun, startLoadTestQueue } from '../handlers/test/follow.ts'
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import { handleOnionSessionSocket } from '../handlers/onionSession/ws.ts'
@@ -86,13 +84,13 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         const id = (req.params as { id: string}).id
         registerClient(id, connection, testClients)
 
-        startLoadTestQueue()
+        void import('../handlers/test/follow.ts').then(({ startLoadTestQueue }) => startLoadTestQueue())
 
         connection.on('message', (msg) => {
             try {
                 const parsed = JSON.parse(msg.toString()) as { type?: string }
                 if (parsed.type === 'rerun') {
-                    void enqueueLoadTestRun(id, true)
+                    void import('../handlers/test/follow.ts').then(({ enqueueLoadTestRun }) => enqueueLoadTestRun(id, true))
                 }
             } catch (error) {
                 void recordWebsocketFailure('test-message', id, error)
@@ -115,7 +113,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         registerClient(id, connection, shareClients)
 
         connection.on('message', (message) => {
-            void handleMessage(id, connection, message, shareClients)
+            void import('#utils/ws/handleMessage.ts').then(({ handleMessage }) => handleMessage(id, connection, message, shareClients))
         })
 
         connection.on('error', (error) => {
