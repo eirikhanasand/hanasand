@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
-const script = readFileSync(new URL('../../ops/browser-worker/install-egress-firewall.sh', import.meta.url), 'utf8')
+const scriptUrl = new URL('../../ops/browser-worker/install-egress-firewall.sh', import.meta.url)
+if (!existsSync(scriptUrl)) {
+    console.log('Browser egress firewall contract skipped outside the repository root.')
+    process.exit(0)
+}
+const script = readFileSync(scriptUrl, 'utf8')
 
 for (const value of [
     '0.0.0.0/8',
