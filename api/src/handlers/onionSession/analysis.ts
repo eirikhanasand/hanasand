@@ -284,10 +284,21 @@ function isBlockedIPv4Host(host: string) {
 function isBlockedIPv6Host(host: string) {
     if (!host.includes(':')) return false
     const normalized = host.toLowerCase()
+    const mappedIPv4 = ipv4FromMappedIPv6(normalized)
+    if (mappedIPv4 && isBlockedIPv4Host(mappedIPv4)) return true
     return normalized === '::'
         || normalized === '::1'
         || normalized.startsWith('fc')
         || normalized.startsWith('fd')
         || normalized.startsWith('fe80:')
         || normalized.startsWith('ff')
+}
+
+function ipv4FromMappedIPv6(host: string) {
+    const match = /^(?:::ffff:|64:ff9b::)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host)
+    if (!match) return ''
+    const high = Number.parseInt(match[1], 16)
+    const low = Number.parseInt(match[2], 16)
+    if ([high, low].some(part => !Number.isFinite(part) || part < 0 || part > 0xffff)) return ''
+    return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.')
 }

@@ -6,7 +6,7 @@ import {
     sandboxUrlSafety,
     summarizeDeobfuscationTask,
 } from '../src/handlers/onionSession/analysis.ts'
-import { parseCymruAsn, providerSummaryText } from '../src/handlers/onionSession/ws.ts'
+import { parseCymruAsn, providerSummaryText, sandboxResolvedAddressSafety } from '../src/handlers/onionSession/ws.ts'
 
 assert.deepEqual(sandboxUrlSafety('https://example.com/path'), { ok: true })
 assert.equal(sandboxUrlSafety('ftp://example.com').ok, false)
@@ -15,6 +15,11 @@ assert.equal(sandboxUrlSafety('http://169.254.169.254/latest/meta-data').ok, fal
 assert.equal(sandboxUrlSafety('http://metadata.google.internal/computeMetadata/v1').ok, false)
 assert.equal(sandboxUrlSafety('http://user:pass@example.com').ok, false)
 assert.equal(sandboxUrlSafety('http://[::1]/').ok, false)
+assert.equal(sandboxUrlSafety('http://[::ffff:127.0.0.1]/').ok, false)
+assert.equal(sandboxUrlSafety('http://[64:ff9b::7f00:1]/').ok, false)
+assert.equal(sandboxResolvedAddressSafety([{ address: '10.0.0.8', family: 4 }]).ok, false, 'blocks hostnames resolving to private IPv4')
+assert.equal(sandboxResolvedAddressSafety([{ address: '::ffff:7f00:1', family: 6 }]).ok, false, 'blocks hostnames resolving to mapped private IPv6')
+assert.deepEqual(sandboxResolvedAddressSafety([{ address: '93.184.216.34', family: 4 }]), { ok: true })
 
 const indicators = extractIndicators('Visit https://stage.example.net/a.js then 203.0.113.44 and bad.example.net.')
 assert(indicators.urls.includes('https://stage.example.net/a.js'), 'extracts full URLs for copyable IOC lists')

@@ -1646,20 +1646,22 @@ async function sandboxRequestSafety(value: string) {
     let resolved = sandboxDnsSafetyCache.get(host)
     if (!resolved) {
         resolved = lookup(host, { all: true })
-            .then(addresses => {
-                for (const item of addresses) {
-                    const addressUrl = item.family === 6 ? `http://[${item.address}]/` : `http://${item.address}/`
-                    const safety = sandboxUrlSafety(addressUrl)
-                    if (!safety.ok) return { ok: false as const, reason: `hostname resolves to ${safety.reason}` }
-                }
-                return { ok: true as const }
-            })
-            .catch(() => ({ ok: true as const }))
+            .then(sandboxResolvedAddressSafety)
+            .catch(() => ({ ok: false as const, reason: 'hostname could not be resolved safely' }))
         sandboxDnsSafetyCache.set(host, resolved)
         const oldestHost = sandboxDnsSafetyCache.keys().next().value
         if (sandboxDnsSafetyCache.size > 512 && oldestHost) sandboxDnsSafetyCache.delete(oldestHost)
     }
     return resolved
+}
+
+export function sandboxResolvedAddressSafety(addresses: Array<{ address: string; family: number }>) {
+    for (const item of addresses) {
+        const addressUrl = item.family === 6 ? `http://[${item.address}]/` : `http://${item.address}/`
+        const safety = sandboxUrlSafety(addressUrl)
+        if (!safety.ok) return { ok: false as const, reason: `hostname resolves to ${safety.reason}` }
+    }
+    return { ok: true as const }
 }
 
 function isWebCrackTool(tool: { id?: string; name?: string; url?: string }, resolvedUrl: string) {
