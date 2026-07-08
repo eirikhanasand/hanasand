@@ -356,6 +356,7 @@ async function startEphemeralBrowserWorker(sessionId: string) {
             'BROWSER_SANDBOX_WORKER_ONLY=1',
             'BROWSER_SANDBOX_SKIP_RUN_DB=1',
             'BROWSER_SANDBOX_CHROMIUM_SANDBOX=1',
+            'BROWSER_SANDBOX_MAX_SESSIONS=1',
             'BROWSER_SANDBOX_PREWARM=0',
             `ONION_SESSION_PROXY=${process.env.ONION_SESSION_PROXY || 'socks5://hanasand_onion_tor:9050'}`,
         ],

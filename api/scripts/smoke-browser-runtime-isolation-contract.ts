@@ -28,6 +28,7 @@ for (const value of [
     'VM_API_TOKEN',
     'MAIL_ADMIN_PASSWORD',
     'API_SSH_KEY',
+    'browser worker must enforce one browser session per container',
     'forbidden operational tool is installed in browser worker',
     'DOCKER-USER',
     'HANASAND-BROWSER-EGRESS',
