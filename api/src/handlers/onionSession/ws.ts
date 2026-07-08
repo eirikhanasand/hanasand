@@ -292,7 +292,19 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }
     }
 
+    const trace = (event: string, detail: Record<string, unknown> = {}) => {
+        if (process.env.BROWSER_SANDBOX_WORKER_ONLY !== '1') return
+        console.warn(JSON.stringify({
+            level: 'warn',
+            category: 'browser_worker_lifecycle',
+            sessionId,
+            event,
+            ...detail,
+        }))
+    }
+
     const cleanup = async (runStatus: 'ended' | 'failed' = 'ended') => {
+        trace('cleanup', { runStatus, hasPage: Boolean(page), hasContext: Boolean(context), ownsBrowser })
         closed = true
         cancelAdmission?.()
         cancelAdmission = null
@@ -329,6 +341,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     })
 
     connection.on('close', () => {
+        trace('connection_close')
         void cleanup()
     })
 
@@ -470,7 +483,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             })
 
             ownsBrowser = Boolean(proxy || network !== 'regular' || process.env.BROWSER_SANDBOX_WORKER_ONLY === '1')
+            trace('launch_chromium', { target, network, ownsBrowser })
             browser = ownsBrowser ? await chromium.launch(chromiumLaunchOptions(proxy)) : await regularBrowser()
+            trace('chromium_launched')
             context = await browser.newContext({
                 viewport: browserViewportForMessage(message),
                 ignoreHTTPSErrors: true,
@@ -481,6 +496,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 serviceWorkers: 'block',
                 permissions: network === 'regular' ? [] : ['clipboard-read', 'clipboard-write'],
             })
+            trace('context_created')
             await context.addInitScript(() => {
                 Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
             })
@@ -503,6 +519,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await route.continue().catch(() => undefined)
             })
             page = await context.newPage()
+            trace('page_created')
             page.on('console', (entry) => send({ type: 'console', level: entry.type(), text: entry.text() }))
             page.on('pageerror', (error) => send({ type: 'pageerror', message: error.message }))
             page.on('request', (request) => {
@@ -601,9 +618,13 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 connection.close()
             }, durationMs)
 
+            trace('navigate_start', { target })
             await navigate(target)
+            trace('navigate_returned', { url: page?.url() })
             await Promise.allSettled(documentEvidencePromises)
+            trace('document_evidence_settled')
             const initialEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
+            trace('initial_evidence_collected', { hasEvidence: Boolean(initialEvidence) })
             rememberDeobfuscationTasks(initialEvidence)
             void captureProfileTools(
                 context,
