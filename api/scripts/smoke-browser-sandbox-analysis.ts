@@ -19,6 +19,7 @@ assert.equal(sandboxUrlSafety('http://[::ffff:127.0.0.1]/').ok, false)
 assert.equal(sandboxUrlSafety('http://[64:ff9b::7f00:1]/').ok, false)
 assert.equal(sandboxResolvedAddressSafety([{ address: '10.0.0.8', family: 4 }]).ok, false, 'blocks hostnames resolving to private IPv4')
 assert.equal(sandboxResolvedAddressSafety([{ address: '::ffff:7f00:1', family: 6 }]).ok, false, 'blocks hostnames resolving to mapped private IPv6')
+assert.equal(sandboxResolvedAddressSafety([]).ok, false, 'fails closed when DNS resolution returns no usable addresses')
 assert.deepEqual(sandboxResolvedAddressSafety([{ address: '93.184.216.34', family: 4 }]), { ok: true })
 
 const indicators = extractIndicators('Visit https://stage.example.net/a.js then 203.0.113.44 and bad.example.net.')

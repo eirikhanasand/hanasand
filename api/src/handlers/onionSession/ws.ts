@@ -1656,6 +1656,7 @@ async function sandboxRequestSafety(value: string) {
 }
 
 export function sandboxResolvedAddressSafety(addresses: Array<{ address: string; family: number }>) {
+    if (!addresses.length) return { ok: false as const, reason: 'hostname did not resolve to an address' }
     for (const item of addresses) {
         const addressUrl = item.family === 6 ? `http://[${item.address}]/` : `http://${item.address}/`
         const safety = sandboxUrlSafety(addressUrl)
