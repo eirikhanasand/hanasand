@@ -839,6 +839,14 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         const y = clampNumber(message.y, 0, 1600, 0)
         if (message.type === 'click') {
             await page.mouse.click(x, y, { button: mouseButton(message.button) })
+            await page.evaluate(({ x, y }) => {
+                const target = document.elementFromPoint(x, y)
+                if (!(target instanceof HTMLElement)) return
+                for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+                    target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }))
+                }
+                target.click()
+            }, { x, y }).catch(() => undefined)
         } else {
             await page.mouse.move(x, y)
             if (message.event === 'pointerdown') {

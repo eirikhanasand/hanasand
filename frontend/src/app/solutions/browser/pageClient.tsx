@@ -751,7 +751,6 @@ export default function BrowserPageClient() {
                             <div className='flex items-start justify-between gap-3'>
                                 <div>
                                     <h2 className='text-lg font-semibold text-ui-text'>Start sandbox</h2>
-                                    <p className='mt-1 text-sm text-ui-muted'>Paste a URL. Onion addresses route automatically.</p>
                                 </div>
                                 <Globe2 className='h-5 w-5 shrink-0 text-ui-primary' />
                             </div>
@@ -761,7 +760,7 @@ export default function BrowserPageClient() {
                                     id='sandbox-url'
                                     value={target}
                                     onChange={event => setTarget(event.target.value)}
-                                    placeholder='https://example.com/suspicious-path'
+                                    placeholder='URL to investigate'
                                     className='h-12 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 font-mono text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                                 />
                                 <button type='submit' disabled={!normalizedTarget} className='inline-flex h-12 items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
