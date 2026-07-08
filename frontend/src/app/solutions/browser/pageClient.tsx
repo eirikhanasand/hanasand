@@ -1365,7 +1365,7 @@ function EvidenceWorkspace({
 
                 <div className='grid gap-3 md:grid-cols-3'>
                     {profile.tools.map(tool => {
-                        const capture = toolCaptures.find(item => matchesTool(item, tool))
+                        const capture = selectToolCapture(toolCaptures, tool)
                         const analysis = capture?.toolAnalysis
                         return (
                             <EvidencePanel key={tool.id} title={tool.name} status={providerStatus(capture, analysis)}>
