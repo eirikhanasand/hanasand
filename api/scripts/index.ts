@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { readdir } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -99,10 +99,16 @@ function guardedTask(id: string, title: string, scriptName: string, requires: Te
 
 async function discoverStoryContractTasks() {
     const files = await readdir(scriptDir)
-    return files
+    return await Promise.all(files
         .filter(file => file.startsWith('smoke-share-chat-') && file.endsWith('.ts'))
         .sort()
-        .map(file => scriptTask(file.replace(/\.(mjs|ts)$/, ''), `Share chat story contract: ${file}`, file))
+        .map(async file => {
+            const task = scriptTask(file.replace(/\.(mjs|ts)$/, ''), `Share chat story contract: ${file}`, file)
+            const content = await readFile(path.join(scriptDir, file), 'utf8').catch(() => '')
+            return /\bfrom ['"]playwright['"]|\bfrom ['"]@playwright\/test['"]|\bimport\(['"]playwright['"]\)/.test(content)
+                ? { ...task, requires: 'playwright' as const }
+                : task
+        }))
 }
 
 async function discoverPlaywrightTasks() {
