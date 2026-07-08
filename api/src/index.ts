@@ -169,7 +169,9 @@ function isMailAdminConfigError(error: unknown) {
 
 function isBunWebSocketErrorEvent(error: unknown) {
     if (!error || typeof error !== 'object') return false
-    return (error as { constructor?: { name?: string } }).constructor?.name === 'ErrorEvent'
+    const event = error as { constructor?: { name?: string }, isTrusted?: unknown, type?: unknown }
+    return event.constructor?.name === 'ErrorEvent'
+        || (event.isTrusted !== undefined && typeof event.type === 'string')
 }
 
 function describeUnknownError(error: unknown) {
