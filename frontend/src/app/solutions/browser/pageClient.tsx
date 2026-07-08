@@ -1,7 +1,7 @@
 'use client'
 
 import { Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, Share2, ShieldCheck, Square, Trash2 } from 'lucide-react'
-import { type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 
@@ -621,6 +621,8 @@ export default function BrowserPageClient() {
 
     const clickBrowserFrame = useCallback((event: MouseEvent<HTMLDivElement>) => {
         if (activeTool) return
+        event.preventDefault()
+        event.stopPropagation()
         viewportRef.current?.focus()
         const point = browserPoint(event.clientX, event.clientY)
         if (!point) return
@@ -629,20 +631,14 @@ export default function BrowserPageClient() {
 
     const pointerBrowserFrame = useCallback((event: PointerEvent<HTMLDivElement>) => {
         if (activeTool) return
+        event.preventDefault()
+        event.stopPropagation()
         const point = browserPoint(event.clientX, event.clientY)
         if (!point) return
         viewportRef.current?.focus()
         if (event.type === 'pointerdown') event.currentTarget.setPointerCapture(event.pointerId)
         sendBrowserInput({ type: 'pointer', event: event.type, ...point, button: event.button, buttons: event.buttons })
     }, [activeTool, browserPoint, sendBrowserInput])
-
-    const wheelBrowserFrame = useCallback((event: WheelEvent<HTMLDivElement>) => {
-        viewportRef.current?.focus()
-        const point = browserPoint(event.clientX, event.clientY)
-        if (!point) return
-        event.preventDefault()
-        sendBrowserInput({ type: 'wheel', ...point, deltaX: event.deltaX, deltaY: event.deltaY })
-    }, [browserPoint, sendBrowserInput])
 
     const keyBrowserFrame = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
         const keyPayload = {
@@ -668,6 +664,21 @@ export default function BrowserPageClient() {
             if (event.key !== 'Tab') event.preventDefault()
         }
     }, [sendBrowserInput])
+
+    useEffect(() => {
+        const viewport = viewportRef.current
+        if (!viewport || activeTool) return
+        const wheelBrowserFrame = (event: globalThis.WheelEvent) => {
+            viewport.focus()
+            const point = browserPoint(event.clientX, event.clientY)
+            if (!point) return
+            event.preventDefault()
+            event.stopPropagation()
+            sendBrowserInput({ type: 'wheel', ...point, deltaX: event.deltaX, deltaY: event.deltaY })
+        }
+        viewport.addEventListener('wheel', wheelBrowserFrame, { passive: false })
+        return () => viewport.removeEventListener('wheel', wheelBrowserFrame)
+    }, [activeTool, browserPoint, sendBrowserInput])
 
     const saveProfile = useCallback(() => {
         const name = customProfileName.trim()
@@ -836,7 +847,7 @@ export default function BrowserPageClient() {
                             </div>
                             <div
                                 ref={viewportRef}
-                                className='relative aspect-[16/9] w-full overflow-hidden bg-ui-canvas outline-none focus:ring-2 focus:ring-ui-primary/30'
+                                className='relative aspect-[16/9] w-full touch-none overflow-hidden overscroll-contain bg-ui-canvas outline-none focus:ring-2 focus:ring-ui-primary/30'
                                 tabIndex={0}
                                 role='application'
                                 aria-label='Interactive isolated browser viewport'
@@ -847,7 +858,6 @@ export default function BrowserPageClient() {
                                     if (event.buttons) pointerBrowserFrame(event)
                                 }}
                                 onPointerUp={pointerBrowserFrame}
-                                onWheel={activeTool ? undefined : wheelBrowserFrame}
                             >
                                 {activeTool && activeToolCapture ? (
                                     <ProviderViewportEvidence tool={activeTool} capture={activeToolCapture} />
