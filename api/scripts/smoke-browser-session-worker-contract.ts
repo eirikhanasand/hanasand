@@ -5,6 +5,8 @@ const ws = readFileSync(new URL('../src/plugins/ws.ts', import.meta.url), 'utf8'
 const onionWs = readFileSync(new URL('../src/handlers/onionSession/ws.ts', import.meta.url), 'utf8')
 const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8')
 const appRuntimeStage = /FROM oven\/bun:1\.3\.11-alpine AS app-runtime\n([\s\S]*?)\nFROM app-runtime AS browser-runtime/.exec(dockerfile)?.[1] || ''
+const handoff = readFileSync(new URL('../../agents/scripts/handoff-context.mjs', import.meta.url), 'utf8')
+const runbook = readFileSync(new URL('../../agents/HANDOFF_RUNBOOK.md', import.meta.url), 'utf8')
 const composeUrl = new URL('../../docker-compose.yml', import.meta.url)
 
 assert.match(ws, /BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only'/, 'browser proxy should require per-session workers unless an unsafe dev-only override is set')
@@ -27,6 +29,10 @@ assert.match(ws, /BROWSER_SANDBOX_WORKER_ONLY=1/, 'session worker should boot in
 assert.doesNotMatch(ws, /DB_PASSWORD=|VM_API_TOKEN=|MAIL_ADMIN_PASSWORD=|API_SSH_KEY=|\/var\/run\/docker\.sock|lxd\/unix\.socket/, 'session worker should not receive app secrets or host control sockets')
 assert.match(dockerfile, /FROM app-runtime AS browser-runtime[\s\S]*apk add --no-cache chromium xvfb/, 'Chromium should live only in the browser-worker image target')
 assert.doesNotMatch(appRuntimeStage, /\b(chromium|xvfb)\b/, 'main API image should not install Chromium or Xvfb')
+for (const source of [handoff, runbook]) {
+    assert.match(source, /--profile unsafe-dev-only build api browser-worker/, 'browser deploy path should build the separate browser-worker image')
+    assert.match(source, /up -d --no-deps api/, 'browser deploy path should restart API without starting the dev-only shared worker')
+}
 if (existsSync(composeUrl)) {
     const compose = readFileSync(composeUrl, 'utf8')
     const serviceBlock = (name: string) => new RegExp(`\\n  ${name}:\\n([\\s\\S]*?)(?=\\n  [a-zA-Z0-9_-]+:\\n|\\nvolumes:)`).exec(compose)?.[1] || ''
