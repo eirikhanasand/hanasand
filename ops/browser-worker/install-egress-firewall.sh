@@ -4,6 +4,7 @@ set -eu
 NETWORK="${1:-hanasand_browsernet}"
 CHAIN="${HANASAND_BROWSER_EGRESS_CHAIN:-HANASAND-BROWSER-EGRESS}"
 TOR_CONTAINER="${HANASAND_BROWSER_TOR_CONTAINER:-hanasand_onion_tor}"
+API_CONTAINER="${HANASAND_BROWSER_API_CONTAINER:-hanasand_api}"
 TOR_PORT="${HANASAND_BROWSER_TOR_PORT:-9050}"
 
 bridge_name() {
@@ -41,11 +42,16 @@ ensure_jump() {
 install_ipv4() {
     bridge="$1"
     tor_ip="$2"
+    api_ip="$3"
     iptables -N "$CHAIN" 2>/dev/null || true
     iptables -F "$CHAIN"
     ensure_rule iptables "$CHAIN" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
     if [ -n "$tor_ip" ]; then
         ensure_rule iptables "$CHAIN" -d "$tor_ip" -p tcp --dport "$TOR_PORT" -j RETURN
+    fi
+    if [ -n "$api_ip" ]; then
+        ensure_rule iptables "$CHAIN" ! -s "$api_ip" -d "$api_ip" -j REJECT
+        ensure_rule iptables "$CHAIN" -s "$api_ip" -p tcp --dport 8081 -j RETURN
     fi
     for cidr in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4; do
         ensure_rule iptables "$CHAIN" -d "$cidr" -j REJECT
@@ -69,7 +75,8 @@ install_ipv6() {
 
 bridge="$(bridge_name)"
 tor_ip="$(container_ip "$TOR_CONTAINER")"
-install_ipv4 "$bridge" "$tor_ip"
+api_ip="$(container_ip "$API_CONTAINER")"
+install_ipv4 "$bridge" "$tor_ip" "$api_ip"
 install_ipv6 "$bridge"
 
 printf 'Installed browser egress firewall for %s on %s\n' "$NETWORK" "$bridge"

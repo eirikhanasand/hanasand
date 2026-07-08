@@ -70,11 +70,16 @@ if ! docker exec "$container_id" sh -lc "ps -ef | grep chromium | grep -v grep" 
 fi
 
 if docker ps --format '{{.Names}}' | grep -qx "$API_CONTAINER"; then
+    api_ip="$(docker inspect -f "{{ with index .NetworkSettings.Networks \"$NETWORK\" }}{{ .IPAddress }}{{ end }}" "$API_CONTAINER" 2>/dev/null || true)"
     if docker exec "$API_CONTAINER" sh -lc "ps -ef | grep chromium | grep -v grep" >/dev/null 2>&1; then
         fail "Chromium is running inside the main API container"
     fi
     if docker exec "$API_CONTAINER" sh -lc "command -v chromium || command -v chromium-browser" >/dev/null 2>&1; then
         fail "Chromium is installed inside the main API container"
+    fi
+    if [ -n "$api_ip" ]; then
+        iptables -S "$FIREWALL_CHAIN" 2>/dev/null | grep -q -- "! -s $api_ip/32 -d $api_ip/32 -j REJECT" || fail "firewall chain does not block browser worker traffic to API container $api_ip"
+        iptables -S "$FIREWALL_CHAIN" 2>/dev/null | grep -q -- "-s $api_ip/32 -p tcp -m tcp --dport 8081 -j RETURN" || fail "firewall chain does not allow API worker websocket control traffic"
     fi
 fi
 
