@@ -1650,7 +1650,7 @@ async function firstUrlQueryReportUrl(page: Page, target: string) {
             ].join(' ').toLowerCase()
             return targetHost && rowText.includes(targetHost)
         })
-        return (matching || links[0])?.href || ''
+        return matching?.href || ''
     }, host).catch(() => '')
 }
 
