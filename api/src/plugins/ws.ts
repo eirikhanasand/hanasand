@@ -301,7 +301,10 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             upstream.on('message', message => {
                 if (connection.readyState === WebSocket.OPEN) connection.send(message)
             })
-            upstream.on('close', closeBoth)
+            upstream.on('close', () => {
+                if (connection.readyState === WebSocket.OPEN) sendErrorThenClose(connection, 'Isolated browser worker closed before completing the run.')
+                else closeBoth()
+            })
             upstream.on('error', error => {
                 void recordWebsocketFailure(`browser-session-upstream-${route}`, id, error)
                 if (connection.readyState === WebSocket.OPEN) sendErrorThenClose(connection, `Isolated browser worker connection failed: ${error instanceof Error ? error.message : String(error)}`)
