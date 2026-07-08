@@ -629,8 +629,10 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 .then(() => sendFrame(true, 'cookie_dismissed'))
                 .catch(() => undefined)
         } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            send({ type: 'status', state: 'failed', sessionId, message })
+            send({ type: 'ended', reason: 'launch_failed', sessionId, message })
             await cleanup()
-            throw error
         }
     }
 

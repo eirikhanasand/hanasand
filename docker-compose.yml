@@ -121,8 +121,6 @@ services:
       - /tmp:rw,noexec,nosuid,size=768m
     cap_drop:
       - ALL
-    security_opt:
-      - no-new-privileges:true
     shm_size: "1gb"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081"]
