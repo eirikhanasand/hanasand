@@ -1682,16 +1682,9 @@ function StatusPill({ label, value, good }: { label: string; value: string; good
 function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; capture: Capture }) {
     if (capture.image) {
         return (
-            <div className='grid h-full w-full min-w-0 bg-ui-canvas lg:grid-cols-[minmax(0,1fr)_20rem]'>
-                <div className='relative h-full min-h-0 w-full overflow-hidden bg-white'>
-                    <img
-                        src={capture.image}
-                        alt={`${tool.name} provider screenshot`}
-                        className='absolute inset-0 h-full w-full min-w-0 bg-white object-cover'
-                        style={{ transform: 'translateY(-6%) scale(1.12)', transformOrigin: 'center top' }}
-                    />
-                </div>
-                <div className='min-h-0 overflow-auto border-t border-ui-border bg-ui-panel/95 p-3 lg:border-l lg:border-t-0'>
+            <div className='relative h-full w-full min-w-0 overflow-hidden bg-ui-canvas'>
+                <img src={capture.image} alt={`${tool.name} provider screenshot`} className='absolute inset-0 h-full w-full min-w-0 bg-white object-contain' />
+                <div className='absolute inset-x-0 bottom-0 max-h-48 overflow-auto border-t border-ui-border bg-ui-panel/95 p-3 shadow-lg lg:inset-y-0 lg:left-auto lg:right-0 lg:max-h-none lg:w-80 lg:border-l lg:border-t-0'>
                     <ProviderReportDetails tool={tool} capture={capture} compact />
                 </div>
             </div>
