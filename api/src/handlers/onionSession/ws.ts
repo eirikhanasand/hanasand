@@ -713,7 +713,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await withTimeout(dismissCookieOverlays(toolPage), 1200, undefined).catch(() => undefined)
                 const actionError = await interactWithProvider(toolPage, tool, target)
                 navigationError ||= actionError
-                const openedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 56, animations: 'disabled', timeout: 800 }), 800, null)
+                const openedScreenshotTimeout = providerScreenshotTimeoutMs(tool, 800)
+                const openedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 56, animations: 'disabled', timeout: openedScreenshotTimeout }), openedScreenshotTimeout, null)
                 const openedEvidence = providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target)
                 send({
                     type: 'tool_capture',
@@ -763,7 +764,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     await waitForProviderVisual(tool, toolPage)
                     const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText, tool.name || toolUrl)
                     const parsedAnalysis = analyzeToolEvidence(tool.name || toolUrl, parsedEvidence)
-                    const parsedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 1500 }), 1500, openedImage)
+                    const parsedScreenshotTimeout = providerScreenshotTimeoutMs(tool, 1500)
+                    const parsedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: parsedScreenshotTimeout }), parsedScreenshotTimeout, openedImage)
                     void persistProviderRunResult(parsedAnalysis)
                     send({
                         type: 'tool_capture',
@@ -1864,9 +1866,13 @@ function providerDataTimeoutMs(tool: { id?: string; name?: string; url?: string 
     return isVirusTotalTool(tool) ? 45_000 : isUrlQueryTool(tool) ? 18_000 : 5_000
 }
 
+function providerScreenshotTimeoutMs(tool: { id?: string; name?: string; url?: string }, fallback: number) {
+    return isUrlQueryTool(tool) ? 4_000 : isVirusTotalTool(tool) ? Math.max(fallback, 3_000) : fallback
+}
+
 async function waitForProviderVisual(tool: { id?: string; name?: string; url?: string }, page: Page) {
     if (isVirusTotalTool(tool)) await page.waitForTimeout(8_000).catch(() => undefined)
-    else if (isUrlQueryTool(tool)) await page.waitForTimeout(1_000).catch(() => undefined)
+    else if (isUrlQueryTool(tool)) await page.waitForTimeout(2_000).catch(() => undefined)
 }
 
 function hasParsedProviderData(tool: { id?: string; name?: string; url?: string }, text: string) {
