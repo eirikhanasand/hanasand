@@ -677,23 +677,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const startedAt = new Date().toISOString()
             const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
             const webcrackTool = isWebCrackTool(tool, toolUrl)
-            if (webcrackTool && !deobfuscationTasks.some(task => task.sample || task.decodedPreview)) {
-                const webcrackLoad: WebCrackLoadResult = { loaded: false, reason: 'no obfuscated script sample extracted from target page' }
-                const evidence = providerPendingEvidence(toolUrl, tool.name || toolUrl, target)
-                send({
-                    type: 'tool_capture',
-                    sessionId,
-                    id: tool.id || safeToolId(tool.name || toolUrl),
-                    name: tool.name || toolUrl,
-                    url: toolUrl,
-                    capturedAt: startedAt,
-                    evidence,
-                    toolAnalysis: analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad),
-                    webcrackLoad,
-                    target,
-                })
-                return
-            }
             const toolPage = await context.newPage().catch(() => null)
             if (!toolPage) return
             const providerBodies = collectProviderResponses(toolPage, tool.name || toolUrl)
@@ -777,6 +760,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         }
                         providerText = [providerText, reportText].filter(Boolean).join('\n')
                     }
+                    await waitForProviderVisual(tool, toolPage)
                     const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText, tool.name || toolUrl)
                     const parsedAnalysis = analyzeToolEvidence(tool.name || toolUrl, parsedEvidence)
                     const parsedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 1500 }), 1500, openedImage)
@@ -805,7 +789,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 if (webcrackTool) {
                     const evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 400, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies(), tool.name || toolUrl)
                     const toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
-                    const image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 500 }), 500, null)
+                    const image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 2500 }), 2500, null)
                     send({
                         type: 'tool_capture',
                         sessionId,
@@ -1878,6 +1862,11 @@ function providerTimeoutMs(tool: { id?: string; name?: string; url?: string }) {
 
 function providerDataTimeoutMs(tool: { id?: string; name?: string; url?: string }) {
     return isVirusTotalTool(tool) ? 45_000 : isUrlQueryTool(tool) ? 18_000 : 5_000
+}
+
+async function waitForProviderVisual(tool: { id?: string; name?: string; url?: string }, page: Page) {
+    if (isVirusTotalTool(tool)) await page.waitForTimeout(8_000).catch(() => undefined)
+    else if (isUrlQueryTool(tool)) await page.waitForTimeout(1_000).catch(() => undefined)
 }
 
 function hasParsedProviderData(tool: { id?: string; name?: string; url?: string }, text: string) {
