@@ -1682,9 +1682,9 @@ function StatusPill({ label, value, good }: { label: string; value: string; good
 function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; capture: Capture }) {
     if (capture.image) {
         return (
-            <div className='relative h-full w-full min-w-0 overflow-hidden bg-ui-canvas'>
-                <img src={capture.image} alt={`${tool.name} provider screenshot`} className='absolute inset-0 h-full w-full min-w-0 bg-white object-contain' />
-                <div className='absolute inset-x-0 bottom-0 max-h-48 overflow-auto border-t border-ui-border bg-ui-panel/95 p-3 shadow-lg lg:inset-y-0 lg:left-auto lg:right-0 lg:max-h-none lg:w-80 lg:border-l lg:border-t-0'>
+            <div className='h-full w-full min-w-0 overflow-auto bg-ui-canvas'>
+                <img src={capture.image} alt={`${tool.name} provider screenshot`} className='block w-full min-w-0 bg-white' />
+                <div className='border-t border-ui-border bg-ui-panel/95 p-3'>
                     <ProviderReportDetails tool={tool} capture={capture} compact />
                 </div>
             </div>
@@ -1922,7 +1922,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
         exportedAt: new Date().toISOString(),
         evidenceChecklist: {
             renderedScreenshots: pageCaptures.filter(capture => capture.image && isUsefulFrameImage(capture.image) && !capture.frameQuality?.looksBlank).length,
-            providerReports: providerReports.filter(report => report.status === 'Result captured').length,
+            providerReports: providerReports.filter(report => report.status === 'Results').length,
             networkRequests: latestNetwork?.requestCount || 0,
             contactedDomains: latestNetwork?.uniqueDomainCount || 0,
             redirectStates: input.summary.urlTimeline.length,
@@ -2320,7 +2320,7 @@ function providerStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (!capture) return 'Unavailable'
     if (capture.error === 'provider_navigation_pending') return 'Loading'
     if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false && /no obfuscated script sample/i.test(analysis.webcrackLoadReason || '')) return 'No sample needed'
-    if (hasParsedProviderResult(analysis)) return 'Result captured'
+    if (hasParsedProviderResult(analysis)) return 'Results'
     if (capture.error) return 'Provider error'
     return 'Result unavailable'
 }
