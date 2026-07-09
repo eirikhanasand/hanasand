@@ -3,6 +3,7 @@ import { ArrowRight, Radar, Search, ShieldCheck } from 'lucide-react'
 import type { Metadata } from 'next'
 import { buildRouteMetadata } from './seo'
 import NotFoundSuggestions from './not-found-suggestions'
+import SupportAssistant from '@/components/support/supportAssistant'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Page Not Found',
@@ -35,6 +36,7 @@ const recoveryLinks = [
 export default function NotFound() {
     return (
         <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-10 text-ui-text md:px-8'>
+            <SupportAssistant force />
             <section className='mx-auto grid max-w-6xl gap-8 py-8 md:py-14'>
                 <div className='grid max-w-3xl gap-4'>
                     <p className='text-sm font-semibold uppercase text-ui-primary'>Page not found</p>

@@ -248,7 +248,12 @@ export async function getRuntimeContainerLogs(id: string, tail = 120) {
 
 async function statsRuntimeContainer(id: string) {
     const body = await requestDocker(`/containers/${id}/stats?stream=false`)
-    return parseStats(JSON.parse(body.toString('utf8')) as DockerStatsResponse)
+    const stats = parseStats(JSON.parse(body.toString('utf8')) as DockerStatsResponse)
+    if (stats.cpu_percent !== null) return stats
+
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const secondBody = await requestDocker(`/containers/${id}/stats?stream=false`)
+    return parseStats(JSON.parse(secondBody.toString('utf8')) as DockerStatsResponse)
 }
 
 function detectLevel(message: string): RuntimeLogEntry['level'] {

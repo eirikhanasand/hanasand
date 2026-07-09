@@ -115,6 +115,9 @@ export type TrafficDomains = {
 
 export type MonitoringOverview = {
     requestsToday: number
+    requestsThisWeek: number
+    requestsThisMonth: number
+    requestsTotal: number
     activeDomains: number
     totalVulnerabilities: number
     criticalVulnerabilities: number

@@ -8,10 +8,10 @@ import ImpersonationBanner from '@/components/impersonation/impersonationBanner'
 
 export const metadata: Metadata = {
     title: {
-        default: 'Monitoring Console | Hanasand',
+        default: 'Dashboard | Hanasand',
         template: '%s | Hanasand',
     },
-    description: 'Customer console for company exposure monitoring, threat search, webhook alerts, and API access.',
+    description: 'Customer dashboard for company exposure monitoring, threat search, webhook alerts, and API access.',
 }
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {

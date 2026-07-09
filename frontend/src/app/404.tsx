@@ -1,11 +1,13 @@
 'use client'
 
 import Line from '../components/misc/line'
+import SupportAssistant from '@/components/support/supportAssistant'
 
 // Handles invalid pages
 export default function Custom404 () {
     return (
         <main className='grid place-items-center h-[92vh]'>
+            <SupportAssistant force />
             <div className='flex place-items-center'>
                 <h1 className='text-3xl'>404</h1>
                 <Line width={1} height={40} className='mx-4' />

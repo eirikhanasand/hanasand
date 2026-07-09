@@ -378,8 +378,19 @@ function persistBrowserProviderResult(id: string, message: RawData) {
 
 async function finishProxiedBrowserRun(id: string, message: RawData) {
     const payload = parseSocketMessage(message)
-    if (payload?.type === 'ended') await finishBrowserRun(id, 'ended')
-    if (payload?.type === 'error') await finishBrowserRun(id, 'failed')
+    if (payload?.type === 'status' && payload.state === 'failed') {
+        await logBrowserRunFailure(id, 'status_failed', payload.message)
+        return
+    }
+    if (payload?.type === 'ended') {
+        const failed = payload.reason === 'launch_failed'
+        if (failed) await logBrowserRunFailure(id, String(payload.reason), payload.message)
+        await finishBrowserRun(id, failed ? 'failed' : 'ended')
+    }
+    if (payload?.type === 'error') {
+        await logBrowserRunFailure(id, 'error', payload.message)
+        await finishBrowserRun(id, 'failed')
+    }
 }
 
 function parseSocketMessage(message: RawData): any {
@@ -389,6 +400,19 @@ function parseSocketMessage(message: RawData): any {
     } catch {
         return null
     }
+}
+
+async function logBrowserRunFailure(id: string, reason: string, message: unknown) {
+    await recordLog({
+        level: 'warn',
+        message: `Browser run failed for ${id}: ${typeof message === 'string' && message ? message : reason}`,
+        metadata: {
+            category: 'browser_run_failed',
+            sessionId: id,
+            reason,
+            workerMessage: typeof message === 'string' ? message : '',
+        },
+    }).catch(() => undefined)
 }
 
 function providerRunResultValue(analysis: any, error = ''): BrowserProviderRunResult | null {

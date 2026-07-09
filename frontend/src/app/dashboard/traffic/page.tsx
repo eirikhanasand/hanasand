@@ -65,7 +65,7 @@ export default async function Page({
                         title='Hot route'
                         icon={<Globe2 className='h-4 w-4' />}
                         value={topPath?.key || 'Route stream'}
-                        detail={topPath ? `${topPath.count} requests in the current window` : 'Route demand updates as traffic arrives'}
+                        detail={topPath ? `${topPath.count} requests in the live traffic sample` : 'Route demand updates as traffic arrives'}
                         footer={selectedDomain || topDomain?.key || 'all domains'}
                         tone='neutral'
                     />

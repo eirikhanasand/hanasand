@@ -9,11 +9,13 @@ import postBlocklist from '@/utils/traffic/postBlocklist'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import prettyDate from '@/utils/date/prettyDate'
 import TrafficSpeedometer from '@/components/traffic/speedometer'
+import { AppConfirmDialog } from '@/components/ui/appDialog'
 
 type MetricSummary = {
     value: string
     hits_today: number
     hits_last_week: number
+    hits_this_month?: number
     hits_total: number
 }
 
@@ -50,6 +52,7 @@ export default function TrafficDashboard({
     const [IPs] = useState<IPMetrics[]>(Array.isArray(topIPs) ? topIPs : [])
     const [showBlockModal, setShowBlockModal] = useState(false)
     const [editingBlock, setEditingBlock] = useState<BlocklistEntry | null>(null)
+    const [deletingBlockId, setDeletingBlockId] = useState<number | null>(null)
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const domains = Array.isArray(topDomains) ? topDomains : []
@@ -81,10 +84,7 @@ export default function TrafficDashboard({
     }
 
     async function handleDeleteBlock(id: number) {
-        if (!confirm('Delete this blocklist entry?')) {
-            return
-        }
-
+        setDeletingBlockId(null)
         try {
             await fetch(`${config.url.cdn}/blocklist/${id}`, { method: 'DELETE' })
             setMessage('Blocklist entry deleted')
@@ -122,6 +122,15 @@ export default function TrafficDashboard({
     return (
         <div className='grid h-full gap-4'>
             <ErrorNotice compact variant='info' message={message as string | null} />
+            <AppConfirmDialog
+                open={deletingBlockId !== null}
+                title='Delete access control?'
+                body='This blocklist entry will be removed from production traffic controls.'
+                confirmLabel='Delete'
+                tone='danger'
+                onCancel={() => setDeletingBlockId(null)}
+                onConfirm={() => deletingBlockId !== null ? void handleDeleteBlock(deletingBlockId) : undefined}
+            />
 
             <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_auto]' data-traffic-primary-flow>
                 <div className='min-w-0'>
@@ -175,6 +184,7 @@ export default function TrafficDashboard({
                         <MetricCard key={i} title={m.value} rows={[
                             ['Today', m.hits_today],
                             ['Last week', m.hits_last_week],
+                            ['This month', m.hits_this_month ?? 0],
                             ['Total', m.hits_total],
                         ]} />
                     ))}
@@ -268,7 +278,7 @@ export default function TrafficDashboard({
                                             <button onClick={() => editBlock(entry)} className='hidden cursor-pointer text-ui-muted hover:text-ui-primary group-hover:block'>
                                                 <Pencil className='w-4 h-4' />
                                             </button>
-                                            <button onClick={() => handleDeleteBlock(entry.id)} className='hidden cursor-pointer text-ui-muted hover:text-ui-danger group-hover:block'>
+                                            <button onClick={() => setDeletingBlockId(entry.id)} className='hidden cursor-pointer text-ui-muted hover:text-ui-danger group-hover:block'>
                                                 <X className='w-5 h-5' />
                                             </button>
                                             <div className='block group-hover:hidden w-5' />

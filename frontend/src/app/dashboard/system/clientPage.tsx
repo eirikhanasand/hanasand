@@ -26,6 +26,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import ErrorNotice from '@/components/error/errorNotice'
 import { DashboardPanel } from '@/components/dashboard/ui'
+import { AppConfirmDialog } from '@/components/ui/appDialog'
 import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie } from '@/utils/cookies/cookies'
@@ -90,6 +91,8 @@ export default function SystemDashboard({
     const [refreshSeconds, setRefreshSeconds] = useState(15)
     const [refreshing, setRefreshing] = useState(false)
     const [selectedContainerId, setSelectedContainerId] = useState<string>(dockerTelemetry.containers[0]?.id || '')
+    const [restartContainer, setRestartContainer] = useState<DockerContainer | null>(null)
+    const [stopAllVmsOpen, setStopAllVmsOpen] = useState(false)
     const [logs, setLogs] = useState<RuntimeLog[]>([])
     const [logsReason, setLogsReason] = useState('')
     const [logsLoading, setLogsLoading] = useState(false)
@@ -273,15 +276,19 @@ export default function SystemDashboard({
         void loadContainerLogs(selectedContainer)
     }, [loadContainerLogs, selectedContainer])
 
+    function inspectContainer(container: DockerContainer) {
+        setSelectedContainerId(container.id)
+        window.requestAnimationFrame(() => document.getElementById('system-container-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    }
+
     async function handleRestartContainer(container: DockerContainer) {
-        const label = container.name || container.id.slice(0, 12)
-        if (!window.confirm(`Restart ${label}? Active requests in this container may be interrupted.`)) return
+        setRestartContainer(null)
         setMessage(await restartDocker(container.id))
         await refreshAll()
     }
 
     async function handleStopAll() {
-        if (!window.confirm('Stop all virtual machines? This can interrupt active VM sessions.')) return
+        setStopAllVmsOpen(false)
         const cookieToken = getCookie('access_token')
         const cookieId = getCookie('id')
         if (!cookieToken || !cookieId) {
@@ -294,7 +301,7 @@ export default function SystemDashboard({
 
     async function copyContainer(container: DockerContainer) {
         try {
-            await navigator.clipboard.writeText(`${container.name} ${container.id}`)
+            await navigator.clipboard.writeText(container.name)
             setMessage(`Copied ${container.name}.`)
         } catch {
             setMessage('Clipboard access is unavailable in this browser context.')
@@ -304,6 +311,23 @@ export default function SystemDashboard({
     return (
         <div className='grid gap-4'>
             <ErrorNotice compact variant='info' className='max-w-3xl' message={message as string | null} />
+            <AppConfirmDialog
+                open={Boolean(restartContainer)}
+                title={restartContainer ? `Restart ${restartContainer.name}?` : 'Restart container?'}
+                body='Active requests in this container may be interrupted.'
+                confirmLabel='Restart'
+                onCancel={() => setRestartContainer(null)}
+                onConfirm={() => restartContainer ? void handleRestartContainer(restartContainer) : undefined}
+            />
+            <AppConfirmDialog
+                open={stopAllVmsOpen}
+                title='Stop all virtual machines?'
+                body='This can interrupt active VM sessions.'
+                confirmLabel='Stop VMs'
+                tone='danger'
+                onCancel={() => setStopAllVmsOpen(false)}
+                onConfirm={() => void handleStopAll()}
+            />
 
             <DashboardPanel className='p-4' id='system-telemetry'>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -421,9 +445,9 @@ export default function SystemDashboard({
                                             container={container}
                                             selected={selectedContainer?.id === container.id}
                                             globalReason={dockerTelemetry.unavailable_reason}
-                                            onSelect={() => setSelectedContainerId(container.id)}
+                                            onSelect={() => inspectContainer(container)}
                                             onCopy={() => void copyContainer(container)}
-                                            onRestart={() => void handleRestartContainer(container)}
+                                            onRestart={() => setRestartContainer(container)}
                                         />
                                     ))}
                                 </tbody>
@@ -442,7 +466,7 @@ export default function SystemDashboard({
                     logsLoading={logsLoading}
                     onRefreshLogs={() => void loadContainerLogs(selectedContainer)}
                     onCopy={() => selectedContainer ? void copyContainer(selectedContainer) : undefined}
-                    onRestart={() => selectedContainer ? void handleRestartContainer(selectedContainer) : undefined}
+                    onRestart={() => selectedContainer ? setRestartContainer(selectedContainer) : undefined}
                 />
             </section>
 
@@ -501,7 +525,7 @@ export default function SystemDashboard({
                         <p className='max-w-2xl text-sm leading-6 text-ui-muted'>Use this only for a planned maintenance window or emergency containment. Active VM sessions can be interrupted.</p>
                         <button
                             type='button'
-                            onClick={handleStopAll}
+                            onClick={() => setStopAllVmsOpen(true)}
                             className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger transition hover:bg-ui-danger/15'
                             data-system-stop-all-vms
                         >
@@ -589,7 +613,7 @@ function ContainerDetails({
     const health = containerHealth(container)
 
     return (
-        <DashboardPanel className='p-4'>
+        <DashboardPanel className='p-4' id='system-container-details'>
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
                     <h2 className='truncate text-base font-semibold text-ui-text'>{container.name}</h2>

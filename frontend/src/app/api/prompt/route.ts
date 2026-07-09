@@ -27,9 +27,10 @@ export async function POST(request: NextRequest) {
     if (contentType.includes('multipart/form-data')) return enqueuePrompt(request)
 
     const body = await request.json().catch(() => null)
-    if (body?.action !== 'login') {
-        return NextResponse.json({ ok: false, error: 'Unsupported prompt portal action.' }, { status: 400 })
-    }
+    if (body?.action === 'edit') return mutateQueuedPrompt(body, 'edit')
+    if (body?.action === 'delete') return mutateQueuedPrompt(body, 'delete')
+    if (body?.action === 'reorder') return mutateQueuedPrompt(body, 'reorder')
+    if (body?.action !== 'login') return NextResponse.json({ ok: false, error: 'Unsupported prompt portal action.' }, { status: 400 })
 
     const code = String(body.code || '').trim()
     if (!/^\d{6}$/.test(code)) {
@@ -87,6 +88,47 @@ async function enqueuePrompt(request: NextRequest) {
     return NextResponse.json({ ok: true, ...publicPromptPortalState(state, id) })
 }
 
+async function mutateQueuedPrompt(body: Record<string, unknown>, action: 'edit' | 'delete' | 'reorder') {
+    const state = await readPromptPortalState()
+    const id = await sessionId()
+    if (!id || !state.sessions[id]) return NextResponse.json({ ok: false, error: 'Login required.' }, { status: 401 })
+    if (promptPortalReadOnly(state)) return NextResponse.json({ ok: false, error: 'Portal is read only. Request a new code.' }, { status: 423 })
+
+    const item = state.items.find(candidate => candidate.id === body.id && candidate.status === 'queued')
+    if (!item) return NextResponse.json({ ok: false, error: 'Queued instruction not found.' }, { status: 404 })
+
+    if (action === 'edit') {
+        const prompt = String(body.prompt || '').trim().slice(0, MAX_PROMPT_LENGTH)
+        if (!prompt) return NextResponse.json({ ok: false, error: 'Prompt is required.' }, { status: 400 })
+        item.prompt = prompt
+    } else if (action === 'delete') {
+        state.items = state.items.filter(candidate => candidate.id !== item.id)
+    } else {
+        const queued = state.items.filter(candidate => candidate.status === 'queued').sort(comparePromptItems)
+        const index = queued.findIndex(candidate => candidate.id === item.id)
+        const target = queued[index + (body.direction === 'down' ? 1 : -1)]
+        if (target) {
+            const priority = item.priority
+            const createdAt = item.createdAt
+            item.priority = target.priority
+            item.createdAt = target.createdAt
+            target.createdAt = createdAt
+            target.priority = priority
+        }
+    }
+
+    await writePromptPortalState(state)
+    return NextResponse.json({ ok: true, ...publicPromptPortalState(state, id) })
+}
+
 async function sessionId() {
     return (await cookies()).get(COOKIE)?.value
+}
+
+function comparePromptItems(a: { priority: 'now' | 'next', createdAt: string }, b: { priority: 'now' | 'next', createdAt: string }) {
+    return priorityRank(a.priority) - priorityRank(b.priority) || Date.parse(a.createdAt) - Date.parse(b.createdAt)
+}
+
+function priorityRank(value: 'now' | 'next') {
+    return value === 'now' ? 0 : 1
 }

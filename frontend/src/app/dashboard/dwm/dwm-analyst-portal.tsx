@@ -134,8 +134,10 @@ type PortalProps = {
     dataHealth: DwmDataHealth
     initialAlertId?: string
     publicTiHandoff?: PublicTiHandoffDecodeResult | null
-    view?: 'cases' | 'watchlists'
+    view?: DwmView
 }
+
+export type DwmView = 'cases' | 'watchlists' | 'sources' | 'delivery' | 'actors' | 'actions'
 
 type DwmDataHealth = {
     snapshot: DataHealthItem
@@ -412,6 +414,38 @@ export function DwmAnalystPortal({
         )
     }
 
+    if (view === 'sources') {
+        return (
+            <DwmPanelPage title='Sources' meta={`${activeSourceCount}/${sourceCount} active sources · ${captureCount} captures`}>
+                <SourcePosture snapshot={snapshot} operations={operations} />
+            </DwmPanelPage>
+        )
+    }
+
+    if (view === 'delivery') {
+        return (
+            <DwmPanelPage title='Delivery' meta={`${localDeliveries.length} delivery attempts · webhook ${webhookState}`}>
+                <DeliveryPanel alert={selectedAlert} deliveries={localDeliveries} busyAction={busyAction} onTest={testDelivery} onSend={sendAlert} />
+            </DwmPanelPage>
+        )
+    }
+
+    if (view === 'actors') {
+        return (
+            <DwmPanelPage title='Actors' meta={`${snapshot.actorOverviews.length} actor profiles`}>
+                <ActorPanel snapshot={snapshot} />
+            </DwmPanelPage>
+        )
+    }
+
+    if (view === 'actions') {
+        return (
+            <DwmPanelPage title='Actions' meta='Watchlist, source pack, case, and webhook controls'>
+                {workflowActions}
+            </DwmPanelPage>
+        )
+    }
+
     return (
         <div className='grid gap-4'>
             <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
@@ -457,7 +491,7 @@ export function DwmAnalystPortal({
                     />
                 ) : null}
 
-                <div className='grid min-h-[480px] min-w-0 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]'>
+                <div className='grid min-h-[480px] min-w-0 xl:grid-cols-[300px_minmax(0,1fr)]'>
                     <aside className='order-2 min-w-0 border-b border-ui-border bg-ui-raised xl:order-none xl:border-b-0 xl:border-r'>
                         <div className='border-b border-ui-border p-4'>
                             <div className='flex items-center justify-between gap-3'>
@@ -559,27 +593,27 @@ export function DwmAnalystPortal({
                         )}
                     </main>
 
-                    <aside className='order-3 min-w-0 border-t border-ui-border bg-ui-raised xl:col-span-2 xl:order-none 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
-                        <div className='grid gap-4 p-4'>
-                            <SourcePosture snapshot={snapshot} operations={operations} />
-                            <DeliveryPanel alert={selectedAlert} deliveries={localDeliveries} busyAction={busyAction} onTest={testDelivery} onSend={sendAlert} />
-                            <ActorPanel snapshot={snapshot} />
-                        </div>
-                    </aside>
                 </div>
             </section>
+        </div>
+    )
+}
 
-            {selectedAlert ? (
-                <section id='dwm-workflow-actions' className='scroll-mt-24 overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-dwm-selected-workflow-actions>
-                    <div className='flex flex-col gap-1 border-b border-ui-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
-                        <h2 className='text-sm font-semibold text-ui-text'>Action controls</h2>
-                        <p className='text-xs font-medium text-ui-muted'>Watchlist, source pack, case, and webhook actions</p>
+function DwmPanelPage({ title, meta, children }: { title: string, meta: string, children: ReactNode }) {
+    return (
+        <div className='grid gap-4'>
+            <section className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+                <div className='flex flex-col gap-1 border-b border-ui-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between'>
+                    <div>
+                        <p className='text-[10px] font-semibold uppercase text-ui-primary'>Dark web monitoring</p>
+                        <h1 className='mt-1 text-lg font-semibold text-ui-text'>{title}</h1>
                     </div>
-                    <div className='p-3'>
-                        {workflowActions}
-                    </div>
-                </section>
-            ) : null}
+                    <p className='text-xs font-medium text-ui-muted'>{meta}</p>
+                </div>
+                <div className='p-3'>
+                    {children}
+                </div>
+            </section>
         </div>
     )
 }
@@ -757,9 +791,9 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
             <div className='border-t border-ui-border px-4 py-3'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <p className='text-xs leading-5 text-ui-muted'>Use this workflow when a source match needs to become a customer case and delivery.</p>
-                    <a href='#dwm-workflow-actions' className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                    <Link href='/dashboard/dwm/actions' className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                         Run workflow
-                    </a>
+                    </Link>
                 </div>
                 <details className='mt-3 rounded-lg border border-ui-border bg-ui-panel p-2' data-dwm-workflow-path='true'>
                     <summary className='flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 px-1 text-xs font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>
@@ -1370,9 +1404,9 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
                     <p className='text-xs font-semibold uppercase text-ui-primary'>Workflow</p>
                     <h3 className='mt-0.5 text-base font-semibold text-ui-text'>Watchlist match to customer handoff</h3>
                 </div>
-                <a href='#dwm-workflow-actions' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
+                <Link href='/dashboard/dwm/actions' className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-canvas focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
                     {routeControlLabel}
-                </a>
+                </Link>
             </div>
             <div className='grid gap-2 p-3 md:grid-cols-2 xl:grid-cols-6'>
                 {steps.map((step, index) => (
@@ -2126,9 +2160,9 @@ function NoCaseWorkspace({ latestCaptures, workflowActions }: { latestCaptures: 
                                     <td className='px-4 py-3 text-sm font-semibold text-ui-text'>{row.stage}</td>
                                     <td className='px-4 py-3 text-sm text-ui-text'>{row.state}</td>
                                     <td className='px-4 py-3'>
-                                        <a href='#dwm-workflow-actions' className='inline-flex rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-ui-primary transition hover:border-ui-primary hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                                        <Link href='/dashboard/dwm/actions' className='inline-flex rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-ui-primary transition hover:border-ui-primary hover:bg-ui-primary/10 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                                             {row.action}
-                                        </a>
+                                        </Link>
                                     </td>
                                     <td className='px-4 py-3 text-sm leading-5 text-ui-muted'>{row.detail}</td>
                                 </tr>

@@ -2031,8 +2031,8 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-2'>
-                    <Link href='/readiness' className='inline-flex min-h-8 min-w-36 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised ' data-readiness-scorecard-link='/readiness'>
-                        Open operations gates
+                    <Link href='/dashboard/dwm' className='inline-flex min-h-8 min-w-36 items-center justify-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised '>
+                        Open DWM queue
                     </Link>
                     <span className={workflowStatusClass(orgContext?.readiness.fullChainReady ? 'ready' : 'needs_action')}>
                         {orgContext?.readiness.fullChainReady ? 'ready' : `${blockerCount} syncing`}
@@ -2042,7 +2042,7 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
             <div className='mt-3 grid gap-2 sm:grid-cols-3'>
                 <ReadinessDetailField label='Running' value={`${readyCount}/${items.length}`} />
                 <ReadinessDetailField label='Next lane' value={prioritizedItems[0]?.label || 'checking'} />
-                <ReadinessDetailField label='Operations view' value='/readiness' />
+                <ReadinessDetailField label='Operations view' value='/dashboard/dwm' />
             </div>
             <div className='mt-3 grid gap-2'>
                 {prioritizedItems.map((item, index) => {
@@ -2180,9 +2180,6 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
                 <div className='mt-3 flex flex-wrap gap-2'>
                     <Link href={item.href} className='inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised '>
                         Open workflow
-                    </Link>
-                    <Link href='/readiness' className='inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised '>
-                        Open scorecard
                     </Link>
                 </div>
             ) : (

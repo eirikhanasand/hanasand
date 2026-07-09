@@ -41,6 +41,7 @@ export async function getLegacyTrafficSummary(req: FastifyRequest, res: FastifyR
             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 hour')::int AS hits_hour,
             COUNT(*) FILTER (WHERE created_at >= date_trunc('day', NOW()))::int AS hits_today,
             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS hits_last_week,
+            COUNT(*) FILTER (WHERE created_at >= date_trunc('month', NOW()))::int AS hits_this_month,
             COUNT(*)::int AS hits_total
         FROM traffic_events
         WHERE ${column} <> ''

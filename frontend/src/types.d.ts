@@ -495,6 +495,7 @@ type MetricSummary = {
     value: string
     hits_today: number
     hits_last_week: number
+    hits_this_month?: number
     hits_total: number
 }
 

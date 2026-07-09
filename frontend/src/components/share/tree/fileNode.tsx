@@ -13,6 +13,7 @@ import Tree from './tree'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import NewFile from './newFile'
+import { AppConfirmDialog } from '@/components/ui/appDialog'
 
 type FileNodeProps = {
     tree: Tree
@@ -49,6 +50,7 @@ export default function FileNode({
     const [isRenaming, setIsRenaming] = useState(false)
     const [renameValue, setRenameValue] = useState(file.name)
     const [busyAction, setBusyAction] = useState<string | null>(null)
+    const [deleteOpen, setDeleteOpen] = useState(false)
     const open = isOpen(file.id)
     const pathname = usePathname()
     const isActive = pathname.includes(`/s/${file.id}`)
@@ -94,10 +96,7 @@ export default function FileNode({
     }
 
     async function handleDelete() {
-        if (!window.confirm(`Delete ${file.name}${file.type === 'folder' ? ' and everything inside it' : ''}?`)) {
-            return
-        }
-
+        setDeleteOpen(false)
         setBusyAction('delete')
         const token = getCookie('access_token')
         const userId = getCookie('id')
@@ -145,6 +144,15 @@ export default function FileNode({
 
         return (
             <li className='space-y-1' onClick={(e) => e.stopPropagation()}>
+                <AppConfirmDialog
+                    open={deleteOpen}
+                    title={`Delete ${file.name}?`}
+                    body={file.type === 'folder' ? 'Everything inside this folder will be deleted.' : 'This file will be deleted from the share.'}
+                    confirmLabel='Delete'
+                    tone='danger'
+                    onCancel={() => setDeleteOpen(false)}
+                    onConfirm={() => void handleDelete()}
+                />
                 <div
                     onClick={handleFolderClick}
                     className={`group/node flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm ${isFolderActive ? 'border border-ui-primary/35 bg-ui-primary/10 text-ui-primary' : 'text-ui-muted hover:bg-ui-raised hover:text-ui-text'}`}
@@ -169,7 +177,7 @@ export default function FileNode({
                         onCreateFolder={() => startCreate('folder')}
                         onRename={() => setIsRenaming(true)}
                         onDuplicate={handleDuplicate}
-                        onDelete={handleDelete}
+                        onDelete={() => setDeleteOpen(true)}
                     />}
                 </div>
                 {!hasChildren && <div className='ml-3.5 rounded-md group-hover:bg-ui-raised'>
@@ -209,6 +217,15 @@ export default function FileNode({
 
     return (
         <>
+            <AppConfirmDialog
+                open={deleteOpen}
+                title={`Delete ${file.name}?`}
+                body='This file will be deleted from the share.'
+                confirmLabel='Delete'
+                tone='danger'
+                onCancel={() => setDeleteOpen(false)}
+                onConfirm={() => void handleDelete()}
+            />
             <NewFile
                 isCreatingNewFile={isCreatingNewFile}
                 display={isFirstFileInFolder && shouldDisplay}
@@ -246,7 +263,7 @@ export default function FileNode({
                     onCreateFolder={() => startCreate('folder')}
                     onRename={() => setIsRenaming(true)}
                     onDuplicate={handleDuplicate}
-                    onDelete={handleDelete}
+                    onDelete={() => setDeleteOpen(true)}
                 />}
             </div>
         </>

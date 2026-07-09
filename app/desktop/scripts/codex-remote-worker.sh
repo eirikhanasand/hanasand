@@ -7,6 +7,7 @@ FAILED_DIR="${QUEUE_DIR}/failed"
 CODEX_BIN="${HANASAND_CODEX_BIN:-/Applications/Codex.app/Contents/Resources/codex}"
 REPO_DIR="${HANASAND_CODEX_REPO:-/Users/eirikhanasand/Desktop/personal/hanasand}"
 POLL_SECONDS="${HANASAND_CODEX_POLL_SECONDS:-2}"
+PORTAL_WORKER="${HANASAND_PROMPT_PORTAL_WORKER:-$(dirname "$0")/codex-portal-worker.mjs}"
 
 mkdir -p "$QUEUE_DIR" "$DONE_DIR" "$FAILED_DIR"
 
@@ -39,6 +40,10 @@ if [[ "${1:-}" == "--once" ]]; then
     run_prompt "$prompt_file"
   done
   exit 0
+fi
+
+if [[ -f "$PORTAL_WORKER" && "${HANASAND_PROMPT_PORTAL_ENABLED:-1}" == "1" ]]; then
+  node "$PORTAL_WORKER" &
 fi
 
 while true; do

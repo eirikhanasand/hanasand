@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, AlarmClockCheck, BookOpen, BrainCircuit, CalendarClock, ClipboardList, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, ListChecks, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
-import { useSyncExternalStore } from 'react'
+import { Activity, AlarmClockCheck, BookOpen, BrainCircuit, CalendarClock, ChevronDown, ClipboardList, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, ListChecks, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 
 type Item = {
@@ -44,11 +44,15 @@ export default function DashboardSidebar({
     )
 
     const productItems: Item[] = [
-        { href: '/dashboard', label: 'Console', icon: <LayoutDashboard className='h-4 w-4' /> },
+        { href: '/dashboard/overview', label: 'Overview', icon: <LayoutDashboard className='h-4 w-4' /> },
         { href: '/ti', label: 'Threat search', icon: <Radar className='h-4 w-4' /> },
-        { href: '/dashboard/dwm/cases', label: 'Dark web', icon: <ShieldCheck className='h-4 w-4' />, subItems: [
-            { href: '/dashboard/dwm/cases', label: 'Active cases' },
+        { href: '/dashboard/dwm', label: 'DWM', icon: <ShieldCheck className='h-4 w-4' />, subItems: [
+            { href: '/dashboard/dwm/cases', label: 'Cases' },
             { href: '/dashboard/dwm/watchlists', label: 'Watchlists' },
+            { href: '/dashboard/dwm/sources', label: 'Sources' },
+            { href: '/dashboard/dwm/delivery', label: 'Delivery' },
+            { href: '/dashboard/dwm/actors', label: 'Actors' },
+            { href: '/dashboard/dwm/actions', label: 'Actions' },
         ] },
         { href: '/developers', label: 'API docs', icon: <Code2 className='h-4 w-4' /> },
         { href: '/dashboard/subscription', label: 'Subscription', icon: <ScanSearch className='h-4 w-4' /> },
@@ -130,9 +134,17 @@ export default function DashboardSidebar({
     const activeSubHref = allItems
         .filter((item) => pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`)))
         .sort((a, b) => b.href.length - a.href.length)[0]?.href
+    const activeGroupKey = sections
+        .flatMap(section => section.items)
+        .find(item => item.subItems?.length && (pathname === item.href || pathname.startsWith(`${item.href}/`) || item.subItems.some(subItem => subItem.href === activeSubHref || pathname.startsWith(`${subItem.href}/`))))?.href
+    const [expandedGroups, setExpandedGroups] = useState<string[]>(() => activeGroupKey ? [activeGroupKey] : [])
+
+    useEffect(() => {
+        setExpandedGroups(activeGroupKey ? [activeGroupKey] : [])
+    }, [activeGroupKey])
 
     return (
-        <aside className={`dashboard-sidebar-sticky noscroll hidden min-h-0 overflow-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20 lg:block ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
+        <aside className={`dashboard-sidebar-sticky noscroll min-h-0 w-full overflow-auto rounded-lg border border-ui-border bg-ui-panel p-2 shadow-sm shadow-ui-canvas/10 dark:shadow-ui-canvas/20 ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
             <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between gap-3 px-2 py-1'}`}>
                 {compact ? (
                     <button
@@ -147,7 +159,7 @@ export default function DashboardSidebar({
                 ) : (
                     <>
                         <div>
-                            <p className='text-[0.62rem] font-semibold uppercase text-ui-primary'>Console</p>
+                            <p className='text-[0.62rem] font-semibold uppercase text-ui-primary'>Dashboard</p>
                             <h2 className='mt-1 text-sm font-semibold text-ui-text'>Monitoring</h2>
                         </div>
                         <button
@@ -171,24 +183,39 @@ export default function DashboardSidebar({
                             {section.items.map((item) => {
                                 const active = item.href === activeHref || item.subItems?.some(subItem => subItem.href === activeSubHref)
                                 const itemKey = `${section.title}:${item.href}:${item.label}`
+                                const expanded = expandedGroups.includes(item.href)
+                                const hasSubmenu = Boolean(item.subItems?.length)
 
                                 return (
                                     <div key={itemKey} className='grid gap-1'>
-                                        <Link
-                                            href={item.href}
-                                            title={item.label}
-                                            className={`flex min-h-10 items-center rounded-lg border px-3 transition ${
-                                                compact ? 'justify-center' : 'gap-3'
-                                            } ${
-                                                active
-                                                    ? 'border-ui-primary bg-ui-primary/10 text-ui-primary'
-                                                    : 'border-transparent text-ui-muted hover:border-ui-border hover:bg-ui-canvas hover:text-ui-text'
-                                            }`}
-                                        >
-                                            {item.icon}
-                                            {!compact && <span className='text-sm font-medium'>{item.label}</span>}
-                                        </Link>
-                                        {!compact && active && item.subItems?.length ? (
+                                        <div className={`flex min-h-10 items-center rounded-lg border transition ${
+                                            active
+                                                ? 'border-ui-primary bg-ui-primary/10 text-ui-primary'
+                                                : 'border-transparent text-ui-muted hover:border-ui-border hover:bg-ui-canvas hover:text-ui-text'
+                                        }`}>
+                                            <Link
+                                                href={item.href}
+                                                title={item.label}
+                                                onClick={() => hasSubmenu ? setExpandedGroups([item.href]) : undefined}
+                                                className={`flex min-h-10 min-w-0 flex-1 items-center px-3 ${compact ? 'justify-center' : 'gap-3'}`}
+                                            >
+                                                {item.icon}
+                                                {!compact && <span className='truncate text-sm font-medium'>{item.label}</span>}
+                                            </Link>
+                                            {!compact && hasSubmenu ? (
+                                                <button
+                                                    type='button'
+                                                    onClick={() => setExpandedGroups(current => current.includes(item.href) ? current.filter(key => key !== item.href) : [...current, item.href])}
+                                                    className='mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-ui-muted transition hover:bg-ui-panel hover:text-ui-text'
+                                                    aria-expanded={expanded}
+                                                    aria-label={`${expanded ? 'Collapse' : 'Expand'} ${item.label}`}
+                                                    title={`${expanded ? 'Collapse' : 'Expand'} ${item.label}`}
+                                                >
+                                                    <ChevronDown className={`h-4 w-4 transition ${expanded ? 'rotate-180' : ''}`} />
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                        {!compact && expanded && item.subItems?.length ? (
                                             <div className='grid gap-0.5 pl-7'>
                                                 {item.subItems.map(subItem => {
                                                     const subActive = activeSubHref === subItem.href
@@ -196,6 +223,7 @@ export default function DashboardSidebar({
                                                         <Link
                                                             key={subItem.href}
                                                             href={subItem.href}
+                                                            onClick={() => setExpandedGroups([item.href])}
                                                             className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${subActive ? 'text-ui-primary' : 'text-ui-muted hover:bg-ui-canvas hover:text-ui-text'}`}
                                                         >
                                                             {subItem.label}

@@ -14,6 +14,8 @@ import isSharePath from '@/utils/routes/isSharePath'
 import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 import BrandLogo from '@/components/brand/brandLogo'
 import { useState } from 'react'
+import SiteSearch from './siteSearch'
+import SupportAssistant from '@/components/support/supportAssistant'
 
 const productItems = [
     { title: 'Organizations', detail: 'Manage members, shared watchlists, alert scope, and destinations.', href: '/organizations', icon: ShieldCheck },
@@ -153,6 +155,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     </nav>
 
                     <div className='flex items-center justify-end gap-2'>
+                        <SiteSearch token={token} />
                         <ThemeSwitch />
                         <Link href='/support' className='hidden h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-ui-muted transition hover:bg-ui-raised hover:text-ui-text md:inline-flex'>Support</Link>
                         <Link href={token ? '/dashboard/overview' : '/login'} className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90'>
@@ -164,6 +167,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                         <PublicMobileMenu token={token} />
                     </div>
                 </div>
+                <SupportAssistant />
             </header>
         )
     }
@@ -189,6 +193,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                 <div className='flex items-center justify-end gap-2'>
                     {token && isDashboard && <ViewModeToggle />}
                     {isShare ? <ShareIcon baseStyles={baseStyles} isShare={isShare} href='/s' /> : null}
+                    <SiteSearch token={token} />
                     <Link href='/status' aria-label='Status' title='Status' className={`${baseStyles} hidden sm:grid`}>
                         <ActivityIcon className={`h-4.5 w-4.5 ${isStatus ? 'text-ui-success' : ''}`} />
                     </Link>
@@ -199,6 +204,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     <Menu />
                 </div>
             </div>
+            <SupportAssistant />
         </header>
     )
 }

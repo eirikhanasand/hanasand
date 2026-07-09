@@ -837,7 +837,7 @@ export default function BrowserPageClient() {
                                 <Share2 className='h-4 w-4' />
                                 {shareStatus === 'saving' ? 'Saving' : shareStatus === 'copied' ? 'Copied' : 'Share'}
                             </button>
-                            {sessionState !== 'ended' ? (
+                            {sessionState === 'queued' || sessionState === 'connecting' || sessionState === 'live' ? (
                                 <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
                                     <Square className='h-4 w-4' />
                                     Stop

@@ -3,7 +3,7 @@ import type { DwmProductSnapshot } from '@/utils/dwm/product'
 import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { cookies, headers } from 'next/headers'
-import { DwmAnalystPortal } from './dwm-analyst-portal'
+import { DwmAnalystPortal, type DwmView } from './dwm-analyst-portal'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,10 +58,14 @@ export default async function DashboardDwmPage({
                 dataHealth={dataHealth}
                 initialAlertId={initialAlertId}
                 publicTiHandoff={publicTiHandoff}
-                view={firstParam(params?.panel) === 'watchlists' ? 'watchlists' : 'cases'}
+                view={normalizeDwmView(firstParam(params?.panel))}
             />
         </DashboardPage>
     )
+}
+
+function normalizeDwmView(value: string | undefined): DwmView {
+    return value === 'watchlists' || value === 'sources' || value === 'delivery' || value === 'actors' || value === 'actions' ? value : 'cases'
 }
 
 function emptyDwmPageData(scope: DwmPageScope): DwmPageData {

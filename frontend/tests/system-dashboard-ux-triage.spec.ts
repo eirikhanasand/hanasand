@@ -11,6 +11,9 @@ test('system dashboard focuses operator triage while preserving live controls', 
     expect(page).toContain('fetch(`${config.url.api}/docker`')
     expect(page).toContain('/logs/realtime?${params.toString()}')
     expect(page).toContain('restartDocker(container.id)')
+    expect(page).toContain('navigator.clipboard.writeText(container.name)')
+    expect(page).not.toContain('navigator.clipboard.writeText(`${container.name} ${container.id}`)')
+    expect(page).not.toContain('window.confirm(`Restart ${label}?')
     expect(page).toContain('stopAllVms(cookieToken, cookieId)')
 
     expect(page).toContain('data-system-primary-triage')
@@ -21,6 +24,8 @@ test('system dashboard focuses operator triage while preserving live controls', 
 
     expect(page).toContain('id=\'system-telemetry\'')
     expect(page).toContain('id=\'system-containers\'')
+    expect(page).toContain('id=\'system-container-details\'')
+    expect(page).toContain('scrollIntoView({ behavior: \'smooth\', block: \'start\' })')
     expect(page).toContain('data-system-containers')
     expect(page).toContain('id=\'system-vms\'')
     expect(page).toContain('data-system-vms')
