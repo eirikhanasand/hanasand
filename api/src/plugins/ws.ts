@@ -229,7 +229,7 @@ function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' 
         while (pending.length && upstream.readyState === WebSocket.OPEN) upstream.send(pending.shift()!)
     })
     upstream.on('message', message => {
-        if (connection.readyState === WebSocket.OPEN) connection.send(message)
+        if (connection.readyState === WebSocket.OPEN) connection.send(socketMessageText(message))
     })
     connection.on('message', message => {
         if (upstream.readyState === WebSocket.OPEN) upstream.send(message)
@@ -318,7 +318,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
                 if (payload?.type === 'frame') deliveredFrame = true
                 void persistBrowserProviderResult(id, message)
                 void finishProxiedBrowserRun(id, message)
-                if (connection.readyState === WebSocket.OPEN) connection.send(message)
+                if (connection.readyState === WebSocket.OPEN) connection.send(socketMessageText(message))
             })
             upstream.on('close', () => {
                 if (connection.readyState === WebSocket.OPEN) {
@@ -405,12 +405,19 @@ async function finishProxiedBrowserRun(id: string, message: RawData) {
 }
 
 function parseSocketMessage(message: RawData): any {
-    const text = Buffer.isBuffer(message) ? message.toString('utf8') : String(message)
+    const text = socketMessageText(message)
     try {
         return JSON.parse(text)
     } catch {
         return null
     }
+}
+
+function socketMessageText(message: RawData) {
+    if (Buffer.isBuffer(message)) return message.toString('utf8')
+    if (message instanceof ArrayBuffer) return Buffer.from(message).toString('utf8')
+    if (Array.isArray(message)) return Buffer.concat(message).toString('utf8')
+    return String(message)
 }
 
 async function logBrowserRunFailure(id: string, reason: string, message: unknown) {
