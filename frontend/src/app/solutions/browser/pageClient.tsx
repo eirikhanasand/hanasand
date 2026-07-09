@@ -239,9 +239,10 @@ export default function BrowserPageClient() {
     const selectedProfile = useMemo(() => profiles.find(profile => profile.id === selectedProfileId) || profiles[0], [profiles, selectedProfileId])
     const summary = useMemo(() => buildAnalystSummary(normalizedTarget, captures, selectedProfile), [captures, normalizedTarget, selectedProfile])
     const toolCaptures = useMemo(() => captures.filter(capture => capture.kind === 'tool'), [captures])
+    const latestPageImage = useMemo(() => captures.find(capture => capture.kind === 'page' && capture.image && !capture.frameQuality?.looksBlank)?.image || null, [captures])
     const activeTool = useMemo(() => selectedProfile.tools.find(tool => tool.id === activeSandboxTab), [activeSandboxTab, selectedProfile.tools])
     const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool, normalizedTarget) : undefined
-    const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage
+    const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage || latestPageImage
     const activeViewportUrl = activeTool ? activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : activeUrl || normalizedTarget
 
     const pushEvent = useCallback((event: string) => {
@@ -858,7 +859,7 @@ export default function BrowserPageClient() {
                                 tools={selectedProfile.tools}
                                 toolCaptures={toolCaptures}
                                 target={normalizedTarget}
-                                browserCaptured={Boolean(activeImage || captures.some(capture => capture.kind === 'page' && capture.image && !capture.frameQuality?.looksBlank))}
+                                browserCaptured={Boolean(activeImage || latestPageImage)}
                                 onSelect={setActiveSandboxTab}
                             />
                             <div className='flex items-center gap-2 border-b border-ui-border bg-ui-raised px-3 py-2'>
