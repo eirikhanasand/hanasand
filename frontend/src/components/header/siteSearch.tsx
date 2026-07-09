@@ -27,7 +27,7 @@ const publicRouteItems: SearchItem[] = [
 
 const dashboardRouteItems: SearchItem[] = [
     route('Dashboard overview', 'Customer console overview', '/dashboard/overview'),
-    route('DWM cases', 'Dark web monitoring case queue', '/dashboard/dwm/cases'),
+    route('DWM cases', 'Dark web monitoring case review', '/dashboard/dwm/cases'),
     route('DWM watchlists', 'Watched companies, vendors, domains, and brands', '/dashboard/dwm/watchlists'),
     route('DWM sources', 'Source health and capture state', '/dashboard/dwm/sources'),
     route('DWM delivery', 'Webhook attempts and customer delivery', '/dashboard/dwm/delivery'),
