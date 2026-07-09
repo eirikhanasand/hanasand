@@ -258,6 +258,8 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     let containerId = ''
     let closed = false
     let runPrepared = false
+    let sawReady = false
+    let deliveredFrame = false
 
     const closeBoth = () => {
         if (closed) return
@@ -311,6 +313,9 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             })
             while (pending.length && upstream.readyState === WebSocket.OPEN) upstream.send(pending.shift()!)
             upstream.on('message', message => {
+                const payload = parseSocketMessage(message)
+                if (payload?.type === 'ready') sawReady = true
+                if (payload?.type === 'frame') deliveredFrame = true
                 void persistBrowserProviderResult(id, message)
                 void finishProxiedBrowserRun(id, message)
                 if (connection.readyState === WebSocket.OPEN) connection.send(message)
@@ -318,7 +323,13 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             upstream.on('close', () => {
                 if (connection.readyState === WebSocket.OPEN) {
                     void recordBrowserWorkerLogs(containerId, route, id)
-                    sendErrorThenClose(connection, 'Isolated browser worker closed before completing the run.')
+                    void logBrowserRunClosure(id, sawReady, deliveredFrame)
+                    if (sawReady) {
+                        void finishBrowserRun(id, 'ended')
+                        connection.close()
+                    } else {
+                        sendErrorThenClose(connection, 'Isolated browser worker closed before completing the run.')
+                    }
                 }
                 else closeBoth()
             })
@@ -411,6 +422,19 @@ async function logBrowserRunFailure(id: string, reason: string, message: unknown
             sessionId: id,
             reason,
             workerMessage: typeof message === 'string' ? message : '',
+        },
+    }).catch(() => undefined)
+}
+
+async function logBrowserRunClosure(id: string, sawReady: boolean, deliveredFrame: boolean) {
+    await recordLog({
+        level: deliveredFrame ? 'info' : 'warn',
+        message: `Browser worker closed for ${id}${deliveredFrame ? '' : ' before a frame was delivered'}.`,
+        metadata: {
+            category: 'browser_run_closed',
+            sessionId: id,
+            sawReady,
+            deliveredFrame,
         },
     }).catch(() => undefined)
 }

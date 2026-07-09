@@ -1036,6 +1036,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         try {
             const buffer = await withTimeout(page.screenshot({ type: 'jpeg', quality: 68, animations: 'disabled', timeout: 2_000 }), 2_200, null)
             if (!buffer) {
+                trace('frame_capture_timeout', { reason })
                 send({ type: 'status', state: 'frame_capture_failed', sessionId, reason, message: 'Browser frame capture timed out.' })
                 return
             }
@@ -1097,6 +1098,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 evidence,
                 networkSummary: summarizeNetworkEvents(networkEvents),
             })
+            trace('frame_sent', { reason, url: page.url(), bytes: buffer.length })
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
             send({ type: 'status', state: 'frame_capture_failed', sessionId, reason, message })
