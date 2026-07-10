@@ -103,6 +103,7 @@ function classifySurface(path: string) {
 }
 
 function isExpectedInternalProbe(path: string, statusCode: number, userAgent: string) {
+    if (path === '/api/pwned' && statusCode === 400 && userAgent.startsWith('Bun/')) return true
     if (userAgent !== 'hanasand_internal' || ![401, 404].includes(statusCode)) return false
     return path === '/api/docker'
         || path === '/api/stats'
