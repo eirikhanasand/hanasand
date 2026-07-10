@@ -181,6 +181,10 @@ function normalizeTarget(value: string) {
     return `https://${trimmed}`
 }
 
+function isBrowserErrorUrl(value: string) {
+    return value.startsWith('chrome-error://')
+}
+
 function sessionId() {
     return `regular-${Date.now().toString(36)}`
 }
@@ -511,12 +515,17 @@ export default function BrowserPageClient() {
                 const image = `data:image/jpeg;base64,${payload.image}`
                 const evidence = evidenceValue(payload.evidence)
                 if (isUsefulFrameImage(image)) setActiveImage(image)
-                setSessionState(current => current === 'connecting' || current === 'queued' ? 'live' : current)
                 const urlValue = String(payload.url || url)
                 const frameWidth = finiteNumber(payload.width) || 1280
                 const frameHeight = finiteNumber(payload.height) || 720
                 setActiveUrl(urlValue)
                 setActiveFrame({ width: frameWidth, height: frameHeight })
+                if (isBrowserErrorUrl(urlValue)) {
+                    setSessionState('failed')
+                    setRunBlocker('Target page did not load; the isolated browser showed an error page.')
+                } else {
+                    setSessionState(current => current === 'connecting' || current === 'queued' ? 'live' : current)
+                }
                 const reason = stringValue(payload.reason)
                 setCaptures(current => addCapture(current, {
                     id: `page-${payload.capturedAt || Date.now()}-${current.length}`,
@@ -2099,6 +2108,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     const pageCaptures = captures.filter(capture => capture.kind === 'page')
     const toolCaptures = captures.filter(capture => capture.kind === 'tool')
     const redirected = new Set(pageCaptures.map(capture => capture.url)).size > 1
+    const navigationFailed = pageCaptures.some(capture => isBrowserErrorUrl(capture.url || capture.evidence?.url || ''))
     const extracted = extractIndicators(captures.map(capture => `${capture.url} ${capture.title || ''}`).join('\n'))
     const evidenceIndicators = captures.flatMap(capture => [
         ...(capture.evidence?.indicators?.domains || []),
@@ -2150,6 +2160,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         urlTimeline,
         threatAssociations,
         deobfuscationTasks,
+        navigationFailed,
     })
     const threatNarrative = threatAssociations.length
         ? `Observed threat context in captured evidence: ${threatAssociations.slice(0, 4).map(item => `${item.name} (${item.category || 'context'}, ${item.confidence || 'low'})`).join('; ')}.`
@@ -2161,10 +2172,13 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
             ? 'Profile tools produced captures, but no parsed provider verdict was returned.'
             : 'No external provider result has been parsed yet; provider panels show configured tools and blockers.'
     const narrative = pageCaptures.length
-        ? `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. ${providerNarrative} ${suspiciousCaptures.length ? `Rendered evidence requires review: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'No signs of suspicious activity were found in the captured browser evidence.'} ${threatNarrative} ${comments.length ? `Source comments observed: ${comments.join(' ')}` : 'No community comments were extracted from provider or page evidence.'}`
+        ? navigationFailed
+            ? `The isolated browser could not load ${target || 'the submitted URL'} and captured a browser error page instead of site evidence. Do not record this as a clean verdict.`
+            : `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. ${providerNarrative} ${suspiciousCaptures.length ? `Rendered evidence requires review: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'No signs of suspicious activity were found in the captured browser evidence.'} ${threatNarrative} ${comments.length ? `Source comments observed: ${comments.join(' ')}` : 'No community comments were extracted from provider or page evidence.'}`
         : `The sandbox is preparing ${target || 'the submitted URL'}. No success verdict is shown until a browser frame, provider result, or explicit blocker is captured for profile "${profile.name}".`
     const brief = buildAnalystBrief({
         target,
+        navigationFailed,
         pageCaptureCount: pageCaptures.length,
         redirected,
         virusTotal,
@@ -2193,6 +2207,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         webcrackLoaded,
         rows: [
             { label: 'Page captures', value: String(pageCaptures.length) },
+            { label: 'Navigation status', value: navigationFailed ? 'target unreachable' : 'loaded' },
             { label: 'Profile tools', value: `${capturedToolCount}/${profile.tools.length}` },
             { label: 'VirusTotal vendors', value: virusTotal?.vendorFlagged !== undefined ? virusTotalVendorLabel(virusTotal) : 'unknown' },
             { label: 'urlquery alerts', value: urlquery?.alertCount !== undefined ? String(urlquery.alertCount) : 'unknown' },
@@ -2219,8 +2234,16 @@ function buildReviewQueue(input: {
     urlTimeline: Array<{ url: string; capturedAt: string; reason: string; title: string }>
     threatAssociations: SandboxThreatAssociation[]
     deobfuscationTasks: NonNullable<SandboxEvidence['deobfuscationTasks']>
+    navigationFailed: boolean
 }): ReviewQueueItem[] {
     const items: ReviewQueueItem[] = []
+    if (input.navigationFailed) items.push({
+        severity: 'medium',
+        source: 'browser',
+        title: 'Target did not load',
+        detail: 'The isolated browser showed a browser error page instead of the submitted website.',
+        evidence: input.urlTimeline.at(-1)?.url,
+    })
     const hasRenderedFrame = input.pageCaptures.some(capture => capture.image && !capture.frameQuality?.looksBlank)
     const blankFrame = hasRenderedFrame ? undefined : input.pageCaptures.find(capture => capture.frameQuality?.looksBlank)
     if (blankFrame) items.push({
@@ -2276,6 +2299,7 @@ function buildReviewQueue(input: {
 
 function buildAnalystBrief(input: {
     target: string
+    navigationFailed: boolean
     pageCaptureCount: number
     redirected: boolean
     virusTotal?: SandboxToolAnalysis
@@ -2295,27 +2319,27 @@ function buildAnalystBrief(input: {
     const highSignal = Boolean(vtFlagged || urlqueryAlerts || input.suspiciousCaptureCount || input.suspiciousDeobfuscationCount)
     const meaningfulThreatContext = input.threatAssociations.some(item => item.confidence !== 'low')
     const mediumSignal = Boolean(input.obfuscatedScriptCount || meaningfulThreatContext)
-    const verdict = highSignal
-        ? 'Review required - detection source present'
-        : mediumSignal
-            ? 'Review required'
-            : input.pageCaptureCount
-                ? 'No signs of suspicious activity'
-                : 'Insufficient external evidence'
-    const impact = highSignal
-        ? `External detections, suspicious rendered evidence, or decoded script indicators were observed for ${input.target || 'the submitted URL'}.`
-        : mediumSignal
-            ? 'The run contains obfuscation or meaningful threat-context signals that need analyst review.'
-            : input.pageCaptureCount
-                ? 'Captured browser and provider evidence did not show suspicious activity.'
-                : 'No browser evidence has been captured yet.'
-    const recommendedAction = highSignal
-        ? 'Open the evidence workspace, copy indicators, and create or update the alert with the observed route and sourced evidence.'
-        : mediumSignal
-            ? 'Review the suspicious evidence, contacted domains, and WebCrack output before allowing user access.'
-            : input.pageCaptureCount
-                ? 'Record the run as no signs of suspicious activity based on the captured evidence.'
-                : 'Wait for the first page frame, provider result, or explicit blocker.'
+    let verdict = 'Insufficient external evidence'
+    let impact = 'No browser evidence has been captured yet.'
+    let recommendedAction = 'Wait for the first page frame, provider result, or explicit blocker.'
+
+    if (input.navigationFailed) {
+        verdict = 'Run failed - target unreachable'
+        impact = 'The isolated browser captured an error page, so no clean verdict can be made for the submitted target.'
+        recommendedAction = 'Retry later or inspect DNS, TLS, and network reachability before treating the URL as benign.'
+    } else if (highSignal) {
+        verdict = 'Review required - detection source present'
+        impact = `External detections, suspicious rendered evidence, or decoded script indicators were observed for ${input.target || 'the submitted URL'}.`
+        recommendedAction = 'Open the evidence workspace, copy indicators, and create or update the alert with the observed route and sourced evidence.'
+    } else if (mediumSignal) {
+        verdict = 'Review required'
+        impact = 'The run contains obfuscation or meaningful threat-context signals that need analyst review.'
+        recommendedAction = 'Review the suspicious evidence, contacted domains, and WebCrack output before allowing user access.'
+    } else if (input.pageCaptureCount) {
+        verdict = 'No signs of suspicious activity'
+        impact = 'Captured browser and provider evidence did not show suspicious activity.'
+        recommendedAction = 'Record the run as no signs of suspicious activity based on the captured evidence.'
+    }
     const confidence = input.confidence
         ? `${formatConfidencePercent(input.confidence)} evidence confidence`
         : input.virusTotal || input.urlquery
