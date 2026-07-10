@@ -23,6 +23,16 @@ type PendingUpdates = {
 
 const messageBuffer: Buffer[] = []
 const browserRunWarningLogTimes = new Map<string, number>()
+const browserRunFailureLogTimes = new Map<string, number>()
+const browserRunLogContexts = new Map<string, BrowserRunLogContext>()
+
+type BrowserRunLogContext = {
+    target?: string
+    network?: string
+    runStatus?: string
+    lastUrl?: string
+    framesDelivered?: number
+}
 
 export const pwnedClients = new Map<string, Set<WebSocket>>()
 export const testClients = new Map<string, Set<WebSocket>>()
@@ -365,6 +375,7 @@ async function prepareProxiedBrowserRun(id: string, message: RawData, connection
     if (payload?.type !== 'start') return true
     const target = typeof payload.target === 'string' ? payload.target : ''
     const network = payload.network === 'tor' ? 'tor' : 'regular'
+    rememberBrowserRunLogContext(id, { target, network })
     const result = await prepareBrowserRun({
         id,
         target,
@@ -399,6 +410,7 @@ function persistBrowserProviderResult(id: string, message: RawData) {
 
 async function finishProxiedBrowserRun(id: string, message: RawData) {
     const payload = parseSocketMessage(message)
+    rememberBrowserRunPayload(id, payload)
     if (payload?.type === 'status') {
         if (payload.state === 'frame_capture_failed') {
             await logBrowserRunWarning(id, 'frame_capture_failed', payload.message || payload.reason)
@@ -470,6 +482,12 @@ async function logBrowserRunWarning(id: string, reason: string, message: unknown
 
 async function logBrowserRunFailure(id: string, reason: string, message: unknown) {
     const text = typeof message === 'string' && message ? message : reason
+    const key = `${id}:${reason}:${text}`
+    const now = Date.now()
+    const last = browserRunFailureLogTimes.get(key) || 0
+    if (now - last < 60_000) return
+    browserRunFailureLogTimes.set(key, now)
+    trimBrowserLogMap(browserRunFailureLogTimes)
     const context = await browserRunLogContext(id)
     console.warn(JSON.stringify({ level: 'warn', category: 'browser_run_failed', sessionId: id, reason, message: text, ...context }))
     await recordLog({
@@ -547,7 +565,40 @@ async function browserRunLogContext(id: string) {
     if (!id) return {}
     const result = await run('SELECT target, network, status FROM browser_runs WHERE id = $1 LIMIT 1', [id]).catch(() => null)
     const row = result?.rows?.[0]
-    return row ? { target: row.target || '', network: row.network || '', runStatus: row.status || '' } : {}
+    const cached = browserRunLogContexts.get(id) || {}
+    return {
+        ...cached,
+        ...(row ? { target: row.target || cached.target || '', network: row.network || cached.network || '', runStatus: row.status || cached.runStatus || '' } : {}),
+    }
+}
+
+function rememberBrowserRunPayload(id: string, payload: any) {
+    if (!payload || typeof payload !== 'object') return
+    if (payload.type === 'frame') {
+        const current = browserRunLogContexts.get(id)
+        rememberBrowserRunLogContext(id, {
+            lastUrl: typeof payload.url === 'string' ? payload.url : current?.lastUrl,
+            framesDelivered: (current?.framesDelivered || 0) + 1,
+        })
+        return
+    }
+    if (typeof payload.url === 'string') rememberBrowserRunLogContext(id, { lastUrl: payload.url })
+    if (typeof payload.target === 'string') rememberBrowserRunLogContext(id, { target: payload.target })
+}
+
+function rememberBrowserRunLogContext(id: string, context: BrowserRunLogContext) {
+    if (!id) return
+    const current = browserRunLogContexts.get(id) || {}
+    browserRunLogContexts.set(id, { ...current, ...context })
+    trimBrowserLogMap(browserRunLogContexts)
+}
+
+function trimBrowserLogMap(map: Map<string, unknown>) {
+    while (map.size > 1000) {
+        const oldestKey = map.keys().next().value
+        if (!oldestKey) return
+        map.delete(oldestKey)
+    }
 }
 
 function sendStatus(connection: WebSocket, state: string, message: string) {
