@@ -482,7 +482,7 @@ async function logBrowserRunWarning(id: string, reason: string, message: unknown
 
 async function logBrowserRunFailure(id: string, reason: string, message: unknown) {
     const text = typeof message === 'string' && message ? message : reason
-    const key = `${id}:${reason}:${text}`
+    const key = `${id}:${text}`
     const now = Date.now()
     const last = browserRunFailureLogTimes.get(key) || 0
     if (now - last < 60_000) return
