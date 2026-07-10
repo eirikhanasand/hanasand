@@ -9,6 +9,7 @@ import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
+import run from '#db'
 import { handleOnionSessionSocket } from '../handlers/onionSession/ws.ts'
 import { finishBrowserRun, prepareBrowserRun, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../handlers/browserSandboxRuns.ts'
 import { createRuntimeContainer, getRuntimeContainer, getRuntimeContainerLogs, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
@@ -452,39 +453,44 @@ async function logBrowserRunWarning(id: string, reason: string, message: unknown
         if (oldestKey) browserRunWarningLogTimes.delete(oldestKey)
     }
     const text = typeof message === 'string' && message ? message : reason
-    console.warn(JSON.stringify({ level: 'warn', category: 'browser_run_warning', sessionId: id, reason, message: text }))
+    const context = await browserRunLogContext(id)
+    console.warn(JSON.stringify({ level: 'warn', category: 'browser_run_warning', sessionId: id, reason, message: text, ...context }))
     await recordLog({
         level: 'warn',
-        message: `Browser run warning for ${id}: ${text}`,
+        message: `Browser run warning for ${context.target || id}: ${text}`,
         metadata: {
             category: 'browser_run_warning',
             sessionId: id,
             reason,
             workerMessage: typeof message === 'string' ? message : '',
+            ...context,
         },
     }).catch(() => undefined)
 }
 
 async function logBrowserRunFailure(id: string, reason: string, message: unknown) {
     const text = typeof message === 'string' && message ? message : reason
-    console.warn(JSON.stringify({ level: 'warn', category: 'browser_run_failed', sessionId: id, reason, message: text }))
+    const context = await browserRunLogContext(id)
+    console.warn(JSON.stringify({ level: 'warn', category: 'browser_run_failed', sessionId: id, reason, message: text, ...context }))
     await recordLog({
         level: 'warn',
-        message: `Browser run failed for ${id}: ${text}`,
+        message: `Browser run failed for ${context.target || id}: ${text}`,
         metadata: {
             category: 'browser_run_failed',
             sessionId: id,
             reason,
             workerMessage: typeof message === 'string' ? message : '',
+            ...context,
         },
     }).catch(() => undefined)
 }
 
 async function logBrowserRunClosure(id: string, sawReady: boolean, deliveredFrame: boolean, sawTerminalMessage: boolean, code: number, reason: Buffer) {
     const reasonText = closeMessage(code, reason)
+    const context = await browserRunLogContext(id)
     await recordLog({
         level: deliveredFrame ? 'info' : 'warn',
-        message: `Browser worker closed for ${id}${deliveredFrame ? '' : ' before a frame was delivered'}: ${reasonText}.`,
+        message: `Browser worker closed for ${context.target || id}${deliveredFrame ? '' : ' before a frame was delivered'}: ${reasonText}.`,
         metadata: {
             category: 'browser_run_closed',
             sessionId: id,
@@ -493,6 +499,7 @@ async function logBrowserRunClosure(id: string, sawReady: boolean, deliveredFram
             sawTerminalMessage,
             closeCode: code,
             closeReason: reasonText,
+            ...context,
         },
     }).catch(() => undefined)
 }
@@ -520,16 +527,27 @@ function providerRunResultValue(analysis: any, error = ''): BrowserProviderRunRe
 async function recordBrowserWorkerLogs(containerId: string, route: string, id: string) {
     const logs = await getRuntimeContainerLogs(containerId).catch(error => `Could not read browser worker logs: ${error instanceof Error ? error.message : String(error)}`)
     if (!logs) return
+    const context = await browserRunLogContext(id)
+    const tail = logs.slice(-4000)
     await recordLog({
         level: 'warn',
-        message: `Browser worker logs before ${route} session ${id} closed:\n${logs.slice(-4000)}`,
+        message: `Browser worker emitted logs before ${route} session ${context.target || id} closed.`,
         metadata: {
             category: 'browser_sandbox_worker',
             route,
             sessionId: id,
             containerId,
+            logTail: tail,
+            ...context,
         },
     }).catch(() => {})
+}
+
+async function browserRunLogContext(id: string) {
+    if (!id) return {}
+    const result = await run('SELECT target, network, status FROM browser_runs WHERE id = $1 LIMIT 1', [id]).catch(() => null)
+    const row = result?.rows?.[0]
+    return row ? { target: row.target || '', network: row.network || '', runStatus: row.status || '' } : {}
 }
 
 function sendStatus(connection: WebSocket, state: string, message: string) {

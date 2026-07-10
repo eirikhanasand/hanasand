@@ -10,14 +10,18 @@ const ignoredPrefixes = [
 
 export async function recordHttpErrorResponse(req: FastifyRequest, res: FastifyReply, payload: unknown) {
     const statusCode = Number(res.statusCode || 0)
-    if (statusCode < 400 || ignoredPrefixes.some(prefix => req.url.startsWith(prefix))) {
+    const path = normalizePath(req.url)
+    if (
+        statusCode < 400
+        || ignoredPrefixes.some(prefix => req.url.startsWith(prefix))
+        || isExpectedInternalProbe(path, statusCode, readHeader(req.headers['user-agent']))
+    ) {
         return
     }
 
     const body = parsePayload(payload)
     const errorCode = normalizeErrorCode(body)
     const message = normalizeMessage(body, `HTTP ${statusCode}`)
-    const path = normalizePath(req.url)
     const level = statusCode >= 500 ? 'error' : 'warn'
     const requestId = readHeader(req.headers['x-request-id']) || req.id
     const userId = readHeader(req.headers.id)
@@ -96,6 +100,13 @@ function classifySurface(path: string) {
     if (path.startsWith('/api/ai')) return 'ai'
     if (path.startsWith('/api/vms')) return 'workspace_runtime'
     return 'api'
+}
+
+function isExpectedInternalProbe(path: string, statusCode: number, userAgent: string) {
+    if (userAgent !== 'hanasand_internal' || ![401, 404].includes(statusCode)) return false
+    return path === '/api/docker'
+        || path === '/api/stats'
+        || /^\/api\/vms?\/[^/]+\/start$/.test(path)
 }
 
 function readHeader(value: string | string[] | undefined) {
