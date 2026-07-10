@@ -9,6 +9,7 @@ import {
     extractIndicators,
     extractThreatAssociations,
     inspectScript,
+    isActionableObfuscatedScript,
     sandboxUrlSafety,
     summarizeDeobfuscationTask,
 } from './analysis.ts'
@@ -659,6 +660,23 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 .catch(() => undefined)
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
+            void recordLog({
+                level: 'error',
+                service: 'hanasand-api',
+                message: `Browser run failed for ${target}: ${message}`,
+                metadata: {
+                    category: 'browser_run_failure',
+                    sessionId,
+                    target,
+                    network,
+                    runId: currentRunId,
+                    hasPage: Boolean(page),
+                    hasContext: Boolean(context),
+                    hasBrowser: Boolean(browser),
+                    lastUrl: page?.url(),
+                    runStatus: 'failed',
+                },
+            }).catch(() => undefined)
             send({ type: 'status', state: 'failed', sessionId, message })
             send({ type: 'ended', reason: 'launch_failed', sessionId, message })
             await cleanup('failed')
@@ -1165,7 +1183,7 @@ function documentDeobfuscationTasks(html: string): SandboxDeobfuscationTask[] {
             src: /\bsrc=["']([^"']+)["']/i.exec(match[1])?.[1] || '',
             inline: match[2] || '',
         }, index))
-        .filter(script => script.obfuscationScore >= 3)
+        .filter(isActionableObfuscatedScript)
     return scripts.map(script => summarizeDeobfuscationTask(script))
 }
 
@@ -2056,7 +2074,9 @@ async function collectPageEvidence(page: Page) {
     ].join('\n')
     const scripts = snapshot.scripts.map((script, index) => inspectScript(script, index)).filter(script => script.src || script.sample || script.obfuscationScore > 0)
     const indicators = extractIndicators(joined)
-    const obfuscatedScripts = scripts.filter(script => script.obfuscationScore >= 3)
+    const obfuscatedScripts = scripts.filter(isActionableObfuscatedScript)
+    const deobfuscationTasks = obfuscatedScripts.map(script => summarizeDeobfuscationTask(script))
+    const suspiciousDeobfuscationTasks = deobfuscationTasks.filter(task => task.assessment === 'suspicious')
     const forms = snapshot.forms.map(form => ({
         action: form.action,
         method: form.method,
@@ -2064,7 +2084,7 @@ async function collectPageEvidence(page: Page) {
         inputCount: form.inputs.length,
     }))
     const suspiciousReasons = [
-        obfuscatedScripts.length ? `${obfuscatedScripts.length} obfuscated script candidate${obfuscatedScripts.length === 1 ? '' : 's'}` : '',
+        suspiciousDeobfuscationTasks.length ? `${suspiciousDeobfuscationTasks.length} suspicious decoded script sample${suspiciousDeobfuscationTasks.length === 1 ? '' : 's'}` : '',
         indicators.ips.length ? `${indicators.ips.length} IP indicator${indicators.ips.length === 1 ? '' : 's'}` : '',
         forms.some(form => form.sensitiveInputCount > 0) ? 'sensitive form fields present' : '',
         /wallet|seed phrase|connect wallet|verify account|install extension|wallet connect/i.test(text) ? 'social-engineering language present' : '',
@@ -2080,11 +2100,11 @@ async function collectPageEvidence(page: Page) {
         forms,
         scripts,
         obfuscatedScripts,
-        verdict: suspiciousReasons.length >= 2 || obfuscatedScripts.length >= 1 ? 'suspicious' : 'unknown',
-        confidence: Math.min(95, 35 + suspiciousReasons.length * 15 + obfuscatedScripts.length * 10),
+        verdict: suspiciousReasons.length >= 2 || suspiciousDeobfuscationTasks.length >= 1 ? 'suspicious' : 'unknown',
+        confidence: Math.min(95, 35 + suspiciousReasons.length * 15 + suspiciousDeobfuscationTasks.length * 10),
         reasons: suspiciousReasons.length ? suspiciousReasons : ['No high-signal malicious pattern was extracted from the rendered page yet.'],
         threatAssociations: extractThreatAssociations(joined, 'rendered_page'),
-        deobfuscationTasks: obfuscatedScripts.map(script => summarizeDeobfuscationTask(script)),
+        deobfuscationTasks,
     }
 }
 

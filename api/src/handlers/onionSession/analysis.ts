@@ -94,11 +94,18 @@ export function summarizeDeobfuscationTask(script: InspectedSandboxScript) {
     const decoded = decodeScriptSample(script.sample)
     const joined = [script.sample, decoded.preview].join('\n')
     const indicators = extractIndicators(joined)
+    const threatAssociations = extractThreatAssociations(joined, 'decoded_script')
+    const highConfidenceThreat = threatAssociations.some(item => item.confidence !== 'low')
+    const hasDecodedNetwork = decoded.preview && (indicators.ips.length > 0 || indicators.urls.length > 0)
+    const hasExecutablePayload = /\b(?:powershell|cmd\.exe|wscript|mshta|rundll32|regsvr32|\.exe|\.dll|payload|dropper|stealer|seed phrase|credential)\b/i.test(joined)
+    const hasSuspiciousRedirect = /(?:document\.write|location\.href|window\.location)/i.test(joined)
+        && /https?:\/\//i.test(joined)
+        && script.reasons.some(reason => reason !== 'dynamic execution')
     const maliciousReasons = [
-        indicators.ips.length || indicators.domains.length ? 'decoded network indicators' : '',
-        /document\.write|location\.href|window\.location|fetch\s*\(|XMLHttpRequest|navigator\.sendBeacon/i.test(joined) ? 'browser redirect or network call' : '',
-        /powershell|cmd\.exe|wscript|mshta|download|payload|stealer|wallet|seed phrase/i.test(joined) ? 'payload or credential-theft language' : '',
-        script.reasons.includes('dynamic execution') ? 'dynamic execution' : '',
+        hasDecodedNetwork ? 'decoded network indicators' : '',
+        hasSuspiciousRedirect ? 'decoded redirect behavior' : '',
+        hasExecutablePayload ? 'payload or credential-theft language' : '',
+        highConfidenceThreat ? 'threat-context match' : '',
     ].filter(Boolean)
 
     return {
@@ -110,12 +117,18 @@ export function summarizeDeobfuscationTask(script: InspectedSandboxScript) {
         decodedPreview: decoded.preview,
         decodedTransforms: decoded.transforms,
         indicators,
-        threatAssociations: extractThreatAssociations(joined, 'decoded_script'),
+        threatAssociations,
         assessment: maliciousReasons.length ? 'suspicious' : 'unknown',
         summary: maliciousReasons.length
             ? `Decoded script remains suspicious: ${maliciousReasons.join(', ')}.`
             : 'Decoded sample did not expose a high-confidence payload in the extracted window.',
     }
+}
+
+export function isActionableObfuscatedScript(script: InspectedSandboxScript) {
+    if (!script.sample || script.sample.length < 120) return false
+    const strongReasons = script.reasons.filter(reason => reason !== 'dynamic execution')
+    return strongReasons.length >= 2 && script.obfuscationScore >= 5
 }
 
 export function decodeScriptSample(sample: string) {
