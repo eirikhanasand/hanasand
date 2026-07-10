@@ -425,8 +425,8 @@ async function finishProxiedBrowserRun(id: string, message: RawData) {
         }
     }
     if (payload?.type === 'navigation_error') {
-        await logBrowserRunUnreachable(id, 'navigation_error', payload.message || payload.target)
         await finishBrowserRun(id, 'unreachable')
+        await logBrowserRunUnreachable(id, 'navigation_error', payload.message || payload.target)
         return
     }
     if (payload?.type === 'ended') {
@@ -514,16 +514,17 @@ async function logBrowserRunUnreachable(id: string, reason: string, message: unk
     browserRunUnreachableLogTimes.set(key, now)
     trimBrowserLogMap(browserRunUnreachableLogTimes)
     const context = await browserRunLogContext(id)
-    console.info(JSON.stringify({ level: 'info', category: 'browser_run_unreachable', sessionId: id, reason, message: text, ...context }))
+    const unreachableContext = { ...context, runStatus: 'unreachable' }
+    console.info(JSON.stringify({ level: 'info', category: 'browser_run_unreachable', sessionId: id, reason, message: text, ...unreachableContext }))
     await recordLog({
         level: 'info',
-        message: `Browser target unreachable for ${context.target || id}: ${text}`,
+        message: `Browser target unreachable for ${unreachableContext.target || id}: ${text}`,
         metadata: {
             category: 'browser_run_unreachable',
             sessionId: id,
             reason,
             workerMessage: typeof message === 'string' ? message : '',
-            ...context,
+            ...unreachableContext,
         },
     }).catch(() => undefined)
 }
