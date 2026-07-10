@@ -1,7 +1,7 @@
 'use client'
 
 import { Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, Share2, ShieldCheck, Square, Trash2 } from 'lucide-react'
-import { type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 
@@ -635,60 +635,12 @@ export default function BrowserPageClient() {
         return { x, y }
     }, [activeFrame.height, activeFrame.width])
 
-    const clickBrowserFrame = useCallback((event: MouseEvent<HTMLDivElement>) => {
-        if (activeTool) return
-        event.preventDefault()
-        event.stopPropagation()
-        viewportRef.current?.focus()
-        const point = browserPoint(event.clientX, event.clientY)
-        if (!point) return
-        sendBrowserInput({ type: 'click', ...point, button: 0 })
-    }, [activeTool, browserPoint, sendBrowserInput])
-
-    const pointerBrowserFrame = useCallback((event: PointerEvent<HTMLDivElement>) => {
-        if (activeTool) return
-        event.preventDefault()
-        event.stopPropagation()
-        const point = browserPoint(event.clientX, event.clientY)
-        if (!point) return
-        viewportRef.current?.focus()
-        if (event.type === 'pointerdown') event.currentTarget.setPointerCapture(event.pointerId)
-        sendBrowserInput({ type: 'pointer', event: event.type, ...point, button: event.button, buttons: event.buttons })
-    }, [activeTool, browserPoint, sendBrowserInput])
-
-    const touchBrowserFrame = useCallback((event: TouchEvent<HTMLDivElement>) => {
-        if (activeTool) return
-        const touch = event.changedTouches[0]
-        if (!touch) return
-        const point = browserPoint(touch.clientX, touch.clientY)
-        if (!point) return
-        event.preventDefault()
-        event.stopPropagation()
-        viewportRef.current?.focus()
-
-        if (event.type === 'touchstart') {
-            touchFrameRef.current = { clientX: touch.clientX, clientY: touch.clientY, lastX: touch.clientX, lastY: touch.clientY, moved: false }
-            sendBrowserInput({ type: 'pointer', event: 'pointerdown', ...point, button: 0, buttons: 1 })
-            return
-        }
-
-        const touchState = touchFrameRef.current
-        if (!touchState) return
-        const deltaX = touch.clientX - touchState.lastX
-        const deltaY = touch.clientY - touchState.lastY
-        touchState.lastX = touch.clientX
-        touchState.lastY = touch.clientY
-        if (Math.abs(touch.clientX - touchState.clientX) > 6 || Math.abs(touch.clientY - touchState.clientY) > 6) touchState.moved = true
-
-        if (event.type === 'touchmove') {
-            sendBrowserInput({ type: 'wheel', ...point, deltaX: -deltaX, deltaY: -deltaY })
-            return
-        }
-
-        sendBrowserInput({ type: 'pointer', event: 'pointerup', ...point, button: 0, buttons: 0 })
-        if (!touchState.moved && event.type === 'touchend') sendBrowserInput({ type: 'click', ...point, button: 0 })
-        touchFrameRef.current = null
-    }, [activeTool, browserPoint, sendBrowserInput])
+    const eventInsideViewport = useCallback((clientX: number, clientY: number) => {
+        const viewport = viewportRef.current
+        if (!viewport) return false
+        const rect = viewport.getBoundingClientRect()
+        return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+    }, [])
 
     const keyBrowserFrame = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
         const keyPayload = {
@@ -738,6 +690,78 @@ export default function BrowserPageClient() {
         window.addEventListener('wheel', wheelBrowserFrame, { capture: true, passive: false })
         return () => window.removeEventListener('wheel', wheelBrowserFrame, { capture: true })
     }, [activeTool, browserPoint, sendBrowserInput])
+
+    useEffect(() => {
+        if (activeTool) return
+        const capturePointerFrame = (event: globalThis.PointerEvent) => {
+            if (event.pointerType === 'touch' || !eventInsideViewport(event.clientX, event.clientY)) return
+            const point = browserPoint(event.clientX, event.clientY)
+            if (!point) return
+            event.preventDefault()
+            event.stopPropagation()
+            viewportRef.current?.focus()
+            sendBrowserInput({ type: 'pointer', event: event.type, ...point, button: event.button, buttons: event.buttons })
+        }
+        const captureClickFrame = (event: globalThis.MouseEvent) => {
+            if (!eventInsideViewport(event.clientX, event.clientY)) return
+            const point = browserPoint(event.clientX, event.clientY)
+            if (!point) return
+            event.preventDefault()
+            event.stopPropagation()
+            viewportRef.current?.focus()
+            sendBrowserInput({ type: 'click', ...point, button: event.button })
+        }
+        const captureTouchFrame = (event: globalThis.TouchEvent) => {
+            const touch = event.changedTouches[0]
+            if (!touch || !eventInsideViewport(touch.clientX, touch.clientY)) return
+            const point = browserPoint(touch.clientX, touch.clientY)
+            if (!point) return
+            event.preventDefault()
+            event.stopPropagation()
+            viewportRef.current?.focus()
+
+            if (event.type === 'touchstart') {
+                touchFrameRef.current = { clientX: touch.clientX, clientY: touch.clientY, lastX: touch.clientX, lastY: touch.clientY, moved: false }
+                sendBrowserInput({ type: 'pointer', event: 'pointerdown', ...point, button: 0, buttons: 1 })
+                return
+            }
+
+            const touchState = touchFrameRef.current
+            if (!touchState) return
+            const deltaX = touch.clientX - touchState.lastX
+            const deltaY = touch.clientY - touchState.lastY
+            touchState.lastX = touch.clientX
+            touchState.lastY = touch.clientY
+            if (Math.abs(touch.clientX - touchState.clientX) > 6 || Math.abs(touch.clientY - touchState.clientY) > 6) touchState.moved = true
+
+            if (event.type === 'touchmove') {
+                sendBrowserInput({ type: 'wheel', ...point, deltaX: -deltaX, deltaY: -deltaY })
+                return
+            }
+
+            sendBrowserInput({ type: 'pointer', event: 'pointerup', ...point, button: 0, buttons: 0 })
+            if (!touchState.moved && event.type === 'touchend') sendBrowserInput({ type: 'click', ...point, button: 0 })
+            touchFrameRef.current = null
+        }
+        window.addEventListener('pointerdown', capturePointerFrame, { capture: true })
+        window.addEventListener('pointermove', capturePointerFrame, { capture: true })
+        window.addEventListener('pointerup', capturePointerFrame, { capture: true })
+        window.addEventListener('click', captureClickFrame, { capture: true })
+        window.addEventListener('touchstart', captureTouchFrame, { capture: true, passive: false })
+        window.addEventListener('touchmove', captureTouchFrame, { capture: true, passive: false })
+        window.addEventListener('touchend', captureTouchFrame, { capture: true, passive: false })
+        window.addEventListener('touchcancel', captureTouchFrame, { capture: true, passive: false })
+        return () => {
+            window.removeEventListener('pointerdown', capturePointerFrame, { capture: true })
+            window.removeEventListener('pointermove', capturePointerFrame, { capture: true })
+            window.removeEventListener('pointerup', capturePointerFrame, { capture: true })
+            window.removeEventListener('click', captureClickFrame, { capture: true })
+            window.removeEventListener('touchstart', captureTouchFrame, { capture: true })
+            window.removeEventListener('touchmove', captureTouchFrame, { capture: true })
+            window.removeEventListener('touchend', captureTouchFrame, { capture: true })
+            window.removeEventListener('touchcancel', captureTouchFrame, { capture: true })
+        }
+    }, [activeTool, browserPoint, eventInsideViewport, sendBrowserInput])
 
     const saveProfile = useCallback(() => {
         const name = customProfileName.trim()
@@ -910,16 +934,6 @@ export default function BrowserPageClient() {
                                 role='application'
                                 aria-label='Interactive isolated browser viewport'
                                 onKeyDown={keyBrowserFrame}
-                                onClick={clickBrowserFrame}
-                                onPointerDown={pointerBrowserFrame}
-                                onPointerMove={event => {
-                                    if (event.buttons) pointerBrowserFrame(event)
-                                }}
-                                onPointerUp={pointerBrowserFrame}
-                                onTouchStart={touchBrowserFrame}
-                                onTouchMove={touchBrowserFrame}
-                                onTouchEnd={touchBrowserFrame}
-                                onTouchCancel={touchBrowserFrame}
                             >
                                 {activeTool && activeToolCapture ? (
                                     <ProviderViewportEvidence tool={activeTool} capture={activeToolCapture} />
