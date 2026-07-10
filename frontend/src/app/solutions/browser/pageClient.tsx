@@ -5,7 +5,7 @@ import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, us
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 
-type SessionState = 'prompt' | 'queued' | 'connecting' | 'live' | 'ended' | 'failed'
+type SessionState = 'prompt' | 'queued' | 'connecting' | 'live' | 'ended' | 'failed' | 'unreachable'
 type SocketState = 'closed' | 'connecting' | 'open' | 'error'
 type BrowserNetwork = 'regular' | 'tor'
 type SandboxCapacity = {
@@ -480,7 +480,7 @@ export default function BrowserPageClient() {
         socket.onclose = () => {
             if (socketRef.current !== socket) return
             setSocketState('closed')
-            setSessionState(current => current === 'prompt' || current === 'failed' ? current : 'ended')
+            setSessionState(current => current === 'prompt' || current === 'failed' || current === 'unreachable' ? current : 'ended')
             pushEvent('Sandbox broker closed.')
         }
         socket.onerror = () => {
@@ -521,7 +521,7 @@ export default function BrowserPageClient() {
                 setActiveUrl(urlValue)
                 setActiveFrame({ width: frameWidth, height: frameHeight })
                 if (isBrowserErrorUrl(urlValue)) {
-                    setSessionState('failed')
+                    setSessionState('unreachable')
                     setRunBlocker('Target page did not load; the isolated browser showed an error page.')
                 } else {
                     setSessionState(current => current === 'connecting' || current === 'queued' ? 'live' : current)
@@ -601,6 +601,7 @@ export default function BrowserPageClient() {
             }
             if (payload.type === 'navigation_error' || payload.type === 'error') {
                 if (payload.type === 'navigation_error' && isDegradedNavigationError(stringValue(payload.message))) {
+                    setSessionState('unreachable')
                     setRunBlocker(String(payload.message || 'Target navigation did not complete; showing captured browser/provider evidence.'))
                     pushEvent(String(payload.message || 'Target navigation did not complete; showing captured browser/provider evidence.'))
                     return
@@ -901,7 +902,7 @@ export default function BrowserPageClient() {
                             <h1 className='truncate text-lg font-semibold text-ui-text'>{activeUrl || normalizedTarget}</h1>
                         </div>
                         <div className='flex flex-wrap items-center gap-2'>
-                            <StatusPill label='Run' value={sessionStateLabel(sessionState)} good={sessionState === 'live'} />
+                            <StatusPill label='Run' value={summary.navigationFailed || sessionState === 'unreachable' ? 'unreachable' : sessionStateLabel(sessionState)} good={sessionState === 'live'} />
                             {sessionState !== 'ended' ? <StatusPill label='Connection' value={socketStateLabel(socketState)} good={socketState === 'open'} /> : null}
                             {capacity ? <StatusPill label='Capacity' value={capacity.queuePosition ? `${capacity.queuePosition}/${capacity.queuedSessions} queued` : `${capacity.activeSessions}/${capacity.maxSessions} active`} good={!capacity.queuePosition} /> : null}
                             <button type='button' onClick={exportReport} disabled={!captures.length} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary disabled:cursor-not-allowed disabled:opacity-50'>
@@ -1017,7 +1018,7 @@ function SandboxTabStrip({
             <SandboxTabButton
                 active={activeTab === 'browser'}
                 label='Browser'
-                status={sessionState === 'live' ? 'live frame' : sessionState === 'ended' ? (browserCaptured ? 'captured frame' : 'no frame') : sessionStateLabel(sessionState)}
+                status={sessionState === 'live' ? 'live frame' : sessionState === 'ended' ? (browserCaptured ? 'captured frame' : 'no frame') : sessionState === 'unreachable' || (sessionState === 'failed' && browserCaptured) ? 'unreachable' : sessionStateLabel(sessionState)}
                 onClick={() => onSelect('browser')}
             />
             {tools.map(tool => {
@@ -1622,7 +1623,7 @@ function QuickTriageStrip({ summary, toolCaptures, toolCount }: { summary: Retur
 }
 
 function RunOutcomeCard({ summary, captures, sessionState }: { summary: ReturnType<typeof buildAnalystSummary>; captures: Capture[]; sessionState: SessionState }) {
-    if (!captures.length && sessionState !== 'failed') return null
+    if (!captures.length && sessionState !== 'failed' && sessionState !== 'unreachable') return null
     const pageCaptures = captures.filter(capture => capture.kind === 'page').length
     const vt = summary.rows.find(row => row.label === 'VirusTotal vendors')?.value || 'unknown'
     const urlquery = summary.rows.find(row => row.label === 'urlquery alerts')?.value || 'unknown'
@@ -1632,8 +1633,8 @@ function RunOutcomeCard({ summary, captures, sessionState }: { summary: ReturnTy
         <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 md:grid-cols-[minmax(0,1fr)_auto]'>
             <div className='min-w-0'>
                 <p className='text-xs font-semibold uppercase text-ui-primary'>Investigation result</p>
-                <h2 className='mt-1 text-lg font-semibold text-ui-text'>{sessionState === 'failed' && !pageCaptures ? 'Run failed before browser evidence was captured' : summary.brief.verdict}</h2>
-                <p className='mt-1 text-sm leading-6 text-ui-muted'>{sessionState === 'failed' && !pageCaptures ? 'No browser frame, provider verdict, or network evidence was available for this run.' : summary.brief.impact}</p>
+                <h2 className='mt-1 text-lg font-semibold text-ui-text'>{sessionState === 'unreachable' && !pageCaptures ? 'Target unreachable' : sessionState === 'failed' && !pageCaptures ? 'Run failed before browser evidence was captured' : summary.brief.verdict}</h2>
+                <p className='mt-1 text-sm leading-6 text-ui-muted'>{sessionState === 'unreachable' && !pageCaptures ? 'The sandbox ran, but the submitted target did not return browser evidence.' : sessionState === 'failed' && !pageCaptures ? 'No browser frame, provider verdict, or network evidence was available for this run.' : summary.brief.impact}</p>
             </div>
             <div className='grid grid-cols-2 gap-2 text-xs text-ui-muted sm:grid-cols-4 md:min-w-[26rem]'>
                 <EvidenceFact label='VT' value={vt} />
@@ -1836,6 +1837,7 @@ function sessionStateLabel(state: SessionState) {
     if (state === 'live') return 'running'
     if (state === 'ended') return 'complete'
     if (state === 'failed') return 'failed'
+    if (state === 'unreachable') return 'unreachable'
     return 'ready'
 }
 
@@ -2200,6 +2202,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
         indicators: allIndicators,
         threatAssociations,
         latestNetwork,
+        navigationFailed,
         urlTimeline,
         reviewQueue,
         deobfuscationTasks,
@@ -2324,7 +2327,7 @@ function buildAnalystBrief(input: {
     let recommendedAction = 'Wait for the first page frame, provider result, or explicit blocker.'
 
     if (input.navigationFailed) {
-        verdict = 'Run failed - target unreachable'
+        verdict = 'Target unreachable'
         impact = 'The isolated browser captured an error page, so no clean verdict can be made for the submitted target.'
         recommendedAction = 'Retry later or inspect DNS, TLS, and network reachability before treating the URL as benign.'
     } else if (highSignal) {

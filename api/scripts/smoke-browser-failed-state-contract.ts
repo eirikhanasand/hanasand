@@ -4,8 +4,10 @@ import { readFileSync } from 'node:fs'
 const ws = readFileSync(new URL('../src/handlers/onionSession/ws.ts', import.meta.url), 'utf8')
 const page = readFileSync(new URL('../../frontend/src/app/solutions/browser/pageClient.tsx', import.meta.url), 'utf8')
 
-assert.match(ws, /const cleanup = async \(runStatus: 'ended' \| 'failed' = 'ended'\)/, 'cleanup should accept the terminal run status')
+assert.match(ws, /const cleanup = async \(runStatus: 'ended' \| 'failed' \| 'unreachable' = terminalRunStatus\)/, 'cleanup should accept the terminal run status')
 assert.match(ws, /await cleanup\('failed'\)/, 'launch failures should persist browser_runs.status=failed')
+assert(ws.includes("finishBrowserRun(currentRunId, 'unreachable')"), 'navigation errors should persist browser_runs.status=unreachable')
+assert(ws.includes("category: 'browser_run_unreachable'"), 'unreachable targets should be logged separately from browser_run_failure')
 assert(ws.includes('const kind = officialProviderKind(resolvedUrl)'), 'provider start URLs should be based on configured provider hosts')
 assert.doesNotMatch(ws, /\|\| \(isVirusTotalTool\(tool, resolvedUrl\) \? 'virustotal' : ''\)/, 'tool labels should not rewrite custom VirusTotal fixtures to the public provider')
 assert.doesNotMatch(ws, /\|\| \(isUrlQueryTool\(tool, resolvedUrl\) \? 'urlquery' : ''\)/, 'tool labels should not rewrite custom urlquery fixtures to the public provider')

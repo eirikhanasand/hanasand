@@ -273,6 +273,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let cancelAdmission: (() => void) | null = null
     let releaseAdmission: (() => void) | null = null
     let currentRunId: string | null = null
+    let terminalRunStatus: 'ended' | 'failed' | 'unreachable' = 'ended'
     let closed = false
     let lastFrame = ''
     let remoteClipboard = ''
@@ -306,7 +307,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }))
     }
 
-    const cleanup = async (runStatus: 'ended' | 'failed' = 'ended') => {
+    const cleanup = async (runStatus: 'ended' | 'failed' | 'unreachable' = terminalRunStatus) => {
         trace('cleanup', { runStatus, hasPage: Boolean(page), hasContext: Boolean(context), ownsBrowser })
         closed = true
         cancelAdmission?.()
@@ -323,6 +324,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const title = page ? await page.title().catch(() => '') : ''
             await finishBrowserRun(runId, runStatus, title).catch(() => undefined)
         }
+        terminalRunStatus = 'ended'
         cachedDeobfuscationTasks = []
         cachedThreatAssociations = []
         cachedIndicators = null
@@ -887,6 +889,25 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         void updateBrowserRunProviderResult(currentRunId, analysis.toolKind, result).catch(() => undefined)
     }
 
+    function markTargetUnreachable(target: string, message: string) {
+        terminalRunStatus = 'unreachable'
+        if (currentRunId) void finishBrowserRun(currentRunId, 'unreachable').catch(() => undefined)
+        void recordLog({
+            level: 'info',
+            service: 'hanasand-api',
+            message: `Browser target unreachable for ${target}: ${message}`,
+            metadata: {
+                category: 'browser_run_unreachable',
+                sessionId,
+                target,
+                network: defaultNetwork,
+                runId: currentRunId,
+                workerMessage: message,
+                runStatus: 'unreachable',
+            },
+        }).catch(() => undefined)
+    }
+
     function trackNetwork(event: SandboxNetworkEvent) {
         networkEvents.push(event)
         if (networkEvents.length > 600) networkEvents = networkEvents.slice(-600)
@@ -907,7 +928,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }, 5_000)
         const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 25_000 })
             .catch((error) => {
-                send({ type: 'navigation_error', target, message: error instanceof Error ? error.message : String(error) })
+                const message = error instanceof Error ? error.message : String(error)
+                markTargetUnreachable(target, message)
+                send({ type: 'navigation_error', target, message })
                 return null
             })
             .finally(() => clearInterval(heartbeat))

@@ -208,7 +208,7 @@ export async function prepareBrowserRun(input: PrepareBrowserRunInput): Promise<
     }
 }
 
-export async function finishBrowserRun(id: string, status: 'ended' | 'failed' = 'ended', title = '') {
+export async function finishBrowserRun(id: string, status: 'ended' | 'failed' | 'unreachable' = 'ended', title = '') {
     if (!id) return
     await run(`
         UPDATE browser_runs

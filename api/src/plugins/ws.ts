@@ -24,6 +24,7 @@ type PendingUpdates = {
 const messageBuffer: Buffer[] = []
 const browserRunWarningLogTimes = new Map<string, number>()
 const browserRunFailureLogTimes = new Map<string, number>()
+const browserRunUnreachableLogTimes = new Map<string, number>()
 const browserRunLogContexts = new Map<string, BrowserRunLogContext>()
 
 type BrowserRunLogContext = {
@@ -424,7 +425,8 @@ async function finishProxiedBrowserRun(id: string, message: RawData) {
         }
     }
     if (payload?.type === 'navigation_error') {
-        await logBrowserRunFailure(id, 'navigation_error', payload.message || payload.target)
+        await logBrowserRunUnreachable(id, 'navigation_error', payload.message || payload.target)
+        await finishBrowserRun(id, 'unreachable')
         return
     }
     if (payload?.type === 'ended') {
@@ -495,6 +497,29 @@ async function logBrowserRunFailure(id: string, reason: string, message: unknown
         message: `Browser run failed for ${context.target || id}: ${text}`,
         metadata: {
             category: 'browser_run_failed',
+            sessionId: id,
+            reason,
+            workerMessage: typeof message === 'string' ? message : '',
+            ...context,
+        },
+    }).catch(() => undefined)
+}
+
+async function logBrowserRunUnreachable(id: string, reason: string, message: unknown) {
+    const text = typeof message === 'string' && message ? message : reason
+    const key = `${id}:${text}`
+    const now = Date.now()
+    const last = browserRunUnreachableLogTimes.get(key) || 0
+    if (now - last < 60_000) return
+    browserRunUnreachableLogTimes.set(key, now)
+    trimBrowserLogMap(browserRunUnreachableLogTimes)
+    const context = await browserRunLogContext(id)
+    console.info(JSON.stringify({ level: 'info', category: 'browser_run_unreachable', sessionId: id, reason, message: text, ...context }))
+    await recordLog({
+        level: 'info',
+        message: `Browser target unreachable for ${context.target || id}: ${text}`,
+        metadata: {
+            category: 'browser_run_unreachable',
             sessionId: id,
             reason,
             workerMessage: typeof message === 'string' ? message : '',
