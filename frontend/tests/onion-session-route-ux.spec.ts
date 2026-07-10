@@ -9,7 +9,7 @@ test('legacy onion and regular sandbox routes redirect to the unified browser wo
     const onionRouteSource = await readFile(path.join(root, 'src/app/solutions/onion-session/page.tsx'), 'utf8')
     const regularRouteSource = await readFile(path.join(root, 'src/app/browser-sandbox/page.tsx'), 'utf8')
     const browserRouteSource = await readFile(path.join(root, 'src/app/browser/page.tsx'), 'utf8')
-    const browserClientSource = await readFile(path.join(root, 'src/app/solutions/browser/pageClient.tsx'), 'utf8')
+    const browserClientSource = await readFile(path.join(root, 'src/app/browser/pageClient.tsx'), 'utf8')
     const solutionsSource = await readFile(path.join(root, 'src/app/solutions/page.tsx'), 'utf8')
     const headerSource = await readFile(path.join(root, 'src/components/header/header.tsx'), 'utf8')
     const footerSource = await readFile(path.join(root, 'src/components/footer/footer.tsx'), 'utf8')
@@ -24,9 +24,9 @@ test('legacy onion and regular sandbox routes redirect to the unified browser wo
 
     assert(browserClientSource.includes('Browser'))
     assert(browserClientSource.includes('BrowserNetwork'))
-    assert(browserClientSource.includes('Regular'))
-    assert(browserClientSource.includes('Tor'))
-    assert(browserClientSource.includes('Auto-detected route'))
+    assert(browserClientSource.includes('inferNetwork'))
+    assert(browserClientSource.includes('BrowserFingerprint'))
+    assert(browserClientSource.includes('SlidersHorizontal'))
     assert(browserClientSource.includes('id=\'sandbox-url\''))
     assert(browserClientSource.includes('SOC analyst summary'))
     assert(browserClientSource.includes('HistoryPanel'))
@@ -34,7 +34,7 @@ test('legacy onion and regular sandbox routes redirect to the unified browser wo
 })
 
 test('unified browser app chrome uses shared theme tokens', async () => {
-    const clientSource = await readFile(path.join(root, 'src/app/solutions/browser/pageClient.tsx'), 'utf8')
+    const clientSource = await readFile(path.join(root, 'src/app/browser/pageClient.tsx'), 'utf8')
     const jsxChrome = clientSource
         .replace(/context\.(?:fillStyle|strokeStyle)\s*=\s*'#[^']+'/g, '')
         .replace(/drawRoundedRect\([\s\S]+?#[\s\S]+?\)/g, '')

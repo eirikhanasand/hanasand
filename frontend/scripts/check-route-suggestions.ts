@@ -1,9 +1,9 @@
 import { suggestRoutes } from '../src/utils/routes/routeSuggestions'
 
-const suggestion = suggestRoutes('/solutions/browsee')
+const suggestion = suggestRoutes('/browsee')
 
-if (suggestion[0] !== '/solutions/browser') {
-    throw new Error(`Expected /solutions/browser, got ${suggestion.join(', ')}`)
+if (suggestion[0] !== '/browser') {
+    throw new Error(`Expected /browser, got ${suggestion.join(', ')}`)
 }
 
 if (suggestion.length > 3) {

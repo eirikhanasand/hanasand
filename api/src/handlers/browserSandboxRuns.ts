@@ -361,5 +361,5 @@ function hashValue(value: string) {
 }
 
 function browserReportViewerUrl(id: string, token: string) {
-    return `/solutions/browser/report?run=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`
+    return `/browser/report?run=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`
 }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const ws = readFileSync(new URL('../src/handlers/onionSession/ws.ts', import.meta.url), 'utf8')
-const page = readFileSync(new URL('../../frontend/src/app/solutions/browser/pageClient.tsx', import.meta.url), 'utf8')
+const page = readFileSync(new URL('../../frontend/src/app/browser/pageClient.tsx', import.meta.url), 'utf8')
 
 assert.match(ws, /const cleanup = async \(runStatus: 'ended' \| 'failed' \| 'unreachable' = terminalRunStatus\)/, 'cleanup should accept the terminal run status')
 assert.match(ws, /await cleanup\('failed'\)/, 'launch failures should persist browser_runs.status=failed')

@@ -34,23 +34,8 @@ const nextConfig = {
                 permanent: true,
             },
             {
-                source: '/solutions/browser',
-                destination: '/browser',
-                permanent: true,
-            },
-            {
-                source: '/solutions/browser-sandbox',
-                destination: '/browser',
-                permanent: true,
-            },
-            {
                 source: '/solutions/onion-session',
                 destination: '/browser',
-                permanent: true,
-            },
-            {
-                source: '/solutions/browser/report',
-                destination: '/browser/report',
                 permanent: true,
             },
         ]

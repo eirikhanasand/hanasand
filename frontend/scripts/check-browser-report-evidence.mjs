@@ -4,8 +4,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const liveClient = readSource('src/app/solutions/browser/pageClient.tsx')
-const reportClient = readSource('src/app/solutions/browser/report/pageClient.tsx')
+const liveClient = readSource('src/app/browser/pageClient.tsx')
+const reportClient = readSource('src/app/browser/report/pageClient.tsx')
 const backendProxy = readSource('src/app/api/backend/[...path]/route.ts')
 
 for (const token of [
