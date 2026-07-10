@@ -269,7 +269,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
         closed = true
         if (connection.readyState === WebSocket.OPEN) connection.close()
         if (upstream && (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING)) upstream.close()
-        if (containerId) void recordBrowserWorkerLogs(containerId, route, id)
+        if (containerId) void (!sawReady || !deliveredFrame ? recordBrowserWorkerLogs(containerId, route, id) : Promise.resolve())
             .finally(() => removeRuntimeContainer(containerId))
             .catch(error => recordWebsocketFailure(`browser-session-remove-${route}`, id, error))
     }
