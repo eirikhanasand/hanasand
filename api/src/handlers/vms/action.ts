@@ -10,10 +10,10 @@ const allowedActions = new Set(['start', 'stop', 'restart'])
 
 export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'system_admin')
     if (!valid || !userId) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
+    const { valid: validRole } = await hasRole(req, res, 'system_admin')
 
     const { id: rawId, action: rawAction } = req.params as { id: string, action: string }
     const id = sanitize(rawId)

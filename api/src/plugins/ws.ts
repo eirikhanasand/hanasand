@@ -398,7 +398,11 @@ function persistBrowserProviderResult(id: string, message: RawData) {
 async function finishProxiedBrowserRun(id: string, message: RawData) {
     const payload = parseSocketMessage(message)
     if (payload?.type === 'status') {
-        const failureStates = new Set(['failed', 'frame_capture_failed', 'unsafe_target_blocked', 'quota_exhausted'])
+        if (payload.state === 'frame_capture_failed') {
+            await logBrowserRunWarning(id, 'frame_capture_failed', payload.message || payload.reason)
+            return
+        }
+        const failureStates = new Set(['failed', 'unsafe_target_blocked', 'quota_exhausted'])
         if (failureStates.has(String(payload.state))) {
             await logBrowserRunFailure(id, `status_${String(payload.state)}`, payload.message || payload.url || payload.reason)
             if (payload.state === 'failed' || payload.state === 'unsafe_target_blocked' || payload.state === 'quota_exhausted') await finishBrowserRun(id, 'failed')
@@ -434,6 +438,21 @@ function socketMessageText(message: RawData) {
     if (message instanceof ArrayBuffer) return Buffer.from(message).toString('utf8')
     if (Array.isArray(message)) return Buffer.concat(message).toString('utf8')
     return String(message)
+}
+
+async function logBrowserRunWarning(id: string, reason: string, message: unknown) {
+    const text = typeof message === 'string' && message ? message : reason
+    console.warn(JSON.stringify({ level: 'warn', category: 'browser_run_warning', sessionId: id, reason, message: text }))
+    await recordLog({
+        level: 'warn',
+        message: `Browser run warning for ${id}: ${text}`,
+        metadata: {
+            category: 'browser_run_warning',
+            sessionId: id,
+            reason,
+            workerMessage: typeof message === 'string' ? message : '',
+        },
+    }).catch(() => undefined)
 }
 
 async function logBrowserRunFailure(id: string, reason: string, message: unknown) {
