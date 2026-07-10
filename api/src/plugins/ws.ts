@@ -326,7 +326,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             })
             upstream.on('close', (code, reason) => {
                 if (connection.readyState === WebSocket.OPEN) {
-                    if (!sawReady || !deliveredFrame || !sawTerminalMessage) void recordBrowserWorkerLogs(containerId, route, id)
+                    if (!sawReady || !deliveredFrame) void recordBrowserWorkerLogs(containerId, route, id)
                     void logBrowserRunClosure(id, sawReady, deliveredFrame, sawTerminalMessage, code, reason)
                     if (sawReady) {
                         void finishBrowserRun(id, 'ended')
