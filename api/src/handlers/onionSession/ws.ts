@@ -26,6 +26,12 @@ type BrokerMessage = {
     sessionToken?: string
     width?: number
     height?: number
+    userAgent?: string
+    locale?: string
+    timezoneId?: string
+    platform?: string
+    isMobile?: boolean
+    hasTouch?: boolean
     x?: number
     y?: number
     deltaX?: number
@@ -494,17 +500,21 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             context = await browser.newContext({
                 viewport: browserViewportForMessage(message),
                 ignoreHTTPSErrors: true,
-                userAgent: CHROME_USER_AGENT,
-                locale: 'en-US',
-                extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+                userAgent: browserUserAgentForMessage(message),
+                locale: browserLocaleForMessage(message),
+                timezoneId: browserTimezoneForMessage(message),
+                extraHTTPHeaders: { 'Accept-Language': acceptLanguageForLocale(browserLocaleForMessage(message)) },
+                isMobile: message.isMobile === true,
+                hasTouch: message.hasTouch === true,
                 acceptDownloads: true,
                 serviceWorkers: 'block',
                 permissions: network === 'regular' ? [] : ['clipboard-read', 'clipboard-write'],
             })
             trace('context_created')
-            await context.addInitScript(() => {
+            await context.addInitScript((platform) => {
                 Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
-            })
+                if (platform) Object.defineProperty(navigator, 'platform', { get: () => platform })
+            }, browserPlatformForMessage(message))
             await context.route('**/*', async (route) => {
                 const requestUrl = route.request().url()
                 const safety = await sandboxRequestSafety(requestUrl)
@@ -2324,9 +2334,36 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
     return Math.max(min, Math.min(max, Math.round(numeric)))
 }
 
-function browserViewportForMessage(message: Pick<BrokerMessage, 'width'>) {
-    const width = clampNumber(message.width, 640, 2400, DEFAULT_WIDTH)
-    return { width, height: Math.round(width * 9 / 16) }
+function browserViewportForMessage(message: Pick<BrokerMessage, 'width' | 'height'>) {
+    const width = clampNumber(message.width, 320, 2400, DEFAULT_WIDTH)
+    const height = clampNumber(message.height, 320, 2160, Math.round(width * 9 / 16))
+    return { width, height }
+}
+
+function browserUserAgentForMessage(message: Pick<BrokerMessage, 'userAgent'>) {
+    const value = typeof message.userAgent === 'string' ? message.userAgent.trim() : ''
+    if (!value || value.length > 512) return CHROME_USER_AGENT
+    return value
+}
+
+function browserLocaleForMessage(message: Pick<BrokerMessage, 'locale'>) {
+    const value = typeof message.locale === 'string' ? message.locale.trim() : ''
+    return /^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(value) ? value : 'en-US'
+}
+
+function browserTimezoneForMessage(message: Pick<BrokerMessage, 'timezoneId'>) {
+    const value = typeof message.timezoneId === 'string' ? message.timezoneId.trim() : ''
+    return /^[A-Za-z_]+\/[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)?$|^UTC$/.test(value) ? value : 'UTC'
+}
+
+function browserPlatformForMessage(message: Pick<BrokerMessage, 'platform'>) {
+    const value = typeof message.platform === 'string' ? message.platform.trim() : ''
+    return value && value.length <= 64 ? value : ''
+}
+
+function acceptLanguageForLocale(locale: string) {
+    const language = locale.split('-')[0]
+    return language && language !== locale ? `${locale},${language};q=0.9` : `${locale};q=0.9,en;q=0.8`
 }
 
 function mouseButton(value: unknown): 'left' | 'right' | 'middle' {

@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, Share2, ShieldCheck, Square, Trash2 } from 'lucide-react'
+import { Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
@@ -8,6 +8,18 @@ import { getCookie } from '@/utils/cookies/cookies'
 type SessionState = 'prompt' | 'queued' | 'connecting' | 'live' | 'ended' | 'failed' | 'unreachable'
 type SocketState = 'closed' | 'connecting' | 'open' | 'error'
 type BrowserNetwork = 'regular' | 'tor'
+type BrowserFingerprint = {
+    id: string
+    label: string
+    userAgent: string
+    width: number
+    height: number
+    locale: string
+    timezoneId: string
+    platform: string
+    isMobile?: boolean
+    hasTouch?: boolean
+}
 type SandboxCapacity = {
     activeSessions: number
     queuedSessions: number
@@ -173,6 +185,70 @@ const defaultProfiles: SandboxProfile[] = [
     { id: 'triage-default', name: 'SOC triage', tools: defaultTools },
     { id: 'browser-only', name: 'Browser only', tools: [] },
 ]
+const browserFingerprints: BrowserFingerprint[] = [
+    {
+        id: 'windows-11-chrome',
+        label: 'Windows 11 Chrome',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+        width: 1920,
+        height: 1080,
+        locale: 'en-US',
+        timezoneId: 'America/New_York',
+        platform: 'Win32',
+    },
+    {
+        id: 'iphone-17-safari',
+        label: 'iPhone 17 Safari',
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1',
+        width: 393,
+        height: 852,
+        locale: 'en-US',
+        timezoneId: 'America/New_York',
+        platform: 'iPhone',
+        isMobile: true,
+        hasTouch: true,
+    },
+    {
+        id: 'macbook-safari',
+        label: 'MacBook Safari',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+        width: 1512,
+        height: 982,
+        locale: 'en-US',
+        timezoneId: 'America/Los_Angeles',
+        platform: 'MacIntel',
+    },
+    {
+        id: 'ubuntu-firefox',
+        label: 'Ubuntu Firefox',
+        userAgent: 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0',
+        width: 1920,
+        height: 1080,
+        locale: 'en-US',
+        timezoneId: 'UTC',
+        platform: 'Linux x86_64',
+    },
+    {
+        id: 'powershell',
+        label: 'PowerShell',
+        userAgent: 'Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/7.5.0',
+        width: 1280,
+        height: 720,
+        locale: 'en-US',
+        timezoneId: 'UTC',
+        platform: 'Win32',
+    },
+    {
+        id: 'curl-macos',
+        label: 'macOS curl',
+        userAgent: 'curl/8.7.1',
+        width: 1280,
+        height: 720,
+        locale: 'en-US',
+        timezoneId: 'UTC',
+        platform: 'MacIntel',
+    },
+]
 
 function normalizeTarget(value: string) {
     const trimmed = value.trim()
@@ -199,16 +275,6 @@ function resolveToolUrl(template: string, target: string) {
     return template.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
 }
 
-function browserViewportSize(element: HTMLElement | null) {
-    const rect = element?.getBoundingClientRect()
-    if (!rect?.width || !rect.height) return null
-    const width = Math.round(rect.width)
-    return {
-        width,
-        height: Math.round(width * 9 / 16),
-    }
-}
-
 export default function BrowserPageClient() {
     const [formReady, setFormReady] = useState(false)
     const [target, setTarget] = useState('')
@@ -216,6 +282,13 @@ export default function BrowserPageClient() {
     const [socketState, setSocketState] = useState<SocketState>('closed')
     const [profiles, setProfiles] = useState<SandboxProfile[]>(defaultProfiles)
     const [selectedProfileId, setSelectedProfileId] = useState(defaultProfiles[0].id)
+    const [fingerprintId, setFingerprintId] = useState(browserFingerprints[0].id)
+    const [customUserAgent, setCustomUserAgent] = useState(browserFingerprints[0].userAgent)
+    const [customViewportWidth, setCustomViewportWidth] = useState(String(browserFingerprints[0].width))
+    const [customViewportHeight, setCustomViewportHeight] = useState(String(browserFingerprints[0].height))
+    const [customLocale, setCustomLocale] = useState(browserFingerprints[0].locale)
+    const [customTimezoneId, setCustomTimezoneId] = useState(browserFingerprints[0].timezoneId)
+    const [customPlatform, setCustomPlatform] = useState(browserFingerprints[0].platform)
     const [captures, setCaptures] = useState<Capture[]>([])
     const [activeImage, setActiveImage] = useState<string | null>(null)
     const [activeFrame, setActiveFrame] = useState<{ width: number; height: number }>({ width: 1280, height: 720 })
@@ -243,6 +316,17 @@ export default function BrowserPageClient() {
 
     const normalizedTarget = useMemo(() => normalizeTarget(target), [target])
     const selectedProfile = useMemo(() => profiles.find(profile => profile.id === selectedProfileId) || profiles[0], [profiles, selectedProfileId])
+    const selectedFingerprint = useMemo(() => browserFingerprints.find(item => item.id === fingerprintId) || browserFingerprints[0], [fingerprintId])
+    const browserMetadata = useMemo(() => ({
+        userAgent: customUserAgent.trim() || selectedFingerprint.userAgent,
+        width: clampUiNumber(customViewportWidth, 320, 3840, selectedFingerprint.width),
+        height: clampUiNumber(customViewportHeight, 320, 2160, selectedFingerprint.height),
+        locale: customLocale.trim() || selectedFingerprint.locale,
+        timezoneId: customTimezoneId.trim() || selectedFingerprint.timezoneId,
+        platform: customPlatform.trim() || selectedFingerprint.platform,
+        isMobile: selectedFingerprint.isMobile,
+        hasTouch: selectedFingerprint.hasTouch,
+    }), [customLocale, customPlatform, customTimezoneId, customUserAgent, customViewportHeight, customViewportWidth, selectedFingerprint])
     const summary = useMemo(() => buildAnalystSummary(normalizedTarget, captures, selectedProfile), [captures, normalizedTarget, selectedProfile])
     const toolCaptures = useMemo(() => captures.filter(capture => capture.kind === 'tool'), [captures])
     const latestPageImage = useMemo(() => captures.find(capture => capture.kind === 'page' && capture.image && !capture.frameQuality?.looksBlank)?.image || null, [captures])
@@ -421,11 +505,11 @@ export default function BrowserPageClient() {
     }, [])
 
     const sendBrowserResize = useCallback(() => {
-        const size = browserViewportSize(viewportRef.current)
+        const size = { width: browserMetadata.width, height: browserMetadata.height }
         const socket = socketRef.current
         if (!size || !socket || socket.readyState !== WebSocket.OPEN) return
         socket.send(JSON.stringify({ type: 'resize', ...size }))
-    }, [])
+    }, [browserMetadata.height, browserMetadata.width])
 
     useEffect(() => {
         if (sessionState === 'prompt') return
@@ -436,6 +520,17 @@ export default function BrowserPageClient() {
         observer.observe(element)
         return () => observer.disconnect()
     }, [sendBrowserResize, sessionState])
+
+    const applyFingerprint = useCallback((id: string) => {
+        const next = browserFingerprints.find(item => item.id === id) || browserFingerprints[0]
+        setFingerprintId(next.id)
+        setCustomUserAgent(next.userAgent)
+        setCustomViewportWidth(String(next.width))
+        setCustomViewportHeight(String(next.height))
+        setCustomLocale(next.locale)
+        setCustomTimezoneId(next.timezoneId)
+        setCustomPlatform(next.platform)
+    }, [])
 
     const startRun = useCallback((override?: { target?: string; network?: BrowserNetwork }) => {
         const url = normalizeTarget(override?.target ?? target)
@@ -471,7 +566,7 @@ export default function BrowserPageClient() {
                 target: url,
                 durationMinutes: 15,
                 profileTools,
-                ...browserViewportSize(viewportRef.current),
+                ...browserMetadata,
                 clientId: getOrCreateBrowserClientId(),
                 userId: getCookie('id') || undefined,
                 sessionToken: getCookie('access_token') || undefined,
@@ -611,7 +706,7 @@ export default function BrowserPageClient() {
                 pushEvent(String(payload.message || 'Sandbox navigation failed.'))
             }
         }
-    }, [pushConsoleEvent, pushEvent, selectedProfile.tools, selectedProfileId, target])
+    }, [browserMetadata, pushConsoleEvent, pushEvent, selectedProfile.tools, selectedProfileId, target])
 
     const stopRun = useCallback(() => {
         socketRef.current?.send(JSON.stringify({ type: 'end' }))
@@ -843,7 +938,7 @@ export default function BrowserPageClient() {
                                 </div>
                                 <Globe2 className='h-5 w-5 shrink-0 text-ui-primary' />
                             </div>
-                            <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]'>
+                            <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]'>
                                 <input
                                     id='sandbox-url'
                                     value={target}
@@ -856,6 +951,28 @@ export default function BrowserPageClient() {
                                     <Play className='h-4 w-4' />
                                     Start
                                 </button>
+                                <details className='relative'>
+                                    <summary className='grid h-12 w-12 cursor-pointer list-none place-items-center rounded-md border border-ui-border bg-ui-raised text-ui-text transition hover:border-ui-primary [&::-webkit-details-marker]:hidden' aria-label='Browser metadata'>
+                                        <SlidersHorizontal className='h-4 w-4' />
+                                    </summary>
+                                    <div className='absolute right-0 z-20 mt-2 grid w-[min(34rem,calc(100vw-2rem))] gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-xl'>
+                                        <div className='flex flex-wrap gap-2'>
+                                            {browserFingerprints.map(item => (
+                                                <button key={item.id} type='button' onClick={() => applyFingerprint(item.id)} className={`rounded-md border px-3 py-2 text-xs font-semibold transition ${fingerprintId === item.id ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'}`}>
+                                                    {item.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className='grid gap-2 sm:grid-cols-2'>
+                                            <input value={customViewportWidth} onChange={event => setCustomViewportWidth(event.target.value)} inputMode='numeric' aria-label='Viewport width' className='h-10 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none focus:border-ui-primary' />
+                                            <input value={customViewportHeight} onChange={event => setCustomViewportHeight(event.target.value)} inputMode='numeric' aria-label='Viewport height' className='h-10 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none focus:border-ui-primary' />
+                                            <input value={customLocale} onChange={event => setCustomLocale(event.target.value)} aria-label='Locale' className='h-10 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none focus:border-ui-primary' />
+                                            <input value={customTimezoneId} onChange={event => setCustomTimezoneId(event.target.value)} aria-label='Timezone' className='h-10 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none focus:border-ui-primary' />
+                                        </div>
+                                        <input value={customPlatform} onChange={event => setCustomPlatform(event.target.value)} aria-label='Platform' className='h-10 rounded-md border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none focus:border-ui-primary' />
+                                        <textarea value={customUserAgent} onChange={event => setCustomUserAgent(event.target.value)} aria-label='User agent' rows={3} className='min-h-20 rounded-md border border-ui-border bg-ui-canvas px-3 py-2 font-mono text-xs text-ui-text outline-none focus:border-ui-primary' />
+                                    </div>
+                                </details>
                             </div>
                             <details className='grid gap-3 rounded-md border border-ui-border bg-ui-raised p-3'>
                                 <summary className='flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden'>
@@ -2674,6 +2791,12 @@ function finiteNumber(value: unknown) {
     const numeric = Number(value)
     if (!Number.isFinite(numeric)) return null
     return Math.max(0, Math.round(numeric))
+}
+
+function clampUiNumber(value: unknown, min: number, max: number, fallback: number) {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric)) return fallback
+    return Math.max(min, Math.min(max, Math.round(numeric)))
 }
 
 function queueCopy(capacity: SandboxCapacity | null) {
