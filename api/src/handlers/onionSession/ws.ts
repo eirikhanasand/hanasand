@@ -285,6 +285,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let cachedFrameQuality: Awaited<ReturnType<typeof collectFrameQuality>> | null = null
     let cachedPageEvidence: Awaited<ReturnType<typeof collectPageEvidence>> | null = null
     let lastHeavyFrameAt = 0
+    let firstFrameAttemptedAt = 0
     let fastFrameInFlight = false
     let documentEvidencePromises: Promise<void>[] = []
 
@@ -1037,11 +1038,12 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         if (!page || closed || connection.readyState !== connection.OPEN) return
         if (!force && fastFrameInFlight) return
         fastFrameInFlight = !force
+        if (!lastFrame && !firstFrameAttemptedAt) firstFrameAttemptedAt = Date.now()
         try {
             const buffer = await withTimeout(page.screenshot({ type: 'jpeg', quality: 68, animations: 'disabled', timeout: 2_000 }), 2_200, null)
             if (!buffer) {
                 trace('frame_capture_timeout', { reason })
-                if (!force && lastFrame) return
+                if (lastFrame || Date.now() - firstFrameAttemptedAt < 15_000) return
                 send({ type: 'status', state: 'frame_capture_failed', sessionId, reason, message: 'Browser frame capture timed out.' })
                 return
             }
@@ -1106,7 +1108,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             trace('frame_sent', { reason, url: page.url(), bytes: buffer.length })
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
-            if (!force && lastFrame) {
+            if (lastFrame || Date.now() - firstFrameAttemptedAt < 15_000) {
                 trace('frame_capture_error', { reason, message })
                 return
             }
