@@ -1004,7 +1004,7 @@ function SandboxTabStrip({
     onSelect: (tab: string) => void
 }) {
     return (
-        <div className='grid grid-cols-4 gap-1.5 border-b border-ui-border bg-ui-panel px-2 py-2 md:flex md:justify-center md:gap-2 md:overflow-x-auto md:px-3'>
+        <div className='grid grid-cols-4 gap-1 border-b border-ui-border bg-ui-panel px-1 py-2 sm:gap-1.5 sm:px-2 md:flex md:justify-center md:gap-2 md:overflow-x-auto md:px-3'>
             <SandboxTabButton
                 active={activeTab === 'browser'}
                 label='Browser'
@@ -1032,9 +1032,9 @@ function SandboxTabButton({ active, label, status, onClick }: { active: boolean;
         <button
             type='button'
             onClick={onClick}
-            className={`grid min-w-0 gap-1 rounded-md border px-2 py-2 text-left transition md:min-w-[9rem] md:shrink-0 md:px-3 ${active ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary/60'}`}
+            className={`grid min-w-0 gap-1 rounded-md border px-1 py-2 text-left transition sm:px-2 md:min-w-[9rem] md:shrink-0 md:px-3 ${active ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary/60'}`}
         >
-            <span className='truncate text-xs font-semibold md:text-sm'>{label}</span>
+            <span className='truncate text-[11px] font-semibold sm:text-xs md:text-sm'>{label}</span>
             <span className='truncate text-[11px] text-ui-muted'>{status}</span>
         </button>
     )
