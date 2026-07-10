@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="${HANASAND_LOGIN_MONITOR_DIR:-/home/hanasand/hanasand-deploy-64d9339/ops/login-ui-monitor}"
+APP_DIR="${HANASAND_LOGIN_MONITOR_DIR:-/home/hanasand/hanasand/ops/login-ui-monitor}"
 ENV_FILE="${HANASAND_LOGIN_MONITOR_ENV:-/home/hanasand/monitor-state/login-ui-monitor.env}"
 LOG_FILE="${HANASAND_LOGIN_MONITOR_LOG:-/home/hanasand/monitor-state/login-ui-monitor.log}"
 LOCK_FILE="${HANASAND_LOGIN_MONITOR_LOCK:-/tmp/hanasand-login-ui-monitor.lock}"

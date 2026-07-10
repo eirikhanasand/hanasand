@@ -64,8 +64,8 @@ Example: if the user asks to make audit-only jobs runnable, do not only relabel 
 - Do not stop at 5 percent of the ask. Keep going on the obvious next 20 percent inside the same scope when that is what makes the workflow usable.
 - Final implementation handoffs must include: `BASELINE dirty files:`, `FINAL dirty files:`, `Commit:`, `Checks:`, `Live probes:`, and `Remaining blockers:`.
 - Always commit agent-owned changes. Dirty worktree baseline is not a reason to skip commit; leave unrelated paths unstaged and report them.
-- Always push committed work to both GitHub and Forgejo, keep local main aligned, and deploy from the real Hanasand directory on the server.
-- Never deploy from a temp folder, copied checkout, archive, worktree, or generated staging directory.
+- Always push committed work to both GitHub and Forgejo, keep local main aligned, and deploy from `/home/hanasand/hanasand` on the production server.
+- Never deploy from `*-deploy*`, `*deploy-*`, temp, copied checkout, archive, worktree, or generated staging directories. The Docker Compose `deploy-path-guard` service must remain in the deploy graph and blocks production deploys from any path other than `/home/hanasand/hanasand`.
 - Never use `rsync` for Hanasand deployment.
 - Never copy `.env`, env folders, secret folders, or environment material as part of deployment. The server's real checkout and existing server environment are the source of truth.
 - After code edits, run type checks and the focused scripts below instead of manually reviewing every touched file.

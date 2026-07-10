@@ -1,4 +1,28 @@
 services:
+  deploy-path-guard:
+    image: alpine:3.22
+    working_dir: /workspace
+    command: >
+      sh -ec 'host="$$(cat /host/etc-hostname 2>/dev/null || hostname)";
+      if [ "$$host" = "hanasand" ] || [ "$$host" = "inspur" ]; then
+        test "$$HANASAND_DEPLOY_GUARD_CWD" = "/home/hanasand/hanasand";
+        test -e /workspace/.git;
+      fi;
+      sleep infinity'
+    environment:
+      HANASAND_DEPLOY_GUARD_CWD: ${PWD:-}
+    volumes:
+      - .:/workspace:ro
+      - /etc/hostname:/host/etc-hostname:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "host=$$(cat /host/etc-hostname 2>/dev/null || hostname); if [ \"$$host\" = \"hanasand\" ] || [ \"$$host\" = \"inspur\" ]; then test \"$$HANASAND_DEPLOY_GUARD_CWD\" = \"/home/hanasand/hanasand\" && test -e /workspace/.git; fi",
+        ]
+      interval: 5s
+      retries: 3
+
   frontend:
     container_name: hanasand
     image: hanasand
@@ -29,6 +53,9 @@ services:
       retries: 5
     networks:
       - hanasandnet
+    depends_on:
+      deploy-path-guard:
+        condition: service_healthy
 
   api:
     container_name: hanasand_api
@@ -83,6 +110,8 @@ services:
       - pwnednet
       - browsernet
     depends_on:
+      deploy-path-guard:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       stalwart:
@@ -144,6 +173,8 @@ services:
     networks:
       - browsernet
     depends_on:
+      deploy-path-guard:
+        condition: service_healthy
       onion-tor:
         condition: service_started
 
@@ -159,6 +190,9 @@ services:
     networks:
       - hanasandnet
       - browsernet
+    depends_on:
+      deploy-path-guard:
+        condition: service_healthy
 
   ai-parser-bridge:
     container_name: hanasand_ai_parser_bridge
@@ -183,6 +217,9 @@ services:
       start_period: 10s
     networks:
       - hanasandnet
+    depends_on:
+      deploy-path-guard:
+        condition: service_healthy
 
   ai-model-client:
     container_name: hanasand_ai_model_client
@@ -206,6 +243,8 @@ services:
       start_period: 10s
     network_mode: host
     depends_on:
+      deploy-path-guard:
+        condition: service_healthy
       api:
         condition: service_healthy
 
@@ -264,6 +303,8 @@ services:
     networks:
       - hanasandnet
     depends_on:
+      deploy-path-guard:
+        condition: service_healthy
       ai-parser-bridge:
         condition: service_started
 
@@ -288,6 +329,9 @@ services:
       retries: 5
     networks:
       - hanasandnet
+    depends_on:
+      deploy-path-guard:
+        condition: service_healthy
 
   stalwart:
     image: stalwartlabs/stalwart:latest
@@ -319,7 +363,7 @@ volumes:
     name: hanasand_postgres_data
   ti_scraper_evidence:
     external: true
-    name: hanasand-deploy-64d9339_ti_scraper_evidence
+    name: hanasand_ti_scraper_evidence
 
 networks:
   pwnednet:

@@ -136,10 +136,10 @@ For every future prompt, especially product/UI work, use this operating loop:
 Every implementation prompt ends with a real commit and deployment. Do not leave agent-authored code or docs uncommitted because the tree was dirty; stage only the intended paths and leave unrelated dirty files unstaged.
 
 - Always commit the agent-owned diff locally, then push the commit to both GitHub and Forgejo.
-- Always deploy from the real Hanasand directory on the server. Never deploy from a temp folder, copied checkout, archive, worktree, or generated staging directory.
+- Always deploy from the canonical Hanasand directory on the production server: `/home/hanasand/hanasand`. Never deploy from `*-deploy*`, `*deploy-*`, temp, copied checkout, archive, worktree, or generated staging directories.
 - Never use `rsync` for Hanasand deployment.
 - Never copy `.env`, env folders, secret folders, or environment material as part of deployment. The server's real checkout and existing server environment are the source of truth.
-- On the server, update the real Hanasand checkout from git, verify it is on the intended commit/main branch, then rebuild/restart from that directory only.
+- On the server, update `/home/hanasand/hanasand` from git, verify it is on the intended commit/main branch, then rebuild/restart from that directory only. The Docker Compose `deploy-path-guard` service must remain in the deploy graph and blocks production deploys from any other directory.
 - Keep local `main`, GitHub, Forgejo, and the deployed server checkout aligned to the same commit unless a command is blocked; report the exact blocker and commit hash.
 
 Do not say a task is done because scaffolding exists. The user must be able to do meaningful work in the product. If the result still feels like dashboard cards instead of a usable application, continue.

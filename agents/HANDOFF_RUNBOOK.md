@@ -23,17 +23,18 @@ Infer "Hanasand server" from local context before asking the parent agent:
 - shell alias: `ssh hanasand`
 - SSH config host: `Host hanasand`
 - current target: `hanasand@hanasand.com`, port `222`
-- dirty working repo path: `/home/hanasand/hanasand`
-- clean deploy checkout path: `/home/hanasand/hanasand-deploy-64d9339`
+- canonical deploy checkout path: `/home/hanasand/hanasand`
 - OpenResty path: `/home/hanasand/openresty`
-- expected app deploy path: `cd /home/hanasand/hanasand-deploy-64d9339 && git fetch github main && git pull --ff-only github main`
+- expected app deploy path: `cd /home/hanasand/hanasand && git fetch github main && git pull --ff-only github main`
 - expected app restart from the deploy checkout: `docker compose -p hanasand up -d --build`
 - browser sandbox changes must build the separate worker image, reinstall and verify the browser egress firewall, then restart API with `BROWSER_SANDBOX_EGRESS_FIREWALL_READY=1` before traffic is sent to the sandbox: `docker compose -p hanasand --profile unsafe-dev-only build api browser-worker && sudo ops/browser-worker/install-egress-firewall.sh hanasand_browsernet && sudo ops/browser-worker/verify-egress-firewall.sh hanasand_browsernet && docker compose -p hanasand up -d --no-deps api`
 - after starting a browser sandbox session, verify the live worker isolation with: `sudo ops/browser-worker/verify-runtime-isolation.sh`
 - if only the web/API images need replacing after a successful build, use `docker compose -p hanasand up -d --no-deps frontend api`
-- expected public archive smoke after app deploy: `cd /home/hanasand/hanasand-deploy-64d9339/frontend && PUBLIC_ARCHIVE_BASE_URL=http://127.0.0.1:3000 bun run test:public-archive`
+- expected public archive smoke after app deploy: `cd /home/hanasand/hanasand/frontend && PUBLIC_ARCHIVE_BASE_URL=http://127.0.0.1:3000 bun run test:public-archive`
 - active web server: Docker container `openresty`
 - expected OpenResty verification: `cd /home/hanasand/openresty && docker compose exec -T openresty openresty -t`
+
+Do not create, use, or preserve `*-deploy*`, `*deploy-*`, copied checkout, worktree, archive, temp, or generated deployment directories for Hanasand app deploys. On the `hanasand`/`inspur` production server, the Docker Compose `deploy-path-guard` service must stay enabled and blocks app deploys from any path other than `/home/hanasand/hanasand`.
 
 For upload-limit changes, update the local `/Users/eirikhanasand/Desktop/personal/openresty` repo, push it, deploy `/home/hanasand/openresty`, then verify the CDN server block contains `client_max_body_size 50M;`.
 

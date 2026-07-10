@@ -126,11 +126,8 @@ export const managedCronDefinitions: ManagedCronDefinition[] = [
         name: 'Database dashboard monitor',
         description: 'Logs in to the production dashboard, verifies live database metrics stay non-zero and explicit, and sends Discord alerts on repeated failure.',
         defaultSchedule: '* * * * *',
-        command: '/home/hanasand/hanasand-deploy-clean/ops/db-dashboard-monitor/run-db-dashboard-monitor.sh',
-        legacyCommands: [
-            '/home/hanasand/hanasand-deploy-64d9339/ops/db-dashboard-monitor/run-db-dashboard-monitor.sh',
-            '/home/hanasand/hanasand-deploy-64d9339/ops/db-dashboard-monitor/run-db-dashboard-monitor.sh # id=hanasand-db-dashboard-monitor',
-        ],
+        command: '/home/hanasand/hanasand/ops/db-dashboard-monitor/run-db-dashboard-monitor.sh',
+        legacyCommands: [],
         host: 'hanasand',
         category: 'Backup/Database',
         service: 'database-monitor',
