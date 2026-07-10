@@ -206,6 +206,7 @@ function browserViewportSize(element: HTMLElement | null) {
 }
 
 export default function BrowserPageClient() {
+    const [formReady, setFormReady] = useState(false)
     const [target, setTarget] = useState('')
     const [sessionState, setSessionState] = useState<SessionState>('prompt')
     const [socketState, setSocketState] = useState<SocketState>('closed')
@@ -245,6 +246,10 @@ export default function BrowserPageClient() {
     const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool, normalizedTarget) : undefined
     const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage || latestPageImage
     const activeViewportUrl = activeTool ? activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : activeUrl || normalizedTarget
+
+    useEffect(() => {
+        setFormReady(true)
+    }, [])
 
     const pushEvent = useCallback((event: string) => {
         setEvents(current => [event, ...current].slice(0, 8))
@@ -834,9 +839,10 @@ export default function BrowserPageClient() {
                                     value={target}
                                     onChange={event => setTarget(event.target.value)}
                                     placeholder='URL to investigate'
+                                    disabled={!formReady}
                                     className='h-12 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 font-mono text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                                 />
-                                <button type='submit' disabled={!normalizedTarget} className='inline-flex h-12 items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
+                                <button type='submit' disabled={!formReady || !normalizedTarget} className='inline-flex h-12 items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                                     <Play className='h-4 w-4' />
                                     Start
                                 </button>
