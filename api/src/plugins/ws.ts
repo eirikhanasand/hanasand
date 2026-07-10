@@ -260,6 +260,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     let runPrepared = false
     let sawReady = false
     let deliveredFrame = false
+    let sawTerminalMessage = false
 
     const closeBoth = () => {
         if (closed) return
@@ -316,18 +317,21 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
                 const payload = parseSocketMessage(message)
                 if (payload?.type === 'ready') sawReady = true
                 if (payload?.type === 'frame') deliveredFrame = true
+                if (payload?.type === 'ended') sawTerminalMessage = true
                 void persistBrowserProviderResult(id, message)
                 void finishProxiedBrowserRun(id, message)
                 if (connection.readyState === WebSocket.OPEN) connection.send(socketMessageText(message))
             })
-            upstream.on('close', () => {
+            upstream.on('close', (code, reason) => {
                 if (connection.readyState === WebSocket.OPEN) {
                     void recordBrowserWorkerLogs(containerId, route, id)
-                    void logBrowserRunClosure(id, sawReady, deliveredFrame)
+                    void logBrowserRunClosure(id, sawReady, deliveredFrame, sawTerminalMessage, code, reason)
                     if (sawReady) {
                         void finishBrowserRun(id, 'ended')
                         connection.close()
                     } else {
+                        void logBrowserRunFailure(id, 'worker_closed_before_ready', closeMessage(code, reason))
+                        void finishBrowserRun(id, 'failed')
                         sendErrorThenClose(connection, 'Isolated browser worker closed before completing the run.')
                     }
                 }
@@ -335,6 +339,8 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             })
             upstream.on('error', error => {
                 void recordWebsocketFailure(`browser-session-upstream-${route}`, id, error)
+                void logBrowserRunFailure(id, 'worker_connection_error', error instanceof Error ? error.message : String(error))
+                void finishBrowserRun(id, 'failed')
                 if (connection.readyState === WebSocket.OPEN) sendErrorThenClose(connection, `Isolated browser worker connection failed: ${error instanceof Error ? error.message : String(error)}`)
                 else closeBoth()
             })
@@ -347,6 +353,8 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
                 closeBoth()
             }
             void recordWebsocketFailure(`browser-session-create-${route}`, id, error)
+            void logBrowserRunFailure(id, 'worker_start_failed', message)
+            void finishBrowserRun(id, 'failed')
         })
 }
 
@@ -389,12 +397,20 @@ function persistBrowserProviderResult(id: string, message: RawData) {
 
 async function finishProxiedBrowserRun(id: string, message: RawData) {
     const payload = parseSocketMessage(message)
-    if (payload?.type === 'status' && payload.state === 'failed') {
-        await logBrowserRunFailure(id, 'status_failed', payload.message)
+    if (payload?.type === 'status') {
+        const failureStates = new Set(['failed', 'frame_capture_failed', 'unsafe_target_blocked', 'quota_exhausted'])
+        if (failureStates.has(String(payload.state))) {
+            await logBrowserRunFailure(id, `status_${String(payload.state)}`, payload.message || payload.url || payload.reason)
+            if (payload.state === 'failed' || payload.state === 'unsafe_target_blocked' || payload.state === 'quota_exhausted') await finishBrowserRun(id, 'failed')
+            return
+        }
+    }
+    if (payload?.type === 'navigation_error') {
+        await logBrowserRunFailure(id, 'navigation_error', payload.message || payload.target)
         return
     }
     if (payload?.type === 'ended') {
-        const failed = payload.reason === 'launch_failed'
+        const failed = payload.reason === 'launch_failed' || payload.reason === 'quota_exhausted'
         if (failed) await logBrowserRunFailure(id, String(payload.reason), payload.message)
         await finishBrowserRun(id, failed ? 'failed' : 'ended')
     }
@@ -421,9 +437,11 @@ function socketMessageText(message: RawData) {
 }
 
 async function logBrowserRunFailure(id: string, reason: string, message: unknown) {
+    const text = typeof message === 'string' && message ? message : reason
+    console.warn(JSON.stringify({ level: 'warn', category: 'browser_run_failed', sessionId: id, reason, message: text }))
     await recordLog({
         level: 'warn',
-        message: `Browser run failed for ${id}: ${typeof message === 'string' && message ? message : reason}`,
+        message: `Browser run failed for ${id}: ${text}`,
         metadata: {
             category: 'browser_run_failed',
             sessionId: id,
@@ -433,17 +451,26 @@ async function logBrowserRunFailure(id: string, reason: string, message: unknown
     }).catch(() => undefined)
 }
 
-async function logBrowserRunClosure(id: string, sawReady: boolean, deliveredFrame: boolean) {
+async function logBrowserRunClosure(id: string, sawReady: boolean, deliveredFrame: boolean, sawTerminalMessage: boolean, code: number, reason: Buffer) {
+    const reasonText = closeMessage(code, reason)
     await recordLog({
         level: deliveredFrame ? 'info' : 'warn',
-        message: `Browser worker closed for ${id}${deliveredFrame ? '' : ' before a frame was delivered'}.`,
+        message: `Browser worker closed for ${id}${deliveredFrame ? '' : ' before a frame was delivered'}: ${reasonText}.`,
         metadata: {
             category: 'browser_run_closed',
             sessionId: id,
             sawReady,
             deliveredFrame,
+            sawTerminalMessage,
+            closeCode: code,
+            closeReason: reasonText,
         },
     }).catch(() => undefined)
+}
+
+function closeMessage(code: number, reason: Buffer) {
+    const text = reason.toString('utf8')
+    return text ? `${code} ${text}` : String(code)
 }
 
 function providerRunResultValue(analysis: any, error = ''): BrowserProviderRunResult | null {

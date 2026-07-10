@@ -1,7 +1,7 @@
 'use client'
 
 import { Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, Share2, ShieldCheck, Square, Trash2 } from 'lucide-react'
-import { type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 
@@ -234,6 +234,7 @@ export default function BrowserPageClient() {
     const socketRef = useRef<WebSocket | null>(null)
     const viewportRef = useRef<HTMLDivElement | null>(null)
     const imageRef = useRef<HTMLImageElement | null>(null)
+    const touchFrameRef = useRef<{ clientX: number; clientY: number; lastX: number; lastY: number; moved: boolean } | null>(null)
 
     const normalizedTarget = useMemo(() => normalizeTarget(target), [target])
     const selectedProfile = useMemo(() => profiles.find(profile => profile.id === selectedProfileId) || profiles[0], [profiles, selectedProfileId])
@@ -655,6 +656,40 @@ export default function BrowserPageClient() {
         sendBrowserInput({ type: 'pointer', event: event.type, ...point, button: event.button, buttons: event.buttons })
     }, [activeTool, browserPoint, sendBrowserInput])
 
+    const touchBrowserFrame = useCallback((event: TouchEvent<HTMLDivElement>) => {
+        if (activeTool) return
+        const touch = event.changedTouches[0]
+        if (!touch) return
+        const point = browserPoint(touch.clientX, touch.clientY)
+        if (!point) return
+        event.preventDefault()
+        event.stopPropagation()
+        viewportRef.current?.focus()
+
+        if (event.type === 'touchstart') {
+            touchFrameRef.current = { clientX: touch.clientX, clientY: touch.clientY, lastX: touch.clientX, lastY: touch.clientY, moved: false }
+            sendBrowserInput({ type: 'pointer', event: 'pointerdown', ...point, button: 0, buttons: 1 })
+            return
+        }
+
+        const touchState = touchFrameRef.current
+        if (!touchState) return
+        const deltaX = touch.clientX - touchState.lastX
+        const deltaY = touch.clientY - touchState.lastY
+        touchState.lastX = touch.clientX
+        touchState.lastY = touch.clientY
+        if (Math.abs(touch.clientX - touchState.clientX) > 6 || Math.abs(touch.clientY - touchState.clientY) > 6) touchState.moved = true
+
+        if (event.type === 'touchmove') {
+            sendBrowserInput({ type: 'wheel', ...point, deltaX: -deltaX, deltaY: -deltaY })
+            return
+        }
+
+        sendBrowserInput({ type: 'pointer', event: 'pointerup', ...point, button: 0, buttons: 0 })
+        if (!touchState.moved && event.type === 'touchend') sendBrowserInput({ type: 'click', ...point, button: 0 })
+        touchFrameRef.current = null
+    }, [activeTool, browserPoint, sendBrowserInput])
+
     const keyBrowserFrame = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
         const keyPayload = {
             type: 'key',
@@ -881,6 +916,10 @@ export default function BrowserPageClient() {
                                     if (event.buttons) pointerBrowserFrame(event)
                                 }}
                                 onPointerUp={pointerBrowserFrame}
+                                onTouchStart={touchBrowserFrame}
+                                onTouchMove={touchBrowserFrame}
+                                onTouchEnd={touchBrowserFrame}
+                                onTouchCancel={touchBrowserFrame}
                             >
                                 {activeTool && activeToolCapture ? (
                                     <ProviderViewportEvidence tool={activeTool} capture={activeToolCapture} />
@@ -904,6 +943,7 @@ export default function BrowserPageClient() {
                                 )}
                             </div>
                         </section>
+                        <RunOutcomeCard summary={summary} captures={captures} sessionState={sessionState} />
                         <QuickTriageStrip summary={summary} toolCaptures={toolCaptures} toolCount={selectedProfile.tools.length} />
                         <aside className='grid gap-4 xl:grid-cols-3'>
                             <CapacityPanel capacity={capacity} sessionState={sessionState} />
@@ -944,7 +984,7 @@ function SandboxTabStrip({
     onSelect: (tab: string) => void
 }) {
     return (
-        <div className='flex justify-start gap-2 overflow-x-auto border-b border-ui-border bg-ui-panel px-3 py-2 md:justify-center'>
+        <div className='grid grid-cols-2 gap-2 border-b border-ui-border bg-ui-panel px-3 py-2 sm:grid-cols-4 md:flex md:justify-center md:overflow-x-auto'>
             <SandboxTabButton
                 active={activeTab === 'browser'}
                 label='Browser'
@@ -972,7 +1012,7 @@ function SandboxTabButton({ active, label, status, onClick }: { active: boolean;
         <button
             type='button'
             onClick={onClick}
-            className={`grid min-w-[9rem] shrink-0 gap-1 rounded-md border px-3 py-2 text-left transition ${active ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary/60'}`}
+            className={`grid min-w-0 gap-1 rounded-md border px-3 py-2 text-left transition md:min-w-[9rem] md:shrink-0 ${active ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary/60'}`}
         >
             <span className='truncate text-sm font-semibold'>{label}</span>
             <span className='truncate text-[11px] text-ui-muted'>{status}</span>
@@ -1552,6 +1592,30 @@ function QuickTriageStrip({ summary, toolCaptures, toolCount }: { summary: Retur
     )
 }
 
+function RunOutcomeCard({ summary, captures, sessionState }: { summary: ReturnType<typeof buildAnalystSummary>; captures: Capture[]; sessionState: SessionState }) {
+    if (!captures.length && sessionState !== 'failed') return null
+    const pageCaptures = captures.filter(capture => capture.kind === 'page').length
+    const vt = summary.rows.find(row => row.label === 'VirusTotal vendors')?.value || 'unknown'
+    const urlquery = summary.rows.find(row => row.label === 'urlquery alerts')?.value || 'unknown'
+    const domains = summary.latestNetwork?.uniqueDomainCount ?? summary.latestNetwork?.domains?.length ?? 0
+    const requests = summary.latestNetwork?.requestCount ?? 0
+    return (
+        <section className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3 md:grid-cols-[minmax(0,1fr)_auto]'>
+            <div className='min-w-0'>
+                <p className='text-xs font-semibold uppercase text-ui-primary'>Investigation result</p>
+                <h2 className='mt-1 text-lg font-semibold text-ui-text'>{sessionState === 'failed' && !pageCaptures ? 'Run failed before browser evidence was captured' : summary.brief.verdict}</h2>
+                <p className='mt-1 text-sm leading-6 text-ui-muted'>{sessionState === 'failed' && !pageCaptures ? 'No browser frame, provider verdict, or network evidence was available for this run.' : summary.brief.impact}</p>
+            </div>
+            <div className='grid grid-cols-2 gap-2 text-xs text-ui-muted sm:grid-cols-4 md:min-w-[26rem]'>
+                <EvidenceFact label='VT' value={vt} />
+                <EvidenceFact label='urlquery' value={urlquery} />
+                <EvidenceFact label='Domains' value={String(domains)} />
+                <EvidenceFact label='Requests' value={String(requests)} />
+            </div>
+        </section>
+    )
+}
+
 function EvidenceFact({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
     return (
         <div className='min-w-0 rounded-md border border-ui-border bg-ui-panel p-2'>
@@ -2077,7 +2141,7 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
             ? 'Profile tools produced captures, but no parsed provider verdict was returned.'
             : 'No external provider result has been parsed yet; provider panels show configured tools and blockers.'
     const narrative = pageCaptures.length
-        ? `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. ${providerNarrative} ${suspiciousCaptures.length ? `Rendered evidence requires review: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'Rendered page evidence is neutral or inconclusive.'} ${threatNarrative} ${comments.length ? `Source comments observed: ${comments.join(' ')}` : 'No community comments were extracted from provider or page evidence.'}`
+        ? `The sandbox loaded ${target || 'the submitted URL'} and captured ${pageCaptures.length} browser state${pageCaptures.length === 1 ? '' : 's'}${redirected ? ' across at least one URL change' : ''}. ${providerNarrative} ${suspiciousCaptures.length ? `Rendered evidence requires review: ${suspiciousCaptures.flatMap(capture => capture.evidence?.reasons || []).slice(0, 3).join('; ')}.` : 'No signs of suspicious activity were found in the captured browser evidence.'} ${threatNarrative} ${comments.length ? `Source comments observed: ${comments.join(' ')}` : 'No community comments were extracted from provider or page evidence.'}`
         : `The sandbox is preparing ${target || 'the submitted URL'}. No success verdict is shown until a browser frame, provider result, or explicit blocker is captured for profile "${profile.name}".`
     const brief = buildAnalystBrief({
         target,
@@ -2209,27 +2273,28 @@ function buildAnalystBrief(input: {
     const vtFlagged = input.virusTotal?.vendorFlagged || 0
     const urlqueryAlerts = input.urlquery?.alertCount || 0
     const highSignal = Boolean(vtFlagged || urlqueryAlerts || input.suspiciousCaptureCount || input.suspiciousDeobfuscationCount)
-    const mediumSignal = Boolean(input.redirected || input.obfuscatedScriptCount || input.threatAssociations.length)
+    const meaningfulThreatContext = input.threatAssociations.some(item => item.confidence !== 'low')
+    const mediumSignal = Boolean(input.obfuscatedScriptCount || meaningfulThreatContext)
     const verdict = highSignal
         ? 'Review required - detection source present'
         : mediumSignal
             ? 'Review required'
             : input.pageCaptureCount
-                ? 'No malicious verdict from available evidence'
+                ? 'No signs of suspicious activity'
                 : 'Insufficient external evidence'
     const impact = highSignal
         ? `External detections, suspicious rendered evidence, or decoded script indicators were observed for ${input.target || 'the submitted URL'}.`
         : mediumSignal
-            ? 'The run contains redirect, obfuscation, threat-context, or blocked-request signals that need analyst review.'
+            ? 'The run contains obfuscation or meaningful threat-context signals that need analyst review.'
             : input.pageCaptureCount
-                ? 'Captured browser and tool evidence does not currently show a confirmed malicious chain.'
+                ? 'Captured browser and provider evidence did not show suspicious activity.'
                 : 'No browser evidence has been captured yet.'
     const recommendedAction = highSignal
         ? 'Open the evidence workspace, copy indicators, and create or update the alert with the observed route and sourced evidence.'
         : mediumSignal
-            ? 'Review redirects, contacted domains, and WebCrack output before allowing user access.'
+            ? 'Review the suspicious evidence, contacted domains, and WebCrack output before allowing user access.'
             : input.pageCaptureCount
-                ? 'Record as no malicious verdict from available evidence unless new provider or network evidence appears.'
+                ? 'Record the run as no signs of suspicious activity based on the captured evidence.'
                 : 'Wait for the first page frame, provider result, or explicit blocker.'
     const confidence = input.confidence
         ? `${formatConfidencePercent(input.confidence)} evidence confidence`
