@@ -21,6 +21,7 @@ type PendingUpdates = {
 }
 
 const messageBuffer: Buffer[] = []
+const browserRunWarningLogTimes = new Map<string, number>()
 
 export const pwnedClients = new Map<string, Set<WebSocket>>()
 export const testClients = new Map<string, Set<WebSocket>>()
@@ -441,6 +442,15 @@ function socketMessageText(message: RawData) {
 }
 
 async function logBrowserRunWarning(id: string, reason: string, message: unknown) {
+    const key = `${id}:${reason}`
+    const now = Date.now()
+    const last = browserRunWarningLogTimes.get(key) || 0
+    if (now - last < 60_000) return
+    browserRunWarningLogTimes.set(key, now)
+    if (browserRunWarningLogTimes.size > 1000) {
+        const oldestKey = browserRunWarningLogTimes.keys().next().value
+        if (oldestKey) browserRunWarningLogTimes.delete(oldestKey)
+    }
     const text = typeof message === 'string' && message ? message : reason
     console.warn(JSON.stringify({ level: 'warn', category: 'browser_run_warning', sessionId: id, reason, message: text }))
     await recordLog({
