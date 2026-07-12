@@ -6,6 +6,7 @@ function readOptional(url: URL) {
 }
 
 const ws = readFileSync(new URL('../src/plugins/ws.ts', import.meta.url), 'utf8')
+const rateLimit = readFileSync(new URL('../src/plugins/rateLimit.ts', import.meta.url), 'utf8')
 const index = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
 const onionWs = readFileSync(new URL('../src/handlers/onionSession/ws.ts', import.meta.url), 'utf8')
 const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8')
@@ -63,6 +64,8 @@ assert.match(ws, /SELKIES_FRAMERATE=30/, 'browser worker should target real-time
 assert.match(onionWs, /resizeBrowserDisplay\(viewport\)/, 'the captured X display should follow the selected browser resolution')
 assert.match(ws, /type: 'stream_ready'[\s\S]*transport: 'webrtc'/, 'browser proxy should announce the WebRTC transport to the client')
 assert.doesNotMatch(onionWs, /setInterval\([\s\S]{0,120}sendFrame/, 'Playwright screenshots must not drive the live rendering loop')
+assert.match(rateLimit, /isBrowserStreamPath\(path\)/, 'token-protected WebRTC stream assets should not exhaust the generic REST rate limit')
+assert.match(rateLimit, /path\.startsWith\('\/api\/browser-stream\/'\)/, 'only browser stream routes should receive the WebRTC asset rate-limit exemption')
 assert.doesNotMatch(appRuntimeStage, /\b(chromium|xvfb)\b/, 'main API image should not install Chromium or Xvfb')
 for (const source of [handoff, runbook].filter(Boolean)) {
     assert.match(source, /--profile unsafe-dev-only build api browser-worker/, 'browser deploy path should build the separate browser-worker image')

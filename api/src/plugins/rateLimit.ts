@@ -43,7 +43,7 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
 
     fastify.addHook('preHandler', async (req: FastifyRequest, res: FastifyReply) => {
         const path = normalizeRequestPath(req)
-        if (req.headers.upgrade?.toLowerCase() === 'websocket' || isInfrastructureWebSocketPath(path)) {
+        if (req.headers.upgrade?.toLowerCase() === 'websocket' || isInfrastructureWebSocketPath(path) || isBrowserStreamPath(path)) {
             return
         }
 
@@ -122,6 +122,10 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
 
 function isInfrastructureWebSocketPath(path: string) {
     return path.startsWith('/api/client/ws/')
+}
+
+function isBrowserStreamPath(path: string) {
+    return path.startsWith('/api/browser-stream/')
 }
 
 function isTrustedStatusIngest(req: FastifyRequest, path: string) {
