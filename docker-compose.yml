@@ -128,7 +128,7 @@ services:
       - unsafe-dev-only
     image: hanasand_browser_worker
     mem_limit: 3g
-    cpus: "2.0"
+    cpus: "3.0"
     init: true
     restart: always
     build:
