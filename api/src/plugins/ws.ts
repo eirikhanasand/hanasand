@@ -281,7 +281,7 @@ function proxyBrowserStreamWebSocket(
     }
 
     const upstream = new WebSocket(`ws://${stream.ip}:8080${browserStreamUpstreamPath(req)}`)
-    const pending: RawData[] = []
+    const pending: string[] = []
     let closed = false
     const closeBoth = () => {
         if (closed) return
@@ -293,11 +293,12 @@ function proxyBrowserStreamWebSocket(
         while (pending.length && upstream.readyState === WebSocket.OPEN) upstream.send(pending.shift()!)
     })
     upstream.on('message', message => {
-        if (connection.readyState === WebSocket.OPEN) connection.send(message)
+        if (connection.readyState === WebSocket.OPEN) connection.send(socketMessageText(message))
     })
     connection.on('message', message => {
-        if (upstream.readyState === WebSocket.OPEN) upstream.send(message)
-        else pending.push(message)
+        const text = socketMessageText(message)
+        if (upstream.readyState === WebSocket.OPEN) upstream.send(text)
+        else pending.push(text)
     })
     connection.on('close', closeBoth)
     upstream.on('close', closeBoth)
