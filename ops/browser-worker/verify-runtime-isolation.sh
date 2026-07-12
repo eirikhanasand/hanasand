@@ -40,7 +40,7 @@ cap_add="$(docker inspect -f '{{ json .HostConfig.CapAdd }}' "$container_id")"
 cap_drop="$(docker inspect -f '{{ json .HostConfig.CapDrop }}' "$container_id")"
 pids_limit="$(docker inspect -f '{{ .HostConfig.PidsLimit }}' "$container_id")"
 
-[ "$user" = "bun" ] || fail "browser worker user is $user, expected bun"
+[ "$user" = "1000" ] || fail "browser worker user is $user, expected 1000"
 [ "$init_enabled" = "true" ] || fail "Docker init is not enabled for browser worker"
 [ "$auto_remove" = "true" ] || fail "browser worker does not auto-remove after exit"
 [ "$privileged" = "false" ] || fail "browser worker is privileged"
@@ -66,7 +66,7 @@ done
 
 printf '%s\n' "$env" | while IFS='=' read -r name _; do
     case "$name" in
-        NODE_ENV|PORT|HOME|BUN_INSTALL|BUN_INSTALL_BIN|BUN_RUNTIME_TRANSPILER_CACHE_PATH|CHROMIUM_BIN|BROWSER_SANDBOX_WORKER_ONLY|BROWSER_SANDBOX_SKIP_RUN_DB|BROWSER_SANDBOX_CHROMIUM_SANDBOX|BROWSER_SANDBOX_MAX_SESSIONS|BROWSER_SANDBOX_PREWARM|ONION_SESSION_PROXY|PATH|HOSTNAME) ;;
+        NODE_ENV|PORT|HOME|USER|DISPLAY|START_XFCE4|BROWSER_STREAM_RESOLUTION|BUN_INSTALL|BUN_INSTALL_BIN|BUN_RUNTIME_TRANSPILER_CACHE_PATH|CHROMIUM_BIN|BROWSER_SANDBOX_WORKER_ONLY|BROWSER_SANDBOX_SKIP_RUN_DB|BROWSER_SANDBOX_CHROMIUM_SANDBOX|BROWSER_SANDBOX_MAX_SESSIONS|BROWSER_SANDBOX_PREWARM|SELKIES_ENABLE_BASIC_AUTH|SELKIES_ENABLE_RESIZE|SELKIES_ENCODER|SELKIES_FRAMERATE|SELKIES_VIDEO_BITRATE|SELKIES_TURN_HOST|SELKIES_TURN_PORT|SELKIES_TURN_PROTOCOL|SELKIES_TURN_USERNAME|SELKIES_TURN_PASSWORD|ONION_SESSION_PROXY|PATH|HOSTNAME) ;;
         *) fail "unexpected browser worker environment variable present: $name" ;;
     esac
 done
@@ -97,7 +97,9 @@ if docker ps --format '{{.Names}}' | grep -qx "$API_CONTAINER"; then
         fail "Chromium is installed inside the main API container"
     fi
     iptables -S "$FIREWALL_CHAIN" 2>/dev/null | grep -q -- "! -s $api_ip/32 -d $api_ip/32 -j REJECT" || fail "firewall chain does not block browser worker traffic to API container $api_ip"
-    iptables -S "$FIREWALL_CHAIN" 2>/dev/null | grep -q -- "-s $api_ip/32 -p tcp -m tcp --dport 8081 -j RETURN" || fail "firewall chain does not allow API worker websocket control traffic"
+    for port in 8080 8090 9081; do
+        iptables -S "$FIREWALL_CHAIN" 2>/dev/null | grep -q -- "-s $api_ip/32 -p tcp -m tcp --dport $port -j RETURN" || fail "firewall chain does not allow API browser stream/control traffic on $port"
+    done
 fi
 
 if ! iptables -S DOCKER-USER 2>/dev/null | grep -q "$FIREWALL_CHAIN"; then

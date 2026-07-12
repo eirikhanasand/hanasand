@@ -42,7 +42,7 @@ for (const value of [
     'HANASAND_API_CONTAINER',
     'cannot verify browser worker API isolation',
     'firewall chain does not block browser worker traffic to API container',
-    'firewall chain does not allow API worker websocket control traffic',
+    'firewall chain does not allow API browser stream/control traffic',
     'HANASAND_BROWSER_PIDS_LIMIT',
     'Chromium is running inside the main API container',
     'Chromium is installed inside the main API container',

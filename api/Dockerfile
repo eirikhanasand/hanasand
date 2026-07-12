@@ -34,11 +34,36 @@ RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8080
 
-FROM app-runtime AS browser-runtime
-RUN apk del varnish git openssh-client docker-cli curl tar \
-    && rm -f /usr/local/bin/trivy /usr/bin/k6 \
-    && apk add --no-cache chromium xvfb ttf-freefont font-noto
-ENV CHROMIUM_BIN=/usr/bin/chromium
+FROM oven/bun:1.3.11 AS browser-bun
+
+FROM ghcr.io/selkies-project/selkies-gstreamer/gst-py-example@sha256:3b7e60077dfc56af335cbe3da33a8255ec0ab954ecf6169b9a46e78d09c3df84 AS browser-runtime
+
+USER root
+COPY --from=browser-bun /usr/local/bin/bun /usr/local/bin/bun
+RUN ln -s /usr/local/bin/bun /usr/local/bin/bunx \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl fonts-noto-color-emoji \
+    && curl -fsSLo /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && apt-get install -y --no-install-recommends /tmp/chrome.deb \
+    && apt-get purge -y git \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/* /tmp/chrome.deb
+
+WORKDIR /app
+COPY package.json bun.lock* bunfig.toml ./
+RUN bun install --frozen-lockfile
+COPY . .
+COPY browser-worker/supervisor.conf /etc/supervisor/conf.d/browser-worker.conf
+COPY browser-worker/start.sh /usr/local/bin/hanasand-browser-worker
+RUN chmod +x /usr/local/bin/hanasand-browser-worker \
+    && sed -i 's/selkies-gstreamer-resize 1920x1080/selkies-gstreamer-resize "${BROWSER_STREAM_RESOLUTION:-1280x720}"/' /etc/entrypoint.sh
+
+ENV CHROMIUM_BIN=/usr/bin/google-chrome-stable \
+    BROWSER_STREAM_RESOLUTION=1280x720 \
+    DISPLAY=:20 \
+    START_XFCE4=false
+
+USER 1000
 
 FROM app-runtime
 

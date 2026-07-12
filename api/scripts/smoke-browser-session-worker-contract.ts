@@ -9,7 +9,7 @@ const ws = readFileSync(new URL('../src/plugins/ws.ts', import.meta.url), 'utf8'
 const index = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
 const onionWs = readFileSync(new URL('../src/handlers/onionSession/ws.ts', import.meta.url), 'utf8')
 const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8')
-const appRuntimeStage = /FROM oven\/bun:1\.3\.11-alpine AS app-runtime\n([\s\S]*?)\nFROM app-runtime AS browser-runtime/.exec(dockerfile)?.[1] || ''
+const appRuntimeStage = /FROM oven\/bun:1\.3\.11-alpine AS app-runtime\n([\s\S]*?)\nFROM oven\/bun:1\.3\.11 AS browser-bun/.exec(dockerfile)?.[1] || ''
 const handoff = readOptional(new URL('../../agents/scripts/handoff-context.mjs', import.meta.url))
 const runbook = readOptional(new URL('../../agents/HANDOFF_RUNBOOK.md', import.meta.url))
 const composeUrl = new URL('../../docker-compose.yml', import.meta.url)
@@ -54,9 +54,12 @@ assert.match(ws, /BROWSER_SANDBOX_WORKER_ONLY=1/, 'session worker should boot in
 assert.match(ws, /BROWSER_SANDBOX_MAX_SESSIONS=1/, 'session worker should enforce one browser session per container')
 assert.match(ws, /AutoRemove:\s*true/, 'session worker should auto-remove so failed malicious sessions do not linger after Docker exits them')
 assert.doesNotMatch(ws, /DB_PASSWORD=|VM_API_TOKEN=|MAIL_ADMIN_PASSWORD=|API_SSH_KEY=|\/var\/run\/docker\.sock|lxd\/unix\.socket/, 'session worker should not receive app secrets or host control sockets')
-assert.match(dockerfile, /FROM app-runtime AS browser-runtime[\s\S]*apk add --no-cache chromium xvfb/, 'Chromium should live only in the browser-worker image target')
-assert.match(dockerfile, /apk del varnish git openssh-client docker-cli curl tar/, 'browser-worker image should strip API operational tools before installing Chromium')
-assert.match(dockerfile, /rm -f \/usr\/local\/bin\/trivy \/usr\/bin\/k6/, 'browser-worker image should remove copied operational scanners/load tools')
+assert.match(dockerfile, /selkies-gstreamer\/gst-py-example@sha256:[a-f0-9]{64} AS browser-runtime/, 'browser worker should pin its WebRTC runtime image by digest')
+assert.match(dockerfile, /google-chrome-stable_current_amd64\.deb/, 'Chromium should live only in the browser-worker image target')
+assert.match(dockerfile, /apt-get purge -y git/, 'browser-worker image should strip operational source-control tools')
+assert.match(ws, /SELKIES_FRAMERATE=30/, 'browser worker should target real-time 30 FPS streaming')
+assert.match(ws, /type: 'stream_ready'[\s\S]*transport: 'webrtc'/, 'browser proxy should announce the WebRTC transport to the client')
+assert.doesNotMatch(onionWs, /setInterval\([\s\S]{0,120}sendFrame/, 'Playwright screenshots must not drive the live rendering loop')
 assert.doesNotMatch(appRuntimeStage, /\b(chromium|xvfb)\b/, 'main API image should not install Chromium or Xvfb')
 for (const source of [handoff, runbook].filter(Boolean)) {
     assert.match(source, /--profile unsafe-dev-only build api browser-worker/, 'browser deploy path should build the separate browser-worker image')

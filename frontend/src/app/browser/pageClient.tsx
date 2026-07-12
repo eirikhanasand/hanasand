@@ -7,6 +7,7 @@ import { getCookie } from '@/utils/cookies/cookies'
 
 type SessionState = 'prompt' | 'queued' | 'connecting' | 'live' | 'ended' | 'failed' | 'unreachable'
 type SocketState = 'closed' | 'connecting' | 'open' | 'error'
+type StreamStats = { fps?: number; latencyMs?: number }
 type BrowserNetwork = 'regular' | 'tor'
 type BrowserFingerprint = {
     id: string
@@ -270,6 +271,13 @@ function brokerUrlForSession(baseUrl: string, id: string) {
     return `${baseUrl.replace(/\/$/, '')}/${encodeURIComponent(id)}`
 }
 
+function streamUrlForPath(path: string) {
+    if (/^https?:\/\//i.test(path)) return path
+    const base = new URL(brokerBaseUrl)
+    base.protocol = base.protocol === 'wss:' ? 'https:' : 'http:'
+    return new URL(path, base).toString()
+}
+
 function resolveToolUrl(template: string, target: string) {
     if (!target) return template
     return template.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
@@ -291,6 +299,8 @@ export default function BrowserPageClient() {
     const [customPlatform, setCustomPlatform] = useState(browserFingerprints[0].platform)
     const [captures, setCaptures] = useState<Capture[]>([])
     const [activeImage, setActiveImage] = useState<string | null>(null)
+    const [streamUrl, setStreamUrl] = useState('')
+    const [streamStats, setStreamStats] = useState<StreamStats>({})
     const [activeFrame, setActiveFrame] = useState<{ width: number; height: number }>({ width: 1280, height: 720 })
     const [activeUrl, setActiveUrl] = useState('')
     const [runBlocker, setRunBlocker] = useState('')
@@ -547,6 +557,8 @@ export default function BrowserPageClient() {
         setConsoleEvents([])
         setRunBlocker('')
         setActiveImage(null)
+        setStreamUrl('')
+        setStreamStats({})
         setActiveUrl(url)
         setActiveSandboxTab('browser')
         setCapacity(null)
@@ -575,6 +587,8 @@ export default function BrowserPageClient() {
         socket.onclose = () => {
             if (socketRef.current !== socket) return
             setSocketState('closed')
+            setStreamUrl('')
+            setStreamStats({})
             setSessionState(current => current === 'prompt' || current === 'failed' || current === 'unreachable' ? current : 'ended')
             pushEvent('Sandbox broker closed.')
         }
@@ -589,6 +603,15 @@ export default function BrowserPageClient() {
             if (typeof message.data !== 'string') return
             const payload = parsePayload(message.data)
             if (!payload) return
+            if (payload.type === 'stream_ready' && typeof payload.streamUrl === 'string') {
+                setStreamUrl(streamUrlForPath(payload.streamUrl))
+                pushEvent('WebRTC browser stream ready.')
+                return
+            }
+            if (payload.type === 'stream_metrics') {
+                setStreamStats({ fps: finiteNumber(payload.fps) || undefined, latencyMs: finiteNumber(payload.latencyMs) || undefined })
+                return
+            }
             if (payload.type === 'ready') {
                 setCapacity(capacityValue(payload.capacity) || null)
                 const runRecord = runHistoryValue(payload.run) || {
@@ -713,6 +736,8 @@ export default function BrowserPageClient() {
         socketRef.current?.close()
         socketRef.current = null
         setSessionState('ended')
+        setStreamUrl('')
+        setStreamStats({})
         pushEvent('Sandbox stopped.')
     }, [pushEvent])
 
@@ -724,6 +749,8 @@ export default function BrowserPageClient() {
         setCaptures([])
         setRunBlocker('')
         setActiveImage(null)
+        setStreamUrl('')
+        setStreamStats({})
         setActiveUrl('')
         setCapacity(null)
         pushEvent('Sandbox reset.')
@@ -1077,6 +1104,7 @@ export default function BrowserPageClient() {
                                 <span className='h-3 w-3 rounded-full bg-ui-warning' />
                                 <span className='h-3 w-3 rounded-full bg-ui-success' />
                                 <div className='min-w-0 flex-1 truncate rounded-md border border-ui-border bg-ui-canvas px-3 py-2 font-mono text-xs text-ui-muted'>{activeViewportUrl}</div>
+                                {!activeTool && streamUrl && streamStats.fps ? <div className='shrink-0 text-xs font-semibold text-ui-success'>{Math.round(streamStats.fps)} FPS{streamStats.latencyMs ? ` · ${Math.round(streamStats.latencyMs)} ms` : ''}</div> : null}
                             </div>
                             <div
                                 ref={viewportRef}
@@ -1088,6 +1116,14 @@ export default function BrowserPageClient() {
                             >
                                 {activeTool && activeToolCapture ? (
                                     <ProviderViewportEvidence tool={activeTool} capture={activeToolCapture} />
+                                ) : !activeTool && streamUrl ? (
+                                    <iframe
+                                        src={streamUrl}
+                                        title='Live WebRTC browser sandbox'
+                                        className='absolute inset-0 h-full w-full border-0 bg-black'
+                                        allow='autoplay; clipboard-read; clipboard-write; fullscreen'
+                                        sandbox='allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups allow-downloads'
+                                    />
                                 ) : activeViewportImage ? (
                                     <img
                                         ref={imageRef}

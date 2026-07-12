@@ -86,7 +86,6 @@ const DEFAULT_TARGET = 'http://sample-intel-source.onion'
 const DEFAULT_WIDTH = 1280
 const DEFAULT_HEIGHT = 720
 const MAX_DURATION_MS = 60 * 60 * 1000
-const FRAME_INTERVAL_MS = 900
 const DEFAULT_BROWSER_MAX_SESSIONS = 10
 const MAX_DOWNLOAD_HASH_BYTES = 5 * 1024 * 1024
 const asnCache = new Map<string, Promise<string | undefined>>()
@@ -128,6 +127,9 @@ function chromiumLaunchOptions(proxy?: string) {
         '--no-first-run',
         '--no-default-browser-check',
         '--disable-blink-features=AutomationControlled',
+        '--kiosk',
+        '--window-position=0,0',
+        `--window-size=${DEFAULT_WIDTH},${DEFAULT_HEIGHT}`,
     ]
     if (process.env.BROWSER_SANDBOX_CHROMIUM_SANDBOX !== '1') args.unshift('--no-sandbox')
     return {
@@ -274,7 +276,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let context: BrowserContext | null = null
     let page: Page | null = null
     let ownsBrowser = false
-    let frameTimer: NodeJS.Timeout | null = null
     let closeTimer: NodeJS.Timeout | null = null
     let cancelAdmission: (() => void) | null = null
     let releaseAdmission: (() => void) | null = null
@@ -320,9 +321,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         cancelAdmission = null
         releaseAdmission?.()
         releaseAdmission = null
-        if (frameTimer) clearInterval(frameTimer)
         if (closeTimer) clearTimeout(closeTimer)
-        frameTimer = null
         closeTimer = null
         const runId = currentRunId
         currentRunId = null
@@ -664,13 +663,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 run: browserRun.run,
                 quota: browserRun.quota,
             })
-            frameTimer = setInterval(() => {
-                void sendFrame(false)
-            }, FRAME_INTERVAL_MS)
             void sendFrame(true, 'initial_target')
-            void dismissCookieOverlays(page)
-                .then(() => sendFrame(true, 'cookie_dismissed'))
-                .catch(() => undefined)
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
             void recordLog({
@@ -710,6 +703,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const webcrackTool = isWebCrackTool(tool, toolUrl)
             const toolPage = await context.newPage().catch(() => null)
             if (!toolPage) return
+            await page?.bringToFront().catch(() => undefined)
             const providerBodies = collectProviderResponses(toolPage, tool.name || toolUrl)
             try {
                 toolPage.setDefaultTimeout(providerTimeoutMs(tool))
@@ -974,7 +968,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await page.mouse.down({ button: mouseButton(message.button) }).catch(() => undefined)
             }
         }
-        void sendFrame(false, 'input').catch(() => undefined)
     }
 
     async function handleWheel(message: BrokerMessage) {
@@ -986,7 +979,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }
         await page.mouse.wheel(deltaX, deltaY)
         await page.waitForTimeout(80).catch(() => undefined)
-        void sendFrame(false, 'wheel').catch(() => undefined)
     }
 
     async function handleKey(message: BrokerMessage) {
@@ -1017,7 +1009,6 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             editableSelectAllArmed = false
             await page.keyboard.press(normalizeKey(message.key)).catch(() => undefined)
         }
-        void sendFrame(false, 'key').catch(() => undefined)
     }
 
     async function readRemoteClipboard() {

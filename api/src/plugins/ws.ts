@@ -2,7 +2,9 @@ import fp from 'fastify-plugin'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { randomUUID } from 'node:crypto'
+import type { FastifyReply } from 'fastify'
+import { createHmac, randomUUID } from 'node:crypto'
+import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { registerClient } from '#utils/ws/registerClient.ts'
@@ -26,6 +28,14 @@ const browserRunWarningLogTimes = new Map<string, number>()
 const browserRunFailureLogTimes = new Map<string, number>()
 const browserRunUnreachableLogTimes = new Map<string, number>()
 const browserRunLogContexts = new Map<string, BrowserRunLogContext>()
+const browserStreams = new Map<string, BrowserStream>()
+
+type BrowserStream = {
+    token: string
+    ip: string
+    containerId: string
+    expiresAt: number
+}
 
 type BrowserRunLogContext = {
     target?: string
@@ -45,6 +55,8 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         registerBrowserSessionRoutes(fastify)
         return
     }
+
+    registerBrowserStreamRoute(fastify)
 
     // pwned
     fastify.get('/api/ws/pwned/:id', { websocket: true }, (connection, req: FastifyRequest) => {
@@ -209,6 +221,93 @@ function registerBrowserSessionRoutes(fastify: FastifyInstance) {
     })
 }
 
+function registerBrowserStreamRoute(fastify: FastifyInstance) {
+    fastify.route<{
+        Params: { id: string, token: string, '*': string }
+    }>({
+        method: 'GET',
+        url: '/api/browser-stream/:id/:token/*',
+        handler: (req, reply) => proxyBrowserStreamHttp(req, reply),
+        wsHandler: (connection, req) => proxyBrowserStreamWebSocket(connection, req),
+    })
+}
+
+function browserStreamFor(id: string, token: string) {
+    const stream = browserStreams.get(id)
+    if (!stream || stream.token !== token || stream.expiresAt <= Date.now()) return null
+    return stream
+}
+
+function browserStreamUpstreamPath(req: FastifyRequest<{ Params: { '*': string } }>) {
+    const query = req.raw.url?.split('?')[1]
+    return `/${req.params['*'] || ''}${query ? `?${query}` : ''}`
+}
+
+function proxyBrowserStreamHttp(
+    req: FastifyRequest<{ Params: { id: string, token: string, '*': string } }>,
+    reply: FastifyReply,
+) {
+    const stream = browserStreamFor(req.params.id, req.params.token)
+    if (!stream) return reply.code(404).send({ error: 'Browser stream is unavailable.' })
+
+    reply.hijack()
+    const upstream = http.request({
+        hostname: stream.ip,
+        port: 8080,
+        method: 'GET',
+        path: browserStreamUpstreamPath(req),
+        headers: { accept: req.headers.accept || '*/*', 'user-agent': req.headers['user-agent'] || 'hanasand-browser-stream' },
+    }, response => {
+        reply.raw.writeHead(response.statusCode || 502, response.headers)
+        response.pipe(reply.raw)
+    })
+    upstream.setTimeout(10_000, () => upstream.destroy(new Error('Browser stream proxy timed out.')))
+    upstream.on('error', error => {
+        if (!reply.raw.headersSent) reply.raw.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' })
+        reply.raw.end(`Browser stream unavailable: ${error.message}`)
+    })
+    req.raw.on('aborted', () => upstream.destroy())
+    upstream.end()
+}
+
+function proxyBrowserStreamWebSocket(
+    connection: WebSocket,
+    req: FastifyRequest<{ Params: { id: string, token: string, '*': string } }>,
+) {
+    const stream = browserStreamFor(req.params.id, req.params.token)
+    if (!stream) {
+        connection.close(1008, 'Browser stream is unavailable.')
+        return
+    }
+
+    const upstream = new WebSocket(`ws://${stream.ip}:8080${browserStreamUpstreamPath(req)}`)
+    const pending: RawData[] = []
+    let closed = false
+    const closeBoth = () => {
+        if (closed) return
+        closed = true
+        if (connection.readyState === WebSocket.OPEN) connection.close()
+        if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) upstream.close()
+    }
+    upstream.on('open', () => {
+        while (pending.length && upstream.readyState === WebSocket.OPEN) upstream.send(pending.shift()!)
+    })
+    upstream.on('message', message => {
+        if (connection.readyState === WebSocket.OPEN) connection.send(message)
+    })
+    connection.on('message', message => {
+        if (upstream.readyState === WebSocket.OPEN) upstream.send(message)
+        else pending.push(message)
+    })
+    connection.on('close', closeBoth)
+    upstream.on('close', closeBoth)
+    connection.on('error', closeBoth)
+    upstream.on('error', error => {
+        void recordWebsocketFailure('browser-stream-upstream', req.params.id, error)
+        closeBoth()
+    })
+}
+
 function proxyBrowserSocket(connection: WebSocket, id: string, route: 'browser' | 'browser-sandbox' | 'onion-session') {
     if (process.env.BROWSER_SANDBOX_WORKER_ONLY === '1') return false
     if (process.env.BROWSER_SANDBOX_ALLOW_SHARED_WORKER !== 'unsafe-dev-only') {
@@ -274,12 +373,16 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     let sawReady = false
     let deliveredFrame = false
     let sawTerminalMessage = false
+    let streamMetricsTimer: NodeJS.Timeout | null = null
+    const streamToken = randomUUID().replaceAll('-', '')
 
     const closeBoth = () => {
         if (closed) return
         closed = true
         if (connection.readyState === WebSocket.OPEN) connection.close()
         if (upstream && (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING)) upstream.close()
+        if (streamMetricsTimer) clearInterval(streamMetricsTimer)
+        browserStreams.delete(id)
         if (containerId) void (!sawReady || !deliveredFrame ? recordBrowserWorkerLogs(containerId, route, id) : Promise.resolve())
             .finally(() => removeRuntimeContainer(containerId))
             .catch(error => recordWebsocketFailure(`browser-session-remove-${route}`, id, error))
@@ -306,12 +409,17 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     sendStatus(connection, 'launching_worker', 'Starting isolated browser worker.')
 
     void startEphemeralBrowserWorker(id)
-        .then(({ containerId: nextContainerId, wsUrl }) => {
+        .then(({ containerId: nextContainerId, wsUrl, streamIp }) => {
             if (closed) {
                 void removeRuntimeContainer(nextContainerId).catch(() => undefined)
                 return
             }
             containerId = nextContainerId
+            browserStreams.set(id, { token: streamToken, ip: streamIp, containerId, expiresAt: Date.now() + 65 * 60_000 })
+            void announceBrowserStream(connection, id, streamToken, streamIp).then(timer => {
+                if (closed && timer) clearInterval(timer)
+                else streamMetricsTimer = timer
+            })
             return connectBrowserWorkerSocket(`${wsUrl.replace(/\/$/, '')}/${route}/${encodeURIComponent(id)}`)
         })
         .then(nextUpstream => {
@@ -665,28 +773,105 @@ function connectBrowserWorkerSocket(url: string, attempts = 20): Promise<WebSock
     })
 }
 
+function browserTurnCredentials(sessionId: string) {
+    const secret = process.env.BROWSER_SANDBOX_TURN_SECRET || ''
+    const host = process.env.BROWSER_SANDBOX_TURN_HOST || ''
+    if (process.env.NODE_ENV === 'production' && (!secret || secret === 'unsafe-dev-turn-secret' || !host)) {
+        throw new Error('Production WebRTC browser streams require BROWSER_SANDBOX_TURN_SECRET and BROWSER_SANDBOX_TURN_HOST.')
+    }
+    const username = `${Math.floor(Date.now() / 1000) + 60 * 60}:${sessionId}`
+    return {
+        host: host || '127.0.0.1',
+        username,
+        password: createHmac('sha1', secret || 'unsafe-dev-turn-secret').update(username).digest('base64'),
+    }
+}
+
+async function announceBrowserStream(connection: WebSocket, id: string, token: string, ip: string) {
+    const ready = await waitForBrowserStream(ip)
+    if (!ready) {
+        sendStatus(connection, 'stream_unavailable', 'The browser started, but its WebRTC transport did not become ready.')
+        return null
+    }
+    if (connection.readyState === WebSocket.OPEN) {
+        connection.send(JSON.stringify({
+            type: 'stream_ready',
+            transport: 'webrtc',
+            targetFps: 30,
+            streamUrl: `/api/browser-stream/${encodeURIComponent(id)}/${token}/index.html`,
+        }))
+    }
+    const sendMetrics = () => void browserStreamMetrics(ip).then(metrics => {
+        if (metrics && connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify({ type: 'stream_metrics', ...metrics }))
+    })
+    sendMetrics()
+    const timer = setInterval(sendMetrics, 1_000)
+    timer.unref()
+    return timer
+}
+
+async function waitForBrowserStream(ip: string) {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+        const ready = await fetch(`http://${ip}:8080/health`, { signal: AbortSignal.timeout(750) })
+            .then(response => response.ok)
+            .catch(() => false)
+        if (ready) return true
+        await new Promise(resolve => setTimeout(resolve, 250))
+    }
+    return false
+}
+
+async function browserStreamMetrics(ip: string) {
+    const body = await fetch(`http://${ip}:9081/metrics`, { signal: AbortSignal.timeout(750) })
+        .then(response => response.ok ? response.text() : '')
+        .catch(() => '')
+    if (!body) return null
+    const fps = Number(body.match(/^fps ([\d.]+)$/m)?.[1])
+    const latencyMs = Number(body.match(/^latency ([\d.]+)$/m)?.[1])
+    if (!Number.isFinite(fps) && !Number.isFinite(latencyMs)) return null
+    return {
+        fps: Number.isFinite(fps) ? fps : undefined,
+        latencyMs: Number.isFinite(latencyMs) ? latencyMs : undefined,
+        sampledAt: new Date().toISOString(),
+    }
+}
+
 async function startEphemeralBrowserWorker(sessionId: string) {
     if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_EGRESS_FIREWALL_READY !== '1') {
         throw new Error('Browser sandbox egress firewall is not marked ready. Run ops/browser-worker/install-egress-firewall.sh before enabling production browser sessions.')
     }
     const containerName = `hanasand_browser_session_${sessionId.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 48)}_${randomUUID().slice(0, 8)}`
     const networkName = process.env.BROWSER_SANDBOX_WORKER_NETWORK || 'hanasand_browsernet'
+    const turn = browserTurnCredentials(sessionId)
     const containerId = await createRuntimeContainer(containerName, {
         Image: process.env.BROWSER_SANDBOX_WORKER_IMAGE || 'hanasand_browser_worker',
-        User: 'bun',
-        Cmd: ['sh', '-c', 'export DISPLAY="${DISPLAY:-:99}"; Xvfb "$DISPLAY" -screen 0 1920x1080x24 >/tmp/xvfb.log 2>&1 & bun start'],
+        User: '1000',
         Env: [
             'NODE_ENV=production',
-            'PORT=8081',
-            'HOME=/tmp',
+            'PORT=8090',
+            'HOME=/home/ubuntu',
+            'USER=ubuntu',
+            'DISPLAY=:20',
+            'START_XFCE4=false',
+            'BROWSER_STREAM_RESOLUTION=1280x720',
             'BROWSER_SANDBOX_WORKER_ONLY=1',
             'BROWSER_SANDBOX_SKIP_RUN_DB=1',
             'BROWSER_SANDBOX_CHROMIUM_SANDBOX=1',
             'BROWSER_SANDBOX_MAX_SESSIONS=1',
             'BROWSER_SANDBOX_PREWARM=0',
+            'SELKIES_ENABLE_BASIC_AUTH=false',
+            'SELKIES_ENABLE_RESIZE=false',
+            'SELKIES_ENCODER=vp8enc',
+            'SELKIES_FRAMERATE=30',
+            'SELKIES_VIDEO_BITRATE=4000',
+            `SELKIES_TURN_HOST=${turn.host}`,
+            'SELKIES_TURN_PORT=3478',
+            'SELKIES_TURN_PROTOCOL=udp',
+            `SELKIES_TURN_USERNAME=${turn.username}`,
+            `SELKIES_TURN_PASSWORD=${turn.password}`,
             `ONION_SESSION_PROXY=${process.env.ONION_SESSION_PROXY || 'socks5://hanasand_onion_tor:9050'}`,
         ],
-        ExposedPorts: { '8081/tcp': {} },
+        ExposedPorts: { '8080/tcp': {}, '8090/tcp': {}, '9081/tcp': {} },
         HostConfig: {
             NetworkMode: networkName,
             AutoRemove: true,
@@ -694,13 +879,16 @@ async function startEphemeralBrowserWorker(sessionId: string) {
             Privileged: false,
             IpcMode: 'private',
             ReadonlyRootfs: true,
-            Tmpfs: { '/tmp': 'rw,noexec,nosuid,size=768m' },
+            Tmpfs: {
+                '/tmp': 'rw,noexec,nosuid,size=1g',
+                '/etc/nginx/sites-available': 'rw,noexec,nosuid,size=1m,uid=1000,gid=1000',
+            },
             CapAdd: [],
             CapDrop: ['ALL'],
             SecurityOpt: [`seccomp=${browserWorkerSeccompProfile}`, 'apparmor=docker-default', 'no-new-privileges'],
             ShmSize: 1024 * 1024 * 1024,
-            Memory: 2 * 1024 * 1024 * 1024,
-            NanoCpus: 2_000_000_000,
+            Memory: 3 * 1024 * 1024 * 1024,
+            NanoCpus: 4_000_000_000,
             PidsLimit: 512,
         },
         Labels: {
@@ -713,7 +901,7 @@ async function startEphemeralBrowserWorker(sessionId: string) {
         await startRuntimeContainer(containerId)
         const inspect = await getRuntimeContainer(containerId)
         const ip = inspect.NetworkSettings?.Networks?.[networkName]?.IPAddress
-        return { containerId, wsUrl: `ws://${ip || containerName}:8081/api/ws` }
+        return { containerId, wsUrl: `ws://${ip || containerName}:8090/api/ws`, streamIp: ip || containerName }
     } catch (error) {
         await removeRuntimeContainer(containerId).catch(() => undefined)
         throw error

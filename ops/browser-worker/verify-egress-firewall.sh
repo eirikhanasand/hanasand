@@ -42,7 +42,9 @@ has_rule iptables DOCKER-USER -i "$bridge" -j "$CHAIN" || fail "DOCKER-USER does
 has_rule iptables "$CHAIN" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN || fail "$CHAIN does not allow established control responses"
 has_rule iptables "$CHAIN" -d "$tor_ip" -p tcp --dport "$TOR_PORT" -j RETURN || fail "$CHAIN does not allow Tor SOCKS at $tor_ip:$TOR_PORT"
 has_rule iptables "$CHAIN" ! -s "$api_ip" -d "$api_ip" -j REJECT || fail "$CHAIN does not block browser-worker initiated API access to $api_ip"
-has_rule iptables "$CHAIN" -s "$api_ip" -p tcp --dport 8081 -j RETURN || fail "$CHAIN does not allow API worker websocket control traffic"
+for port in 8080 8090 9081; do
+    has_rule iptables "$CHAIN" -s "$api_ip" -p tcp --dport "$port" -j RETURN || fail "$CHAIN does not allow API browser stream/control traffic on $port"
+done
 
 for cidr in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4; do
     has_rule iptables "$CHAIN" -d "$cidr" -j REJECT || fail "$CHAIN does not reject $cidr"
