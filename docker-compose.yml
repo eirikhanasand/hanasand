@@ -138,7 +138,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8090
-      HOME: /home/ubuntu
+      HOME: /tmp
       DISPLAY: ":20"
       START_XFCE4: "false"
       BROWSER_STREAM_RESOLUTION: 1280x720
@@ -204,7 +204,6 @@ services:
       - --min-port=49152
       - --max-port=49252
       - --no-multicast-peers
-      - --no-loopback-peers
       - --log-file=stdout
     ports:
       - "3478:3478/tcp"

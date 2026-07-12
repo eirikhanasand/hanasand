@@ -849,7 +849,7 @@ async function startEphemeralBrowserWorker(sessionId: string) {
         Env: [
             'NODE_ENV=production',
             'PORT=8090',
-            'HOME=/home/ubuntu',
+            'HOME=/tmp',
             'USER=ubuntu',
             'DISPLAY=:20',
             'START_XFCE4=false',
