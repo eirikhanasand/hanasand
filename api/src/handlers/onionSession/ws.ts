@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto'
+import { execFile } from 'node:child_process'
 import { lookup, resolveTxt } from 'node:dns/promises'
 import { readFile, stat } from 'node:fs/promises'
+import { promisify } from 'node:util'
 import WebSocket, { type RawData } from 'ws'
 import { chromium, type Browser, type BrowserContext, type Frame, type Page, type Request } from 'playwright'
 import recordLog from '#utils/logs/recordLog.ts'
@@ -90,6 +92,7 @@ const DEFAULT_BROWSER_MAX_SESSIONS = 20
 const MAX_DOWNLOAD_HASH_BYTES = 5 * 1024 * 1024
 const asnCache = new Map<string, Promise<string | undefined>>()
 const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+const execFileAsync = promisify(execFile)
 
 type SandboxAdmissionStatus = {
     activeSessions: number
@@ -418,7 +421,13 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }
 
         if (message.type === 'resize') {
-            await page.setViewportSize(browserViewportForMessage(message))
+            const viewport = browserViewportForMessage(message)
+            if (process.env.BROWSER_SANDBOX_WORKER_ONLY === '1') {
+                await resizeBrowserDisplay(viewport)
+                await fullscreenBrowserPage(context!, page)
+            } else {
+                await page.setViewportSize(viewport)
+            }
             await sendFrame(true)
         }
     }
@@ -493,11 +502,13 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             })
 
             ownsBrowser = Boolean(proxy || network !== 'regular' || process.env.BROWSER_SANDBOX_WORKER_ONLY === '1')
+            const viewport = browserViewportForMessage(message)
+            if (process.env.BROWSER_SANDBOX_WORKER_ONLY === '1') await resizeBrowserDisplay(viewport)
             trace('launch_chromium', { target, network, ownsBrowser })
             browser = ownsBrowser ? await chromium.launch(chromiumLaunchOptions(proxy)) : await regularBrowser()
             trace('chromium_launched')
             context = await browser.newContext({
-                viewport: browserViewportForMessage(message),
+                viewport,
                 ignoreHTTPSErrors: true,
                 userAgent: browserUserAgentForMessage(message),
                 locale: browserLocaleForMessage(message),
@@ -1217,6 +1228,10 @@ async function fullscreenBrowserPage(context: BrowserContext, page: Page) {
     } finally {
         await session.detach().catch(() => undefined)
     }
+}
+
+async function resizeBrowserDisplay({ width, height }: { width: number, height: number }) {
+    await execFileAsync('selkies-gstreamer-resize', [`${width}x${height}`])
 }
 
 function documentDeobfuscationTasks(html: string): SandboxDeobfuscationTask[] {

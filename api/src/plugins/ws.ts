@@ -913,7 +913,7 @@ async function startEphemeralBrowserWorker(sessionId: string) {
             SecurityOpt: [`seccomp=${browserWorkerSeccompProfile}`, 'apparmor=docker-default', 'no-new-privileges'],
             ShmSize: 1024 * 1024 * 1024,
             Memory: 3 * 1024 * 1024 * 1024,
-            NanoCpus: 4_000_000_000,
+            NanoCpus: 2_000_000_000,
             PidsLimit: 512,
         },
         Labels: {
