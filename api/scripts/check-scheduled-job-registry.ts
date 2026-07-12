@@ -63,6 +63,7 @@ function normalize(value: string) {
 function isAllowedIncidentalSchedulerFile(file: string) {
     return [
         'api/src/index.ts',
+        'api/src/plugins/ws.ts',
         'api/src/routes.ts',
         'api/src/handlers/onionSession/ws.ts',
         'api/src/handlers/systemCron.ts',

@@ -51,6 +51,10 @@ type BrokerPayload = {
         downloads?: Array<{ url?: string; fileName?: string; bytes?: number; sha256?: string; hashStatus?: string }>
     }
     receivedAt?: number
+    expiresAt?: string
+    suspiciousExtended?: boolean
+    freeExtensionUsed?: boolean
+    paidExtensionUsed?: boolean
 }
 
 process.env.BROWSER_SANDBOX_ALLOW_LOCAL_TARGETS = '1'
@@ -171,7 +175,7 @@ client.send(JSON.stringify({
     target,
     durationMinutes: 1,
     width: 960,
-    height: 640,
+    height: 540,
     profileTools: [
         { id: 'virustotal', name: 'VirusTotal', url: `${base}/virustotal?url={url}` },
         { id: 'urlquery', name: 'urlquery', url: `${base}/urlquery?q={url}` },
@@ -193,6 +197,16 @@ await waitForPayload(payloads, payload => payload.type === 'tool_capture' && pay
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery' && payload.toolAnalysis.alertCount !== undefined)
 await waitForPayload(payloads, payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'webcrack' && payload.webcrackLoad?.loaded === true)
 assert(payloads.some(payload => payload.type === 'tool_capture' && payload.error === 'provider_navigation_pending'), 'provider tabs surface a pending capture immediately')
+const suspiciousTiming = await waitForPayload(payloads, payload => payload.type === 'run_time' && payload.suspiciousExtended === true)
+assert(new Date(suspiciousTiming.expiresAt || 0).getTime() - (suspiciousTiming.receivedAt || 0) > 120_000, 'suspicious evidence extends the live run to about three minutes')
+client.send(JSON.stringify({ type: 'select_tab', tabId: 'virustotal' }))
+await waitForPayload(payloads, payload => payload.type === 'status' && payload.state === 'tab_selected' && payload.url?.includes('/virustotal'))
+client.send(JSON.stringify({ type: 'extend', extension: 'free' }))
+await waitForPayload(payloads, payload => payload.type === 'run_time' && payload.freeExtensionUsed === true)
+client.send(JSON.stringify({ type: 'extend', extension: 'free' }))
+await waitForPayload(payloads, payload => payload.type === 'status' && payload.state === 'extension_used')
+client.send(JSON.stringify({ type: 'extend', extension: 'paid' }))
+await waitForPayload(payloads, payload => payload.type === 'status' && payload.state === 'payment_required')
 
 const ready = payloads.find(payload => payload.type === 'ready')
 assert.equal(ready?.torProxyConfigured, false, 'regular browser sandbox should not use the Tor proxy')

@@ -13,7 +13,7 @@ import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#ut
 import recordLog from '#utils/logs/recordLog.ts'
 import run from '#db'
 import { currentBrowserAdmissionStatus, handleOnionSessionSocket, requestBrowserAdmission } from '../handlers/onionSession/ws.ts'
-import { finishBrowserRun, prepareBrowserRun, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../handlers/browserSandboxRuns.ts'
+import { browserPaidExtensionAllowed, finishBrowserRun, prepareBrowserRun, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../handlers/browserSandboxRuns.ts'
 import { createRuntimeContainer, getRuntimeContainer, getRuntimeContainerLogs, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
 
 const browserWorkerSeccompProfile = fs.readFileSync(new URL('../../seccomp-chromium.json', import.meta.url), 'utf8')
@@ -405,8 +405,22 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             if (!allowed) return
             runPrepared = true
         }
-        if (upstream?.readyState === WebSocket.OPEN) upstream.send(message)
-        else pending.push(message)
+        let forwarded: RawData = message
+        const payload = parseSocketMessage(message)
+        if (payload?.type === 'extend' && payload.extension === 'paid') {
+            const allowed = await browserPaidExtensionAllowed(id).catch(() => false)
+            if (!allowed) {
+                if (connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify({
+                    type: 'status',
+                    state: 'payment_required',
+                    message: 'A paid browser plan is required for the second five-minute extension.',
+                }))
+                return
+            }
+            forwarded = Buffer.from(JSON.stringify({ ...payload, paidAuthorized: true }))
+        }
+        if (upstream?.readyState === WebSocket.OPEN) upstream.send(forwarded)
+        else pending.push(forwarded)
     })
     connection.on('close', closeBoth)
     connection.on('error', error => {

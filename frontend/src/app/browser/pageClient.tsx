@@ -1,6 +1,7 @@
 'use client'
 
 import { Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
+import Link from 'next/link'
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
@@ -8,6 +9,12 @@ import { getCookie } from '@/utils/cookies/cookies'
 type SessionState = 'prompt' | 'queued' | 'connecting' | 'live' | 'ended' | 'failed' | 'unreachable'
 type SocketState = 'closed' | 'connecting' | 'open' | 'error'
 type StreamStats = { fps?: number; latencyMs?: number }
+type RunTiming = {
+    expiresAt: string
+    suspiciousExtended: boolean
+    freeExtensionUsed: boolean
+    paidExtensionUsed: boolean
+}
 type BrowserNetwork = 'regular' | 'tor'
 type BrowserFingerprint = {
     id: string
@@ -301,6 +308,8 @@ export default function BrowserPageClient() {
     const [activeImage, setActiveImage] = useState<string | null>(null)
     const [streamUrl, setStreamUrl] = useState('')
     const [streamStats, setStreamStats] = useState<StreamStats>({})
+    const [runTiming, setRunTiming] = useState<RunTiming | null>(null)
+    const [clockNow, setClockNow] = useState(Date.now())
     const [activeFrame, setActiveFrame] = useState<{ width: number; height: number }>({ width: 1280, height: 720 })
     const [activeUrl, setActiveUrl] = useState('')
     const [runBlocker, setRunBlocker] = useState('')
@@ -344,10 +353,19 @@ export default function BrowserPageClient() {
     const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool, normalizedTarget) : undefined
     const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage || latestPageImage
     const activeViewportUrl = activeTool ? activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : activeUrl || normalizedTarget
+    const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
+    const paidBrowserPlan = Boolean(quota && quota.plan !== 'anonymous' && quota.plan !== 'free')
 
     useEffect(() => {
         setFormReady(true)
     }, [])
+
+    useEffect(() => {
+        if (!runTiming || sessionState !== 'live') return
+        setClockNow(Date.now())
+        const timer = window.setInterval(() => setClockNow(Date.now()), 1000)
+        return () => window.clearInterval(timer)
+    }, [runTiming, sessionState])
 
     const pushEvent = useCallback((event: string) => {
         setEvents(current => [event, ...current].slice(0, 8))
@@ -559,6 +577,7 @@ export default function BrowserPageClient() {
         setActiveImage(null)
         setStreamUrl('')
         setStreamStats({})
+        setRunTiming(null)
         setActiveUrl(url)
         setActiveSandboxTab('browser')
         setCapacity(null)
@@ -576,7 +595,7 @@ export default function BrowserPageClient() {
                 sessionId: id,
                 network: runNetwork,
                 target: url,
-                durationMinutes: 15,
+                durationSeconds: 90,
                 profileTools,
                 ...browserMetadata,
                 clientId: getOrCreateBrowserClientId(),
@@ -610,6 +629,16 @@ export default function BrowserPageClient() {
             }
             if (payload.type === 'stream_metrics') {
                 setStreamStats({ fps: finiteNumber(payload.fps) || undefined, latencyMs: finiteNumber(payload.latencyMs) || undefined })
+                return
+            }
+            if (payload.type === 'run_time' && typeof payload.expiresAt === 'string') {
+                setRunTiming({
+                    expiresAt: payload.expiresAt,
+                    suspiciousExtended: payload.suspiciousExtended === true,
+                    freeExtensionUsed: payload.freeExtensionUsed === true,
+                    paidExtensionUsed: payload.paidExtensionUsed === true,
+                })
+                setClockNow(Date.now())
                 return
             }
             if (payload.type === 'ready') {
@@ -705,7 +734,7 @@ export default function BrowserPageClient() {
                     setSessionState('failed')
                     setRunBlocker(String(payload.message || 'Sandbox launch failed.'))
                 }
-                if (payload.url) setActiveUrl(String(payload.url))
+                if (payload.url && statusState !== 'tab_selected' && statusState !== 'tab_navigated') setActiveUrl(String(payload.url))
                 pushEvent(String(payload.message || payload.state || 'Browser status updated.'))
                 return
             }
@@ -731,6 +760,18 @@ export default function BrowserPageClient() {
         }
     }, [browserMetadata, pushConsoleEvent, pushEvent, selectedProfile.tools, selectedProfileId, target])
 
+    const selectSandboxTab = useCallback((tabId: string) => {
+        setActiveSandboxTab(tabId)
+        const socket = socketRef.current
+        if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'select_tab', tabId }))
+    }, [])
+
+    const extendRun = useCallback((extension: 'free' | 'paid') => {
+        const socket = socketRef.current
+        if (socket?.readyState !== WebSocket.OPEN) return
+        socket.send(JSON.stringify({ type: 'extend', extension }))
+    }, [])
+
     const stopRun = useCallback(() => {
         socketRef.current?.send(JSON.stringify({ type: 'end' }))
         socketRef.current?.close()
@@ -751,6 +792,7 @@ export default function BrowserPageClient() {
         setActiveImage(null)
         setStreamUrl('')
         setStreamStats({})
+        setRunTiming(null)
         setActiveUrl('')
         setCapacity(null)
         pushEvent('Sandbox reset.')
@@ -1067,6 +1109,20 @@ export default function BrowserPageClient() {
                             <StatusPill label='Run' value={summary.navigationFailed || sessionState === 'unreachable' ? 'unreachable' : sessionStateLabel(sessionState)} good={sessionState === 'live'} />
                             {sessionState !== 'ended' ? <StatusPill label='Connection' value={socketStateLabel(socketState)} good={socketState === 'open'} /> : null}
                             {capacity ? <StatusPill label='Capacity' value={capacity.queuePosition ? `${capacity.queuePosition}/${capacity.queuedSessions} queued` : `${capacity.activeSessions}/${capacity.maxSessions} active`} good={!capacity.queuePosition} /> : null}
+                            {sessionState === 'live' && runTiming ? <StatusPill label='Time' value={formatRunDuration(runRemainingSeconds)} good={runRemainingSeconds > 15} /> : null}
+                            {sessionState === 'live' && runTiming && !runTiming.paidExtensionUsed ? (
+                                runTiming.freeExtensionUsed && !paidBrowserPlan ? (
+                                    <Link href='/pricing' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                                        <Plus className='h-4 w-4' />
+                                        Add 5 min · Paid
+                                    </Link>
+                                ) : (
+                                    <button type='button' onClick={() => extendRun(runTiming.freeExtensionUsed ? 'paid' : 'free')} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                                        <Plus className='h-4 w-4' />
+                                        {runTiming.freeExtensionUsed ? 'Add 5 min · Paid' : 'Add 5 min'}
+                                    </button>
+                                )
+                            ) : null}
                             <button type='button' onClick={exportReport} disabled={!captures.length} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary disabled:cursor-not-allowed disabled:opacity-50'>
                                 <Download className='h-4 w-4' />
                                 Export
@@ -1097,26 +1153,24 @@ export default function BrowserPageClient() {
                                 toolCaptures={toolCaptures}
                                 target={normalizedTarget}
                                 browserCaptured={Boolean(activeImage || latestPageImage)}
-                                onSelect={setActiveSandboxTab}
+                                onSelect={selectSandboxTab}
                             />
                             <div className='flex items-center gap-2 border-b border-ui-border bg-ui-raised px-3 py-2'>
                                 <span className='h-3 w-3 rounded-full bg-ui-danger' />
                                 <span className='h-3 w-3 rounded-full bg-ui-warning' />
                                 <span className='h-3 w-3 rounded-full bg-ui-success' />
                                 <div className='min-w-0 flex-1 truncate rounded-md border border-ui-border bg-ui-canvas px-3 py-2 font-mono text-xs text-ui-muted'>{activeViewportUrl}</div>
-                                {!activeTool && streamUrl && streamStats.fps ? <div className='shrink-0 text-xs font-semibold text-ui-success'>{Math.round(streamStats.fps)} FPS{streamStats.latencyMs ? ` · ${Math.round(streamStats.latencyMs)} ms` : ''}</div> : null}
+                                {streamUrl && streamStats.fps ? <div className='shrink-0 text-xs font-semibold text-ui-success'>{Math.round(streamStats.fps)} FPS{streamStats.latencyMs ? ` · ${Math.round(streamStats.latencyMs)} ms` : ''}</div> : null}
                             </div>
                             <div
                                 ref={viewportRef}
-                                className={`relative aspect-[16/9] w-full overflow-hidden overscroll-contain bg-ui-canvas outline-none focus:ring-2 focus:ring-ui-primary/30 ${activeTool ? 'touch-auto' : 'touch-none'}`}
+                                className='relative aspect-[16/9] w-full touch-none overflow-hidden overscroll-contain bg-ui-canvas outline-none focus:ring-2 focus:ring-ui-primary/30'
                                 tabIndex={0}
                                 role='application'
                                 aria-label='Interactive isolated browser viewport'
                                 onKeyDown={keyBrowserFrame}
                             >
-                                {activeTool && activeToolCapture ? (
-                                    <ProviderViewportEvidence tool={activeTool} capture={activeToolCapture} />
-                                ) : !activeTool && streamUrl ? (
+                                {streamUrl ? (
                                     <iframe
                                         src={streamUrl}
                                         title='Live WebRTC browser sandbox'
@@ -1124,6 +1178,8 @@ export default function BrowserPageClient() {
                                         allow='autoplay; clipboard-read; clipboard-write; fullscreen'
                                         sandbox='allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups allow-downloads'
                                     />
+                                ) : activeTool && activeToolCapture ? (
+                                    <ProviderViewportEvidence tool={activeTool} capture={activeToolCapture} />
                                 ) : activeViewportImage ? (
                                     <img
                                         ref={imageRef}
@@ -1148,7 +1204,7 @@ export default function BrowserPageClient() {
                         <QuickTriageStrip summary={summary} toolCaptures={toolCaptures} toolCount={selectedProfile.tools.length} />
                         <aside className='grid gap-4 xl:grid-cols-3'>
                             <CapacityPanel capacity={capacity} sessionState={sessionState} />
-                            <ProviderStatusPanel tools={selectedProfile.tools} toolCaptures={toolCaptures} target={normalizedTarget} onSelect={setActiveSandboxTab} />
+                            <ProviderStatusPanel tools={selectedProfile.tools} toolCaptures={toolCaptures} target={normalizedTarget} onSelect={selectSandboxTab} />
                             <div className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted'>
                                 Latest event: {events[0]}
                             </div>
@@ -2010,6 +2066,11 @@ function sessionStateLabel(state: SessionState) {
     if (state === 'failed') return 'failed'
     if (state === 'unreachable') return 'unreachable'
     return 'ready'
+}
+
+function formatRunDuration(seconds: number) {
+    const safe = Math.max(0, Math.floor(seconds))
+    return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`
 }
 
 function socketStateLabel(state: SocketState) {

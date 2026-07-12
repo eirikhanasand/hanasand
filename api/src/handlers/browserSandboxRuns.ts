@@ -229,6 +229,21 @@ export async function updateBrowserRunProviderResult(id: string, provider: strin
     `, [id, provider, JSON.stringify(result)])
 }
 
+export async function browserPaidExtensionAllowed(id: string) {
+    if (!id) return false
+    const result = await run(`
+        SELECT EXISTS (
+            SELECT 1
+            FROM browser_runs runs
+            JOIN browser_subscriptions subscriptions ON subscriptions.owner_id = runs.owner_id
+            WHERE runs.id = $1
+              AND subscriptions.active IS TRUE
+              AND subscriptions.plan <> 'free'
+        ) AS allowed
+    `, [id])
+    return result.rows[0]?.allowed === true
+}
+
 async function browserRunIdentityForSocket(input: { clientId?: string; userId?: string; sessionToken?: string }) {
     const sessionToken = cleanText(input.sessionToken)
     const userId = cleanText(input.userId)

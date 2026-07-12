@@ -128,7 +128,11 @@ export function summarizeDeobfuscationTask(script: InspectedSandboxScript) {
 export function isActionableObfuscatedScript(script: InspectedSandboxScript) {
     if (!script.sample || script.sample.length < 120) return false
     const strongReasons = script.reasons.filter(reason => reason !== 'dynamic execution')
-    return strongReasons.length >= 2 && script.obfuscationScore >= 5
+    if (strongReasons.length >= 2 && script.obfuscationScore >= 5) return true
+    const decoded = decodeScriptSample(script.sample)
+    return script.reasons.includes('dynamic execution')
+        && strongReasons.length >= 2
+        && extractIndicators(decoded.preview).urls.length > 0
 }
 
 export function decodeScriptSample(sample: string) {

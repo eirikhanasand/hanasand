@@ -22,6 +22,7 @@ type BrokerMessage = {
     network?: 'tor' | 'regular'
     target?: string
     durationMinutes?: number
+    durationSeconds?: number
     profileTools?: Array<{ id?: string; name?: string; url?: string }>
     clientId?: string
     userId?: string
@@ -48,6 +49,9 @@ type BrokerMessage = {
     shiftKey?: boolean
     text?: string
     direction?: string
+    tabId?: string
+    extension?: 'free' | 'paid'
+    paidAuthorized?: boolean
 }
 type SandboxNetworkEvent = {
     kind: 'request' | 'response' | 'failed' | 'download'
@@ -88,6 +92,9 @@ const DEFAULT_TARGET = 'http://sample-intel-source.onion'
 const DEFAULT_WIDTH = 1280
 const DEFAULT_HEIGHT = 720
 const MAX_DURATION_MS = 60 * 60 * 1000
+const DEFAULT_DURATION_MS = 90 * 1000
+const SUSPICIOUS_DURATION_MS = 3 * 60 * 1000
+const MANUAL_EXTENSION_MS = 5 * 60 * 1000
 const DEFAULT_BROWSER_MAX_SESSIONS = 100
 const MAX_DOWNLOAD_HASH_BYTES = 5 * 1024 * 1024
 const asnCache = new Map<string, Promise<string | undefined>>()
@@ -278,8 +285,15 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
     let browser: Browser | null = null
     let context: BrowserContext | null = null
     let page: Page | null = null
+    const toolPages = new Map<string, Page>()
+    let activeRemoteTabId = 'browser'
     let ownsBrowser = false
     let closeTimer: NodeJS.Timeout | null = null
+    let runStartedAt = 0
+    let runExpiresAt = 0
+    let suspiciousExtensionApplied = false
+    let freeExtensionUsed = false
+    let paidExtensionUsed = false
     let cancelAdmission: (() => void) | null = null
     let releaseAdmission: (() => void) | null = null
     let currentRunId: string | null = null
@@ -336,11 +350,18 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         cachedDeobfuscationTasks = []
         cachedThreatAssociations = []
         cachedIndicators = null
+        toolPages.clear()
         await context?.close().catch(() => undefined)
         if (ownsBrowser) await browser?.close().catch(() => undefined)
         context = null
         browser = null
         page = null
+        activeRemoteTabId = 'browser'
+        runStartedAt = 0
+        runExpiresAt = 0
+        suspiciousExtensionApplied = false
+        freeExtensionUsed = false
+        paidExtensionUsed = false
         ownsBrowser = false
     }
 
@@ -380,6 +401,17 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             send({ type: 'ended', sessionId })
             await cleanup()
             connection.close()
+            return
+        }
+
+        if (message.type === 'select_tab') {
+            activeRemoteTabId = cleanRemoteTabId(message.tabId)
+            await focusRemoteTab(true)
+            return
+        }
+
+        if (message.type === 'extend') {
+            extendRun(message.extension, message.paidAuthorized === true)
             return
         }
 
@@ -432,6 +464,84 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         }
     }
 
+    function cleanRemoteTabId(value: unknown) {
+        const id = typeof value === 'string' ? value.trim() : ''
+        return /^[a-z0-9_-]{1,80}$/i.test(id) ? id : 'browser'
+    }
+
+    async function focusRemoteTab(report = false) {
+        const selectedPage = activeRemoteTabId === 'browser' ? page : toolPages.get(activeRemoteTabId)
+        if (!selectedPage || selectedPage.isClosed()) {
+            if (report) send({ type: 'status', state: 'tab_waiting', tabId: activeRemoteTabId, message: 'Remote tab is still opening.' })
+            return
+        }
+        await selectedPage.bringToFront().catch(() => undefined)
+        if (report) send({ type: 'status', state: 'tab_selected', tabId: activeRemoteTabId, url: selectedPage.url(), message: 'Remote browser tab selected.' })
+    }
+
+    function sendRunTiming(reason: string) {
+        if (!runStartedAt || !runExpiresAt) return
+        send({
+            type: 'run_time',
+            sessionId,
+            startedAt: new Date(runStartedAt).toISOString(),
+            expiresAt: new Date(runExpiresAt).toISOString(),
+            remainingSeconds: Math.max(0, Math.ceil((runExpiresAt - Date.now()) / 1000)),
+            suspiciousExtended: suspiciousExtensionApplied,
+            freeExtensionUsed,
+            paidExtensionUsed,
+            reason,
+        })
+    }
+
+    function scheduleCloseTimer(reason: string) {
+        if (closeTimer) clearTimeout(closeTimer)
+        const delay = Math.max(0, runExpiresAt - Date.now())
+        closeTimer = setTimeout(() => {
+            send({ type: 'ended', reason: 'timeout', sessionId })
+            void cleanup().finally(() => connection.close())
+        }, delay)
+        sendRunTiming(reason)
+    }
+
+    function extendRun(extension: BrokerMessage['extension'], paidAuthorized: boolean) {
+        if (!runStartedAt || !runExpiresAt) {
+            send({ type: 'status', state: 'extension_unavailable', message: 'The browser run has not started yet.' })
+            return
+        }
+        if (extension === 'free') {
+            if (freeExtensionUsed) {
+                send({ type: 'status', state: 'extension_used', message: 'The included five-minute extension has already been used.' })
+                return
+            }
+            freeExtensionUsed = true
+        } else if (extension === 'paid') {
+            if (!freeExtensionUsed || paidExtensionUsed || !paidAuthorized) {
+                send({ type: 'status', state: paidAuthorized ? 'extension_used' : 'payment_required', message: paidAuthorized ? 'No additional extension is available for this run.' : 'A paid browser plan is required for the second five-minute extension.' })
+                return
+            }
+            paidExtensionUsed = true
+        } else {
+            return
+        }
+        runExpiresAt = Math.min(runStartedAt + MAX_DURATION_MS, Math.max(Date.now(), runExpiresAt) + MANUAL_EXTENSION_MS)
+        scheduleCloseTimer(extension === 'paid' ? 'paid_extension' : 'free_extension')
+        send({ type: 'status', state: 'run_extended', message: 'Browser run extended by five minutes.' })
+    }
+
+    function maybeExtendSuspiciousRun(evidence?: { verdict?: string } | null, analysis?: SandboxToolAnalysis | null) {
+        if (suspiciousExtensionApplied || !runStartedAt || !runExpiresAt) return
+        const suspicious = evidence?.verdict === 'suspicious'
+            || analysis?.verdict === 'suspicious'
+            || Number(analysis?.vendorFlagged || 0) > 0
+            || Number(analysis?.alertCount || 0) > 0
+        if (!suspicious) return
+        suspiciousExtensionApplied = true
+        runExpiresAt = Math.max(runExpiresAt, runStartedAt + SUSPICIOUS_DURATION_MS)
+        scheduleCloseTimer('suspicious_evidence')
+        send({ type: 'status', state: 'suspicious_time_extension', message: 'Suspicious evidence detected; run extended to at least three minutes.' })
+    }
+
     async function startBrowser(message: BrokerMessage) {
         await cleanup()
         assertProductionBrowserWorker()
@@ -442,10 +552,18 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         cachedThreatAssociations = []
         cachedIndicators = null
         documentEvidencePromises = []
+        toolPages.clear()
+        activeRemoteTabId = 'browser'
+        suspiciousExtensionApplied = false
+        freeExtensionUsed = false
+        paidExtensionUsed = false
         const target = normalizeTarget(message.target || DEFAULT_TARGET)
         const network = message.network === 'regular' || message.network === 'tor' ? message.network : defaultNetwork
         const proxy = network === 'tor' ? process.env.ONION_SESSION_PROXY || process.env.TOR_SOCKS_PROXY || '' : ''
-        const durationMs = Math.min(MAX_DURATION_MS, Math.max(60_000, (message.durationMinutes || 15) * 60_000))
+        const requestedDurationMs = Number(message.durationSeconds) > 0
+            ? Number(message.durationSeconds) * 1000
+            : Number(message.durationMinutes) > 0 ? Number(message.durationMinutes) * 60_000 : DEFAULT_DURATION_MS
+        const durationMs = Math.min(MAX_DURATION_MS, Math.max(60_000, requestedDurationMs))
         const skipRunDb = process.env.BROWSER_SANDBOX_SKIP_RUN_DB === '1'
         const browserRun = skipRunDb
             ? {
@@ -638,11 +756,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 void sendFrame(true, 'load')
             })
 
-            closeTimer = setTimeout(() => {
-                void cleanup()
-                send({ type: 'ended', reason: 'timeout', sessionId })
-                connection.close()
-            }, durationMs)
+            runStartedAt = Date.now()
+            runExpiresAt = runStartedAt + durationMs
+            scheduleCloseTimer('started')
 
             trace('navigate_start', { target })
             await navigate(target)
@@ -651,6 +767,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             trace('document_evidence_settled')
             const initialEvidence = page ? await collectPageEvidence(page).catch(() => null) : null
             trace('initial_evidence_collected', { hasEvidence: Boolean(initialEvidence) })
+            maybeExtendSuspiciousRun(initialEvidence)
             rememberDeobfuscationTasks(initialEvidence)
             void captureProfileTools(
                 context,
@@ -713,9 +830,17 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             const startedAt = new Date().toISOString()
             const toolUrl = tool.url!.replaceAll('{url}', encodeURIComponent(target)).replaceAll('{rawUrl}', target)
             const webcrackTool = isWebCrackTool(tool, toolUrl)
+            const toolId = cleanRemoteTabId(tool.id || safeToolId(tool.name || toolUrl))
             const toolPage = await context.newPage().catch(() => null)
             if (!toolPage) return
-            await page?.bringToFront().catch(() => undefined)
+            toolPages.set(toolId, toolPage)
+            toolPage.on('close', () => toolPages.delete(toolId))
+            toolPage.on('console', entry => send({ type: 'console', level: entry.type(), text: `[${tool.name || toolId}] ${entry.text()}` }))
+            toolPage.on('pageerror', error => send({ type: 'pageerror', message: `[${tool.name || toolId}] ${error.message}` }))
+            toolPage.on('framenavigated', frame => {
+                if (frame === toolPage.mainFrame() && activeRemoteTabId === toolId) send({ type: 'status', state: 'tab_navigated', tabId: toolId, url: toolPage.url(), message: `${tool.name || toolId} navigated.` })
+            })
+            await focusRemoteTab()
             const providerBodies = collectProviderResponses(toolPage, tool.name || toolUrl)
             try {
                 toolPage.setDefaultTimeout(providerTimeoutMs(tool))
@@ -801,6 +926,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     await waitForProviderVisual(tool, toolPage)
                     const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText, tool.name || toolUrl)
                     const parsedAnalysis = analyzeToolEvidence(tool.name || toolUrl, parsedEvidence)
+                    maybeExtendSuspiciousRun(parsedEvidence, parsedAnalysis)
                     const parsedScreenshotTimeout = providerScreenshotTimeoutMs(tool, 1500)
                     const parsedImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: parsedScreenshotTimeout }), parsedScreenshotTimeout, openedImage)
                     void persistProviderRunResult(parsedAnalysis)
@@ -828,6 +954,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 if (webcrackTool) {
                     const evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 400, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies(), tool.name || toolUrl)
                     const toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
+                    maybeExtendSuspiciousRun(evidence, toolAnalysis)
                     const image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 2500 }), 2500, null)
                     send({
                         type: 'tool_capture',
@@ -849,6 +976,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 const initialEvidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 2500, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies(), tool.name || toolUrl)
                 const initialImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 2500 }), 2500, null)
                 const initialAnalysis = analyzeToolEvidence(tool.name || toolUrl, initialEvidence)
+                maybeExtendSuspiciousRun(initialEvidence, initialAnalysis)
                 let image = initialImage
                 let evidence = initialEvidence
                 let toolAnalysis = navigationError
@@ -864,6 +992,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 500 }), 500, image)
                     evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 500, evidence), providerBodies(), tool.name || toolUrl)
                     toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
+                    maybeExtendSuspiciousRun(evidence, toolAnalysis)
                 }
                 send({
                     type: 'tool_capture',
@@ -893,7 +1022,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     target,
                 })
             } finally {
-                await toolPage.close().catch(() => undefined)
+                await focusRemoteTab()
             }
         }))
     }
@@ -1122,6 +1251,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     }
                 }
                 rememberDeobfuscationTasks(evidence)
+                maybeExtendSuspiciousRun(evidence)
                 cachedFrameQuality = frameQuality
                 cachedPageEvidence = evidence
                 lastHeavyFrameAt = Date.now()
@@ -1215,6 +1345,11 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         const deadline = Date.now() + 1200
         while (!tasks.length && !cachedDeobfuscationTasks.length && Date.now() < deadline) {
             await new Promise(resolve => setTimeout(resolve, 100))
+        }
+        if (!tasks.length && !cachedDeobfuscationTasks.length && page && !page.isClosed()) {
+            const liveEvidence = await collectPageEvidence(page).catch(() => null)
+            rememberDeobfuscationTasks(liveEvidence)
+            maybeExtendSuspiciousRun(liveEvidence)
         }
         return tasks.length ? tasks : cachedDeobfuscationTasks
     }
