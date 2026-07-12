@@ -376,6 +376,8 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     let sawTerminalMessage = false
     let streamMetricsTimer: NodeJS.Timeout | null = null
     let releaseAdmission: (() => void) | null = null
+    let resolveStreamResolution: (resolution: string) => void = () => undefined
+    const streamResolution = new Promise<string>(resolve => { resolveStreamResolution = resolve })
     const streamToken = randomUUID().replaceAll('-', '')
     const admission = requestBrowserAdmission(id, payload => {
         if (connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify(payload))
@@ -397,7 +399,9 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     }
 
     connection.on('message', async message => {
+        const payload = parseSocketMessage(message)
         if (!runPrepared) {
+            if (payload?.type !== 'start') return
             const allowed = await prepareProxiedBrowserRun(id, message, connection).catch(error => {
                 void recordWebsocketFailure(`browser-session-prepare-${route}`, id, error)
                 return false
@@ -405,8 +409,8 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             if (!allowed) return
             runPrepared = true
         }
+        if (payload?.type === 'start') resolveStreamResolution(browserStreamResolution(payload))
         let forwarded: RawData = message
-        const payload = parseSocketMessage(message)
         if (payload?.type === 'extend' && payload.extension === 'paid') {
             const allowed = await browserPaidExtensionAllowed(id).catch(() => false)
             if (!allowed) {
@@ -428,7 +432,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
         closeBoth()
     })
 
-    void admission.promise.then(slot => {
+    void Promise.all([admission.promise, streamResolution]).then(([slot, resolution]) => {
         if (closed) {
             slot.release()
             return null
@@ -441,7 +445,7 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
             message: 'Sandbox capacity is available. Starting this browser.',
         }))
         sendStatus(connection, 'launching_worker', 'Starting isolated browser worker.')
-        return startEphemeralBrowserWorker(id)
+        return startEphemeralBrowserWorker(id, resolution)
     })
         .then(worker => {
             if (!worker) return
@@ -874,7 +878,13 @@ async function browserStreamMetrics(ip: string) {
     }
 }
 
-async function startEphemeralBrowserWorker(sessionId: string) {
+function browserStreamResolution(payload: { width?: unknown; height?: unknown }) {
+    const width = Math.max(320, Math.min(2400, Math.round(Number(payload.width) || 1280)))
+    const height = Math.max(320, Math.min(2160, Math.round(Number(payload.height) || width * 9 / 16)))
+    return `${width}x${height}`
+}
+
+async function startEphemeralBrowserWorker(sessionId: string, resolution = '1280x720') {
     if (process.env.NODE_ENV === 'production' && process.env.BROWSER_SANDBOX_EGRESS_FIREWALL_READY !== '1') {
         throw new Error('Browser sandbox egress firewall is not marked ready. Run ops/browser-worker/install-egress-firewall.sh before enabling production browser sessions.')
     }
@@ -891,7 +901,7 @@ async function startEphemeralBrowserWorker(sessionId: string) {
             'USER=ubuntu',
             'DISPLAY=:20',
             'START_XFCE4=false',
-            'BROWSER_STREAM_RESOLUTION=1280x720',
+            `BROWSER_STREAM_RESOLUTION=${resolution}`,
             'BROWSER_SANDBOX_WORKER_ONLY=1',
             'BROWSER_SANDBOX_SKIP_RUN_DB=1',
             'BROWSER_SANDBOX_CHROMIUM_SANDBOX=1',

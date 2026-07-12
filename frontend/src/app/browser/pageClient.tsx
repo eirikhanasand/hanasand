@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
+import { ArrowUp, Check, Clipboard, Download, Globe2, Hourglass, Play, Plus, RotateCcw, Share2, ShieldCheck, SlidersHorizontal, Square, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
@@ -273,6 +273,11 @@ function sessionId() {
     return `regular-${Date.now().toString(36)}`
 }
 
+function scrollRouteFrameToTop(behavior: ScrollBehavior) {
+    const frame = document.querySelector<HTMLElement>('.enterprise-theme')
+    frame?.scrollTo({ top: 0, behavior })
+}
+
 function brokerUrlForSession(baseUrl: string, id: string) {
     if (baseUrl.includes(':id')) return baseUrl.replace(':id', encodeURIComponent(id))
     return `${baseUrl.replace(/\/$/, '')}/${encodeURIComponent(id)}`
@@ -532,23 +537,6 @@ export default function BrowserPageClient() {
         socketRef.current = null
     }, [])
 
-    const sendBrowserResize = useCallback(() => {
-        const size = { width: browserMetadata.width, height: browserMetadata.height }
-        const socket = socketRef.current
-        if (!size || !socket || socket.readyState !== WebSocket.OPEN) return
-        socket.send(JSON.stringify({ type: 'resize', ...size }))
-    }, [browserMetadata.height, browserMetadata.width])
-
-    useEffect(() => {
-        if (sessionState === 'prompt') return
-        const element = viewportRef.current
-        if (!element) return
-        sendBrowserResize()
-        const observer = new ResizeObserver(sendBrowserResize)
-        observer.observe(element)
-        return () => observer.disconnect()
-    }, [sendBrowserResize, sessionState])
-
     const applyFingerprint = useCallback((id: string) => {
         const next = browserFingerprints.find(item => item.id === id) || browserFingerprints[0]
         setFingerprintId(next.id)
@@ -563,6 +551,7 @@ export default function BrowserPageClient() {
     const startRun = useCallback((override?: { target?: string; network?: BrowserNetwork }) => {
         const url = normalizeTarget(override?.target ?? target)
         if (!url) return
+        scrollRouteFrameToTop('auto')
         const id = sessionId()
         const socket = new WebSocket(brokerUrlForSession(brokerBaseUrl, id))
         const runNetwork = inferNetwork(url)
@@ -1099,17 +1088,17 @@ export default function BrowserPageClient() {
     return (
         <main className='min-h-[calc(100vh-4.5rem)] overflow-x-hidden bg-ui-canvas text-ui-text'>
             <section className='grid min-h-[calc(100vh-4.5rem)] grid-rows-[auto_minmax(0,1fr)]'>
-                <header className='border-b border-ui-border bg-ui-panel px-4 py-3'>
-                    <div className='mx-auto flex max-w-[96rem] flex-wrap items-center justify-between gap-3'>
-                        <div className='min-w-0'>
+                <header className='sticky top-0 z-40 border-b border-ui-border bg-ui-panel px-4 py-3'>
+                    <div className='mx-auto flex max-w-[96rem] flex-wrap items-start justify-between gap-3'>
+                        <div className='min-w-0 flex-1 basis-56'>
                             <p className='text-xs font-semibold uppercase text-ui-primary'>Browser sandbox</p>
-                            <h1 className='truncate text-lg font-semibold text-ui-text'>{activeUrl || normalizedTarget}</h1>
+                            <h1 className='mt-0.5 line-clamp-2 break-all text-sm font-semibold leading-5 text-ui-text sm:text-lg'>{activeUrl || normalizedTarget}</h1>
                         </div>
                         <div className='flex flex-wrap items-center gap-2'>
                             <StatusPill label='Run' value={summary.navigationFailed || sessionState === 'unreachable' ? 'unreachable' : sessionStateLabel(sessionState)} good={sessionState === 'live'} />
                             {sessionState !== 'ended' ? <StatusPill label='Connection' value={socketStateLabel(socketState)} good={socketState === 'open'} /> : null}
                             {capacity ? <StatusPill label='Capacity' value={capacity.queuePosition ? `${capacity.queuePosition}/${capacity.queuedSessions} queued` : `${capacity.activeSessions}/${capacity.maxSessions} active`} good={!capacity.queuePosition} /> : null}
-                            {sessionState === 'live' && runTiming ? <StatusPill label='Time' value={formatRunDuration(runRemainingSeconds)} good={runRemainingSeconds > 15} /> : null}
+                            {sessionState === 'live' && runTiming ? <span role='timer' aria-label={`${formatRunDuration(runRemainingSeconds)} remaining`}><StatusPill label='Time left' value={formatRunDuration(runRemainingSeconds)} good={runRemainingSeconds > 15} /></span> : null}
                             {sessionState === 'live' && runTiming && !runTiming.paidExtensionUsed ? (
                                 runTiming.freeExtensionUsed && !paidBrowserPlan ? (
                                     <Link href='/pricing' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
@@ -1137,6 +1126,9 @@ export default function BrowserPageClient() {
                                     Stop
                                 </button>
                             ) : null}
+                            <button type='button' onClick={() => scrollRouteFrameToTop('smooth')} className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary sm:hidden' aria-label='Back to top' title='Back to top'>
+                                <ArrowUp className='h-4 w-4' />
+                            </button>
                             <button type='button' onClick={resetRun} className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary' aria-label='New sandbox run'>
                                 <RotateCcw className='h-4 w-4' />
                             </button>
@@ -1155,12 +1147,12 @@ export default function BrowserPageClient() {
                                 browserCaptured={Boolean(activeImage || latestPageImage)}
                                 onSelect={selectSandboxTab}
                             />
-                            <div className='flex items-center gap-2 border-b border-ui-border bg-ui-raised px-3 py-2'>
-                                <span className='h-3 w-3 rounded-full bg-ui-danger' />
-                                <span className='h-3 w-3 rounded-full bg-ui-warning' />
-                                <span className='h-3 w-3 rounded-full bg-ui-success' />
-                                <div className='min-w-0 flex-1 truncate rounded-md border border-ui-border bg-ui-canvas px-3 py-2 font-mono text-xs text-ui-muted'>{activeViewportUrl}</div>
-                                {streamUrl && streamStats.fps ? <div className='shrink-0 text-xs font-semibold text-ui-success'>{Math.round(streamStats.fps)} FPS{streamStats.latencyMs ? ` · ${Math.round(streamStats.latencyMs)} ms` : ''}</div> : null}
+                            <div className='flex items-start gap-2 border-b border-ui-border bg-ui-raised px-3 py-2'>
+                                <span className='mt-3 h-3 w-3 rounded-full bg-ui-danger' />
+                                <span className='mt-3 h-3 w-3 rounded-full bg-ui-warning' />
+                                <span className='mt-3 h-3 w-3 rounded-full bg-ui-success' />
+                                <div className='max-h-20 min-w-0 flex-1 overflow-y-auto break-all rounded-md border border-ui-border bg-ui-canvas px-3 py-2 font-mono text-xs leading-5 text-ui-muted'>{activeViewportUrl}</div>
+                                {streamUrl && streamStats.fps ? <div className='hidden shrink-0 pt-2 text-xs font-semibold text-ui-success sm:block'>{Math.round(streamStats.fps)} FPS{streamStats.latencyMs ? ` · ${Math.round(streamStats.latencyMs)} ms` : ''}</div> : null}
                             </div>
                             <div
                                 ref={viewportRef}
@@ -1177,6 +1169,7 @@ export default function BrowserPageClient() {
                                         className='absolute inset-0 h-full w-full border-0 bg-black'
                                         allow='autoplay; clipboard-read; clipboard-write; fullscreen'
                                         sandbox='allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups allow-downloads'
+                                        onLoad={() => scrollRouteFrameToTop('auto')}
                                     />
                                 ) : activeTool && activeToolCapture ? (
                                     <ProviderViewportEvidence tool={activeTool} capture={activeToolCapture} />
@@ -1437,7 +1430,7 @@ function RunDetailModal({ run, onClose, onRerun }: { run: BrowserRunHistory; onC
                 <div className='flex items-start justify-between gap-3'>
                     <div className='min-w-0'>
                         <h2 className='text-base font-semibold text-ui-text'>Browser run</h2>
-                        <p className='mt-1 truncate font-mono text-xs text-ui-muted'>{run.target}</p>
+                        <p className='mt-1 break-all font-mono text-xs text-ui-muted'>{run.target}</p>
                     </div>
                     <button type='button' onClick={onClose} className='rounded-md border border-ui-border px-2 py-1 text-xs font-semibold text-ui-text'>Close</button>
                 </div>
@@ -1877,7 +1870,7 @@ function EvidenceFact({ label, value, mono = false }: { label: string; value: st
     return (
         <div className='min-w-0 rounded-md border border-ui-border bg-ui-panel p-2'>
             <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
-            <p className={`mt-1 truncate font-semibold text-ui-text ${mono ? 'font-mono text-[11px]' : ''}`}>{value}</p>
+            <p className={`mt-1 font-semibold text-ui-text ${mono ? 'break-all font-mono text-[11px]' : 'wrap-break-word'}`}>{value}</p>
         </div>
     )
 }
