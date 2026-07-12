@@ -475,7 +475,14 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             if (report) send({ type: 'status', state: 'tab_waiting', tabId: activeRemoteTabId, message: 'Remote tab is still opening.' })
             return
         }
-        await selectedPage.bringToFront().catch(() => undefined)
+        const focusError = await selectedPage.bringToFront()
+            .then(() => selectedPage.evaluate(() => window.focus()))
+            .then(() => '')
+            .catch(error => error instanceof Error ? error.message : String(error))
+        if (focusError) {
+            send({ type: 'status', state: 'tab_select_failed', tabId: activeRemoteTabId, url: selectedPage.url(), message: `Remote tab could not be selected: ${focusError}` })
+            return
+        }
         if (report) send({ type: 'status', state: 'tab_selected', tabId: activeRemoteTabId, url: selectedPage.url(), message: 'Remote browser tab selected.' })
     }
 
