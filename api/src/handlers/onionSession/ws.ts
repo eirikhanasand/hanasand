@@ -533,6 +533,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 await route.continue().catch(() => undefined)
             })
             page = await context.newPage()
+            await fullscreenBrowserPage(context, page)
             trace('page_created')
             page.on('console', (entry) => send({ type: 'console', level: entry.type(), text: entry.text() }))
             page.on('pageerror', (error) => send({ type: 'pageerror', message: error.message }))
@@ -1205,6 +1206,16 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             await new Promise(resolve => setTimeout(resolve, 100))
         }
         return tasks.length ? tasks : cachedDeobfuscationTasks
+    }
+}
+
+async function fullscreenBrowserPage(context: BrowserContext, page: Page) {
+    const session = await context.newCDPSession(page)
+    try {
+        const { windowId } = await session.send('Browser.getWindowForTarget')
+        await session.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'fullscreen' } })
+    } finally {
+        await session.detach().catch(() => undefined)
     }
 }
 
