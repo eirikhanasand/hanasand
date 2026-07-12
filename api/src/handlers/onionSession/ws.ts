@@ -86,7 +86,7 @@ const DEFAULT_TARGET = 'http://sample-intel-source.onion'
 const DEFAULT_WIDTH = 1280
 const DEFAULT_HEIGHT = 720
 const MAX_DURATION_MS = 60 * 60 * 1000
-const DEFAULT_BROWSER_MAX_SESSIONS = 10
+const DEFAULT_BROWSER_MAX_SESSIONS = 20
 const MAX_DOWNLOAD_HASH_BYTES = 5 * 1024 * 1024
 const asnCache = new Map<string, Promise<string | undefined>>()
 const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
@@ -170,7 +170,7 @@ function browserMaxSessions() {
     return Math.max(1, Math.min(100, Math.floor(configured)))
 }
 
-function currentBrowserAdmissionStatus(queuePosition?: number): SandboxAdmissionStatus {
+export function currentBrowserAdmissionStatus(queuePosition?: number): SandboxAdmissionStatus {
     return {
         activeSessions: activeBrowserSessions,
         queuedSessions: browserSessionQueue.length,
@@ -179,7 +179,7 @@ function currentBrowserAdmissionStatus(queuePosition?: number): SandboxAdmission
     }
 }
 
-function requestBrowserAdmission(sessionId: string, send: (payload: Record<string, unknown>) => void) {
+export function requestBrowserAdmission(sessionId: string, send: (payload: Record<string, unknown>) => void) {
     const maxSessions = browserMaxSessions()
     if (activeBrowserSessions < maxSessions) {
         activeBrowserSessions += 1

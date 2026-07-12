@@ -12,7 +12,7 @@ import { removeClient } from '#utils/ws/removeClient.ts'
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import run from '#db'
-import { handleOnionSessionSocket } from '../handlers/onionSession/ws.ts'
+import { currentBrowserAdmissionStatus, handleOnionSessionSocket, requestBrowserAdmission } from '../handlers/onionSession/ws.ts'
 import { finishBrowserRun, prepareBrowserRun, updateBrowserRunProviderResult, type BrowserProviderRunResult } from '../handlers/browserSandboxRuns.ts'
 import { createRuntimeContainer, getRuntimeContainer, getRuntimeContainerLogs, removeRuntimeContainer, startRuntimeContainer } from '#utils/docker/engine.ts'
 
@@ -375,7 +375,11 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
     let deliveredFrame = false
     let sawTerminalMessage = false
     let streamMetricsTimer: NodeJS.Timeout | null = null
+    let releaseAdmission: (() => void) | null = null
     const streamToken = randomUUID().replaceAll('-', '')
+    const admission = requestBrowserAdmission(id, payload => {
+        if (connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify(payload))
+    })
 
     const closeBoth = () => {
         if (closed) return
@@ -383,6 +387,9 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
         if (connection.readyState === WebSocket.OPEN) connection.close()
         if (upstream && (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING)) upstream.close()
         if (streamMetricsTimer) clearInterval(streamMetricsTimer)
+        admission.cancel()
+        releaseAdmission?.()
+        releaseAdmission = null
         browserStreams.delete(id)
         if (containerId) void (!sawReady || !deliveredFrame ? recordBrowserWorkerLogs(containerId, route, id) : Promise.resolve())
             .finally(() => removeRuntimeContainer(containerId))
@@ -407,10 +414,24 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
         closeBoth()
     })
 
-    sendStatus(connection, 'launching_worker', 'Starting isolated browser worker.')
-
-    void startEphemeralBrowserWorker(id)
-        .then(({ containerId: nextContainerId, wsUrl, streamIp }) => {
+    void admission.promise.then(slot => {
+        if (closed) {
+            slot.release()
+            return null
+        }
+        releaseAdmission = slot.release
+        if (connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify({
+            type: 'status',
+            state: 'capacity_admitted',
+            capacity: slot.status,
+            message: 'Sandbox capacity is available. Starting this browser.',
+        }))
+        sendStatus(connection, 'launching_worker', 'Starting isolated browser worker.')
+        return startEphemeralBrowserWorker(id)
+    })
+        .then(worker => {
+            if (!worker) return
+            const { containerId: nextContainerId, wsUrl, streamIp } = worker
             if (closed) {
                 void removeRuntimeContainer(nextContainerId).catch(() => undefined)
                 return
@@ -442,7 +463,9 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
                 if (payload?.type === 'ended') sawTerminalMessage = true
                 void persistBrowserProviderResult(id, message)
                 void finishProxiedBrowserRun(id, message)
-                if (connection.readyState === WebSocket.OPEN) connection.send(socketMessageText(message))
+                if (connection.readyState === WebSocket.OPEN) connection.send(payload?.capacity
+                    ? JSON.stringify({ ...payload, capacity: currentBrowserAdmissionStatus() })
+                    : socketMessageText(message))
             })
             upstream.on('close', (code, reason) => {
                 if (connection.readyState === WebSocket.OPEN) {
