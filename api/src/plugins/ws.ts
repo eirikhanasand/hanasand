@@ -882,6 +882,7 @@ async function startEphemeralBrowserWorker(sessionId: string) {
             Tmpfs: {
                 '/tmp': 'rw,noexec,nosuid,size=1g',
                 '/etc/nginx/sites-available': 'rw,noexec,nosuid,size=1m,uid=1000,gid=1000',
+                '/var/lib/nginx': 'rw,noexec,nosuid,size=16m,uid=1000,gid=1000',
             },
             CapAdd: [],
             CapDrop: ['ALL'],
