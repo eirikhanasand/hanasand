@@ -106,7 +106,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(wsSource.includes('requestBrowserAdmission(id') && wsSource.includes('releaseAdmission?.()'), 'the API broker should enforce and release fleet-wide isolated-browser capacity.')
     assert(wsSource.includes('currentBrowserAdmissionStatus()'), 'worker status should be rewritten with fleet-wide broker capacity.')
     assert(brokerSource.includes('network?: \'tor\' | \'regular\''), 'broker should support regular network mode.')
-    assert(brokerSource.includes('DEFAULT_BROWSER_MAX_SESSIONS = 20'), 'broker should default shared browser capacity to twenty active sessions.')
+    assert(brokerSource.includes('DEFAULT_BROWSER_MAX_SESSIONS = 100'), 'broker should default shared browser capacity to one hundred active sessions.')
     assert(!brokerSource.includes('network === \'regular\' ? requestBrowserAdmission'), 'broker should use the shared queue for Regular and Tor runs.')
     assert(brokerSource.includes('BROWSER_SANDBOX_MAX_SESSIONS'), 'broker capacity should be configurable by environment.')
     assert(routesSource.includes('/browser/profiles'), 'API should expose canonical browser profile routes.')

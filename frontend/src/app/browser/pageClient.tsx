@@ -946,7 +946,7 @@ export default function BrowserPageClient() {
                             Check unknown URLs in a sandbox. Onion addresses are also supported.
                         </p>
                         <div className='grid max-w-xl gap-2 text-sm text-ui-muted sm:grid-cols-3'>
-                            <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'><strong className='text-ui-text'>{capacity?.activeSessions ?? 0}/{capacity?.maxSessions ?? 20}</strong> browsers active</span>
+                            <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'><strong className='text-ui-text'>{capacity?.activeSessions ?? 0}/{capacity?.maxSessions ?? 100}</strong> browsers active</span>
                             <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>Queues when full</span>
                             <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>Onion supported</span>
                         </div>
@@ -1427,7 +1427,7 @@ function virusTotalVendorLabel(analysis: Pick<SandboxToolAnalysis, 'vendorFlagge
 
 function CapacityPanel({ capacity, sessionState }: { capacity: SandboxCapacity | null; sessionState: SessionState }) {
     const active = capacity?.activeSessions ?? 0
-    const max = capacity?.maxSessions ?? 20
+    const max = capacity?.maxSessions ?? 100
     const queued = capacity?.queuedSessions ?? 0
     const position = capacity?.queuePosition
     const busy = sessionState === 'queued'
