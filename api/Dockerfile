@@ -36,7 +36,7 @@ EXPOSE 8080
 
 FROM oven/bun:1.3.11 AS browser-bun
 
-FROM ghcr.io/selkies-project/selkies-gstreamer/gst-py-example@sha256:3b7e60077dfc56af335cbe3da33a8255ec0ab954ecf6169b9a46e78d09c3df84 AS browser-runtime
+FROM ghcr.io/selkies-project/selkies-gstreamer/gst-py-example@sha256:3b7e60077dfc56af335cbe2da33a8255ec0ab954ecf6169b9a46e78d09c3df84 AS browser-runtime
 
 USER root
 COPY --from=browser-bun /usr/local/bin/bun /usr/local/bin/bun
