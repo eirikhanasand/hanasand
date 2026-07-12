@@ -16,6 +16,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     const runsSource = readFileSync(path.join(root, '../api/src/handlers/browserSandboxRuns.ts'), 'utf8')
     const routesSource = readFileSync(path.join(root, '../api/src/routes.ts'), 'utf8')
     const analysisSource = readFileSync(path.join(root, '../api/src/handlers/onionSession/analysis.ts'), 'utf8')
+    const stopRunSource = clientSource.slice(clientSource.indexOf('const stopRun'), clientSource.indexOf('const resetRun'))
 
     assert(routeSource.includes('path: \'/browser\''), 'browser route metadata should use the canonical public route path.')
     assert(routeSource.includes('<BrowserPageClient />'), 'browser route should render the unified client.')
@@ -100,6 +101,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(clientSource.includes('capacity_busy'), 'client should react to backend capacity-busy events.')
     assert(clientSource.includes('capacity_admitted'), 'client should react when a queued sandbox is admitted.')
     assert(clientSource.includes('durationSeconds: 90'), 'browser runs should default to ninety seconds.')
+    assert(stopRunSource.includes('type: \'end\'') && !stopRunSource.includes('.close()'), 'Stop should wait for the worker ended acknowledgement instead of racing the websocket closed.')
     assert(clientSource.includes('label=\'Time left\'') && clientSource.includes('role=\'timer\''), 'mobile analysts should see an explicit live countdown.')
     assert(clientSource.includes('aria-label=\'Back to top\'') && clientSource.includes('sticky top-0'), 'mobile run controls should remain reachable above the interactive stream.')
     assert(clientSource.includes('onLoad={() => scrollRouteFrameToTop(\'auto\')}'), 'mounting the WebRTC stream should restore the outer product page to the top.')

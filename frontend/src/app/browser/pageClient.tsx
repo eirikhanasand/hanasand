@@ -762,12 +762,9 @@ export default function BrowserPageClient() {
     }, [])
 
     const stopRun = useCallback(() => {
-        socketRef.current?.send(JSON.stringify({ type: 'end' }))
-        socketRef.current?.close()
-        socketRef.current = null
+        const socket = socketRef.current
+        if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'end' }))
         setSessionState('ended')
-        setStreamUrl('')
-        setStreamStats({})
         pushEvent('Sandbox stopped.')
     }, [pushEvent])
 
