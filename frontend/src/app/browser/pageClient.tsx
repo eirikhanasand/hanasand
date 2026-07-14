@@ -2351,14 +2351,6 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     const toolCaptures = captures.filter(capture => capture.kind === 'tool')
     const redirected = new Set(pageCaptures.map(capture => capture.url)).size > 1
     const navigationFailed = pageCaptures.some(capture => isBrowserErrorUrl(capture.url || capture.evidence?.url || ''))
-    const extracted = extractIndicators(captures.map(capture => `${capture.url} ${capture.title || ''}`).join('\n'))
-    const evidenceIndicators = captures.flatMap(capture => [
-        ...(capture.evidence?.indicators?.domains || []),
-        ...(capture.evidence?.indicators?.ips || []),
-        ...(capture.evidence?.indicators?.urls || []),
-        ...(capture.evidence?.sourceUrls || []),
-    ])
-    const indicators = usefulIndicators([...extracted, ...evidenceIndicators], target)
     const toolAnalyses = toolCaptures.map(capture => capture.toolAnalysis).filter(Boolean) as SandboxToolAnalysis[]
     const virusTotal = toolAnalyses.find(item => item.toolKind === 'virustotal')
     const urlquery = toolAnalyses.find(item => item.toolKind === 'urlquery')
@@ -2375,14 +2367,18 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     ]).map(cleanEvidenceComment).filter(Boolean))).slice(0, 4) as string[]
     const confidence = Math.max(0, ...captures.map(capture => capture.evidence?.confidence || 0))
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
-    const networkDomains = captures.flatMap(capture => capture.networkSummary?.domains || [])
     const failedRequests = captures.reduce((count, capture) => count + (capture.networkSummary?.failedCount || 0), 0)
-    const decodedIndicators = deobfuscationTasks.flatMap(task => [
+    const decodedIndicators = suspiciousDeobfuscationTasks.flatMap(task => [
         ...(task.indicators?.domains || []),
         ...(task.indicators?.ips || []),
         ...(task.indicators?.urls || []),
     ])
-    const allIndicators = usefulIndicators([...indicators, ...decodedIndicators, ...networkDomains], target)
+    const providerDetected = (virusTotal?.vendorFlagged || 0) > 0 || (urlquery?.alertCount || 0) > 0
+    const allIndicators = usefulIndicators([
+        ...(providerDetected ? [target] : []),
+        ...suspiciousCaptures.map(capture => capture.url || capture.evidence?.url || '').filter(Boolean),
+        ...decodedIndicators,
+    ])
     const deobfuscationSummary = deobfuscationTasks.find(task => task.summary)?.summary || 'No decoded malicious payload summary is available yet.'
     const capturedToolCount = profile.tools.filter(tool => toolCaptures.some(capture => matchesTool(capture, tool))).length
     const threatAssociations = dedupeThreatAssociations([
@@ -2723,21 +2719,8 @@ function hasParsedProviderResult(analysis?: SandboxToolAnalysis) {
         || Boolean(analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded !== undefined)
 }
 
-function extractIndicators(value: string) {
-    const domains = value.match(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi) || []
-    const ips = (value.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) || [])
-        .filter(ip => ip.split('.').every(part => Number(part) >= 0 && Number(part) <= 255))
-    const urls = value.match(/https?:\/\/[^\s"'<>]+/gi) || []
-    return Array.from(new Set([
-        ...urls.filter(isUsefulUrlIndicator),
-        ...domains.filter(isUsefulDomainIndicator),
-        ...ips,
-    ].map(item => item.toLowerCase()))).slice(0, 80)
-}
-
-function usefulIndicators(values: string[], target: string) {
-    const normalizedTarget = target.toLowerCase()
-    return Array.from(new Set(values.map(item => item.toLowerCase().trim()).filter(item => item && !normalizedTarget.includes(item) && isUsefulIndicator(item)))).slice(0, 80)
+function usefulIndicators(values: string[]) {
+    return Array.from(new Set(values.map(item => item.toLowerCase().trim()).filter(item => item && isUsefulIndicator(item)))).slice(0, 80)
 }
 
 function isUsefulIndicator(value: string) {
