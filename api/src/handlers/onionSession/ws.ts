@@ -2168,7 +2168,7 @@ async function loadWebCrackSample(page: Page, tasks: SandboxDeobfuscationTask[])
     const task = tasks.find(item => item.sample || item.decodedPreview)
     const sample = (task?.sample || task?.decodedPreview || '').slice(0, 12000)
     if (!task || !sample) {
-        return { loaded: false, reason: 'no obfuscated script sample extracted from target page' }
+        return { loaded: false, reason: 'no obfuscated code found on target page' }
     }
 
     const textArea = page.locator('textarea').first()

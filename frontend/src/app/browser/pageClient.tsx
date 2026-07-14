@@ -1280,7 +1280,7 @@ function SandboxTabButton({ active, label, status, onClick }: { active: boolean;
 function ProviderStatusPanel({ tools, toolCaptures, target, onSelect }: { tools: SandboxTool[]; toolCaptures: Capture[]; target: string; onSelect: (tab: string) => void }) {
     return (
         <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
-            <h2 className='text-sm font-semibold uppercase text-ui-primary'>Provider tabs</h2>
+            <h2 className='text-sm font-semibold uppercase text-ui-primary'>Tabs</h2>
             <div className='mt-3 grid gap-2'>
                 {tools.length ? tools.map(tool => {
                     const capture = selectToolCapture(toolCaptures, tool, target)
@@ -1613,7 +1613,7 @@ function AnalystSummary({ summary, captures }: { summary: ReturnType<typeof buil
             {summary.deobfuscationTasks.length ? (
                 <div className='mt-3 rounded-md border border-ui-warning/30 bg-ui-warning/10 p-3'>
                     <p className='text-xs font-semibold uppercase text-ui-warning'>WebCrack analysis</p>
-                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{summary.deobfuscationTasks.length} script sample{summary.deobfuscationTasks.length === 1 ? '' : 's'} extracted. {summary.webcrackLoaded ? `WebCrack loaded ${summary.webcrackLoaded} sample${summary.webcrackLoaded === 1 ? '' : 's'} for deobfuscation.` : 'WebCrack did not accept an extracted sample yet.'} {summary.deobfuscationSummary}</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>{summary.deobfuscationTasks.length} obfuscated code item{summary.deobfuscationTasks.length === 1 ? '' : 's'} extracted. {summary.webcrackLoaded ? `WebCrack loaded ${summary.webcrackLoaded} item${summary.webcrackLoaded === 1 ? '' : 's'} for deobfuscation.` : 'WebCrack did not accept the extracted code yet.'} {summary.deobfuscationSummary}</p>
                 </div>
             ) : null}
         </section>
@@ -1714,19 +1714,19 @@ function EvidenceWorkspace({
                     })}
                 </div>
 
-                <EvidencePanel title='WebCrack / decoded scripts' status={summary.webcrackLoaded ? 'Sample loaded' : 'No decoded result'}>
+                <EvidencePanel title='WebCrack / decoded code' status={summary.webcrackLoaded ? 'Code loaded' : 'No decoded result'}>
                     {summary.deobfuscationTasks.length ? (
                         <div className='grid gap-2 text-xs text-ui-muted'>
                             {summary.deobfuscationTasks.slice(0, 4).map(task => (
                                 <div key={`${task.scriptId}-${task.source}`} className='rounded-md border border-ui-border bg-ui-panel p-2'>
-                                    <p className='font-semibold text-ui-text'>{task.scriptId || 'script sample'} · {task.assessment || 'review required'}</p>
+                                    <p className='font-semibold text-ui-text'>{task.scriptId || 'obfuscated code'} · {task.assessment || 'review required'}</p>
                                     {task.sha256 ? <p className='mt-1 break-all font-mono text-[11px] text-ui-text'>sha256 {task.sha256}</p> : null}
                                     <p className='mt-1 leading-5'>{task.summary || task.decodedPreview || 'Decoded summary unavailable.'}</p>
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <p className='text-xs leading-5 text-ui-muted'>No obfuscated script sample was loaded into WebCrack for this run.</p>
+                        <p className='text-xs leading-5 text-ui-muted'>No obfuscated code was found on this page.</p>
                     )}
                 </EvidencePanel>
 
@@ -2584,7 +2584,7 @@ function buildAnalystBrief(input: {
         recommendedAction = 'Review the suspicious evidence, contacted domains, and WebCrack output before allowing user access.'
     } else if (input.pageCaptureCount) {
         verdict = 'No signs of suspicious activity'
-        impact = 'Captured browser and provider evidence did not show suspicious activity.'
+        impact = 'The website showed no signs of suspicious activity when analyzed in a sandbox.'
         recommendedAction = 'Record the run as no signs of suspicious activity based on the captured evidence.'
     }
     const confidence = input.confidence
@@ -2597,7 +2597,7 @@ function buildAnalystBrief(input: {
         : 'No capture timestamp yet'
     const nextSteps = [
         input.indicatorCount ? `Copy ${input.indicatorCount} indicator${input.indicatorCount === 1 ? '' : 's'} into the alert workflow.` : 'Keep the indicator list open until domains, IPs, or URLs appear.',
-        input.webcrackLoaded ? 'Review WebCrack decoded output for second-stage URLs and payload logic.' : 'Use WebCrack if obfuscated script samples appear.',
+        input.webcrackLoaded ? 'Review WebCrack decoded output for second-stage URLs and payload logic.' : 'Use WebCrack if obfuscated code appears.',
         input.threatAssociations.length ? `Check threat context: ${input.threatAssociations.slice(0, 2).map(item => item.name).join(', ')}.` : 'Confirm actor or malware context from external sources if needed.',
     ]
     return { verdict, impact, recommendedAction, confidence, freshness, nextSteps }
@@ -2675,7 +2675,7 @@ function safeToolKey(value: string) {
 function providerStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (!capture) return 'Unavailable'
     if (capture.error === 'provider_navigation_pending') return 'Loading'
-    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false && /no obfuscated script sample/i.test(analysis.webcrackLoadReason || '')) return 'No sample needed'
+    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false && /no obfuscated (?:script sample|code)/i.test(analysis.webcrackLoadReason || '')) return 'No obfuscated code'
     if (hasParsedProviderResult(analysis)) return 'Results'
     if (capture.error) return 'Provider error'
     return 'Result unavailable'
@@ -2685,8 +2685,8 @@ function providerTabStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
     if (!capture) return 'waiting'
     if (analysis?.vendorFlagged !== undefined) return `${virusTotalVendorLabel(analysis)} vendors`
     if (analysis?.alertCount !== undefined) return `${analysis.alertCount} alerts`
-    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === true) return 'sample loaded'
-    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false) return /no obfuscated script sample/i.test(analysis.webcrackLoadReason || '') ? 'no sample' : 'not loaded'
+    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === true) return 'code loaded'
+    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false) return /no obfuscated (?:script sample|code)/i.test(analysis.webcrackLoadReason || '') ? 'no obfuscated code' : 'not loaded'
     if (capture.error === 'provider_navigation_pending') return 'loading'
     if (capture.error) return 'blocked'
     return analysis?.verdict && analysis.verdict !== 'unknown' ? analysis.verdict : 'unavailable'
@@ -2695,7 +2695,7 @@ function providerTabStatus(capture?: Capture, analysis?: SandboxToolAnalysis) {
 function providerDetail(analysis?: SandboxToolAnalysis, capture?: Capture) {
     if (analysis?.vendorFlagged !== undefined) return `VirusTotal vendors: ${virusTotalVendorLabel(analysis)}${analysis.communityCommentCount !== undefined ? ` · ${communityCommentLabel(analysis.communityCommentCount)}` : ''}`
     if (analysis?.alertCount !== undefined) return `urlquery alerts: ${analysis.alertCount}${analysis.communityCommentCount !== undefined ? ` · ${communityCommentLabel(analysis.communityCommentCount)}` : ''}`
-    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false && /no obfuscated script sample/i.test(analysis.webcrackLoadReason || '')) return 'No obfuscated script sample was extracted from this page; WebCrack was not required for this run.'
+    if (analysis?.toolKind === 'webcrack' && analysis.webcrackLoaded === false && /no obfuscated (?:script sample|code)/i.test(analysis.webcrackLoadReason || '')) return 'No obfuscated code was found on this page.'
     if (analysis?.extractedSignals?.length) return analysis.extractedSignals.slice(0, 2).join(' · ')
     if (capture?.error === 'provider_navigation_pending') return 'Provider tab is open and loading in the sandbox.'
     if (capture?.error) return `Provider blocked or failed: ${providerErrorText(capture.error)}`
