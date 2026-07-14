@@ -601,7 +601,7 @@ export default function BrowserPageClient() {
             setStreamUrl('')
             setStreamStats({})
             setSessionState(current => current === 'prompt' || current === 'failed' || current === 'unreachable' ? current : 'ended')
-            pushEvent('Sandbox broker closed.')
+            pushEvent('Sandbox closed.')
         }
         socket.onerror = () => {
             if (socketRef.current !== socket) return
@@ -1893,7 +1893,7 @@ function SourceCodeDisclosure({ evidence }: { evidence?: SandboxEvidence }) {
             <div className='grid gap-2 border-t border-ui-border p-2'>
                 {evidence.sourceUrls?.length ? (
                     <div className='grid gap-1'>
-                        <p className='text-[11px] font-semibold uppercase text-ui-muted'>Source URLs</p>
+                        <p className='text-[11px] font-semibold uppercase text-ui-muted'>URLs</p>
                         <pre className='max-h-24 overflow-auto whitespace-pre-wrap break-all rounded border border-ui-border bg-ui-panel p-2 text-[11px] text-ui-text'>{evidence.sourceUrls.join('\n')}</pre>
                     </div>
                 ) : null}
