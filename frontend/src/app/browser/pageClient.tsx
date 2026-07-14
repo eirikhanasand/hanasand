@@ -1002,14 +1002,14 @@ export default function BrowserPageClient() {
                                 </div>
                                 <Globe2 className='h-5 w-5 shrink-0 text-ui-primary' />
                             </div>
-                            <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]'>
+                            <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]'>
                                 <input
                                     id='sandbox-url'
                                     value={target}
                                     onChange={event => setTarget(event.target.value)}
                                     placeholder='URL to investigate'
                                     disabled={!formReady}
-                                    className='h-12 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 font-mono text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                                    className='col-span-2 h-12 min-w-0 rounded-md border border-ui-border bg-ui-canvas px-3 font-mono text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20 md:col-span-1'
                                 />
                                 <button type='submit' disabled={!formReady || !normalizedTarget} className='inline-flex h-12 items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                                     <Play className='h-4 w-4' />
