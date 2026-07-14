@@ -283,9 +283,15 @@ function proxyBrowserStreamWebSocket(
     const upstream = new WebSocket(`ws://${stream.ip}:8080${browserStreamUpstreamPath(req)}`)
     const pending: string[] = []
     let closed = false
+    const keepAliveTimer = setInterval(() => {
+        if (connection.readyState === WebSocket.OPEN) connection.ping()
+        if (upstream.readyState === WebSocket.OPEN) upstream.ping()
+    }, 20_000)
+    keepAliveTimer.unref()
     const closeBoth = () => {
         if (closed) return
         closed = true
+        clearInterval(keepAliveTimer)
         if (connection.readyState === WebSocket.OPEN) connection.close()
         if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) upstream.close()
     }
@@ -300,9 +306,15 @@ function proxyBrowserStreamWebSocket(
         if (upstream.readyState === WebSocket.OPEN) upstream.send(text)
         else pending.push(text)
     })
-    connection.on('close', closeBoth)
+    connection.on('close', (code, reason) => {
+        if (code === 1006) void logBrowserStreamClosure(req.params.id, code, reason)
+        closeBoth()
+    })
     upstream.on('close', closeBoth)
-    connection.on('error', closeBoth)
+    connection.on('error', error => {
+        void recordWebsocketFailure('browser-stream-client', req.params.id, error)
+        closeBoth()
+    })
     upstream.on('error', error => {
         void recordWebsocketFailure('browser-stream-upstream', req.params.id, error)
         closeBoth()
@@ -426,7 +438,13 @@ function proxyEphemeralBrowserSocket(connection: WebSocket, id: string, route: '
         if (upstream?.readyState === WebSocket.OPEN) upstream.send(forwarded)
         else pending.push(forwarded)
     })
-    connection.on('close', closeBoth)
+    connection.on('close', (code, reason) => {
+        if (runPrepared && !sawTerminalMessage) {
+            void logBrowserClientClosure(id, code, reason, sawReady, deliveredFrame)
+            void finishBrowserRun(id, 'ended')
+        }
+        closeBoth()
+    })
     connection.on('error', error => {
         void recordWebsocketFailure(`browser-session-client-${route}`, id, error)
         closeBoth()
@@ -691,6 +709,40 @@ async function logBrowserRunClosure(id: string, sawReady: boolean, deliveredFram
             sawReady,
             deliveredFrame,
             sawTerminalMessage,
+            closeCode: code,
+            closeReason: reasonText,
+            ...context,
+        },
+    }).catch(() => undefined)
+}
+
+async function logBrowserClientClosure(id: string, code: number, reason: Buffer, sawReady: boolean, deliveredFrame: boolean) {
+    const reasonText = closeMessage(code, reason)
+    const context = await browserRunLogContext(id)
+    await recordLog({
+        level: 'warn',
+        message: `Browser client disconnected before the worker completed ${context.target || id}: ${reasonText}.`,
+        metadata: {
+            category: 'browser_run_client_closed',
+            sessionId: id,
+            sawReady,
+            deliveredFrame,
+            closeCode: code,
+            closeReason: reasonText,
+            ...context,
+        },
+    }).catch(() => undefined)
+}
+
+async function logBrowserStreamClosure(id: string, code: number, reason: Buffer) {
+    const reasonText = closeMessage(code, reason)
+    const context = await browserRunLogContext(id)
+    await recordLog({
+        level: 'warn',
+        message: `Browser WebRTC signalling disconnected unexpectedly for ${context.target || id}: ${reasonText}.`,
+        metadata: {
+            category: 'browser_stream_disconnected',
+            sessionId: id,
             closeCode: code,
             closeReason: reasonText,
             ...context,

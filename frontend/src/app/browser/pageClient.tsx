@@ -360,6 +360,7 @@ export default function BrowserPageClient() {
     const activeViewportUrl = activeTool ? activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : activeUrl || normalizedTarget
     const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
     const paidBrowserPlan = Boolean(quota && quota.plan !== 'anonymous' && quota.plan !== 'free')
+    const runIsActive = sessionState === 'queued' || sessionState === 'connecting' || sessionState === 'live'
 
     useEffect(() => {
         setFormReady(true)
@@ -603,7 +604,6 @@ export default function BrowserPageClient() {
         socket.onerror = () => {
             if (socketRef.current !== socket) return
             setSocketState('error')
-            setSessionState('failed')
             pushEvent('Sandbox broker errored.')
         }
         socket.onmessage = (message) => {
@@ -645,6 +645,13 @@ export default function BrowserPageClient() {
                 if (nextQuota) setQuota(nextQuota)
                 setSessionState('live')
                 pushEvent('Browser is live.')
+                return
+            }
+            if (payload.type === 'ended') {
+                setStreamUrl('')
+                setStreamStats({})
+                setSessionState(current => current === 'failed' || current === 'unreachable' ? current : 'ended')
+                pushEvent('Sandbox run ended.')
                 return
             }
             if (payload.type === 'frame' && typeof payload.image === 'string') {
@@ -1093,8 +1100,8 @@ export default function BrowserPageClient() {
                         </div>
                         <div className='flex flex-wrap items-center gap-2'>
                             <StatusPill label='Run' value={summary.navigationFailed || sessionState === 'unreachable' ? 'unreachable' : sessionStateLabel(sessionState)} good={sessionState === 'live'} />
-                            {sessionState !== 'ended' ? <StatusPill label='Connection' value={socketStateLabel(socketState)} good={socketState === 'open'} /> : null}
-                            {capacity ? <StatusPill label='Capacity' value={capacity.queuePosition ? `${capacity.queuePosition}/${capacity.queuedSessions} queued` : `${capacity.activeSessions}/${capacity.maxSessions} active`} good={!capacity.queuePosition} /> : null}
+                            {runIsActive ? <StatusPill label='Connection' value={socketStateLabel(socketState)} good={socketState === 'open'} /> : null}
+                            {runIsActive && capacity ? <StatusPill label='Capacity' value={capacity.queuePosition ? `${capacity.queuePosition}/${capacity.queuedSessions} queued` : `${capacity.activeSessions}/${capacity.maxSessions} active`} good={!capacity.queuePosition} /> : null}
                             {sessionState === 'live' && runTiming ? <span role='timer' aria-label={`${formatRunDuration(runRemainingSeconds)} remaining`}><StatusPill label='Time left' value={formatRunDuration(runRemainingSeconds)} good={runRemainingSeconds > 15} /></span> : null}
                             {sessionState === 'live' && runTiming && !runTiming.paidExtensionUsed ? (
                                 runTiming.freeExtensionUsed && !paidBrowserPlan ? (
@@ -1117,7 +1124,7 @@ export default function BrowserPageClient() {
                                 <Share2 className='h-4 w-4' />
                                 {shareStatus === 'saving' ? 'Saving' : shareStatus === 'copied' ? 'Copied' : 'Share'}
                             </button>
-                            {sessionState === 'queued' || sessionState === 'connecting' || sessionState === 'live' ? (
+                            {runIsActive ? (
                                 <button type='button' onClick={stopRun} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger'>
                                     <Square className='h-4 w-4' />
                                     Stop
@@ -1134,6 +1141,7 @@ export default function BrowserPageClient() {
                 </header>
                 <div className='mx-auto grid w-full max-w-[96rem] gap-4 px-4 py-4'>
                     <div className='grid min-w-0 items-start gap-4'>
+                        {!runIsActive ? <RunOutcomeCard summary={summary} captures={captures} sessionState={sessionState} /> : null}
                         <section className='grid overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
                             <SandboxTabStrip
                                 activeTab={activeSandboxTab}
@@ -1190,7 +1198,7 @@ export default function BrowserPageClient() {
                                 )}
                             </div>
                         </section>
-                        <RunOutcomeCard summary={summary} captures={captures} sessionState={sessionState} />
+                        {runIsActive ? <RunOutcomeCard summary={summary} captures={captures} sessionState={sessionState} /> : null}
                         <QuickTriageStrip summary={summary} toolCaptures={toolCaptures} toolCount={selectedProfile.tools.length} />
                         <aside className='grid gap-4 xl:grid-cols-3'>
                             <CapacityPanel capacity={capacity} sessionState={sessionState} />

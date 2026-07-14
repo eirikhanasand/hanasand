@@ -212,7 +212,10 @@ export async function finishBrowserRun(id: string, status: 'ended' | 'failed' | 
     if (!id) return
     await run(`
         UPDATE browser_runs
-        SET status = $2,
+        SET status = CASE
+                WHEN $2 = 'ended' AND status IN ('failed', 'unreachable') THEN status
+                ELSE $2
+            END,
             title = COALESCE(NULLIF($3, ''), title),
             updated_at = NOW()
         WHERE id = $1
