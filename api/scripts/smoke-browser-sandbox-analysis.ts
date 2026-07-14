@@ -6,7 +6,7 @@ import {
     sandboxUrlSafety,
     summarizeDeobfuscationTask,
 } from '../src/handlers/onionSession/analysis.ts'
-import { parseCymruAsn, providerSummaryText, sandboxResolvedAddressSafety } from '../src/handlers/onionSession/ws.ts'
+import { parseCymruAsn, providerCommunityComments, providerSummaryText, sandboxResolvedAddressSafety } from '../src/handlers/onionSession/ws.ts'
 
 assert.deepEqual(sandboxUrlSafety('https://example.com/path'), { ok: true })
 assert.equal(sandboxUrlSafety('ftp://example.com').ok, false)
@@ -47,5 +47,9 @@ assert.equal(parseCymruAsn([['15169 | 8.8.8.0/24 | US | arin | 2023-12-28']]), '
 const providerSummary = providerSummaryText(JSON.stringify({ last_analysis_stats: { malicious: 2, suspicious: 1, harmless: 80, undetected: 12, timeout: 0 } }) + '<td>0 - 1 - 2</td>')
 assert(providerSummary.includes('3/95 security vendors'), 'summarizes VirusTotal stats before provider text is trimmed')
 assert(providerSummary.includes('3 urlquery alerts'), 'summarizes urlquery score rows before provider text is trimmed')
+assert.deepEqual(providerCommunityComments(JSON.stringify({ data: [
+    { type: 'comment', attributes: { text: 'LockBit credential theft reported.' } },
+    { type: 'comment', attributes: { html: '<p>Suspicious redirect chain observed.</p>' } },
+] })), ['LockBit credential theft reported.', 'Suspicious redirect chain observed.'], 'extracts and cleans structured provider comment bodies')
 
 console.log('Browser sandbox analysis helpers passed.')

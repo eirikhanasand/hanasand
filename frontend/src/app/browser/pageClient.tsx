@@ -99,6 +99,7 @@ type SandboxToolAnalysis = {
     vendorTotal?: number
     alertCount?: number
     communityCommentCount?: number
+    communityComments?: string[]
     communitySummary?: string
     verdict?: string
     extractedSignals?: string[]
@@ -147,6 +148,7 @@ type SandboxEvidence = {
     confidence?: number
     reasons?: string[]
     comments?: string[]
+    communityComments?: string[]
     indicators?: {
         domains?: string[]
         ips?: string[]
@@ -2019,6 +2021,7 @@ function ProviderViewportEvidence({ tool, capture }: { tool: SandboxTool; captur
 function ProviderReportDetails({ tool, capture, compact = false }: { tool: SandboxTool; capture: Capture; compact?: boolean }) {
     const analysis = capture.toolAnalysis
     const commentCount = analysis?.communityCommentCount
+    const communityComments = analysis?.communityComments || capture.evidence?.communityComments || []
     const facts = [
         analysis?.vendorFlagged !== undefined ? ['Vendors', virusTotalVendorLabel(analysis)] : undefined,
         analysis?.alertCount !== undefined ? ['urlquery alerts', String(analysis.alertCount)] : undefined,
@@ -2045,7 +2048,13 @@ function ProviderReportDetails({ tool, capture, compact = false }: { tool: Sandb
             </div>
             {capture.image && !compact ? <img src={capture.image} alt={`${tool.name} provider screenshot`} className='max-h-[32rem] w-full rounded border border-ui-border bg-ui-canvas object-contain' /> : null}
             {!facts.length ? <p className='text-sm text-ui-muted'>{providerDetail(analysis, capture)}</p> : null}
-            {analysis?.communitySummary ? <p className='text-xs leading-5 text-ui-muted'>{analysis.communitySummary}</p> : null}
+            {communityComments.length ? (
+                <div className='grid gap-1.5'>
+                    <p className='text-[10px] font-semibold uppercase text-ui-muted'>Community comments</p>
+                    {communityComments.map((comment, index) => <blockquote key={`${index}-${comment}`} className='rounded-md border border-ui-border bg-ui-canvas px-3 py-2 text-xs leading-5 text-ui-text'>{comment}</blockquote>)}
+                </div>
+            ) : null}
+            {commentCount && communityComments.length < commentCount ? <p className='text-xs text-ui-muted'>{commentCount - communityComments.length} additional comment{commentCount - communityComments.length === 1 ? '' : 's'} reported; the provider did not return the text.</p> : null}
             {analysis?.threatAssociations?.length ? (
                 <div className='flex flex-wrap gap-1'>
                     {analysis.threatAssociations.slice(0, 4).map(item => <span key={`${item.name}-${item.source}`} className='rounded-md border border-ui-warning/30 bg-ui-warning/10 px-2 py-1 text-[11px] font-semibold text-ui-warning'>{item.name} · {item.confidence || 'low'}</span>)}
@@ -2208,6 +2217,7 @@ function buildShareableAnalystReport(input: Parameters<typeof buildExportReport>
             vendorTotal: analysis?.vendorTotal,
             alertCount: analysis?.alertCount,
             communityCommentCount: analysis?.communityCommentCount,
+            communityComments: analysis?.communityComments,
             communitySummary: analysis?.communitySummary,
             screenshotCaptured: Boolean(capture?.image),
             signals: analysis?.extractedSignals || [],
@@ -2358,7 +2368,11 @@ function buildAnalystSummary(target: string, captures: Capture[], profile: Sandb
     const suspiciousDeobfuscationTasks = deobfuscationTasks.filter(task => task.assessment === 'suspicious')
     const webcrackLoads = captures.flatMap(capture => capture.webcrackLoad ? [capture.webcrackLoad] : [])
     const webcrackLoaded = webcrackLoads.filter(load => load.loaded).length
-    const comments = captures.flatMap(capture => capture.evidence?.comments || []).map(cleanEvidenceComment).filter(Boolean).slice(0, 4) as string[]
+    const comments = Array.from(new Set(captures.flatMap(capture => [
+        ...(capture.toolAnalysis?.communityComments || []),
+        ...(capture.evidence?.communityComments || []),
+        ...(capture.evidence?.comments || []),
+    ]).map(cleanEvidenceComment).filter(Boolean))).slice(0, 4) as string[]
     const confidence = Math.max(0, ...captures.map(capture => capture.evidence?.confidence || 0))
     const latestNetwork = pageCaptures.find(capture => capture.networkSummary)?.networkSummary
     const networkDomains = captures.flatMap(capture => capture.networkSummary?.domains || [])

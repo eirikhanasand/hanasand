@@ -30,7 +30,7 @@ type BrowserReport = {
     analystReport?: {
         verdict?: string
         evidenceChecklist?: Record<string, number>
-        providerReports?: Array<{ tool?: string; status?: string; verdict?: string; url?: string; vendorFlagged?: number; vendorTotal?: number; alertCount?: number; communityCommentCount?: number; communitySummary?: string; screenshotCaptured?: boolean; signals?: string[]; threatAssociations?: Array<{ name?: string; confidence?: string; source?: string }>; error?: string }>
+        providerReports?: Array<{ tool?: string; status?: string; verdict?: string; url?: string; vendorFlagged?: number; vendorTotal?: number; alertCount?: number; communityCommentCount?: number; communityComments?: string[]; communitySummary?: string; screenshotCaptured?: boolean; signals?: string[]; threatAssociations?: Array<{ name?: string; confidence?: string; source?: string }>; error?: string }>
         networkEvidence?: {
             requests?: number
             responses?: number
@@ -124,7 +124,8 @@ export default function BrowserReportPageClient({ runId, token }: { runId: strin
                                         <p className='mt-1 text-xs text-ui-muted'>{provider.verdict || 'No parsed verdict'}{provider.vendorFlagged !== undefined ? ` · ${providerVendorLabel(provider)} vendors` : ''}{provider.alertCount !== undefined ? ` · ${provider.alertCount} alerts` : ''}{provider.screenshotCaptured ? ' · screenshot captured' : ''}</p>
                                         {provider.url ? <a href={provider.url} target='_blank' rel='noreferrer noopener' className='mt-1 block truncate font-mono text-xs text-ui-primary underline-offset-2 hover:underline'>{provider.url}</a> : null}
                                         {provider.error ? <p className='mt-2 text-xs text-ui-danger'>{provider.error}</p> : null}
-                                        {provider.communitySummary ? <p className='mt-2 text-xs leading-5 text-ui-muted'>{provider.communitySummary}</p> : null}
+                                        {provider.communityComments?.length ? <div className='mt-2 grid gap-1'>{provider.communityComments.map((comment, index) => <blockquote key={`${index}-${comment}`} className='rounded-md border border-ui-border bg-ui-canvas px-2 py-1.5 text-xs leading-5'>{comment}</blockquote>)}</div> : null}
+                                        {!provider.communityComments?.length && provider.communitySummary ? <p className='mt-2 text-xs leading-5 text-ui-muted'>Provider summary: {provider.communitySummary}</p> : null}
                                         {provider.threatAssociations?.length ? <p className='mt-2 text-xs text-ui-warning'>{provider.threatAssociations.slice(0, 4).map(item => [item.name, item.confidence ? `${item.confidence} confidence` : '', item.source].filter(Boolean).join(' · ')).join('\n')}</p> : null}
                                         {provider.signals?.length ? <pre className='mt-2 max-h-28 overflow-auto whitespace-pre-wrap rounded-md border border-ui-border bg-ui-canvas p-2 font-mono text-xs text-ui-text'>{provider.signals.slice(0, 12).join('\n')}</pre> : null}
                                     </div>

@@ -23,6 +23,7 @@ type BrokerPayload = {
         textExcerpt?: string
         verdict?: string
         reasons?: string[]
+        communityComments?: string[]
         indicators?: { domains?: string[]; ips?: string[]; urls?: string[] }
         obfuscatedScripts?: unknown[]
         deobfuscationTasks?: Array<{
@@ -39,6 +40,8 @@ type BrokerPayload = {
         vendorTotal?: number
         alertCount?: number
         communityCommentCount?: number
+        communityComments?: string[]
+        communitySummary?: string
         extractedSignals?: string[]
     }
     webcrackLoad?: {
@@ -109,10 +112,10 @@ const pages = new Map<string, string>([
 <body><main><h1>Final landing</h1><p>Redirect complete after staged invoice lure.</p></main></body></html>`],
     ['/virustotal', `<!doctype html>
 <html><head><title>VirusTotal fixture</title></head>
-<body><main><h1>VirusTotal</h1><p>12/94 security vendors flagged this URL as malicious.</p><p>3 community comments mention LockBit and credential theft.</p></main></body></html>`],
+<body><main><h1>VirusTotal</h1><p>12/94 security vendors flagged this URL as malicious.</p><p>3 community comments</p></main></body></html>`],
     ['/urlquery', `<!doctype html>
 <html><head><title>urlquery fixture</title></head>
-<body><main><h1>urlquery.net</h1><p>4 alerts were raised for malicious requests.</p><p>2 community comments mention suspicious redirect chains.</p><!-- <div class="relative mx-auto"><table><tr><th>Date</th></tr></table></div> --></main></body></html>`],
+<body><main><h1>urlquery.net</h1><p>4 alerts were raised for malicious requests.</p><!-- <div class="relative mx-auto"><table><tr><th>Date</th></tr></table></div> --></main></body></html>`],
     ['/webcrack', `<!doctype html>
 <html><head><title>WebCrack fixture</title></head>
 <body><main><h1>WebCrack</h1><textarea aria-label="source"></textarea><button>Run</button><pre id="out"></pre></main>
@@ -239,11 +242,12 @@ const vt = payloads.find(payload => payload.type === 'tool_capture' && payload.t
 assert.equal(vt?.toolAnalysis?.vendorFlagged, 12)
 assert.equal(vt?.toolAnalysis?.vendorTotal, 94)
 assert.equal(vt?.toolAnalysis?.communityCommentCount, 3)
+assert.deepEqual(vt?.toolAnalysis?.communityComments, [])
 assert((vt?.image || '').length > 1000, 'VirusTotal parsed capture includes a screenshot')
 
 const urlquery = payloads.find(payload => payload.type === 'tool_capture' && payload.toolAnalysis?.toolKind === 'urlquery' && payload.toolAnalysis.alertCount !== undefined)
 assert.equal(urlquery?.toolAnalysis?.alertCount, 4)
-assert.equal(urlquery?.toolAnalysis?.communityCommentCount, 2)
+assert.equal(urlquery?.toolAnalysis?.communityCommentCount, undefined, 'provider summaries are not miscounted as community comments')
 assert((urlquery?.image || '').length > 1000, 'urlquery parsed capture includes a screenshot')
 assert(!urlquery?.evidence?.comments?.some(comment => /<[^>]+>/.test(comment)), 'provider comments do not leak raw HTML into analyst summaries')
 assert(!/<[^>]+>/.test(urlquery?.toolAnalysis?.communitySummary || ''), 'provider community summary does not leak raw HTML into analyst summaries')

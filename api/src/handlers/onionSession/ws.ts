@@ -900,8 +900,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     error: navigationError || 'Provider tab opened; verdict parsing is still running.',
                 })
                 let providerText = officialProviderKind(preparedUrl)
-                    ? await waitForProviderData(tool, toolPage, providerBodies)
-                    : [providerBodies(), await withTimeout(collectFastRenderedText(toolPage), 1000, '')].filter(Boolean).join('\n')
+                    ? await waitForProviderData(tool, toolPage, providerBodies.text)
+                    : [providerBodies.text(), await withTimeout(collectFastRenderedText(toolPage), 1000, '')].filter(Boolean).join('\n')
                 navigationError ||= providerAccessIssue(tool, providerText, toolPage.url())
                 if (providerText && hasParsedProviderData(tool, providerText)) {
                     navigationError = ''
@@ -911,7 +911,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     if (reportUrl) {
                         await toolPage.goto(reportUrl, { waitUntil: 'domcontentloaded', timeout: providerTimeoutMs(tool) }).catch(() => undefined)
                         await withTimeout(dismissCookieOverlays(toolPage), 800, undefined).catch(() => undefined)
-                        const reportText = [providerBodies(), await collectRenderedText(toolPage)].filter(Boolean).join('\n')
+                        const reportText = [providerBodies.text(), await collectRenderedText(toolPage)].filter(Boolean).join('\n')
                         if (!urlQueryReportMatchesTarget(reportText, target)) {
                             send({
                                 type: 'tool_capture',
@@ -931,7 +931,8 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                         providerText = [providerText, reportText].filter(Boolean).join('\n')
                     }
                     await waitForProviderVisual(tool, toolPage)
-                    const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText, tool.name || toolUrl)
+                    const fetchedComments = await fetchProviderCommunityComments(toolPage, tool, target)
+                    const parsedEvidence = enrichProviderEvidence(providerPendingEvidence(toolPage.url() || preparedUrl, tool.name || toolUrl, target), providerText, tool.name || toolUrl, [...providerBodies.comments(), ...fetchedComments])
                     const parsedAnalysis = analyzeToolEvidence(tool.name || toolUrl, parsedEvidence)
                     maybeExtendSuspiciousRun(parsedEvidence, parsedAnalysis)
                     const parsedScreenshotTimeout = providerScreenshotTimeoutMs(tool, 1500)
@@ -959,7 +960,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 }
                 await toolPage.waitForTimeout(webcrackLoad?.loaded ? 150 : 1200).catch(() => undefined)
                 if (webcrackTool) {
-                    const evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 400, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies(), tool.name || toolUrl)
+                    const evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 400, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies.text(), tool.name || toolUrl, providerBodies.comments())
                     const toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
                     maybeExtendSuspiciousRun(evidence, toolAnalysis)
                     const image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 2500 }), 2500, null)
@@ -980,7 +981,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     })
                     return
                 }
-                const initialEvidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 2500, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies(), tool.name || toolUrl)
+                const initialEvidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 2500, providerPendingEvidence(toolPage.url() || toolUrl, tool.name || toolUrl, target)), providerBodies.text(), tool.name || toolUrl, providerBodies.comments())
                 const initialImage = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 2500 }), 2500, null)
                 const initialAnalysis = analyzeToolEvidence(tool.name || toolUrl, initialEvidence)
                 maybeExtendSuspiciousRun(initialEvidence, initialAnalysis)
@@ -997,7 +998,7 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                     : initialAnalysis
                 if (webcrackTool) {
                     image = await withTimeout(toolPage.screenshot({ type: 'jpeg', quality: 64, animations: 'disabled', timeout: 500 }), 500, image)
-                    evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 500, evidence), providerBodies(), tool.name || toolUrl)
+                    evidence = enrichProviderEvidence(await withTimeout(collectPageEvidence(toolPage), 500, evidence), providerBodies.text(), tool.name || toolUrl, providerBodies.comments())
                     toolAnalysis = analyzeToolEvidence(tool.name || toolUrl, evidence, webcrackLoad)
                     maybeExtendSuspiciousRun(evidence, toolAnalysis)
                 }
@@ -2023,24 +2024,72 @@ function collectProviderResponses(page: Page, toolName: string) {
             })
             .catch(() => undefined)
     })
-    return () => bodies.join('\n')
+    return {
+        text: () => bodies.join('\n'),
+        comments: () => uniqueStrings(bodies.flatMap(providerCommunityComments)).slice(0, 8),
+    }
 }
 
 function providerResponseUrl(toolName: string, url: string) {
     const lower = `${toolName} ${url}`.toLowerCase()
-    return lower.includes('virustotal') && /\/ui\/(?:search|urls\/)/i.test(url)
+    return lower.includes('virustotal') && /\/ui\/(?:search|urls\/|comments)/i.test(url)
         || lower.includes('urlquery') && /\/(?:api\/htmx\/search|search\?)/i.test(url)
 }
 
-function enrichProviderEvidence<T extends Awaited<ReturnType<typeof collectPageEvidence>>>(evidence: T, providerText: string, providerHint = ''): T {
-    if (!providerText) return evidence
+function enrichProviderEvidence<T extends Awaited<ReturnType<typeof collectPageEvidence>>>(evidence: T, providerText: string, providerHint = '', communityComments: string[] = []): T {
+    if (!providerText && !communityComments.length) return evidence
     const summary = providerSummaryText(providerText, providerHint)
     const cleanProviderText = cleanAnalystText(providerText, 1800)
     return {
         ...evidence,
         textExcerpt: [evidence.textExcerpt, summary, cleanProviderText].filter(Boolean).join('\n'),
-        comments: [...(evidence.comments || []), summary].filter(Boolean),
+        communityComments: uniqueStrings([...(evidence.communityComments || []), ...communityComments]).slice(0, 8),
     }
+}
+
+export function providerCommunityComments(body: string) {
+    let root: unknown
+    try {
+        root = JSON.parse(body)
+    } catch {
+        return []
+    }
+    const comments: string[] = []
+    const add = (value: unknown) => {
+        if (typeof value !== 'string') return
+        const clean = cleanAnalystText(value, 500)
+        if (clean) comments.push(clean)
+    }
+    const visit = (value: unknown) => {
+        if (!value || typeof value !== 'object') return
+        if (Array.isArray(value)) {
+            value.forEach(visit)
+            return
+        }
+        const record = value as Record<string, unknown>
+        const attributes = record.attributes && typeof record.attributes === 'object' ? record.attributes as Record<string, unknown> : undefined
+        if (record.type === 'comment') add(attributes?.text || attributes?.html)
+        if (Array.isArray(record.comments)) {
+            for (const item of record.comments) {
+                if (item && typeof item === 'object') {
+                    const comment = item as Record<string, unknown>
+                    add(comment.comment || comment.text)
+                }
+            }
+        }
+        Object.values(record).forEach(visit)
+    }
+    visit(root)
+    return uniqueStrings(comments).slice(0, 8)
+}
+
+async function fetchProviderCommunityComments(page: Page, tool: { id?: string; name?: string; url?: string }, target: string) {
+    if (!isVirusTotalTool(tool, page.url()) || !domainFromUrl(page.url()).endsWith('virustotal.com')) return []
+    const body = await withTimeout(page.evaluate(async (urlId) => {
+        const response = await fetch(`/ui/urls/${urlId}/comments?limit=8`, { credentials: 'include' })
+        return response.ok ? response.text() : ''
+    }, virusTotalUrlId(target)), 3000, '')
+    return providerCommunityComments(body)
 }
 
 export function providerSummaryText(providerText: string, providerHint = '') {
@@ -2062,6 +2111,10 @@ function cleanAnalystText(value: string, maxLength = 900) {
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, maxLength)
+}
+
+function uniqueStrings(values: string[]) {
+    return [...new Set(values.filter(Boolean))]
 }
 
 async function waitForProviderData(tool: { id?: string; name?: string; url?: string }, page: Page, providerText: () => string) {
@@ -2296,6 +2349,7 @@ async function collectPageEvidence(page: Page) {
         sourceCode: snapshot.sourceCode,
         sourceUrls: sourceIndicators.urls.filter(url => url !== page.url()).slice(0, 40),
         comments: snapshot.comments.map(comment => cleanAnalystText(comment, 500)).filter(Boolean).slice(0, 8),
+        communityComments: [] as string[],
         forms,
         scripts,
         obfuscatedScripts,
@@ -2315,6 +2369,7 @@ function emptyPageEvidence(): Awaited<ReturnType<typeof collectPageEvidence>> {
         sourceCode: '',
         sourceUrls: [],
         comments: [],
+        communityComments: [],
         forms: [],
         scripts: [],
         obfuscatedScripts: [],
@@ -2354,8 +2409,8 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
     const flagged = Number.isFinite(rawFlagged) ? rawFlagged : vtNoDetectionsText ? 0 : undefined
     const total = vtStats?.total || (vendorMatch?.[2] ? Number(vendorMatch[2]) : undefined)
     const alertCount = isUrlQuery ? Number.isFinite(urlqueryScores?.alerts) ? urlqueryScores?.alerts : alertMatch ? Number(alertMatch[1]) : urlqueryNoAlertText ? 0 : undefined : undefined
-    const cleanComments = (evidence.comments || []).map(comment => cleanAnalystText(comment, 500)).filter(Boolean)
-    const communityCommentCount = communityMatch ? Number(communityMatch[1]) : cleanComments.length || undefined
+    const communityComments = uniqueStrings((evidence.communityComments || []).map(comment => cleanAnalystText(comment, 500)).filter(Boolean)).slice(0, 8)
+    const communityCommentCount = communityMatch ? Number(communityMatch[1]) : communityComments.length || undefined
     const hasProviderNoDetectionText = /(?:no\s+(?:detections|alerts?|results?|matches?|issues)\s+(?:found)?|undetected|clean|harmless)/i.test(text)
     const hasVendorDetections = flagged !== undefined && Number.isFinite(flagged) && flagged > 0
     const hasUrlQueryAlerts = alertCount !== undefined && Number.isFinite(alertCount) && alertCount > 0
@@ -2390,7 +2445,8 @@ function analyzeToolEvidence(toolName: string, evidence: Awaited<ReturnType<type
         vendorTotal: Number.isFinite(total) ? total : undefined,
         alertCount: Number.isFinite(alertCount) ? alertCount : undefined,
         communityCommentCount: Number.isFinite(communityCommentCount) ? communityCommentCount : undefined,
-        communitySummary: cleanComments.slice(0, 3).join(' ') || undefined,
+        communityComments,
+        communitySummary: communityComments.slice(0, 3).join(' ') || undefined,
         verdict,
         threatAssociations: extractThreatAssociations(text, 'tool_context'),
         extractedSignals: [
@@ -2457,6 +2513,7 @@ function providerPendingEvidence(url: string, toolName: string, target: string):
         sourceCode: '',
         sourceUrls: [],
         comments: [],
+        communityComments: [],
         forms: [],
         scripts: [],
         obfuscatedScripts: [],
