@@ -2876,19 +2876,36 @@ function providerResultsValue(value: unknown): Record<string, ProviderRunResult>
     return entries.length ? Object.fromEntries(entries) : undefined
 }
 
-function sanitizeHistory(value: unknown): BrowserRunHistory[] {
+export function sanitizeHistory(value: unknown): BrowserRunHistory[] {
     if (!Array.isArray(value)) return []
-    return value.map(runHistoryValue).filter(Boolean).slice(0, 12) as BrowserRunHistory[]
+    const seen = new Set<string>()
+    return (value.map(runHistoryValue).filter(Boolean) as BrowserRunHistory[])
+        .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt))
+        .filter(run => {
+            const key = historyDomainKey(run.target)
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+        })
+        .slice(0, 12)
 }
 
 function persistHistory(next: BrowserRunHistory[]) {
-    const deduped = Array.from(new Map(next.map(item => [item.id, item])).values()).slice(0, 12)
+    const deduped = sanitizeHistory(next)
     try {
         window.localStorage.setItem(historyStorageKey, JSON.stringify(deduped))
     } catch {
         // Local history is best effort; backend history is authoritative for authenticated users.
     }
     return deduped
+}
+
+function historyDomainKey(target: string) {
+    try {
+        return new URL(normalizeTarget(target)).hostname.toLowerCase().replace(/^www\./, '')
+    } catch {
+        return target.trim().toLowerCase()
+    }
 }
 
 function getOrCreateBrowserClientId() {

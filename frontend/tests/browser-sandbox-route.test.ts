@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import path from 'node:path'
+import { sanitizeHistory } from '../src/app/browser/pageClient'
 
 const root = process.cwd()
 
@@ -97,6 +98,7 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(!clientSource.includes('10 active browsers by default'), 'pre-run browser form should not disclose shared capacity trivia.')
     assert(clientSource.includes('CapacityPanel'), 'client should show a dedicated sandbox capacity panel.')
     assert(clientSource.includes('HistoryPanel'), 'client should expose recent run history and quota state.')
+    assert(clientSource.includes('historyDomainKey') && clientSource.includes('Date.parse(right.startedAt) - Date.parse(left.startedAt)'), 'recent history should keep the newest scan for each normalized domain.')
     assert(clientSource.includes('/api/backend/browser/runs'), 'client should load browser run history through the backend proxy.')
     assert(clientSource.includes('/api/backend/browser/profiles'), 'client should use the canonical browser profile API path.')
     assert(clientSource.includes('sessionToken: getCookie(\'access_token\')'), 'browser websocket should use the same auth token cookie as login and profile sync.')
@@ -199,4 +201,14 @@ test('regular browser sandbox route and broker contract are wired', () => {
     assert(workerDockerSource.includes('reconnect-watchdog.js') && streamWatchdogSource.includes('loadingText === \'Waiting for stream.\''), 'a stuck Selkies viewer should recover without restarting the remote browser.')
     assert(analysisSource.includes('tool_context'), 'analysis helpers should tag threat context found in external tool pages.')
     assert(analysisSource.includes('decoded_script'), 'analysis helpers should tag threat context found in decoded scripts.')
+})
+
+test('recent browser history keeps the newest scan for each domain', () => {
+    const history = sanitizeHistory([
+        { id: 'first-vg', target: 'https://www.vg.no/first', network: 'regular', status: 'ended', startedAt: '2026-07-14T05:00:00.000Z' },
+        { id: 'example', target: 'https://example.com/', network: 'regular', status: 'ended', startedAt: '2026-07-14T05:30:00.000Z' },
+        { id: 'latest-vg', target: 'https://vg.no/latest', network: 'regular', status: 'ended', startedAt: '2026-07-14T06:00:00.000Z' },
+    ])
+
+    assert.deepEqual(history.map(run => run.id), ['latest-vg', 'example'])
 })
