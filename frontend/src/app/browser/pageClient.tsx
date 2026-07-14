@@ -319,6 +319,7 @@ export default function BrowserPageClient() {
     const [clockNow, setClockNow] = useState(Date.now())
     const [activeFrame, setActiveFrame] = useState<{ width: number; height: number }>({ width: 1280, height: 720 })
     const [activeUrl, setActiveUrl] = useState('')
+    const [remoteTabUrls, setRemoteTabUrls] = useState<Record<string, string>>({})
     const [runBlocker, setRunBlocker] = useState('')
     const [events, setEvents] = useState<string[]>(['Sandbox ready.'])
     const [consoleEvents, setConsoleEvents] = useState<string[]>([])
@@ -359,7 +360,7 @@ export default function BrowserPageClient() {
     const activeTool = useMemo(() => selectedProfile.tools.find(tool => tool.id === activeSandboxTab), [activeSandboxTab, selectedProfile.tools])
     const activeToolCapture = activeTool ? selectToolCapture(toolCaptures, activeTool, normalizedTarget) : undefined
     const activeViewportImage = activeTool ? activeToolCapture?.image : activeImage || latestPageImage
-    const activeViewportUrl = activeTool ? activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : activeUrl || normalizedTarget
+    const activeViewportUrl = activeTool ? remoteTabUrls[activeTool.id] || activeToolCapture?.url || resolveToolUrl(activeTool.url, activeUrl || normalizedTarget) : remoteTabUrls.browser || activeUrl || normalizedTarget
     const runRemainingSeconds = runTiming ? Math.max(0, Math.ceil((new Date(runTiming.expiresAt).getTime() - clockNow) / 1000)) : 0
     const paidBrowserPlan = Boolean(quota && quota.plan !== 'anonymous' && quota.plan !== 'free')
     const runIsActive = sessionState === 'queued' || sessionState === 'connecting' || sessionState === 'live'
@@ -571,6 +572,7 @@ export default function BrowserPageClient() {
         setStreamStats({})
         setRunTiming(null)
         setActiveUrl(url)
+        setRemoteTabUrls({ browser: url })
         setActiveSandboxTab('browser')
         setCapacity(null)
         setSessionState('connecting')
@@ -664,6 +666,7 @@ export default function BrowserPageClient() {
                 const frameWidth = finiteNumber(payload.width) || 1280
                 const frameHeight = finiteNumber(payload.height) || 720
                 setActiveUrl(urlValue)
+                setRemoteTabUrls(current => ({ ...current, browser: urlValue }))
                 setActiveFrame({ width: frameWidth, height: frameHeight })
                 if (isBrowserErrorUrl(urlValue)) {
                     setSessionState('unreachable')
@@ -717,6 +720,13 @@ export default function BrowserPageClient() {
             }
             if (payload.type === 'status') {
                 const statusState = stringValue(payload.state)
+                const remoteTabId = stringValue(payload.tabId)
+                const remoteTabUrl = stringValue(payload.url)
+                if ((statusState === 'tab_selected' || statusState === 'tab_navigated') && remoteTabId) {
+                    setActiveSandboxTab(remoteTabId)
+                    if (remoteTabUrl) setRemoteTabUrls(current => ({ ...current, [remoteTabId]: remoteTabUrl }))
+                    if (remoteTabId === 'browser' && remoteTabUrl) setActiveUrl(remoteTabUrl)
+                }
                 const nextCapacity = capacityValue(payload.capacity)
                 if (nextCapacity) setCapacity(nextCapacity)
                 const nextQuota = quotaValue(payload.quota)

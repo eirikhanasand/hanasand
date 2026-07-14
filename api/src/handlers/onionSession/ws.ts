@@ -469,6 +469,23 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
         return /^[a-z0-9_-]{1,80}$/i.test(id) ? id : 'browser'
     }
 
+    function remoteTabIdForPage(candidate: Page) {
+        if (candidate === page) return 'browser'
+        for (const [tabId, toolPage] of toolPages) {
+            if (candidate === toolPage) return tabId
+        }
+        return ''
+    }
+
+    async function syncVisibleRemoteTab(selectedPage: Page) {
+        if (!await selectedPage.evaluate(() => document.visibilityState === 'visible').catch(() => false)) return
+        const tabId = remoteTabIdForPage(selectedPage)
+        if (!tabId || tabId === activeRemoteTabId) return
+        activeRemoteTabId = tabId
+        trace('native_tab_selected', { tabId, url: selectedPage.url() })
+        send({ type: 'status', state: 'tab_selected', tabId, url: selectedPage.url(), message: 'Remote browser tab selected.' })
+    }
+
     async function focusRemoteTab(report = false) {
         const selectedPage = activeRemoteTabId === 'browser' ? page : toolPages.get(activeRemoteTabId)
         if (!selectedPage || selectedPage.isClosed()) {
@@ -646,10 +663,20 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
                 permissions: network === 'regular' ? [] : ['clipboard-read', 'clipboard-write'],
             })
             trace('context_created')
+            await context.exposeBinding('__hanasandRemoteTabSelected', ({ page: selectedPage }) => syncVisibleRemoteTab(selectedPage))
             await context.addInitScript((platform) => {
                 Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
                 if (platform) Object.defineProperty(navigator, 'platform', { get: () => platform })
             }, browserPlatformForMessage(message))
+            await context.addInitScript(() => {
+                const reportVisibleTab = () => {
+                    if (document.visibilityState !== 'visible') return
+                    const notify = (window as unknown as { __hanasandRemoteTabSelected?: () => Promise<void> }).__hanasandRemoteTabSelected
+                    void notify?.()
+                }
+                document.addEventListener('visibilitychange', reportVisibleTab)
+                window.addEventListener('pageshow', reportVisibleTab)
+            })
             await context.route('**/*', async (route) => {
                 const requestUrl = route.request().url()
                 const safety = await sandboxRequestSafety(requestUrl)
@@ -845,7 +872,9 @@ export function handleOnionSessionSocket(connection: WebSocket, sessionId: strin
             toolPage.on('console', entry => send({ type: 'console', level: entry.type(), text: `[${tool.name || toolId}] ${entry.text()}` }))
             toolPage.on('pageerror', error => send({ type: 'pageerror', message: `[${tool.name || toolId}] ${error.message}` }))
             toolPage.on('framenavigated', frame => {
-                if (frame === toolPage.mainFrame() && activeRemoteTabId === toolId) send({ type: 'status', state: 'tab_navigated', tabId: toolId, url: toolPage.url(), message: `${tool.name || toolId} navigated.` })
+                if (frame !== toolPage.mainFrame()) return
+                trace('provider_tab_navigated', { tabId: toolId, url: toolPage.url(), activeRemoteTabId })
+                if (activeRemoteTabId === toolId) send({ type: 'status', state: 'tab_navigated', tabId: toolId, url: toolPage.url(), message: `${tool.name || toolId} navigated.` })
             })
             await focusRemoteTab()
             const providerBodies = collectProviderResponses(toolPage, tool.name || toolUrl)
