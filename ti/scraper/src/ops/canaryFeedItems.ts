@@ -11,7 +11,7 @@ export function feedItems(source: any, task: any, fetched: string, at: string, m
     if (telegram.length) return telegram;
     return [fallback(source, task, fetched, at, { ...metadata, parserWarnings: ["public Telegram preview contained no messages"] })];
   }
-  if (source.type === "json_api") {
+  if (["api", "json_api"].includes(source.type)) {
     const json = jsonItems(source, task, fetched, at, metadata, maxItems);
     if (json.length) return json;
     return [fallback(source, task, fetched, at, { ...metadata, parserWarnings: ["JSON source contained no supported records"] })];

@@ -40,4 +40,22 @@ describe("compact public advisory adapter", () => {
     expect(signals[0].matchedEntities.actors).toContain("APT29");
     expect(connector.status).toBe("ready");
   });
+
+  test("normalizes the official CISA KEV envelope", () => {
+    const cisa = { ...source, catalog: { canonicalId: "gov:us:cisa:known-exploited-vulnerabilities" } } as SourceRecord;
+    const parsed = parsePublicAdvisoryRecords({
+      body: JSON.stringify({ vulnerabilities: [{ cveID: "CVE-2026-4242", vulnerabilityName: "Example exploited vulnerability", shortDescription: "Used in active exploitation.", dateAdded: "2026-06-21" }] }),
+      contentType: "application/json",
+      source: cisa,
+      feedUrl: source.url,
+      collectedAt: "2026-06-22T00:00:00.000Z"
+    });
+    const item = publicAdvisoryRecordToCollectedItem({ record: parsed.records[0], source: cisa, collectedAt: "2026-06-22T00:00:00.000Z" });
+
+    expect(item).toMatchObject({
+      title: "Example exploited vulnerability",
+      publishedAt: "2026-06-21",
+      metadata: { extractionProfile: "cisa_kev", structuredFields: { cveID: "CVE-2026-4242" } }
+    });
+  });
 });

@@ -20,6 +20,33 @@ describe("canary feed item extraction", () => {
     expect(items[0].rawText).toContain("phishing infrastructure");
     expect(items[1].contentHash).not.toEqual(items[0].contentHash);
   });
+
+  test("parses legacy API sources into structured CISA KEV items", () => {
+    const cisa = {
+      ...source,
+      id: "src_seed_cisa_known_exploited_vulns",
+      type: "api",
+      catalog: { canonicalId: "gov:us:cisa:known-exploited-vulnerabilities" }
+    };
+    const items = feedItems(cisa, { ...task, targetUrl: "https://www.cisa.gov/kev.json" }, JSON.stringify({ vulnerabilities: [{
+      cveID: "CVE-2026-4242",
+      vendorProject: "Example Vendor",
+      product: "Example Product",
+      vulnerabilityName: "Example exploited vulnerability",
+      dateAdded: "2026-06-21",
+      knownRansomwareCampaignUse: "Known"
+    }] }), "2026-06-22T00:00:00.000Z", metadata);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      title: "CVE-2026-4242",
+      publishedAt: "2026-06-21",
+      metadata: {
+        extractionProfile: "cisa_kev",
+        structuredFields: { cveID: "CVE-2026-4242", vendorProject: "Example Vendor", knownRansomwareCampaignUse: "Known" }
+      }
+    });
+  });
 });
 
 function rss() {
