@@ -49,7 +49,7 @@ describe("DWM exposure queue pipeline", () => {
     expect(ingestBody.accepted).toBe(1);
     expect(store.listSources()[0]).toMatchObject({ status: "candidate", governance: { approvalState: "pending", approvalRequired: true, metadataOnly: true } });
 
-    const queue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=5"), options);
+    const queue = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=5"), options);
     expect(queue.status).toBe(200);
     const queueBody = await queue.json() as any;
     expect(queueBody.status).toBe("live");
@@ -58,11 +58,11 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items[0].country).toBe("Norway");
     expect(queueBody.items[0].metadataOnly).toBe(true);
 
-    const countryQueue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?country=Norway&category=Documents"), options);
+    const countryQueue = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?country=Norway&category=Documents"), options);
     const countryQueueBody = await countryQueue.json() as any;
     expect(countryQueueBody.items).toHaveLength(0);
 
-    const filteredQueue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?country=Norway&size=82"), options);
+    const filteredQueue = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?country=Norway&size=82"), options);
     const filteredQueueBody = await filteredQueue.json() as any;
     expect(filteredQueueBody.items[0]).toMatchObject({ company: "Contoso Energy", country: "Norway" });
 
@@ -115,7 +115,7 @@ describe("DWM exposure queue pipeline", () => {
       body: JSON.stringify({ items: [claim] })
     }), options);
 
-    const first = await handleApiRequest(new Request("http://local/v1/dwm/alerts?sourceFamily=darkweb_metadata"), options);
+    const first = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/alerts?sourceFamily=darkweb_metadata"), options);
     const firstBody = await first.json() as any;
     const exposureAlert = firstBody.alerts.find((alert: any) => alert.workflowContext?.source === "exposure_queue" && alert.company === "Northwind Health");
 
@@ -137,7 +137,7 @@ describe("DWM exposure queue pipeline", () => {
       provenance: { collector: "exposure_queue", metadataOnly: true }
     });
 
-    const second = await handleApiRequest(new Request("http://local/v1/dwm/alerts?sourceFamily=darkweb_metadata"), options);
+    const second = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/alerts?sourceFamily=darkweb_metadata"), options);
     const secondBody = await second.json() as any;
     const exposureAlerts = secondBody.alerts.filter((alert: any) => alert.workflowContext?.source === "exposure_queue" && alert.company === "Northwind Health");
     expect(exposureAlerts).toHaveLength(1);
@@ -209,7 +209,7 @@ describe("DWM exposure queue pipeline", () => {
       body: JSON.stringify({ items: [claim] })
     }), options);
 
-    const queue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=5"), options);
+    const queue = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=5"), options);
     const queueBody = await queue.json() as any;
     expect(queueBody.status).toBe("stale");
     expect(queueBody.scheduler.state).toBe("due");
@@ -237,13 +237,13 @@ describe("DWM exposure queue pipeline", () => {
       }), options);
     }
 
-    const first = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=4"), options);
+    const first = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=4"), options);
     const firstBody = await first.json() as any;
     expect(firstBody.items).toHaveLength(4);
     expect(firstBody.counts.total).toBe(9);
     expect(firstBody.page).toMatchObject({ limit: 4, offset: 0, total: 9, nextOffset: 4, hasMore: true });
 
-    const second = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=4&offset=4"), options);
+    const second = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?limit=4&offset=4"), options);
     const secondBody = await second.json() as any;
     expect(secondBody.items).toHaveLength(4);
     expect(secondBody.page).toMatchObject({ limit: 4, offset: 4, total: 9, nextOffset: 8, hasMore: true });
@@ -339,7 +339,7 @@ describe("DWM exposure queue pipeline", () => {
     expect(enrichedBody.updated).toBe(1);
     expect(enrichedBody.rows[0].country).toBe("Norway");
 
-    const queue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?country=Norway"), options);
+    const queue = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue?country=Norway"), options);
     const queueBody = await queue.json() as any;
     expect(queueBody.items[0]).toMatchObject({ company: "Contoso Energy", country: "Norway" });
   });
