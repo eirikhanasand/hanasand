@@ -88,14 +88,14 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/metrics") return json(metrics(options));
     if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "GET") return collectionSchedulerStatus(options);
     if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "POST") return updateCollectionSchedulerControl(request, options);
-    if (url.pathname === "/v1/organizations" && request.method === "GET") return listOrganizations(url, options);
+    if (url.pathname === "/v1/organizations" && request.method === "GET") return listOrganizations(request, options);
     if (url.pathname === "/v1/organizations" && request.method === "POST") return createOrganization(request, options);
-    if (/^\/v1\/organizations\/[^/]+\/members$/.test(url.pathname) && request.method === "GET") return listOrganizationMembers(url, options, url.pathname.split("/")[3]);
+    if (/^\/v1\/organizations\/[^/]+\/members$/.test(url.pathname) && request.method === "GET") return listOrganizationMembers(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/invites$/.test(url.pathname) && request.method === "POST") return createOrganizationInvites(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/entitlements\/readiness$/.test(url.pathname) && (request.method === "GET" || request.method === "POST")) return getOrganizationEntitlementReadiness(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/entitlements$/.test(url.pathname) && request.method === "GET") return getOrganizationEntitlements(url, options, url.pathname.split("/")[3], request);
     if (/^\/v1\/organizations\/[^/]+\/entitlements$/.test(url.pathname) && request.method === "PUT") return upsertOrganizationEntitlements(request, options, url.pathname.split("/")[3]);
-    if (/^\/v1\/organizations\/[^/]+\/webhooks$/.test(url.pathname) && request.method === "GET") return listWebhookDestinations(url, options, url.pathname.split("/")[3]);
+    if (/^\/v1\/organizations\/[^/]+\/webhooks$/.test(url.pathname) && request.method === "GET") return listWebhookDestinations(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/webhooks$/.test(url.pathname) && request.method === "POST") return createWebhookDestination(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/webhooks\/test$/.test(url.pathname) && request.method === "POST") return testOrganizationWebhook(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/webhooks\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateWebhookDestination(request, options, url.pathname.split("/")[3], url.pathname.split("/")[5]);
@@ -324,8 +324,6 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
 function requiresAuthenticatedMutation(method: string, pathname: string): boolean {
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return false;
   return pathname === "/v1/intel/runs"
-    || pathname === "/v1/organizations"
-    || pathname.startsWith("/v1/organizations/")
     || pathname === "/v1/cases"
     || pathname.startsWith("/v1/cases/")
     || pathname.startsWith("/v1/dwm/")

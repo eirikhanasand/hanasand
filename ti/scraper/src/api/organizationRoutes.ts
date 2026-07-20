@@ -4,6 +4,7 @@ import { sanitizeDwmCustomerEvidenceExcerpt, sanitizeDwmCustomerText } from "../
 import { error, json, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
+import { authenticateOperatorRequest, type AuthenticatedIdentity } from "./requestAuthentication.ts";
 
 type OrganizationRole = "owner" | "admin" | "analyst" | "viewer";
 type OrganizationStatus = "active" | "suspended";
@@ -72,12 +73,18 @@ type PublicWebhookDestination = Omit<WebhookDestination, "url"> & {
   endpointHint: string;
 };
 
-export function listOrganizations(_url: URL, options: ApiServerOptions): Response {
+export async function listOrganizations(request: Request, options: ApiServerOptions): Promise<Response> {
+  const access = await organizationAccess(request, options);
+  if (access.error) return access.error;
   const organizations = (options.store as any).listOrganizations?.() ?? [];
-  return json({ organizations });
+  if (!access.identity || access.privileged) return json({ organizations });
+  const organizationIds = new Set(activeMembers(options).filter((member) => memberMatchesIdentity(member, access.identity!.id)).map((member) => member.organizationId));
+  return json({ organizations: organizations.filter((organization: Organization) => organizationIds.has(organization.id)) });
 }
 
 export async function createOrganization(request: Request, options: ApiServerOptions): Promise<Response> {
+  const access = await organizationAccess(request, options);
+  if (access.error) return access.error;
   const body = await readJson<any>(request);
   const name = String(body.name ?? "").trim();
   if (!name) return json({ error: { code: "missing_name", message: "Organization name is required." } }, 400);
@@ -95,7 +102,7 @@ export async function createOrganization(request: Request, options: ApiServerOpt
     kind: body.kind === "operational_canary" ? "operational_canary" : existing?.kind ?? "customer",
     createdAt: existing?.createdAt ?? generatedAt,
     updatedAt: generatedAt,
-    createdBy: String(body.createdBy ?? request.headers.get("x-actor-id") ?? "").trim() || existing?.createdBy
+    createdBy: access.identity?.id ?? (String(body.createdBy ?? request.headers.get("x-actor-id") ?? "").trim() || existing?.createdBy)
   };
 
   (options.store as any).saveOrganization(organization);
@@ -103,7 +110,7 @@ export async function createOrganization(request: Request, options: ApiServerOpt
   const owner = ownerEmail ? upsertMember(options, {
     organizationId: organization.id,
     email: ownerEmail,
-    userId: body.ownerUserId ? String(body.ownerUserId) : undefined,
+    userId: access.identity && !access.service ? access.identity.id : body.ownerUserId ? String(body.ownerUserId) : undefined,
     role: "owner",
     status: "active",
     acceptedAt: generatedAt,
@@ -113,7 +120,9 @@ export async function createOrganization(request: Request, options: ApiServerOpt
   return json({ organization, owner }, existing ? 200 : 201);
 }
 
-export function listOrganizationMembers(_url: URL, options: ApiServerOptions, organizationId: string | undefined): Response {
+export async function listOrganizationMembers(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
+  const access = await organizationAccess(request, options, organizationId);
+  if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
   const members = ((options.store as any).listOrganizationMembers?.() ?? []).filter((row: OrganizationMember) => row.organizationId === organization.id);
@@ -122,6 +131,8 @@ export function listOrganizationMembers(_url: URL, options: ApiServerOptions, or
 }
 
 export async function createOrganizationInvites(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
+  const access = await organizationAccess(request, options, organizationId, true);
+  if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
   const body = await readJson<any>(request);
@@ -134,7 +145,7 @@ export async function createOrganizationInvites(request: Request, options: ApiSe
 
   const role = normalizeRole(body.role);
   const generatedAt = nowIso();
-  const invitedBy = String(body.invitedBy ?? request.headers.get("x-actor-id") ?? "").trim() || undefined;
+  const invitedBy = access.identity?.id ?? (String(body.invitedBy ?? request.headers.get("x-actor-id") ?? "").trim() || undefined);
   const expiresAt = new Date(Date.parse(generatedAt) + 1000 * 60 * 60 * 24 * Number(body.expiresInDays ?? 14)).toISOString();
 
   const invites = emails.map((email) => {
@@ -160,7 +171,9 @@ export async function createOrganizationInvites(request: Request, options: ApiSe
   return json({ organization, invites, members }, 201);
 }
 
-export function listWebhookDestinations(_url: URL, options: ApiServerOptions, organizationId: string | undefined): Response {
+export async function listWebhookDestinations(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
+  const access = await organizationAccess(request, options, organizationId);
+  if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
   const destinations = organizationWebhookDestinationRows(options, organization.id).map(publicWebhookDestination);
@@ -168,6 +181,8 @@ export function listWebhookDestinations(_url: URL, options: ApiServerOptions, or
 }
 
 export async function createWebhookDestination(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
+  const access = await organizationAccess(request, options, organizationId, true);
+  if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
   const body = await readJson<any>(request);
@@ -186,13 +201,15 @@ export async function createWebhookDestination(request: Request, options: ApiSer
     status: body.status === "paused" ? "paused" : "active",
     createdAt: (options.store as any).getWebhookDestination?.(String(body.id ?? stableId("webhook_destination", `${organization.id}:${url}`)))?.createdAt ?? generatedAt,
     updatedAt: generatedAt,
-    createdBy: String(body.createdBy ?? request.headers.get("x-actor-id") ?? "").trim() || undefined
+    createdBy: access.identity?.id ?? (String(body.createdBy ?? request.headers.get("x-actor-id") ?? "").trim() || undefined)
   };
   (options.store as any).saveWebhookDestination(destination);
   return json({ organization, destination: publicWebhookDestination(destination) }, 201);
 }
 
 export async function updateWebhookDestination(request: Request, options: ApiServerOptions, organizationId: string | undefined, destinationId: string | undefined): Promise<Response> {
+  const access = await organizationAccess(request, options, organizationId, true);
+  if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
   const existing = findOrganizationWebhookDestination(options, organization.id, destinationId);
@@ -219,7 +236,9 @@ export async function updateWebhookDestination(request: Request, options: ApiSer
   return json({ organization, destination: publicWebhookDestination(destination) });
 }
 
-export async function disableWebhookDestination(_request: Request, options: ApiServerOptions, organizationId: string | undefined, destinationId: string | undefined): Promise<Response> {
+export async function disableWebhookDestination(request: Request, options: ApiServerOptions, organizationId: string | undefined, destinationId: string | undefined): Promise<Response> {
+  const access = await organizationAccess(request, options, organizationId, true);
+  if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
   const existing = findOrganizationWebhookDestination(options, organization.id, destinationId);
@@ -230,6 +249,8 @@ export async function disableWebhookDestination(_request: Request, options: ApiS
 }
 
 export async function testOrganizationWebhook(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
+  const access = await organizationAccess(request, options, organizationId, true);
+  if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
   const body = await readJson<any>(request);
@@ -313,6 +334,31 @@ export function resolveOrganizationScope(input: { body?: any; url?: URL; request
 
 function scopeValues(...values: unknown[]): string[] {
   return values.map((value) => typeof value === "string" ? value.trim() : "").filter(Boolean);
+}
+
+async function organizationAccess(request: Request, options: ApiServerOptions, organizationId?: string, mutate = false): Promise<{ identity?: AuthenticatedIdentity; service?: boolean; privileged?: boolean; error?: Response }> {
+  const authentication = await authenticateOperatorRequest(request, options);
+  if (authentication.error) return { error: authentication.error };
+  const identity = authentication.identity;
+  if (!identity) return {};
+  const service = identity.roles.includes("service");
+  const privileged = service || identity.roles.includes("system_admin");
+  if (!organizationId || privileged) return { identity, service, privileged };
+  const member = activeMembers(options).find((row) => row.organizationId === organizationId && memberMatchesIdentity(row, identity.id));
+  if (!member) return { error: error("organization_access_denied", "Organization access requires an active membership", 403) };
+  if (mutate && !["owner", "admin"].includes(member.role)) {
+    return { error: error("organization_admin_required", "Organization changes require an owner or administrator", 403) };
+  }
+  return { identity, service, privileged };
+}
+
+function activeMembers(options: ApiServerOptions): OrganizationMember[] {
+  return ((options.store as any).listOrganizationMembers?.() ?? []).filter((member: OrganizationMember) => member.status === "active");
+}
+
+function memberMatchesIdentity(member: OrganizationMember, identity: string): boolean {
+  const normalized = identity.trim().toLowerCase();
+  return [member.id, member.userId, member.email].some((value) => String(value ?? "").trim().toLowerCase() === normalized);
 }
 
 export function organizationWebhookDestinations(options: ApiServerOptions, organizationId: string | undefined): WebhookDestination[] {
