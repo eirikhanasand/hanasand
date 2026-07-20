@@ -7,3 +7,8 @@ test("capture dedupe compares published timestamps by instant", () => {
   store.saveCapture(fixtureCapture({ id: "cap_utc", publishedAt: "2026-07-20T10:00:00.000Z" }));
   expect(store.saveCaptureWithDedupe(fixtureCapture({ id: "cap_offset", publishedAt: "2026-07-20T12:00:00+02:00" }))).toMatchObject({ status: "duplicate", duplicateOf: "cap_utc" });
 });
+
+test("capture storage drops malformed published timestamps", () => {
+  const stored = new InMemoryScraperStore().saveCapture(fixtureCapture({ publishedAt: "Thu, 07/16/2026 - 07:25" }));
+  expect(stored.publishedAt).toBeUndefined();
+});

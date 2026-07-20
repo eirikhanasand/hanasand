@@ -39,7 +39,7 @@ export function readPromotionMetadata(metadata: Record<string, unknown>): Discov
 
 const stringArray = (v: unknown) => Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 const normalizedBodyHash = (body?: string) => body ? hashContent(normalizeWhitespace(body).toLowerCase()) : undefined;
-const normalizeTimestamp = (value?: string) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : value;
+const normalizeTimestamp = (value?: string) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : undefined;
 const isMetadataOnlyFlag = (flag: string) => ["sensitive_source", "leak_metadata", "credential_material", "restricted_protocol"].includes(flag);
 function sortedSearch(params: URLSearchParams) { const sorted = new URLSearchParams(); for (const [k, v] of [...params.entries()].sort(([a], [b]) => a.localeCompare(b))) sorted.append(k, v); const text = sorted.toString(); return text ? `?${text}` : ""; }
 function safeEntityHintsFromBody(body?: string) { if (!body) return undefined; const victims = new Set([...body.matchAll(/\bvictim\s*:?\s+([A-Z][A-Za-z0-9&., -]{2,80})/g)].map((m) => m[1]?.replace(/\s+\b(?:on|in|using|with|after|from)\b.*$/i, "").trim()).filter(Boolean)); const sectors = new Set(["healthcare", "telecommunications", "energy", "government", "finance", "education", "manufacturing"].filter((s) => new RegExp(`\\b${s}\\b`, "i").test(body))); return victims.size || sectors.size ? { victims: [...victims], sectors: [...sectors] } : undefined; }
