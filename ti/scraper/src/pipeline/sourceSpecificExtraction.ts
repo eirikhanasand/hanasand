@@ -20,9 +20,15 @@ function victimBlogEntities(item: CollectedItem, context: ExtractionContext): Ex
     fieldEntity("sector", fields.claimedSector, 0.68, "claimedSector", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("country", fields.claimedCountry, 0.68, "claimedCountry", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("dataset", fields.claimedDataType, 0.64, "claimedDataType", item, context, "source_claim", ["advertised data type is unverified"]),
-    fieldEntity("publication_strategy", "public victim listing", 0.95, "channel", item, context, "observed", []),
+    fieldEntity("extortion_type", fields.extortionType ?? (fields.victimName && fields.claimedDataType ? "data-theft extortion" : undefined), fields.extortionType ? 0.8 : 0.55, "extortionType", item, context, fields.extortionType ? "source_claim" : "inferred", fields.extortionType ? ["unverified threat-actor claim"] : ["inferred from victim listing and advertised data type"]),
+    fieldEntity("monetization_path", fields.monetizationPath, 0.72, "monetizationPath", item, context, "source_claim", ["unverified threat-actor claim"]),
+    fieldEntity("publicity_tactic", fields.publicityTactic ?? "public victim naming", fields.publicityTactic ? 0.8 : 0.7, "publicityTactic", item, context, fields.publicityTactic ? "source_claim" : "observed", fields.publicityTactic ? ["unverified threat-actor claim"] : []),
+    fieldEntity("publication_strategy", fields.publicationStrategy ?? "public victim listing", fields.publicationStrategy ? 0.8 : 0.95, "publicationStrategy", item, context, fields.publicationStrategy ? "source_claim" : "observed", fields.publicationStrategy ? ["unverified threat-actor claim"] : []),
     fieldEntity("channel_type", "dark web victim blog", 0.95, "channel", item, context, "observed", []),
-    fieldEntity("victim_pressure_tactic", "public naming", 0.65, "channel", item, context, "inferred", ["inferred from publication channel"])
+    fieldEntity("victim_pressure_tactic", fields.victimPressureTactic ?? "public naming", fields.victimPressureTactic ? 0.75 : 0.65, "victimPressureTactic", item, context, fields.victimPressureTactic ? "source_claim" : "inferred", fields.victimPressureTactic ? ["unverified threat-actor claim"] : ["inferred from publication channel"]),
+    fieldEntity("buyer_seller_communication", fields.buyerSellerCommunication, 0.7, "buyerSellerCommunication", item, context, "source_claim", ["unverified threat-actor claim"]),
+    fieldEntity("intermediary_communication", fields.intermediaryCommunication, 0.7, "intermediaryCommunication", item, context, "source_claim", ["unverified threat-actor claim"]),
+    fieldEntity("profitability_signal", fields.profitabilitySignal, 0.65, "profitabilitySignal", item, context, "source_claim", ["signal does not establish realized profit"])
   ]);
 }
 

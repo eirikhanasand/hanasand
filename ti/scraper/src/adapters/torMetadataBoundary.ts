@@ -80,6 +80,14 @@ function metadataFromHtml(html: string, actorName?: string) {
     claimedSector: labeled(description, ["sector", "industry"]),
     claimedCountry: labeled(description, ["country", "location"]),
     claimedDataType: labeled(description, ["data type", "data"]),
+    extortionType: labeled(description, ["extortion type", "extortion"]),
+    monetizationPath: labeled(description, ["monetization path", "monetization", "payment model"]),
+    publicityTactic: labeled(description, ["publicity tactic", "publicity"]),
+    publicationStrategy: labeled(description, ["publication strategy"]),
+    victimPressureTactic: labeled(description, ["victim pressure", "pressure tactic"]),
+    buyerSellerCommunication: labeled(description, ["buyer communication", "seller communication"]),
+    intermediaryCommunication: labeled(description, ["intermediary communication", "broker communication"]),
+    profitabilitySignal: labeled(description, ["profitability signal", "revenue signal"]),
     sourceTimestamp: time(html),
     links: [...html.matchAll(/\bhref=["']([^"']+)["']/gi)].map((match) => match[1]).filter((value) => /^https?:\/\/[a-z2-7]{56}\.onion(?:\/|$)/i.test(value)).slice(0, 20)
   };

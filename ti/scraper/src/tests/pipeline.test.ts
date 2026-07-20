@@ -36,7 +36,7 @@ describe("compact pipeline value path", () => {
       contentHash: hashContent("darknet"),
       links: [],
       sensitive: true,
-      metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Blackout", victimName: "Example Energy AS", claimedSector: "energy", claimedCountry: "Norway", claimedDataType: "customer records" } }
+      metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Blackout", victimName: "Example Energy AS", claimedSector: "energy", claimedCountry: "Norway", claimedDataType: "customer records", extortionType: "double extortion", monetizationPath: "ransom demand", publicityTactic: "countdown announcement", buyerSellerCommunication: "auction contact channel", intermediaryCommunication: "broker listing", profitabilitySignal: "claimed paid victims" } }
     });
     const cisa = processCollectedItem({
       sourceId: "src_cisa_kev",
@@ -61,7 +61,13 @@ describe("compact pipeline value path", () => {
 
     expect(darknet.entities).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "victim", value: "Example Energy AS", assertionKind: "source_claim", extractorVersion: SOURCE_SPECIFIC_EXTRACTOR_VERSION }),
-      expect.objectContaining({ type: "publication_strategy", value: "public victim listing", assertionKind: "observed" })
+      expect.objectContaining({ type: "publication_strategy", value: "public victim listing", assertionKind: "observed" }),
+      expect.objectContaining({ type: "extortion_type", value: "double extortion", assertionKind: "source_claim" }),
+      expect.objectContaining({ type: "monetization_path", value: "ransom demand", assertionKind: "source_claim" }),
+      expect.objectContaining({ type: "publicity_tactic", value: "countdown announcement", assertionKind: "source_claim" }),
+      expect.objectContaining({ type: "buyer_seller_communication", value: "auction contact channel", assertionKind: "source_claim" }),
+      expect.objectContaining({ type: "intermediary_communication", value: "broker listing", assertionKind: "source_claim" }),
+      expect.objectContaining({ type: "profitability_signal", value: "claimed paid victims", reviewReasons: ["signal does not establish realized profit"] })
     ]));
     expect(cisa.entities).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "product", value: "Example Product", confidence: 0.94 }),
