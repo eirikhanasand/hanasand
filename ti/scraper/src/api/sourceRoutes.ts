@@ -5,6 +5,8 @@ import type { SourceRecord } from "../types.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
 import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
+import { authenticateRequest } from "./requestAuthentication.ts";
+import { validateSource } from "../registry/sourceRegistry.ts";
 
 export async function sourceApplyPlan(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson(request);
@@ -33,15 +35,21 @@ export function sourceAtlas(request: Request, options: ApiServerOptions): Respon
 }
 
 export async function createSource(request: Request, options: ApiServerOptions): Promise<Response> {
+  const access = await sourceAdminAccess(request, options);
+  if (access) return access;
   const input = await readJson<Partial<SourceRecord>>(request);
   const scope = resolveTenantScope(request, new URL(request.url), input.tenantId);
   if (scope.error) return scope.error;
   const source = { id: input.id ?? stableId("source", input.url ?? input.name ?? nowIso()), tenantId: scope.tenantId, name: input.name ?? input.url ?? "source", type: input.type ?? "rss", url: input.url ?? "", accessMethod: input.accessMethod ?? "public_http", status: input.status ?? "active", risk: input.risk ?? "low", trustScore: input.trustScore ?? 0.5, language: input.language ?? "en", crawlFrequencySeconds: input.crawlFrequencySeconds ?? 3600, legalNotes: input.legalNotes ?? "public source", createdAt: nowIso(), updatedAt: nowIso(), metadata: input.metadata ?? {} } as SourceRecord;
+  const invalid = invalidSource(source);
+  if (invalid) return invalid;
   options.store.saveSource(source);
   return json({ source: toSafeSourceDto(source) }, 201);
 }
 
 export async function updateSource(request: Request, options: ApiServerOptions, sourceId: string | undefined): Promise<Response> {
+  const access = await sourceAdminAccess(request, options);
+  if (access) return access;
   const source = options.store.getSource?.(sourceId ?? "");
   if (!source) return json({ error: { code: "not_found", message: "Source not found" } }, 404);
   const patch = await readJson<Partial<SourceRecord>>(request);
@@ -49,8 +57,26 @@ export async function updateSource(request: Request, options: ApiServerOptions, 
   if (scope.error) return scope.error;
   if (!inTenantScope(source, scope.tenantId)) return json({ error: { code: "not_found", message: "Source not found" } }, 404);
   const updated = { ...source, ...patch, id: source.id, tenantId: source.tenantId, trustScore: patch.trustScore === undefined ? source.trustScore : Math.max(0, Math.min(1, patch.trustScore)), updatedAt: nowIso() };
+  const invalid = invalidSource(updated);
+  if (invalid) return invalid;
   options.store.saveSource(updated);
   return json({ source: toSafeSourceDto(updated) });
+}
+
+async function sourceAdminAccess(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
+  const authentication = await authenticateRequest(request, options);
+  if (authentication.error) return authentication.error;
+  if (!authentication.identity!.roles.some((role) => ["owner", "admin", "source_admin", "source_operator"].includes(role))) {
+    return json({ error: { code: "source_admin_forbidden", message: "Source changes require a source administrator role" } }, 403);
+  }
+}
+
+function invalidSource(source: SourceRecord): Response | undefined {
+  try {
+    validateSource(source);
+  } catch (cause) {
+    return json({ error: { code: "invalid_source", message: cause instanceof Error ? cause.message : "Source validation failed" } }, 400);
+  }
 }
 
 export function toSafeSourceDto(source: SourceRecord) {
