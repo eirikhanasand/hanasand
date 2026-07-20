@@ -8,26 +8,25 @@ describe("api v1", () => {
     expect(response).toMatchObject({
       version: "v1",
       authBoundary: {
-        schemaVersion: "ti.enterprise_auth_boundary.v1",
-        mode: "trusted_gateway_forwarded_identity",
-        enforcedHere: false,
-        requiredForwardedHeaders: expect.arrayContaining(["x-tenant-id", "x-actor-id"]),
+        schemaVersion: "ti.enterprise_auth_boundary.v2",
+        mode: "hanasand_session_validation",
+        enforcedHere: true,
         tenantContract: {
           header: "x-tenant-id",
-          requiredForProduction: true
+          requiredForTenantScopedRoutes: true
         },
-        requesterContract: {
-          header: "x-actor-id",
-          requiredForProduction: true,
-          auditOnlyHere: true
+        identityContract: {
+          header: "id",
+          bearerHeader: "authorization",
+          requiredForProtectedMutations: true
         },
         secretHandling: {
           scraperDoesNotStoreSecrets: true,
-          bearerTokensAcceptedHere: false
+          bearerTokensAcceptedForValidation: true
         }
       },
       notes: expect.arrayContaining([
-        expect.stringContaining("Authenticate at the main CTI app")
+        expect.stringContaining("validate the Hanasand session")
       ])
     });
     expect(JSON.stringify(response).toLowerCase()).not.toContain("authorization:");

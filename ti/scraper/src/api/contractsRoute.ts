@@ -42,6 +42,7 @@ export const PRODUCT_READINESS_CONSUMER_HANDOFF_PACKET_SCHEMA_VERSION = "hanasan
 export function contractIndex() {
   const routes = [
     route("GET", "/v1/health"),
+    route("GET", "/v1/auth/integration-notes"),
     route("GET", "/v1/intel/search"),
     route("GET", "/api/ti/search"),
     route("GET", "/v1/intel/sources"),

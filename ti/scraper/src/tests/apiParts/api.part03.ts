@@ -6,7 +6,7 @@ describe("api v1", () => {
       store: new InMemoryScraperStore(),
       frontier: new FocusedFrontier()
     }));
-    expect(response.schemaVersion).toBe("ti.live_product_slo_dashboard.v1");
+    expect(response.schemaVersion).toBe("ti.live_product_slo.compact.v3");
     expect(response.route).toBe("/v1/ops/product-slo");
     expect(response.productLaunch).toBeDefined();
     const serialized = JSON.stringify(response).toLowerCase();

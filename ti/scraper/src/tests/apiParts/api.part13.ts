@@ -1,21 +1,88 @@
-import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir, handleApiRequest, startApiServer, loadRuntimeConfig, FocusedFrontier, activatePublicCanarySources, buildCanaryOperatorSummary, runCanaryCollectionCycle, startCanaryCollectionLoop, createLogger, MetricsRegistry, WorkerSupervisor, processCollectedItem, FileBackedScraperStore, InMemoryObjectEvidenceStore, InMemoryScraperStore, hashContent, api, apiRestrictedMetadataApplyPlanSources, body, fixtureCapture, fixtureDelta, restrictedMetadataApplyPlanSources, seedEvidenceReplayFixture, source, telegramCapture } from "../apiTestHarness.ts";
-import type { AnalystClaimLedgerEntry, CanaryOperatorResponseForTest, CanaryReadinessResponseForTest, CanarySoakResponseForTest, RawCapture, SourceRecord } from "../apiTestHarness.ts";
+import {
+  activatePublicCanarySources,
+  api,
+  apiRestrictedMetadataApplyPlanSources,
+  body,
+  buildCanaryOperatorSummary,
+  createLogger,
+  describe,
+  expect,
+  FileBackedScraperStore,
+  fixtureCapture,
+  fixtureDelta,
+  FocusedFrontier,
+  handleApiRequest,
+  hashContent,
+  InMemoryObjectEvidenceStore,
+  InMemoryScraperStore,
+  join,
+  loadRuntimeConfig,
+  MetricsRegistry,
+  mkdtempSync,
+  processCollectedItem,
+  restrictedMetadataApplyPlanSources,
+  rmSync,
+  runCanaryCollectionCycle,
+  seedEvidenceReplayFixture,
+  source,
+  startApiServer,
+  startCanaryCollectionLoop,
+  telegramCapture,
+  test,
+  tmpdir,
+  WorkerSupervisor,
+} from "../apiTestHarness.ts";
+import type {
+  AnalystClaimLedgerEntry,
+  CanaryOperatorResponseForTest,
+  CanaryReadinessResponseForTest,
+  CanarySoakResponseForTest,
+  RawCapture,
+  SourceRecord,
+} from "../apiTestHarness.ts";
 
 describe("api v1", () => {
   test("records canary retry and run health when a public source fetch fails", async () => {
     const store = new InMemoryScraperStore();
     const frontier = new FocusedFrontier();
-    const canaryFetch = async () => new Response("temporary upstream failure", { status: 503 });
-    const options = { store, frontier, objectStore: new InMemoryObjectEvidenceStore(), canaryFetch };
+    const canaryFetch = async () =>
+      new Response("temporary upstream failure", { status: 503 });
+    const options = {
+      store,
+      frontier,
+      objectStore: new InMemoryObjectEvidenceStore(),
+      canaryFetch,
+    };
 
-    await body(await handleApiRequest(api("/v1/sources/canary-activation", {
-      method: "POST",
-      body: JSON.stringify({ operatorApproval: true, approvedBy: "analyst-1", generatedAt: "2026-05-24T10:00:00.000Z" })
-    }), options));
-    const run = await body(await handleApiRequest(api("/v1/ops/canary/run", {
-      method: "POST",
-      body: JSON.stringify({ operatorApproval: true, approvedBy: "analyst-1", maxSources: 1, maxTasks: 1, generatedAt: "2026-05-24T10:01:00.000Z", timeoutMs: 1000 })
-    }), options));
+    await body(
+      await handleApiRequest(
+        api("/v1/sources/canary-activation", {
+          method: "POST",
+          body: JSON.stringify({
+            operatorApproval: true,
+            approvedBy: "analyst-1",
+            generatedAt: "2026-05-24T10:00:00.000Z",
+          }),
+        }),
+        options,
+      ),
+    );
+    const run = await body(
+      await handleApiRequest(
+        api("/v1/ops/canary/run", {
+          method: "POST",
+          body: JSON.stringify({
+            operatorApproval: true,
+            approvedBy: "analyst-1",
+            maxSources: 1,
+            maxTasks: 1,
+            generatedAt: "2026-05-24T10:01:00.000Z",
+            timeoutMs: 1000,
+          }),
+        }),
+        options,
+      ),
+    );
 
     expect(run.canaryRun).toMatchObject({
       mode: "production_canary",
@@ -27,23 +94,30 @@ describe("api v1", () => {
       remainingQueuedTaskCount: 1,
       health: {
         errorRate: 1,
-        promotionYield: 0
-      }
+        promotionYield: 0,
+      },
     });
-    expect(store.listRuns()[0]).toMatchObject({ status: "running", taskCount: 1, captureCount: 0, incidentCount: 0 });
+    expect(store.listRuns()[0]).toMatchObject({
+      status: "failed",
+      taskCount: 1,
+      captureCount: 0,
+      incidentCount: 0,
+    });
     expect(frontier.snapshot()).toHaveLength(1);
     expect(store.listSources()[0]?.health?.status).toBe("degraded");
 
-    const operator = await body(await handleApiRequest(api("/v1/ops/canary"), options));
+    const operator = await body(
+      await handleApiRequest(api("/v1/ops/canary"), options),
+    );
     expect(operator.operatorView).toMatchObject({
       queue: { queued: 1, leased: 0, deadLetters: 0 },
       schedulerHealth: {
-        errorRate: 0.01,
+        errorRate: 1,
         retryScheduledCount: 1,
         retryExhaustedCount: 0,
         failingSourceCount: 0,
-        degradedSourceCount: 1
-      }
+        degradedSourceCount: 1,
+      },
     });
   });
 });

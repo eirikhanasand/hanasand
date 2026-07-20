@@ -7,7 +7,7 @@ import { buildDwmOperationsSnapshot } from "../product/dwmOperations.ts";
 import { buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
 import { nowIso } from "../utils.ts";
 import { cancelActorOrgRelevanceReviewPreparedHandoff, createActorOrgRelevanceReviewAlertGenerationRequest, createActorOrgRelevanceReviewCaseHandoffRequest, createActorOrgRelevanceReviewCustomerNotification, createActorOrgRelevanceReviewSourceCollectionRequest, createActorOrgRelevanceReviewWebhookTriggerRequest, getActorOrgRelevanceReview, listActorOrgRelevanceHandoffQueue, listActorOrgRelevanceReviews, listActorOrgRelevanceSourceCollectionQueue, materializeActorOrgRelevanceReviewWatchlist, submitActorOrgRelevanceReview, updateActorOrgRelevanceReview, updateActorOrgRelevanceReviewEvidence } from "./actorOrgRelevanceRoutes.ts";
-import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./canaryRoutes.ts";
+import { canaryActivation, canaryConsole, canaryOperator, canaryPause, canaryReadiness, canaryRun, canarySoak } from "./canaryRoutes.ts";
 import { createCase, createCaseFromDwmAlert, exportCaseActionReplay, exportCaseEvidence, getCaseDetail, getCaseWebhookReplayReadiness, listCaseHandoffActions, listCaseWorkflowTransitions, listCases, recordCaseCustomerNotification, recordCaseHandoffAction, updateCase } from "./caseRoutes.ts";
 import { collectionSchedulerStatus, updateCollectionSchedulerControl } from "./collectionSchedulerStatus.ts";
 import { contractIndex } from "./contractsRoute.ts";
@@ -53,6 +53,22 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/health") {
       const storage = await (options.store as any).databaseHealth?.() ?? { ok: true, backend: "memory" };
       return json({ ok: storage.ok !== false, service: "ti-scraper", version: "v1", storage, collection: { public: (options.canaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, generatedAt: nowIso() }, storage.ok === false ? 503 : 200);
+    }
+    if (url.pathname === "/v1/auth/integration-notes" && request.method === "GET") {
+      return json({
+        version: "v1",
+        authBoundary: {
+          schemaVersion: "ti.enterprise_auth_boundary.v2",
+          mode: "hanasand_session_validation",
+          enforcedHere: true,
+          identityContract: { header: "id", bearerHeader: "authorization", requiredForProtectedMutations: true },
+          tenantContract: { header: "x-tenant-id", requiredForTenantScopedRoutes: true },
+          organizationContract: { header: "x-organization-id", requiredForOrganizationScopedRoutes: true },
+          validation: { authority: "hanasand_auth_api", cache: "no-store", failClosed: true },
+          secretHandling: { scraperDoesNotStoreSecrets: true, bearerTokensAcceptedForValidation: true }
+        },
+        notes: ["Protected mutations validate the Hanasand session before applying tenant-scoped changes."]
+      });
     }
     if (url.pathname === "/v1/contracts") return json(contractIndex());
     if (url.pathname === "/v1/metrics") return json(metrics(options));
@@ -246,10 +262,13 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       return scope.error ?? json(qualityPayload(url.searchParams.get("q") ?? "", options.store, scope.tenantId));
     }
     if (url.pathname === "/v1/ops/product-slo") return json({ route: "/v1/ops/product-slo", ...productSlo(options, url) });
-    if (url.pathname === "/v1/sources/canary-activation") return canaryActivation(request, options);
-    if (url.pathname === "/v1/ops/canary/run") return canaryRun(request, options);
-    if (url.pathname === "/v1/ops/canary") return canaryOperator(options);
-    if (url.pathname === "/v1/ops/canary/readiness") return canaryReadiness(url, options);
+    if (url.pathname === "/v1/sources/canary-activation" && request.method === "POST") return canaryActivation(request, options);
+    if (url.pathname === "/v1/sources/canary-pause" && request.method === "POST") return canaryPause(request, options);
+    if (url.pathname === "/v1/ops/canary/run" && request.method === "POST") return canaryRun(request, options);
+    if (url.pathname === "/v1/ops/canary" && request.method === "GET") return canaryOperator(options);
+    if (url.pathname === "/v1/ops/canary/readiness" && request.method === "GET") return canaryReadiness(url, options);
+    if (url.pathname === "/v1/ops/canary/soak" && request.method === "GET") return canarySoak(url, options);
+    if (url.pathname === "/v1/ops/canary/console" && request.method === "GET") return canaryConsole(url, options);
     if (url.pathname === "/v1/ops/resource-snapshot") return json({ service: "ti-scraper", queue: { queued: options.frontier.size() }, workers: options.supervisor?.snapshot() ?? [] });
     if (url.pathname === "/v1/frontier") return json({ queued: options.frontier.size(), tasks: options.frontier.snapshot?.() ?? [] });
     if (url.pathname === "/v1/frontier/apply-plan" && request.method === "POST") {

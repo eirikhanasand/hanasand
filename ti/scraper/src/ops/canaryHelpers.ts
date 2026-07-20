@@ -38,7 +38,7 @@ export function health(store: any, at: string, counters: any) {
 }
 
 export function detachedState(at: string, queueLimit: number): CanaryLoopState {
-  return { schemaVersion: "ti.public_canary_loop_runtime.v1", supervisorAttached: false, enabled: false, running: false, startedAt: at, intervalSeconds: 300, cycleCount: 0, successCount: 0, errorCount: 0, consecutiveErrorCount: 0, maxSources: 10, maxTasks: 5, maxBytes: 512_000, timeoutMs: 30_000, queueLimit, activateSources: false, controls: { canaryPortfolioOnly: true, activationRequiresHumanApproval: true, continuousLoopAutoActivation: false, nativeFetchDefault: true, objectBoundaryConfigured: true, boundedQueueRequired: true, dedupeBeforeWrite: true, retriesBounded: true, restrictedSourcesExcluded: true } };
+  return { schemaVersion: "ti.public_canary_loop_runtime.v1", supervisorAttached: false, enabled: false, running: false, startedAt: at, intervalSeconds: 300, cycleCount: 0, successCount: 0, errorCount: 0, consecutiveErrorCount: 0, maxSources: 10, maxTasks: 5, maxBytes: 512_000, timeoutMs: 30_000, queueLimit, activateSources: false, controls: { canaryPortfolioOnly: false, activationRequiresHumanApproval: true, continuousLoopAutoActivation: false, nativeFetchDefault: true, objectBoundaryConfigured: true, boundedQueueRequired: true, dedupeBeforeWrite: true, retriesBounded: true, restrictedSourcesExcluded: true } };
 }
 
 export function storageStats(captures: any[]) {
