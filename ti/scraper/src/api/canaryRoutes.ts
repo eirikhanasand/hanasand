@@ -24,6 +24,7 @@ export async function canaryRun(request: Request, options: ApiServerOptions): Pr
   const canaryRun = await runCanaryCollectionCycle({
     store: options.store, frontier: options.frontier, objectStore: options.objectStore,
     fetch: options.canaryFetch as any, activateSources: false,
+    tenantId: input.tenantId, sourceIds: input.sourceIds,
     maxSources: input.maxSources, maxTasks: input.maxTasks,
     maxItemsPerTask: input.maxItemsPerTask, timeoutMs: input.timeoutMs,
     maxConcurrentTasks: input.maxConcurrentTasks,
@@ -62,7 +63,10 @@ export function canaryConsole(url: URL, options: ApiServerOptions): Response {
 }
 
 async function canaryInput(request: Request): Promise<any> {
-  if (!isForm(request)) return readJson(request);
+  if (!isForm(request)) {
+    const input = await readJson(request);
+    return { ...input, sourceIds: sourceIds(input.sourceIds) };
+  }
   const input = Object.fromEntries(await request.formData());
   return {
     ...input,
@@ -73,6 +77,12 @@ async function canaryInput(request: Request): Promise<any> {
     timeoutMs: numeric(input.timeoutMs),
     maxConcurrentTasks: numeric(input.maxConcurrentTasks)
   };
+}
+
+function sourceIds(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const ids = value.filter((item): item is string => typeof item === "string" && /^[A-Za-z0-9_.:-]{1,200}$/.test(item));
+  return ids.length ? [...new Set(ids)].slice(0, 100) : undefined;
 }
 
 function numeric(value: unknown): number | undefined {

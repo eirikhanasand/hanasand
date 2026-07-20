@@ -16,7 +16,10 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const generatedAt = options.now?.() ?? nowIso(), fetcher = options.fetch ?? fetch, mode = options.fetch ? "injected_proof_fetch" : "native_live_http";
   const activation = options.activateSources ? activatePublicCanarySources({ ...options, now: generatedAt }) : { activated: [], alreadyActive: [], rejected: [] };
   const maxSources = Math.max(1, options.maxSources ?? 10), maxTasks = Math.max(1, options.maxTasks ?? 5), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
-  const due = options.store.listSources().filter((s: any) => isProductionCollectionSource(s, generatedAt)).slice(0, maxSources);
+  const selectedSourceIds = new Set(options.sourceIds ?? []);
+  const due = options.store.listSources()
+    .filter((s: any) => (!options.tenantId || s.tenantId === options.tenantId) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt))
+    .slice(0, maxSources);
   const planId = stableId("canary-plan", generatedAt), runId = stableId("canary-run", planId), tasks = due.map((s: any) => taskFor(s, generatedAt, runId, maxBytes));
   options.store.savePlan?.({ id: planId, requestId: "req_public_canary", createdAt: generatedAt, tasks, request: { query: canaryQueries }, reviewRequired: [], rejected: activation.rejected, audit: [] });
   options.store.saveRun?.({ id: runId, planId, requestId: "req_public_canary", status: "running", createdAt: generatedAt, startedAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: 0, rejectedSourceCount: activation.rejected.length, captureCount: 0, incidentCount: 0 });

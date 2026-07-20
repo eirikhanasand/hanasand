@@ -17,6 +17,28 @@ describe("public collection boundary", () => {
     await expect(fetchItems(source({ url: "http://127.0.0.1/admin" }), { targetUrl: "http://127.0.0.1/admin" }, fetch, "native_live_http", new Date().toISOString(), 1_024)).rejects.toThrow("public fetch policy blocked target");
   });
 
+  test("runs only explicitly selected due sources", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "first", tenantId: "default", url: "https://example.test/first.xml", status: "active" }));
+    store.saveSource(source({ id: "selected", tenantId: "default", url: "https://example.test/selected.xml", status: "active" }));
+    const fetched: string[] = [];
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      tenantId: "default",
+      sourceIds: ["selected"],
+      maxSources: 1,
+      maxTasks: 1,
+      fetch: async (url: string) => {
+        fetched.push(url);
+        return new Response("<rss><channel></channel></rss>", { headers: { "content-type": "application/rss+xml" } });
+      }
+    });
+
+    expect(cycle.activeSourceCount).toBe(1);
+    expect(fetched).toEqual(["https://example.test/selected.xml"]);
+  });
+
   test("keeps the official CISA catalog bounded without truncating its JSON envelope", async () => {
     const cisa = source({
       id: "src_seed_cisa_known_exploited_vulns",
