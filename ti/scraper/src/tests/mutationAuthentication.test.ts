@@ -51,6 +51,10 @@ describe("durable mutation authentication", () => {
       body: JSON.stringify({ url: "https://hooks.example.test/alert" })
     }), options);
     expect(rejected.status).toBe(403);
+    const rejectedEntitlements = await handleApiRequest(new Request("http://local/v1/organizations/org_owned/entitlements", {
+      headers: { ...outsiderHeaders, "x-user-id": "owner-user" }
+    }), options);
+    expect(rejectedEntitlements.status).toBe(403);
 
     const owner = await handleApiRequest(new Request("http://local/v1/organizations/org_owned/webhooks", {
       method: "POST",
@@ -58,5 +62,9 @@ describe("durable mutation authentication", () => {
       body: JSON.stringify({ url: "https://hooks.example.test/alert" })
     }), options);
     expect(owner.status).toBe(201);
+    const ownerEntitlements = await handleApiRequest(new Request("http://local/v1/organizations/org_owned/entitlements", {
+      headers: { authorization: "Bearer valid", id: "owner-user" }
+    }), options);
+    expect(ownerEntitlements.status).toBe(200);
   });
 });

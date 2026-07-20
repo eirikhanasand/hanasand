@@ -3,6 +3,7 @@ import { validateAnalystHandoffConsumerBundle, type AnalystHandoffConsumerBlocke
 import { json, readJson } from "./http.ts";
 import type { Organization, OrganizationMember } from "./organizationRoutes.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
+import { authenticateOperatorRequest, type AuthenticatedIdentity } from "./requestAuthentication.ts";
 
 export type DwmEntitlementPlan = "trial" | "team" | "portfolio" | "enterprise" | "custom";
 export type DwmEntitlementStatus = "active" | "suspended";
@@ -187,8 +188,10 @@ const planLimits: Record<DwmEntitlementPlan, DwmEntitlementLimits> = {
   custom: { activeWatchlists: 10, watchTerms: 250, webhookDestinations: 5, sourcePacks: 25, alertRebuildsPerDay: 100, openCases: 100 }
 };
 
-export function getOrganizationEntitlements(_url: URL, options: ApiServerOptions, organizationId: string | undefined, request?: Request): Response {
-  const access = authorizeEntitlementAccess(options, organizationId, request, undefined, "read");
+export async function getOrganizationEntitlements(_url: URL, options: ApiServerOptions, organizationId: string | undefined, request?: Request): Promise<Response> {
+  const authentication = request ? await authenticateOperatorRequest(request, options) : {};
+  if (authentication.error) return authentication.error;
+  const access = authorizeEntitlementAccess(options, organizationId, request, undefined, "read", authentication.identity);
   if (access.error) return access.error;
   const policy = getOrDefaultEntitlementPolicy(options, access.organization);
   return json({ organization: access.organization, access: access.access, entitlement: policy, evaluation: evaluateDwmEntitlementPolicy(options, access.organization, policy) });
@@ -196,7 +199,9 @@ export function getOrganizationEntitlements(_url: URL, options: ApiServerOptions
 
 export async function getOrganizationEntitlementReadiness(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
   const body = request.method === "POST" ? await readJson<any>(request) : undefined;
-  const access = authorizeEntitlementAccess(options, organizationId, request, body, "read");
+  const authentication = await authenticateOperatorRequest(request, options);
+  if (authentication.error) return authentication.error;
+  const access = authorizeEntitlementAccess(options, organizationId, request, body, "read", authentication.identity);
   if (access.error) return access.error;
   return json(buildOrganizationEntitlementReadiness(options, access.organization, {
     requestId: String(body?.requestId ?? request.headers.get("x-request-id") ?? "").trim() || undefined,
@@ -208,7 +213,9 @@ export async function getOrganizationEntitlementReadiness(request: Request, opti
 
 export async function upsertOrganizationEntitlements(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
   const body = await readJson<any>(request);
-  const access = authorizeEntitlementAccess(options, organizationId, request, body, "mutate");
+  const authentication = await authenticateOperatorRequest(request, options);
+  if (authentication.error) return authentication.error;
+  const access = authorizeEntitlementAccess(options, organizationId, request, body, "mutate", authentication.identity);
   if (access.error) return access.error;
 
   const reason = String(body.reason ?? body.auditReason ?? "").trim();
@@ -1207,11 +1214,14 @@ function sampleDwmEntitlementEvaluation(input: {
   };
 }
 
-function authorizeEntitlementAccess(options: ApiServerOptions, organizationId: string | undefined, request: Request | undefined, body: any, mode: "read" | "mutate") {
+function authorizeEntitlementAccess(options: ApiServerOptions, organizationId: string | undefined, request: Request | undefined, body: any, mode: "read" | "mutate", trustedIdentity?: AuthenticatedIdentity) {
   const organization = findOrganization(options, organizationId);
   if (!organization) return { error: json({ error: { code: "organization_not_found", message: "Organization not found." } }, 404) };
+  if (trustedIdentity?.roles.some((role) => role === "service" || role === "system_admin")) {
+    return { organization, identity: [trustedIdentity.id], access: { allowed: true, reason: null, role: "owner", readOnly: mode === "read" } };
+  }
   const members = ((options.store as any).listOrganizationMembers?.() ?? []).filter((row: OrganizationMember) => row.organizationId === organization.id);
-  const identity = requestIdentity(request, body);
+  const identity = trustedIdentity ? [trustedIdentity.id.toLowerCase()] : requestIdentity(request, body);
   const member = members.find((row: OrganizationMember) => identityMatchesMember(identity, row));
   if (members.length && !member) return { organization, identity, access: { allowed: false, reason: "not_member" }, error: json({ error: { code: "organization_entitlement_denied", message: "Entitlement access requires organization membership.", reason: "not_member" } }, 403) };
   if (member && !isActiveMember(member)) return { organization, member, identity, access: { allowed: false, reason: "member_inactive", role: member.role }, error: json({ error: { code: "organization_entitlement_denied", message: "Only active organization members can access entitlements.", reason: "member_inactive" } }, 403) };
@@ -1305,7 +1315,11 @@ function memberActor(member: OrganizationMember | undefined, fallbackIdentity: s
 }
 
 function requestIdentity(request: Request | undefined, body?: any): string[] {
+  const sessionId = normalizeIdentity(request?.headers.get("id"));
+  if (sessionId && request?.headers.get("authorization")?.startsWith("Bearer ")) return [sessionId];
+
   return [
+    request?.headers.get("id"),
     request?.headers.get("x-user-email"),
     request?.headers.get("x-user-id"),
     request?.headers.get("x-actor-id"),
