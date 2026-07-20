@@ -483,7 +483,8 @@ function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
 }
 
 function inTenant(record: { tenantId?: string }, tenantId?: string): boolean {
-  return (record.tenantId || undefined) === tenantId;
+  const recordTenantId = record.tenantId || undefined;
+  return recordTenantId === undefined || recordTenantId === tenantId;
 }
 
 function readinessBlockers(watchlist: DwmWatchTerm[], sources: SourceRecord[]): string[] {

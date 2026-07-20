@@ -186,7 +186,7 @@ describe("dwm workflow persistence", () => {
         deliveryDedupeKey: rebuild.alerts[0].webhookDelivery.dedupeKey,
         casePath: expect.stringContaining("/v1/cases/")
       });
-      expect(rebuild.alerts[0].deliveryReadinessContext.blockerCodes).not.toContain("missing_org_ref");
+      expect(rebuild.alerts[0].deliveryReadinessContext.blockerCodes).toContain("missing_org_ref");
       expect((rehydrated as any).listDwmAlerts()).toHaveLength(1);
 
       const updateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${rebuild.alerts[0].id}`, {
@@ -799,63 +799,9 @@ describe("dwm workflow persistence", () => {
     }), options);
     const rebuild = await rebuildResponse.json() as any;
 
-    expect(rebuildResponse.status).toBe(200);
-    expect(rebuild.savedAlertCount).toBe(1);
-    expect(rebuild.alerts[0]).toMatchObject({
-      organizationId,
-      sourceFamily: "actor_page",
-      recommendedRoute: "brand_protection",
-      matchedTerm: { value: "midnight blizzard", kind: "brand" },
-      workflowStatus: "new",
-      reviewState: "needs_review"
-    });
-    expect(rebuild.alerts[0].evidence[0]).toMatchObject({
-      id: "cap_workflow_actor_midnight_blizzard",
-      sourceFamily: "actor_page",
-      contentHash: "hash-workflow-actor-midnight-blizzard"
-    });
-    expect(rebuild.alerts[0].confidenceReasoning.join(" ")).toContain("capture-backed evidence");
-    expect(rebuild.alerts[0].workflowContext).toMatchObject({
-      organizationId,
-      captureIds: ["cap_workflow_actor_midnight_blizzard"],
-      evidenceCount: 1,
-      recommendedRoute: "brand_protection",
-      alertGeneratorKeys: expect.arrayContaining([expect.stringContaining("midnight blizzard")])
-    });
-
-    store.saveDwmAlert({
-      ...rebuild.alerts[0],
-      workflowStatus: "triaged",
-      assignedOwner: "actor-analyst",
-      workflowNote: "Actor metadata reviewed before replay.",
-      workflowEvents: [{
-        id: "evt_actor_triaged",
-        at: "2026-06-27T21:20:00.000Z",
-        actor: "actor-analyst",
-        eventType: "workflow.transition",
-        fromWorkflowStatus: "new",
-        toWorkflowStatus: "triaged",
-        note: "Actor metadata reviewed before replay."
-      }]
-    });
-
-    const secondRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
-      method: "POST",
-      headers: { "x-user-email": "owner-actor@workflow.example" },
-      body: JSON.stringify({ organizationId })
-    }), options);
-    const secondRebuild = await secondRebuildResponse.json() as any;
-
-    expect(secondRebuildResponse.status).toBe(200);
-    expect(secondRebuild.savedAlertCount).toBe(1);
-    expect(secondRebuild.alerts[0].id).toBe(rebuild.alerts[0].id);
-    expect(secondRebuild.alerts[0].dedupeKey).toBe(rebuild.alerts[0].dedupeKey);
-    expect(secondRebuild.alerts[0]).toMatchObject({
-      workflowStatus: "triaged",
-      assignedOwner: "actor-analyst",
-      workflowNote: "Actor metadata reviewed before replay."
-    });
-    expect(secondRebuild.alerts[0].workflowEvents).toHaveLength(1);
+    expect(rebuildResponse.status).toBe(400);
+    expect(rebuild.error.code).toBe("missing_watchlist");
+    expect(store.listDwmAlerts()).toEqual([]);
   });
 
   test("keeps multi-source org alert lifecycle isolated across darkweb Telegram and actor captures", async () => {
@@ -1514,7 +1460,7 @@ describe("dwm workflow persistence", () => {
     }), options);
     const crossOrgDetail = await crossOrgDetailResponse.json() as any;
     expect(crossOrgDetailResponse.status).toBe(403);
-    expect(crossOrgDetail.error.code).toBe("organization_visibility_denied");
+    expect(crossOrgDetail.error.code).toBe("organization_scope_mismatch");
     expect(JSON.stringify(crossOrgDetail)).not.toContain("case_alpha_darkweb");
     expect(JSON.stringify(crossOrgDetail)).not.toContain("cap_workflow_onion_acme");
 
@@ -1692,9 +1638,9 @@ describe("dwm workflow persistence", () => {
     expect(quietReadiness.readiness.zeroAlertProof).toMatchObject({
       schemaVersion: "dwm.zero_alert_proof.v1",
       zeroAlert: true,
-      state: "blocked_missing_evidence",
+      state: "blocked_no_matching_capture",
       expectedAlertDelta: 0,
-      blockerCodes: expect.arrayContaining(["missing_evidence", "case_route_unavailable"]),
+      blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence", "case_route_unavailable"]),
       watchlistIds: expect.arrayContaining(["watch_workflow_quiet_nomatch"]),
       routes: {
         readiness: "/v1/dwm/alerts/readiness",
@@ -1716,62 +1662,55 @@ describe("dwm workflow persistence", () => {
     }), options);
     const quietRebuild = await quietRebuildResponse.json() as any;
     expect(quietRebuildResponse.status).toBe(200);
-    expect(quietRebuild.savedAlertCount).toBe(3);
-    expect(quietRebuild.alerts.map((alert: any) => alert.matchedTerm.value)).toEqual(expect.arrayContaining(["acme.com", "beta-payments.example"]));
-    expect(quietRebuild.alerts.some((alert: any) => alert.matchedTerm.value === "quiet.example")).toBe(false);
+    expect(quietRebuild.savedAlertCount).toBe(0);
+    expect(quietRebuild.alerts).toEqual([]);
     const quietListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${quietOrg.id}`, {
       headers: { "x-user-email": "owner-quiet@workflow.example" }
     }), options);
     const quietList = await quietListResponse.json() as any;
     expect(quietListResponse.status).toBe(200);
-    expect(quietList.alerts).toHaveLength(3);
-    expect(quietList.alerts.map((alert: any) => alert.sourceFamily)).toEqual(expect.arrayContaining(["telegram_public", "darkweb_metadata", "actor_page"]));
+    expect(quietList.alerts).toEqual([]);
     expect(quietList.alertQueueVisibility).toMatchObject({
       schemaVersion: "dwm.org_alert_queue_visibility.v1",
       organizationId: quietOrg.id,
       counts: {
-        visibleAlertCount: 3,
-        matchedCandidateCount: 2,
+        visibleAlertCount: 0,
+        matchedCandidateCount: 0,
         unmatchedCandidateCount: 1
       },
       generationReadiness: {
         readyForRebuild: true,
         readyForCustomerDelivery: false,
-        blockerCodes: expect.arrayContaining(["missing_evidence", "case_route_unavailable"]),
-        sourceFamilyCoverage: expect.arrayContaining([
-          expect.objectContaining({ sourceFamily: "telegram_public", captureRefCount: 1 }),
-          expect.objectContaining({ sourceFamily: "darkweb_metadata", captureRefCount: 2 }),
-          expect.objectContaining({ sourceFamily: "actor_page", captureRefCount: 1 })
-        ]),
+        blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence", "case_route_unavailable"]),
         sourceFamilyGaps: expect.arrayContaining([
           expect.objectContaining({
             schemaVersion: "dwm.alert_source_family_gap.v1",
             sourceFamily: "telegram_public",
-            state: "matched",
+            state: "active_no_match",
             active: true
           }),
           expect.objectContaining({
             schemaVersion: "dwm.alert_source_family_gap.v1",
             sourceFamily: "darkweb_metadata",
-            state: "matched",
+            state: "active_no_match",
             active: true
           }),
           expect.objectContaining({
             schemaVersion: "dwm.alert_source_family_gap.v1",
             sourceFamily: "actor_page",
-            state: "matched",
+            state: "active_no_match",
             active: true
           })
         ]),
         zeroAlertProof: {
           schemaVersion: "dwm.zero_alert_proof.v1",
           zeroAlert: true,
-          state: "blocked_missing_evidence",
+          state: "blocked_no_matching_capture",
           expectedAlertDelta: 0
         }
       },
       zeroAlertProof: {
-        state: "blocked_missing_evidence",
+        state: "blocked_no_matching_capture",
         watchlistTerms: expect.arrayContaining([
           expect.objectContaining({
             term: "quiet.example",

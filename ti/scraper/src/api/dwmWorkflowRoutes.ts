@@ -28,6 +28,24 @@ type DwmWatchlist = {
   orgMembershipContext?: RuntimeDwmWatchlist["orgMembershipContext"];
 };
 
+function stableWatchlistTerms(watchlistId: string, terms: DwmWatchTerm[]): Array<DwmWatchTerm & { id: string }> {
+  return terms.map((term: any) => ({
+    ...term,
+    id: String(term.id ?? stableId("dwm_watchlist_item", `${watchlistId}:${term.kind}:${term.value.toLowerCase()}`))
+  }));
+}
+
+function organizationWatchlistRuntime(watchlist: DwmWatchlist, organizationId?: string) {
+  if (!organizationId) return {};
+  return sourceMatchedOrgRuntime({
+    id: watchlist.id,
+    tenantId: watchlist.tenantId,
+    organizationId,
+    terms: watchlist.terms as Array<DwmWatchTerm & { id: string }>,
+    existing: watchlist
+  });
+}
+
 export function listDwmWatchlists(url: URL, options: ApiServerOptions, request?: Request): Response {
   const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
@@ -72,13 +90,14 @@ export async function createDwmWatchlist(request: Request, options: ApiServerOpt
     tenantId,
     organizationId: scope.organizationId ?? existing?.organizationId,
     name: String(body.name ?? "Company exposure watchlist"),
-    terms,
+    terms: stableWatchlistTerms(id, terms),
     webhookUrl,
     webhookDestinationId: webhookDestinationId ?? existing?.webhookDestinationId,
     status: body.status === "paused" ? "paused" : "active",
     createdAt: existing?.createdAt ?? generatedAt,
     updatedAt: generatedAt
   };
+  Object.assign(watchlist, organizationWatchlistRuntime(watchlist, scope.organizationId));
   const entitlement = enforceDwmWatchlistEntitlement({ options, request, body, scope, access, watchlist, action: "create_dwm_watchlist" });
   if (entitlement.error) return entitlement.error;
   (options.store as any).saveDwmWatchlist(watchlist);
@@ -124,12 +143,13 @@ export async function updateDwmWatchlist(request: Request, options: ApiServerOpt
   const watchlist: DwmWatchlist = {
     ...existing,
     name: body.name === undefined ? existing.name : String(body.name),
-    terms,
+    terms: stableWatchlistTerms(existing.id, terms),
     webhookUrl,
     webhookDestinationId,
     status: normalizeWatchlistStatus(body.status, existing.status),
     updatedAt: nowIso()
   };
+  Object.assign(watchlist, organizationWatchlistRuntime(watchlist, scope.organizationId));
   const entitlement = enforceDwmWatchlistEntitlement({ options, request, body, scope, access, watchlist, action: "update_dwm_watchlist" });
   if (entitlement.error) return entitlement.error;
   (options.store as any).saveDwmWatchlist(watchlist);
@@ -175,17 +195,6 @@ export async function listDwmAlerts(url: URL, options: ApiServerOptions, request
   const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
   const tenantId = scope.tenantId;
-  const existingAlerts = (options.store as any).listDwmAlerts?.() ?? [];
-  const existingVisibleCount = existingAlerts
-    .filter((row: any) => row.tenantId === tenantId)
-    .filter((row: any) => !scope.organizationId || row.organizationId === scope.organizationId)
-    .length;
-  if (existingVisibleCount === 0) {
-    const bootstrap = ensureSourceMatchedDwmWatchlist(options, scope);
-    if (bootstrap.watchlist) {
-      rebuildDwmRuntimeAlerts({ store: options.store as any, tenantId, organizationId: scope.organizationId, visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization) });
-    }
-  }
   await ensureExposureQueueDwmAlerts(options, { tenantId, organizationId: scope.organizationId });
   const alerts = (options.store as any).listDwmAlerts?.() ?? [];
   const visibleAlerts = alerts
@@ -526,7 +535,6 @@ export function getDwmAlertGenerationReadiness(url: URL, options: ApiServerOptio
   if (scope.error) return scope.error;
   const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
-  ensureSourceMatchedDwmWatchlist(options, scope);
   const readiness = buildDwmAlertGenerationReadiness({
     watchlists: (options.store as any).listDwmWatchlists?.() ?? [],
     tenantId: scope.tenantId,
@@ -551,7 +559,6 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
       lifecycleReadiness: buildDwmAlertDownstreamHandoff({ organizationId: scope.organizationId, organizationStatus: (scope.organization as any).status, activeSourceMatch: false })
     }, 409);
   }
-  ensureSourceMatchedDwmWatchlist(options, scope);
   const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
   const terms = watchlists.flatMap((watchlist: DwmWatchlist) => watchlist.terms);
   if (!terms.length) return json({ error: { code: "missing_watchlist", message: "Create an active DWM watchlist before rebuilding alerts." } }, 400);

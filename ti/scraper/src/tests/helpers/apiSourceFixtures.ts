@@ -5,6 +5,7 @@ const createdAt = new Date(0).toISOString();
 export function source(input: Partial<SourceRecord> = {}): SourceRecord {
   return {
     id: input.id ?? "src_rss",
+    tenantId: input.tenantId,
     name: input.name ?? "Security RSS",
     type: input.type ?? "rss",
     url: input.url ?? "https://example.test/search?q={query}",
