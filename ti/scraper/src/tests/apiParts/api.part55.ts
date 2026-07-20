@@ -17,5 +17,6 @@ describe("api v1", () => {
     expect(response.publicTiAnswer.evidenceLedgerReferences).toEqual([]);
     expect(response).not.toHaveProperty("collectionStrategy");
     expect(response.planner).not.toHaveProperty("decisions");
+    expect(response.publicChannel).not.toHaveProperty("operatorStates");
   });
 });

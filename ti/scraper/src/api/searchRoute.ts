@@ -216,12 +216,12 @@ export async function searchResponse(request: Request, options: ApiServerOptions
 }
 
 function compactPublicChannel(status: any, packs: any[] = [], query: string) {
-  const pendingSources = (status.operatorStates ?? []).filter((item: any) => item.collectable === false);
+  const pendingSources = (status.operatorStates ?? []).filter((item: any) => item.collectable === false).slice(0, 10);
   const queryTerms = query.toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 1);
   const sourcePackRecommendations = packs.flatMap((pack) => (pack.sources ?? []).filter((source: any) => {
     const haystack = JSON.stringify([source.name, source.topicTags, source.focus]).toLowerCase();
     return queryTerms.some((term) => haystack.includes(term));
-  }).map((source: any) => ({ sourcePackId: pack.id, sourceId: source.id, requiredAction: "review" })));
+  }).map((source: any) => ({ sourcePackId: pack.id, sourceId: source.id, requiredAction: "review" }))).slice(0, 10);
   const activationRecommendations = [
     ...pendingSources.map((source: any) => ({ sourceId: source.sourceId, requiredAction: "approve" })),
     ...sourcePackRecommendations,
@@ -234,7 +234,6 @@ function compactPublicChannel(status: any, packs: any[] = [], query: string) {
     activationRecommendations,
     sourcePackRecommendations,
     coverageGaps: pendingSources.map((source: any) => ({ reason: "matching_channels_pending_review", sourceId: source.sourceId, requiredAction: "approve" })),
-    operatorStates: status.operatorStates,
     poll: status.poll,
     sla: { status: status.sla?.status },
     safeOutput: status.safeOutput,
