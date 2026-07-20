@@ -20,7 +20,7 @@ describe("live search planner", () => {
   test("reports zero-task reasons and active-run attachment", () => {
     const activePlan = createCollectionPlan({ id: "request_active", query: "Akira", entityType: "actor", tenantId: "tenant_live", createdAt: "2026-05-24T00:00:00.000Z" }, [source({ id: "rss_active", type: "rss" })]);
     const activeRun: CollectionRun = { id: "run_active", tenantId: "tenant_live", planId: activePlan.id, requestId: activePlan.request.id, status: "running", createdAt: "2026-05-24T00:00:00.000Z", updatedAt: "2026-05-24T00:00:00.000Z", taskCount: activePlan.tasks.length, reviewTaskCount: activePlan.reviewRequired.length, rejectedSourceCount: activePlan.rejected.length, captureCount: 0, incidentCount: 0 };
-    const duplicate = createLiveSearchPlan({ request: { query: "Akira", entityType: "actor", tenantId: "tenant_live" }, sources: [source({ id: "rss_active", type: "rss" })], activeRuns: [activeRun], activePlans: [activePlan] });
+    const duplicate = createLiveSearchPlan({ request: { query: "Akira", entityType: "actor", tenantId: "tenant_live" }, sources: [source({ id: "rss_active", type: "rss" })], activeRuns: [activeRun], activePlans: [{ id: "unrelated_workflow_record" }, activePlan] });
     expect(duplicate.dto.attachedToActiveRun).toBe(true);
     expect(duplicate.dto.backpressureState).toBe("attached_to_active_run");
     expect(duplicate.dto.zeroTaskReason).toBe("duplicate_run_already_active");
