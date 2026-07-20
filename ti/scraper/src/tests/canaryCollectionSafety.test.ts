@@ -32,5 +32,11 @@ describe("public collection boundary", () => {
 
     expect(items).toHaveLength(60);
     expect(items[0]).toMatchObject({ title: "CVE-2026-4242", metadata: { fetchProvenance: { maxBytes: 4_000_000, truncated: false } } });
+
+    const store = new InMemoryScraperStore();
+    store.saveSource(cisa);
+    const oldEntry = JSON.stringify({ vulnerabilities: [{ cveID: "CVE-2024-4242", vendorProject: "Vendor", product: "Product", vulnerabilityName: "Example exploited vulnerability", dateAdded: "2024-01-01", shortDescription: "An actively exploited vulnerability allows a remote attacker to compromise affected systems." }] });
+    const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, maxItemsPerTask: 1, now: () => "2026-06-22T00:00:00.000Z", fetch: async () => new Response(oldEntry, { headers: { "content-type": "application/json" } }) });
+    expect(cycle).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
   });
 });

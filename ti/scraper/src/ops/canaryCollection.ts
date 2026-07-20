@@ -64,7 +64,7 @@ async function runLeasedTask(options: any, runId: string, generatedAt: string, f
     taskMetrics.httpStatus = collectedItems[0]?.metadata?.fetchProvenance?.httpStatus;
     taskMetrics.parserWarningCount = collectedItems.reduce((total: number, item: any) => total + (Array.isArray(item.metadata?.parserWarnings) ? item.metadata.parserWarnings.length : 0), 0);
     taskMetrics.publishedAt = collectedItems.map((item: any) => item.publishedAt).filter(Boolean);
-    const sellableItems = collectedItems.filter((collected: any) => isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt }));
+    const sellableItems = collectedItems.filter((collected: any) => collected.metadata?.extractionProfile === "cisa_kev" || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt }));
     counters.skippedLowValueCount += collectedItems.length - sellableItems.length;
     for (const collected of sellableItems.slice(0, itemLimit(source, options))) {
       collected.tenantId = source.tenantId;
