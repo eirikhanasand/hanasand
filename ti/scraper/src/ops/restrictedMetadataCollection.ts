@@ -50,7 +50,13 @@ export function startRestrictedMetadataCollectionLoop(options: any) {
   const cycle = async () => {
     if (!state.enabled || state.running) return;
     state.running = true; state.lastCycleAt = nowIso();
-    try { state.latestResult = await runRestrictedMetadataCollectionCycle(options); state.successCount++; state.lastSuccessAt = nowIso(); }
+    try {
+      state.latestResult = await runRestrictedMetadataCollectionCycle(options);
+      state.successCount++;
+      state.lastSuccessAt = nowIso();
+      state.failedSourceCount = state.latestResult.failedSourceCount;
+      state.lastSourceFailureAt = state.latestResult.failedSourceCount ? state.lastSuccessAt : undefined;
+    }
     catch (caught) { state.errorCount++; state.lastError = safeError(caught); state.lastErrorAt = nowIso(); options.onError?.(caught); }
     finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? new Date(Date.now() + intervalSeconds * 1_000).toISOString() : undefined; }
   };

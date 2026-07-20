@@ -87,6 +87,40 @@
         "retentionDays": 30,
         "attribution": "Ransomwhere.org public API proxy, sourced from ransomware.live"
       }
+    },
+    {
+      "id": "restricted_akira_victim_blog",
+      "name": "Akira victim blog",
+      "type": "tor_metadata",
+      "url": "http://akiral2iz6a7qgd3ayp3l6yub7xx2uep76idk3u2kollpj5z3z636bad.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.7,
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Collect victim-listing metadata from the public blog only after institutional approval. Never authenticate, interact with operators, or retrieve linked files or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "pending",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Akira",
+        "actors": ["Akira"],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/developers",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups",
+        "discoveryCheckedAt": "2026-07-20T15:00:00.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-07-20T15:00:00.000Z",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "attribution": "Ransomwhere.org public API proxy, sourced from ransomware.live"
+      }
     }
   ]
 }
