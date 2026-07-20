@@ -10,16 +10,21 @@ import {
 import { booleanQuery, error, json, numberQuery, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { nowIso } from "../utils.ts";
+import { authenticateOperatorRequest } from "./requestAuthentication.ts";
 
 export async function canaryActivation(request: Request, options: ApiServerOptions): Promise<Response> {
   const input = await canaryInput(request);
+  const authentication = await authenticateOperatorRequest(request, options);
+  if (authentication.error) return authentication.error;
   if (input.operatorApproval !== true) return error("approval_required", "operatorApproval=true is required for executable canary source activation", 409);
-  const activation = activatePublicCanarySources({ store: options.store, tenantId: input.tenantId, operatorId: input.approvedBy, now: input.generatedAt });
+  const activation = activatePublicCanarySources({ store: options.store, tenantId: input.tenantId, operatorId: authentication.identity?.id ?? input.approvedBy, now: input.generatedAt });
   return isForm(request) ? consoleRedirect("activated") : json({ activation });
 }
 
 export async function canaryRun(request: Request, options: ApiServerOptions): Promise<Response> {
   const input = await canaryInput(request);
+  const authentication = await authenticateOperatorRequest(request, options);
+  if (authentication.error) return authentication.error;
   if (input.operatorApproval !== true) return error("approval_required", "operatorApproval=true is required to run the public canary collector", 409);
   const canaryRun = await runCanaryCollectionCycle({
     store: options.store, frontier: options.frontier, objectStore: options.objectStore,
@@ -36,8 +41,10 @@ export async function canaryRun(request: Request, options: ApiServerOptions): Pr
 
 export async function canaryPause(request: Request, options: ApiServerOptions): Promise<Response> {
   const input = await canaryInput(request);
+  const authentication = await authenticateOperatorRequest(request, options);
+  if (authentication.error) return authentication.error;
   if (input.operatorApproval !== true) return error("approval_required", "operatorApproval=true is required to pause canary source collection", 409);
-  const pause = pausePublicCanarySources({ store: options.store, tenantId: input.tenantId, operatorId: input.approvedBy, now: input.generatedAt });
+  const pause = pausePublicCanarySources({ store: options.store, tenantId: input.tenantId, operatorId: authentication.identity?.id ?? input.approvedBy, now: input.generatedAt });
   return isForm(request) ? consoleRedirect("paused") : json({ pause });
 }
 

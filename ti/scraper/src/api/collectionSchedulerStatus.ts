@@ -2,6 +2,7 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 import { json, readJson } from "./http.ts";
 import { exposureClaimsFromStore } from "./exposureQueueRoutes.ts";
 import { nowIso } from "../utils.ts";
+import { authenticateOperatorRequest } from "./requestAuthentication.ts";
 
 export function collectionSchedulerStatus(options: ApiServerOptions, lastControlAction?: Record<string, unknown>) {
   const generatedAt = nowIso();
@@ -104,6 +105,8 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
 
 export async function updateCollectionSchedulerControl(request: Request, options: ApiServerOptions) {
   const body = await readJson(request);
+  const authentication = await authenticateOperatorRequest(request, options);
+  if (authentication.error) return authentication.error;
   const action = body.action === "resume" || body.enabled === true
     ? "resume"
     : body.action === "pause" || body.enabled === false
@@ -135,7 +138,7 @@ export async function updateCollectionSchedulerControl(request: Request, options
 
   return collectionSchedulerStatus(options, {
     action,
-    approvedBy: typeof body.approvedBy === "string" ? body.approvedBy : undefined,
+    approvedBy: authentication.identity?.id ?? (typeof body.approvedBy === "string" ? body.approvedBy : undefined),
     requestedAt: nowIso(),
     applied: true
   });

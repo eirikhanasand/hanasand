@@ -14,6 +14,7 @@ export interface ApiServerOptions {
   runExecutor?: (runId: string) => void;
   authApiBase?: string;
   authFetch?: typeof fetch;
+  serviceToken?: string;
   orgAlertCaseActionLedgerRepository?: InMemoryOrgAlertCaseActionLedgerRepository;
   [key: string]: unknown;
 }

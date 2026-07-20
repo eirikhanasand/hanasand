@@ -54,6 +54,20 @@ describe("collection scheduler control", () => {
     expect(runs).toBe(1);
     expect(body.lastControlAction).toMatchObject({ action: "run_now", approvedBy: "test", applied: true });
   });
+
+  test("requires trusted operator identity when authentication is configured", async () => {
+    const options = optionsWithCanaryLoop();
+    options.serviceToken = "scheduler-test-secret";
+
+    const rejected = await handleApiRequest(request({ action: "pause", approvedBy: "spoofed" }), options);
+    expect(rejected.status).toBe(401);
+
+    const accepted = await json(await handleApiRequest(request(
+      { action: "pause", approvedBy: "spoofed" },
+      { "x-hanasand-service-token": "scheduler-test-secret" }
+    ), options));
+    expect(accepted.lastControlAction).toMatchObject({ action: "pause", approvedBy: "service:hanasand-api", applied: true });
+  });
 });
 
 function optionsWithCanaryLoop(input: { enabled?: boolean; runOnce?: () => Promise<void> } = {}): any {
@@ -101,11 +115,11 @@ function source(input: { id: string; status: string; lastCollectedAt?: string; l
   };
 }
 
-function request(body: unknown) {
+function request(body: unknown, headers: Record<string, string> = {}) {
   return new Request("http://localhost/v1/ops/collection-scheduler", {
     method: "POST",
     body: JSON.stringify(body),
-    headers: { "content-type": "application/json" }
+    headers: { "content-type": "application/json", ...headers }
   });
 }
 

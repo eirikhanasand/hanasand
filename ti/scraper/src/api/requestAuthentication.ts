@@ -1,5 +1,6 @@
 import { error } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
+import { timingSafeEqual } from "node:crypto";
 
 export type AuthenticatedIdentity = {
   id: string;
@@ -45,4 +46,22 @@ export async function authenticateRequest(request: Request, options: ApiServerOp
   } catch {
     return { error: error("authentication_unavailable", "Session validation is unavailable", 503) };
   }
+}
+
+export async function authenticateOperatorRequest(request: Request, options: ApiServerOptions): Promise<{ identity?: AuthenticatedIdentity; error?: Response }> {
+  const serviceToken = String(options.serviceToken ?? Bun.env.TI_SCRAPER_SERVICE_TOKEN ?? "").trim();
+  const authApiBase = String(options.authApiBase ?? Bun.env.HANASAND_AUTH_API_BASE ?? "").trim();
+  if (!serviceToken && !authApiBase) return {};
+
+  const presented = request.headers.get("x-hanasand-service-token") ?? "";
+  if (serviceToken && sameSecret(presented, serviceToken)) {
+    return { identity: { id: "service:hanasand-api", roles: ["service"] } };
+  }
+  return authenticateRequest(request, options);
+}
+
+function sameSecret(left: string, right: string): boolean {
+  const leftBytes = Buffer.from(left);
+  const rightBytes = Buffer.from(right);
+  return leftBytes.length === rightBytes.length && timingSafeEqual(leftBytes, rightBytes);
 }

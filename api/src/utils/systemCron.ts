@@ -1143,7 +1143,10 @@ async function runTiJob(path: string, body: unknown) {
     }
     const response = await fetch(new URL(path, base), {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+            'content-type': 'application/json',
+            ...(process.env.TI_SCRAPER_SERVICE_TOKEN ? { 'x-hanasand-service-token': process.env.TI_SCRAPER_SERVICE_TOKEN } : {}),
+        },
         body: JSON.stringify(body),
         cache: 'no-store',
         signal: AbortSignal.timeout(12000),

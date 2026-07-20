@@ -80,6 +80,7 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       TI_SCRAPER_API_BASE: ${TI_SCRAPER_API_BASE:-http://ti-scraper:8097}
+      TI_SCRAPER_SERVICE_TOKEN: ${TI_SCRAPER_SERVICE_TOKEN:-}
       API_CORS_ALLOWED_ORIGINS: ${API_CORS_ALLOWED_ORIGINS:-https://hanasand.com,https://www.hanasand.com}
       MAIL_INTERNAL_URL: ${MAIL_INTERNAL_URL:-http://host.docker.internal:${MAIL_HTTP_LOCAL_PORT:-8081}}
       MAIL_HOST: ${MAIL_HOST:-mail.hanasand.com}
@@ -348,6 +349,7 @@ services:
       HANASAND_AI_EXPOSURE_PARSE_PATH: ${HANASAND_AI_EXPOSURE_PARSE_PATH:-/v1/parse/exposure-claim}
       HANASAND_AI_PARSE_TIMEOUT_MS: ${HANASAND_AI_PARSE_TIMEOUT_MS:-12000}
       HANASAND_AUTH_API_BASE: ${HANASAND_AUTH_API_BASE:-http://api:8080/api}
+      TI_SCRAPER_SERVICE_TOKEN: ${TI_SCRAPER_SERVICE_TOKEN:-}
     volumes:
       - ti_scraper_evidence:/var/lib/ti-scraper/evidence
     extra_hosts:
