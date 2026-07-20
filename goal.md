@@ -47,9 +47,9 @@ The initial feasibility set must include at least one working feed of each selec
 
 ### Analysis Objectives
 
-- [ ] Capture enough structured evidence to analyze threat-actor business models.
-- [ ] Capture publicity tactics and signals that support analysis of how publicity contributes to profitability.
-- [ ] Capture observable communication between threat actors, buyers, victims, and intermediaries without redistributing harmful material.
+- [x] Capture enough structured evidence to analyze threat-actor business models.
+- [x] Capture publicity tactics and signals that support analysis of how publicity contributes to profitability.
+- [x] Capture observable communication between threat actors, buyers, victims, and intermediaries without redistributing harmful material.
 
 ### Collection and Tracking
 
@@ -155,6 +155,7 @@ The initial feasibility set must include at least one working feed of each selec
 - Public and restricted collection supervisors start after PostgreSQL hydration, prevent overlapping cycles, enforce bounded concurrency/cadence, and persist run, health, retry, and quadratic backoff state. Production restart verification resumed the public cycle after hydrating 1,472 sources; earlier unavailable restricted sources remained durably rejected or backed off while approved sources continued independently.
 - Actor profiles now merge provenance-backed victims, sectors, countries, TTPs, malware, impacts, datasets, extortion/monetization/publicity/channel/pressure/communication/profitability fields across captures and persist immutable per-capture temporal deltas without raw content or locators. The first production cycle on the new code wrote 21 added/updated actor-profile deltas, all `rawContentExposed=false`, with no HTTP or onion locator; profiles showed changing first/last-seen windows and multi-capture evidence counts.
 - Production `/v1/intel/evaluation` now measures attempt-level active-source reliability and useful yield, actor coverage, duplicates, corroborated and contradicted claims, and label-backed false-positive rate from durable records. The 2026-07-20 live snapshot covered 69 attempts, 865 claims, 159 duplicates, six corroborated claims, and 601 evaluated labels while retaining explicit recall and alert-latency limitations.
+- The approved public Ransomware.live group dataset now uses a bounded 2 MB, locator-free source-specific parser instead of serializing nested onion/HTTP metadata. A live one-source cycle processed 120 records into 118 new captures and two duplicates with no skipped rows or locator leakage, yielding 128 actor, 115 extortion/publication/publicity, 120 activity-scale profitability, and nine chat/negotiation observations. These fields distinguish observed channel classes from inferred monetization and explicitly state that listing volume does not establish payment, revenue, or profit and that endpoint counterparties require analyst verification; no conversation or leak content is retained.
 - `/v1/intel/evaluation` computes tenant-scoped precision, recall, F1, false-positive/false-negative counts by label type, parser, source family, and dataset split from immutable durable labels. It also reports median/p95 stage latency, timestamp anomalies, active/useful source coverage, actor coverage, and public-validation status without a parallel evidence store.
 - Focused source-operations, storage/API, runtime evidence persistence, tenant-isolated alert lifecycle, type-check, and diff checks pass together.
 - The broad scraper suite still contains pre-existing failures in product areas outside the initial storage replacement. Those failures remain work; the database milestone does not make the overall product complete.
