@@ -6,8 +6,8 @@ describe("runtime config", () => {
     const config = loadRuntimeConfig({});
 
     expect(config.apiVersion).toBe("v1");
-    expect(config.limits.maxMemoryMbTarget).toBe(96 * 1024);
-    expect(config.limits.maxMemoryMbCeiling).toBe(160 * 1024);
+    expect(config.limits.maxMemoryMbTarget).toBe(8 * 1024);
+    expect(config.limits.maxMemoryMbCeiling).toBe(14 * 1024);
     expect(config.collection.darknetMetadataOnly).toBe(true);
     expect(config.scheduler.queueBackend).toBe("embedded_memory");
     expect(config.scheduler.postgresQueueEnabled).toBe(false);
