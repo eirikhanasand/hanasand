@@ -145,6 +145,18 @@ export const managedCronDefinitions: ManagedCronDefinition[] = [
         service: 'ti-scraper',
         logPath: '/home/hanasand/monitor-state/threat-intel-backup.log',
     },
+    {
+        id: 'ti-operational-workflow-canary',
+        name: 'Threat intelligence workflow canary',
+        description: 'Exercises organization, watchlist, evidence alert, and webhook delivery through an explicitly classified operational canary.',
+        defaultSchedule: '41 3 * * *',
+        command: '/home/hanasand/hanasand/ops/threat-intel-workflow-canary/run-threat-intel-workflow-canary.sh >> /home/hanasand/monitor-state/threat-intel-workflow-canary.log 2>&1',
+        legacyCommands: [],
+        host: 'hanasand',
+        category: 'TI / Exposure',
+        service: 'ti-scraper',
+        logPath: '/home/hanasand/monitor-state/threat-intel-workflow-canary.log',
+    },
 ]
 
 export function scheduledJobRegistryGuardrailEntries() {

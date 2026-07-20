@@ -43,6 +43,13 @@ function validateDwmWebhookPayload(payload: Record<string, unknown> | null) {
         return 'A JSON DWM webhook payload is required.'
     }
 
+    if (payload.eventType === 'organization.webhook.test') {
+        for (const field of ['organizationId', 'tenantId', 'webhookDestinationId', 'generatedAt', 'message', 'expectedAlertEvent']) {
+            if (typeof payload[field] !== 'string' || !payload[field].trim()) return `Missing required organization webhook test field: ${field}.`
+        }
+        return ''
+    }
+
     const requiredStrings = [
         'eventType',
         'deliveredAt',

@@ -15,6 +15,7 @@ export type Organization = {
   name: string;
   slug: string;
   status: OrganizationStatus;
+  kind: "customer" | "operational_canary";
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
@@ -89,6 +90,7 @@ export async function createOrganization(request: Request, options: ApiServerOpt
     name,
     slug,
     status: body.status === "suspended" ? "suspended" : "active",
+    kind: body.kind === "operational_canary" ? "operational_canary" : existing?.kind ?? "customer",
     createdAt: existing?.createdAt ?? generatedAt,
     updatedAt: generatedAt,
     createdBy: String(body.createdBy ?? request.headers.get("x-actor-id") ?? "").trim() || existing?.createdBy
