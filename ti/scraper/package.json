@@ -7,7 +7,7 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "SCRAPER_LOG_LEVEL=debug bun --watch src/index.ts",
-    "test": "bun test",
+    "test": "sh scripts/run-tests.sh",
     "check": "bunx tsc --noEmit",
     "check:canary-proof-path": "bun run scripts/check-canary-proof-path.ts",
     "check:docker-contexts": "bun run scripts/check-docker-contexts.ts",

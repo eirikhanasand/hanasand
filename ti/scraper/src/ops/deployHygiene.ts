@@ -20,7 +20,7 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
     check("required.root_dockerignore", Boolean(rootDockerignore), "root .dockerignore exists"),
     check("required.scraper_dockerignore", Boolean(scraperDockerignore), "ti/scraper .dockerignore exists"),
     check("dockerfile.test_enforced", /FROM\s+test\s+AS\s+runtime/i.test(scraperDockerfile), "scraper runtime stage depends on test stage"),
-    check("dockerfile.runs_tests", /RUN\s+bun\s+test/.test(scraperDockerfile) && /RUN\s+bun\s+run\s+check/.test(scraperDockerfile), "scraper Docker build runs tests and type-check"),
+    check("dockerfile.runs_tests", /RUN\s+bun\s+(?:run\s+)?test/.test(scraperDockerfile) && /RUN\s+bun\s+run\s+check/.test(scraperDockerfile), "scraper Docker build runs tests and type-check"),
     check("compose.scraper_service", /ti-scraper:\s*\n/.test(compose), "compose declares ti-scraper service"),
     check("compose.scraper_health", /ti-scraper:[\s\S]*healthcheck:[\s\S]*\/v1\/health/.test(compose), "ti-scraper healthcheck probes /v1/health"),
     check("compose.api_depends_on_scraper", /api:[\s\S]*depends_on:[\s\S]*ti-scraper:[\s\S]*condition:\s*service_healthy/.test(compose), "api waits for scraper service_healthy"),

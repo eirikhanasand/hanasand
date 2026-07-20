@@ -314,7 +314,9 @@ describe("dwm entitlement policy", () => {
         limit: { code: "watch_terms", used: 2, limit: 1, remaining: 0 },
         audit: { requestId: "req-watch-update-denied" }
       });
-      expect((store as any).getDwmWatchlist("watch_limit_allowed").terms).toEqual([{ value: "allowed.example", kind: "domain" }]);
+      expect((store as any).getDwmWatchlist("watch_limit_allowed").terms).toEqual([
+        expect.objectContaining({ value: "allowed.example", kind: "domain", id: expect.stringMatching(/^dwm_watchlist_item_/) })
+      ]);
 
       const outsiderResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
         method: "POST",
