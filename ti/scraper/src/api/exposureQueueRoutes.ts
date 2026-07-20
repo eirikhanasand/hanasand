@@ -484,13 +484,15 @@ async function parseWithHostedAi(item: ExposureClaimItem) {
 
 function fallbackParse(item: ExposureClaimItem, at: string) {
   const text = [item.title, item.text].filter(Boolean).join("\n");
+  const titleClaim = parseVictimClaimTitle(text);
   const victim =
     item.company ||
     item.victimName ||
+    titleClaim?.company ||
     match(text, /\bvictim\s*:?\s+([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})/i) ||
     match(text, /\b(?:listed|lists|added|adds|claims?|target(?:ed|ing))\s+([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})/i) ||
     match(text, /:\s*([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})$/);
-  const actor = cleanActorName(item.actor || match(text, /^([A-Z][A-Za-z0-9_.-]{2,40})\b/) || item.sourceName || "Unknown actor");
+  const actor = cleanActorName(item.actor || titleClaim?.actor || match(text, /^([A-Z][A-Za-z0-9_.-]{2,40})\b/) || item.sourceName || "Unknown actor");
   const claimedData = meaningfulClaimedData(item.claimedData) || claimedDataFromText(text) || "Not disclosed by TA";
   const claimedDataSize = item.claimedDataSize || dataSizeFromText(text) || "Not disclosed by TA";
   const country = item.country || item.claimedCountry || countryFromText(text) || countryFromCompanyDomain(victim || "") || "Not disclosed by TA";

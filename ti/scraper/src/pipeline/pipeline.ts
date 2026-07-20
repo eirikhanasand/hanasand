@@ -18,7 +18,11 @@ export function processCollectedItem(item: CollectedItem): PipelineResult {
   };
   const indicators = extractIndicators(item.rawText, extractorContext);
   const sourceSpecificEntities = extractSourceSpecificEntities(item, extractorContext);
-  const entities = mergeEntities(sourceSpecificEntities, extractEntities(item.rawText, extractorContext));
+  const fallbackEntities = extractEntities(item.rawText, extractorContext);
+  const authoritativeTypes = item.metadata?.extractionProfile === "ransomware_victim_blog"
+    ? new Set(sourceSpecificEntities.filter((entity) => entity.type === "actor" || entity.type === "victim").map((entity) => entity.type))
+    : new Set<string>();
+  const entities = mergeEntities(sourceSpecificEntities, fallbackEntities.filter((entity) => !authoritativeTypes.has(entity.type)));
   capture.metadata = {
     ...capture.metadata,
     extractionMethod: sourceSpecificEntities.length ? "source_specific_with_deterministic_fallback" : "deterministic_fallback",

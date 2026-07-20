@@ -147,8 +147,9 @@ describe("DWM exposure queue pipeline", () => {
     const store = new InMemoryScraperStore();
     const collected = {
       sourceId: "src_public_news",
-      title: "Akira claims victim: Fabrikam Manufacturing",
-      rawText: "Akira ransomware actor page claims victim: Fabrikam Manufacturing. 44 GB data leak listed with sample records.",
+      source: { name: "Ransomware.live Victim Feed", url: "https://www.ransomware.live/rss.xml" },
+      title: "Ransomware.live Victim Feed",
+      rawText: "Ransomware.live Victim Feed\nAkira claims victim: Fabrikam Manufacturing\n44 GB data leak listed with sample records.",
       url: "https://news.example.test/fabrikam",
       collectedAt: new Date().toISOString(),
       publishedAt: new Date().toISOString(),
@@ -162,6 +163,9 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items[0].actor).toBe("Akira");
     expect(queueBody.items[0].company).toBe("Fabrikam Manufacturing");
     expect(store.listCaptures()).toHaveLength(1);
+    expect(store.listExtractedEntities().filter((entity: any) => entity.type === "victim")).toEqual([
+      expect.objectContaining({ value: "Fabrikam Manufacturing", extractionMethod: "source_specific" })
+    ]);
     expect(store.listExtractedEntities()).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "extortion_type", extractionMethod: "source_specific" }),
       expect.objectContaining({ type: "publication_strategy", value: "public victim listing" }),

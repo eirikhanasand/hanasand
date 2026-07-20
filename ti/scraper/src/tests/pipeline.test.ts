@@ -32,7 +32,7 @@ describe("compact pipeline value path", () => {
       sourceId: "src_darknet",
       url: `http://${"a".repeat(56)}.onion/`,
       collectedAt,
-      rawText: "Blackout\nExample Energy AS\nenergy\nNorway",
+      rawText: "Blackout has just published a new victim: Example Energy AS Claimed data category: customer records.",
       contentHash: hashContent("darknet"),
       links: [],
       sensitive: true,
@@ -69,6 +69,9 @@ describe("compact pipeline value path", () => {
       expect.objectContaining({ type: "intermediary_communication", value: "broker listing", assertionKind: "source_claim" }),
       expect.objectContaining({ type: "profitability_signal", value: "claimed paid victims", reviewReasons: ["signal does not establish realized profit"] })
     ]));
+    expect(darknet.entities.filter((entity: any) => entity.type === "victim")).toEqual([
+      expect.objectContaining({ value: "Example Energy AS", extractionMethod: "source_specific" })
+    ]);
     expect(cisa.entities).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "product", value: "Example Product", confidence: 0.94 }),
       expect.objectContaining({ type: "impact", value: "known ransomware campaign use" })
