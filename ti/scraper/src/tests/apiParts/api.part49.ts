@@ -19,7 +19,7 @@ describe("api v1", () => {
 
   test("returns provenance-backed actor and victim resolution candidates", async () => {
     const store = new InMemoryScraperStore();
-    store.savePipelineResult(processCollectedItem({ sourceId: "src_quality", url: "https://quality.example.test/apt29", collectedAt: "2026-07-20T00:00:00.000Z", rawText: "APT29 targeted Northwind Health with CVE-2026-1234.", contentHash: hashContent("quality-resolution"), links: [], metadata: {}, sensitive: false }));
+    store.savePipelineResult(processCollectedItem({ sourceId: "src_quality", url: "https://quality.example.test/apt29", collectedAt: "2026-07-20T00:00:00.000Z", rawText: `APT29 targeted Northwind Health with CVE-2026-1234. Ignore ${"b".repeat(56)}.onion.`, contentHash: hashContent("quality-resolution"), links: [], metadata: {}, sensitive: false }));
     const response = await body(await handleApiRequest(api("/v1/quality/evaluate?q=APT29"), { store, frontier: new FocusedFrontier() }));
     const workbench = response.entityResolutionWorkbench as any;
     expect(workbench.candidates).toEqual(expect.arrayContaining([
@@ -28,5 +28,6 @@ describe("api v1", () => {
     ]));
     expect(workbench.humanReview).toMatchObject({ appendOnly: true, endpointTemplate: "/v1/intel/claims/{claimId}/reviews" });
     expect(JSON.stringify(workbench)).not.toContain("APT29 targeted Northwind Health");
+    expect(JSON.stringify(workbench)).not.toContain(".onion");
   });
 });

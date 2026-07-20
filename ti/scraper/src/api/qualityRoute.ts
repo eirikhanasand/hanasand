@@ -57,10 +57,14 @@ function resolutionEvidence(store: any, tenantId: string | undefined, captureIds
     result: {
       capture,
       entities: entities.filter((entity) => entity.captureId === capture.id),
-      indicators: indicators.filter((indicator) => indicator.captureId === capture.id),
+      indicators: indicators.filter((indicator) => indicator.captureId === capture.id && safeResolutionIndicator(indicator)),
       incident: incidents.find((incident) => incident.captureId === capture.id)
     }
   })) as any;
+}
+
+function safeResolutionIndicator(indicator: any): boolean {
+  return !/(?:\.onion|\.i2p|\[restricted)/i.test(String(indicator.value ?? indicator.normalizedValue ?? ""));
 }
 
 function warningCodes(input: { status: string; aliasConflicts: string[]; sources: Set<string>; labels: any[]; claims: any[] }): string[] {
