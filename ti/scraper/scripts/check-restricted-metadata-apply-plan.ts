@@ -31,7 +31,7 @@ console.log(JSON.stringify({
   command: "bun run check:restricted-metadata-apply-plan",
   endpoints: ["/v1/restricted-metadata/apply-plan", "/v1/sources/src_restricted_ready/restricted-metadata/apply-plan"],
   scenarios: results,
-  expectedOutput: "ok=true; statuses cover restricted states, nested source returns one queue plan, invalid action returns 400, and responses redact unsafe material"
+  expectedOutput: "ok=true; metadata-only actions preserve prohibited operations, nested source returns one queue plan, invalid action returns 400, and responses redact unsafe material"
 }, null, 2));
 
 if (!ok) process.exit(1);
