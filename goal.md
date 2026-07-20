@@ -110,7 +110,7 @@ The initial feasibility set must include at least one working feed of each selec
 
 - [x] Enforce metadata-only handling where full content would redistribute stolen, harmful, or unlawful material.
 - [x] Store source legality, access mode, collection justification, sensitivity, and retention/redaction policy as operational metadata.
-- [ ] Prevent secrets, personal data, unsafe payloads, and raw stolen datasets from leaking through logs, APIs, exports, alerts, or UI.
+- [x] Prevent secrets, personal data, unsafe payloads, and raw stolen datasets from leaking through logs, APIs, exports, alerts, or UI.
 - [x] Document and implement deletion, correction, source takedown, and analyst-audit paths required by institutional and legal review.
 
 ### Production Quality
