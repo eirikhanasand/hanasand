@@ -284,7 +284,7 @@ describe("dwm source inventory", () => {
         sourcePackWorkerRunStore: reloadedWorkerState.workerRuns,
         sourcePackCollectionReceiptStore: reloadedWorkerState.collectionReceipts
       };
-      const inventory = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?full=true&watchlist=APT29"), reloadedOptions);
+      const inventory = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?tenantId=tenant_source_health&full=true&watchlist=APT29"), reloadedOptions);
       const inventoryBody = await inventory.json() as any;
       const packs = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-packs?terms=APT29"), reloadedOptions);
       const packsBody = await packs.json() as any;
@@ -446,7 +446,7 @@ describe("dwm source inventory", () => {
       expect(repeatedBody.collectionQueue.summary).toMatchObject({ queuedCount: 0, duplicateCount: 2, taskCount: 2 });
       expect(reloadedOptions.frontier.snapshot()).toHaveLength(0);
 
-      const inventory = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?full=true&watchlist=APT29"), reloadedOptions);
+      const inventory = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?tenantId=tenant_inventory&full=true&watchlist=APT29"), reloadedOptions);
       const inventoryBody = await inventory.json() as any;
       const packs = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-packs?terms=APT29"), reloadedOptions);
       const packsBody = await packs.json() as any;

@@ -15,6 +15,7 @@ const telegramSource: SourceRecord = {
   risk: "medium",
   trustScore: 0.82,
   legalNotes: "Public Telegram messages only.",
+  tenantId: "tenant_acme",
   createdAt: "2026-06-27T00:00:00.000Z",
   updatedAt: "2026-06-27T00:00:00.000Z"
 } as SourceRecord;
@@ -29,6 +30,7 @@ const darkwebSource: SourceRecord = {
   risk: "high",
   trustScore: 0.76,
   legalNotes: "Metadata-only collection; payload paths blocked.",
+  tenantId: "tenant_acme",
   createdAt: "2026-06-27T00:00:00.000Z",
   updatedAt: "2026-06-27T00:00:00.000Z"
 } as SourceRecord;
@@ -36,6 +38,7 @@ const darkwebSource: SourceRecord = {
 const telegramCapture: RawCapture = {
   id: "cap_telegram_1",
   sourceId: "src_telegram_lumma",
+  tenantId: "tenant_acme",
   url: "https://t.me/lumma_broker_room/42",
   collectedAt: "2026-06-27T08:10:00.000Z",
   mediaType: "text/plain",
@@ -49,6 +52,7 @@ const telegramCapture: RawCapture = {
 const telegramFollowupCapture: RawCapture = {
   id: "cap_telegram_2",
   sourceId: "src_telegram_lumma",
+  tenantId: "tenant_acme",
   url: "https://t.me/lumma_broker_room/43",
   collectedAt: "2026-06-27T08:16:00.000Z",
   mediaType: "text/plain",
@@ -62,6 +66,7 @@ const telegramFollowupCapture: RawCapture = {
 const telegramDuplicateCapture: RawCapture = {
   id: "cap_telegram_2_duplicate",
   sourceId: "src_telegram_lumma",
+  tenantId: "tenant_acme",
   url: "https://t.me/lumma_broker_room/43?mirror=1",
   collectedAt: "2026-06-27T08:18:00.000Z",
   mediaType: "text/plain",
@@ -75,6 +80,7 @@ const telegramDuplicateCapture: RawCapture = {
 const telegramSubstringFalsePositiveCapture: RawCapture = {
   id: "cap_telegram_notacme",
   sourceId: "src_telegram_lumma",
+  tenantId: "tenant_acme",
   url: "https://t.me/lumma_broker_room/44",
   collectedAt: "2026-06-27T08:19:00.000Z",
   mediaType: "text/plain",
@@ -88,6 +94,7 @@ const telegramSubstringFalsePositiveCapture: RawCapture = {
 const darkwebCapture: RawCapture = {
   id: "cap_darkweb_1",
   sourceId: "src_akira_metadata",
+  tenantId: "tenant_acme",
   url: "http://akira-example.onion/acme",
   collectedAt: "2026-06-27T08:18:00.000Z",
   mediaType: "text/plain",
@@ -120,8 +127,7 @@ describe("dwm product snapshot", () => {
       watchlist: ["acme.com"],
       sources: [telegramSource, darkwebSource],
       captures: [telegramCapture, telegramFollowupCapture, telegramDuplicateCapture, telegramSubstringFalsePositiveCapture, darkwebCapture],
-      generatedAt: "2026-06-27T08:20:00.000Z",
-      includeDemoIfEmpty: false
+      generatedAt: "2026-06-27T08:20:00.000Z"
     });
 
     expect(snapshot.readiness.decision).toBe("production_ready_with_live_sources");
@@ -173,19 +179,21 @@ describe("dwm product snapshot", () => {
 
   test("reports missing production blockers instead of hiding behind demo data", () => {
     const snapshot = buildDwmProductSnapshot({ watchlist: ["acme.com"], sources: [], captures: [], generatedAt: "2026-06-27T08:20:00.000Z" });
-    expect(snapshot.readiness.decision).toBe("demo_ready_needs_live_sources");
-    expect(snapshot.alerts[0].id).toContain("dwm_alert_demo");
+    expect(snapshot.readiness.decision).toBe("blocked_missing_live_sources");
+    expect(snapshot.alerts).toEqual([]);
+    expect(snapshot.onDemandQueue).toEqual([]);
+    expect(JSON.stringify(snapshot)).not.toContain("demo");
     expect(snapshot.readiness.blockers).toContain("No live public Telegram source is registered for this tenant.");
     expect(snapshot.readiness.blockers).toContain("No approved metadata-only dark web source is active for this tenant.");
   });
 
   test("treats zero matches as ready when watchlist and live sources exist", () => {
     const snapshot = buildDwmProductSnapshot({
+      tenantId: "tenant_acme",
       watchlist: ["quiet.example"],
       sources: [telegramSource, darkwebSource],
       captures: [],
-      generatedAt: "2026-06-27T08:20:00.000Z",
-      includeDemoIfEmpty: false
+      generatedAt: "2026-06-27T08:20:00.000Z"
     });
 
     expect(snapshot.readiness.decision).toBe("production_ready_with_live_sources");
@@ -201,7 +209,7 @@ describe("dwm product snapshot", () => {
     store.saveCapture(telegramCapture);
     store.saveCapture(darkwebCapture);
 
-    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/product?watchlist=acme.com&demo=false"), {
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/product?tenantId=tenant_acme&watchlist=acme.com"), {
       store,
       frontier: new FocusedFrontier()
     });
@@ -220,7 +228,7 @@ describe("dwm product snapshot", () => {
     store.saveCapture(telegramCapture);
     store.saveCapture(darkwebCapture);
 
-    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/operations?watchlist=quiet.example"), {
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/operations?tenantId=tenant_acme&watchlist=quiet.example"), {
       store,
       frontier: new FocusedFrontier()
     });
@@ -232,5 +240,23 @@ describe("dwm product snapshot", () => {
     expect(body.zeroAlertExplanation.state).toBe("monitoring_no_matches");
     expect(body.latestCaptures.some((capture: any) => capture.redactionState === "metadata_only")).toBe(true);
     expect(JSON.stringify(body)).not.toContain(".onion/acme");
+  });
+
+  test("keeps product evidence in the exact tenant scope", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramSource);
+    store.saveCapture(telegramCapture);
+    store.saveSource({ ...darkwebSource, id: "src_other", tenantId: "tenant_other" });
+    store.saveCapture({ ...darkwebCapture, id: "cap_other", sourceId: "src_other", tenantId: "tenant_other" });
+
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/product?tenantId=tenant_acme&watchlist=acme.com"), {
+      store,
+      frontier: new FocusedFrontier()
+    });
+    const body = await response.json() as any;
+
+    expect(body.alerts).toHaveLength(1);
+    expect(body.alerts[0].provenance.captureIds).toEqual(["cap_telegram_1"]);
+    expect(JSON.stringify(body)).not.toContain("cap_other");
   });
 });

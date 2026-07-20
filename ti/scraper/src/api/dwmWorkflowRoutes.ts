@@ -1,7 +1,7 @@
 import { classifySourceFamily, normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts, type RuntimeDwmWatchlist } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
-import { buildDwmCustomerAlertSummary, sanitizeDwmCustomerEvidenceExcerpt } from "../product/dwmCustomerDisplay.ts";
+import { buildDwmCustomerAlertSummary, sanitizeDwmApiPayload, sanitizeDwmCustomerEvidenceExcerpt } from "../product/dwmCustomerDisplay.ts";
 import { buildOrgAlertWorkflowBridgeReport } from "../product/orgAlertWorkflowBridge.ts";
 import { buildOrgSharedWatchlistAlertGenerationExport } from "../storage/dwmOrgWatchlistBridge.ts";
 import { nowIso, stableId, uniqueStrings } from "../utils.ts";
@@ -1303,6 +1303,8 @@ function ensureSourceMatchedDwmWatchlist(options: ApiServerOptions, scope: { org
     };
   }
 
+  if (scope.organizationId) return { termValues: [], reason: "organization_watchlist_required" };
+
   const terms = sourceMatchedWatchlistTerms({ captures, sources }).slice(0, 3);
   if (!terms.length) return { termValues: [], reason: "no_capture_terms" };
 
@@ -1323,7 +1325,7 @@ function ensureSourceMatchedDwmWatchlist(options: ApiServerOptions, scope: { org
   const watchlist: DwmWatchlist = {
     id,
     tenantId: scope.tenantId,
-    organizationId: scope.organizationId ?? existing?.organizationId,
+    organizationId: scope.organizationId ?? existing?.organizationId ?? route.organizationId,
     name: existing?.name ?? "Source-matched exposure watchlist",
     terms: mergeDwmWatchTerms(existing?.terms ?? [], terms),
     webhookDestinationId: webhookDestinationId ?? existing?.webhookDestinationId,
@@ -1586,7 +1588,7 @@ async function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { 
   const existingAlerts = (options.store as any).listDwmAlerts?.() ?? [];
   let savedAlertCount = 0;
   const saveMissingAlerts = () => {
-    for (const claim of exposureClaimsFromStore(options.store, "", { limit: 25 })) {
+    for (const claim of exposureClaimsFromStore(options.store, "", { limit: 25, tenantId: scope.tenantId })) {
       const claimTenantId = String((claim as any).tenantId ?? scope.tenantId ?? "default");
       if (claimTenantId !== scope.tenantId) continue;
       const alert = buildExposureQueueDwmAlert(options, claim, scope, generatedAt);
@@ -1876,7 +1878,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     provenanceFreshness
   });
 
-  return {
+  return sanitizeDwmApiPayload({
     schemaVersion: "dwm.alert_detail.v1",
     generatedAt: nowIso(),
     visibilityDecision: access?.visibilityDecision,
@@ -1906,7 +1908,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
       explanation: `${String(item.sourceFamily).replaceAll("_", " ")} evidence is shown as ${String(item.redactionState).replaceAll("_", " ")} with hash ${item.contentHash}; capture ${item.provenance?.captureId ?? item.id} was observed at ${item.observedAt}.`
     })),
     nextActions: nextActionsForAlert(alert, deliveries)
-  };
+  });
 }
 
 function buildDwmAlertDetailConsumerContract(alert: any, evidenceReplay: any[]) {
@@ -2013,7 +2015,7 @@ function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries
   const deliveryReadiness = buildDwmAlertDeliveryReadiness(alert, alertDeliveries);
   const evidenceFreshness = buildDwmAlertEvidenceFreshness(alert);
   const provenanceFreshness = buildDwmAlertProvenanceFreshness(alert);
-  return {
+  return sanitizeDwmApiPayload({
     ...alert,
     alertDetailPath: alertDetailPathFor(alert),
     workflowSummary,
@@ -2036,7 +2038,7 @@ function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries
       evidenceFreshness,
       provenanceFreshness
     })
-  };
+  });
 }
 
 function buildDwmAlertCustomerReadiness(input: {

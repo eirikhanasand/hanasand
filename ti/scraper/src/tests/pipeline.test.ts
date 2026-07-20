@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { buildActiveLearningCandidateQueueDto, buildAnalystFeedbackLoopDto, buildAnalystQualityReviewQueueDto } from "../pipeline/analystFeedback.ts";
 import { buildQualityRuntimeValueGatesDto, evaluateExtractionCalibration, evaluateExtractionFixtures } from "../pipeline/evaluation.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
+import { SOURCE_SPECIFIC_EXTRACTOR_VERSION } from "../pipeline/sourceSpecificExtraction.ts";
+import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { hashContent } from "../utils.ts";
 
 describe("compact pipeline value path", () => {
@@ -22,6 +24,61 @@ describe("compact pipeline value path", () => {
     expect(report.fixtureCount).toBe(1);
     expect(calibration.qualityNotes.length).toBeGreaterThan(0);
     expect(gates.summary.sellableRows).toBe(1);
+  });
+
+  test("uses source-specific structured fields before the deterministic fallback", () => {
+    const collectedAt = "2026-07-20T00:00:00.000Z";
+    const darknet = processCollectedItem({
+      sourceId: "src_darknet",
+      url: `http://${"a".repeat(56)}.onion/`,
+      collectedAt,
+      rawText: "Blackout\nExample Energy AS\nenergy\nNorway",
+      contentHash: hashContent("darknet"),
+      links: [],
+      sensitive: true,
+      metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Blackout", victimName: "Example Energy AS", claimedSector: "energy", claimedCountry: "Norway", claimedDataType: "customer records" } }
+    });
+    const cisa = processCollectedItem({
+      sourceId: "src_cisa_kev",
+      url: "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
+      collectedAt,
+      rawText: "CVE-2026-1234 is a known exploited vulnerability.",
+      contentHash: hashContent("cisa"),
+      links: [],
+      sensitive: false,
+      metadata: { extractionProfile: "cisa_kev", structuredFields: { cveID: "CVE-2026-1234", vendorProject: "Example Vendor", product: "Example Product", knownRansomwareCampaignUse: "Known" } }
+    });
+    const certUa = processCollectedItem({
+      sourceId: "src_ssscip_cert_ua_telegram",
+      url: "https://t.me/dsszzi_official/1",
+      collectedAt,
+      rawText: "CERT-UA attributes this campaign to UAC-0050.",
+      contentHash: hashContent("cert-ua"),
+      links: [],
+      sensitive: false,
+      metadata: { extractionProfile: "cert_ua_public_channel" }
+    });
+
+    expect(darknet.entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "victim", value: "Example Energy AS", assertionKind: "source_claim", extractorVersion: SOURCE_SPECIFIC_EXTRACTOR_VERSION }),
+      expect.objectContaining({ type: "publication_strategy", value: "public victim listing", assertionKind: "observed" })
+    ]));
+    expect(cisa.entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "product", value: "Example Product", confidence: 0.94 }),
+      expect.objectContaining({ type: "impact", value: "known ransomware campaign use" })
+    ]));
+    expect(certUa.entities).toContainEqual(expect.objectContaining({ type: "actor", value: "UAC-0050", extractionMethod: "source_specific" }));
+
+    const store = new InMemoryScraperStore();
+    store.savePipelineResult(darknet);
+    expect(store.listExtractedEntities().find((entity: any) => entity.type === "victim")?.extractorVersion).toBe(SOURCE_SPECIFIC_EXTRACTOR_VERSION);
+  });
+
+  test("keeps actor aliases distinct and matches short names on token boundaries", () => {
+    const item = (rawText: string) => processCollectedItem({ sourceId: "src_alias", url: "https://example.test/alias", collectedAt: "2026-07-20T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false });
+    const actors = item("ShinyHunters was mentioned alongside Scattered Spider.").entities.filter((entity: any) => entity.type === "actor").map((entity: any) => entity.value);
+    expect(actors).toEqual(expect.arrayContaining(["ShinyHunters", "Scattered Spider"]));
+    expect(item("The display software update contained no ransomware claim.").entities.some((entity: any) => entity.type === "ransomware_family" && entity.value === "Play")).toBe(false);
   });
 
   test("builds compact analyst feedback and learning queues", () => {

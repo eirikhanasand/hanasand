@@ -1,5 +1,13 @@
 import { startScraperRuntime } from "./runtime/startup.ts";
 
-const runtime = startScraperRuntime();
+const runtime = await startScraperRuntime();
+let stopping = false;
 
-process.on("SIGTERM", () => runtime.stop());
+async function stop() {
+  if (stopping) return;
+  stopping = true;
+  await runtime.stop();
+}
+
+process.on("SIGTERM", stop);
+process.on("SIGINT", stop);

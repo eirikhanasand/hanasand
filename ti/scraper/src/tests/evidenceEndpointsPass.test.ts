@@ -12,10 +12,11 @@ describe("mounted evidence endpoints pass path", () => {
     const server = startApiServer({ port: 0, store, frontier: new FocusedFrontier(), objectStore });
     try {
       const base = `http://127.0.0.1:${server.port}`;
-      const replay = await json(`${base}/v1/evidence/replay-plan?q=APT29&runId=run_pass`);
-      const report = await json(`${base}/v1/evidence/cutover-report?q=APT29&runId=run_pass&generatedAt=2026-05-24T22:00:00.000Z`);
-      const ledger = await json(`${base}/v1/evidence/trust-ledger?q=APT29&runId=run_pass&generatedAt=2026-05-24T22:00:00.000Z`);
-      const claimLedger = await json(`${base}/v1/evidence/claim-ledger?q=APT29&runId=run_pass&generatedAt=2026-05-24T22:00:00.000Z`);
+      const scope = "tenantId=tenant_endpoint";
+      const replay = await json(`${base}/v1/evidence/replay-plan?q=APT29&runId=run_pass&${scope}`);
+      const report = await json(`${base}/v1/evidence/cutover-report?q=APT29&runId=run_pass&${scope}&generatedAt=2026-05-24T22:00:00.000Z`);
+      const ledger = await json(`${base}/v1/evidence/trust-ledger?q=APT29&runId=run_pass&${scope}&generatedAt=2026-05-24T22:00:00.000Z`);
+      const claimLedger = await json(`${base}/v1/evidence/claim-ledger?q=APT29&runId=run_pass&${scope}&generatedAt=2026-05-24T22:00:00.000Z`);
       expect(replay.replayPlan).toMatchObject({ endpoint: "/v1/evidence/replay-plan", replayable: true, redaction: { sensitiveBodiesExposed: false, objectKeysExposed: false } });
       expect(report.cutoverReport).toMatchObject({ readiness: { overall: "ready" }, promotionGate: { agent09Fields: { cursorReplayReady: true }, agent10Fields: { objectIntegrityReady: true } } });
       expect(ledger.contract).toMatchObject({ endpoint: "/v1/evidence/trust-ledger", method: "GET", response: expect.arrayContaining(["trustGate", "claims", "cutover", "safeOutput"]) });

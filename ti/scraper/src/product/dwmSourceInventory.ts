@@ -353,7 +353,7 @@ function generatedPublicAdvisorySeeds(packId: string, topics: string[], target: 
 
 export function buildDwmSourceInventory(input: BuildDwmSourceInventoryInput = {}): DwmSourceInventorySnapshot {
   const generatedAt = input.generatedAt ?? nowIso();
-  const sources = input.sources ?? [];
+  const sources = (input.sources ?? []).filter((source) => (source.tenantId || undefined) === input.tenantId);
   const catalog = buildDwmSeedCatalog({ ...input, generatedAt });
   const { netNew, duplicateItems } = splitCandidateDuplicates(catalog.candidates, sources);
   const reviewQueue = [...netNew, ...duplicateItems].map((item) => reviewItemFor(item.candidate, item.duplicateOf));

@@ -11,6 +11,8 @@ export interface ApiServerOptions {
   supervisor?: { snapshot(): unknown[] };
   objectStore?: unknown;
   canaryLoop?: unknown;
+  authApiBase?: string;
+  authFetch?: typeof fetch;
   orgAlertCaseActionLedgerRepository?: InMemoryOrgAlertCaseActionLedgerRepository;
   [key: string]: unknown;
 }

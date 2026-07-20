@@ -18,5 +18,5 @@ export function publicAdvisoryRecordToCollectedItem(input: any) {
   const r = input.record, source = input.source, urlHash = publicAdvisoryUrlHash(r.url);
   const safeDelta = publicAdvisorySafeDelta({ record: r, source, collectedAt: input.collectedAt });
   const rawText = [r.title, r.summary, r.url].filter(Boolean).join("\n");
-  return { source, task: input.task, url: r.url, title: r.title, rawText, body: rawText, collectedAt: input.collectedAt, contentHash: hashContent(rawText), metadata: { adapter: "public_advisory", state: r.state, family: r.family, canonicalUrlHash: urlHash, matchedEntities: r.matchedEntities, safeDelta } };
+  return { tenantId: source.tenantId, sourceId: source.id, taskId: input.task?.id, url: r.url, title: r.title, rawText, body: rawText, collectedAt: input.collectedAt, publishedAt: r.publishedAt, contentHash: hashContent(rawText), links: r.url ? [r.url] : [], sensitive: false, metadata: { adapter: "public_advisory", state: r.state, family: r.family, canonicalUrlHash: urlHash, matchedEntities: r.matchedEntities, safeDelta } };
 }

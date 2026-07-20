@@ -1,4 +1,4 @@
-import { normalizeWhitespace } from "../utils.ts";
+import { hashContent, normalizeWhitespace } from "../utils.ts";
 
 const STRUCTURED_TEXT_KEYS = /\b(actorName|victimName|claimedData|claimSummary|sourceFamily|sourceName|evidence|metadata|contentHash|raw|body|excerpt)\b\s*[:=]\s*/gi;
 const JSON_PUNCTUATION = /[{}\[\]"]/g;
@@ -35,6 +35,10 @@ export function buildDwmCustomerAlertSummary(alert: any, fallback?: string): str
 
 export function sanitizeDwmCustomerEvidenceExcerpt(value: unknown, fallback?: string): string | undefined {
   return sanitizeDwmCustomerText(value, fallback, 500);
+}
+
+export function sanitizeDwmApiPayload<T>(value: T): T {
+  return sanitizeApiValue(value, []) as T;
 }
 
 function structuredDwmSummary(raw: string): string | undefined {
@@ -85,7 +89,7 @@ function firstText(value: unknown): string | undefined {
 }
 
 function scrubCustomerText(value: string, maxLength: number): string | undefined {
-  const text = normalizeWhitespace(value)
+  const text = normalizeWhitespace(scrubSensitiveLocations(value))
     .replace(STRUCTURED_TEXT_KEYS, "")
     .replace(JSON_PUNCTUATION, " ")
     .replace(/\s+([,.;:])/g, "$1")
@@ -93,3 +97,63 @@ function scrubCustomerText(value: string, maxLength: number): string | undefined
     .trim();
   return text ? text.slice(0, maxLength).trim() : undefined;
 }
+
+function sanitizeApiValue(value: unknown, path: string[]): unknown {
+  if (Array.isArray(value)) return value.map((item) => sanitizeApiValue(item, path));
+  if (!value || typeof value !== "object") return typeof value === "string" ? scrubSensitiveLocations(value) : value;
+
+  const output: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const lowerKey = key.toLowerCase();
+    if (UNSAFE_API_KEYS.has(lowerKey)) continue;
+    if (lowerKey === "body" && (path.at(-1) !== "payload" || !item || typeof item !== "object")) continue;
+    if (lowerKey === "webhookurl") {
+      if (typeof item === "string" && item) output.webhookEndpointHash ??= hashContent(item);
+      continue;
+    }
+    if ((lowerKey === "url" || lowerKey === "sourceurl" || lowerKey === "targeturl") && typeof item === "string" && isRestrictedLocation(item)) {
+      output[`${key}Hash`] = hashContent(item);
+      continue;
+    }
+    if (lowerKey === "excerpt") {
+      output[key] = sanitizeDwmCustomerEvidenceExcerpt(item);
+      continue;
+    }
+    output[key] = sanitizeApiValue(item, [...path, key]);
+  }
+  return output;
+}
+
+function scrubSensitiveLocations(value: string): string {
+  return value
+    .replace(/\b(?:https?|socks5?):\/\/[^\s"'<>]*(?:\.onion|\.i2p)(?:[^\s"'<>]*)?/gi, "[restricted source]")
+    .replace(/\bmetadata:\/\/darkweb\/[^\s"'<>]*/gi, "[restricted source]")
+    .replace(/\bfreenet:[^\s"'<>]*/gi, "[restricted source]")
+    .replace(/\b(https?:\/\/)[^\s/@:]+:[^\s/@]+@/gi, "$1[credentials-redacted]@")
+    .replace(/\b(password|passwd|token|secret|authorization|cookie)=([^\s&]+)/gi, "$1=[redacted]");
+}
+
+function isRestrictedLocation(value: string): boolean {
+  return /(?:\.onion|\.i2p|^metadata:\/\/darkweb\/|^freenet:|^unsafe:)/i.test(value);
+}
+
+const UNSAFE_API_KEYS = new Set([
+  "rawtext",
+  "rawpayload",
+  "rawmessage",
+  "rawbody",
+  "mediapayload",
+  "sessionstring",
+  "objectkey",
+  "objectref",
+  "authorization",
+  "token",
+  "apikey",
+  "api_key",
+  "headers",
+  "proxyurl",
+  "cookie",
+  "password",
+  "credentials",
+  "secret"
+]);

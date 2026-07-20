@@ -59,10 +59,9 @@ export const countries: Record<string, MapCountry> = {
 const rejectedLocationPattern = /continent|europe|north america|latin america|asia|middle east|africa|oceania|global|multiple|various|unknown|nato|allied|live source|source context/
 
 export function actorGeoProfile(result: TiSearchResponse) {
-    const query = result.query.toLowerCase()
     const points = new Map<string, ActorMapPoint>()
     const origin = operatorOriginFor(result)
-    if (origin) points.set(`operator:${origin.code}`, { ...origin, role: 'operator', count: 1, detail: operatorOriginDetail(result) })
+    if (origin) points.set(`operator:${origin.code}`, { ...origin, role: 'operator', count: 1, detail: operatorOriginDetail() })
 
     const targetCounts = new Map<string, { country: MapCountry; victims: Set<string>; fallbackCount: number }>()
     const addTarget = (value: string, victim?: string) => {
@@ -92,16 +91,6 @@ export function actorGeoProfile(result: TiSearchResponse) {
             count: victims.size || fallbackCount || 1,
             detail: targetCountryDetail(result, country.label),
         })
-    }
-
-    if (isApt29Query(query)) {
-        for (const countryName of ['United States', 'United Kingdom', 'Germany']) {
-            const point = countryFromValue(countryName)
-            if (!point) continue
-            const key = `target:${point.code}`
-            const existing = points.get(key)
-            points.set(key, { ...point, role: 'target', count: existing?.count ?? targetCountryDetailCount(result, point.label), detail: targetCountryDetail(result, point.label) })
-        }
     }
 
     const ordered = [...points.values()].sort((a, b) => {
@@ -146,18 +135,6 @@ export function victimObservationsFor(result: TiSearchResponse): VictimObservati
             }
         })
 
-    if (isApt29Query(result.query)) {
-        const seen = new Set<string>()
-        return [...apt29VictimObservations(), ...fromActivity]
-            .filter(item => {
-                const key = `${item.victim}-${item.country}`.toLowerCase()
-                if (seen.has(key)) return false
-                seen.add(key)
-                return true
-            })
-            .slice(0, 8)
-    }
-
     if (fromActivity.length) return fromActivity.slice(0, 8)
 
     return result.targets.flatMap(target => target.regions.map(region => {
@@ -178,17 +155,12 @@ export function victimObservationsFor(result: TiSearchResponse): VictimObservati
 }
 
 function operatorOriginFor(result: TiSearchResponse) {
-    const query = result.query.toLowerCase()
-    if (isApt29Query(query)) return countries.russia
-    const sourceText = `${result.summary} ${result.notes.join(' ')} ${result.aliases.join(' ')}`.toLowerCase()
+    const sourceText = result.actorIntelligence?.attribution?.toLowerCase() ?? ''
     if (/\brussian\b|\brussia\b|\bsvr\b/.test(sourceText)) return countries.russia
     return null
 }
 
-function operatorOriginDetail(result: TiSearchResponse) {
-    if (isApt29Query(result.query)) {
-        return 'Public reporting attributes APT29 to Russia-linked SVR activity.'
-    }
+function operatorOriginDetail() {
     return 'Reported operator origin from attributed profile evidence.'
 }
 
@@ -198,91 +170,6 @@ function targetCountryDetail(result: TiSearchResponse, country: string) {
     const activities = result.recentActivity.filter(item => item.countries?.some(countryValue => countryFromValue(countryValue)?.label === country))
     if (activities.length) return activities[0]?.title ?? 'Country-level targeting mentioned in recent activity.'
     return 'Country-level observation from reported activity.'
-}
-
-function targetCountryDetailCount(result: TiSearchResponse, country: string) {
-    return Math.max(1, new Set(victimObservationsFor(result).filter(item => item.country === country).map(item => item.victim)).size)
-}
-
-function apt29VictimObservations(): VictimObservation[] {
-    return [
-        {
-            victim: 'Democratic National Committee',
-            country: 'United States',
-            sector: 'Political organization',
-            incident: 'Reported intrusion activity connected to the 2016 U.S. election cycle and attributed in public reporting to Russian intelligence-linked operators.',
-            timeframe: '2015-2016',
-            source: 'public attribution reporting',
-            sourceIds: ['public-attribution'],
-            provenanceRefs: ['Public attribution reporting'],
-            reportDate: '2016',
-            confidence: 0.76,
-        },
-        {
-            victim: 'SolarWinds Orion customers and U.S. federal agencies',
-            country: 'United States',
-            sector: 'Government and software supply chain',
-            incident: 'SolarWinds Orion compromise enabled downstream access into government and enterprise environments; public reporting tied the campaign to SVR/APT29 activity.',
-            timeframe: '2020',
-            source: 'public government and vendor reporting',
-            sourceIds: ['cisa', 'solarwinds-public-reporting'],
-            provenanceRefs: ['CISA and allied government SVR/APT29 advisories', 'Public SolarWinds and vendor incident reporting'],
-            reportDate: '2020',
-            confidence: 0.82,
-        },
-        {
-            victim: 'Microsoft corporate email accounts',
-            country: 'United States',
-            sector: 'Technology',
-            incident: 'Microsoft disclosed Midnight Blizzard access to corporate email accounts, including senior leadership and security/legal teams.',
-            timeframe: '2024',
-            source: 'vendor disclosure',
-            sourceIds: ['microsoft'],
-            provenanceRefs: ['Microsoft Midnight Blizzard disclosures'],
-            reportDate: '2024-01-25',
-            confidence: 0.82,
-        },
-        {
-            victim: 'Hewlett Packard Enterprise',
-            country: 'United States',
-            sector: 'Technology',
-            incident: 'HPE disclosed unauthorized access to cloud-based email connected to Midnight Blizzard activity.',
-            timeframe: '2023-2024 disclosure',
-            source: 'vendor disclosure',
-            sourceIds: ['hpe'],
-            provenanceRefs: ['HPE public cloud email intrusion disclosure'],
-            reportDate: '2024',
-            confidence: 0.74,
-        },
-        {
-            victim: 'Diplomatic and government entities',
-            country: 'United Kingdom',
-            sector: 'Government and diplomacy',
-            incident: 'Public advisories describe SVR/APT29 targeting of government, diplomatic, think tank, and policy organizations.',
-            timeframe: 'multi-year reporting',
-            source: 'public advisory reporting',
-            sourceIds: ['government-advisory'],
-            provenanceRefs: ['CISA and allied government SVR/APT29 advisories'],
-            reportDate: 'multi-year reporting',
-            confidence: 0.76,
-        },
-        {
-            victim: 'Government and policy organizations',
-            country: 'Germany',
-            sector: 'Government and policy',
-            incident: 'Public APT29/SVR reporting includes European government and policy-sector targeting, including German government and policy organizations.',
-            timeframe: 'multi-year reporting',
-            source: 'public advisory reporting',
-            sourceIds: ['government-advisory'],
-            provenanceRefs: ['CISA and allied government SVR/APT29 advisories'],
-            reportDate: 'multi-year reporting',
-            confidence: 0.76,
-        },
-    ]
-}
-
-function isApt29Query(value: string) {
-    return /apt29|cozy bear|midnight blizzard|nobelium|the dukes/i.test(value)
 }
 
 function activitySourceLabel(count: number) {

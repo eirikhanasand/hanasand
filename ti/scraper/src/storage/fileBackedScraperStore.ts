@@ -26,6 +26,17 @@ export class FileBackedScraperStore extends InMemoryScraperStore {
   override saveCaptureWithDedupe(capture: RawCapture): CaptureWriteResult { return this.saved(() => super.saveCaptureWithDedupe(capture)); }
   override savePipelineResult(result: PipelineResult): PipelineResult { return this.saved(() => super.savePipelineResult(result)); }
   override saveIncident(candidate: IncidentCandidate): IncidentCandidate { return this.saved(() => super.saveIncident(candidate)); }
+  override saveExtractedEntity(entity: any): any { return this.saved(() => super.saveExtractedEntity(entity)); }
+  override saveIndicator(indicator: any): any { return this.saved(() => super.saveIndicator(indicator)); }
+  override saveActorProfile(profile: any): any { return this.saved(() => super.saveActorProfile(profile)); }
+  override saveEvidenceLink(linkRecord: any): any { return this.saved(() => super.saveEvidenceLink(linkRecord)); }
+  override saveValidationRecord(record: any): any { return this.saved(() => super.saveValidationRecord(record)); }
+  override saveEvaluationLabel(label: any): any { return this.saved(() => super.saveEvaluationLabel(label)); }
+  override saveIntelligenceClaim(claim: any): any { return this.saved(() => super.saveIntelligenceClaim(claim)); }
+  override saveClaimEvidence(evidence: any): any { return this.saved(() => super.saveClaimEvidence(evidence)); }
+  override saveClaimReview(review: any): any { return this.saved(() => super.saveClaimReview(review)); }
+  override saveSourceHealthObservation(observation: any): any { return this.saved(() => super.saveSourceHealthObservation(observation)); }
+  override saveTimelinessRecord(record: any): any { return this.saved(() => super.saveTimelinessRecord(record)); }
   override saveSource(source: SourceRecord): SourceRecord { return this.saved(() => super.saveSource(source)); }
   override savePlan(plan: CollectionPlan): CollectionPlan { return this.saved(() => super.savePlan(plan)); }
   override saveRun(run: CollectionRun): CollectionRun { return this.saved(() => super.saveRun(run)); }
@@ -65,10 +76,21 @@ export class FileBackedScraperStore extends InMemoryScraperStore {
     for (const [key, save] of Object.entries(extraSaves)) for (const row of snapshot[key] ?? []) save(this, row);
   }
   private persist(): void { if (!this.hydrating) { this.dirty = false; writeFileSync(this.snapshotPath, JSON.stringify(this.snapshot(), null, 2)); } }
-  private snapshot(): FileBackedScraperSnapshot { return { schemaVersion: "ti.file_backed_scraper_store.v1", savedAt: new Date().toISOString(), sources: this.listSources(), captures: this.listCaptures(), incidents: this.listIncidents(), plans: this.listPlans(), runs: this.listRuns(), discoveryEvidence: this.listDiscoveryEvidence(), liveSearchSnapshots: this.listLiveSearchSnapshots(), evidenceDeltas: this.listEvidenceDeltas(), replayJobs: this.listReplayJobs(), analystMetadataReviewTasks: this.listAnalystMetadataReviewTasks(), analystSourceActivationPackets: this.listAnalystSourceActivationPackets(), analystVictimNotificationPackets: this.listAnalystVictimNotificationPackets(), analystClaimLedgerEntries: this.listAnalystClaimLedgerEntries(), analystLoopSnapshots: this.listAnalystLoopSnapshots(), organizations: this.listOrganizations(), organizationMembers: this.listOrganizationMembers(), organizationInvites: this.listOrganizationInvites(), webhookDestinations: this.listWebhookDestinations(), cases: this.listCases(), dwmWatchlists: this.listDwmWatchlists(), dwmAlerts: this.listDwmAlerts(), dwmWebhookDeliveries: this.listDwmWebhookDeliveries(), actorOrgRelevanceReviews: this.listActorOrgRelevanceReviews() }; }
+  private snapshot(): FileBackedScraperSnapshot { return { schemaVersion: "ti.file_backed_scraper_store.v3", savedAt: new Date().toISOString(), sources: this.listSources(), captures: this.listCaptures(), incidents: this.listIncidents(), extractedEntities: this.listExtractedEntities(), indicators: this.listIndicators(), actorProfiles: this.listActorProfiles(), actorAliases: this.listActorAliases(), evidenceLinks: this.listEvidenceLinks(), validationRecords: this.listValidationRecords(), evaluationLabels: this.listEvaluationLabels(), intelligenceClaims: this.listIntelligenceClaims(), claimEvidence: this.listClaimEvidence(), claimReviews: this.listClaimReviews(), sourceHealthObservations: this.listSourceHealthObservations(), timelinessRecords: this.listTimelinessRecords(), plans: this.listPlans(), runs: this.listRuns(), discoveryEvidence: this.listDiscoveryEvidence(), liveSearchSnapshots: this.listLiveSearchSnapshots(), evidenceDeltas: this.listEvidenceDeltas(), replayJobs: this.listReplayJobs(), analystMetadataReviewTasks: this.listAnalystMetadataReviewTasks(), analystSourceActivationPackets: this.listAnalystSourceActivationPackets(), analystVictimNotificationPackets: this.listAnalystVictimNotificationPackets(), analystClaimLedgerEntries: this.listAnalystClaimLedgerEntries(), analystLoopSnapshots: this.listAnalystLoopSnapshots(), organizations: this.listOrganizations(), organizationMembers: this.listOrganizationMembers(), organizationInvites: this.listOrganizationInvites(), webhookDestinations: this.listWebhookDestinations(), cases: this.listCases(), dwmWatchlists: this.listDwmWatchlists(), dwmAlerts: this.listDwmAlerts(), dwmWebhookDeliveries: this.listDwmWebhookDeliveries(), actorOrgRelevanceReviews: this.listActorOrgRelevanceReviews() }; }
 }
 
 const extraSaves: Record<string, (store: FileBackedScraperStore, row: any) => void> = {
+  extractedEntities: (s, r) => InMemoryScraperStore.prototype.saveExtractedEntity.call(s, r),
+  indicators: (s, r) => InMemoryScraperStore.prototype.saveIndicator.call(s, r),
+  actorProfiles: (s, r) => InMemoryScraperStore.prototype.saveActorProfile.call(s, r),
+  evidenceLinks: (s, r) => InMemoryScraperStore.prototype.saveEvidenceLink.call(s, r),
+  validationRecords: (s, r) => InMemoryScraperStore.prototype.saveValidationRecord.call(s, r),
+  evaluationLabels: (s, r) => InMemoryScraperStore.prototype.saveEvaluationLabel.call(s, r),
+  intelligenceClaims: (s, r) => InMemoryScraperStore.prototype.saveIntelligenceClaim.call(s, r),
+  claimEvidence: (s, r) => InMemoryScraperStore.prototype.saveClaimEvidence.call(s, r),
+  claimReviews: (s, r) => InMemoryScraperStore.prototype.saveClaimReview.call(s, r),
+  sourceHealthObservations: (s, r) => InMemoryScraperStore.prototype.saveSourceHealthObservation.call(s, r),
+  timelinessRecords: (s, r) => InMemoryScraperStore.prototype.saveTimelinessRecord.call(s, r),
   replayJobs: (s, r) => InMemoryScraperStore.prototype.saveReplayJob.call(s, r),
   analystMetadataReviewTasks: (s, r) => InMemoryScraperStore.prototype.saveAnalystMetadataReviewTask.call(s, r),
   analystSourceActivationPackets: (s, r) => InMemoryScraperStore.prototype.saveAnalystSourceActivationPacket.call(s, r),

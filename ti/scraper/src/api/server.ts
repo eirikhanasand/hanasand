@@ -1,5 +1,4 @@
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
-import { buildRestrictedMetadataOperationsStatus } from "../adapters/darknetMetadata.ts";
 import { getOrganizationEntitlementReadiness, getOrganizationEntitlements, upsertOrganizationEntitlements } from "./dwmEntitlementRoutes.ts";
 import { buildDwmSourcePackWorkerReadinessSnapshot, createDwmSourceRequest } from "./dwmSourceRequestRoute.ts";
 import { createDwmWatchlist, deliverDwmWebhooks, disableDwmWatchlist, getDwmAlertDetail, getDwmAlertGenerationReadiness, getDwmWatchlistDetail, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, replayDwmAlert, storedWatchlistTerms, testDwmWebhook, updateDwmAlert, updateDwmWatchlist } from "./dwmWorkflowRoutes.ts";
@@ -13,21 +12,35 @@ import { createCase, createCaseFromDwmAlert, exportCaseActionReplay, exportCaseE
 import { collectionSchedulerStatus, updateCollectionSchedulerControl } from "./collectionSchedulerStatus.ts";
 import { contractIndex } from "./contractsRoute.ts";
 import { enrichExposureQueueCountries, exposureParserHealth, ingestExposureClaims, listExposureQueue } from "./exposureQueueRoutes.ts";
-import { error, json, numberQuery, page, readJson } from "./http.ts";
+import { error, json, numberQuery, readJson } from "./http.ts";
+import { handleEvidenceRequest } from "./evidenceRoutes.ts";
 import { handleOrgAlertCaseActionLedgerRequest } from "./orgAlertCaseActionLedgerRoutes.ts";
 import { createOrganization, createOrganizationInvites, createWebhookDestination, disableWebhookDestination, listOrganizationMembers, listOrganizations, listWebhookDestinations, resolveOrganizationScope, testOrganizationWebhook, updateWebhookDestination } from "./organizationRoutes.ts";
 import { publicChannelApplyPlan, publicChannelStatus } from "./publicChannelDispatch.ts";
 import { qualityPayload } from "./qualityRoute.ts";
+import { buildRestrictedMetadataApplyPlanRouteResponse, buildRestrictedMetadataStatusRouteResponse } from "./restrictedMetadataRoutes.ts";
 import { createRun, runResults, runStatus } from "./runRoutes.ts";
 import { searchResponse } from "./searchRoute.ts";
 import type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 import { metrics, productSlo } from "./sloRoute.ts";
-import { createSource, sourceApplyPlan, updateSource } from "./sourceRoutes.ts";
+import { createSource, listSources, sourceApplyPlan, sourceAtlas, updateSource } from "./sourceRoutes.ts";
+import { handleStructuredIntelRequest } from "./structuredIntelRoutes.ts";
+import { handleFrontierApplyPlanRoute } from "./frontierApplyPlanRoute.ts";
+import { resolveTenantScope } from "./tenantScope.ts";
 import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 export function startApiServer(options: ApiServerOptions): ApiServerHandle {
-  const server = Bun.serve({ port: options.port ?? 8097, fetch: (request) => handleApiRequest(request, options) });
+  const server = Bun.serve({ port: options.port ?? 8097, fetch: (request) => handleDurableApiRequest(request, options) });
   return { server, port: server.port ?? options.port ?? 8097, stop: () => server.stop(true) };
+}
+async function handleDurableApiRequest(request: Request, options: ApiServerOptions): Promise<Response> {
+  const response = await handleApiRequest(request, options);
+  try {
+    await (options.store as any).flush?.();
+    return response;
+  } catch (caught) {
+    return error("storage_unavailable", caught instanceof Error ? caught.message : String(caught), 503);
+  }
 }
 export async function handleApiRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const url = new URL(request.url);
@@ -37,7 +50,10 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     });
     if (orgAlertCaseActionLedgerResponse) return orgAlertCaseActionLedgerResponse;
 
-    if (url.pathname === "/v1/health") return json({ ok: true, service: "ti-scraper", generatedAt: nowIso() });
+    if (url.pathname === "/v1/health") {
+      const storage = await (options.store as any).databaseHealth?.() ?? { ok: true, backend: "memory" };
+      return json({ ok: storage.ok !== false, service: "ti-scraper", version: "v1", storage, collection: { public: (options.canaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, generatedAt: nowIso() }, storage.ok === false ? 503 : 200);
+    }
     if (url.pathname === "/v1/contracts") return json(contractIndex());
     if (url.pathname === "/v1/metrics") return json(metrics(options));
     if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "GET") return collectionSchedulerStatus(options);
@@ -65,13 +81,17 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/cases\/[^/]+\/handoff-action$/.test(url.pathname) && request.method === "POST") return recordCaseHandoffAction(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/cases\/[^/]+$/.test(url.pathname) && request.method === "GET") return getCaseDetail(url, options, url.pathname.split("/")[3], request);
     if (/^\/v1\/cases\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateCase(request, options, url.pathname.split("/")[3]);
-    if (url.pathname === "/v1/sources" && request.method === "GET") return json({ sources: page(options.store.listSources(), url) });
+    if (url.pathname === "/v1/sources" && request.method === "GET") return listSources(request, options);
     if (url.pathname === "/v1/sources" && request.method === "POST") return createSource(request, options);
     if (url.pathname.startsWith("/v1/sources/") && request.method === "PATCH") return updateSource(request, options, url.pathname.split("/")[3]);
-    if (url.pathname === "/v1/sources/atlas") return json({ records: page(options.store.listSources(), url), summary: { total: options.store.listSources().length } });
+    if (url.pathname === "/v1/sources/atlas" && request.method === "GET") return sourceAtlas(request, options);
     if (url.pathname === "/v1/sources/apply-plan") return sourceApplyPlan(request, options);
     if (url.pathname === "/v1/sources/coverage-plan") return json({ queries: (await readJson(request)).queries ?? [], slo: { goal: "add payworthy fresh rows" } });
     if (url.pathname === "/v1/intel/search" || url.pathname === "/api/ti/search") return searchResponse(request, options, url);
+    const evidenceResponse = await handleEvidenceRequest(request, options);
+    if (evidenceResponse) return evidenceResponse;
+    const structuredIntelResponse = await handleStructuredIntelRequest(request, options);
+    if (structuredIntelResponse) return structuredIntelResponse;
     if (url.pathname === "/v1/ti/actor-org-relevance" && request.method === "GET") return listActorOrgRelevanceReviews(url, options, request);
     if (url.pathname === "/v1/ti/actor-org-relevance" && request.method === "POST") return submitActorOrgRelevanceReview(request, options);
     if (url.pathname === "/v1/ti/actor-org-relevance/handoff-queue" && request.method === "GET") return listActorOrgRelevanceHandoffQueue(url, options, request);
@@ -87,11 +107,11 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/ti\/actor-org-relevance\/[^/]+$/.test(url.pathname) && request.method === "GET") return getActorOrgRelevanceReview(url, options, url.pathname.split("/").pop(), request);
     if (/^\/v1\/ti\/actor-org-relevance\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateActorOrgRelevanceReview(request, options, url.pathname.split("/").pop());
     if (url.pathname === "/v1/intel/runs" && request.method === "POST") return createRun(request, options);
-    if (/^\/v1\/intel\/runs\/[^/]+$/.test(url.pathname)) return runStatus(options, url.pathname.split("/").pop() ?? "");
-    if (/^\/v1\/intel\/runs\/[^/]+\/results$/.test(url.pathname)) return runResults(options, url.pathname.split("/")[4]);
+    if (/^\/v1\/intel\/runs\/[^/]+$/.test(url.pathname) && request.method === "GET") return runStatus(request, options, url.pathname.split("/").pop() ?? "");
+    if (/^\/v1\/intel\/runs\/[^/]+\/results$/.test(url.pathname) && request.method === "GET") return runResults(request, options, url.pathname.split("/")[4]);
     if (url.pathname === "/v1/darkweb/status") return json({ status: buildDarkwebIndexStatus({ sources: options.store.listSources(), captures: options.store.listCaptures() } as any) });
     if (url.pathname === "/v1/darkweb/search") return json(searchDarkwebIndex({ query: url.searchParams.get("q") ?? "", sources: options.store.listSources(), captures: options.store.listCaptures(), limit: numberQuery(url.searchParams.get("limit")) ?? 50 } as any));
-    if ((url.pathname === "/v1/dwm/exposure-queue" || url.pathname === "/api/dwm/exposure-queue") && request.method === "GET") return listExposureQueue(url, options);
+    if ((url.pathname === "/v1/dwm/exposure-queue" || url.pathname === "/api/dwm/exposure-queue") && request.method === "GET") return listExposureQueue(request, url, options);
     if ((url.pathname === "/v1/dwm/exposure-queue/enrich-countries" || url.pathname === "/api/dwm/exposure-queue/enrich-countries") && request.method === "POST") return enrichExposureQueueCountries(request, options);
     if ((url.pathname === "/v1/dwm/exposure-claims/ingest" || url.pathname === "/api/dwm/exposure-claims/ingest") && request.method === "POST") return ingestExposureClaims(request, options);
     if ((url.pathname === "/v1/dwm/exposure-parser/health" || url.pathname === "/api/dwm/exposure-parser/health") && request.method === "GET") return exposureParserHealth();
@@ -104,21 +124,20 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
         tenantId,
         watchlist: explicitWatchlist.length ? explicitWatchlist : storedWatchlistTerms(options, tenantId),
         sources: options.store.listSources(),
-        captures: options.store.listCaptures(),
-        includeDemoIfEmpty: url.searchParams.get("demo") !== "false"
+        captures: options.store.listCaptures()
       }), options, tenantId, scope.organizationId));
     }
     if ((url.pathname === "/v1/dwm/product" || url.pathname === "/api/dwm/product") && request.method === "POST") {
       const body = await readJson(request);
-      const tenantId = body.tenantId ?? "default";
-      const organizationId = typeof body.organizationId === "string" && body.organizationId.trim() ? body.organizationId.trim() : undefined;
+      const scope = resolveOrganizationScope({ body, url, request }, options);
+      if (scope.error) return scope.error;
+      const tenantId = scope.tenantId;
       return json(withPersistedDwmProductAlerts(buildDwmProductSnapshot({
-        tenantId: body.tenantId,
+        tenantId,
         watchlist: Array.isArray(body.watchlist) ? body.watchlist : parseWatchlistParam(String(body.watchlist ?? body.terms ?? "")),
         sources: options.store.listSources(),
-        captures: options.store.listCaptures(),
-        includeDemoIfEmpty: body.includeDemoIfEmpty !== false
-      }), options, tenantId, organizationId));
+        captures: options.store.listCaptures()
+      }), options, tenantId, scope.organizationId));
     }
     if ((url.pathname === "/v1/dwm/operations" || url.pathname === "/api/dwm/operations") && request.method === "GET") {
       const scope = resolveOrganizationScope({ url, request }, options);
@@ -201,11 +220,31 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/dwm/webhooks/test" && request.method === "POST") return testDwmWebhook(request, options);
     if (url.pathname === "/v1/dwm/webhooks/deliveries" && request.method === "GET") return listDwmWebhookDeliveries(url, options, request);
     if (url.pathname === "/v1/dwm/watchlist/normalize") return json({ watchlist: normalizeWatchlist(parseWatchlistParam(url.searchParams.get("terms") ?? "")) });
-    if (url.pathname === "/v1/restricted-metadata/status") return json({ status: buildRestrictedMetadataOperationsStatus({ sources: options.store.listSources(), captures: options.store.listCaptures(), query: url.searchParams.get("q") ?? undefined }) });
-    if (url.pathname === "/v1/restricted-metadata/apply-plan") return json({ endpoint: "/v1/restricted-metadata/apply-plan", metadataOnly: true, actions: [] });
+    if (url.pathname === "/v1/restricted-metadata/status" && request.method === "GET") {
+      const result = buildRestrictedMetadataStatusRouteResponse({
+        sourceIds: url.searchParams.getAll("sourceId"),
+        operatorId: url.searchParams.get("operatorId") ?? undefined,
+        runId: url.searchParams.get("runId") ?? undefined
+      }, { store: options.store, generatedAt: url.searchParams.get("generatedAt") ?? undefined });
+      return json(result.body);
+    }
+    const restrictedSourceMatch = url.pathname.match(/^\/v1\/sources\/([^/]+)\/restricted-metadata\/apply-plan$/);
+    if ((url.pathname === "/v1/restricted-metadata/apply-plan" || restrictedSourceMatch) && request.method === "POST") {
+      const body = await readJson(request);
+      const result = buildRestrictedMetadataApplyPlanRouteResponse({
+        ...body,
+        sourceIds: restrictedSourceMatch ? [decodeURIComponent(restrictedSourceMatch[1])] : body.sourceIds
+      }, { store: options.store, generatedAt: body.generatedAt });
+      return result.ok
+        ? json(result.body)
+        : json({ error: { code: result.code, message: result.message, details: result.details } }, result.status);
+    }
     if (url.pathname === "/v1/public-channels/apply-plan") return publicChannelApplyPlan(request, options);
     if (url.pathname === "/v1/public-channels/status") return publicChannelStatus(url, options);
-    if (url.pathname === "/v1/quality/evaluate") return json(qualityPayload(url.searchParams.get("q") ?? ""));
+    if (url.pathname === "/v1/quality/evaluate") {
+      const scope = resolveTenantScope(request, url);
+      return scope.error ?? json(qualityPayload(url.searchParams.get("q") ?? "", options.store, scope.tenantId));
+    }
     if (url.pathname === "/v1/ops/product-slo") return json({ route: "/v1/ops/product-slo", ...productSlo(options, url) });
     if (url.pathname === "/v1/sources/canary-activation") return canaryActivation(request, options);
     if (url.pathname === "/v1/ops/canary/run") return canaryRun(request, options);
@@ -213,6 +252,19 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/ops/canary/readiness") return canaryReadiness(url, options);
     if (url.pathname === "/v1/ops/resource-snapshot") return json({ service: "ti-scraper", queue: { queued: options.frontier.size() }, workers: options.supervisor?.snapshot() ?? [] });
     if (url.pathname === "/v1/frontier") return json({ queued: options.frontier.size(), tasks: options.frontier.snapshot?.() ?? [] });
+    if (url.pathname === "/v1/frontier/apply-plan" && request.method === "POST") {
+      const body = await readJson(request);
+      const result = handleFrontierApplyPlanRoute({
+        request: body,
+        sources: options.store.listSources(),
+        queued: options.frontier.snapshot?.() ?? [],
+        leased: options.frontier.leasedSnapshot?.() ?? [],
+        deadLetters: options.frontier.deadLetterSnapshot?.() ?? [],
+        runs: options.store.listRuns?.() ?? [],
+        generatedAt: body.generatedAt
+      });
+      return json(result.body, result.status);
+    }
     if (url.pathname.endsWith("/apply-plan")) return json({ endpoint: url.pathname, dryRun: true, actions: [] });
     if (url.pathname.includes("/exports/stix")) return json({ type: "bundle", objects: [] });
     if (url.pathname.includes("/graph/")) return json({ endpoint: url.pathname, nodes: [], relationships: [] });

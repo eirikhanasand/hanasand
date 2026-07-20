@@ -93,7 +93,7 @@ const publicApt29Text = JSON.stringify({ result: sanitizedApt29Result, actor: sa
 assert(!/\breturned\b|What returned|returned actor profile|returned profile|returned observations|Returned as evidence|returned ATT&CK/i.test(publicApt29Text), 'Public APT29 serialization should avoid backend-shaped returned/profile wording.')
 assert(sanitizedApt29Result?.actionability?.handoffs?.watchlist?.payloads[0]?.notes.includes('actor profile'), 'Public /ti result sanitizer should keep watchlist handoff notes meaningful after copy cleanup.')
 assert(sanitizedActor.sourceCoverage.captureRows > 0, 'Sanitized /ti result should still produce capture-backed source coverage.')
-assert(sanitizedActor.malwareTools.length > 0, 'Sanitized /ti result should still carry actor tools and malware facts.')
+assert(sanitizedActor.malwareTools.length === 0, 'Sanitized /ti result must not add actor tools absent from the response.')
 assert(sanitizedActionability.orgRelevance.watchlistIntersections.some(item =>
     item.state === 'ready'
     && item.recommendedAction === 'open_case'

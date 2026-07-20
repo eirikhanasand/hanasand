@@ -63,12 +63,15 @@ export function buildDwmOperationsSnapshot(input: {
 }): DwmOperationsSnapshot {
   const generatedAt = input.generatedAt ?? nowIso();
   const tenantId = input.tenantId ?? "default";
+  const scope = input.tenantId;
   const watchlist = normalizeWatchlist(input.watchlist ?? []);
   const terms = watchlist.map((term) => term.value);
-  const sources = input.sources ?? [];
-  const captures = input.captures ?? [];
+  const sources = (input.sources ?? []).filter((source) => inTenant(source, scope));
+  const sourceIds = new Set(sources.map((source) => source.id));
+  const captures = (input.captures ?? []).filter((capture) => inTenant(capture, scope) && sourceIds.has(capture.sourceId));
   const sourceById = new Map(sources.map((source: any) => [String(source.id), source]));
   const latestRun = (input.runs ?? [])
+    .filter((run: any) => inTenant(run, scope))
     .filter((run: any) => run.requestId === "req_public_canary" || run.id)
     .sort((a: any, b: any) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? "")))[0];
   const latestCaptures = captures
@@ -119,6 +122,10 @@ export function buildDwmOperationsSnapshot(input: {
       })),
     zeroAlertExplanation: explainZeroAlerts({ terms, activeSourceCount, watchlistMatchCount })
   };
+}
+
+function inTenant(record: { tenantId?: string }, tenantId?: string): boolean {
+  return (record.tenantId || undefined) === tenantId;
 }
 
 function captureDto(capture: any, source: any, terms: string[]): DwmOperationsSnapshot["latestCaptures"][number] {

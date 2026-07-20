@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { hashContent } from "../utils.ts";
+import { parseRssItems } from "../adapters/rssXml.ts";
 
 const ITEM_RE = /<item\b[\s\S]*?<\/item>/gi;
 const ENTRY_RE = /<entry\b[\s\S]*?<\/entry>/gi;
@@ -8,10 +9,27 @@ export function feedItems(source: any, task: any, fetched: string, at: string, m
   if (source.type === "telegram_public") {
     const telegram = telegramItems(source, task, fetched, at, metadata, maxItems);
     if (telegram.length) return telegram;
+    return [fallback(source, task, fetched, at, { ...metadata, parserWarnings: ["public Telegram preview contained no messages"] })];
   }
   if (source.type === "json_api") {
     const json = jsonItems(source, task, fetched, at, metadata, maxItems);
     if (json.length) return json;
+    return [fallback(source, task, fetched, at, { ...metadata, parserWarnings: ["JSON source contained no supported records"] })];
+  }
+  if (source.type === "rss") {
+    const rss = parseRssItems(fetched, task.targetUrl).slice(0, maxItems).map((entry, index) => row(
+      source,
+      task,
+      entry.link || task.targetUrl,
+      entry.title || source.name,
+      [source.name, entry.title, entry.description].filter(Boolean).join("\n").slice(0, 24_000),
+      at,
+      entry.publishedAt,
+      { ...metadata, adapter: "rss", parserVersion: "rss-adapter-v2" },
+      index,
+      true
+    )).filter((item) => item.rawText.length > 24);
+    return rss.length ? rss : [fallback(source, task, fetched, at, { ...metadata, adapter: "rss", parserVersion: "rss-adapter-v2", parserWarnings: ["feed contained no RSS or Atom entries"] })];
   }
   const blocks = [...fetched.matchAll(ITEM_RE)].map((m) => m[0]);
   if (!blocks.length) blocks.push(...[...fetched.matchAll(ENTRY_RE)].map((m) => m[0]));
@@ -30,7 +48,7 @@ function jsonItem(source: any, task: any, entry: any, at: string, metadata: any,
   const publishedAt = stringField(entry, ["discovered", "dateAdded", "published", "publishedDate", "lastModified", "lastModifiedDate", "updated"]);
   const url = stringField(entry, ["post_url", "link", "url", "source", "reference"]) || task.targetUrl;
   const rawText = [source.name, title, jsonSummary(entry)].filter(Boolean).join("\n").slice(0, 24_000);
-  return row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true }, index, false);
+  return row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true, structuredFields: structuredFields(entry) }, index, false);
 }
 
 function jsonRows(value: any): any[] {
@@ -44,6 +62,11 @@ function jsonRows(value: any): any[] {
 
 function jsonSummary(value: any) {
   return JSON.stringify(value, (_key, item) => typeof item === "string" && item.length > 800 ? `${item.slice(0, 800)}...` : item);
+}
+
+function structuredFields(value: any) {
+  const fields = ["cveID", "vendorProject", "product", "vulnerabilityName", "dateAdded", "shortDescription", "requiredAction", "dueDate", "knownRansomwareCampaignUse"];
+  return Object.fromEntries(fields.flatMap((field) => typeof value?.[field] === "string" && value[field].trim() ? [[field, value[field].trim().slice(0, 1_000)]] : []));
 }
 
 function safeJson(value: string) {
@@ -67,14 +90,14 @@ function telegramItem(source: any, task: any, block: string, at: string, metadat
   const dataPost = attr(block, "div", "data-post");
   const [channelFromPost, messageId] = dataPost.split("/");
   const channel = channelFromPost || telegramChannel(source.url) || "unknown";
-  const messageText = text(classBlock(block, "tgme_widget_message_text"));
+  const messageText = text(messageTextBlock(block));
   const author = text(classBlock(block, "tgme_widget_message_author"));
   const title = [source.name, messageId ? `message ${messageId}` : ""].filter(Boolean).join(" ");
   const publishedAt = attr(block, "time", "datetime") || undefined;
   const messageUrl = dataPost ? `https://t.me/${dataPost}` : task.targetUrl;
   const rawText = [source.name, author, messageText].filter(Boolean).join("\n").slice(0, 24_000);
   return {
-    ...row(source, task, messageUrl, title, rawText, at, publishedAt, { ...metadata, adapter: "telegram_public", channel, messageId: messageId ? Number(messageId) : undefined, messageState: "available", mediaPolicy: "metadata_only_no_download" }, index, false),
+    ...row(source, task, messageUrl, title, rawText, at, publishedAt, { ...metadata, adapter: "telegram_public", parserVersion: "telegram-public-preview:v1", channel, messageId: messageId ? Number(messageId) : undefined, messageState: "available", mediaPolicy: "metadata_only_no_download" }, index, false),
     links: [messageUrl, ...links(block)].slice(0, 12),
   };
 }
@@ -96,11 +119,19 @@ function fallback(source: any, task: any, fetched: string, at: string, metadata:
 function row(source: any, task: any, url: string, title: string, rawText: string, at: string, publishedAt: string | undefined, metadata: any, index: number, feedItem: boolean) {
   const key = `${source.id}:${url}:${title}:${hashContent(rawText)}`;
   return {
-    sourceId: source.id, taskId: task.id, url, title, rawText, body: rawText,
+    tenantId: source.tenantId, sourceId: source.id, taskId: task.id, url, title, rawText, body: rawText,
     collectedAt: at, publishedAt, contentHash: hashContent(key), links: [url].filter(Boolean),
-    metadata: { ...metadata, feedItem, itemIndex: index, sourceName: source.name },
+    metadata: { ...metadata, feedItem, itemIndex: index, sourceName: source.name, extractionProfile: extractionProfile(source) },
     sensitive: false
   };
+}
+
+function extractionProfile(source: any) {
+  if (source.metadata?.extractionProfile) return source.metadata.extractionProfile;
+  if (source.catalog?.canonicalId === "gov:us:cisa:known-exploited-vulnerabilities") return "cisa_kev";
+  if (source.id === "src_ssscip_cert_ua_telegram") return "cert_ua_public_channel";
+  if (source.id === "src_ccn_cert_telegram") return "ccn_cert_public_channel";
+  return undefined;
 }
 
 function tag(block: string, name: string) {
@@ -116,6 +147,14 @@ function attr(block: string, tagName: string, attrName: string) {
 function classBlock(block: string, className: string) {
   const m = block.match(new RegExp(`<[^>]+class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>`, "i"));
   return m?.[1] ?? "";
+}
+
+function messageTextBlock(block: string) {
+  const opening = /<[^>]+class=["'][^"']*\btgme_widget_message_text\b[^"']*["'][^>]*>/i.exec(block);
+  if (!opening || opening.index === undefined) return "";
+  const tail = block.slice(opening.index + opening[0].length);
+  const footer = tail.search(/<[^>]+class=["'][^"']*\btgme_widget_message_footer\b/i);
+  return footer >= 0 ? tail.slice(0, footer) : tail;
 }
 
 function links(block: string) {

@@ -28,6 +28,7 @@ const source: SourceRecord = {
   status: "active",
   trustScore: 0.82,
   legalNotes: "Public channel preview only.",
+  tenantId: "tenant_acme",
   createdAt: "2026-06-28T16:00:00.000Z",
   updatedAt: "2026-06-28T16:00:00.000Z"
 } as SourceRecord;
@@ -35,6 +36,7 @@ const source: SourceRecord = {
 const capture: RawCapture = {
   id: "cap_handoff_acme",
   sourceId: source.id,
+  tenantId: "tenant_acme",
   url: "https://t.me/handoff_public/99",
   collectedAt: "2026-06-28T16:03:00.000Z",
   mediaType: "text/plain",
@@ -799,8 +801,7 @@ function alertFixture(overrides: { organizationId?: string; caseIdCandidate?: st
     watchlist: [{ kind: "domain", value: "acme.com" }],
     sources: [source],
     captures: [capture],
-    generatedAt: "2026-06-28T16:10:00.000Z",
-    includeDemoIfEmpty: false
+    generatedAt: "2026-06-28T16:10:00.000Z"
   });
   const alert = snapshot.alerts[0];
   return {

@@ -85,6 +85,68 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
+  test("rejects invalid generic seeds and keeps valid Tor metadata seeds inactive", () => {
+    const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+    Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
+    const store = new InMemoryScraperStore();
+    const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-restricted-"));
+    const invalidPath = join(dir, "invalid-public.json");
+    const restrictedPath = join(dir, "restricted.json");
+    writeFileSync(invalidPath, JSON.stringify({ version: 1, name: "invalid", sources: [{ ...source("src_invalid", "https://example.test/feed"), legalNotes: "" }] }));
+    writeFileSync(restrictedPath, JSON.stringify({
+      version: 1,
+      name: "reviewed Tor metadata candidates",
+      disabledByDefault: true,
+      network: "tor",
+      proxyBoundaryId: "tor-approved-metadata-proxy",
+      approvalScope: "metadata_only",
+      retentionClass: "restricted_metadata",
+      forbiddenOperations: ["credential_bypass", "captcha_solving", "threat_actor_interaction", "stolen_file_download", "stealth_or_evasion", "unapproved_proxy", "non_metadata_capture"],
+      sources: [{
+        id: "src_restricted_candidate",
+        name: "Reviewed victim listing candidate",
+        type: "tor_metadata",
+        url: `http://${"a".repeat(56)}.onion/`,
+        accessMethod: "approved_proxy",
+        status: "candidate",
+        risk: "restricted",
+        trustScore: 0.6,
+        crawlFrequencySeconds: 3600,
+        legalNotes: "Publicly advertised victim-listing metadata only; never retrieve leaked files or interact with operators.",
+        governance: { approvalRequired: true, approvalState: "pending", metadataOnly: true, approvalScope: "metadata_only", policyVersion: "collection-policy:v1" },
+        metadata: {
+          sourceFamily: "dark_web_victim_feed",
+          actorName: "Example actor",
+          discoveryAuthorityUrl: "https://example.test/about",
+          discoveryAuthorityRecordUrl: "https://example.test/group/example",
+          discoveryCheckedAt: "2026-07-20T00:00:00.000Z",
+          discoveryAvailability: "unknown",
+          expectedPageRole: "victim_listing",
+          collectionScope: "metadata_only",
+          retainRawContent: false,
+          retentionDays: 30,
+          attribution: "Example public discovery authority"
+        }
+      }]
+    }));
+
+    try {
+      const result = bootstrapRuntimeSources(store, { seedPaths: [invalidPath, restrictedPath], generatedAt: "2026-07-20T00:00:00.000Z", sourceTarget: 1 });
+      expect(result).toMatchObject({ importedSourceCount: 1, skippedSourceCount: 1, activeSourceCount: 0, totalSourceCount: 1 });
+      expect(result.errors.some((error) => error.message.includes("src_invalid: legal notes are required"))).toBe(true);
+      expect(store.listSources()[0]).toMatchObject({
+        id: "src_restricted_candidate",
+        status: "candidate",
+        accessMethod: "approved_proxy",
+        metadata: { productionCollection: false, canaryPortfolio: false, restrictedMetadataCandidate: true }
+      });
+    } finally {
+      if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+      else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("generated public source pack clears the 1k production source target from an empty registry", () => {
     const seedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/public_threat_intel_generated_sources.json");
     const bundle = JSON.parse(readFileSync(seedPath, "utf8"));
@@ -151,7 +213,12 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       const body = await response.json() as any;
 
       expect(response.status).toBe(200);
-      expect(body.decision).toBe("operational");
+      expect(body.decision).toBe("degraded");
+      expect(body.operationalBlockers.map((item: any) => item.code)).toEqual(expect.arrayContaining([
+        "daily_coverage_below_target",
+        "parser_endpoint_missing",
+        "scheduler_loop_unattached"
+      ]));
       expect(body.sourceCoverage).toMatchObject({
         sourceTarget: 2,
         totalSourceCount: 2,

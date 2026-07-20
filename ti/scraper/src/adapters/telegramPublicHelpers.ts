@@ -38,5 +38,5 @@ export function evidenceFromMessage(channel: string, message: any) {
 export function itemFromMessage(source: SourceRecord, message: any, collectedAt: string, task?: any) {
   const text = minimizeTelegramPii(String(message.text ?? message.caption ?? ""));
   const url = message.url ?? `${source.url}/${message.id ?? hashContent(text).slice(0, 8)}`;
-  return { sourceId: source.id, taskId: task?.id, url, collectedAt, publishedAt: message.date, title: `Telegram ${parseTelegramTarget(source.url).channel}`, rawText: text, contentHash: hashContent(text || url), links: links(text), metadata: { adapter: "telegram_public", channel: parseTelegramTarget(source.url).channel, messageId: message.id }, sensitive: false };
+  return { tenantId: source.tenantId, sourceId: source.id, taskId: task?.id, url, collectedAt, publishedAt: message.date, title: `Telegram ${parseTelegramTarget(source.url).channel}`, rawText: text, contentHash: hashContent(text || url), links: links(text), metadata: { adapter: "telegram_public", channel: parseTelegramTarget(source.url).channel, messageId: message.id }, sensitive: false };
 }

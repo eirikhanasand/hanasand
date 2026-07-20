@@ -710,7 +710,7 @@ function unavailableDwmProduct(source: string, checkedAt: string): DwmProductSna
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'dwm_product_snapshot',
-        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert status from the TI service.',
+        integrationProbeHint: 'GET /api/dwm/product must return watchlist, source coverage, and alert status from the TI service.',
         backendProofContractVersion: 'dwm.product.v1',
     }
 }
@@ -1028,7 +1028,7 @@ function normalizeDwmProductReadiness(input: DwmProductSnapshotReadiness | undef
         staleAfterSeconds: input.staleAfterSeconds ?? 900,
         proofTimestamp: input.proofTimestamp || input.latestAlertAt || input.checkedAt || checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'dwm_product_snapshot',
-        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert status from the TI service.',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/product must return watchlist, source coverage, and alert status from the TI service.',
         backendProofContractVersion: input.backendProofContractVersion || 'dwm.product.v1',
         detail: input.detail || (blockers.length ? visibleChecks(blockers) : dwmProductDetail(input)),
     }
@@ -2492,7 +2492,7 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
         case 'dwm_product_snapshot':
             return {
                 backendProofContractVersion: 'dwm.product.v1',
-                integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert status from the TI service.',
+                integrationProbeHint: 'GET /api/dwm/product must return watchlist, source coverage, and alert status from the TI service.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_dwm_product_snapshot',
             }

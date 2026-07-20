@@ -3,10 +3,33 @@ import { saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.t
 
 Bun.env.HANASAND_AI_API_BASE = "";
 
+const authenticatedRequest = (url: string, init: RequestInit = {}) => {
+  const headers = new Headers(init.headers);
+  headers.set("authorization", "Bearer valid-test-session");
+  headers.set("id", "analyst-test");
+  return new Request(url, { ...init, headers });
+};
+
+const testOptions = (store: InMemoryScraperStore, extra: Record<string, unknown> = {}) => ({
+  store,
+  frontier: new FocusedFrontier(),
+  port: 0,
+  authApiBase: "http://auth.test/api",
+  authFetch: async () => Response.json({ id: "analyst-test", roles: [{ id: "analyst" }] }),
+  ...extra
+}) as any;
+
 describe("DWM exposure queue pipeline", () => {
+  test("rejects unauthenticated manual exposure intake", async () => {
+    const store = new InMemoryScraperStore();
+    const response = await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", { method: "POST", body: JSON.stringify({ items: [{ actor: "Akira", company: "Contoso" }] }) }), { store, frontier: new FocusedFrontier() });
+    expect(response.status).toBe(401);
+    expect(store.listCaptures()).toHaveLength(0);
+  });
+
   test("ingests parsed actor claims into the queue and shared TI search index", async () => {
     const store = new InMemoryScraperStore();
-    const options = { store, frontier: new FocusedFrontier(), port: 0 } as any;
+    const options = testOptions(store);
     const item = {
       sourceName: "Example actor leak monitor",
       title: "BlackSuit has just published a new victim: Contoso Energy",
@@ -16,7 +39,7 @@ describe("DWM exposure queue pipeline", () => {
       url: "https://news.example.test/contoso-energy"
     };
 
-    const ingest = await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+    const ingest = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ items: [item] })
@@ -24,6 +47,7 @@ describe("DWM exposure queue pipeline", () => {
     expect(ingest.status).toBe(200);
     const ingestBody = await ingest.json() as any;
     expect(ingestBody.accepted).toBe(1);
+    expect(store.listSources()[0]).toMatchObject({ status: "candidate", governance: { approvalState: "pending", approvalRequired: true, metadataOnly: true } });
 
     const queue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=5"), options);
     expect(queue.status).toBe(200);
@@ -42,7 +66,7 @@ describe("DWM exposure queue pipeline", () => {
     const filteredQueueBody = await filteredQueue.json() as any;
     expect(filteredQueueBody.items[0]).toMatchObject({ company: "Contoso Energy", country: "Norway" });
 
-    const search = await handleApiRequest(new Request("http://local/v1/intel/search?q=Contoso%20Energy"), options);
+    const search = await handleApiRequest(new Request("http://local/v1/intel/search?tenantId=default&q=Contoso%20Energy"), options);
     expect(search.status).toBe(200);
     const searchBody = await search.json() as any;
     expect(searchBody.rows.some((row: any) => row.victimName === "Contoso Energy" && row.actor === "BlackSuit")).toBe(true);
@@ -50,7 +74,7 @@ describe("DWM exposure queue pipeline", () => {
 
   test("indexes metadata-only exposure smoke captures in shared TI search", async () => {
     const store = new InMemoryScraperStore();
-    const options = { store, frontier: new FocusedFrontier(), port: 0 } as any;
+    const options = testOptions(store);
     const item = {
       sourceId: "src_qa_ai_parser_smoke",
       sourceName: "Hanasand AI parser smoke",
@@ -61,14 +85,14 @@ describe("DWM exposure queue pipeline", () => {
       sourceFamily: "darkweb_metadata"
     };
 
-    const ingest = await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+    const ingest = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ items: [item] })
     }), options);
     expect(ingest.status).toBe(200);
 
-    const search = await handleApiRequest(new Request("http://local/v1/intel/search?q=Hanasand%20AI%20Parser%20Smoke"), options);
+    const search = await handleApiRequest(new Request("http://local/v1/intel/search?tenantId=default&q=Hanasand%20AI%20Parser%20Smoke"), options);
     expect(search.status).toBe(200);
     const searchBody = await search.json() as any;
     expect(searchBody.rows.some((row: any) => row.victimName === "Hanasand AI Parser Smoke" && row.actor === "Akira")).toBe(true);
@@ -76,7 +100,7 @@ describe("DWM exposure queue pipeline", () => {
 
   test("bridges exposure queue captures into persisted DWM alerts without fake case state", async () => {
     const store = new InMemoryScraperStore();
-    const options = { store, frontier: new FocusedFrontier(), port: 0 } as any;
+    const options = testOptions(store);
     const claim = {
       sourceName: "Example actor leak monitor",
       title: "Akira has just published a new victim: Northwind Health",
@@ -85,7 +109,7 @@ describe("DWM exposure queue pipeline", () => {
       url: "https://news.example.test/northwind-health"
     };
 
-    await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+    await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ items: [claim] })
@@ -139,7 +163,7 @@ describe("DWM exposure queue pipeline", () => {
 
   test("keeps persisted exposure rows visible when the queue is stale", async () => {
     const store = new InMemoryScraperStore();
-    const options = { store, frontier: new FocusedFrontier(), port: 0 } as any;
+    const options = testOptions(store);
     const claim = {
       sourceName: "Example actor leak monitor",
       title: "LockBit has just published a new victim: Alpine Robotics",
@@ -149,7 +173,7 @@ describe("DWM exposure queue pipeline", () => {
       url: "https://news.example.test/alpine-robotics"
     };
 
-    await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+    await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ items: [claim] })
@@ -166,9 +190,9 @@ describe("DWM exposure queue pipeline", () => {
 
   test("paginates live exposure queue rows for landing-page infinite scroll", async () => {
     const store = new InMemoryScraperStore();
-    const options = { store, frontier: new FocusedFrontier(), port: 0 } as any;
+    const options = testOptions(store);
     for (let index = 0; index < 9; index++) {
-      await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+      await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -225,13 +249,14 @@ describe("DWM exposure queue pipeline", () => {
 
   test("surfaces existing trusted victim-feed captures without exposure metadata backfill", async () => {
     const store = new InMemoryScraperStore();
-    store.saveSource(source({
+    store.saveSource({ ...source({
       id: "src_canary_ransomwarelive",
       name: "Ransomware.live Victim Feed",
       metadata: { sourceFamily: "public_actor_claims" }
-    }));
+    }), tenantId: "default" });
     store.saveCapture(fixtureCapture({
       id: "cap_akira_refinery",
+      tenantId: "default",
       sourceId: "src_canary_ransomwarelive",
       title: undefined as any,
       body: "",
@@ -245,6 +270,7 @@ describe("DWM exposure queue pipeline", () => {
     }));
     store.saveCapture(fixtureCapture({
       id: "cap_cisa_false_positive_backfill",
+      tenantId: "default",
       sourceId: "src_seed_cisa_known_exploited_vulns",
       title: "CISA Catalog of Known Exploited Vulnerabilities",
       body: "An attacker may target victims in some configurations.",
@@ -262,22 +288,19 @@ describe("DWM exposure queue pipeline", () => {
 
   test("enriches old exposure rows with country from public news records", async () => {
     const store = new InMemoryScraperStore();
-    const options = {
-      store,
-      frontier: new FocusedFrontier(),
-      port: 0,
+    const options = testOptions(store, {
       fetch: async (url: string) => new Response(String(url).includes("gdelt")
         ? JSON.stringify({ articles: [{ title: "Contoso Energy is a Norway-based company after public breach review", url: "https://news.example.test/contoso-country" }] })
         : "<rss><channel><item><title>Contoso Energy headquartered in Norway confirms records review</title><link>https://news.example.test/contoso-norway</link></item></channel></rss>")
-    } as any;
+    });
 
-    await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+    await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ items: [{ sourceName: "Example actor leak monitor", title: "BlackSuit has just published a new victim: Contoso Energy", text: "BlackSuit victim: Contoso Energy. 82 GB claimed.", publishedAt: new Date().toISOString() }] })
     }), options);
 
-    const enriched = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue/enrich-countries", {
+    const enriched = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue/enrich-countries", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ limit: 5 })
@@ -293,16 +316,17 @@ describe("DWM exposure queue pipeline", () => {
 
   test("enriches domain-only victim names from public country-code domains", async () => {
     const store = new InMemoryScraperStore();
-    const options = { store, frontier: new FocusedFrontier(), port: 0, fetch: async () => new Response(JSON.stringify({ articles: [] })) } as any;
-    store.saveSource(source({ id: "src_ransomwarelive", name: "Ransomware.live Victim Feed", metadata: { sourceFamily: "public_actor_claims" } }));
+    const options = testOptions(store, { fetch: async () => new Response(JSON.stringify({ articles: [] })) });
+    store.saveSource({ ...source({ id: "src_ransomwarelive", name: "Ransomware.live Victim Feed", metadata: { sourceFamily: "public_actor_claims" } }), tenantId: "default" });
     store.saveCapture(fixtureCapture({
       id: "cap_old_domain_country",
+      tenantId: "default",
       sourceId: "src_ransomwarelive",
       title: "Incransom has just published a new victim: carvalima.com.br",
       metadata: { leakSite: { actorName: "Incransom", victimName: "carvalima.com.br", claimedDataCategory: "Documents", claimedDataSize: "20 GB" } }
     }));
 
-    const enriched = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue/enrich-countries", { method: "POST", body: "{}" }), options);
+    const enriched = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-queue/enrich-countries", { method: "POST", body: "{}" }), options);
     const enrichedBody = await enriched.json() as any;
     expect(enrichedBody.rows[0]).toMatchObject({ company: "carvalima.com.br", country: "Brazil", status: "updated" });
   });

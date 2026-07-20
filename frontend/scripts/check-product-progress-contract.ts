@@ -41,7 +41,7 @@ const routes = {
     webhookHealth: '/api/dwm/webhooks',
     dashboardAlerts: '/api/dwm/alerts',
     alertGenerationReadiness: '/api/dwm/alerts/generation-readiness',
-    dwmProduct: '/api/dwm/product?demo=false',
+    dwmProduct: '/api/dwm/product',
 }
 const sourceProxy = {
     ok: true,
@@ -292,7 +292,7 @@ const dwmProductInventoryFallbackPayload = buildProductProgressPayload({
         },
         error: {
             code: 'source_proxy_fallback_from_dwm_product',
-            message: 'Using /api/dwm/product?demo=false source inventory because scraper control proxy was unavailable.',
+            message: 'Using /api/dwm/product source inventory because scraper control proxy was unavailable.',
         },
     },
     alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
@@ -657,7 +657,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         schemaVersion: 'dwm.product_snapshot.readiness.v1',
         status: 'ready',
         checkedAt: generatedAt,
-        source: '/api/dwm/product?demo=false',
+        source: '/api/dwm/product',
         href: '/dashboard/dwm',
         tenantId: 'org_acme',
         watchlistTermCount: 1,
@@ -670,7 +670,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         staleAfterSeconds: 900,
         proofTimestamp: generatedAt,
         expectedDashboardRowId: 'dwm_product_snapshot',
-        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert proof from the TI backend.',
+        integrationProbeHint: 'GET /api/dwm/product must return watchlist, source coverage, and alert proof from the TI backend.',
         backendProofContractVersion: 'dwm.product.v1',
     },
 })
@@ -988,7 +988,7 @@ for (const scopedProgressToken of [
     'dwm.source_inventory.v1',
     'sourceCount < 1000',
     '/api/dwm/watchlists',
-    '/api/dwm/product?demo=false',
+    '/api/dwm/product',
     '/api/organizations/:id/webhooks',
     '/api/backend/admin/support/access-recovery',
     '/api/backend/admin/audit-events?limit=50',

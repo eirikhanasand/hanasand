@@ -11,13 +11,12 @@ assert(countryFromValue('NATO-aligned states') === null, 'Alliance labels must n
 assert(countryFromValue('From live source context') === null, 'Source-context copy must not be accepted as a map country.')
 assert(countries.get('RU')?.role === 'operator', 'APT29 should mark Russia as the reported operator origin.')
 assert(countries.get('US')?.role === 'target', 'APT29 should mark United States as a target country.')
-assert(countries.get('GB')?.role === 'target', 'APT29 should mark United Kingdom as a target country.')
-assert(countries.get('DE')?.role === 'target', 'APT29 should mark Germany as a target country.')
+assert(!countries.has('GB'), 'Actor geography must not add a country absent from the response.')
+assert(!countries.has('DE'), 'Actor geography must not add a country absent from the response.')
 assert(![...countries.values()].some(country => /north america|europe|nato|source/i.test(country.label)), 'Actor map should not contain pseudo-location labels.')
-assert((countries.get('US')?.count ?? 0) >= 4, 'United States count should be backed by concrete victim observations, not one broad region.')
+assert(countries.get('US')?.count === 2, 'United States count should reflect only concrete response observations.')
 assert(victims.some(item => item.victim === 'Microsoft corporate email accounts' && item.country === 'United States'), 'Victim table should include Microsoft corporate email accounts.')
-assert(victims.some(item => item.victim === 'Hewlett Packard Enterprise' && item.country === 'United States'), 'Victim table should include Hewlett Packard Enterprise.')
-assert(victims.some(item => item.victim === 'SolarWinds Orion customers and U.S. federal agencies' && item.country === 'United States'), 'Victim table should include SolarWinds Orion customers and U.S. federal agencies.')
+assert(!victims.some(item => /Hewlett Packard|SolarWinds/i.test(item.victim)), 'Victim table must not add actor-name fixtures absent from the response.')
 
 function apt29Fixture(): TiSearchResponse {
     return {
@@ -58,6 +57,17 @@ function apt29Fixture(): TiSearchResponse {
             url: 'https://www.microsoft.com/en-us/security/blog/',
         }],
         notes: [],
+        actorIntelligence: {
+            attribution: 'Russian SVR activity attributed in the attached Microsoft disclosure.',
+            structuredProvenance: [{
+                sourceId: 'src_microsoft_midnight_blizzard',
+                sourceName: 'Microsoft Threat Intelligence',
+                provenance: 'https://www.microsoft.com/en-us/security/blog/',
+                reportDate: '2024-01-25',
+                confidence: 0.84,
+                shownBecause: 'Source-backed actor attribution.',
+            }],
+        },
     }
 }
 

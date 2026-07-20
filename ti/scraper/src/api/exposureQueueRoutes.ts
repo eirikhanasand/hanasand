@@ -1,6 +1,9 @@
-import { json, numberQuery, readJson } from "./http.ts";
+import { error, json, numberQuery, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
+import { resolveOrganizationScope } from "./organizationRoutes.ts";
+import { authenticateRequest, type AuthenticatedIdentity } from "./requestAuthentication.ts";
+import { resolveTenantScope } from "./tenantScope.ts";
 
 type ExposureClaimItem = {
   id?: string;
@@ -22,6 +25,8 @@ type ExposureClaimItem = {
   publishedAt?: string;
   confidence?: number;
   sourceFamily?: string;
+  tenantId?: string;
+  organizationId?: string;
 };
 
 type ParsedExposureClaim = ExposureClaimItem & {
@@ -39,13 +44,16 @@ type ParsedExposureClaim = ExposureClaimItem & {
   summary?: string;
 };
 
-export async function listExposureQueue(url: URL, options: ApiServerOptions) {
-  const limit = numberQuery(url.searchParams.get("limit")) ?? 25;
+export async function listExposureQueue(request: Request, url: URL, options: ApiServerOptions) {
+  const scope = resolveTenantScope(request, url);
+  if (scope.error) return scope.error;
+  const tenantId = scope.tenantId ?? "default";
+  const limit = Math.min(250, Math.max(1, Math.floor(numberQuery(url.searchParams.get("limit")) ?? 25)));
   const offset = Math.max(0, Math.floor(numberQuery(url.searchParams.get("offset")) ?? 0));
   const filters = exposureQueueFilters(url);
   const at = nowIso();
-  const allItems = exposureClaimsFromStore(options.store, filters);
-  const items = exposureClaimsFromStore(options.store, filters, { limit, offset });
+  const allItems = exposureClaimsFromStore(options.store, filters, { tenantId });
+  const items = exposureClaimsFromStore(options.store, filters, { limit, offset, tenantId });
   const latestClaimAt = latestTime(allItems.map((item: any) => item.claimTime));
   const latestCollectedAt = latestTime(allItems.map((item: any) => item.collectedAt));
   const claimAgeMinutes = ageMinutes(at, latestClaimAt);
@@ -94,35 +102,47 @@ export async function listExposureQueue(url: URL, options: ApiServerOptions) {
 }
 
 export async function ingestExposureClaims(request: Request, options: ApiServerOptions) {
+  const authentication = await authenticateRequest(request, options);
+  if (authentication.error) return authentication.error;
   const body = await readJson(request);
+  const scope = exposureWriteScope(request, body, options, authentication.identity!);
+  if (scope.error) return scope.error;
   const at = nowIso();
-  const items: ExposureClaimItem[] = Array.isArray(body.items) ? body.items : Array.isArray(body.claims) ? body.claims : [];
+  const submitted = Array.isArray(body.items) ? body.items : Array.isArray(body.claims) ? body.claims : [];
+  if (!submitted.length) return error("missing_exposure_claims", "Submit at least one metadata-only exposure claim", 400);
+  if (submitted.length > 100) return error("exposure_batch_too_large", "At most 100 exposure claims may be submitted at once", 413);
+  const items = submitted.map(exposureClaimInput).filter((item): item is ExposureClaimItem => Boolean(item));
   const parsed = await Promise.all(items.map((item) => parseExposureClaim(item, at)));
   const accepted = parsed
     .filter((claim) => claim.company && claim.actor)
-    .map((claim) => saveExposureClaim(options.store, claim, at));
+    .map((claim) => saveExposureClaim(options.store, claim, at, scope))
+    .filter(Boolean);
 
   return json({
     schemaVersion: "dwm.exposure_ingest.v1",
     generatedAt: at,
     accepted: accepted.length,
-    rejected: parsed.length - accepted.length,
+    rejected: submitted.length - accepted.length,
     parser: {
       service: "hanasand-ai",
       aiEndpointConfigured: Boolean(Bun.env.HANASAND_AI_API_BASE),
       fallbackUsed: parsed.some((claim) => claim.parserMode !== "hanasand-ai")
     },
     captures: accepted.map((capture) => ({ id: capture.id, sourceId: capture.sourceId, collectedAt: capture.collectedAt })),
-    queue: exposureClaimsFromStore(options.store, {}, { limit: 25 })
+    queue: exposureClaimsFromStore(options.store, {}, { limit: 25, tenantId: scope.tenantId })
   });
 }
 
 export async function enrichExposureQueueCountries(request: Request, options: ApiServerOptions) {
+  const authentication = await authenticateRequest(request, options);
+  if (authentication.error) return authentication.error;
   const body = request.method === "POST" ? await readJson(request).catch(() => ({})) : {};
+  const scope = exposureWriteScope(request, body, options, authentication.identity!);
+  if (scope.error) return scope.error;
   const limit = Math.min(100, Math.max(1, Math.floor(Number(body.limit ?? 25))));
   const dryRun = body.dryRun === true;
   const fetcher = typeof options.fetch === "function" ? options.fetch as typeof fetch : fetch;
-  const candidates = exposureCountryBackfillCandidates(options.store).slice(0, limit);
+  const candidates = exposureCountryBackfillCandidates(options.store, scope.tenantId).slice(0, limit);
   const rows: Array<Record<string, unknown>> = [];
 
   for (const candidate of candidates) {
@@ -194,10 +214,107 @@ export async function saveExposureClaimFromCollectedItem(store: any, item: any, 
     sourceFamily: item.metadata?.adapter === "public_advisory" ? "public_advisory" : item.metadata?.adapter === "telegram_public" ? "telegram_public" : undefined
   }, at);
   if (!claim.actor || !claim.company) return undefined;
-  return saveExposureClaim(store, claim, at);
+  return saveExposureClaim(store, claim, at, { tenantId: item.tenantId ?? "default", organizationId: item.organizationId, submittedBy: "collector" });
 }
 
 type ExposureQueueFilters = { q?: string; company?: string; actor?: string; category?: string; size?: string; country?: string; from?: string; to?: string };
+
+type ExposureWriteScope = {
+  tenantId: string;
+  organizationId?: string;
+  submittedBy: string;
+  error?: Response;
+};
+
+function exposureWriteScope(request: Request, body: any, options: ApiServerOptions, identity: AuthenticatedIdentity): ExposureWriteScope {
+  const submitted = Array.isArray(body.items) ? body.items : Array.isArray(body.claims) ? body.claims : [];
+  const tenantIds = uniqueScopeValues(body.tenantId, ...submitted.map((item: any) => item?.tenantId));
+  const organizationIds = uniqueScopeValues(body.organizationId, ...submitted.map((item: any) => item?.organizationId));
+  if (tenantIds.length > 1 || organizationIds.length > 1) {
+    return { tenantId: "", submittedBy: identity.id, error: error("exposure_scope_mismatch", "Every exposure claim in a batch must use the same tenant and organization scope", 403) };
+  }
+  const scope = resolveOrganizationScope({
+    request,
+    url: new URL(request.url),
+    body: { tenantId: tenantIds[0], organizationId: organizationIds[0] }
+  }, options);
+  if (scope.error) return { tenantId: scope.tenantId, organizationId: scope.organizationId, submittedBy: identity.id, error: scope.error };
+  if (scope.tenantId !== "default" && !scope.organizationId) {
+    return { tenantId: scope.tenantId, submittedBy: identity.id, error: error("organization_scope_required", "Non-default tenant writes require an organization scope", 403) };
+  }
+  if (scope.organizationId) {
+    const member = ((options.store as any).listOrganizationMembers?.() ?? []).find((row: any) => row.organizationId === scope.organizationId
+      && row.status === "active"
+      && [row.id, row.userId, row.email].some((value) => String(value ?? "").toLowerCase() === identity.id.toLowerCase()));
+    if (!member) return { tenantId: scope.tenantId, organizationId: scope.organizationId, submittedBy: identity.id, error: error("organization_visibility_denied", "Exposure intake requires active organization membership", 403) };
+    if (member.role === "viewer") return { tenantId: scope.tenantId, organizationId: scope.organizationId, submittedBy: identity.id, error: error("exposure_intake_read_only", "Viewer members cannot submit or enrich exposure claims", 403) };
+  }
+  return { tenantId: scope.tenantId, organizationId: scope.organizationId, submittedBy: identity.id };
+}
+
+function exposureClaimInput(value: unknown): ExposureClaimItem | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const item: any = value;
+  const text = boundedText(item.text, 2000);
+  const title = boundedText(item.title, 240);
+  if ((item.text !== undefined && !text) || (item.title !== undefined && !title)) return undefined;
+  if ((!text && !title && !(item.actor && (item.company || item.victimName))) || unsafeSubmittedText(text)) return undefined;
+  const sourceUrl = submittedUrl(item.sourceUrl);
+  const url = submittedUrl(item.url);
+  if ((item.sourceUrl && !sourceUrl) || (item.url && !url)) return undefined;
+  return {
+    sourceId: /^[A-Za-z0-9_.:-]{1,200}$/.test(String(item.sourceId ?? "")) ? String(item.sourceId) : undefined,
+    sourceName: boundedText(item.sourceName, 160),
+    sourceUrl,
+    url,
+    title,
+    text,
+    actor: boundedText(item.actor, 80),
+    company: boundedText(item.company, 140),
+    victimName: boundedText(item.victimName, 140),
+    claimedData: boundedText(item.claimedData, 240),
+    claimedDataSize: boundedText(item.claimedDataSize, 80),
+    country: boundedText(item.country, 80),
+    claimedCountry: boundedText(item.claimedCountry, 80),
+    claimType: boundedText(item.claimType, 80),
+    capturedAt: validTimestamp(item.capturedAt),
+    publishedAt: validTimestamp(item.publishedAt),
+    confidence: Number.isFinite(Number(item.confidence)) ? clamp(Number(item.confidence)) : undefined,
+    sourceFamily: ["darkweb_metadata", "telegram_public", "public_advisory", "public_actor_claims"].includes(item.sourceFamily) ? item.sourceFamily : "manual_metadata"
+  };
+}
+
+function uniqueScopeValues(...values: unknown[]) {
+  return [...new Set(values.map((value) => typeof value === "string" ? value.trim() : "").filter(Boolean))];
+}
+
+function boundedText(value: unknown, max: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.replace(/\0/g, "").replace(/\s+/g, " ").trim();
+  return normalized && normalized.length <= max ? normalized : undefined;
+}
+
+function unsafeSubmittedText(value?: string) {
+  return Boolean(value && (/-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:password|passwd|secret|api[_-]?key)\s*[:=]\s*\S+/i.test(value) || (value.match(/@/g)?.length ?? 0) > 10));
+}
+
+function submittedUrl(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  try {
+    const url = new URL(String(value));
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.toString().length > 2048) return undefined;
+    if (/^(?:localhost|127\.|0\.|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|::1$)/i.test(url.hostname)) return undefined;
+    if ([...url.searchParams.keys()].some((key) => /token|secret|password|authorization|cookie|api[_-]?key|signature/i.test(key))) return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function validTimestamp(value: unknown): string | undefined {
+  const time = Date.parse(String(value ?? ""));
+  return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
+}
 
 function exposureQueueFilters(url: URL): ExposureQueueFilters {
   return {
@@ -212,7 +329,7 @@ function exposureQueueFilters(url: URL): ExposureQueueFilters {
   };
 }
 
-export function exposureClaimsFromStore(store: any, filters: string | ExposureQueueFilters = "", options: { limit?: number; offset?: number } = {}) {
+export function exposureClaimsFromStore(store: any, filters: string | ExposureQueueFilters = "", options: { limit?: number; offset?: number; tenantId?: string } = {}) {
   const filter = typeof filters === "string" ? { q: filters } : filters;
   const needle = String(filter.q ?? "").trim().toLowerCase();
   const company = String(filter.company ?? "").trim().toLowerCase();
@@ -228,7 +345,9 @@ export function exposureClaimsFromStore(store: any, filters: string | ExposureQu
   const items: any[] = [];
 
   for (const capture of store.listCaptures?.() ?? []) {
+    if (Object.hasOwn(options, "tenantId") && normalizedTenantId(capture.tenantId) !== normalizedTenantId(options.tenantId)) continue;
     const source = store.getSource?.(capture.sourceId);
+    if (source && normalizedTenantId(source.tenantId) !== normalizedTenantId(capture.tenantId)) continue;
     if (!(capture?.metadata?.exposureClaim || capture?.metadata?.leakSite || isTrustedVictimFeedCapture(capture, source))) continue;
     if (!shouldShowExposureQueueCapture(capture, source)) continue;
     const item = exposureClaimFromCapture(capture, source);
@@ -249,47 +368,46 @@ export function exposureClaimsFromStore(store: any, filters: string | ExposureQu
   return boundedLimit ? windowed.slice(0, boundedLimit) : windowed;
 }
 
-function saveExposureClaim(store: any, claim: any, at: string) {
-  const sourceId = claim.sourceId || stableId("src_exposure", claim.sourceName || claim.sourceUrl || claim.actor);
-  if (store.saveSource && !store.getSource?.(sourceId)) {
+function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId: string; organizationId?: string; submittedBy?: string }) {
+  const requestedSourceId = /^[A-Za-z0-9_.:-]{1,200}$/.test(String(claim.sourceId ?? "")) ? String(claim.sourceId) : undefined;
+  const sourceId = requestedSourceId || stableId("src_exposure", `${scope.tenantId}:${claim.sourceName || claim.sourceUrl || claim.actor}`);
+  const existingSource = store.getSource?.(sourceId);
+  if (existingSource && (existingSource.tenantId || "default") !== scope.tenantId) return undefined;
+  if (store.saveSource && !existingSource) {
     store.saveSource({
       id: sourceId,
-      tenantId: claim.tenantId ?? "default",
+      tenantId: scope.tenantId,
       name: claim.sourceName || `${claim.actor} exposure source`,
-      type: claim.sourceFamily === "public_advisory" ? "news" : "tor_metadata",
-      url: claim.sourceUrl || claim.url || `metadata://darkweb/${claim.actor.toLowerCase()}/claims`,
-      status: "active",
-      accessMethod: "approved_proxy",
+      type: claim.sourceFamily === "public_advisory" ? "news" : "metadata_intake",
+      url: claim.sourceUrl || claim.url || `metadata://exposure/${encodeURIComponent(claim.actor)}/claims`,
+      status: "candidate",
+      accessMethod: "manual_submission",
       risk: "high",
-      trustScore: 0.82,
+      trustScore: 0.5,
       crawlFrequencySeconds: 300,
-      legalNotes: "Metadata-only monitoring of public actor-claim and advisory pages for customer exposure alerts.",
+      legalNotes: "Metadata-only analyst submission pending source and collection approval.",
       createdAt: at,
       updatedAt: at,
       governance: {
         approvalRequired: true,
-        approvalState: "approved",
+        approvalState: "pending",
         metadataOnly: true,
-        approvedAt: at,
-        approvedBy: "system"
+        submittedAt: at,
+        submittedBy: scope.submittedBy
       },
-      metadata: { sourceFamily: claim.sourceFamily || "darkweb_metadata", automatedExposureQueue: true }
+      metadata: { sourceFamily: claim.sourceFamily || "darkweb_metadata", exposureQueueIntake: true, organizationId: scope.organizationId }
     });
   }
 
   const claimTime = claim.claimTime || claim.publishedAt || claim.capturedAt || at;
   const title = `${claim.actor} has just published a new victim: ${claim.company}`;
-  const safeExcerpt = [
-    title,
-    claim.claimedData ? `Claimed data: ${claim.claimedData}.` : "New victim claim.",
-    claim.summary
-  ].filter(Boolean).join(" ");
-  const id = claim.id || stableId("cap_exposure", `${sourceId}:${claim.actor}:${claim.company}:${claimTime}:${claim.url ?? ""}`);
+  const safeExcerpt = [title, claim.claimedData ? `Claimed data category: ${claim.claimedData}.` : undefined, claim.claimedDataSize ? `Claimed size: ${claim.claimedDataSize}.` : undefined, claim.country ? `Claimed country: ${claim.country}.` : undefined].filter(Boolean).join(" ");
+  const id = stableId("cap_exposure", `${scope.tenantId}:${sourceId}:${claim.actor}:${claim.company}:${claimTime}:${claim.url ?? ""}`);
   return store.saveCapture({
     id,
-    tenantId: claim.tenantId ?? "default",
+    tenantId: scope.tenantId,
     sourceId,
-    url: claim.url || `metadata://darkweb/${encodeURIComponent(claim.actor)}/${encodeURIComponent(claim.company)}`,
+    url: claim.url || `metadata://exposure/${encodeURIComponent(claim.actor)}/${encodeURIComponent(claim.company)}`,
     title,
     collectedAt: claim.capturedAt || at,
     publishedAt: claimTime,
@@ -300,6 +418,8 @@ function saveExposureClaim(store: any, claim: any, at: string) {
     sensitivityFlags: ["leak_metadata"],
     metadata: {
       exposureClaim: true,
+      organizationId: scope.organizationId,
+      submittedBy: scope.submittedBy,
       safeExcerpt,
       adapter: "darknet_metadata",
       sourceFamily: claim.sourceFamily || "darkweb_metadata",
@@ -326,20 +446,20 @@ async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<
   const ai = await parseWithHostedAi(item).catch(() => undefined);
   const parsed = ai || fallbackParse(item, at);
   const confidence = clamp(Number(parsed.confidence ?? item.confidence ?? 0.74));
+  const company = boundedText(clean(parsed.company || parsed.victimName || item.company || item.victimName || ""), 140) ?? "";
   return {
     ...item,
-    ...parsed,
-    actor: cleanActorName(parsed.actor || item.actor || item.sourceName || "Unknown actor"),
-    company: clean(parsed.company || parsed.victimName || item.company || item.victimName || ""),
-    claimedData: clean(parsed.claimedData || item.claimedData || "Not disclosed by TA"),
-    claimedDataSize: clean(parsed.claimedDataSize || item.claimedDataSize || dataSizeFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"),
-    country: clean(parsed.country || parsed.claimedCountry || item.country || item.claimedCountry || countryFromText([item.title, item.text].filter(Boolean).join(" ")) || countryFromCompanyDomain(parsed.company || parsed.victimName || item.company || item.victimName || "") || "Not disclosed by TA"),
-    claimTime: parsed.claimTime || item.publishedAt || item.capturedAt || at,
+    actor: boundedText(cleanActorName(parsed.actor || item.actor || item.sourceName || "Unknown actor"), 80) ?? "Unknown actor",
+    company,
+    claimedData: boundedText(clean(parsed.claimedData || item.claimedData || "Not disclosed by TA"), 240) ?? "Not disclosed by TA",
+    claimedDataSize: boundedText(clean(parsed.claimedDataSize || item.claimedDataSize || dataSizeFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"), 80) ?? "Not disclosed by TA",
+    country: boundedText(clean(parsed.country || parsed.claimedCountry || item.country || item.claimedCountry || countryFromText([item.title, item.text].filter(Boolean).join(" ")) || countryFromCompanyDomain(company) || "Not disclosed by TA"), 80) ?? "Not disclosed by TA",
+    claimTime: validTimestamp(parsed.claimTime || item.publishedAt || item.capturedAt) ?? at,
     capturedAt: item.capturedAt || at,
     confidence,
     parserMode: ai ? "hanasand-ai" : "local_fallback",
     parserQuality: confidence >= 0.82 ? "high" : confidence >= 0.68 ? "medium" : "needs_review",
-    needsReview: confidence < 0.72 || !clean(parsed.company || parsed.victimName || item.company || item.victimName)
+    needsReview: confidence < 0.72 || !company
   };
 }
 
@@ -430,9 +550,13 @@ function exposureClaimFromCapture(capture: any, source?: any) {
   const firstSeen = leak.firstSeenAt || capture.publishedAt || capture.collectedAt;
   const ageMinutes = Math.max(0, Math.round((Date.now() - Date.parse(firstSeen || capture.collectedAt || nowIso())) / 60_000));
   const confidence = capture.metadata?.parserQuality === "high" ? 0.9 : capture.metadata?.parserQuality === "medium" ? 0.78 : 0.64;
-  const text = [capture.title, capture.body, capture.rawText, capture.metadata?.safeExcerpt].filter(Boolean).join(" ");
+  const text = capture.storageKind === "metadata_only"
+    ? [capture.title, capture.metadata?.safeExcerpt].filter(Boolean).join(" ")
+    : [capture.title, capture.body, capture.rawText, capture.metadata?.safeExcerpt].filter(Boolean).join(" ");
   return {
     id: capture.id,
+    tenantId: capture.tenantId,
+    organizationId: capture.metadata?.organizationId,
     sourceId: capture.sourceId,
     sourceName: source?.name || capture.sourceId,
     actor: leak.actorName || capture.metadata?.actor || parsedTitle?.actor || "Unknown actor",
@@ -447,15 +571,16 @@ function exposureClaimFromCapture(capture: any, source?: any) {
     confidence,
     freshnessMinutes: ageMinutes,
     metadataOnly: capture.storageKind === "metadata_only",
-    url: capture.url?.startsWith("http") ? capture.url : undefined,
+    url: safeExposureUrl(capture.url),
     summary: capture.metadata?.safeExcerpt || capture.title || "",
     provenanceHash: hashContent(capture.id)
   };
 }
 
-function exposureCountryBackfillCandidates(store: any) {
+function exposureCountryBackfillCandidates(store: any, tenantId: string) {
   const rows: Array<{ captureId: string; company: string; actor: string; sourceName: string }> = [];
   for (const capture of store.listCaptures?.() ?? []) {
+    if (normalizedTenantId(capture.tenantId) !== normalizedTenantId(tenantId)) continue;
     const source = store.getSource?.(capture.sourceId);
     if (!shouldShowExposureQueueCapture(capture, source)) continue;
     const leak = capture.metadata?.leakSite ?? {};
@@ -464,6 +589,21 @@ function exposureCountryBackfillCandidates(store: any) {
     rows.push({ captureId: capture.id, company: item.company, actor: item.actor, sourceName: item.sourceName });
   }
   return rows.filter((row) => row.company && row.company !== "Unknown company");
+}
+
+function normalizedTenantId(value: unknown) {
+  return value || "default";
+}
+
+function safeExposureUrl(value: unknown) {
+  try {
+    const url = new URL(String(value ?? ""));
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || /\.onion$|\.i2p$/i.test(url.hostname)) return undefined;
+    if ([...url.searchParams.keys()].some((key) => /token|secret|password|authorization|cookie|api[_-]?key|signature/i.test(key))) return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 function applyCountryEnrichment(store: any, captureId: string, enrichment: CountryEnrichment) {

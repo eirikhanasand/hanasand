@@ -145,7 +145,7 @@ export interface DwmProductSnapshot {
     digest: string;
   };
   readiness: {
-    decision: "production_ready_with_live_sources" | "demo_ready_needs_live_sources" | "blocked_missing_watchlist";
+    decision: "production_ready_with_live_sources" | "blocked_missing_live_sources" | "blocked_missing_watchlist";
     blockers: string[];
     advantages: string[];
     nextWorkItem: string;
@@ -158,7 +158,6 @@ export interface BuildDwmProductSnapshotInput {
   sources?: SourceRecord[];
   captures?: RawCapture[];
   generatedAt?: string;
-  includeDemoIfEmpty?: boolean;
 }
 
 const sourceFamilyLabels: Record<DwmSourceFamily, string> = {
@@ -173,15 +172,13 @@ const sourceFamilyLabels: Record<DwmSourceFamily, string> = {
 export function buildDwmProductSnapshot(input: BuildDwmProductSnapshotInput = {}): DwmProductSnapshot {
   const generatedAt = input.generatedAt ?? nowIso();
   const watchlist = normalizeWatchlist(input.watchlist ?? []);
-  const sources = input.sources ?? [];
-  const captures = input.captures ?? [];
+  const tenantId = input.tenantId;
+  const sources = (input.sources ?? []).filter((source) => inTenant(source, tenantId));
+  const sourceIds = new Set(sources.map((source) => source.id));
+  const captures = (input.captures ?? []).filter((capture) => inTenant(capture, tenantId) && sourceIds.has(capture.sourceId));
   const alerts = buildAlerts({ watchlist, sources, captures, generatedAt });
-  const demoAlerts = alerts.length === 0 && input.includeDemoIfEmpty !== false && watchlist.length > 0
-    ? buildDemoAlerts(watchlist, generatedAt)
-    : [];
   const sourceCoverage = buildSourceCoverage(sources);
-  const actorOverviews = buildActorOverviews({ sources, captures, alerts: [...alerts, ...demoAlerts], generatedAt });
-  const onDemandQueue = buildOnDemandQueue(watchlist, generatedAt);
+  const actorOverviews = buildActorOverviews({ sources, captures, alerts, generatedAt });
   const sourceInventory = buildDwmSourceInventory({
     tenantId: input.tenantId,
     watchlist: watchlist.map((term) => term.value),
@@ -195,12 +192,12 @@ export function buildDwmProductSnapshot(input: BuildDwmProductSnapshotInput = {}
   return {
     schemaVersion: "dwm.product.v1",
     generatedAt,
-    tenantId: input.tenantId ?? "default",
+    tenantId: tenantId ?? "default",
     watchlist,
-    alerts: [...alerts, ...demoAlerts],
+    alerts,
     sourceCoverage,
     actorOverviews,
-    onDemandQueue,
+    onDemandQueue: [],
     sourceInventory: {
       schemaVersion: sourceInventory.schemaVersion,
       counts: sourceInventory.counts,
@@ -210,13 +207,12 @@ export function buildDwmProductSnapshot(input: BuildDwmProductSnapshotInput = {}
       digest: sourceInventoryDigest(sourceInventory)
     },
     readiness: {
-      decision: watchlist.length === 0 ? "blocked_missing_watchlist" : blockers.length ? "demo_ready_needs_live_sources" : "production_ready_with_live_sources",
+      decision: watchlist.length === 0 ? "blocked_missing_watchlist" : blockers.length ? "blocked_missing_live_sources" : "production_ready_with_live_sources",
       blockers,
       advantages: [
-        "Telegram is modeled as a first-class source family with source health, parser state, and webhook routing.",
-        "Restricted dark web collection is metadata-only by default: source timing, hashes, screenshots, and redaction state without stolen-file bloat.",
-        "Alerts are customer-workflow objects, not scraped rows: matched term, confidence, evidence refs, review state, and recommended action.",
-        "On-demand customer source requests become approval packets before they become continuous collection."
+        "Snapshot records are restricted to the resolved tenant.",
+        "Alerts require captured watchlist evidence and retain capture and source provenance.",
+        "Restricted dark web evidence is exposed as metadata-only references."
       ],
       nextWorkItem: nextWorkItemFor(sourceInventory)
     }
@@ -461,113 +457,6 @@ function buildActorOverviews(input: { sources: SourceRecord[]; captures: RawCapt
     .slice(0, 8);
 }
 
-function buildOnDemandQueue(watchlist: DwmWatchTerm[], generatedAt: string): DwmOnDemandRequest[] {
-  const primary = watchlist[0]?.value ?? "customer watchlist";
-  return [
-    {
-      id: stableId("dwm_req", `${primary}:telegram:${generatedAt.slice(0, 10)}`),
-      target: `public Telegram broker rooms for ${primary}`,
-      type: "telegram_channel",
-      priority: "high",
-      scope: `${primary} plus subsidiaries, domains, and brand variants`,
-      approvalState: "queued",
-      nextAction: "Discover candidate public channels, run compliance checks, and promote approved sources to continuous polling."
-    },
-    {
-      id: stableId("dwm_req", `${primary}:restricted:${generatedAt.slice(0, 10)}`),
-      target: `actor-page and leak-site metadata for ${primary}`,
-      type: "restricted_metadata",
-      priority: "high",
-      scope: "metadata-only first seen, actor, victim, claimed data, mirrors, screenshot state, and hash",
-      approvalState: "approved_metadata_only",
-      nextAction: "Keep payload/download paths blocked and capture only safe metadata fields."
-    }
-  ];
-}
-
-function buildDemoAlerts(watchlist: DwmWatchTerm[], generatedAt: string): DwmAlert[] {
-  const matchedTerm = watchlist[0];
-  const seed = `${matchedTerm.value}:demo:telegram_stealer_log_hint`;
-  return [{
-    id: stableId("dwm_alert_demo", seed),
-    eventType: "darkweb.monitoring.match",
-    severity: "critical",
-    confidence: 86,
-    matchedTerm,
-    company: displayCompany(matchedTerm.value),
-    actor: "Lumma C2",
-    artifactType: "infostealer_hint",
-    sourceFamily: "telegram_public",
-    sourceCount: 3,
-    firstSeenAt: generatedAt,
-    lastSeenAt: generatedAt,
-    claimSummary: `Public Telegram broker-room metadata claims ${matchedTerm.value} appears in a stealer-log bundle with corporate URLs and session artifacts.`,
-    matchContext: {
-      normalizedTerm: normalizeMatchValue(matchedTerm.value),
-      termKind: matchedTerm.kind,
-      matchType: "bounded_text_or_metadata",
-      matchedFieldHints: ["demo_public_message"]
-    },
-    evidenceSummary: evidenceSummaryFor([{
-      id: stableId("dwm_ev_demo", seed),
-      sourceId: "demo_telegram_public",
-      sourceName: "Public Telegram broker-room coverage",
-      sourceFamily: "telegram_public",
-      firstSeenAt: generatedAt,
-      observedAt: generatedAt,
-      captureMode: "public_message",
-      redactionState: "redacted",
-      contentHash: hashContent(seed),
-      excerpt: `${matchedTerm.value} matched in a redacted public Telegram stealer-log listing.`,
-      provenance: {
-        captureId: stableId("dwm_ev_demo", seed),
-        sourceId: "demo_telegram_public",
-        sourceType: "telegram_public",
-        collector: "demo",
-        captureMode: "public_message",
-        metadataOnly: false
-      }
-    }]),
-    routingContext: routingContextFor("infostealer_hint", "telegram_public", matchedTerm),
-    confidenceReasoning: ["Demo alert uses seeded public Telegram broker-room metadata.", "Identity response route is selected because the demo artifact references sessions."],
-    provenance: {
-      generatedAt,
-      matchBasis: "watchlist_capture_text",
-      matchedEvidenceIds: [stableId("dwm_ev_demo", seed)],
-      sourceFamilies: ["telegram_public"],
-      captureIds: [stableId("dwm_ev_demo", seed)],
-      sourceIds: ["demo_telegram_public"],
-      extractorVersions: ["demo"],
-      metadataOnly: false
-    },
-    dedupeKey: deliveryFor(matchedTerm, "infostealer_hint", "telegram_public", seed).dedupeKey,
-    reviewState: "validate_identity",
-    recommendedAction: "Validate the identity match, rotate sessions and keys if confirmed, and route to incident response without storing raw stolen material.",
-    recommendedRoute: "identity_response",
-    evidence: [{
-      id: stableId("dwm_ev_demo", seed),
-      sourceId: "demo_telegram_public",
-      sourceName: "Public Telegram broker-room coverage",
-      sourceFamily: "telegram_public",
-      firstSeenAt: generatedAt,
-      observedAt: generatedAt,
-      captureMode: "public_message",
-      redactionState: "redacted",
-      contentHash: hashContent(seed),
-      excerpt: `${matchedTerm.value} matched in a redacted public Telegram stealer-log listing.`,
-      provenance: {
-        captureId: stableId("dwm_ev_demo", seed),
-        sourceId: "demo_telegram_public",
-        sourceType: "telegram_public",
-        collector: "demo",
-        captureMode: "public_message",
-        metadataOnly: false
-      }
-    }],
-    webhookDelivery: deliveryFor(matchedTerm, "infostealer_hint", "telegram_public", seed)
-  }];
-}
-
 function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
   const merged = new Map<string, DwmAlert>();
   for (const alert of alerts) {
@@ -591,6 +480,10 @@ function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
     };
   }
   return [...merged.values()].sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
+}
+
+function inTenant(record: { tenantId?: string }, tenantId?: string): boolean {
+  return (record.tenantId || undefined) === tenantId;
 }
 
 function readinessBlockers(watchlist: DwmWatchTerm[], sources: SourceRecord[]): string[] {

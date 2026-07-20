@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { demoDwmProductSnapshot, dwmWebhookPayload } from '@/utils/dwm/product'
+import { sampleDwmProductSnapshot, dwmWebhookPayload } from '@/utils/dwm/product'
 import { evidenceStrengthLabel } from '@/utils/dwm/display'
 import {
     ArrowRight,
@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { SyntheticEvent, useEffect, useMemo, useState } from 'react'
 
-const snapshot = demoDwmProductSnapshot()
+const snapshot = sampleDwmProductSnapshot()
 const activeSourceCount = snapshot.sourceCoverage.reduce((sum, source) => sum + source.activeCount, 0)
 const totalSourceCount = snapshot.sourceCoverage.reduce((sum, source) => sum + source.sourceCount, 0)
 const telegramCoverage = snapshot.sourceCoverage.find(source => source.family === 'telegram_public')
@@ -43,9 +43,9 @@ const fields = [
 ]
 
 const sourceCoverageStats = [
-    { label: 'Active monitored sources', value: activeSourceCount.toString(), detail: `${totalSourceCount} mapped across source families` },
-    { label: 'Public Telegram sources', value: String(telegramCoverage?.activeCount || 0), detail: 'Broker rooms, mirrors, stealer-log shops' },
-    { label: 'Sources without stolen files', value: String(darkwebCoverage?.activeCount || 0), detail: 'Leak sites, mirrors, hashes, screenshots' },
+    { label: 'Example active sources', value: activeSourceCount.toString(), detail: `${totalSourceCount} in the illustrative coverage model` },
+    { label: 'Example Telegram sources', value: String(telegramCoverage?.activeCount || 0), detail: 'Illustrative broker, mirror, and stealer-log coverage' },
+    { label: 'Example metadata sources', value: String(darkwebCoverage?.activeCount || 0), detail: 'Illustrative metadata-only leak-site coverage' },
 ]
 
 const coverageEvidenceTiers = [

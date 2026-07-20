@@ -45,6 +45,9 @@ export interface TiSearchResponse {
         tactic: string
         detail: string
         confidence: number
+        sourceIds?: string[]
+        captureIds?: string[]
+        reviewState?: string
     }>
     datasets: Array<{
         name: string
@@ -418,6 +421,10 @@ type CapturedTiSearchRow = {
     tags?: string[]
     provenanceHash?: string
     metadataOnly?: boolean
+    actor?: string
+    victimName?: string
+    confidence?: number
+    reviewState?: string
 }
 
 type CapturedTiSearchEnvelope = {
@@ -454,8 +461,13 @@ function normalizeTiSearchResponse(raw: unknown, fallbackQuery: string): TiSearc
 
     const query = stringValue(envelope.query) || fallbackQuery
     const generatedAt = newestDate(rows.map(row => row.collectedAt)) || new Date().toISOString()
-    const confidence = typeof envelope.quality?.score === 'number' ? envelope.quality.score : 0.68
-    const status: TiResultState = envelope.status === 'ready' || envelope.status === 'partial' ? envelope.status : 'ready'
+    const measured = rows.map(row => row.confidence).filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    const confidence = typeof envelope.quality?.score === 'number'
+        ? envelope.quality.score
+        : measured.length
+            ? measured.reduce((sum, value) => sum + value, 0) / measured.length
+            : 0.35
+    const status: TiResultState = envelope.status === 'ready' || envelope.status === 'partial' ? envelope.status : 'partial'
     const summary = Array.isArray(envelope.summary)
         ? envelope.summary.find(item => typeof item === 'string' && item.trim()) || `Found ${rows.length} captured source rows for ${query}.`
         : stringValue(envelope.summary) || `Found ${rows.length} captured source rows for ${query}.`
@@ -509,20 +521,20 @@ function normalizeTiSearchResponse(raw: unknown, fallbackQuery: string): TiSearc
             name: 'Captured source evidence',
             type: 'source_capture',
             coverage: `${rows.length} captured source row${rows.length === 1 ? '' : 's'}`,
-            status: 'ready',
+            status: status === 'ready' ? 'reviewed_or_corroborated' : 'needs_review',
         }],
         sources,
         notes: [`${rows.length} captured source row${rows.length === 1 ? '' : 's'} available for source review and case evidence.`],
         actorIntelligence: {
-            actorClass: /lockbit/i.test(query) ? 'Ransomware and extortion actor' : 'Threat intelligence query',
-            attribution: `${query} source coverage is backed by captured public-intelligence rows.`,
+            actorClass: rows.some(row => row.actor) ? 'Observed threat actor mention' : 'Threat intelligence query',
+            attribution: undefined,
             firstSeen: oldestDate(rows.map(row => row.collectedAt)) || generatedAt,
             lastSeen: generatedAt,
-            motivation: /lockbit/i.test(query) ? ['Financial extortion', 'Data theft pressure', 'Victim publication leverage'] : undefined,
-            malwareTools: /lockbit/i.test(query) ? ['LockBit ransomware'] : undefined,
+            motivation: undefined,
+            malwareTools: undefined,
             campaigns: rows.map(row => compactCapturedTitle(row.title, query)).slice(0, 6),
-            infrastructure: rows.filter(row => /onion|infrastructure|rss|feed|source/i.test(`${row.sourceName} ${row.title}`)).map(row => row.sourceName).slice(0, 6),
-            indicators: rows.map(row => domainFromUrl(row.url)).filter((value): value is string => Boolean(value)).slice(0, 8),
+            infrastructure: [],
+            indicators: [],
             confidence,
             confidenceReasoning: [
                 `${rows.length} captured source row${rows.length === 1 ? '' : 's'} support this actor profile.`,
@@ -533,17 +545,17 @@ function normalizeTiSearchResponse(raw: unknown, fallbackQuery: string): TiSearc
         },
         actionability: {
             schemaVersion: 'ti.query.actionability.v1',
-            alertDisposition: 'ready_for_alert_review',
-            shouldAlert: true,
-            rationale: `${rows.length} captured source row${rows.length === 1 ? '' : 's'} can seed watchlist, alert review, and case evidence.`,
-            watchlistCandidates: watchlistCandidatesForCapturedRows(query, rows),
+            alertDisposition: 'watchlist_required',
+            shouldAlert: false,
+            rationale: `${rows.length} captured source row${rows.length === 1 ? '' : 's'} can seed review, but an organization watchlist match and analyst confirmation are required before alerting.`,
+            watchlistCandidates: watchlistCandidatesForCapturedRows(rows),
             sourceProvenance: structuredProvenance,
-            enrichmentGaps: [],
+            enrichmentGaps: [{ id: 'analyst-confirmation', title: 'Analyst confirmation required', severity: 'medium', detail: 'Review extracted claims and source independence before alerting.', dependency: 'claim review state' }],
             handoffs: {
                 watchlist: {
                     method: 'POST',
                     endpoint: '/v1/dwm/watchlists',
-                    payloads: watchlistCandidatesForCapturedRows(query, rows).map(candidate => ({
+                    payloads: watchlistCandidatesForCapturedRows(rows).map(candidate => ({
                         kind: candidate.kind,
                         value: candidate.value,
                         notes: candidate.reason,
@@ -592,21 +604,18 @@ function stringValue(value: unknown) {
 }
 
 function aliasesForCapturedRows(query: string, rows: CapturedTiSearchRow[]) {
-    const values = new Set<string>([query])
-    rows.forEach(row => {
-        if (/lockbit/i.test(`${row.title} ${row.sourceName}`)) values.add('LockBit')
-        if (/lockbit2/i.test(`${row.title} ${row.sourceName}`)) values.add('LockBit 2.0')
-        if (/lockbit3/i.test(`${row.title} ${row.sourceName}`)) values.add('LockBit 3.0')
-    })
+    const values = new Set<string>(rows.map(row => row.actor).filter((value): value is string => Boolean(value)))
+    if (values.size) values.add(query)
     return Array.from(values).slice(0, 8)
 }
 
-function watchlistCandidatesForCapturedRows(query: string, rows: CapturedTiSearchRow[]): NonNullable<TiActionabilityContract['watchlistCandidates']> {
-    return aliasesForCapturedRows(query, rows).map(value => ({
-        kind: 'vendor' as const,
+function watchlistCandidatesForCapturedRows(rows: CapturedTiSearchRow[]): NonNullable<TiActionabilityContract['watchlistCandidates']> {
+    const values = uniqueStrings(rows.map(row => row.victimName))
+    return values.map(value => ({
+        kind: (/^([a-z0-9-]+\.)+[a-z]{2,}$/i.test(value) ? 'domain' : 'company') as 'domain' | 'company',
         value,
-        reason: `${value} appears in captured public-intelligence source evidence.`,
-        confidence: 0.72,
+        reason: `${value} appears in captured public-intelligence evidence and requires analyst confirmation.`,
+        confidence: 0.6,
     }))
 }
 
@@ -655,15 +664,6 @@ function oldestDate(values: Array<string | undefined>) {
     return values.filter((value): value is string => Boolean(value)).sort()[0]
 }
 
-function domainFromUrl(value?: string) {
-    if (!value) return undefined
-    try {
-        return new URL(value).hostname.replace(/^www\./, '')
-    } catch {
-        return undefined
-    }
-}
-
 function uniqueBy<T>(values: T[], keyFor: (value: T) => string) {
     const seen = new Set<string>()
     return values.filter(value => {
@@ -672,6 +672,10 @@ function uniqueBy<T>(values: T[], keyFor: (value: T) => string) {
         seen.add(key)
         return true
     })
+}
+
+function uniqueStrings(values: Array<string | undefined>) {
+    return Array.from(new Set(values.filter((value): value is string => Boolean(value?.trim())).map(value => value.trim())))
 }
 
 function readCachedResult(key: string) {

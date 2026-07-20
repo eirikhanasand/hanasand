@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "id": "restricted-metadata-safe-fixtures",
-  "name": "Restricted Metadata Safe Review Fixtures",
+  "id": "restricted-metadata-reviewed-sources",
+  "name": "Restricted Metadata Reviewed Sources",
   "disabledByDefault": true,
   "network": "tor",
   "proxyBoundaryId": "tor-approved-metadata-proxy",
   "killSwitchGroup": "restricted-metadata-tor-review",
-  "legalNotes": "Dry-run fixtures for metadata-only restricted source review. No live access or raw leaked data collection is permitted.",
+  "legalNotes": "Only individually verified v3 onion victim-listing sources may be added. Import and collection remain disabled by default; raw leaked data and actor interaction are prohibited.",
   "approvalScope": "metadata_only",
   "retentionClass": "restricted_metadata",
   "forbiddenOperations": [
@@ -20,16 +20,38 @@
   ],
   "sources": [
     {
-      "id": "restricted_pack_metadata_listing",
-      "name": "Metadata-only leak listing fixture",
+      "id": "restricted_blackout_victim_blog",
+      "name": "Blackout victim blog",
       "type": "tor_metadata",
-      "url": "http://metadata-listing.onion/posts",
-      "legalNotes": "Reviewer may inspect parser fixtures for actor, victim, date, sector, country, and hash fields only.",
-      "approvalScope": "metadata_only",
-      "topicTags": ["ransomware", "metadata-only"],
-      "actors": ["Akira"],
-      "victims": ["Fjord Energy AS"],
-      "ransomwareFamilies": ["Akira"]
+      "url": "http://black3gnkizshuynieigw6ejgpblb53mpasftzd6pydqpmq2vn2xf6yd.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.55,
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Collect victim-listing metadata from the public blog only after institutional approval. Never authenticate, interact with operators, or retrieve linked files or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "pending",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Blackout",
+        "actors": ["Blackout"],
+        "discoveryAuthorityUrl": "https://www.ransomlook.io/about",
+        "discoveryAuthorityRecordUrl": "https://www.ransomlook.io/api/group/blackout",
+        "discoveryCheckedAt": "2026-07-20T07:12:42.000Z",
+        "discoveryAvailability": "reported_unavailable",
+        "discoveryObservedAt": "2026-07-19T18:41:03.877Z",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "attribution": "RansomLook public group metadata, CC BY 4.0"
+      }
     }
   ]
 }

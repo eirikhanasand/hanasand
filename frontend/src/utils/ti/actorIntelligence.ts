@@ -101,14 +101,13 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
         ...result.sources.map(source => source.url || source.provenance || source.name),
         ...fallback.sourceProvenance,
     ]).slice(0, 10)
-    const provenanceRows = buildProvenanceRows(result, fallback)
+    const provenanceRows = buildProvenanceRows(result)
     const sourceCoverage = buildSourceCoverage(provenanceRows, result.generatedAt)
     const techniqueCoverage = buildTechniqueCoverage(result, provenanceRows)
-    const campaignTimeline = buildCampaignTimeline(result, provenanceRows, fallback)
+    const campaignTimeline = buildCampaignTimeline(result, provenanceRows)
     const indicators = unique([
         ...(contract?.indicators ?? []),
         ...fallback.indicators,
-        ...result.sources.map(source => domainFromUrl(source.url || source.provenance)).filter((value): value is string => Boolean(value)),
     ]).slice(0, 12)
     const lastSeen = contract?.lastSeen || result.lastSeen || result.generatedAt || fallback.lastSeen
 
@@ -138,82 +137,16 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
 type TiActorIntelligenceFallback = Omit<TiActorIntelligenceProfile, 'provenanceRows' | 'sourceCoverage' | 'techniqueCoverage' | 'campaignTimeline' | 'freshness'>
 
 function fallbackActorIntelligence(result: TiSearchResponse, victimObservations: VictimObservation[]): TiActorIntelligenceFallback {
-    if (isApt29(result)) {
-        return {
-            actorClass: 'State-linked espionage actor',
-            attribution: 'Russia-linked SVR/APT29 activity in public government, vendor, and incident reporting',
-            firstSeen: 'Late-2000s public reporting',
-            lastSeen: result.lastSeen || result.generatedAt,
-            motivation: ['Strategic intelligence collection', 'Diplomatic and policy access', 'Cloud and identity compromise', 'Long-running stealthy persistence'],
-            malwareTools: ['WellMess', 'WellMail', 'SUNBURST', 'TEARDROP', 'Cobalt Strike', 'Custom credential and token tooling'],
-            campaigns: ['SolarWinds Orion supply-chain compromise', 'Microsoft corporate email intrusion', 'HPE cloud email intrusion', 'Diplomatic and policy-sector credential campaigns'],
-            infrastructure: ['Cloud identity tenants', 'Compromised email accounts', 'Legitimate-looking web services', 'Supply-chain access paths', 'Residential or leased operational infrastructure'],
-            indicators: ['SUNBURST supply-chain activity', 'Cloud mailbox access', 'OAuth/token abuse', 'microsoft.com reporting source'],
-            targetSectors: ['Government and diplomacy', 'Technology and cloud services', 'NGO, think tank, and research organizations'],
-            geographies: unique(victimObservations.map(item => item.country)).filter(item => !/not stated/i.test(item)),
-            confidence: Math.max(result.confidence || 0, 0.76),
-            confidenceReasoning: [
-                'Aliases and attribution are corroborated across government and vendor reporting.',
-                'Victim observations include named organizations, sectors, timeframes, and evidence strength.',
-                'Tradecraft aligns with mapped ATT&CK techniques for credential, cloud, email, and command-and-control activity.',
-            ],
-            sourceProvenance: [
-                'CISA and allied government SVR/APT29 advisories',
-                'Microsoft Midnight Blizzard disclosures',
-                'Public SolarWinds and vendor incident reporting',
-            ],
-        }
-    }
-    if (isLockBit(result)) {
-        const activityTitles = result.recentActivity.map(item => item.title).filter((value): value is string => Boolean(value))
-        const sourceLabels = result.sources.map(source => source.name || source.url || source.provenance).filter((value): value is string => Boolean(value))
-        return {
-            actorClass: 'Ransomware and extortion actor',
-            attribution: 'LockBit-branded ransomware and extortion activity from sourced actor intelligence and source rows',
-            firstSeen: result.recentActivity.map(item => item.firstReportedAt || item.date).filter(Boolean).sort()[0] || 'Public ransomware reporting period',
-            lastSeen: result.lastSeen || result.generatedAt,
-            motivation: ['Financial extortion', 'Data theft pressure', 'Affiliate-driven intrusion operations', 'Victim publication leverage'],
-            malwareTools: unique([...result.aliases.filter(alias => /lockbit/i.test(alias)), 'LockBit ransomware']).slice(0, 8),
-            campaigns: activityTitles.length ? activityTitles.slice(0, 8) : ['LockBit actor profile activity'],
-            infrastructure: unique([
-                ...result.recentActivity.filter(item => item.claimType === 'infrastructure_activity').map(item => item.title),
-                ...sourceLabels.filter(label => /leak|blog|onion|infrastructure|source|profile/i.test(label)),
-                'Leak-site publication workflow',
-            ]).slice(0, 8),
-            indicators: unique([
-                ...result.sources.map(source => domainFromUrl(source.url || source.provenance)).filter((value): value is string => Boolean(value)),
-                ...result.aliases.filter(alias => /lockbit/i.test(alias)),
-            ]).slice(0, 8),
-            targetSectors: unique([
-                ...result.targets.map(target => target.sector),
-                ...result.recentActivity.flatMap(item => item.affectedSectors ?? []),
-                ...victimObservations.map(item => item.sector),
-            ]).filter(item => !/not stated/i.test(item)).slice(0, 8),
-            geographies: unique([
-                ...result.targets.flatMap(target => target.regions),
-                ...result.recentActivity.flatMap(item => item.countries ?? []),
-                ...victimObservations.map(item => item.country),
-            ]).filter(item => !/not stated|global|multiple|various|unknown/i.test(item)).slice(0, 8),
-            confidence: Math.max(result.confidence || 0, result.sources.length ? 0.66 : 0.52),
-            confidenceReasoning: [
-                result.sources.length ? `${result.sources.length} source records support this actor profile.` : 'Source records are still needed before customer routing.',
-                result.recentActivity.length ? `${result.recentActivity.length} activity rows are available for analyst review.` : 'Recent activity rows are still needed.',
-                result.aliases.length ? 'Aliases include LockBit-branded operator labels.' : 'Alias coverage is still sparse.',
-            ],
-            sourceProvenance: sourceLabels.slice(0, 8),
-        }
-    }
-
     return {
         actorClass: result.aliases.length ? 'Named threat actor or activity cluster' : 'Threat intelligence query',
         attribution: result.notes.find(note => /attribut/i.test(note)) || 'Attribution needs a cited source statement',
         firstSeen: result.recentActivity.map(item => item.firstReportedAt || item.date).filter(Boolean).sort()[0] || 'No dated activity yet',
         lastSeen: result.lastSeen || result.generatedAt,
-        motivation: result.targets.map(target => target.rationale).slice(0, 4),
+        motivation: [],
         malwareTools: [],
         campaigns: result.recentActivity.map(item => item.title).slice(0, 6),
         infrastructure: result.recentActivity.filter(item => item.claimType === 'infrastructure_activity').map(item => item.title).slice(0, 6),
-        indicators: result.sources.map(source => domainFromUrl(source.url || source.provenance)).filter((value): value is string => Boolean(value)).slice(0, 8),
+        indicators: [],
         targetSectors: result.targets.map(target => target.sector).slice(0, 8),
         geographies: unique([...result.targets.flatMap(target => target.regions), ...victimObservations.map(item => item.country)]).slice(0, 8),
         confidence: result.confidence,
@@ -226,26 +159,20 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
     }
 }
 
-function buildProvenanceRows(result: TiSearchResponse, fallback: TiActorIntelligenceFallback): TiActorSourceProvenance[] {
+function buildProvenanceRows(result: TiSearchResponse): TiActorSourceProvenance[] {
     const contractRows = result.actorIntelligence?.structuredProvenance ?? []
     const actionabilityRows = result.actionability?.sourceProvenance ?? []
     const sourceRows = result.sources.map(source => ({
         sourceId: source.id,
         sourceName: source.name,
         provenance: source.url || source.provenance || source.name,
-        reportDate: undefined,
-        captureId: undefined,
+        reportDate: source.reportDate || source.lastCollectedAt,
+        captureId: source.captureId,
+        sourceFamily: source.sourceFamily,
+        parserStatus: source.parserStatus,
+        lastCollectedAt: source.lastCollectedAt,
         confidence: result.confidence,
         shownBecause: `Source record supporting ${result.query}.`,
-    }))
-    const fallbackRows = fallback.sourceProvenance.map(source => ({
-        sourceId: undefined,
-        sourceName: 'Actor profile reference',
-        provenance: source,
-        reportDate: undefined,
-        captureId: undefined,
-        confidence: fallback.confidence,
-        shownBecause: 'Used to support actor profiles until newer source rows are attached.',
     }))
 
     return uniqueBy([
@@ -264,7 +191,6 @@ function buildProvenanceRows(result: TiSearchResponse, fallback: TiActorIntellig
             shownBecause: 'Evidence used for watchlist, alert, or case handoff.',
         })),
         ...sourceRows,
-        ...fallbackRows,
     ].filter(row => row.sourceName && row.provenance), row => `${row.sourceId ?? row.sourceName}:${row.provenance}`).slice(0, 12)
 }
 
@@ -304,10 +230,11 @@ function buildSourceCoverage(rows: TiActorSourceProvenance[], generatedAt: strin
 }
 
 function buildTechniqueCoverage(result: TiSearchResponse, provenanceRows: TiActorSourceProvenance[]): TiActorTechniqueCoverage[] {
-    const sourceIds = unique(provenanceRows.map(row => row.sourceId).filter((value): value is string => Boolean(value)))
-    const captureIds = unique(provenanceRows.map(row => row.captureId).filter((value): value is string => Boolean(value)))
-    const provenanceRefs = unique(provenanceRows.map(row => row.provenance)).slice(0, 6)
     return result.ttps.map(item => {
+        const sourceIds = unique(item.sourceIds ?? [])
+        const supportingRows = provenanceRows.filter(row => row.sourceId && sourceIds.includes(row.sourceId))
+        const captureIds = unique([...(item.captureIds ?? []), ...supportingRows.map(row => row.captureId).filter((value): value is string => Boolean(value))])
+        const provenanceRefs = unique(supportingRows.map(row => row.provenance)).slice(0, 6)
         const missing = [
             sourceIds.length ? '' : 'sourceId',
             captureIds.length ? '' : 'captureId',
@@ -329,12 +256,11 @@ function buildTechniqueCoverage(result: TiSearchResponse, provenanceRows: TiActo
     }).slice(0, 10)
 }
 
-function buildCampaignTimeline(result: TiSearchResponse, provenanceRows: TiActorSourceProvenance[], fallback: TiActorIntelligenceFallback): TiActorCampaignTimelineItem[] {
-    const provenanceRefs = unique(provenanceRows.map(row => row.provenance)).slice(0, 6)
-    const sourceIds = unique(provenanceRows.map(row => row.sourceId).filter((value): value is string => Boolean(value)))
+function buildCampaignTimeline(result: TiSearchResponse, provenanceRows: TiActorSourceProvenance[]): TiActorCampaignTimelineItem[] {
     const rows = result.recentActivity.map(item => {
         const firstReportedAt = item.firstReportedAt || item.date || result.generatedAt
-        const rowSourceIds = unique([...item.sourceIds, ...sourceIds])
+        const rowSourceIds = unique(item.sourceIds)
+        const provenanceRefs = unique(provenanceRows.filter(row => row.sourceId && rowSourceIds.includes(row.sourceId)).map(row => row.provenance)).slice(0, 6)
         const affectedSectors = unique(item.affectedSectors ?? [])
         const countries = unique(item.countries ?? [])
         const missing = [
@@ -356,19 +282,7 @@ function buildCampaignTimeline(result: TiSearchResponse, provenanceRows: TiActor
         }
     })
 
-    const fallbackRows = rows.length ? [] : fallback.campaigns.slice(0, 4).map(title => ({
-        title,
-        firstReportedAt: fallback.firstSeen,
-        sourceIds,
-        provenanceRefs,
-        affectedSectors: fallback.targetSectors,
-        countries: fallback.geographies,
-        confidence: fallback.confidence,
-        freshness: 'review' as const,
-        missing: ['datedActivityRow'],
-    }))
-
-    return [...rows, ...fallbackRows].sort((a, b) => {
+    return rows.sort((a, b) => {
         const parsedA = parseSourceDate(a.firstReportedAt) ?? 0
         const parsedB = parseSourceDate(b.firstReportedAt) ?? 0
         return parsedB - parsedA || b.confidence - a.confidence
@@ -403,23 +317,6 @@ function freshnessFor(generatedAt: string, lastSeen: string): TiActorIntelligenc
         stale,
         reason: stale ? `Last observed date is older than 180 days at ${generatedAt}.` : 'Last observed date is within freshness policy or not date-parseable.',
     }
-}
-
-function domainFromUrl(value?: string) {
-    if (!value) return null
-    try {
-        return new URL(value).hostname.replace(/^www\./, '')
-    } catch {
-        return null
-    }
-}
-
-function isApt29(result: TiSearchResponse) {
-    return /apt29|cozy bear|midnight blizzard|nobelium|the dukes/i.test(`${result.query} ${result.aliases.join(' ')}`)
-}
-
-function isLockBit(result: TiSearchResponse) {
-    return /lockbit/i.test(`${result.query} ${result.aliases.join(' ')} ${result.recentActivity.map(item => item.title).join(' ')}`)
 }
 
 function unique(values: string[]) {

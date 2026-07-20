@@ -227,7 +227,14 @@ services:
       context: ./ops/onion-tor
       dockerfile: ./Dockerfile
     expose:
+      - "8118"
       - "9050"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8118 && nc -z 127.0.0.1 9050"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
     networks:
       - hanasandnet
       - browsernet
@@ -306,6 +313,11 @@ services:
       SCRAPER_MAX_REQUEST_TASKS: 500
       SCRAPER_DARKNET_METADATA_ONLY: "true"
       SCRAPER_HIGH_RISK_REQUIRES_APPROVAL: "true"
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${DB_USER:-hanasand}
+      PGPASSWORD: ${DB_PASSWORD}
+      PGDATABASE: ${DB:-hanasand}
       TI_EVIDENCE_ROOT: /var/lib/ti-scraper/evidence
       TI_EVIDENCE_METADATA_PATH: /var/lib/ti-scraper/evidence/metadata/scraper-store.json
       TI_EVIDENCE_OBJECT_DIR: /var/lib/ti-scraper/evidence/objects
@@ -323,13 +335,18 @@ services:
       TI_CANARY_BUDGET_BYTES: 768000000
       TI_SOURCE_TARGET_COUNT: 1000
       TI_SOURCE_SEED_ACTIVATE: "true"
-      TI_SOURCE_SEED_PATHS: /app/ti/scraper/seeds/public_cti_sources.json,/app/ti/scraper/seeds/public_cti_starter_pack.json,/app/ti/scraper/seeds/public_telegram_channel_packs.json,/app/ti/scraper/seeds/public_threat_intel_generated_sources.json,/app/ti/scraper/seeds/high_value_exposure_source_candidates.json,/app/ti/scraper/seeds/restricted_metadata_source_packs.json
+      TI_SOURCE_SEED_PATHS: /app/ti/scraper/seeds/public_cti_sources.json,/app/ti/scraper/seeds/verified_long_lived_sources.json,/app/ti/scraper/seeds/public_cti_starter_pack.json,/app/ti/scraper/seeds/public_telegram_channel_packs.json,/app/ti/scraper/seeds/public_threat_intel_generated_sources.json,/app/ti/scraper/seeds/high_value_exposure_source_candidates.json,/app/ti/scraper/seeds/restricted_metadata_source_packs.json
       TI_IMPORT_RESTRICTED_METADATA_SOURCES: ${TI_IMPORT_RESTRICTED_METADATA_SOURCES:-false}
+      TI_RESTRICTED_METADATA_ENABLED: ${TI_RESTRICTED_METADATA_ENABLED:-false}
+      TI_RESTRICTED_METADATA_INTERVAL_SECONDS: ${TI_RESTRICTED_METADATA_INTERVAL_SECONDS:-900}
+      TI_RESTRICTED_METADATA_MAX_SOURCES: ${TI_RESTRICTED_METADATA_MAX_SOURCES:-2}
+      TI_TOR_METADATA_PROXY: http://onion-tor:8118
       TI_IMPORT_CREDENTIAL_REQUIRED_SOURCES: ${TI_IMPORT_CREDENTIAL_REQUIRED_SOURCES:-false}
       HANASAND_AI_API_BASE: ${HANASAND_AI_API_BASE:-http://ai-parser-bridge:18181}
       HANASAND_AI_HEALTH_PATH: ${HANASAND_AI_HEALTH_PATH:-/health}
       HANASAND_AI_EXPOSURE_PARSE_PATH: ${HANASAND_AI_EXPOSURE_PARSE_PATH:-/v1/parse/exposure-claim}
       HANASAND_AI_PARSE_TIMEOUT_MS: ${HANASAND_AI_PARSE_TIMEOUT_MS:-12000}
+      HANASAND_AUTH_API_BASE: ${HANASAND_AUTH_API_BASE:-http://api:8080/api}
     volumes:
       - ti_scraper_evidence:/var/lib/ti-scraper/evidence
     extra_hosts:
@@ -348,6 +365,10 @@ services:
         condition: service_healthy
       ai-parser-bridge:
         condition: service_started
+      postgres:
+        condition: service_healthy
+      onion-tor:
+        condition: service_healthy
 
   postgres:
     image: postgres:15

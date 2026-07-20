@@ -1508,8 +1508,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
     tenantId: input.tenantId,
     watchlist: terms,
     sources,
-    captures,
-    includeDemoIfEmpty: false
+    captures
   });
   const generationReadiness = buildDwmAlertGenerationReadiness({
     watchlists,

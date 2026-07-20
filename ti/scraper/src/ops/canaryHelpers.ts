@@ -4,13 +4,18 @@ import type { CanaryFetch, CanaryLoopState } from "./canaryCollectionTypes.ts";
 import { feedItems } from "./canaryFeedItems.ts";
 
 export function taskFor(source: any, at: string, runId: string, maxBytes: number) {
-  return { id: stableId("task", `${source.id}:${at}`), sourceId: source.id, targetUrl: source.url, sourceType: source.type, queuedAt: at, priority: source.trustScore ?? 0.5, reason: "public_canary", retryCount: 0, maxBytes, runId };
+  return { id: stableId("task", `${source.id}:${at}`), tenantId: source.tenantId, sourceId: source.id, targetUrl: source.url, sourceType: source.type, queuedAt: at, priority: source.trustScore ?? 0.5, reason: "public_canary", retryCount: 0, maxBytes, runId };
 }
 
 export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, mode: string, at: string, maxBytes: number, timeoutMs = 12_000) {
-  const started = Date.now(), requestedUrl = publicFetchUrl(source, task.targetUrl), res = await fetcher(requestedUrl, { headers: { "user-agent": "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" }, signal: AbortSignal.timeout(timeoutMs) });
-  const fetched = (await res.text()).slice(0, maxBytes);
-  const metadata = { canaryPortfolio: true, fetchMode: mode, finalUrlHash: hashContent(res.url || requestedUrl), responseBytes: fetched.length, fetchProvenance: { mode, adapterVersion: "public_canary_fetcher:v1", requestedUrlHash: hashContent(requestedUrl), sourceUrlHash: hashContent(task.targetUrl), finalUrlHash: hashContent(res.url || requestedUrl), httpStatus: res.status, ok: res.ok, contentType: res.headers.get("content-type") ?? undefined, fetchedAt: at, durationMs: Date.now() - started, bytesReceived: fetched.length, maxBytes, truncated: fetched.length >= maxBytes, bounded: true, userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" } };
+  const started = Date.now(), requestedUrl = publicFetchUrl(source, task.targetUrl);
+  const { response: res, finalUrl, redirectCount } = await fetchPublicResponse(fetcher, requestedUrl, timeoutMs);
+  if (!res.ok) throw httpError(res.status);
+  const contentType = res.headers.get("content-type") ?? undefined;
+  if (contentType && !/^(?:text\/|application\/(?:rss\+xml|atom\+xml|xml|json|xhtml\+xml))/i.test(contentType)) throw new Error(`unsupported media type: ${contentType}`);
+  const body = await boundedText(res, maxBytes);
+  const fetched = body.text;
+  const metadata = { canaryPortfolio: true, fetchMode: mode, finalUrlHash: hashContent(finalUrl), responseBytes: body.bytesReceived, fetchProvenance: { mode, adapterVersion: "public_canary_fetcher:v2", requestedUrlHash: hashContent(requestedUrl), sourceUrlHash: hashContent(task.targetUrl), finalUrlHash: hashContent(finalUrl), httpStatus: res.status, ok: res.ok, contentType, fetchedAt: at, durationMs: Date.now() - started, bytesReceived: body.bytesReceived, maxBytes, truncated: body.truncated, bounded: true, redirectCount, userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" } };
   return feedItems(source, task, fetched, at, metadata, maxItemsFor(source));
 }
 
@@ -49,5 +54,60 @@ export function maxItemsFor(source: any) {
 function publicFetchUrl(source: any, targetUrl: string) {
   if (source.type !== "telegram_public") return targetUrl;
   const match = targetUrl.match(/(?:https?:\/\/)?t\.me\/(?:s\/)?([a-zA-Z0-9_]+)/);
-  return match ? `https://t.me/s/${match[1]}` : targetUrl;
+  const searchQuery = typeof source.metadata?.searchQuery === "string" ? source.metadata.searchQuery.trim().slice(0, 100) : "";
+  return match ? `https://t.me/s/${match[1]}${searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : ""}` : targetUrl;
+}
+
+export function isSafePublicCollectionTarget(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return false;
+    const host = url.hostname.toLowerCase();
+    if (!host || host === "localhost" || /\.(?:local|internal|onion|i2p)$/.test(host)) return false;
+    if (host === "::1" || /^(?:fc|fd|fe8|fe9|fea|feb)/i.test(host)) return false;
+    const octets = host.split(".").map(Number);
+    if (octets.length === 4 && octets.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) {
+      const [a, b] = octets;
+      if (a === 0 || a === 10 || a === 127 || a >= 224 || a === 169 && b === 254 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168 || a === 100 && b >= 64 && b <= 127 || a === 198 && [18, 19].includes(b)) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function fetchPublicResponse(fetcher: CanaryFetch, initialUrl: string, timeoutMs: number) {
+  let currentUrl = initialUrl;
+  for (let redirectCount = 0; redirectCount <= 3; redirectCount++) {
+    if (!isSafePublicCollectionTarget(currentUrl)) throw new Error("public fetch policy blocked target");
+    const response = await fetcher(currentUrl, { headers: { "user-agent": "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" }, redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
+    if (![301, 302, 303, 307, 308].includes(response.status)) return { response, finalUrl: response.url || currentUrl, redirectCount };
+    const location = response.headers.get("location");
+    if (!location || redirectCount === 3) throw new Error("public fetch redirect limit exceeded");
+    currentUrl = new URL(location, currentUrl).toString();
+  }
+  throw new Error("public fetch redirect limit exceeded");
+}
+
+async function boundedText(response: Response, maxBytes: number) {
+  const reader = response.body?.getReader();
+  if (!reader) return { text: "", bytesReceived: 0, truncated: false };
+  const decoder = new TextDecoder();
+  let text = "", bytesReceived = 0, truncated = false;
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    const remaining = maxBytes - bytesReceived;
+    if (remaining <= 0) { truncated = true; await reader.cancel(); break; }
+    const bytes = chunk.value.byteLength > remaining ? chunk.value.subarray(0, remaining) : chunk.value;
+    bytesReceived += bytes.byteLength;
+    text += decoder.decode(bytes, { stream: true });
+    if (bytes.byteLength < chunk.value.byteLength) { truncated = true; await reader.cancel(); break; }
+  }
+  text += decoder.decode();
+  return { text, bytesReceived, truncated };
+}
+
+function httpError(status: number) {
+  return Object.assign(new Error(`HTTP ${status}`), { httpStatus: status });
 }

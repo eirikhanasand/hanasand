@@ -141,14 +141,14 @@ export type DwmProductSnapshot = {
         nextAction: string
     }>
     readiness: {
-        decision: 'production_ready_with_live_sources' | 'demo_ready_needs_live_sources' | 'blocked_missing_watchlist'
+        decision: 'production_ready_with_live_sources' | 'blocked_missing_live_sources' | 'blocked_missing_watchlist'
         blockers: string[]
         advantages: string[]
         nextWorkItem: string
     }
 }
 
-export function demoDwmProductSnapshot(generatedAt = new Date().toISOString()): DwmProductSnapshot {
+export function sampleDwmProductSnapshot(generatedAt = new Date().toISOString()): DwmProductSnapshot {
     const firstAlertAt = minutesBefore(generatedAt, 6)
     const secondAlertAt = minutesBefore(generatedAt, 29)
     const watchlist: DwmWatchTerm[] = [
@@ -255,7 +255,7 @@ export function demoDwmProductSnapshot(generatedAt = new Date().toISOString()): 
             { id: 'req_lumma_cluster', target: 'Lumma broker alias cluster', type: 'actor_scope', priority: 'medium', scope: 'identity exposure', approvalState: 'queued', nextAction: 'Link aliases to Telegram and clear-web corroboration sources before customer alerting.' },
         ],
         readiness: {
-            decision: 'demo_ready_needs_live_sources',
+            decision: 'blocked_missing_live_sources',
             blockers: [
                 'Persist tenant-specific DWM watchlists instead of using the preview snapshot.',
                 'Schedule live public Telegram polling and source health rollups for approved channels.',

@@ -7652,7 +7652,7 @@ function sourceFreshnessConsumers(
     consumer: "publicTI",
     ownerLane: "publicTI",
     ready: publicReady,
-    reason: publicReady ? "Actor page can show current source coverage." : "Actor page needs fresh, case-ready source details.",
+    reason: publicReady ? "Actor page can show current source coverage." : "Actor page needs fresh, case-ready source evidence.",
     route: {
       method: "GET",
       path: lifecycle.publicTiRoute ?? `/ti/${encodeURIComponent(lifecycle.actor)}`,

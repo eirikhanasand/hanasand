@@ -1,6 +1,6 @@
 import { nowIso, stableId, uniqueStrings } from "../utils.ts";
 import { sanitizeDwmCustomerEvidenceExcerpt, sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
-import { json, readJson } from "./http.ts";
+import { error, json, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 
 type OrganizationRole = "owner" | "admin" | "analyst" | "viewer";
@@ -287,13 +287,26 @@ export async function testOrganizationWebhook(request: Request, options: ApiServ
 }
 
 export function resolveOrganizationScope(input: { body?: any; url?: URL; request?: Request }, options: ApiServerOptions): { organization?: Organization; organizationId?: string; tenantId: string; error?: Response } {
-  const organizationId = String(input.body?.organizationId ?? input.url?.searchParams.get("organizationId") ?? input.request?.headers.get("x-organization-id") ?? "").trim();
+  const organizationIds = scopeValues(input.body?.organizationId, input.url?.searchParams.get("organizationId"), input.request?.headers.get("x-organization-id"));
+  if (new Set(organizationIds).size > 1) return { tenantId: "", error: error("organization_scope_mismatch", "Organization header, query, and body scope must match", 403) };
+  const tenantIds = scopeValues(input.body?.tenantId, input.url?.searchParams.get("tenantId"), input.request?.headers.get("x-tenant-id"));
+  if (new Set(tenantIds).size > 1) return { tenantId: "", error: error("tenant_scope_mismatch", "Tenant header, query, and body scope must match", 403) };
+  const organizationId = organizationIds[0] ?? "";
   if (organizationId) {
     const organization = findOrganization(options, organizationId);
     if (!organization) return { organizationId, tenantId: organizationId, error: orgNotFound() };
+    if (tenantIds[0] && tenantIds[0] !== organization.tenantId) {
+      return { organizationId, tenantId: tenantIds[0], error: error("tenant_scope_mismatch", "Organization and tenant scope must match", 403) };
+    }
     return { organization, organizationId: organization.id, tenantId: organization.tenantId };
   }
-  return { tenantId: String(input.body?.tenantId ?? input.url?.searchParams.get("tenantId") ?? input.request?.headers.get("x-tenant-id") ?? "default") };
+  const tenantId = tenantIds[0] ?? "default";
+  if (!/^[A-Za-z0-9_.:-]{1,200}$/.test(tenantId)) return { tenantId, error: error("invalid_tenant_scope", "Tenant scope uses an unsupported format", 400) };
+  return { tenantId };
+}
+
+function scopeValues(...values: unknown[]): string[] {
+  return values.map((value) => typeof value === "string" ? value.trim() : "").filter(Boolean);
 }
 
 export function organizationWebhookDestinations(options: ApiServerOptions, organizationId: string | undefined): WebhookDestination[] {

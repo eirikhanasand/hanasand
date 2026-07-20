@@ -124,7 +124,6 @@ async function loadDwmSnapshot(scope: DwmPageScope, headers: HeadersInit, timeou
     try {
         const target = new URL('/v1/dwm/product', base)
         setDwmScopeParams(target, scope)
-        target.searchParams.set('demo', 'false')
 
         const response = await fetch(target, { cache: 'no-store', headers, signal: AbortSignal.timeout(timeoutMs) })
         if (!response.ok) return {

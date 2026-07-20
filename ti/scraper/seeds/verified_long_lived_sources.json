@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "name": "verified-long-lived-public-sources",
+  "description": "Public sources verified against publisher-owned pages for sustained thesis collection.",
+  "generatedAt": "2026-07-20T00:00:00.000Z",
+  "sources": [
+    {
+      "id": "src_ssscip_cert_ua_telegram",
+      "name": "SSSCIP / CERT-UA public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/dsszzi_official",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.94,
+      "language": "uk",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public text posts from the official State Service of Special Communications and Information Protection of Ukraine channel listed by cip.gov.ua. Collect the public web preview only; do not join channels, authenticate, or download media and files.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-20T00:00:00.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "collectionMode": "public_web_preview",
+        "searchQuery": "CERT-UA",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "publisherReference": "https://cip.gov.ua/ua/statics/pro-derszhpeczv-yazku",
+        "topics": ["CERT-UA", "APT", "UAC", "cyberattack", "malware"],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "gov:ua:ssscip:telegram",
+        "publisher": {
+          "name": "State Service of Special Communications and Information Protection of Ukraine",
+          "country": "UA",
+          "homepage": "https://cip.gov.ua",
+          "trustBasis": "government"
+        },
+        "tier": "tier_1",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public government communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public government channel used for defensive security research.",
+        "reliability": 0.94,
+        "intelligenceValue": 0.9,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": ["APT", "UAC", "cyberattack", "malware", "phishing"],
+          "actors": ["APT28", "UAC-0010", "UAC-0050"],
+          "aliases": ["Fancy Bear", "Gamaredon", "Armageddon"],
+          "industries": ["government", "defence", "energy", "healthcare"],
+          "regions": ["Ukraine", "Europe"],
+          "countries": ["Ukraine"],
+          "languages": ["uk"],
+          "queryPatterns": ["APT28", "UAC-", "CERT-UA"]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": ["telegram_public"],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_ccn_cert_telegram",
+      "name": "CCN-CERT public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/CCNCERT",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.93,
+      "language": "es",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public text posts from the official CCN-CERT Telegram channel announced by ccn-cert.cni.es. Collect the public web preview only; do not join channels, authenticate, or download media and files.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-20T00:00:00.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "publisherReference": "https://www.ccn-cert.cni.es/es/comunicacion-eventos/comunicados-ccn-cert/10202-el-ccn-cert-estrena-su-nuevo-canal-en-telegram.html",
+        "topics": ["CERT", "APT", "cyberattack", "vulnerability", "malware"],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "gov:es:ccn-cert:telegram",
+        "publisher": {
+          "name": "CCN-CERT",
+          "country": "ES",
+          "homepage": "https://www.ccn-cert.cni.es",
+          "trustBasis": "government"
+        },
+        "tier": "tier_1",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public government communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public government channel used for defensive security research.",
+        "reliability": 0.93,
+        "intelligenceValue": 0.82,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": ["APT", "cyberattack", "vulnerability", "malware", "phishing"],
+          "actors": [],
+          "aliases": [],
+          "industries": ["government", "critical infrastructure"],
+          "regions": ["Spain", "Europe"],
+          "countries": ["Spain"],
+          "languages": ["es"],
+          "queryPatterns": ["APT", "ciberataque", "vulnerabilidad", "malware"]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": ["telegram_public"],
+        "rollback": {}
+      }
+    }
+  ]
+}

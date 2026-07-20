@@ -29,12 +29,15 @@ export function evaluateTaskForCollection(source: SourceRecord, task: Collection
 }
 
 function evaluateTelegramSource(source: SourceRecord): PolicyDecision {
-  if (source.accessMethod !== "official_api") {
-    return { allowed: false, metadataOnly: false, reason: "public Telegram collection requires official API access" };
-  }
   const telegramCompliance = evaluateTelegramPublicCompliance(source);
   if (!telegramCompliance.allowed) return { allowed: false, metadataOnly: false, reason: telegramCompliance.reason };
   if (!source.legalNotes.trim()) return { allowed: false, metadataOnly: false, reason: "public Telegram source has no legal notes" };
   if (!isApproved(source)) return { allowed: false, metadataOnly: false, reason: "public Telegram source requires source review approval" };
+  if (source.accessMethod === "public_http" && source.metadata?.collectionMode === "public_web_preview") {
+    return { allowed: true, metadataOnly: false, reason: "public Telegram source is collectable through the approved public web preview" };
+  }
+  if (source.accessMethod !== "official_api") {
+    return { allowed: false, metadataOnly: false, reason: "public Telegram collection requires official API or approved public web preview access" };
+  }
   return { allowed: true, metadataOnly: false, reason: "public Telegram source is collectable through official APIs" };
 }

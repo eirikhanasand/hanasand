@@ -249,13 +249,13 @@ function actionNeededDwmProduct(source: string, checkedAt: string): DwmProductSn
         source,
         href: '/dashboard/dwm',
         detail: 'Live DWM product data needs to be connected to this console summary.',
-        blockers: ['Connect /api/dwm/product with demo=false before treating the homepage summary as live-backed.'],
+        blockers: ['Connect /api/dwm/product before treating the homepage summary as live-backed.'],
         ownerLane: 'dwm',
         unavailableReason: 'missing_dwm_product_snapshot',
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'dwm_product_snapshot',
-        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert status from the TI backend.',
+        integrationProbeHint: 'GET /api/dwm/product must return watchlist, source coverage, and alert status from the TI backend.',
         backendProofContractVersion: 'dwm.product.v1',
     }
 }

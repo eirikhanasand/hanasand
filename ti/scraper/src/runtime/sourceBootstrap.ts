@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { importSeedBundle, seedDuplicateKey } from "../registry/sourceSeeds.ts";
+import { importRestrictedMetadataSeedBundle, isRestrictedMetadataSeedBundle } from "../registry/restrictedSourceSeeds.ts";
 import type { SourceRecord } from "../types.ts";
 import { nowIso } from "../utils.ts";
 
@@ -33,6 +34,7 @@ type RuntimeSourceBootstrapInput = {
 
 const defaultSeedPaths = [
   "public_cti_sources.json",
+  "verified_long_lived_sources.json",
   "public_cti_starter_pack.json",
   "public_telegram_channel_packs.json",
   "public_threat_intel_generated_sources.json",
@@ -67,9 +69,13 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
       continue;
     }
 
-    const report = importSeedBundle(bundle, { importedAt: generatedAt, existingSources: store.listSources() });
+    const restricted = isRestrictedMetadataSeedBundle(bundle);
+    const report = restricted
+      ? importRestrictedMetadataSeedBundle(bundle, generatedAt)
+      : importSeedBundle(bundle, { importedAt: generatedAt, existingSources: store.listSources() });
+    const rejectedSourceIds = new Set((report.errors ?? []).map((error: any) => error.sourceId).filter(Boolean));
     for (const source of report.accepted as SourceRecord[]) {
-      if (!shouldImportSource(source)) {
+      if (rejectedSourceIds.has(source.id) || !shouldImportSource(source)) {
         skippedSourceCount++;
         continue;
       }
@@ -79,7 +85,7 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
         continue;
       }
       existingByKey.add(duplicateKey);
-      store.saveSource(prepareRuntimeSource(source, path, generatedAt));
+      store.saveSource(prepareRuntimeSource(source, path, generatedAt, restricted));
       importedSourceCount++;
     }
 
@@ -116,17 +122,18 @@ function shouldImportSource(source: SourceRecord) {
   return true;
 }
 
-function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedAt: string): SourceRecord {
-  const activate = Bun.env.TI_SOURCE_SEED_ACTIVATE !== "false" && source.risk !== "medium" && source.risk !== "high" && source.risk !== "restricted";
+function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedAt: string, restricted = false): SourceRecord {
+  const activate = !restricted && Bun.env.TI_SOURCE_SEED_ACTIVATE !== "false" && source.risk !== "medium" && source.risk !== "high" && source.risk !== "restricted";
   return {
     ...source,
-    status: activate ? "active" : source.status ?? "candidate",
+    status: restricted ? "candidate" : activate ? "active" : source.status ?? "candidate",
     createdAt: source.createdAt ?? generatedAt,
     updatedAt: generatedAt,
     metadata: {
       ...(source.metadata ?? {}),
-      productionCollection: true,
-      canaryPortfolio: true,
+      productionCollection: !restricted,
+      canaryPortfolio: !restricted,
+      restrictedMetadataCandidate: restricted || undefined,
       sourceSeedPath: seedPath,
       sourceImportedAt: generatedAt
     },

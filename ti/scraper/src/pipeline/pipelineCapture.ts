@@ -8,6 +8,7 @@ export function buildRawCapture(item: CollectedItem): RawCapture {
 
   return {
     id: captureId,
+    tenantId: item.tenantId,
     sourceId: item.sourceId,
     taskId: item.taskId,
     url: item.url,

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const routes = productProgressRoutes(query)
     const [sourceProxy, dwmProduct, publicTi, alerts, alertGeneration, cases, deliveries, organizations, watchlists, supportRecovery, auditEvents, deployStatus] = await Promise.all([
         fetchInternalJson(request, routes.sourceProxy || '/api/ti/scraper/control'),
-        fetchInternalJson(request, routes.dwmProduct || '/api/dwm/product?demo=false'),
+        fetchInternalJson(request, routes.dwmProduct || '/api/dwm/product'),
         fetchInternalJson(request, routes.publicTiProvenance || '/api/ti/search'),
         fetchInternalJson(request, routes.dashboardAlerts || '/api/dwm/alerts'),
         fetchInternalJson(request, routes.alertGenerationReadiness || '/api/dwm/alerts/generation-readiness'),
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
             previous: fetchedSourceProxy,
             query,
             generatedAt,
-            route: routes.dwmProduct || '/api/dwm/product?demo=false',
+            route: routes.dwmProduct || '/api/dwm/product',
         }) || fetchedSourceProxy
     const helpdeskProofLedger = (!supportRecovery.ok || !auditEvents.ok || !supportAuditExportProof(auditEvents))
         ? await loadProductHelpdeskAuditProofLedger()
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
         sourceProxy: normalizedSourceProxy,
         dwmProduct: dwmProductReadiness({
             generatedAt,
-            route: routes.dwmProduct || '/api/dwm/product?demo=false',
+            route: routes.dwmProduct || '/api/dwm/product',
             fetch: dwmProduct,
         }),
         alerts: alertRows,
@@ -245,7 +245,7 @@ function productProgressRoutes(query: string) {
         organizations: '/api/organizations',
         watchlists: '/api/dwm/watchlists',
         operations: '/api/dwm/operations',
-        dwmProduct: '/api/dwm/product?demo=false',
+        dwmProduct: '/api/dwm/product',
         deliveries: '/api/dwm/webhooks/deliveries',
         organizationWebhooks: '/api/organizations/:id/webhooks',
         supportRecovery: '/api/backend/admin/support/access-recovery',
@@ -1338,7 +1338,7 @@ function dwmProductReadiness(input: {
         staleAfterSeconds: 900,
         proofTimestamp: latestAlertAt || payload?.generatedAt || input.generatedAt,
         expectedDashboardRowId: 'dwm_product_snapshot',
-        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert evidence from the TI backend.',
+        integrationProbeHint: 'GET /api/dwm/product must return watchlist, source coverage, and alert evidence from the TI backend.',
         backendProofContractVersion: 'dwm.product.v1',
         detail: blockers.length
             ? blockers.join('; ')

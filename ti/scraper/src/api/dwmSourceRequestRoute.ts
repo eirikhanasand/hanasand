@@ -36,6 +36,7 @@ import {
 import { hashContent, nowIso, stableId } from "../utils.ts";
 import { json, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
+import { resolveTenantScope } from "./tenantScope.ts";
 import type { SourceRecord } from "../types.ts";
 
 type DwmSourceRequestBody = {
@@ -118,6 +119,9 @@ const sourcePackCollectionReceipts = new WeakMap<object, InMemoryDwmSourcePackCo
 
 export async function createDwmSourceRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<DwmSourceRequestBody>(request);
+  const scope = resolveTenantScope(request, new URL(request.url), body.tenantId);
+  if (scope.error) return scope.error;
+  if (scope.tenantId || !body.action) body.tenantId = scope.tenantId ?? "default";
   if (body.action) return handleSourceLifecycleAction(body, options);
 
   if (Array.isArray(body.candidates) && body.candidates.length > 0) {
@@ -7023,13 +7027,19 @@ function sourceActorPackActionReadiness(input: {
 
 function sourceActorCaptureFreshness(latestCaptureAt: string | undefined, generatedAt: string | undefined) {
   if (!latestCaptureAt) return { state: "needs_capture", staleAfterHours: 24, ageHours: undefined };
-  const ageMs = Math.max(0, Date.parse(String(generatedAt ?? nowIso())) - Date.parse(latestCaptureAt));
+  const checkedAt = Date.parse(String(generatedAt ?? nowIso()));
+  const capturedAt = Date.parse(latestCaptureAt);
+  if (!Number.isFinite(checkedAt) || !Number.isFinite(capturedAt)) {
+    return { state: "stale", staleAfterHours: 24, ageHours: undefined, latestCaptureAt, timestampAnomaly: "invalid_timestamp" };
+  }
+  const ageMs = checkedAt - capturedAt;
   const ageHours = Math.round((ageMs / 3600000) * 10) / 10;
   return {
-    state: ageHours > 24 ? "stale" : "fresh",
+    state: ageMs < -300_000 || ageHours > 24 ? "stale" : "fresh",
     staleAfterHours: 24,
     ageHours,
-    latestCaptureAt
+    latestCaptureAt,
+    timestampAnomaly: ageMs < -300_000 ? "future_capture" : undefined
   };
 }
 
@@ -9051,8 +9061,7 @@ function runAlertRebuildAdapter(input: { source: SourceRecord; captureIds: strin
       watchlist: terms,
       sources: input.options.store.listSources(),
       captures: input.options.store.listCaptures(),
-      generatedAt: input.generatedAt,
-      includeDemoIfEmpty: false
+      generatedAt: input.generatedAt
     });
     const savedAlerts = snapshot.alerts.map((alert) => store.saveDwmAlert ? store.saveDwmAlert({
       ...alert,

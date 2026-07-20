@@ -16,6 +16,7 @@ export function mapRssEntry(input: {
   const entryUrl = canonicalizeUrl(entry.link || finalUrl);
   const rawText = normalizeWhitespace(`${entry.title} ${entry.description}`.trim());
   return {
+    tenantId: source.tenantId,
     sourceId: source.id,
     taskId: task?.id,
     url: entryUrl,

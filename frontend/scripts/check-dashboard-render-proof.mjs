@@ -30,7 +30,7 @@ const readinessRows = {
     },
     dwm_product_snapshot: {
         href: '/dashboard/dwm',
-        backendProbe: 'GET /api/dwm/product?demo=false',
+        backendProbe: 'GET /api/dwm/product',
         commits: ['9d4c7118', '03d8d1ec'],
     },
     entitlement_readiness: {

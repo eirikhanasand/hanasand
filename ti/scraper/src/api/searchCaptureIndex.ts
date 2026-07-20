@@ -7,8 +7,8 @@ const cache = new WeakMap<object, { signature: string; docs: SearchDoc[] }>();
 const norm = (value: unknown) => String(value ?? "").toLowerCase();
 const words = (query: string) => norm(query).split(/[^a-z0-9.-]+/).filter((w) => w.length > 1);
 const unique = (items: string[]) => [...new Set(items.filter(Boolean))];
-export function findSearchCaptures(store: any, query: string, limit: number) {
-  const docs = docsForStore(store);
+export function findSearchCaptures(store: any, query: string, limit: number, tenantId?: string) {
+  const docs = docsForStore(store).filter((doc) => (doc.capture?.tenantId || undefined) === tenantId);
   const terms = words(query);
   if (!terms.length) return docs.slice(0, limit).map((doc) => doc.capture);
   return docs
