@@ -177,6 +177,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const first = await PostgresScraperStore.create({ databaseUrl });
     first.saveSource(source({ id: "src_postgres", tenantId: "tenant_postgres" }));
     const result = first.savePipelineResult(pipeline("src_postgres", "tenant_postgres"));
+    first.replaceCaptureForRetention({ ...result.capture, retentionClass: "public_report", metadata: { ...result.capture.metadata, retentionPolicy: { class: "public_report" } } });
     const entity = first.listExtractedEntities().find((record: any) => record.type === "actor");
     const actorClaim = first.listIntelligenceClaims().find((record: any) => record.claimType === "actor");
     const alertedAt = new Date(Date.parse(result.capture.firstVisibleAt) + 1_000).toISOString();
@@ -233,6 +234,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(await second.databaseHealth()).toMatchObject({ ok: true, backend: "postgresql", schema: "threat_intel" });
     expect(second.listSources().map((record: any) => record.id)).toContain("src_postgres");
     expect(second.listCaptures()).toHaveLength(1);
+    expect(second.listCaptures()[0]).toMatchObject({ retentionClass: "public_report", metadata: { retentionPolicy: { class: "public_report" } } });
     expect(second.listIncidents()).toHaveLength(1);
     expect(second.listExtractedEntities().length).toBeGreaterThan(1);
     expect(second.listIndicators()).toHaveLength(1);
@@ -281,6 +283,10 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(counts.claims).toBeGreaterThan(3);
     expect(counts.claim_evidence).toBeGreaterThan(3);
     expect(counts.links).toBeGreaterThan(3);
+    const [captureRetention] = await admin<{ retention_class: string; record_class: string }[]>`
+      SELECT retention_class, record->>'retentionClass' AS record_class FROM threat_intel.captures WHERE id = ${result.capture.id}
+    `;
+    expect(captureRetention).toEqual({ retention_class: "public_report", record_class: "public_report" });
     await second.close();
   });
 
