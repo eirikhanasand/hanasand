@@ -13,7 +13,7 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     expect(dwmPage).toContain('The exposure monitor is showing live watchlists, sources, actors, and alerts.')
     expect(dwmPage).toContain('Collection is showing source and evidence state.')
     expect(dwmPage).toContain('usingFallbackAlerts: !savedAlerts.length && snapshot.alerts.length > 0')
-    expect(dashboardPage).toContain('DWM alerts reported HTTP')
+    expect(dashboardPage).toContain("redirect('/dashboard/overview')")
     expect(workflowActions).toContain('<RouteRunSummary route={lastRoute} organizationId={organizationId} />')
     expect(workflowActions).toContain('function organizationDestinationPath(organizationId: string, alertId?: string, caseId?: string)')
     expect(workflowActions).toContain('focus: \'destinations\'')
@@ -48,4 +48,12 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     expect(workflowActions).not.toContain('Every command calls the DWM API')
     expect(workflowActions).not.toContain('Dry-run uses this endpoint and records the delivery result without external send by default.')
     expect(workflowActions).not.toContain('Paste an HTTPS Discord or webhook endpoint before testing customer delivery.')
+})
+
+test('product progress uses persisted evidence instead of synthetic readiness rows', async () => {
+    const route = await readFile(path.join(root, 'src/app/api/product-progress/route.ts'), 'utf8')
+
+    expect(route).not.toMatch(/synthetic(?:Organization|Webhook|Deliveries|Cases|Analyst|Support)/)
+    expect(route).toContain('const organizationProof = organizationReadinessProof(organizationReadiness)')
+    expect(route).toContain('const selectedCaseProof = analystCaseDetailProof(selectedCaseDetail')
 })

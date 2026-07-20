@@ -34,36 +34,25 @@ export async function GET(request: NextRequest) {
         fetchInternalJson(request, routes.deployProbe || '/api/status'),
     ])
     const watchlistRows = rows((watchlists.json as { watchlists?: unknown[] } | undefined)?.watchlists) as DwmWatchlistSummary[]
-    const selectedOrganization = selectOrganization(organizations.json, request) || organizationFromWatchlists(watchlistRows, generatedAt, request)
+    const selectedOrganization = selectOrganization(organizations.json, request)
     const organizationWebhooks = selectedOrganization
         ? await fetchInternalJson(request, `/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks`)
         : { ok: false, status: 0, error: 'No selected organization available for webhook readiness.' }
     const organizationReadiness = selectedOrganization
         ? await fetchInternalJson(request, `/api/organizations/${encodeURIComponent(selectedOrganization.id)}/alert-readiness`)
         : { ok: false, status: 0, error: 'No selected organization available for organization readiness.' }
-    const organizationProof = organizationReadinessProof(organizationReadiness) || syntheticOrganizationReadinessProof(selectedOrganization, watchlistRows)
+    const organizationProof = organizationReadinessProof(organizationReadiness)
     const alertRows = rows((alerts.json as { alerts?: unknown[] } | undefined)?.alerts)
-    const deliveryRows = [
-        ...(rows((deliveries.json as { deliveries?: unknown[] } | undefined)?.deliveries) as DwmDeliveryItem[]),
-        ...syntheticDeliveriesFromAlerts(alertRows, generatedAt),
-    ]
+    const deliveryRows = rows((deliveries.json as { deliveries?: unknown[] } | undefined)?.deliveries) as DwmDeliveryItem[]
     const deliveryProofLedger = webhookDeliveryProofLedger(deliveries)
-    const caseRows = [
-        ...rows((cases.json as { cases?: unknown[] } | undefined)?.cases),
-        ...syntheticCasesFromAlerts(alertRows, generatedAt),
-    ]
-    const webhookRows = [
-        ...(rows((organizationWebhooks.json as { destinations?: unknown[] } | undefined)?.destinations) as DwmOrganizationWebhookDestination[]),
-        ...syntheticWebhookDestinationsFromWatchlists(watchlistRows, selectedOrganization, generatedAt),
-    ]
+    const caseRows = rows((cases.json as { cases?: unknown[] } | undefined)?.cases)
+    const webhookRows = rows((organizationWebhooks.json as { destinations?: unknown[] } | undefined)?.destinations) as DwmOrganizationWebhookDestination[]
     const selectedCase = selectCaseForProductProgress(alertRows, caseRows, deliveryRows)
     const selectedCaseDetailRoute = selectedCase?.id ? `/api/cases/${encodeURIComponent(String(selectedCase.id))}` : undefined
     const selectedCaseDetail = selectedCaseDetailRoute
         ? await fetchInternalJson(request, selectedCaseDetailRoute)
         : { ok: false, status: 0, error: 'No selected analyst case was available for case detail readiness.' }
-    const selectedCaseProof = selectedCaseDetail.ok
-        ? analystCaseDetailProof(selectedCaseDetail, selectedCaseDetailRoute || '/api/cases/:id')
-        : syntheticAnalystCaseDetailProof(selectedCase, selectedCaseDetail, selectedCaseDetailRoute || '/api/cases/:id', generatedAt)
+    const selectedCaseProof = analystCaseDetailProof(selectedCaseDetail, selectedCaseDetailRoute || '/api/cases/:id')
     const fetchedSourceProxy = normalizeSourceProxy(sourceProxy, query, generatedAt)
     const normalizedSourceProxy = sourceProxyReady(fetchedSourceProxy)
         ? fetchedSourceProxy
@@ -86,7 +75,7 @@ export async function GET(request: NextRequest) {
             recovery: helpdeskFallback.recovery,
             audit: helpdeskFallback.audit,
         })
-        : syntheticSupportAuditReadiness(alertRows, deliveryRows, generatedAt) || helpdeskAuditReadiness({
+        : helpdeskAuditReadiness({
             generatedAt,
             recoveryRoute: routes.supportRecovery || '/api/backend/admin/support/access-recovery',
             auditRoute: routes.adminAuditEvents || '/api/backend/admin/audit-events?limit=50',
@@ -411,142 +400,6 @@ function selectOrganization(payload: unknown, request: NextRequest): DwmOrganiza
     return organizations.find(item => item.id === requestedId)
         || organizations.find(item => item.status === 'active')
         || organizations[0]
-}
-
-function organizationFromWatchlists(watchlists: DwmWatchlistSummary[], generatedAt: string, request: NextRequest): DwmOrganizationSummary | undefined {
-    const requestedId = request.nextUrl.searchParams.get('organizationId') || request.headers.get('x-organization-id') || ''
-    const watchlist = watchlists.find(item => requestedId && item.organizationId === requestedId)
-        || watchlists.find(item => item.status === 'active' && (item.organizationId || item.webhookDestinationId))
-    const organizationId = watchlist?.organizationId || (watchlist?.webhookDestinationId ? 'default' : undefined)
-    if (!organizationId) return undefined
-    return {
-        id: organizationId,
-        tenantId: watchlist?.tenantId || 'default',
-        name: organizationId === 'default' ? 'Hanasand DWM review' : organizationId,
-        slug: organizationId === 'default' ? 'hanasand-dwm-review' : organizationId,
-        status: 'active',
-        alertVisibilityPolicy: 'members',
-        createdAt: watchlist?.createdAt || generatedAt,
-        updatedAt: watchlist?.updatedAt || generatedAt,
-        createdBy: 'dwm-watchlist-runtime',
-    }
-}
-
-function syntheticOrganizationReadinessProof(organization: DwmOrganizationSummary | undefined, watchlists: DwmWatchlistSummary[]): OrganizationWorker3ReadinessProof | undefined {
-    if (!organization) return undefined
-    const activeWatchlists = watchlists.filter(item => item.status === 'active' && (!item.organizationId || item.organizationId === organization.id || organization.id === 'default'))
-    const activeWatchlistTermCount = activeWatchlists.reduce((sum, item) => sum + (item.terms || []).length, 0)
-    if (!activeWatchlistTermCount) return undefined
-    return {
-        schemaVersion: 'organization.worker3_ui_readiness_proof.v1',
-        organizationId: organization.id,
-        tenantId: organization.tenantId,
-        actor: { role: 'owner', canExportActiveTerms: true },
-        counts: {
-            activeMemberCount: 1,
-            activeAdminCount: 1,
-            pendingInviteCount: 0,
-            activeWatchlistTermCount,
-            pausedWatchlistCount: watchlists.filter(item => item.status === 'paused').length,
-            archivedWatchlistCount: 0,
-        },
-        readiness: {
-            organizationCanGenerateAlerts: true,
-            actorCanExportActiveTerms: true,
-            readyForWorker3Replay: true,
-            readyForDashboard: true,
-            cleanupRequired: false,
-        },
-        blockers: [],
-    }
-}
-
-function syntheticWebhookDestinationsFromWatchlists(watchlists: DwmWatchlistSummary[], organization: DwmOrganizationSummary | undefined, generatedAt: string): DwmOrganizationWebhookDestination[] {
-    const ids = uniqueStrings(watchlists.map(item => item.webhookDestinationId || ''))
-    return ids.map(id => ({
-        id,
-        organizationId: organization?.id || 'default',
-        tenantId: organization?.tenantId || 'default',
-        name: 'Hanasand DWM intake',
-        kind: 'generic',
-        status: 'active',
-        createdAt: generatedAt,
-        updatedAt: generatedAt,
-        createdBy: 'dwm-watchlist-runtime',
-        lastTestedAt: generatedAt,
-        lastTestStatus: 'delivered',
-    }))
-}
-
-function syntheticDeliveriesFromAlerts(alerts: Array<Record<string, unknown>>, generatedAt: string): DwmDeliveryItem[] {
-    return alerts.flatMap(alert => {
-        const alertId = stringOrUndefined(alert.id)
-        const readiness = alert.deliveryReadinessContext as { ready?: boolean, webhookDestinationIds?: unknown[], deliveryDedupeKey?: string } | undefined
-            || alert.deliveryReadiness as { ready?: boolean, webhookDestinationIds?: unknown[], deliveryDedupeKey?: string } | undefined
-        const webhookDestinationId = stringsFrom(readiness?.webhookDestinationIds).at(0)
-        if (!alertId || !readiness?.ready || !webhookDestinationId) return []
-        return [{
-            id: `delivery_${alertId}`,
-            alertId,
-            watchlistId: stringsFrom(alert.watchlistIds).at(0) || 'dwm_watchlist_runtime',
-            organizationId: stringOrUndefined(alert.organizationId) || 'default',
-            webhookDestinationId,
-            endpointHash: webhookDestinationId,
-            attemptedAt: stringOrUndefined(alert.updatedAt) || stringOrUndefined(alert.lastSeenAt) || generatedAt,
-            payloadHash: stringOrUndefined((alert.webhookDelivery as { payloadHash?: unknown } | undefined)?.payloadHash) || stringOrUndefined(alert.dedupeKey) || alertId,
-            status: 'delivered',
-            deliveryKind: 'generic',
-            httpStatus: 202,
-        } satisfies DwmDeliveryItem]
-    })
-}
-
-function syntheticCasesFromAlerts(alerts: Array<Record<string, unknown>>, generatedAt: string): Array<Record<string, unknown>> {
-    return alerts.flatMap(alert => {
-        const alertId = stringOrUndefined(alert.id)
-        const casePath = stringOrUndefined((alert.caseHandoff as { casePath?: unknown } | undefined)?.casePath)
-            || stringOrUndefined(alert.casePath)
-            || stringOrUndefined((alert.workflowContext as { casePath?: unknown } | undefined)?.casePath)
-        const caseId = stringOrUndefined((alert.caseHandoff as { caseId?: unknown } | undefined)?.caseId)
-            || caseIdFromPath(casePath)
-            || stringOrUndefined((alert.workflowContext as { caseIdCandidate?: unknown } | undefined)?.caseIdCandidate)
-        if (!alertId || !caseId) return []
-        return [{
-            id: caseId,
-            alertId,
-            status: stringOrUndefined(alert.workflowStatus) || 'new',
-            assignedOwner: stringOrUndefined(alert.assignedOwner) || 'Hanasand DWM',
-            updatedAt: stringOrUndefined(alert.updatedAt) || stringOrUndefined(alert.lastSeenAt) || generatedAt,
-            createdAt: stringOrUndefined(alert.createdAt) || stringOrUndefined(alert.firstSeenAt) || generatedAt,
-            timelineCount: 1,
-            casePath,
-        }]
-    })
-}
-
-function syntheticAnalystCaseDetailProof(caseRow: Record<string, unknown> | undefined, fetch: FetchResult, route: string, generatedAt: string): AnalystCaseDetailProofInput {
-    if (!caseRow?.id) return analystCaseDetailProof(fetch, route)
-    return {
-        route,
-        fetchOk: true,
-        fetchStatus: fetch.status,
-        fetchError: undefined,
-        schemaVersion: 'analyst.case_detail.synthetic_from_dwm_alert.v1',
-        caseId: String(caseRow.id),
-        alertId: stringOrUndefined(caseRow.alertId),
-        status: stringOrUndefined(caseRow.status) || 'new',
-        assignedOwner: stringOrUndefined(caseRow.assignedOwner),
-        updatedAt: stringOrUndefined(caseRow.updatedAt) || stringOrUndefined(caseRow.createdAt) || generatedAt,
-        readOnly: true,
-        canMutate: true,
-        timelineCount: Number(caseRow.timelineCount || 1),
-        proofTimestamp: stringOrUndefined(caseRow.updatedAt) || stringOrUndefined(caseRow.createdAt) || generatedAt,
-    }
-}
-
-function caseIdFromPath(path?: string) {
-    const match = path?.match(/\/cases\/([^/?#]+)/)
-    return match?.[1]
 }
 
 function publicTiProvenanceReadiness(input: {
@@ -1178,33 +1031,6 @@ function webhookProductProgressProof(result: FetchResult): DwmWebhookProductProg
     const candidate = proof as Partial<DwmWebhookProductProgressProof>
     if (candidate.schemaVersion !== 'dwm.webhook.destination_admin_product_progress.v1') return undefined
     return candidate as DwmWebhookProductProgressProof
-}
-
-function syntheticSupportAuditReadiness(alerts: Array<Record<string, unknown>>, deliveries: DwmDeliveryItem[], generatedAt: string): HelpdeskAuditReadiness | undefined {
-    const routedAlerts = alerts.filter(alert => stringOrUndefined(alert.id) && (alert.deliveryReadinessContext as { ready?: boolean } | undefined)?.ready === true)
-    if (!routedAlerts.length && !deliveries.length) return undefined
-    const latestAlertAt = latestTimestamp(routedAlerts.map(alert => String(alert.updatedAt || alert.lastSeenAt || alert.createdAt || '')))
-    const latestDeliveryAt = latestTimestamp(deliveries.map(row => row.attemptedAt || String((row as { createdAt?: unknown }).createdAt || '')))
-    const latestAuditAt = latestTimestamp([latestAlertAt || '', latestDeliveryAt || '', generatedAt])
-    return {
-        schemaVersion: 'support.audit.readiness.v1',
-        status: 'ready',
-        checkedAt: generatedAt,
-        source: '/api/dwm/alerts + /api/dwm/webhooks/deliveries',
-        href: '/dashboard/system/impersonation',
-        auditedActions: routedAlerts.length + deliveries.length,
-        openRecoveryRequests: 0,
-        supportQueueDepth: routedAlerts.length,
-        latestAuditEventAt: latestAuditAt,
-        blockers: [],
-        ownerLane: 'helpdesk',
-        staleAfterSeconds: 3600,
-        proofTimestamp: latestAuditAt || generatedAt,
-        expectedDashboardRowId: 'helpdesk_audit',
-        integrationProbeHint: 'Customer-safe support audit uses DWM alert workflow and webhook delivery records; admin-only recovery/audit routes remain protected by auth.',
-        backendProofContractVersion: 'support.audit.readiness.v1 + dwm.alert_customer_readiness.v1',
-        detail: `${routedAlerts.length} customer-visible alert workflow record${routedAlerts.length === 1 ? '' : 's'} and ${deliveries.length} delivery record${deliveries.length === 1 ? '' : 's'} are available for support review without exposing raw evidence.`,
-    }
 }
 
 function helpdeskAuditReadiness(input: {
