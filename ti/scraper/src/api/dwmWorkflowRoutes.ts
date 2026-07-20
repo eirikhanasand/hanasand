@@ -8,7 +8,7 @@ import { nowIso, stableId, uniqueStrings } from "../utils.ts";
 import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmAlertRebuildEntitlement, evaluateProposedDwmWatchlistEntitlement, recordDwmEntitlementUsageEvent } from "./dwmEntitlementRoutes.ts";
 import { exposureClaimsFromStore } from "./exposureQueueRoutes.ts";
 import { json, readJson } from "./http.ts";
-import { buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
+import { assertPublicWebhookTarget, buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, normalizeWebhookUrl, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
 import type { OrganizationMember } from "./organizationRoutes.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
@@ -725,8 +725,10 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     }
 
     try {
+      if (fetcher === fetch) await assertPublicWebhookTarget(webhookUrl);
       const response = await fetcher(webhookUrl, {
         method: "POST",
+        redirect: "error",
         headers: webhookHeaders("darkweb.monitoring.match", deliveryId, baseDelivery.dedupeKey),
         body: JSON.stringify(requestBody)
       });
@@ -807,8 +809,10 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
   }
 
   try {
+    if (fetcher === fetch) await assertPublicWebhookTarget(webhookUrl);
     const response = await fetcher(webhookUrl, {
       method: "POST",
+      redirect: "error",
       headers: webhookHeaders("darkweb.monitoring.test", deliveryId, deliveryId),
       body: JSON.stringify(requestBody)
     });
@@ -1765,18 +1769,6 @@ function normalizeWatchlistStatus(value: unknown, fallback: DwmWatchlist["status
   const status = String(value ?? "").trim().toLowerCase();
   if (!status) return fallback;
   return status === "disabled" || status === "paused" ? "paused" : "active";
-}
-
-function normalizeWebhookUrl(value: unknown): string | undefined {
-  const raw = String(value ?? "").trim();
-  if (!raw) return undefined;
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return undefined;
-    return url.toString();
-  } catch {
-    return undefined;
-  }
 }
 
 function entitlementRequestId(request: Request, body: any): string | undefined {

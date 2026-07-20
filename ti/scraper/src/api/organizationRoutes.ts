@@ -1,7 +1,9 @@
 import { nowIso, stableId, uniqueStrings } from "../utils.ts";
+import { lookup } from "node:dns/promises";
 import { sanitizeDwmCustomerEvidenceExcerpt, sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
 import { error, json, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
+import { privateTarget } from "../registry/sourceRegistry.ts";
 
 type OrganizationRole = "owner" | "admin" | "analyst" | "viewer";
 type OrganizationStatus = "active" | "suspended";
@@ -170,7 +172,7 @@ export async function createWebhookDestination(request: Request, options: ApiSer
   if (!organization) return orgNotFound();
   const body = await readJson<any>(request);
   const url = normalizeWebhookUrl(body.url ?? body.webhookUrl);
-  if (!url) return json({ error: { code: "invalid_webhook_url", message: "Webhook URL must start with http:// or https://." } }, 400);
+  if (!url) return invalidWebhookUrl();
 
   const generatedAt = nowIso();
   const kind = body.kind === "discord" || body.kind === "generic" ? body.kind : inferWebhookKind(url);
@@ -200,7 +202,7 @@ export async function updateWebhookDestination(request: Request, options: ApiSer
   const nextUrl = body.url !== undefined || body.webhookUrl !== undefined
     ? normalizeWebhookUrl(body.url ?? body.webhookUrl)
     : existing.url;
-  if (!nextUrl) return json({ error: { code: "invalid_webhook_url", message: "Webhook URL must start with http:// or https://." } }, 400);
+  if (!nextUrl) return invalidWebhookUrl();
 
   const generatedAt = nowIso();
   const kind = body.kind === "discord" || body.kind === "generic" ? body.kind : inferWebhookKind(nextUrl);
@@ -272,8 +274,10 @@ export async function testOrganizationWebhook(request: Request, options: ApiServ
 
   const fetcher = typeof options.webhookFetch === "function" ? options.webhookFetch as typeof fetch : fetch;
   try {
+    if (fetcher === fetch) await assertPublicWebhookTarget(destination.url);
     const response = await fetcher(destination.url, {
       method: "POST",
+      redirect: "error",
       headers: webhookHeaders("organization.webhook.test", deliveryId, deliveryId),
       body: JSON.stringify(payload)
     });
@@ -453,16 +457,31 @@ function normalizeRole(value: unknown): OrganizationRole {
   return value === "owner" || value === "admin" || value === "viewer" ? value : "analyst";
 }
 
-function normalizeWebhookUrl(value: unknown): string | undefined {
+export function normalizeWebhookUrl(value: unknown): string | undefined {
   const raw = String(value ?? "").trim();
   if (!raw) return undefined;
   try {
     const url = new URL(raw);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return undefined;
+    if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || privateTarget(url.hostname)) return undefined;
     return url.toString();
   } catch {
     return undefined;
   }
+}
+
+export async function assertPublicWebhookTarget(value: unknown, resolver = lookup): Promise<string> {
+  const normalized = normalizeWebhookUrl(value);
+  if (!normalized) throw new Error("Webhook target is not a public HTTP(S) endpoint.");
+  const url = new URL(normalized);
+  const addresses = await resolver(url.hostname, { all: true, verbatim: true });
+  if (!addresses.length || addresses.some(({ address }) => privateTarget(address))) {
+    throw new Error("Webhook target resolved to a private network.");
+  }
+  return normalized;
+}
+
+function invalidWebhookUrl() {
+  return json({ error: { code: "invalid_webhook_url", message: "Webhook URL must use a public HTTP(S) endpoint without credentials." } }, 400);
 }
 
 function redactWebhookUrl(value: string): string {
