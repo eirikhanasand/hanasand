@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
-import { DEFAULT_RETENTION_POLICIES, defaultRetentionClassForCapture, enforceRetentionPolicy, simulateRetentionEnforcement } from "../storage/retention.ts";
+import { DEFAULT_RETENTION_POLICIES, defaultRetentionClassForCapture, enforceRetentionPolicy, normalizeDefaultRetentionClasses, simulateRetentionEnforcement } from "../storage/retention.ts";
 import { InMemoryObjectEvidenceStore } from "../storage/memoryObjectEvidenceStore.ts";
 import { hashContent } from "../utils.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
@@ -70,5 +70,24 @@ describe("storage provenance replay and retention", () => {
     expect(defaultRetentionClassForCapture({ metadata: { screenshotHash: "hash" } })).toBe("screenshot_hash");
     expect(defaultRetentionClassForCapture({ sensitive: true })).toBe("sensitive_metadata");
     expect(DEFAULT_RETENTION_POLICIES.discovery_snippet.ttlDays).toBeLessThan(DEFAULT_RETENTION_POLICIES.public_chat_text.ttlDays ?? 0);
+  });
+
+  test("assigns source-aware retention to new and existing captures", () => {
+    const result = processCollectedItem({
+      sourceId: "src_retention_rss",
+      url: "https://example.test/advisory",
+      collectedAt: "2026-05-24T12:00:00.000Z",
+      rawText: "Public advisory evidence.",
+      contentHash: "hash_retention_rss",
+      links: [],
+      metadata: { adapter: "rss" },
+      sensitive: false
+    });
+    expect(result.capture).toMatchObject({ retentionClass: "public_report", metadata: { retentionPolicy: { class: "public_report", assignedFrom: "rss" } } });
+
+    const store = new InMemoryScraperStore();
+    store.saveCapture(fixtureCapture({ id: "cap_legacy_telegram", retentionClass: "standard", metadata: { adapter: "telegram_public" } }));
+    expect(normalizeDefaultRetentionClasses(store, "2026-07-20T00:00:00.000Z")).toBe(1);
+    expect(store.getCapture("cap_legacy_telegram")).toMatchObject({ retentionClass: "public_chat_text", metadata: { retentionPolicy: { assignedAt: "2026-07-20T00:00:00.000Z" } } });
   });
 });

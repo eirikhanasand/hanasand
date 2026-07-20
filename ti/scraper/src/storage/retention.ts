@@ -57,6 +57,23 @@ export async function enforceDefaultRetentionPolicies(store: RetentionStore, obj
   return store.batch ? await store.batch(enforce) : enforce();
 }
 
+export function normalizeDefaultRetentionClasses(store: RetentionStore, assignedAt = nowIso()): number {
+  let updated = 0;
+  for (const capture of store.listCaptures()) {
+    if ((capture.retentionClass ?? "standard") !== "standard" || capture.sensitive || capture.legalHold) continue;
+    const sourceType = capture.metadata?.sourceType ?? capture.metadata?.adapter;
+    const retentionClass = defaultRetentionClassForCapture({ sourceType, mediaType: capture.mediaType, metadata: capture.metadata });
+    if (retentionClass === "standard") continue;
+    store.replaceCaptureForRetention({
+      ...capture,
+      retentionClass,
+      metadata: { ...capture.metadata, retentionPolicy: { class: retentionClass, version: "default-retention:v1", assignedFrom: sourceType, assignedAt } }
+    });
+    updated += 1;
+  }
+  return updated;
+}
+
 const held = (capture: RawCapture) => Boolean(capture.legalHold || capture.retentionClass === "legal_hold");
 const requiresMutation = (capture: RawCapture, policy: RetentionPolicy) => policy.action === "delete_body" ? capture.body !== undefined : ["delete_object", "delete_capture_metadata"].includes(policy.action) ? capture.body !== undefined || capture.objectRef !== undefined : false;
 function mutate(capture: RawCapture, policy: RetentionPolicy): RawCapture { return policy.action === "delete_body" ? { ...capture, body: undefined } : policy.action === "delete_object" ? { ...capture, body: undefined, objectRef: undefined } : policy.action === "delete_capture_metadata" ? { ...capture, body: undefined, objectRef: undefined, metadata: policy.preserveMetadata ? capture.metadata : {}, contentHash: policy.preserveHashes ? capture.contentHash : "purged", normalizedTextHash: policy.preserveHashes ? capture.normalizedTextHash : undefined } : capture; }

@@ -1,10 +1,13 @@
 import type { CollectedItem, RawCapture } from "../types.ts";
 import { hashContent, normalizeWhitespace, stableId } from "../utils.ts";
+import { defaultRetentionClassForCapture } from "../storage/retention.ts";
 import { detectLanguageHooks, EXTRACTOR_VERSION } from "./extractors.ts";
 
 export function buildRawCapture(item: CollectedItem): RawCapture {
   const captureId = stableId("cap", `${item.sourceId}:${item.url}:${item.contentHash}`);
   const contentHash = item.contentHash || hashContent(item.rawText);
+  const sourceType = item.metadata?.sourceType ?? item.metadata?.adapter;
+  const retentionClass = item.sensitive ? "restricted_metadata" : defaultRetentionClassForCapture({ sourceType, mediaType: item.html ? "text/html" : "text/plain" });
 
   return {
     id: captureId,
@@ -22,7 +25,8 @@ export function buildRawCapture(item: CollectedItem): RawCapture {
     metadata: {
       ...item.metadata,
       extractorVersion: EXTRACTOR_VERSION,
-      languageHooks: detectLanguageHooks(item.rawText, item.language)
+      languageHooks: detectLanguageHooks(item.rawText, item.language),
+      retentionPolicy: { class: retentionClass, version: "default-retention:v1", assignedFrom: sourceType || "default" }
     },
     sensitive: item.sensitive,
     sensitivityFlags: item.sensitive ? ["sensitive_source", "leak_metadata"] : ["public"],
@@ -40,6 +44,6 @@ export function buildRawCapture(item: CollectedItem): RawCapture {
       extractorVersion: EXTRACTOR_VERSION,
       taskId: item.taskId
     },
-    retentionClass: item.sensitive ? "restricted_metadata" : "standard"
+    retentionClass
   };
 }
