@@ -149,8 +149,8 @@ describe("DWM exposure queue pipeline", () => {
       sourceId: "src_public_news",
       source: { name: "Ransomware.live Victim Feed", url: "https://www.ransomware.live/rss.xml" },
       title: "Ransomware.live Victim Feed",
-      rawText: "Ransomware.live Victim Feed\nAkira claims victim: Fabrikam Manufacturing\n44 GB data leak listed with sample records.",
-      url: "https://news.example.test/fabrikam",
+      rawText: "Ransomware.live Victim Feed\nFabrikam Manufacturing\n44 GB data leak listed with sample records.",
+      url: "https://www.ransomware.live/id/RmFicmlrYW0gTWFudWZhY3R1cmluZ0Bha2lyYQ==",
       collectedAt: new Date().toISOString(),
       publishedAt: new Date().toISOString(),
       metadata: { adapter: "public_advisory" }

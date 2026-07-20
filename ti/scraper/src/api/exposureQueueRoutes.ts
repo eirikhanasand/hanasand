@@ -449,11 +449,13 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
 async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<ParsedExposureClaim> {
   const ai = await parseWithHostedAi(item).catch(() => undefined);
   const parsed = ai || fallbackParse(item, at);
+  const sourceIdentity = ransomwareLiveIdentity(item.url);
+  const titleClaim = parseVictimClaimTitle([item.title, item.text].filter(Boolean).join("\n"));
   const confidence = clamp(Number(parsed.confidence ?? item.confidence ?? 0.74));
-  const company = boundedText(clean(parsed.company || parsed.victimName || item.company || item.victimName || ""), 140) ?? "";
+  const company = boundedText(clean(item.company || item.victimName || sourceIdentity?.company || titleClaim?.company || parsed.company || parsed.victimName || ""), 140) ?? "";
   return {
     ...item,
-    actor: boundedText(cleanActorName(parsed.actor || item.actor || item.sourceName || "Unknown actor"), 80) ?? "Unknown actor",
+    actor: boundedText(cleanActorName(item.actor || sourceIdentity?.actor || titleClaim?.actor || parsed.actor || item.sourceName || "Unknown actor"), 80) ?? "Unknown actor",
     company,
     claimedData: boundedText(clean(parsed.claimedData || item.claimedData || "Not disclosed by TA"), 240) ?? "Not disclosed by TA",
     claimedDataSize: boundedText(clean(parsed.claimedDataSize || item.claimedDataSize || dataSizeFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"), 80) ?? "Not disclosed by TA",
@@ -763,6 +765,22 @@ function parseVictimClaimTitle(title: string) {
   const company = clean(direct[2]);
   if (!actor || !company || actor.length > 80 || company.length > 140) return undefined;
   return { actor, company };
+}
+
+function ransomwareLiveIdentity(value: unknown) {
+  try {
+    const url = new URL(String(value ?? ""));
+    if (!/^(?:www\.)?ransomware\.live$/i.test(url.hostname) || !url.pathname.startsWith("/id/")) return undefined;
+    const token = decodeURIComponent(url.pathname.slice(4)).replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = new TextDecoder().decode(Uint8Array.from(atob(token), (char) => char.charCodeAt(0)));
+    const separator = decoded.lastIndexOf("@");
+    const company = clean(decoded.slice(0, separator));
+    const rawActor = clean(decoded.slice(separator + 1));
+    if (separator < 1 || !company || !rawActor || company.length > 140 || rawActor.length > 80) return undefined;
+    return { company, actor: rawActor.charAt(0).toUpperCase() + rawActor.slice(1) };
+  } catch {
+    return undefined;
+  }
 }
 
 function victimClaimHeadline(value: unknown) {
