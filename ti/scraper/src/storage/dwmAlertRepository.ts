@@ -4836,6 +4836,7 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
   if (!evidence.length) return undefined;
 
   const sourceFamilies = uniqueStrings(evidence.map((item) => item.sourceFamily)) as DwmAlert["sourceFamily"][];
+  const sourceCount = uniqueStrings(evidence.map((item) => item.sourceId)).length;
   const sourceFamily = evidence[0]?.sourceFamily ?? "unknown";
   const observed = evidence.map((item) => item.observedAt || item.firstSeenAt).filter(Boolean).sort();
   const artifactType = sourceFamily === "public_advisory" ? "public_report" : "metadata_match";
@@ -4852,9 +4853,11 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
     company: displayAlertCompany(candidate.term.value),
     artifactType,
     sourceFamily,
-    sourceCount: evidence.length,
+    sourceCount,
     firstSeenAt: observed[0] ?? nowFromEvidence(input),
     lastSeenAt: observed.at(-1) ?? nowFromEvidence(input),
+    assertionKind: "source_claim",
+    observedMatchSummary: generatedObservedMatchSummary(candidate.term.value, evidence.length, sourceCount),
     claimSummary: `${sourceFamily.replaceAll("_", " ")} evidence matched ${candidate.term.value} across ${evidence.length} capture${evidence.length === 1 ? "" : "s"}.`,
     matchContext: {
       normalizedTerm: candidate.normalizedTerm,
@@ -4965,9 +4968,11 @@ function mergeGeneratedAlert(current: DwmAlert, next: DwmAlert): DwmAlert {
   return {
     ...current,
     evidence,
-    sourceCount: evidence.length,
+    sourceCount: sourceIds.length,
     firstSeenAt: observed[0] ?? current.firstSeenAt ?? next.firstSeenAt,
     lastSeenAt: observed.at(-1) ?? next.lastSeenAt ?? current.lastSeenAt,
+    assertionKind: "source_claim",
+    observedMatchSummary: generatedObservedMatchSummary(current.matchedTerm.value, evidence.length, sourceIds.length),
     confidence: Math.max(Number(current.confidence ?? 0), Number(next.confidence ?? 0)),
     confidenceReasoning: uniqueStrings([...(current.confidenceReasoning ?? []), ...(next.confidenceReasoning ?? [])].map(String)),
     provenance: {
@@ -4976,6 +4981,10 @@ function mergeGeneratedAlert(current: DwmAlert, next: DwmAlert): DwmAlert {
       sourceIds
     }
   };
+}
+
+function generatedObservedMatchSummary(term: string, evidenceCount: number, sourceCount: number): string {
+  return `${evidenceCount} captured record${evidenceCount === 1 ? "" : "s"} from ${sourceCount} source${sourceCount === 1 ? "" : "s"} matched ${term}. This confirms the source mention, not the underlying incident.`;
 }
 
 function mergeGeneratedEvidence(evidence: any[]): any[] {

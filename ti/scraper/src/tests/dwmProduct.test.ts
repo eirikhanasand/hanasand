@@ -133,8 +133,12 @@ describe("dwm product snapshot", () => {
     expect(snapshot.readiness.decision).toBe("production_ready_with_live_sources");
     expect(snapshot.alerts).toHaveLength(2);
     expect(snapshot.alerts[0].severity).toBe("critical");
-    expect(snapshot.alerts[0].sourceCount).toBe(2);
+    expect(snapshot.alerts[0].sourceCount).toBe(1);
     expect(snapshot.alerts[0].evidence).toHaveLength(2);
+    expect(snapshot.alerts[0]).toMatchObject({
+      assertionKind: "source_claim",
+      observedMatchSummary: "2 captured records from 1 source matched acme.com. This confirms the source mention, not the underlying incident."
+    });
     expect(snapshot.alerts[0].evidence.map((item) => item.id)).not.toContain("cap_telegram_2_duplicate");
     expect(snapshot.alerts[0].evidence.map((item) => item.id)).not.toContain("cap_telegram_notacme");
     expect(snapshot.alerts.flatMap((alert) => alert.provenance.captureIds)).not.toContain("cap_telegram_notacme");

@@ -304,6 +304,8 @@ function safeAlertDto(alert: any) {
     incidentId: alert.incidentId,
     actor: sanitizeDwmCustomerText(alert.actor, undefined, 160),
     victim: sanitizeDwmCustomerText(alert.company ?? alert.victimName, undefined, 160),
+    assertionKind: alert.assertionKind ?? "source_claim",
+    observedMatchSummary: sanitizeDwmCustomerText(alert.observedMatchSummary),
     summary: sanitizeDwmCustomerText(alert.claimSummary ?? alert.summary),
     severity: alert.severityOverride ?? alert.severity,
     confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence > 1 ? confidence / 100 : confidence)) : undefined,

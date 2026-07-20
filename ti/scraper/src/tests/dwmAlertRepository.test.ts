@@ -1297,7 +1297,7 @@ describe("dwm alert repository", () => {
     expect(preserved?.replayCount).toBe(2);
     expect(preserved?.lastReplayedAt).toBe("2026-06-28T13:13:00.000Z");
     expect(preserved?.deliveredAt).toBe("2026-06-28T13:14:00.000Z");
-    expect(preserved?.sourceCount).toBe(2);
+    expect(preserved?.sourceCount).toBe(1);
     expect(preserved?.workflowContext.evidenceCount).toBe(2);
     expect(preserved?.webhookContext.evidenceCount).toBe(2);
     expect(preserved?.workflowContext.generationEvidenceWindow).toMatchObject({

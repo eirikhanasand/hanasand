@@ -276,7 +276,7 @@ describe("dwm workflow persistence", () => {
       expect(secondRebuild.alerts[0].assignedOwner).toBe("iris");
       expect(secondRebuild.alerts[0].workflowEvents).toHaveLength(2);
       expect(secondRebuild.alerts[0].replayCount).toBe(1);
-      expect(secondRebuild.alerts[0].sourceCount).toBe(2);
+      expect(secondRebuild.alerts[0].sourceCount).toBe(1);
       expect(secondRebuild.alerts[0].evidenceSummary.evidenceCount).toBe(2);
       expect(secondRebuild.alerts[0].workflowContext.evidenceCount).toBe(2);
       expect(secondRebuild.alerts[0].workflowContext.generationEvidenceWindow).toMatchObject({

@@ -125,6 +125,10 @@ type CaseAlert = {
     firstSeenAt?: string
     lastSeenAt?: string
     confidence?: number
+    assertionKind?: 'source_claim'
+    observedMatchSummary?: string
+    claimSummary?: string
+    routingContext?: { reason?: string }
     dedupeKey?: string
     provenance?: {
         sourceIds?: string[]
@@ -676,9 +680,14 @@ function DecisionBrief({ detail, exportPayload, latestDelivery, actionDockHref, 
                 <h2 className='mt-2 wrap-break-word text-base font-semibold text-ui-text'>{primaryNext?.label || recommended}</h2>
                 <p className='mt-1 max-w-3xl wrap-break-word text-sm leading-6 text-ui-muted'>{recommendedDetail}</p>
                 <div className='mt-3 grid gap-2 sm:grid-cols-3'>
-                    <DecisionFact label='Matched term' value={terms[0] || detail.alert?.matchedTerm?.value || 'term pending'} />
+                    <DecisionFact label='Assertion' value='Source claim' />
                     <DecisionFact label='Sources' value={sourceRefs.length ? `${sourceRefs.length} linked` : 'source pending'} title={sourceRefs.join(', ')} />
                     <DecisionFact label='Captures' value={captureRefs.length ? `${captureRefs.length} linked` : 'capture pending'} title={captureRefs.join(', ')} />
+                </div>
+                <div className='mt-3 grid max-w-3xl gap-1 text-xs leading-5 text-ui-muted'>
+                    <p className='wrap-break-word'><span className='font-semibold text-ui-text'>Observed fact:</span> {detail.alert?.observedMatchSummary || `${evidenceCount} captured record${evidenceCount === 1 ? '' : 's'} matched ${terms[0] || detail.alert?.matchedTerm?.value || 'the watched term'}; this confirms a source mention, not the underlying incident.`}</p>
+                    <p className='wrap-break-word'><span className='font-semibold text-ui-text'>Source claim:</span> {detail.alert?.claimSummary || 'No source claim summary is available.'}</p>
+                    <p className='wrap-break-word'><span className='font-semibold text-ui-text'>Analyst inference:</span> {detail.alert?.routingContext?.reason || 'Review the linked evidence before drawing an incident conclusion.'}</p>
                 </div>
             </div>
             <div className='grid min-w-0 content-start gap-2'>

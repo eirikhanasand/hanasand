@@ -21,6 +21,8 @@ export type DwmAlert = {
     sourceCount: number
     firstSeenAt: string
     lastSeenAt?: string
+    assertionKind?: 'source_claim'
+    observedMatchSummary?: string
     claimSummary: string
     matchContext?: {
         normalizedTerm: string

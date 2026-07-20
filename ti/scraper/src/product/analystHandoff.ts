@@ -1202,6 +1202,8 @@ function alertFromOrgRelevance(
     sourceCount: sourceIds.length || 1,
     firstSeenAt: orgRelevance.freshness?.lastSeen ?? orgRelevance.generatedAt,
     lastSeenAt: orgRelevance.freshness?.lastSeen ?? orgRelevance.generatedAt,
+    assertionKind: "source_claim",
+    observedMatchSummary: `1 captured record from ${sourceIds.length || 1} source matched ${term.value}. This confirms the source mention, not the underlying incident.`,
     claimSummary: `${orgRelevance.query} matched ${term.value} from ${source.sourceName}.`,
     matchContext: {
       normalizedTerm: normalizeValue(term.value),

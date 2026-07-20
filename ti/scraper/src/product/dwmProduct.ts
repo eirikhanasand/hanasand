@@ -8,6 +8,7 @@ export type DwmReviewState = "needs_review" | "validate_identity" | "route_to_cu
 export type DwmArtifactType = "telegram_mention" | "ransomware_claim" | "infostealer_hint" | "session_or_token_hint" | "nhi_exposure_hint" | "vendor_claim" | "public_report" | "metadata_match";
 export type DwmCaptureMode = "public_message" | "metadata_only" | "public_report" | "unknown";
 export type DwmRecommendedRoute = "identity_response" | "vendor_risk" | "incident_response" | "brand_protection" | "analyst_review";
+export type DwmAssertionKind = "source_claim";
 
 export interface DwmWatchTerm {
   value: string;
@@ -51,6 +52,8 @@ export interface DwmAlert {
   sourceCount: number;
   firstSeenAt: string;
   lastSeenAt: string;
+  assertionKind: DwmAssertionKind;
+  observedMatchSummary: string;
   claimSummary: string;
   matchContext: {
     normalizedTerm: string;
@@ -279,6 +282,8 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
       sourceCount: 1,
       firstSeenAt: String((capture as any).collectedAt ?? input.generatedAt),
       lastSeenAt: String((capture as any).collectedAt ?? input.generatedAt),
+      assertionKind: "source_claim",
+      observedMatchSummary: observedMatchSummary(matchedTerm, [evidence]),
       claimSummary: summarizeClaim({ matchedTerm, text, artifactType, sourceFamily, actor }),
       matchContext: matchContextFor(matchedTerm, capture),
       evidenceSummary: evidenceSummaryFor([evidence]),
@@ -467,7 +472,8 @@ function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
       continue;
     }
     current.evidence = mergeEvidenceRefs([...current.evidence, ...alert.evidence]);
-    current.sourceCount = current.evidence.length;
+    current.sourceCount = new Set(current.evidence.map((item) => item.sourceId)).size;
+    current.observedMatchSummary = observedMatchSummary(current.matchedTerm, current.evidence);
     current.confidence = Math.min(99, Math.max(current.confidence, alert.confidence) + 3);
     current.confidenceReasoning = uniqueStrings([...current.confidenceReasoning, ...alert.confidenceReasoning, "Multiple recent captures support the same watchlist alert."]);
     current.firstSeenAt = current.firstSeenAt < alert.firstSeenAt ? current.firstSeenAt : alert.firstSeenAt;
@@ -758,6 +764,11 @@ function safeExcerpt(text: string): string {
 function summarizeClaim(input: { matchedTerm: DwmWatchTerm; text: string; artifactType: DwmArtifactType; sourceFamily: DwmSourceFamily; actor?: string }): string {
   const actorPrefix = input.actor ? `${input.actor} context from ` : "";
   return `${actorPrefix}${sourceFamilyLabels[input.sourceFamily]} matched ${input.matchedTerm.value} as ${input.artifactType.replaceAll("_", " ")}. ${safeExcerpt(input.text)}`;
+}
+
+function observedMatchSummary(term: DwmWatchTerm, evidence: DwmEvidenceRef[]): string {
+  const sources = new Set(evidence.map((item) => item.sourceId)).size;
+  return `${evidence.length} captured record${evidence.length === 1 ? "" : "s"} from ${sources} source${sources === 1 ? "" : "s"} matched ${term.value}. This confirms the source mention, not the underlying incident.`;
 }
 
 function displayCompany(value: string): string {

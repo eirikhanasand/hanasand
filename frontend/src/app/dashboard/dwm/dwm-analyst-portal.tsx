@@ -1291,9 +1291,10 @@ function AnalystBriefPanel({ brief }: { brief: ReturnType<typeof buildAnalystBri
                     {brief.readyForCustomer ? 'Customer-ready after review' : 'Review before customer update'}
                 </span>
             </div>
-            <div className='grid gap-3 lg:grid-cols-3'>
-                <BriefStep label='What happened' value={brief.whatHappened} />
-                <BriefStep label='Why it matters' value={brief.whyItMatters} />
+            <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+                <BriefStep label='Observed fact' value={brief.observedFact} />
+                <BriefStep label='Source claim' value={brief.sourceClaim} />
+                <BriefStep label='Analyst inference' value={brief.analystInference} />
                 <BriefStep label='What to do next' value={brief.nextAction} />
             </div>
             <div className='grid gap-3 border-t border-ui-border pt-3 md:grid-cols-3'>
@@ -2571,8 +2572,9 @@ function buildAnalystBrief(
     )
     return {
         headline: `${alert.company} matched ${alert.matchedTerm.value}`,
-        whatHappened: safeAlertSummary(alert),
-        whyItMatters: routingContext.reason,
+        observedFact: alert.observedMatchSummary || `${evidenceSummary.evidenceCount} captured source record${evidenceSummary.evidenceCount === 1 ? '' : 's'} matched ${alert.matchedTerm.value}. This confirms the source mention, not the underlying incident.`,
+        sourceClaim: safeAlertSummary(alert),
+        analystInference: routingContext.reason,
         nextAction: alert.recommendedAction,
         readyForCustomer,
         evidenceBoundary: `Show ${visibleCounts}; keep sensitive file contents and secrets out of the customer update.`,

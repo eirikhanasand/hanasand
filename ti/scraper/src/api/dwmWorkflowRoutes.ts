@@ -879,6 +879,8 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     sourceCount: alert.sourceCount,
     firstSeenAt: alert.firstSeenAt,
     lastSeenAt: alert.lastSeenAt,
+    assertionKind: alert.assertionKind ?? "source_claim",
+    observedMatchSummary: alert.observedMatchSummary,
     claimSummary: buildDwmCustomerAlertSummary(alert),
     matchContext: alert.matchContext,
     evidenceSummary: alert.evidenceSummary,

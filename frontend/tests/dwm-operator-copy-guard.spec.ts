@@ -9,6 +9,7 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     const dwmPortal = await readFile(path.join(root, 'src/app/dashboard/dwm/dwm-analyst-portal.tsx'), 'utf8')
     const dashboardPage = await readFile(path.join(root, 'src/app/dashboard/page.tsx'), 'utf8')
     const workflowActions = await readFile(path.join(root, 'src/app/dashboard/dwm/dwm-workflow-actions.tsx'), 'utf8')
+    const caseDetail = await readFile(path.join(root, 'src/app/dashboard/dwm/cases/[id]/case-detail-client.tsx'), 'utf8')
 
     expect(dwmPage).toContain('The exposure monitor is showing live watchlists, sources, actors, and alerts.')
     expect(dwmPage).toContain('Collection is showing source and evidence state.')
@@ -34,6 +35,11 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
     expect(workflowActions).toContain('formatClaimSummary(readString(alert.claimSummary)')
     expect(workflowActions).not.toContain('{route.alertId}</span>')
     expect(workflowActions).not.toContain('const summary = readString(alert.claimSummary).toLowerCase()')
+    expect(dwmPortal).toContain('BriefStep label=\'Observed fact\'')
+    expect(dwmPortal).toContain('BriefStep label=\'Source claim\'')
+    expect(dwmPortal).toContain('BriefStep label=\'Analyst inference\'')
+    expect(caseDetail).toContain('<DecisionFact label=\'Assertion\'')
+    expect(caseDetail).toContain('this confirms a source mention, not the underlying incident')
     expect(dwmPortal).toContain('no active Discord/webhook destination is configured for this alert organization or watchlist')
     expect(dwmPortal).toContain('Trace ${row.auditEventId || row.requestId}.')
 
