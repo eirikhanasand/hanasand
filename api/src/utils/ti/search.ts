@@ -24,7 +24,6 @@ export interface TiSearchResponse {
     notes: string[]
     operationalStatus?: TiOperationalStatus
     analystLoop?: TiAnalystLoop
-    collectionStrategy?: TiCollectionStrategy
     actorIntelligence?: TiActorIntelligenceContract
     actionability?: TiActionabilityContract
 }
@@ -231,29 +230,6 @@ export interface TiSource {
     parserStatus?: NonNullable<NonNullable<TiActionabilityContract['sourceProvenance']>[number]['parserStatus']>
     reportDate?: string
     lastCollectedAt?: string
-}
-
-export interface TiCollectionStrategy {
-    thesis: string
-    productFocus: string[]
-    sourcePosture: Array<{
-        source: string
-        role: 'primary_seed' | 'corroboration' | 'context_only' | 'rejected_paid_rows' | 'owned_collection_target'
-        summary: string
-        buyerValue: string
-        limitations?: string
-    }>
-    ownedCollection: {
-        priority: 'primary'
-        summary: string
-        requirements: string[]
-        prohibited: string[]
-    }
-    distribution: {
-        primarySurface: 'hanasand.com'
-        secondarySurface: 'none'
-        summary: string
-    }
 }
 
 export interface TiAnalystLoop {
@@ -831,22 +807,13 @@ async function tryScraperSearch(scraperBase: string, query: string): Promise<TiS
                 : seeded.summary,
             operationalStatus: publicOperationalStatus,
             analystLoop: publicAnalystLoop,
-            sources: [
-                {
-                    id: run.id,
-                    name: 'TI scraper run',
-                    type: 'scraper_run',
-                    provenance: publicAnalystLoop.runStatusClarity.summary
-                },
-                ...seeded.sources
-            ],
-            notes: [
+            sources: seeded.sources,
+            notes: uniqueStrings([
                 publicAnalystLoop.headline,
                 publicOperationalStatus.headline,
                 `Run ${run.id}`,
                 ...seeded.notes
-            ],
-            collectionStrategy: collectionStrategy()
+            ])
         }
     } catch {
         return null
@@ -902,6 +869,7 @@ function mergeScraperEvidence(query: string, result: TiSearchResponse, rows: Scr
         confidence: Math.max(result.confidence, 0.68),
         lastSeen: activity[0]?.lastReportedAt ?? result.lastSeen,
         recentActivity: [...activity, ...result.recentActivity].slice(0, 8),
+        datasets: mergeDatasets([capturedEvidenceDataset()], result.datasets),
         sources: mergedSources,
         actionability: actionabilityForQuery(query, knownActorProfile(query), mergedSources),
         notes: ['Captured public-source evidence is available for this query.', ...result.notes]
@@ -960,7 +928,7 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
             recentActivity: mergeActivity(activity, known?.recentActivity ?? []),
             targets: mergeTargets(inferLiveTargets(query, matches), known?.targets ?? []),
             ttps: mergeTtps(inferLiveTtps(matches), known?.ttps ?? []),
-            datasets: mergeDatasets(liveDatasets(), known?.datasets ?? []),
+            datasets: mergeDatasets([clearWebEvidenceDataset()], known?.datasets ?? []),
             sources: mergeSources(matches.slice(0, 8).map(match => ({
                 id: match.id,
                 name: match.publisher ?? match.title,
@@ -975,7 +943,6 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
             ],
             operationalStatus: buildOperationalStatus(null, { query, mode: 'live_search', taskCount: matches.length }),
             analystLoop: buildAnalystLoop({ query, seeded: { recentActivity: activity }, operationalStatus: buildOperationalStatus(null, { query, mode: 'live_search', taskCount: matches.length }) }),
-            collectionStrategy: collectionStrategy(),
             actorIntelligence: known?.actorIntelligence,
             actionability: actionabilityForQuery(query, known, mergeSources(matches.slice(0, 8).map(match => ({
                 id: match.id,
@@ -1001,12 +968,11 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
         recentActivity: known?.recentActivity ?? [],
         targets: known?.targets ?? [],
         ttps: known?.ttps ?? [],
-        datasets: mergeDatasets(liveDatasets(), known?.datasets ?? []),
+        datasets: known?.datasets ?? [],
         sources: known?.sources ?? [],
         notes: known?.notes ?? [],
         operationalStatus,
         analystLoop: buildAnalystLoop({ query, operationalStatus }),
-        collectionStrategy: collectionStrategy(),
         actorIntelligence: known?.actorIntelligence,
         actionability: actionabilityForQuery(query, known)
     }
@@ -1032,78 +998,13 @@ function seededSearch(query: string): TiSearchResponse {
         recentActivity: known?.recentActivity ?? [],
         targets: known?.targets ?? [],
         ttps: known?.ttps ?? [],
-        datasets: mergeDatasets(liveDatasets(), known?.datasets ?? []),
+        datasets: known?.datasets ?? [],
         sources: known?.sources ?? [],
         notes: known?.notes ?? [],
         operationalStatus,
         analystLoop,
-        collectionStrategy: collectionStrategy(),
         actorIntelligence: known?.actorIntelligence,
         actionability: actionabilityForQuery(query, known)
-    }
-}
-
-export function collectionStrategy(): TiCollectionStrategy {
-    return {
-        thesis: 'Use public indexes as seeds and corroboration, then create value through our own high-speed metadata capture, actor mapping, and company/vendor notifications.',
-        productFocus: [
-            'recent victim and company claims',
-            'actor, date, claimed-data, sector, country, and source records',
-            'fast notifications when a watched company, vendor, domain, brand, or portfolio company appears',
-            'UI-friendly actor overviews with sources used, freshness, and review state'
-        ],
-        sourcePosture: [
-            {
-                source: 'RansomLook and ransomware.live',
-                role: 'primary_seed',
-                summary: 'Good starting mix for recent victim claims, actor names, company names, claimed dates, sector/country context, and claimed-data descriptions.',
-                buyerValue: 'Useful for bootstrapping coverage and cross-checking our captures, but not enough by itself because anyone can index the same public rows.',
-                limitations: 'Treat as seed and corroboration, not the final product.'
-            },
-            {
-                source: 'Direct actor infrastructure collection',
-                role: 'owned_collection_target',
-                summary: 'Metadata-first collection from actor-controlled public leak/extortion infrastructure where policy allows.',
-                buyerValue: 'This is where defensible value comes from: faster discovery, verified claims, freshness deltas, actor-page changes, and watchlist alerts that are not just copied from another index.'
-            },
-            {
-                source: 'RansomLook markets/crypto/notes/leaks/urls/torrent-health',
-                role: 'rejected_paid_rows',
-                summary: 'Mostly infrastructure, aliases, wallet references, old breach inventory, or sensitive-adjacent distribution metadata.',
-                buyerValue: 'Keep as analyst context or actor overview enrichment only; do not sell as paid rows for now.'
-            },
-            {
-                source: 'Infostealer and credential-exposure metadata',
-                role: 'owned_collection_target',
-                summary: 'Potentially high-value if collected as metadata and routed through safety review.',
-                buyerValue: 'Valuable for company/domain exposure alerts, but it must avoid credential values, raw dumps, private access, auth bypass, and unsafe redistribution.'
-            }
-        ],
-        ownedCollection: {
-            priority: 'primary',
-            summary: 'The long-term system should run isolated collectors and parsers that verify claims directly, store event metadata, and feed the threat actor graph and notification pipeline.',
-            requirements: [
-                'isolated disposable collectors',
-                'metadata-only storage by default',
-                'source, freshness, hash, and collection tracking',
-                'no raw leak downloads or credential values',
-                'review queues for sensitive or ambiguous captures',
-                'actor/victim/domain graph edges for the overview UI'
-            ],
-            prohibited: [
-                'raw leaked files',
-                'credential values',
-                'private or authenticated communities',
-                'CAPTCHA bypass',
-                'threat actor interaction',
-                'payload or dump redistribution'
-            ]
-        },
-        distribution: {
-            primarySurface: 'hanasand.com',
-            secondarySurface: 'none',
-            summary: 'hanasand.com is the product surface for monitoring, notifications, actor overview, and public-source reporting.'
-        }
     }
 }
 
@@ -1600,7 +1501,7 @@ function formatPercent(value: number) {
 }
 
 function actionabilityForQuery(query: string, known?: KnownActorContext | null, sources = known?.sources ?? []): TiActionabilityContract {
-    const sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']> = (sources.length ? sources : known ? automaticActorSources(query) : []).map(source => {
+    const sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']> = (sources.length ? sources : known ? automaticActorSources() : []).map(source => {
         const sourceFamily = source.sourceFamily ?? actionabilitySourceFamily(source)
         return {
             sourceId: source.id,
@@ -1615,7 +1516,7 @@ function actionabilityForQuery(query: string, known?: KnownActorContext | null, 
             confidence: known?.confidence ?? 0.58
         }
     }).filter(source => source.provenance)
-    const watchlistCandidates = known ? watchlistCandidatesForKnownActor(query, known) : watchlistCandidatesForQuery(query)
+    const watchlistCandidates = known ? watchlistCandidatesForKnownActor() : watchlistCandidatesForQuery(query)
     const hasEvidence = sourceProvenance.length > 0
     const alertDisposition: NonNullable<TiActionabilityContract['alertDisposition']> = watchlistCandidates.length
         ? 'watchlist_required'
@@ -1688,45 +1589,17 @@ function actionabilitySourceFamily(source: TiSource): NonNullable<NonNullable<Ti
     return 'public_ti'
 }
 
-function watchlistCandidatesForKnownActor(query: string, known: KnownActorContext): NonNullable<TiActionabilityContract['watchlistCandidates']> {
-    const normalized = query.trim().toLowerCase()
-    const fixed = normalized === 'apt29' || normalized.includes('cozy bear') || normalized.includes('midnight blizzard')
-        ? [
-            { kind: 'company' as const, value: 'Microsoft', reason: 'Public reporting and the actor profile include Microsoft email intrusion context.', confidence: 0.78 },
-            { kind: 'vendor' as const, value: 'SolarWinds', reason: 'Public reporting and the actor profile include SolarWinds supply-chain campaign context.', confidence: 0.78 },
-            { kind: 'company' as const, value: 'Hewlett Packard Enterprise', reason: 'Public reporting and the actor profile include HPE cloud email intrusion context.', confidence: 0.7 },
-            { kind: 'domain' as const, value: 'microsoft.com', reason: 'Domain watchlist term for Microsoft-related exposure routing.', confidence: 0.62 }
-        ]
-        : []
-    const sectorCandidates = known.targets.slice(0, 3).map(target => ({
-        kind: 'vendor' as const,
-        value: target.sector,
-        reason: `Actor target sector from this profile: ${target.rationale}`,
-        confidence: Math.min(target.confidence, 0.68)
-    }))
-    return uniqueCandidates([...fixed, ...sectorCandidates]).slice(0, 10)
+function watchlistCandidatesForKnownActor(): NonNullable<TiActionabilityContract['watchlistCandidates']> {
+    return []
 }
 
 function watchlistCandidatesForQuery(query: string): NonNullable<TiActionabilityContract['watchlistCandidates']> {
     const clean = query.trim()
     if (!clean) return []
     if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(clean)) {
-        return [{ kind: 'domain', value: clean.toLowerCase(), reason: 'Query is a domain supported by organization watchlists.', confidence: 0.72 }]
-    }
-    if (!/apt|cve-|campaign|malware|actor/i.test(clean)) {
-        return [{ kind: 'company', value: clean, reason: 'Query can be saved as an organization company watchlist term.', confidence: 0.58 }]
+        return [{ kind: 'domain', value: clean.toLowerCase(), reason: 'Exact domain supplied by the user; organization watchlists support domain terms.', confidence: 1 }]
     }
     return []
-}
-
-function uniqueCandidates(candidates: NonNullable<TiActionabilityContract['watchlistCandidates']>) {
-    const seen = new Set<string>()
-    return candidates.filter(candidate => {
-        const key = `${candidate.kind}:${candidate.value.toLowerCase()}`
-        if (!candidate.value.trim() || seen.has(key)) return false
-        seen.add(key)
-        return true
-    })
 }
 
 export function knownActorProfile(query: string): KnownActorContext | null {
@@ -2006,7 +1879,7 @@ function withAutomaticProfileDefaults(profile: KnownActorContext, actorName: str
         confidence: profile.confidence ?? confidence,
         recentActivity: profile.recentActivity ?? [],
         datasets: mergeDatasets(profile.datasets ?? [], automaticActorDatasets(actorName)),
-        sources: mergeSources(profile.sources ?? [], automaticActorSources(actorName)),
+        sources: mergeSources(profile.sources ?? [], automaticActorSources()),
         notes: [
             ...(profile.notes ?? []),
             'Stable actor fields are curated background context and are not evidence of current activity.',
@@ -2301,7 +2174,7 @@ function buildAutomaticBaselineProfile(profile: BaselineActorProfile): KnownActo
         targets: inferBaselineTargets(profile.summary),
         ttps: inferBaselineTtps(profile.summary),
         datasets: automaticActorDatasets(primaryName),
-        sources: automaticActorSources(primaryName),
+        sources: automaticActorSources(),
         notes: [
             'Shared actor refresh job; not a one-off profile override.',
             'Profile fields are cached and reused until source records or recent activity changes.',
@@ -2375,26 +2248,13 @@ function automaticActorDatasets(actorName: string): TiDataset[] {
         {
             name: `${actorName} actor profile`,
             type: 'vendor_report',
-            coverage: 'Curated actor identity, aliases, targeting, tradecraft, source links, and analyst notes. This profile is background context, not current activity.',
-            status: 'planned',
-        },
-        {
-            name: `${actorName} recent activity refresh`,
-            type: 'clear_web',
-            coverage: 'Recent reporting and monitored source deltas update independently from the stable profile cache.',
+            coverage: 'Curated background fields backed by the public references listed in this result; not evidence of current activity.',
             status: 'available',
-        },
-        {
-            name: 'Company exposure monitoring',
-            type: 'darknet_metadata',
-            coverage: 'Company, domain, vendor, and product mentions are matched against monitored actor/source records where policy allows.',
-            status: 'metadata_only',
         },
     ]
 }
 
-function automaticActorSources(actorName: string): TiSource[] {
-    const query = encodeURIComponent(`${actorName} threat actor`)
+function automaticActorSources(): TiSource[] {
     return [
         {
             id: 'google-cloud-apt-groups',
@@ -2423,13 +2283,6 @@ function automaticActorSources(actorName: string): TiSource[] {
             type: 'public_advisory',
             provenance: 'https://www.cisa.gov/news-events/cybersecurity-advisories',
             url: 'https://www.cisa.gov/news-events/cybersecurity-advisories',
-        },
-        {
-            id: `live-news-${slugifyForId(actorName)}`,
-            name: `${actorName} live reporting query`,
-            type: 'live_clear_web',
-            provenance: `https://news.google.com/search?q=${query}`,
-            url: `https://news.google.com/search?q=${query}`,
         },
     ]
 }
@@ -2510,10 +2363,6 @@ function targetRationaleForSector(sector: string, summary: string) {
 
 function titleCaseWords(value: string) {
     return value.split(/\s+/).map(word => word ? `${word[0].toUpperCase()}${word.slice(1)}` : '').join(' ')
-}
-
-function slugifyForId(value: string) {
-    return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'actor'
 }
 
 function truncateSentence(value: string, maxLength: number) {
@@ -3009,13 +2858,12 @@ function sourceActivationExecution(value: string | undefined): TiAnalystLoop['so
         : 'dry_run'
 }
 
-function liveDatasets(): TiDataset[] {
-    return [
-        { name: 'Live clear-web search', type: 'clear_web', coverage: 'Real-time public web discovery plus approved scraper captures', status: 'available' },
-        { name: 'Public Telegram/channel mentions', type: 'public_channel', coverage: 'Public channels only through official APIs', status: 'planned', url: 'https://core.telegram.org/bots/api' },
-        { name: 'Darknet/leak metadata', type: 'darknet_metadata', coverage: 'Metadata-only actor/victim/date claims; no leaked file downloads', status: 'metadata_only' },
-        { name: 'STIX-like export bundle', type: 'stix_export', coverage: 'Indicators, entities, and relationships once live captures exist', status: 'planned', url: 'https://oasis-open.github.io/cti-documentation/' }
-    ]
+function clearWebEvidenceDataset(): TiDataset {
+    return { name: 'Clear-web discovery results', type: 'clear_web', coverage: 'Public web results returned for this query.', status: 'available' }
+}
+
+function capturedEvidenceDataset(): TiDataset {
+    return { name: 'Stored scraper captures', type: 'clear_web', coverage: 'Captured public-source records returned for this query.', status: 'available' }
 }
 
 function safeTiLink(value?: string): string | undefined {
@@ -3037,7 +2885,7 @@ function inferLiveTargets(query: string, matches: LiveSearchMatch[]): TiTarget[]
     if (/\bgovernment|diplomat|ministry|embassy|state|defense|nato\b/.test(text)) {
         targets.push({
             sector: 'Government, diplomacy, or defense',
-            regions: ['From live source context'],
+            regions: [],
             rationale: 'Live public results include government, diplomacy, defense, or NATO-related language.',
             confidence: 0.38
         })
@@ -3045,7 +2893,7 @@ function inferLiveTargets(query: string, matches: LiveSearchMatch[]): TiTarget[]
     if (/\bhealthcare|hospital|pharma|medical\b/.test(text)) {
         targets.push({
             sector: 'Healthcare',
-            regions: ['From live source context'],
+            regions: [],
             rationale: 'Live public results include healthcare-related language.',
             confidence: 0.34
         })
@@ -3053,7 +2901,7 @@ function inferLiveTargets(query: string, matches: LiveSearchMatch[]): TiTarget[]
     if (/\btechnology|cloud|software|identity|microsoft|google\b/.test(text)) {
         targets.push({
             sector: 'Technology and cloud services',
-            regions: ['From live source context'],
+            regions: [],
             rationale: 'Live public results include technology, cloud, or identity platform language.',
             confidence: 0.34
         })

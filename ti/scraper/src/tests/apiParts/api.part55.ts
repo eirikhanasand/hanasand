@@ -15,5 +15,6 @@ describe("api v1", () => {
     });
     expect(response.publicTiAnswer.waitReasons).toEqual(expect.arrayContaining([expect.objectContaining({ code: "capture_promotion" })]));
     expect(response.publicTiAnswer.evidenceLedgerReferences).toEqual([]);
+    expect(response).not.toHaveProperty("collectionStrategy");
   });
 });

@@ -2,7 +2,6 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 import { error, json, numberQuery, readJson } from "./http.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { findSearchCaptures } from "./searchCaptureIndex.ts";
-import { collectionStrategy } from "./collectionStrategy.ts";
 import { isMetadataOnlyCapture, rowFromCapture } from "./searchRows.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { sanitizeDwmApiPayload, sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
@@ -197,7 +196,6 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     },
     quality: qualityPayload(query, rows, records, assessment),
     graph: { endpoint: "/v1/intel/search.graph", reviewQueue: { total: records.claims.filter((claim) => !["confirmed", "rejected"].includes(claim.reviewState)).length, publicFactPolicy: assessment.ready ? "ready" : "hold_weak_edges" } },
-    collectionStrategy: collectionStrategy(),
     planner: liveSearch.dto,
     publicChannel: publicChannelResult.ok
       ? compactPublicChannel(publicChannelResult.body, options.publicTelegramSourcePacks as any[] | undefined, query)
