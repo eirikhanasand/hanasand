@@ -12,3 +12,14 @@ test("capture storage drops malformed published timestamps", () => {
   const stored = new InMemoryScraperStore().saveCapture(fixtureCapture({ publishedAt: "Thu, 07/16/2026 - 07:25" }));
   expect(stored.publishedAt).toBeUndefined();
 });
+
+test("pipeline storage drops malformed incident timestamps", () => {
+  const capture = fixtureCapture();
+  const stored = new InMemoryScraperStore().savePipelineResult({
+    capture,
+    incident: { id: "incident_bad_date", sourceId: capture.sourceId, captureId: capture.id, title: "Incident", summary: "Summary", firstSeenAt: "Wed, 07/08/2026 - 06:25", reportedAt: "bad", publishedAt: "bad", confidence: 0.5, extractorVersion: "test", reviewState: "unreviewed" },
+    entities: [],
+    indicators: []
+  });
+  expect(stored.incident).toMatchObject({ firstSeenAt: capture.collectedAt, reportedAt: undefined, publishedAt: undefined });
+});

@@ -48,8 +48,9 @@ export class InMemoryScraperStore implements ScraperStore {
       tenantId: capture.tenantId,
       sourceId: capture.sourceId,
       captureId: capture.id,
-      reportedAt: result.incident.reportedAt ?? reportedAt(result.capture.metadata),
-      publishedAt: result.incident.publishedAt ?? capture.publishedAt,
+      firstSeenAt: validIso(result.incident.firstSeenAt) ?? capture.publishedAt ?? capture.collectedAt,
+      reportedAt: validIso(result.incident.reportedAt) ?? reportedAt(result.capture.metadata),
+      publishedAt: validIso(result.incident.publishedAt) ?? capture.publishedAt,
       collectedAt: result.incident.collectedAt ?? capture.collectedAt,
       processedAt: result.incident.processedAt ?? capture.processedAt,
       firstVisibleAt: previousIncident?.firstVisibleAt ?? capture.firstVisibleAt ?? firstVisibleAt
