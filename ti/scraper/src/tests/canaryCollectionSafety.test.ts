@@ -16,4 +16,21 @@ describe("public collection boundary", () => {
 
     await expect(fetchItems(source({ url: "http://127.0.0.1/admin" }), { targetUrl: "http://127.0.0.1/admin" }, fetch, "native_live_http", new Date().toISOString(), 1_024)).rejects.toThrow("public fetch policy blocked target");
   });
+
+  test("keeps the official CISA catalog bounded without truncating its JSON envelope", async () => {
+    const cisa = source({
+      id: "src_seed_cisa_known_exploited_vulns",
+      type: "api",
+      url: "https://www.cisa.gov/kev.json",
+      catalog: { canonicalId: "gov:us:cisa:known-exploited-vulnerabilities" }
+    });
+    const payload = JSON.stringify({
+      vulnerabilities: [{ cveID: "CVE-2026-4242", vulnerabilityName: "Example exploited vulnerability", dateAdded: "2026-06-21" }],
+      padding: "x".repeat(600_000)
+    });
+    const items = await fetchItems(cisa, { id: "task_cisa", targetUrl: cisa.url }, async () => new Response(payload, { headers: { "content-type": "application/json" } }), "native_live_http", "2026-06-22T00:00:00.000Z", 512_000);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ title: "CVE-2026-4242", metadata: { fetchProvenance: { maxBytes: 4_000_000, truncated: false } } });
+  });
 });

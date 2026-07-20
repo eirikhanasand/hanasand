@@ -9,6 +9,7 @@ export function taskFor(source: any, at: string, runId: string, maxBytes: number
 
 export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, mode: string, at: string, maxBytes: number, timeoutMs = 12_000) {
   const started = Date.now(), requestedUrl = publicFetchUrl(source, task.targetUrl);
+  if (source.catalog?.canonicalId === "gov:us:cisa:known-exploited-vulnerabilities") maxBytes = Math.max(maxBytes, 4_000_000);
   const { response: res, finalUrl, redirectCount } = await fetchPublicResponse(fetcher, requestedUrl, timeoutMs);
   if (!res.ok) throw httpError(res.status);
   const contentType = res.headers.get("content-type") ?? undefined;
