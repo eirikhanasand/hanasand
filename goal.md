@@ -89,8 +89,8 @@ The initial feasibility set must include at least one working feed of each selec
 
 - [x] Preserve the existing UI while replacing the underlying production store.
 - [x] Expose stable JSON API resources for sources, captures, entities, actors, incidents, evidence, validations, alerts, evaluation, health, and timeliness.
-- [ ] Make actor pages, search results, incidents, and alerts distinguish evidence-backed facts from inferred summaries.
-- [ ] Show confidence, freshness, source count and independence, contradictions, missing fields, parser/review state, and provenance where relevant.
+- [x] Make actor pages, search results, incidents, and alerts distinguish evidence-backed facts from inferred summaries.
+- [x] Show confidence, freshness, source count and independence, contradictions, missing fields, parser/review state, and provenance where relevant.
 - [ ] Ensure technical and non-technical users can explore the same evidence without misleading simplification.
 - [ ] Remove production placeholders and synthetic intelligence, while preserving intentional empty and degraded states.
 - [x] Provide a real source-operations view/API covering last attempt, last success, last useful item, parser success, false-positive rate, failures, family, actor coverage, and legal mode.
