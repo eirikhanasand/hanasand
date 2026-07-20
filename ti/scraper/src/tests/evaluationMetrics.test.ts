@@ -42,7 +42,7 @@ describe("durable evaluation metrics", () => {
 
     const metrics = buildEvaluationMetrics(store, { datasetSplit: "test" });
     expect(metrics.quality).toMatchObject({ status: "diagnostic_only", evaluatedUnitCount: 0, diagnosticUnitCount: 1, overall: { precision: null, recall: null } });
-    expect(metrics.quality.diagnostics.overall).toMatchObject({ truePositive: 1, precision: 1 });
+    expect(metrics.quality.diagnostics.overall).toMatchObject({ truePositive: 1, precision: 1, recall: null, f1: null });
     expect(metrics.limitations).toContain("no independently reviewed evaluation labels in scope; automated checks are diagnostic only");
   });
 });

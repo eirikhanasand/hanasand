@@ -116,7 +116,7 @@ function score(rows: any[]) {
     else counts.needsReview++;
   }
   const precision = ratio(counts.truePositive, counts.truePositive + counts.falsePositive);
-  const recall = ratio(counts.truePositive, counts.truePositive + counts.falseNegative);
+  const recall = counts.falseNegative > 0 ? ratio(counts.truePositive, counts.truePositive + counts.falseNegative) : null;
   return { ...counts, precision, recall, f1: precision === null || recall === null || precision + recall === 0 ? null : round((2 * precision * recall) / (precision + recall)) };
 }
 
