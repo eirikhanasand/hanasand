@@ -800,7 +800,7 @@ async function tryScraperSearch(scraperBase: string, query: string): Promise<TiS
             } satisfies TiAnalystLoop
         return {
             ...seeded,
-            mode: seeded.mode === 'live_search' ? 'live_search' : 'scraper',
+            mode: 'scraper',
             status: publicState,
             runId: run.id,
             refreshAfterSeconds: 3,
