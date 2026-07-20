@@ -466,9 +466,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   private async persistPipeline(capture: RawCapture, incidentId?: string): Promise<void> {
-    const incident = incidentId ? this.getIncident(incidentId) : undefined;
     const entities = this.listExtractedEntities().filter((record: any) => record.captureId === capture.id);
     const indicators = this.listIndicators().filter((record: any) => record.captureId === capture.id);
+    const incidentIds = new Set([incidentId, ...entities.map((record: any) => record.incidentId), ...indicators.map((record: any) => record.incidentId)].filter(Boolean));
+    const incidents = [...incidentIds].map((id) => this.getIncident(id!)).filter(Boolean);
     const profiles = this.listActorProfiles().filter((record: any) => record.captureIds?.includes(capture.id));
     const claims = this.listIntelligenceClaims().filter((record: any) => record.captureIds?.includes(capture.id));
     const claimEvidence = this.listClaimEvidence().filter((record: any) => record.captureId === capture.id);
@@ -477,7 +478,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const deltas = this.listEvidenceDeltas().filter((record: any) => record.captureIds?.includes(capture.id));
     await this.sql.begin(async (sql) => {
       await this.persistCapture(capture, sql);
-      if (incident) await this.persistIncident(incident, sql);
+      for (const incident of incidents) await this.persistIncident(incident, sql);
       for (const entity of entities) await this.persistEntity(entity, sql);
       for (const indicator of indicators) await this.persistIndicator(indicator, sql);
       for (const profile of profiles) await this.persistActorProfile(profile, sql);
