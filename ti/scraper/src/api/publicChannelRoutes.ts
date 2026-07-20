@@ -27,7 +27,10 @@ export function buildPublicChannelStatusRouteResponse(input: any, options: Publi
   const captures = options.store.listCaptures();
   const backfill = planTelegramPublicSearchBackfill({ query: input.query, entityType: input.entityType, sources, sourcePacks: packs, tenantId: input.tenantId, maxTasks: 8, queuedSourceIds });
   const terms = backfill.queryTerms.map((term) => term.toLowerCase());
-  const evidence = captures.map(publicChannelEvidenceFromCapture).filter(Boolean).filter((e) => terms.some((term) => `${e.channel} ${e.snippet} ${e.extractedUrls.join(" ")}`.toLowerCase().includes(term))).slice(0, 20);
+  const evidence = captures.map((capture) => {
+    const item = publicChannelEvidenceFromCapture(capture);
+    return item ? { ...item, sourceId: capture.sourceId } : undefined;
+  }).filter(Boolean).filter((e) => terms.some((term) => `${e.channel} ${e.snippet} ${e.extractedUrls.join(" ")}`.toLowerCase().includes(term))).slice(0, 20);
   const cutoverReport = buildTelegramPublicCutoverReport({ query: input.query, entityType: input.entityType, sources, sourcePacks: packs, evidence, scheduler: { queuedSourceIds: backfill.tasks.map((t) => t.sourceId) }, generatedAt });
   cutoverReport.reconciliation.summary.high_edit_delete_churn ??= 0;
   const previousUrls = sources.flatMap((s) => strings(s.metadata?.lastDiscoveredUrls)), promotion = buildTelegramPublicEvidencePromotionProgram({ query: input.query, sources, evidence, previousUrls, generatedAt });

@@ -6,6 +6,9 @@ import { collectionStrategy } from "./collectionStrategy.ts";
 import { isMetadataOnlyCapture, rowFromCapture } from "./searchRows.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { sanitizeDwmApiPayload, sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
+import { createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
+import { buildPublicChannelStatusRouteResponse } from "./publicChannelRoutes.ts";
+import { searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 
 export async function searchResponse(request: Request, options: ApiServerOptions, url: URL): Promise<Response> {
   const body: any = request.method === "POST" ? await readJson(request) : {};
@@ -14,6 +17,21 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const query = String(body.q ?? body.query ?? url.searchParams.get("q") ?? "").trim();
   if (!query || query.length > 300) return error("invalid_search_query", "Search query must contain 1-300 characters", 400);
 
+  const generatedAt = nowIso();
+  const entityType = String(body.entityType ?? url.searchParams.get("entityType") ?? "actor");
+  const sourcesInScope = options.store.listSources().filter((source: any) => !source.tenantId || source.tenantId === scope.tenantId);
+  const liveSearch = createLiveSearchPlan({
+    request: { query, entityType, tenantId: scope.tenantId, createdAt: generatedAt },
+    sources: sourcesInScope,
+    frontier: options.frontier,
+    activeRuns: options.store.listRuns?.() ?? [],
+    activePlans: options.store.listPlans?.() ?? [],
+    queuePressureLimit: Number(options.liveSearchQueuePressureLimit ?? 50),
+  });
+  const publicChannelResult = buildPublicChannelStatusRouteResponse(
+    { query, entityType, tenantId: scope.tenantId },
+    { store: options.store, publicTelegramSourcePacks: options.publicTelegramSourcePacks as any, generatedAt },
+  );
   const limit = Math.max(1, Math.min(numberQuery(url.searchParams.get("limit")) ?? 50, 100));
   const captures = findSearchCaptures(options.store, query, limit * 3, scope.tenantId);
   const rows = dedupeRows(captures.map((capture: any) => rowFromCapture(capture, scopedSource(options.store.getSource?.(capture.sourceId), scope.tenantId)))).slice(0, limit);
@@ -21,7 +39,6 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const sourceIds = new Set(rows.map((row) => row.sourceId));
   const records = searchRecords(options.store, scope.tenantId, captureIds, sourceIds);
   const assessment = assess(rows, records);
-  const generatedAt = nowIso();
   const lastSeen = latest(rows.map((row) => row.publishedAt ?? row.collectedAt)) ?? generatedAt;
   const aliases = actorAliases(records, rows);
   const recentActivity = rows.map((row) => activity(row, records, assessment.confidence));
@@ -113,6 +130,9 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     uncertaintyReasons: claim.uncertaintyReasons ?? []
   }));
   const status = rows.length ? assessment.ready ? "ready" : "partial" : "searching";
+  const restricted = searchDarkwebIndex({ query, sources: sourcesInScope, captures: options.store.listCaptures(), limit: 20 });
+  const restrictedSourceCount = sourcesInScope.filter((source: any) => String(source.type).endsWith("_metadata")).length;
+  const restrictedDisabled = Number((options.config as any)?.limits?.maxConcurrentDarknetMetadataTasks) === 0;
   const response = {
     query,
     tenantId: scope.tenantId,
@@ -150,18 +170,63 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     publicTiAnswer: {
       route: { canonicalPath: "/api/ti/search", publicWrapperPath: "/api/ti/search", publicWrapperMethod: "POST" },
       status,
+      noResult: rows.length === 0,
+      displayState: status,
       query,
       summary: rows,
-      safeSummary: [summary],
+      safeSummary: rows.length ? [summary] : ["Searching"],
+      waitReasons: rows.length ? [] : [{ code: "capture_promotion", message: "Waiting for captured evidence to be promoted." }],
+      nextPoll: { pollable: rows.length === 0, nextPollAfterSeconds: liveSearch.dto.nextPollSeconds, cursorRequired: rows.length === 0 },
       claims,
       evidenceLedgerReferences: structuredProvenance,
       ux: { evidenceStageLabels: stageCounts(records.claims) }
     },
     quality: qualityPayload(query, rows, records, assessment),
     graph: { endpoint: "/v1/intel/search.graph", reviewQueue: { total: records.claims.filter((claim) => !["confirmed", "rejected"].includes(claim.reviewState)).length, publicFactPolicy: assessment.ready ? "ready" : "hold_weak_edges" } },
-    collectionStrategy: collectionStrategy()
+    collectionStrategy: collectionStrategy(),
+    planner: liveSearch.dto,
+    publicChannel: publicChannelResult.ok
+      ? compactPublicChannel(publicChannelResult.body, options.publicTelegramSourcePacks as any[] | undefined, query)
+      : undefined,
+    restrictedMetadata: {
+      metadataOnly: true,
+      status: restrictedDisabled ? "disabled" : restricted.count ? "partial_metadata" : restrictedSourceCount ? "searching" : "approval_required",
+      sourceCount: restrictedSourceCount,
+      matchingResultCount: restricted.count,
+      results: restricted.rows,
+      noLeakSerialization: restricted.noLeakSerialization,
+    },
+    darknetMetadata: restrictedDisabled
+      ? { status: "disabled", queuedTasks: 0, blocked: sourcesInScope.filter((source: any) => String(source.type).endsWith("_metadata")).map((source: any) => ({ sourceId: source.id, state: "disabled" })) }
+      : { status: restricted.count ? "partial_metadata" : "searching", queuedTasks: 0 },
   };
   return json(sanitizeDwmApiPayload(response));
+}
+
+function compactPublicChannel(status: any, packs: any[] = [], query: string) {
+  const pendingSources = (status.operatorStates ?? []).filter((item: any) => item.collectable === false);
+  const queryTerms = query.toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 1);
+  const sourcePackRecommendations = packs.flatMap((pack) => (pack.sources ?? []).filter((source: any) => {
+    const haystack = JSON.stringify([source.name, source.topicTags, source.focus]).toLowerCase();
+    return queryTerms.some((term) => haystack.includes(term));
+  }).map((source: any) => ({ sourcePackId: pack.id, sourceId: source.id, requiredAction: "review" })));
+  const activationRecommendations = [
+    ...pendingSources.map((source: any) => ({ sourceId: source.sourceId, requiredAction: "approve" })),
+    ...sourcePackRecommendations,
+  ];
+  const pending = status.queuedTasks === 0 && status.evidence.length === 0;
+  return {
+    status: pending ? "pending_channel_search" : status.status,
+    queuedTasks: status.queuedTasks,
+    evidence: status.evidence,
+    activationRecommendations,
+    sourcePackRecommendations,
+    coverageGaps: pendingSources.map((source: any) => ({ reason: "matching_channels_pending_review", sourceId: source.sourceId, requiredAction: "approve" })),
+    operatorStates: status.operatorStates,
+    poll: status.poll,
+    sla: { status: status.sla?.status },
+    safeOutput: status.safeOutput,
+  };
 }
 
 function searchRecords(store: any, tenantId: string | undefined, captureIds: Set<string>, sourceIds: Set<string>) {

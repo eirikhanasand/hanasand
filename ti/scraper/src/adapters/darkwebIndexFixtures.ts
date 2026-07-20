@@ -33,6 +33,35 @@ export function darkwebIndexFixtureRecords(count = 100): DarkwebIndexRecord[] {
 }
 
 export function rowsFromRuntime(input: { sources?: any[]; captures?: any[] }): DarkwebIndexRecord[] {
-  const sourceRows = ((input as any).sources ?? []).filter((s: any) => String(s.type ?? "").includes("metadata")).map((source: any, index: number) => ({ ...darkwebIndexFixtureRecords(1)[0], id: `src_${source.id ?? index}`, title: source.name ?? "Darkweb metadata source", sourceHash: hash(source.id ?? source.url ?? String(index)) }));
-  return sourceRows.length ? sourceRows : darkwebIndexFixtureRecords(Math.max(100, input.captures?.length ?? 0));
+  const sources = new Map(((input as any).sources ?? []).map((source: any) => [source.id, source]));
+  return ((input as any).captures ?? []).filter((capture: any) => capture.storageKind === "metadata_only" || capture.metadata?.leakSite).map((capture: any) => {
+    const leak = capture.metadata?.leakSite ?? {};
+    const source: any = sources.get(capture.sourceId);
+    const network = String(source?.type ?? "tor_metadata").replace("_metadata", "");
+    const firstSeen = leak.claimDate ?? leak.sourceTimestamp ?? capture.publishedAt ?? capture.collectedAt;
+    return {
+      id: capture.id,
+      network: ["tor", "i2p", "freenet"].includes(network) ? network : "tor",
+      category: "leak_extortion",
+      legalTriage: "leak_or_extortion",
+      liveness: "live",
+      reviewState: "approved_metadata_only",
+      title: [leak.actorName, leak.victimName].filter(Boolean).join(" ") || "Restricted metadata claim",
+      safeSummary: `Metadata-only claim${leak.actorName ? ` mentioning ${leak.actorName}` : ""}${leak.victimName ? ` and ${leak.victimName}` : ""}; no raw locator or payload stored.`,
+      actorHints: [leak.actorName].filter(Boolean),
+      victimHints: [leak.victimName].filter(Boolean),
+      datasetHints: [leak.claimedDataCategory].filter(Boolean),
+      sectorHints: [leak.claimedSector].filter(Boolean),
+      countryHints: [leak.claimedCountry].filter(Boolean),
+      sourceFamily: "ransomware_leak_site",
+      firstSeen,
+      lastSeen: leak.sourceTimestamp ?? capture.collectedAt,
+      rawUrlHash: leak.urlHash ?? hash(capture.url ?? capture.id),
+      sourceHash: hash(capture.sourceId ?? capture.id),
+      safeLocatorHash: leak.urlHash ?? hash(capture.url ?? capture.id),
+      provenance: { sourceType: "internal_discovery", sourceHash: hash(capture.sourceId ?? capture.id) },
+      isolationBoundary: { metadataOnly: true, noPayloadFollowing: true, noCredentialDownloads: true, noThreatActorInteraction: true },
+      valueScore: 0.7,
+    } as DarkwebIndexRecord;
+  });
 }

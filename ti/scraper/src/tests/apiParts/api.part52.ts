@@ -7,7 +7,8 @@ describe("api v1", () => {
       frontier: new FocusedFrontier()
     }));
     expect(response.query).toBe("APT29");
-    expect(Array.isArray(response.summary)).toBe(true);
+    expect(typeof response.summary).toBe("string");
+    expect(response.actorProfile).toMatchObject({ query: "APT29" });
     const serialized = JSON.stringify(response).toLowerCase();
     expect(serialized).not.toContain("authorization:");
     expect(serialized).not.toContain("cookie=");

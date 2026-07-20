@@ -10,19 +10,19 @@ export const telegramPublicApplyPlanApiContract = () => ({ route: "/v1/public-ch
 
 export function planTelegramPublicSearchBackfill(input: any) {
   const queryTerms = terms(input.query);
-  const sources = (input.sources ?? []).filter((s: SourceRecord) => s.type === "telegram_public" && validateTelegramPublicSourceCompliance(s).allowed);
+  const sources = (input.sources ?? []).filter(collectable);
   const tasks = sources.slice(0, input.maxTasks ?? 20).map((source: SourceRecord, index: number) => ({ id: `tg_task_${source.id}_${index}`, sourceId: source.id, sourceType: "telegram_public", targetUrl: source.url, queuedAt: input.generatedAt ?? nowIso(), priority: 0.8, reason: `public Telegram search for ${queryTerms.join(" ")}` }));
   return { status: tasks.length ? "ready" : "blocked", queryTerms, tasks, activationRecommendations: [], coverageGaps: tasks.length ? [] : [{ reason: "no_public_channel", queryTerms }], sourcePackRecommendations: recommendTelegramPublicSourcePacks(input), activationProgram: buildTelegramPublicActivationProgram(input), reconciliation: buildTelegramPublicReconciliation(input), cutoverReport: undefined };
 }
 
 export function buildTelegramPublicApplyPlan(input: any) {
-  const steps = (input.sources ?? []).filter((s: SourceRecord) => s.type === "telegram_public").map((source: SourceRecord) => ({ sourceId: source.id, action: validateTelegramPublicSourceCompliance(source).allowed ? "refresh_cursor" : "request_review", execution: validateTelegramPublicSourceCompliance(source).allowed ? "automation_safe" : "human_approval_required", priority: "medium" }));
+  const steps = (input.sources ?? []).filter((s: SourceRecord) => s.type === "telegram_public").map((source: SourceRecord) => ({ sourceId: source.id, action: collectable(source) ? "refresh_cursor" : "request_review", execution: collectable(source) ? "automation_safe" : "human_approval_required", priority: "medium" }));
   return summarizePlan({ generatedAt: input.generatedAt ?? nowIso(), steps });
 }
 
 export const buildTelegramPublicActivationProgram = (input: any) => {
   const sources = (input.sources ?? []).filter((s: SourceRecord) => s.type === "telegram_public");
-  const healthy = sources.filter((source: SourceRecord) => validateTelegramPublicSourceCompliance(source).allowed);
+  const healthy = sources.filter(collectable);
   return {
     generatedAt: input.generatedAt ?? nowIso(),
     recommendedPublicPacks: recommendTelegramPublicSourcePacks(input),
@@ -33,6 +33,7 @@ export const buildTelegramPublicActivationProgram = (input: any) => {
     noApprovedChannelGaps: healthy.length ? [] : [{ reason: "no_approved_public_telegram_sources", nextAction: "Run discovery packs, review public-only candidates, and activate bounded polling for approved channels." }],
   };
 };
+const collectable = (source: SourceRecord) => source.type === "telegram_public" && source.status === "active" && (!source.governance?.approvalRequired || source.governance.approvalState === "approved") && validateTelegramPublicSourceCompliance(source).allowed;
 export const validateTelegramPublicSourcePack = (pack: any) => ({ valid: Array.isArray(pack?.sources), errors: Array.isArray(pack?.sources) ? [] : ["sources required"] });
 export const telegramPublicSourcePackEntryToSource = (entry: any) => ({ id: entry.id ?? `tg_${entry.channel}`, name: entry.title ?? entry.channel, type: "telegram_public", url: channelUrl(entry.channel), accessMethod: "public_http", status: entry.status ?? "candidate", risk: entry.risk ?? "medium", trustScore: entry.trustScore ?? 0.7, crawlFrequencySeconds: entry.crawlFrequencySeconds ?? 900, legalNotes: "Public channel only. No private invite access, auto-join, credential use, or media download.", createdAt: nowIso(), updatedAt: nowIso(), metadata: { sourceFamily: "telegram_public", sourcePackId: entry.packId, topicTags: entry.topicTags ?? [], discoveryQuery: entry.discoveryQuery, maxItemsPerFetch: entry.maxItemsPerFetch ?? 40, mediaPolicy: "metadata_only_no_download" } });
 export const recommendTelegramPublicSourcePacks = (input: any) => {

@@ -30,7 +30,7 @@ export async function createRun(request: Request, options: ApiServerOptions): Pr
   options.store.savePlan?.(plan);
   options.store.saveRun?.(run);
   for (const task of plan.tasks) options.frontier.enqueueTask(task);
-  return json({ run, plan, scheduler: { queued: options.frontier.size() } }, 201);
+  return json({ run, plan, scheduler: { runId: run.id, planId: plan.id, queued: options.frontier.size() } }, 201);
 }
 
 export function runStatus(request: Request, options: ApiServerOptions, runId: string): Response {
