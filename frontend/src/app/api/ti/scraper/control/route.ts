@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadProductSourceProxyProofLedger, sourceProxyFromLedger } from '@/utils/productProgress/sourceProofSource'
+import tokenIsValid from '@/utils/proxy/tokenIsValid'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,8 @@ type ControlActionBody = {
 }
 
 export async function GET(request: NextRequest) {
+    const identity = await controlIdentity(request)
+    if (identity instanceof NextResponse) return identity
     const base = scraperBase()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'APT29'
     const tenantId = request.headers.get('x-tenant-id') || 'default'
@@ -113,6 +116,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+    const identity = await controlIdentity(request)
+    if (identity instanceof NextResponse) return identity
     let body: ControlActionBody
     try {
         body = await request.json() as ControlActionBody
@@ -135,7 +140,7 @@ export async function POST(request: NextRequest) {
             tenantId: 'hanasand-dashboard',
             requesterId: 'dashboard/ti/control',
             reason: 'operator requested collection run',
-        })
+        }, identity)
     }
 
     if (body.action === 'source_apply_plan') {
@@ -144,7 +149,7 @@ export async function POST(request: NextRequest) {
             sourcePackIds: body.sourcePackIds?.length ? body.sourcePackIds : ['safe-public-cti-starter-pack'],
             selectedActions: body.actions?.length ? body.actions : ['approve', 'quarantine', 'request_legal_notes', 'leave_unchanged'],
             includeExecutionPreview: true,
-        })
+        }, identity)
     }
 
     if (body.action === 'public_channel_status') {
@@ -158,7 +163,7 @@ export async function POST(request: NextRequest) {
             action: body.action === 'scheduler_run_now' ? 'run_now' : body.action === 'scheduler_pause' ? 'pause' : 'resume',
             approvedBy: 'dashboard/ti/control',
             reason: 'operator source scheduler control',
-        })
+        }, identity)
     }
 
     if (body.action === 'request_source') {
@@ -173,7 +178,7 @@ export async function POST(request: NextRequest) {
             approvedBy: 'dashboard/ti/control',
             requestedBy: 'dashboard/ti/control',
             priority: 'high',
-        })
+        }, identity)
     }
 
     if (body.action === 'source_candidate_action') {
@@ -185,7 +190,7 @@ export async function POST(request: NextRequest) {
             approvedBy: 'dashboard/ti/control',
             decidedBy: 'dashboard/ti/control',
             reason: body.reason || 'operator source action from collection view',
-        })
+        }, identity)
     }
 
     if (body.action === 'create_watchlist') {
@@ -195,14 +200,14 @@ export async function POST(request: NextRequest) {
             terms: body.terms?.length ? body.terms : [query],
             webhookUrl: body.webhookUrl,
             status: 'active',
-        })
+        }, identity)
     }
 
     if (body.action === 'rebuild_alerts') {
         return forward(base, '/v1/dwm/alerts/rebuild', {
             tenantId: 'default',
             actor: 'dashboard/ti/control',
-        })
+        }, identity)
     }
 
     return NextResponse.json({ ok: false, error: { code: 'unsupported_action', message: 'Unsupported scraper control action.' } }, { status: 400 })
@@ -212,13 +217,34 @@ function scraperBase() {
     return process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
 }
 
-async function forward(base: string, path: string, body: unknown) {
+type ControlIdentity = { id: string, token: string }
+
+async function forward(base: string, path: string, body: unknown, identity: ControlIdentity) {
     const result = await fetchJson(base, path, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${identity.token}`, id: identity.id, 'x-actor-id': identity.id },
         body: JSON.stringify(body),
     })
     return NextResponse.json({ ok: result.ok, status: result.status, payload: result.json, error: result.error }, { status: result.ok ? 200 : 502 })
+}
+
+async function controlIdentity(request: NextRequest): Promise<ControlIdentity | NextResponse> {
+    const token = request.cookies.get('access_token')?.value || bearerToken(request.headers.get('authorization'))
+    const id = request.cookies.get('id')?.value || request.headers.get('id') || ''
+    if (!token || !id) return controlAuthError(401, 'authentication_required', 'A valid Hanasand session is required.')
+    const validation = await tokenIsValid(token, id)
+    if (!validation.valid) return controlAuthError(401, 'invalid_session', 'The Hanasand session is invalid or expired.')
+    const roleIds = (validation.roles ?? []).flatMap(role => [role.id, (role as Role & { role_id?: string }).role_id]).filter((role): role is string => Boolean(role))
+    if (!roleIds.some(role => ['system_admin', 'admin', 'administrator'].includes(role))) return controlAuthError(403, 'operator_role_required', 'System administrator access is required.')
+    return { id, token: validation.token || token }
+}
+
+function bearerToken(value: string | null) {
+    return value?.startsWith('Bearer ') ? value.slice('Bearer '.length).trim() : ''
+}
+
+function controlAuthError(status: number, code: string, message: string) {
+    return NextResponse.json({ ok: false, error: { code, message } }, { status })
 }
 
 async function fetchJson(base: string, path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; json?: unknown; error?: string }> {
