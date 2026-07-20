@@ -25,12 +25,12 @@ describe("public collection boundary", () => {
       catalog: { canonicalId: "gov:us:cisa:known-exploited-vulnerabilities" }
     });
     const payload = JSON.stringify({
-      vulnerabilities: [{ cveID: "CVE-2026-4242", vulnerabilityName: "Example exploited vulnerability", dateAdded: "2026-06-21" }],
+      vulnerabilities: Array.from({ length: 60 }, (_, index) => ({ cveID: `CVE-2026-${4242 + index}`, vulnerabilityName: "Example exploited vulnerability", dateAdded: "2026-06-21" })),
       padding: "x".repeat(600_000)
     });
-    const items = await fetchItems(cisa, { id: "task_cisa", targetUrl: cisa.url }, async () => new Response(payload, { headers: { "content-type": "application/json" } }), "native_live_http", "2026-06-22T00:00:00.000Z", 512_000);
+    const items = await fetchItems(cisa, { id: "task_cisa", targetUrl: cisa.url }, async () => new Response(payload, { headers: { "content-type": "application/json" } }), "native_live_http", "2026-06-22T00:00:00.000Z", 512_000, 12_000, 60);
 
-    expect(items).toHaveLength(1);
+    expect(items).toHaveLength(60);
     expect(items[0]).toMatchObject({ title: "CVE-2026-4242", metadata: { fetchProvenance: { maxBytes: 4_000_000, truncated: false } } });
   });
 });

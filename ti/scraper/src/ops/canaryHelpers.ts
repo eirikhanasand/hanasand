@@ -7,7 +7,7 @@ export function taskFor(source: any, at: string, runId: string, maxBytes: number
   return { id: stableId("task", `${source.id}:${at}`), tenantId: source.tenantId, sourceId: source.id, targetUrl: source.url, sourceType: source.type, queuedAt: at, priority: source.trustScore ?? 0.5, reason: "public_canary", retryCount: 0, maxBytes, runId };
 }
 
-export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, mode: string, at: string, maxBytes: number, timeoutMs = 12_000) {
+export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, mode: string, at: string, maxBytes: number, timeoutMs = 12_000, maxItems?: number) {
   const started = Date.now(), requestedUrl = publicFetchUrl(source, task.targetUrl);
   if (source.catalog?.canonicalId === "gov:us:cisa:known-exploited-vulnerabilities") maxBytes = Math.max(maxBytes, 4_000_000);
   const { response: res, finalUrl, redirectCount } = await fetchPublicResponse(fetcher, requestedUrl, timeoutMs);
@@ -17,7 +17,7 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
   const body = await boundedText(res, maxBytes);
   const fetched = body.text;
   const metadata = { canaryPortfolio: true, fetchMode: mode, finalUrlHash: hashContent(finalUrl), responseBytes: body.bytesReceived, fetchProvenance: { mode, adapterVersion: "public_canary_fetcher:v2", requestedUrlHash: hashContent(requestedUrl), sourceUrlHash: hashContent(task.targetUrl), finalUrlHash: hashContent(finalUrl), httpStatus: res.status, ok: res.ok, contentType, fetchedAt: at, durationMs: Date.now() - started, bytesReceived: body.bytesReceived, maxBytes, truncated: body.truncated, bounded: true, redirectCount, userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" } };
-  return feedItems(source, task, fetched, at, metadata, maxItemsFor(source));
+  return feedItems(source, task, fetched, at, metadata, maxItemsFor(source) ?? maxItems);
 }
 
 export const fetchItem = async (...args: any[]) => (await fetchItems(...args))[0];

@@ -59,7 +59,7 @@ async function runLeasedTask(options: any, runId: string, generatedAt: string, f
   const taskMetrics: any = { itemCount: 0, captureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, actorIds: new Set<string>(), publishedAt: [] };
   try {
     if (!source) throw new Error("source missing");
-    const collectedItems = await fetchItems(source, task, fetcher, mode, generatedAt, maxBytes, options.timeoutMs ?? 12_000);
+    const collectedItems = await fetchItems(source, task, fetcher, mode, generatedAt, maxBytes, options.timeoutMs ?? 12_000, itemLimit(source, options));
     taskMetrics.itemCount = collectedItems.length;
     taskMetrics.httpStatus = collectedItems[0]?.metadata?.fetchProvenance?.httpStatus;
     taskMetrics.parserWarningCount = collectedItems.reduce((total: number, item: any) => total + (Array.isArray(item.metadata?.parserWarnings) ? item.metadata.parserWarnings.length : 0), 0);
