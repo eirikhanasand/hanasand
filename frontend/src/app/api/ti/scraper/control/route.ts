@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadProductSourceProxyProofLedger, sourceProxyFromLedger } from '@/utils/productProgress/sourceProofSource'
-import tokenIsValid from '@/utils/proxy/tokenIsValid'
+import requireApiSession, { type ApiSessionIdentity } from '@/utils/proxy/requireApiSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,8 +24,8 @@ type ControlActionBody = {
 }
 
 export async function GET(request: NextRequest) {
-    const identity = await controlIdentity(request)
-    if (identity instanceof NextResponse) return identity
+    const session = await requireApiSession(request, ['system_admin', 'admin', 'administrator'])
+    if ('response' in session) return session.response
     const base = scraperBase()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'APT29'
     const tenantId = request.headers.get('x-tenant-id') || 'default'
@@ -116,8 +116,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const identity = await controlIdentity(request)
-    if (identity instanceof NextResponse) return identity
+    const session = await requireApiSession(request, ['system_admin', 'admin', 'administrator'])
+    if ('response' in session) return session.response
+    const identity = session.identity
     let body: ControlActionBody
     try {
         body = await request.json() as ControlActionBody
@@ -217,34 +218,13 @@ function scraperBase() {
     return process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
 }
 
-type ControlIdentity = { id: string, token: string }
-
-async function forward(base: string, path: string, body: unknown, identity: ControlIdentity) {
+async function forward(base: string, path: string, body: unknown, identity: ApiSessionIdentity) {
     const result = await fetchJson(base, path, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${identity.token}`, id: identity.id, 'x-actor-id': identity.id },
         body: JSON.stringify(body),
     })
     return NextResponse.json({ ok: result.ok, status: result.status, payload: result.json, error: result.error }, { status: result.ok ? 200 : 502 })
-}
-
-async function controlIdentity(request: NextRequest): Promise<ControlIdentity | NextResponse> {
-    const token = request.cookies.get('access_token')?.value || bearerToken(request.headers.get('authorization'))
-    const id = request.cookies.get('id')?.value || request.headers.get('id') || ''
-    if (!token || !id) return controlAuthError(401, 'authentication_required', 'A valid Hanasand session is required.')
-    const validation = await tokenIsValid(token, id)
-    if (!validation.valid) return controlAuthError(401, 'invalid_session', 'The Hanasand session is invalid or expired.')
-    const roleIds = (validation.roles ?? []).flatMap(role => [role.id, (role as Role & { role_id?: string }).role_id]).filter((role): role is string => Boolean(role))
-    if (!roleIds.some(role => ['system_admin', 'admin', 'administrator'].includes(role))) return controlAuthError(403, 'operator_role_required', 'System administrator access is required.')
-    return { id, token: validation.token || token }
-}
-
-function bearerToken(value: string | null) {
-    return value?.startsWith('Bearer ') ? value.slice('Bearer '.length).trim() : ''
-}
-
-function controlAuthError(status: number, code: string, message: string) {
-    return NextResponse.json({ ok: false, error: { code, message } }, { status })
 }
 
 async function fetchJson(base: string, path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; json?: unknown; error?: string }> {

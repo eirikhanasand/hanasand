@@ -4,7 +4,6 @@ import path from 'node:path'
 
 const source = await readFile(path.join(process.cwd(), 'src/app/api/ti/scraper/control/route.ts'), 'utf8')
 
-assert.match(source, /await controlIdentity\(request\)/)
-assert.match(source, /tokenIsValid\(token, id\)/)
+assert.match(source, /requireApiSession\(request, \['system_admin', 'admin', 'administrator'\]\)/)
 assert.match(source, /system_admin/)
 assert.match(source, /authorization: `Bearer \$\{identity\.token\}`/)

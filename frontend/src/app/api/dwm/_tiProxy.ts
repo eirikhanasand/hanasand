@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
+import requireApiSession from '@/utils/proxy/requireApiSession'
 
 type ProxyOptions = {
     method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
@@ -8,6 +9,9 @@ type ProxyOptions = {
 }
 
 export async function proxyTiRequest(request: NextRequest, path: string, options: ProxyOptions = {}) {
+    const session = await requireApiSession(request)
+    if ('response' in session) return session.response
+
     const base = tiScraperApiBase()
     if (!base) {
         return NextResponse.json({ error: { code: 'ti_backend_unavailable', message: 'TI backend is not configured.' } }, { status: 503 })
@@ -15,9 +19,8 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
 
     try {
         const cookieStore = await cookies()
-        const token = cookieStore.get('access_token')?.value || bearerToken(request.headers.get('authorization')) || ''
-        const id = cookieStore.get('id')?.value || request.headers.get('id') || ''
-        const actorId = request.headers.get('x-actor-id') || id
+        const { token, id } = session.identity
+        const actorId = id
         const userEmail = request.headers.get('x-user-email') || ''
         const impersonationToken = cookieStore.get('impersonation_token')?.value || request.headers.get('x-impersonation-token') || ''
         const target = new URL(path, base)
@@ -58,12 +61,4 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
             },
         }, { status: 502 })
     }
-}
-
-function bearerToken(value: string | null) {
-    if (!value?.startsWith('Bearer ')) {
-        return ''
-    }
-
-    return value.slice('Bearer '.length).trim()
 }
