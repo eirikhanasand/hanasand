@@ -173,6 +173,24 @@ describe("DWM exposure queue pipeline", () => {
     ]));
   });
 
+  test("does not turn a victim-feed label into an actor profile", async () => {
+    const store = new InMemoryScraperStore();
+    const collected = {
+      sourceId: "src_canary_ransomwarelive",
+      source: { name: "Ransomware.live Victim Feed", url: "https://www.ransomware.live/rss.xml" },
+      title: "Ransomware.live Victim Feed",
+      rawText: "Ransomware.live Victim Feed\nExample Manufacturing\n44 GB data leak listed with sample records.",
+      url: "https://www.ransomware.live/#/recentvictims",
+      collectedAt: new Date().toISOString(),
+      publishedAt: new Date().toISOString(),
+      metadata: { adapter: "rss" }
+    };
+
+    expect(await saveExposureClaimFromCollectedItem(store, collected)).toBeUndefined();
+    expect(store.listCaptures()).toHaveLength(0);
+    expect(store.listActorProfiles()).toHaveLength(0);
+  });
+
   test("keeps persisted exposure rows visible when the queue is stale", async () => {
     const store = new InMemoryScraperStore();
     const options = testOptions(store);

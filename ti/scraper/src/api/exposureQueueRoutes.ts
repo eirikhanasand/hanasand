@@ -453,9 +453,10 @@ async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<
   const titleClaim = parseVictimClaimTitle([item.title, item.text].filter(Boolean).join("\n"));
   const confidence = clamp(Number(parsed.confidence ?? item.confidence ?? 0.74));
   const company = boundedText(clean(item.company || item.victimName || sourceIdentity?.company || titleClaim?.company || parsed.company || parsed.victimName || ""), 140) ?? "";
+  const actor = boundedText(validActorName(item.actor || sourceIdentity?.actor || titleClaim?.actor || parsed.actor), 80) ?? "";
   return {
     ...item,
-    actor: boundedText(cleanActorName(item.actor || sourceIdentity?.actor || titleClaim?.actor || parsed.actor || item.sourceName || "Unknown actor"), 80) ?? "Unknown actor",
+    actor,
     company,
     claimedData: boundedText(clean(parsed.claimedData || item.claimedData || "Not disclosed by TA"), 240) ?? "Not disclosed by TA",
     claimedDataSize: boundedText(clean(parsed.claimedDataSize || item.claimedDataSize || dataSizeFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"), 80) ?? "Not disclosed by TA",
@@ -465,7 +466,7 @@ async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<
     confidence,
     parserMode: ai ? "hanasand-ai" : "local_fallback",
     parserQuality: confidence >= 0.82 ? "high" : confidence >= 0.68 ? "medium" : "needs_review",
-    needsReview: confidence < 0.72 || !company,
+    needsReview: confidence < 0.72 || !company || !actor,
     evidenceContentHash: hashContent(JSON.stringify([item.sourceId, item.url, item.title, item.text, item.actor, item.company, item.victimName, item.publishedAt, item.capturedAt]))
   };
 }
@@ -494,7 +495,7 @@ function fallbackParse(item: ExposureClaimItem, at: string) {
     match(text, /\bvictim\s*:?\s+([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})/i) ||
     match(text, /\b(?:listed|lists|added|adds|claims?|target(?:ed|ing))\s+([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})/i) ||
     match(text, /:\s*([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})$/);
-  const actor = cleanActorName(item.actor || titleClaim?.actor || match(text, /^([A-Z][A-Za-z0-9_.-]{2,40})\b/) || item.sourceName || "Unknown actor");
+  const actor = validActorName(item.actor || titleClaim?.actor || match(text, /^([A-Z][A-Za-z0-9_.-]{2,40})\b/)) || "";
   const claimedData = meaningfulClaimedData(item.claimedData) || claimedDataFromText(text) || "Not disclosed by TA";
   const claimedDataSize = item.claimedDataSize || dataSizeFromText(text) || "Not disclosed by TA";
   const country = item.country || item.claimedCountry || countryFromText(text) || countryFromCompanyDomain(victim || "") || "Not disclosed by TA";
@@ -801,6 +802,11 @@ function stripVictimFeedPrefix(value: unknown) {
 function cleanActorName(value: unknown) {
   return clean(stripVictimFeedPrefix(value)
     .replace(/\s+(?:has just published a new victim|claims? victim|claim(?:ed|s)? victim|listed victim|added victim|published victim)\b.*$/i, ""));
+}
+
+function validActorName(value: unknown) {
+  const actor = cleanActorName(value);
+  return actor && !/^(?:unknown actor|ransomware\.live(?: victim feed)?|victim feed|metadata[- ]only victim source)$/i.test(actor) ? actor : "";
 }
 
 function claimedDataFromText(text: string) {

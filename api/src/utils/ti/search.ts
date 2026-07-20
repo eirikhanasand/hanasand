@@ -1527,7 +1527,7 @@ function actionabilityForQuery(query: string, known?: KnownActorContext | null, 
         alertDisposition,
         shouldAlert: false,
         rationale: watchlistCandidates.length
-            ? 'Actor/query relevance is ready to seed organization watchlists, but no backed watchlist match, generated DWM alert, or case ID is attached to this public result.'
+            ? 'The exact query value can seed an organization watchlist, but no backed watchlist match, generated DWM alert, or case ID is attached to this public result.'
             : 'No customer watchlist term, generated alert, or case link is attached to this query result yet.',
         watchlistCandidates,
         watchlistMatches: [],
@@ -1553,7 +1553,9 @@ function actionabilityForQuery(query: string, known?: KnownActorContext | null, 
                 id: 'capture-id-provenance',
                 title: 'Attach capture IDs for replay',
                 severity: 'medium' as const,
-                detail: 'Source provenance is visible, but capture IDs are not attached for replay or case evidence.',
+                detail: hasEvidence
+                    ? 'Source provenance is visible, but capture IDs are not attached for replay or case evidence.'
+                    : 'No stored capture is attached to this query result yet.',
                 dependency: 'sourceProvenance[].captureId'
             }])
         ],

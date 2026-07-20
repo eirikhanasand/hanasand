@@ -60,6 +60,7 @@ describe("compact pipeline value path", () => {
     });
 
     expect(darknet.entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "ransomware_family", value: "Blackout", extractionMethod: "source_specific" }),
       expect.objectContaining({ type: "victim", value: "Example Energy AS", assertionKind: "source_claim", extractorVersion: SOURCE_SPECIFIC_EXTRACTOR_VERSION }),
       expect.objectContaining({ type: "publication_strategy", value: "public victim listing", assertionKind: "observed" }),
       expect.objectContaining({ type: "extortion_type", value: "double extortion", assertionKind: "source_claim" }),
@@ -72,6 +73,7 @@ describe("compact pipeline value path", () => {
     expect(darknet.entities.filter((entity: any) => entity.type === "victim")).toEqual([
       expect.objectContaining({ value: "Example Energy AS", extractionMethod: "source_specific" })
     ]);
+    expect(darknet.entities.some((entity: any) => entity.type === "actor" && entity.value === "Blackout")).toBe(false);
     expect(cisa.entities).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "product", value: "Example Product", confidence: 0.94 }),
       expect.objectContaining({ type: "impact", value: "known ransomware campaign use" })
@@ -81,6 +83,7 @@ describe("compact pipeline value path", () => {
     const store = new InMemoryScraperStore();
     store.savePipelineResult(darknet);
     expect(store.listExtractedEntities().find((entity: any) => entity.type === "victim")?.extractorVersion).toBe(SOURCE_SPECIFIC_EXTRACTOR_VERSION);
+    expect(store.listActorProfiles()).toContainEqual(expect.objectContaining({ canonicalName: "Blackout", actorType: "ransomware" }));
   });
 
   test("keeps actor aliases distinct and matches short names on token boundaries", () => {

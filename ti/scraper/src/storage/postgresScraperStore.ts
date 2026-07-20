@@ -27,7 +27,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "007_operational_intelligence_spine", path: fileURLToPath(new URL("../../migrations/007_operational_intelligence_spine.sql", import.meta.url)) },
   { version: "008_intelligence_claims", path: fileURLToPath(new URL("../../migrations/008_intelligence_claims.sql", import.meta.url)) },
   { version: "009_preserve_changed_capture_evidence", path: fileURLToPath(new URL("../../migrations/009_preserve_changed_capture_evidence.sql", import.meta.url)) },
-  { version: "010_sync_capture_retention_class", path: fileURLToPath(new URL("../../migrations/010_sync_capture_retention_class.sql", import.meta.url)) }
+  { version: "010_sync_capture_retention_class", path: fileURLToPath(new URL("../../migrations/010_sync_capture_retention_class.sql", import.meta.url)) },
+  { version: "011_remove_misclassified_feed_actors", path: fileURLToPath(new URL("../../migrations/011_remove_misclassified_feed_actors.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 

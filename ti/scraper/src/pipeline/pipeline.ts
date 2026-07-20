@@ -20,7 +20,7 @@ export function processCollectedItem(item: CollectedItem): PipelineResult {
   const sourceSpecificEntities = extractSourceSpecificEntities(item, extractorContext);
   const fallbackEntities = extractEntities(item.rawText, extractorContext);
   const authoritativeTypes = item.metadata?.extractionProfile === "ransomware_victim_blog"
-    ? new Set(sourceSpecificEntities.filter((entity) => entity.type === "actor" || entity.type === "victim").map((entity) => entity.type))
+    ? new Set(sourceSpecificEntities.filter((entity) => entity.type === "actor" || entity.type === "ransomware_family" || entity.type === "victim").flatMap((entity) => entity.type === "actor" || entity.type === "ransomware_family" ? ["actor", "ransomware_family"] : [entity.type]))
     : new Set<string>();
   const entities = mergeEntities(sourceSpecificEntities, fallbackEntities.filter((entity) => !authoritativeTypes.has(entity.type)));
   capture.metadata = {

@@ -15,7 +15,7 @@ export function extractSourceSpecificEntities(item: CollectedItem, context: Extr
 
 function ransomwareGroupEntities(item: CollectedItem, context: ExtractionContext): ExtractedEntity[] {
   const fields = item.metadata?.ransomwareGroup ?? {}, channels = Array.isArray(fields.channelTypes) ? fields.channelTypes.map(meaningful).filter(Boolean) : [];
-  const actor = fieldEntity("actor", fields.actorName, 0.88, "actorName", item, context, "observed", []);
+  const actor = fieldEntity("ransomware_family", fields.actorName, 0.88, "actorName", item, context, "observed", []);
   if (actor) (actor as any).aliases = Array.isArray(fields.aliases) ? fields.aliases.map(meaningful).filter(Boolean) : [];
   const has = (type: string) => channels.some((channel: string) => channel.toLowerCase() === type.toLowerCase());
   const victimCount = Number(fields.victimCount);
@@ -35,7 +35,7 @@ function victimBlogEntities(item: CollectedItem, context: ExtractionContext): Ex
   const fields = item.metadata?.leakSite ?? {};
   const actor = meaningful(fields.actorName), victims = [...new Set([fields.victimName, ...(Array.isArray(fields.victimNames) ? fields.victimNames : [])].map(meaningful).filter(Boolean))], dataType = meaningful(fields.claimedDataType);
   return compact([
-    fieldEntity("actor", actor, 0.86, "actorName", item, context, "source_claim", []),
+    fieldEntity("ransomware_family", actor, 0.86, "actorName", item, context, "source_claim", []),
     ...victims.map((victim) => fieldEntity("victim", victim, 0.78, "victimName", item, context, "source_claim", ["unverified threat-actor claim"])),
     fieldEntity("sector", fields.claimedSector, 0.68, "claimedSector", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("country", fields.claimedCountry, 0.68, "claimedCountry", item, context, "source_claim", ["unverified threat-actor claim"]),
