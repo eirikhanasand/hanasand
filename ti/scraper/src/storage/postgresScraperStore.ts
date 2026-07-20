@@ -147,7 +147,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     if (this.hasStoredData()) return { imported: false, reason: "database_not_empty", counts: {} };
     const snapshot = JSON.parse(await file.text()) as Record<string, any[]>;
     await this.batch(() => {
-      for (const source of snapshot.sources ?? []) this.saveSource(source);
+      for (const source of snapshot.sources ?? []) this.saveSource(normalizeLegacySourceForImport(source));
       for (const capture of snapshot.captures ?? []) this.saveCapture(capture);
       for (const incident of snapshot.incidents ?? []) {
         const capture = this.getCapture(incident.captureId);
@@ -1020,6 +1020,24 @@ function readRecord(row: any): any {
 }
 
 function toJson(value: unknown): string { return JSON.stringify(value); }
+export function normalizeLegacySourceForImport(source: any): SourceRecord {
+  if (source.accessMethod) return source;
+  const at = source.updatedAt ?? source.createdAt ?? new Date().toISOString();
+  return {
+    ...source,
+    name: source.name ?? source.id ?? "Legacy source",
+    type: source.type ?? "static_web",
+    accessMethod: "disabled",
+    status: "candidate",
+    risk: source.risk ?? "restricted",
+    trustScore: Number.isFinite(source.trustScore) ? source.trustScore : 0.5,
+    crawlFrequencySeconds: Number.isFinite(source.crawlFrequencySeconds) ? Math.max(60, source.crawlFrequencySeconds) : 3600,
+    legalNotes: source.legalNotes ?? "Legacy source pending governance review.",
+    governance: { ...source.governance, approvalRequired: true, approvalState: "pending", metadataOnly: source.governance?.metadataOnly ?? String(source.type ?? "").endsWith("_metadata") },
+    createdAt: source.createdAt ?? at,
+    updatedAt: at
+  };
+}
 function nullable<T>(value: T | null | undefined): T | null { return value ?? null; }
 function score(value: unknown): number { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0; }
 function alertScore(value: unknown): number { const parsed = Number(value); return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0; }

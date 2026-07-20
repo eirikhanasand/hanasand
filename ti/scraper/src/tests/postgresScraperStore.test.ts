@@ -8,13 +8,21 @@ import { FocusedFrontier } from "../frontier/frontier.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
-import { PostgresScraperStore } from "../storage/postgresScraperStore.ts";
+import { PostgresScraperStore, normalizeLegacySourceForImport } from "../storage/postgresScraperStore.ts";
 import { hashContent } from "../utils.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 
 const collectedAt = "2026-07-19T12:00:00.000Z";
 
 describe("structured threat-intelligence storage contract", () => {
+  test("normalizes incomplete legacy sources into review-only records", () => {
+    expect(normalizeLegacySourceForImport({ id: "legacy", type: "tor_metadata", url: "http://example.onion", updatedAt: collectedAt })).toMatchObject({
+      accessMethod: "disabled",
+      status: "candidate",
+      governance: { approvalRequired: true, approvalState: "pending", metadataOnly: true }
+    });
+  });
+
   test("materializes pipeline entities, actor profiles, and evidence lineage", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_structured" }));
