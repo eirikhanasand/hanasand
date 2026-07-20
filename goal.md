@@ -99,8 +99,8 @@ The initial feasibility set must include at least one working feed of each selec
 ### Validation and Evaluation
 
 - [x] Support durable analyst labels and ground truth for actor, victim, date, source, TTP, impact, and dataset/leak type.
-- [ ] Build a representative labeled corpus from real captures and independently verifiable public incidents, growing beyond the initial 50-100 items.
-- [ ] Cross-reference claims with victim disclosures, news reports, vendor research, and other independent public records.
+- [x] Build a representative labeled corpus from real captures and independently verifiable public incidents, growing beyond the initial 50-100 items.
+- [x] Cross-reference claims with victim disclosures, news reports, vendor research, and other independent public records.
 - [x] Calculate extraction precision, recall, and error breakdown by entity type, parser, and source family.
 - [x] Measure median and p95 latency from first actor/victim report through publication, collection, processing, first visibility, and alert delivery.
 - [x] Measure active source reliability, useful coverage, actor coverage, duplication, corroboration, and false-positive rates.
