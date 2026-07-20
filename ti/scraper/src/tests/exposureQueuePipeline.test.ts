@@ -145,7 +145,7 @@ describe("DWM exposure queue pipeline", () => {
 
   test("promotes collected scraper findings into the exposure queue automatically", async () => {
     const store = new InMemoryScraperStore();
-    await saveExposureClaimFromCollectedItem(store, {
+    const collected = {
       sourceId: "src_public_news",
       title: "Akira claims victim: Fabrikam Manufacturing",
       rawText: "Akira ransomware actor page claims victim: Fabrikam Manufacturing. 44 GB data leak listed with sample records.",
@@ -153,12 +153,20 @@ describe("DWM exposure queue pipeline", () => {
       collectedAt: new Date().toISOString(),
       publishedAt: new Date().toISOString(),
       metadata: { adapter: "public_advisory" }
-    });
+    };
+    await saveExposureClaimFromCollectedItem(store, collected);
+    await saveExposureClaimFromCollectedItem(store, collected);
 
     const queue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?q=Fabrikam"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
     const queueBody = await queue.json() as any;
     expect(queueBody.items[0].actor).toBe("Akira");
     expect(queueBody.items[0].company).toBe("Fabrikam Manufacturing");
+    expect(store.listCaptures()).toHaveLength(1);
+    expect(store.listExtractedEntities()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "extortion_type", extractionMethod: "source_specific" }),
+      expect.objectContaining({ type: "publication_strategy", value: "public victim listing" }),
+      expect.objectContaining({ type: "channel_type", value: "public victim-claim feed" })
+    ]));
   });
 
   test("keeps persisted exposure rows visible when the queue is stale", async () => {

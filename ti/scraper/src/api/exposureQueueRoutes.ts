@@ -4,6 +4,7 @@ import { hashContent, nowIso, stableId } from "../utils.ts";
 import { resolveOrganizationScope } from "./organizationRoutes.ts";
 import { authenticateRequest, type AuthenticatedIdentity } from "./requestAuthentication.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
+import { processCollectedItem } from "../pipeline/pipeline.ts";
 
 type ExposureClaimItem = {
   id?: string;
@@ -41,6 +42,7 @@ type ParsedExposureClaim = ExposureClaimItem & {
   parserMode: "hanasand-ai" | "local_fallback";
   parserQuality: "high" | "medium" | "needs_review";
   needsReview: boolean;
+  evidenceContentHash: string;
   summary?: string;
 };
 
@@ -402,20 +404,17 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
   const claimTime = claim.claimTime || claim.publishedAt || claim.capturedAt || at;
   const title = `${claim.actor} has just published a new victim: ${claim.company}`;
   const safeExcerpt = [title, claim.claimedData ? `Claimed data category: ${claim.claimedData}.` : undefined, claim.claimedDataSize ? `Claimed size: ${claim.claimedDataSize}.` : undefined, claim.country ? `Claimed country: ${claim.country}.` : undefined].filter(Boolean).join(" ");
-  const id = stableId("cap_exposure", `${scope.tenantId}:${sourceId}:${claim.actor}:${claim.company}:${claimTime}:${claim.url ?? ""}`);
-  return store.saveCapture({
-    id,
+  const pipeline = processCollectedItem({
     tenantId: scope.tenantId,
     sourceId,
     url: claim.url || `metadata://exposure/${encodeURIComponent(claim.actor)}/${encodeURIComponent(claim.company)}`,
     title,
     collectedAt: claim.capturedAt || at,
     publishedAt: claimTime,
-    contentHash: hashContent(`${title}:${claim.claimedData ?? ""}:${claim.claimedDataSize ?? ""}:${claimTime}:${claim.url ?? ""}`),
-    mediaType: "text/plain",
-    storageKind: "metadata_only",
+    contentHash: claim.evidenceContentHash,
+    rawText: safeExcerpt,
+    links: [],
     sensitive: true,
-    sensitivityFlags: ["leak_metadata"],
     metadata: {
       exposureClaim: true,
       organizationId: scope.organizationId,
@@ -425,12 +424,15 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
       sourceFamily: claim.sourceFamily || "darkweb_metadata",
       parserMode: claim.parserMode,
       parserQuality: claim.parserQuality,
+      extractionProfile: "ransomware_victim_blog",
       leakSite: {
         actorName: claim.actor,
         victimName: claim.company,
         claimedDataCategory: claim.claimedData || "Not disclosed by TA",
+        claimedDataType: claim.claimedData || "Not disclosed by TA",
         claimedDataSize: claim.claimedDataSize || "Not disclosed by TA",
         claimedCountry: claim.country || "Not disclosed by TA",
+        channelType: claim.sourceFamily === "public_advisory" ? "public victim-claim feed" : claim.sourceFamily === "telegram_public" ? "public Telegram" : "metadata-only victim source",
         firstSeenAt: claimTime,
         claimType: claim.claimType || "ransomware_victim_publication"
       },
@@ -440,6 +442,8 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
       }
     }
   });
+  pipeline.capture.title = title;
+  return store.savePipelineResult(pipeline).capture;
 }
 
 async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<ParsedExposureClaim> {
@@ -459,7 +463,8 @@ async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<
     confidence,
     parserMode: ai ? "hanasand-ai" : "local_fallback",
     parserQuality: confidence >= 0.82 ? "high" : confidence >= 0.68 ? "medium" : "needs_review",
-    needsReview: confidence < 0.72 || !company
+    needsReview: confidence < 0.72 || !company,
+    evidenceContentHash: hashContent(JSON.stringify([item.sourceId, item.url, item.title, item.text, item.actor, item.company, item.victimName, item.publishedAt, item.capturedAt]))
   };
 }
 

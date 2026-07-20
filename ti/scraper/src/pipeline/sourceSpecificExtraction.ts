@@ -14,17 +14,18 @@ export function extractSourceSpecificEntities(item: CollectedItem, context: Extr
 
 function victimBlogEntities(item: CollectedItem, context: ExtractionContext): ExtractedEntity[] {
   const fields = item.metadata?.leakSite ?? {};
+  const actor = meaningful(fields.actorName), victim = meaningful(fields.victimName), dataType = meaningful(fields.claimedDataType);
   return compact([
-    fieldEntity("actor", fields.actorName, 0.86, "actorName", item, context, "source_claim", []),
-    fieldEntity("victim", fields.victimName, 0.78, "victimName", item, context, "source_claim", ["unverified threat-actor claim"]),
+    fieldEntity("actor", actor, 0.86, "actorName", item, context, "source_claim", []),
+    fieldEntity("victim", victim, 0.78, "victimName", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("sector", fields.claimedSector, 0.68, "claimedSector", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("country", fields.claimedCountry, 0.68, "claimedCountry", item, context, "source_claim", ["unverified threat-actor claim"]),
-    fieldEntity("dataset", fields.claimedDataType, 0.64, "claimedDataType", item, context, "source_claim", ["advertised data type is unverified"]),
-    fieldEntity("extortion_type", fields.extortionType ?? (fields.victimName && fields.claimedDataType ? "data-theft extortion" : undefined), fields.extortionType ? 0.8 : 0.55, "extortionType", item, context, fields.extortionType ? "source_claim" : "inferred", fields.extortionType ? ["unverified threat-actor claim"] : ["inferred from victim listing and advertised data type"]),
+    fieldEntity("dataset", dataType, 0.64, "claimedDataType", item, context, "source_claim", ["advertised data type is unverified"]),
+    fieldEntity("extortion_type", fields.extortionType ?? (actor && victim ? "ransomware/extortion victim claim" : undefined), fields.extortionType ? 0.8 : 0.55, "extortionType", item, context, fields.extortionType ? "source_claim" : "inferred", fields.extortionType ? ["unverified threat-actor claim"] : ["inferred from publication in a governed victim-claim feed"]),
     fieldEntity("monetization_path", fields.monetizationPath, 0.72, "monetizationPath", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("publicity_tactic", fields.publicityTactic ?? "public victim naming", fields.publicityTactic ? 0.8 : 0.7, "publicityTactic", item, context, fields.publicityTactic ? "source_claim" : "observed", fields.publicityTactic ? ["unverified threat-actor claim"] : []),
     fieldEntity("publication_strategy", fields.publicationStrategy ?? "public victim listing", fields.publicationStrategy ? 0.8 : 0.95, "publicationStrategy", item, context, fields.publicationStrategy ? "source_claim" : "observed", fields.publicationStrategy ? ["unverified threat-actor claim"] : []),
-    fieldEntity("channel_type", "dark web victim blog", 0.95, "channel", item, context, "observed", []),
+    fieldEntity("channel_type", fields.channelType ?? "metadata-only victim source", 0.95, "channel", item, context, "observed", []),
     fieldEntity("victim_pressure_tactic", fields.victimPressureTactic ?? "public naming", fields.victimPressureTactic ? 0.75 : 0.65, "victimPressureTactic", item, context, fields.victimPressureTactic ? "source_claim" : "inferred", fields.victimPressureTactic ? ["unverified threat-actor claim"] : ["inferred from publication channel"]),
     fieldEntity("buyer_seller_communication", fields.buyerSellerCommunication, 0.7, "buyerSellerCommunication", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("intermediary_communication", fields.intermediaryCommunication, 0.7, "intermediaryCommunication", item, context, "source_claim", ["unverified threat-actor claim"]),
@@ -59,8 +60,9 @@ function certUaEntities(item: CollectedItem, context: ExtractionContext): Extrac
 }
 
 function fieldEntity(type: string, value: unknown, confidence: number, field: string, item: CollectedItem, context: ExtractionContext, assertionKind: string, reviewReasons: string[]): ExtractedEntity | undefined {
-  if (typeof value !== "string" || !value.trim()) return undefined;
-  const normalized = normalizeWhitespace(value).slice(0, 240);
+  const meaningfulValue = meaningful(value);
+  if (!meaningfulValue) return undefined;
+  const normalized = normalizeWhitespace(meaningfulValue).slice(0, 240);
   return entity(type, normalized, confidence, field, item, context, assertionKind, reviewReasons, item.rawText.toLowerCase().indexOf(normalized.toLowerCase()));
 }
 
@@ -87,3 +89,4 @@ function provenance(context: ExtractionContext, startOffset: number, endOffset: 
 }
 
 function compact<T>(values: Array<T | undefined>): T[] { return values.filter((value): value is T => value !== undefined); }
+function meaningful(value: unknown): string | undefined { return typeof value === "string" && value.trim() && !/^(?:unknown|n\/?a|not disclosed(?: by (?:the )?threat actor| by ta)?)$/i.test(value.trim()) ? value.trim() : undefined; }
