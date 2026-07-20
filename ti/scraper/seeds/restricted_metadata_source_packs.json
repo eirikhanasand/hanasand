@@ -20,6 +20,41 @@
   ],
   "sources": [
     {
+      "id": "restricted_tor_project_transport_canary",
+      "name": "Tor Project official onion transport canary",
+      "type": "tor_metadata",
+      "url": "http://2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "active",
+      "risk": "high",
+      "trustScore": 0.99,
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Collect title and description metadata from the Tor Project's officially published onion service solely to verify the bounded Tor transport. Do not run threat extraction, authenticate, interact, or download content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-07-20T00:00:00.000Z",
+        "approvedBy": "source-review:official-onion-directory",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "official_onion_transport",
+        "transportCanary": true,
+        "discoveryAuthorityUrl": "https://onion.torproject.org/",
+        "discoveryAuthorityRecordUrl": "https://onion.torproject.org/#www.torproject.org",
+        "discoveryCheckedAt": "2026-07-20T12:00:00.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-07-20T12:01:00.000Z",
+        "expectedPageRole": "transport_canary",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "attribution": "Official Tor Project onion service directory"
+      }
+    },
+    {
       "id": "restricted_blackout_victim_blog",
       "name": "Blackout victim blog",
       "type": "tor_metadata",

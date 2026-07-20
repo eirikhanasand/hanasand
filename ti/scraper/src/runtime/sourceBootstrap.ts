@@ -124,14 +124,15 @@ function shouldImportSource(source: SourceRecord) {
 
 function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedAt: string, restricted = false): SourceRecord {
   const activate = !restricted && Bun.env.TI_SOURCE_SEED_ACTIVATE !== "false" && source.risk !== "medium" && source.risk !== "high" && source.risk !== "restricted";
+  const transportCanary = restricted && source.metadata?.transportCanary === true;
   return {
     ...source,
-    status: restricted ? "candidate" : activate ? "active" : source.status ?? "candidate",
+    status: transportCanary ? "active" : restricted ? "candidate" : activate ? "active" : source.status ?? "candidate",
     createdAt: source.createdAt ?? generatedAt,
     updatedAt: generatedAt,
     metadata: {
       ...(source.metadata ?? {}),
-      productionCollection: !restricted,
+      productionCollection: !restricted || transportCanary,
       canaryPortfolio: !restricted,
       restrictedMetadataCandidate: restricted || undefined,
       sourceSeedPath: seedPath,

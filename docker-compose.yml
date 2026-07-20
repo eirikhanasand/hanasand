@@ -336,8 +336,8 @@ services:
       TI_SOURCE_TARGET_COUNT: 1000
       TI_SOURCE_SEED_ACTIVATE: "true"
       TI_SOURCE_SEED_PATHS: /app/ti/scraper/seeds/public_cti_sources.json,/app/ti/scraper/seeds/verified_long_lived_sources.json,/app/ti/scraper/seeds/public_cti_starter_pack.json,/app/ti/scraper/seeds/public_telegram_channel_packs.json,/app/ti/scraper/seeds/public_threat_intel_generated_sources.json,/app/ti/scraper/seeds/high_value_exposure_source_candidates.json,/app/ti/scraper/seeds/restricted_metadata_source_packs.json
-      TI_IMPORT_RESTRICTED_METADATA_SOURCES: ${TI_IMPORT_RESTRICTED_METADATA_SOURCES:-false}
-      TI_RESTRICTED_METADATA_ENABLED: ${TI_RESTRICTED_METADATA_ENABLED:-false}
+      TI_IMPORT_RESTRICTED_METADATA_SOURCES: ${TI_IMPORT_RESTRICTED_METADATA_SOURCES:-true}
+      TI_RESTRICTED_METADATA_ENABLED: ${TI_RESTRICTED_METADATA_ENABLED:-true}
       TI_RESTRICTED_METADATA_INTERVAL_SECONDS: ${TI_RESTRICTED_METADATA_INTERVAL_SECONDS:-900}
       TI_RESTRICTED_METADATA_MAX_SOURCES: ${TI_RESTRICTED_METADATA_MAX_SOURCES:-2}
       TI_TOR_METADATA_PROXY: http://onion-tor:8118

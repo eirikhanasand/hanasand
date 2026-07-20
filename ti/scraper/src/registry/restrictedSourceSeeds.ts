@@ -40,13 +40,14 @@ export function importRestrictedMetadataSeedBundle(bundle: unknown, importedAt: 
     errors.push(...sourceErrors.map((message) => ({ sourceId, message })));
     if (sourceErrors.length || !isRecord(raw) || !isRecord(raw.governance) || !isRecord(raw.metadata)) continue;
 
+    const transportCanary = raw.metadata.transportCanary === true;
     accepted.push({
       id: raw.id,
       name: raw.name,
       type: "tor_metadata",
       url: raw.url,
       accessMethod: "approved_proxy",
-      status: "candidate",
+      status: transportCanary ? "active" : "candidate",
       risk: raw.risk,
       trustScore: raw.trustScore,
       crawlFrequencySeconds: raw.crawlFrequencySeconds,
@@ -64,15 +65,16 @@ export function importRestrictedMetadataSeedBundle(bundle: unknown, importedAt: 
         policyVersion: raw.governance.policyVersion
       },
       metadata: {
-        sourceFamily: "dark_web_victim_feed",
+        sourceFamily: transportCanary ? "official_onion_transport" : "dark_web_victim_feed",
+        transportCanary: transportCanary || undefined,
         actorName: raw.metadata.actorName,
-        actors: Array.isArray(raw.metadata.actors) ? raw.metadata.actors.filter(nonEmpty) : [raw.metadata.actorName],
+        actors: Array.isArray(raw.metadata.actors) ? raw.metadata.actors.filter(nonEmpty) : raw.metadata.actorName ? [raw.metadata.actorName] : [],
         discoveryAuthorityUrl: raw.metadata.discoveryAuthorityUrl,
         discoveryAuthorityRecordUrl: raw.metadata.discoveryAuthorityRecordUrl,
         discoveryCheckedAt: raw.metadata.discoveryCheckedAt,
         discoveryAvailability: raw.metadata.discoveryAvailability,
         discoveryObservedAt: raw.metadata.discoveryObservedAt,
-        expectedPageRole: "victim_listing",
+        expectedPageRole: transportCanary ? "transport_canary" : "victim_listing",
         collectionScope: "metadata_only",
         retainRawContent: false,
         retentionDays: raw.metadata.retentionDays,
@@ -96,7 +98,8 @@ function validateSource(source: unknown): string[] {
   if (source.type !== "tor_metadata") errors.push("source type must be tor_metadata");
   if (!isV3OnionUrl(source.url)) errors.push("source URL must be a credential-free v3 onion URL");
   if (source.accessMethod !== "approved_proxy") errors.push("source access method must be approved_proxy");
-  if (source.status !== "candidate" && source.status !== "disabled") errors.push("restricted seed source must be inactive");
+  const transportCanary = isRecord(source.metadata) && source.metadata.transportCanary === true;
+  if (transportCanary ? source.status !== "active" : source.status !== "candidate" && source.status !== "disabled") errors.push(transportCanary ? "transport canary source must be active" : "restricted seed source must be inactive");
   if (source.risk !== "high" && source.risk !== "restricted") errors.push("restricted source risk must be high or restricted");
   if (!boundedNumber(source.trustScore, 0, 1)) errors.push("trust score must be between 0 and 1");
   if (!boundedNumber(source.crawlFrequencySeconds, 900, 86_400)) errors.push("crawl frequency must be between 900 and 86400 seconds");
@@ -113,14 +116,14 @@ function validateSource(source: unknown): string[] {
 
   const metadata = isRecord(source.metadata) ? source.metadata : undefined;
   if (!metadata
-    || metadata.sourceFamily !== "dark_web_victim_feed"
-    || !nonEmpty(metadata.actorName)
+    || (transportCanary ? metadata.sourceFamily !== "official_onion_transport" : metadata.sourceFamily !== "dark_web_victim_feed")
+    || (!transportCanary && !nonEmpty(metadata.actorName))
     || !isPublicHttpsUrl(metadata.discoveryAuthorityUrl)
     || !isPublicHttpsUrl(metadata.discoveryAuthorityRecordUrl)
     || !isIsoDate(metadata.discoveryCheckedAt)
     || !["reported_available", "reported_unavailable", "unknown"].includes(metadata.discoveryAvailability)
     || (metadata.discoveryObservedAt !== undefined && !isIsoDate(metadata.discoveryObservedAt))
-    || metadata.expectedPageRole !== "victim_listing"
+    || metadata.expectedPageRole !== (transportCanary ? "transport_canary" : "victim_listing")
     || metadata.collectionScope !== "metadata_only"
     || metadata.retainRawContent !== false
     || !boundedNumber(metadata.retentionDays, 1, 90)

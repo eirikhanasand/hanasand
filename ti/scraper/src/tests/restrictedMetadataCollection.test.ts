@@ -41,4 +41,20 @@ describe("restricted metadata collection", () => {
     expect(store.listSourceHealthObservations()).toEqual([expect.objectContaining({ sourceId: "src_restricted_live", success: true, useful: true, legalMode: "metadata_only" })]);
     expect(store.listRuns().at(-1)).toMatchObject({ id: result.runId, status: "completed", captureCount: 1 });
   });
+
+  test("stores official transport canary metadata without creating threat intelligence", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource({
+      ...source({ id: "src_transport_canary", type: "tor_metadata", url: `http://${"b".repeat(56)}.onion/`, accessMethod: "approved_proxy", status: "active", risk: "high", legalNotes: "Official onion transport canary metadata only.", governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-20T09:00:00.000Z", approvedBy: "reviewer" }, metadata: { transportCanary: true } }),
+      tenantId: "tenant_restricted"
+    });
+    const boundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response("<title>Official transport canary</title><meta name=\"description\" content=\"Safe metadata\">", { headers: { "content-type": "text/html" } }) });
+
+    const result = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-20T10:05:00.000Z" });
+
+    expect(result).toMatchObject({ status: "completed", captureCount: 1, incidentCount: 0 });
+    expect(store.listCaptures()).toHaveLength(1);
+    expect(store.listIncidents()).toHaveLength(0);
+    expect(store.listExtractedEntities()).toHaveLength(0);
+  });
 });
