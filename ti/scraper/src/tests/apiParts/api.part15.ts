@@ -21,7 +21,7 @@ describe("api v1", () => {
     expect(firstRun.taskCount).toBe(1);
     expect(secondRun.id).toBe(firstRun.id);
 
-    const status = await body(await handleApiRequest(api(`/v1/intel/runs/${firstRun.id}`), options));
+    const status = await body(await handleApiRequest(api(`/v1/intel/runs/${firstRun.id}?tenantId=tenant_a`), options));
     expect((status.run as { id: string }).id).toBe(firstRun.id);
   });
 });

@@ -27,7 +27,7 @@ describe("api v1", () => {
       mediaType: "text/plain",
       storageKind: "inline_text",
       body: rawText,
-      metadata: { title: "Capture-only APT29 report" },
+      metadata: { title: "Capture-only APT29 report", runId: run.id },
       sensitive: false,
       sensitivityFlags: ["public"]
     });
@@ -35,7 +35,7 @@ describe("api v1", () => {
     const exportResponse = await body(await handleApiRequest(api("/v1/exports/stix", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ runId: run.id, generatedAt: "2026-05-24T00:05:00.000Z" })
+      body: JSON.stringify({ runId: run.id, tenantId: "tenant_a", generatedAt: "2026-05-24T00:05:00.000Z" })
     }), options));
     const objects = (exportResponse.bundle as { objects: Array<{ type: string; name?: string; x_ti_provenance?: Array<{ captureId: string }> }> }).objects;
 

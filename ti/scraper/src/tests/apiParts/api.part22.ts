@@ -22,16 +22,8 @@ describe("api v1", () => {
     const frontierResponse = await body(await handleApiRequest(api("/v1/frontier"), options));
     expect((frontierResponse.queue as unknown[])).toHaveLength(1);
     expect((frontierResponse.summary as { groups: { tenants: Record<string, number> } }).groups.tenants.tenant_a).toBe(1);
-    expect((frontierResponse.scheduler as {
-      cutover: { targetBackend: string };
-      diagnostics: { diagnostics: Array<{ workClass: string; pressureState: string; queueAgeSeconds: number }> };
-    }).cutover.targetBackend).toBe("postgres_queue");
-    expect((frontierResponse.scheduler as {
-      diagnostics: { diagnostics: Array<{ workClass: string; pressureState: string; queueAgeSeconds: number }> };
-    }).diagnostics.diagnostics[0]).toMatchObject({
-      workClass: "background_refresh",
-      pressureState: "accepted"
-    });
+    expect((frontierResponse.scheduler as { cutover: { targetBackend: string } }).cutover.targetBackend).toBe("postgres_queue");
+    expect((frontierResponse.scheduler as { diagnostics: { status: string; queue: { pressure: string } } }).diagnostics).toMatchObject({ status: "ok", queue: { pressure: "normal" } });
 
     const runResponse = await body(await handleApiRequest(api("/v1/intel/runs", {
       method: "POST",
@@ -39,7 +31,7 @@ describe("api v1", () => {
       body: JSON.stringify({ query: "APT29", entityType: "actor", tenantId: "tenant_a" })
     }), options));
     const runId = (runResponse.run as { id: string }).id;
-    const status = await body(await handleApiRequest(api(`/v1/intel/runs/${runId}`), options));
+    const status = await body(await handleApiRequest(api(`/v1/intel/runs/${runId}?tenantId=tenant_a`), options));
 
     expect(status.frontier).toBeDefined();
     expect((status.frontier as { summary: { queued: number } }).summary.queued).toBeGreaterThan(0);

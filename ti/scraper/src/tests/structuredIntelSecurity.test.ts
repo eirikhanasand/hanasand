@@ -133,7 +133,13 @@ describe("structured intelligence API boundary", () => {
     expect(evidence.trustLedger).toMatchObject({ tenantId: "tenant_a", counts: { claims: 1 }, claims: [{ claimId: "incident_a", captureId: "cap_a" }] });
 
     const results = await body(await handleApiRequest(api("/v1/intel/runs/run_a/results", { headers: { "x-tenant-id": "tenant_a" } }), options));
-    expect(results).toMatchObject({ runId: "run_a", captures: [{ id: "cap_a", bodyRedacted: true }], incidents: [{ id: "incident_a" }] });
+    expect(results).toMatchObject({
+      runId: "run_a",
+      results: {
+        captures: { items: [{ id: "cap_a", bodyRedacted: true }], total: 1 },
+        incidents: { items: [{ id: "incident_a" }], total: 1 }
+      }
+    });
     expect(JSON.stringify(results)).not.toContain("APT29 compromised Alpha Health");
     expect((await handleApiRequest(api("/v1/intel/runs/run_a/results", { headers: { "x-tenant-id": "tenant_b" } }), options)).status).toBe(404);
   });

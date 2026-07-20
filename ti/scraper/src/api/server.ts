@@ -19,7 +19,7 @@ import { createOrganization, createOrganizationInvites, createWebhookDestination
 import { publicChannelApplyPlan, publicChannelStatus } from "./publicChannelDispatch.ts";
 import { qualityPayload } from "./qualityRoute.ts";
 import { buildRestrictedMetadataApplyPlanRouteResponse, buildRestrictedMetadataStatusRouteResponse } from "./restrictedMetadataRoutes.ts";
-import { createRun, runResults, runStatus } from "./runRoutes.ts";
+import { createRun, exportRunStix, runResults, runStatus } from "./runRoutes.ts";
 import { searchResponse } from "./searchRoute.ts";
 import type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 import { metrics, productSlo } from "./sloRoute.ts";
@@ -28,6 +28,9 @@ import { handleStructuredIntelRequest } from "./structuredIntelRoutes.ts";
 import { handleFrontierApplyPlanRoute } from "./frontierApplyPlanRoute.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
+import { buildSchedulerDiagnostics, SCHEDULER_CUTOVER_DESIGN } from "../frontier/schedulerProduction.ts";
+import { buildResourceSnapshot, estimateCapacity, sizeWorkerPools } from "../ops/resourceControls.ts";
+import { DEFAULT_RESOURCE_BUDGET } from "../ops/config.ts";
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 export function startApiServer(options: ApiServerOptions): ApiServerHandle {
   const server = Bun.serve({ port: options.port ?? 8097, fetch: (request) => handleDurableApiRequest(request, options) });
@@ -125,6 +128,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/intel/runs" && request.method === "POST") return createRun(request, options);
     if (/^\/v1\/intel\/runs\/[^/]+$/.test(url.pathname) && request.method === "GET") return runStatus(request, options, url.pathname.split("/").pop() ?? "");
     if (/^\/v1\/intel\/runs\/[^/]+\/results$/.test(url.pathname) && request.method === "GET") return runResults(request, options, url.pathname.split("/")[4]);
+    if (url.pathname === "/v1/exports/stix" && request.method === "POST") return exportRunStix(request, options);
     if (url.pathname === "/v1/darkweb/status") return json({ status: buildDarkwebIndexStatus({ sources: options.store.listSources(), captures: options.store.listCaptures() } as any) });
     if (url.pathname === "/v1/darkweb/search") return json(searchDarkwebIndex({ query: url.searchParams.get("q") ?? "", sources: options.store.listSources(), captures: options.store.listCaptures(), limit: numberQuery(url.searchParams.get("limit")) ?? 50 } as any));
     if ((url.pathname === "/v1/dwm/exposure-queue" || url.pathname === "/api/dwm/exposure-queue") && request.method === "GET") return listExposureQueue(request, url, options);
@@ -269,8 +273,14 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/ops/canary/readiness" && request.method === "GET") return canaryReadiness(url, options);
     if (url.pathname === "/v1/ops/canary/soak" && request.method === "GET") return canarySoak(url, options);
     if (url.pathname === "/v1/ops/canary/console" && request.method === "GET") return canaryConsole(url, options);
-    if (url.pathname === "/v1/ops/resource-snapshot") return json({ service: "ti-scraper", queue: { queued: options.frontier.size() }, workers: options.supervisor?.snapshot() ?? [] });
-    if (url.pathname === "/v1/frontier") return json({ queued: options.frontier.size(), tasks: options.frontier.snapshot?.() ?? [] });
+    if (url.pathname === "/v1/ops/resource-snapshot") {
+      const budget = DEFAULT_RESOURCE_BUDGET;
+      return json({ service: "ti-scraper", queue: { queued: options.frontier.size() }, resources: buildResourceSnapshot({ budget, queueItems: options.frontier.size() }), capacity: estimateCapacity(budget), workerPools: sizeWorkerPools(budget), workers: options.supervisor?.snapshot() ?? [] });
+    }
+    if (url.pathname === "/v1/frontier") {
+      const queue = options.frontier.snapshot?.() ?? [];
+      return json({ queue, summary: options.frontier.groupedSnapshot(), scheduler: { cutover: SCHEDULER_CUTOVER_DESIGN, diagnostics: buildSchedulerDiagnostics({ queued: queue.map((item: any) => item.task ?? item), leased: options.frontier.leasedSnapshot?.() ?? [], deadLetters: options.frontier.deadLetterSnapshot?.() ?? [], now: new Date() }) } });
+    }
     if (url.pathname === "/v1/frontier/apply-plan" && request.method === "POST") {
       const body = await readJson(request);
       const result = handleFrontierApplyPlanRoute({
@@ -285,7 +295,6 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       return json(result.body, result.status);
     }
     if (url.pathname.endsWith("/apply-plan")) return json({ endpoint: url.pathname, dryRun: true, actions: [] });
-    if (url.pathname.includes("/exports/stix")) return json({ type: "bundle", objects: [] });
     if (url.pathname.includes("/graph/")) return json({ endpoint: url.pathname, nodes: [], relationships: [] });
     return error("not_found", "Route not found", 404);
   } catch (caught) {

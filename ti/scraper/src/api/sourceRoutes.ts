@@ -48,7 +48,7 @@ export async function updateSource(request: Request, options: ApiServerOptions, 
   const scope = resolveTenantScope(request, new URL(request.url), patch.tenantId);
   if (scope.error) return scope.error;
   if (!inTenantScope(source, scope.tenantId)) return json({ error: { code: "not_found", message: "Source not found" } }, 404);
-  const updated = { ...source, ...patch, id: source.id, tenantId: source.tenantId, updatedAt: nowIso() };
+  const updated = { ...source, ...patch, id: source.id, tenantId: source.tenantId, trustScore: patch.trustScore === undefined ? source.trustScore : Math.max(0, Math.min(1, patch.trustScore)), updatedAt: nowIso() };
   options.store.saveSource(updated);
   return json({ source: toSafeSourceDto(updated) });
 }
