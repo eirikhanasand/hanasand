@@ -67,7 +67,7 @@ export async function startScraperRuntime() {
       maxItemsPerTask: Number(Bun.env.TI_CANARY_MAX_ITEMS_PER_TASK ?? "4"),
     }, runId).then((run: any) => {
       if (run?.status !== "queued" || !run.nextAttemptAt) return;
-      const delay = Math.max(0, Date.parse(run.nextAttemptAt) - Date.now());
+      const delay = Math.max(0, Math.min(2_147_000_000, Date.parse(run.nextAttemptAt) - Date.now()));
       runTimers.set(runId, setTimeout(() => executeRun(runId), delay));
     }).catch((error) => logger.warn("scheduled collection run failed", { event: "scheduled_run.error", runId, error: error instanceof Error ? error.message : String(error) }));
   };

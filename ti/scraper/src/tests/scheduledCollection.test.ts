@@ -80,4 +80,16 @@ describe("scheduled API collection runs", () => {
     expect(run).toMatchObject({ status: "queued", nextAttemptAt: availableAt, completedTaskCount: 0 });
     expect(frontier.size()).toBe(1);
   });
+
+  test("fails runs whose collection deadline expired", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    store.savePlan({ id: "plan_expired", tenantId: "tenant_live", budget: { deadlineAt: "2020-01-01T00:00:00.000Z" }, tasks: [{ id: "task_expired", sourceId: "src_expired" }] });
+    store.saveRun({ id: "run_expired", tenantId: "tenant_live", planId: "plan_expired", requestId: "request_expired", status: "queued", createdAt: "2020-01-01T00:00:00.000Z", taskCount: 1 });
+
+    const run = await executeScheduledCollectionRun({ store, frontier }, "run_expired");
+
+    expect(run).toMatchObject({ status: "failed", error: "collection plan deadline expired" });
+    expect(frontier.size()).toBe(0);
+  });
 });

@@ -27,8 +27,10 @@ export async function createRun(request: Request, options: ApiServerOptions): Pr
   const requestId = stableId("request", `${scope.tenantId}:${idempotencyKey ?? requestHash}`);
   const planned = createCollectionPlan({ ...input, id: requestId, createdAt }, options.store.listSources().filter((source: any) => !source.tenantId || source.tenantId === scope.tenantId), options.frontier);
   const plan = { ...planned, id: stableId("plan", requestId), requestId, tenantId: scope.tenantId, idempotencyKey, requestHash } as CollectionPlan;
-  const run = runFromPlan(plan, requestId);
-  const executablePlan = { ...plan, tasks: plan.tasks.map((task: any) => ({ ...task, runId: run.id, planId: plan.id, crawlBudgetKey: undefined })) } as CollectionPlan;
+  const executableTasks = plan.tasks.filter((task: any) => !task.availableAt || !task.deadlineAt || Date.parse(task.availableAt) <= Date.parse(task.deadlineAt));
+  const executablePlan = { ...plan, tasks: executableTasks } as CollectionPlan;
+  const run = runFromPlan(executablePlan, requestId);
+  executablePlan.tasks = executableTasks.map((task: any) => ({ ...task, runId: run.id, planId: plan.id, crawlBudgetKey: undefined }));
   options.store.savePlan?.(executablePlan);
   options.store.saveRun?.(run);
   for (const task of executablePlan.tasks) options.frontier.enqueueTask(task);
@@ -50,7 +52,7 @@ export function runResults(request: Request, options: ApiServerOptions, runId: s
   const run = options.store.getRun?.(runId);
   if (!run || !inTenantScope(run, scope.tenantId)) return error("not_found", "Run not found", 404);
   const runCaptureIds = new Set(run.captureIds ?? []);
-  const captures = options.store.listCaptures().filter((capture: any) => runCaptureIds.has(capture.id) || captureRunId(capture) === runId);
+  const captures = options.store.listCaptures().filter((capture: any) => (!capture.tenantId || capture.tenantId === scope.tenantId) && (runCaptureIds.has(capture.id) || captureRunId(capture) === runId));
   const captureIds = new Set(captures.map((capture: any) => capture.id));
   const belongsToRun = (record: any) => captureIds.has(record.captureId) && (!record.tenantId || record.tenantId === scope.tenantId);
   const incidents = (options.store.listIncidents?.() ?? []).filter(belongsToRun);
