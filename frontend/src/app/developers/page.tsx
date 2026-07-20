@@ -53,10 +53,10 @@ export default function DevelopersPage() {
                                 Request API access
                                 <ArrowRight className='h-4 w-4' />
                             </Link>
-                            <a href='/api/openapi/ti' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
+                            <Link href='/api/openapi/ti' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
                                 <FileJson className='h-4 w-4' />
                                 OpenAPI JSON
-                            </a>
+                            </Link>
                         </div>
                     </div>
 
