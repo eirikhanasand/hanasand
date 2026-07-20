@@ -225,13 +225,10 @@ async function dwmScraperHeaders(): Promise<HeadersInit> {
     const requestHeaders = await headers()
     const token = cookieStore.get('access_token')?.value || bearerToken(requestHeaders.get('authorization')) || ''
     const id = cookieStore.get('id')?.value || requestHeaders.get('id') || ''
-    const actorId = requestHeaders.get('x-actor-id') || id
-    const userEmail = requestHeaders.get('x-user-email') || ''
     return {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(id ? { id } : {}),
-        ...(actorId ? { 'x-actor-id': actorId } : {}),
-        ...(userEmail ? { 'x-user-email': userEmail } : {}),
+        ...(id ? { 'x-actor-id': id, 'x-user-id': id } : {}),
     }
 }
 

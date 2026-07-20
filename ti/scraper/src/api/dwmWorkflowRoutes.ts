@@ -1107,7 +1107,11 @@ function organizationMembers(options: ApiServerOptions, organizationId: string |
 }
 
 function requestIdentity(request: Request | undefined, body?: any, url?: URL): string[] {
+  const sessionId = normalizeIdentity(request?.headers.get("id"));
+  if (sessionId && request?.headers.get("authorization")?.startsWith("Bearer ")) return [sessionId];
+
   return [
+    request?.headers.get("id"),
     request?.headers.get("x-user-email"),
     request?.headers.get("x-user-id"),
     request?.headers.get("x-actor-id"),

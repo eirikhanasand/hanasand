@@ -10,6 +10,8 @@ const [proxy, product, session] = await Promise.all([
 
 assert.match(proxy, /await requireApiSession\(request\)/)
 assert.match(proxy, /const actorId = id/)
+assert.doesNotMatch(proxy, /x-user-email/)
+assert.doesNotMatch(proxy, /x-tenant-id': request\.headers\.get\('x-tenant-id'\) \|\| 'default'/)
 assert.match(product, /await requireApiSession\(request\)/)
 assert.match(product, /authorization: `Bearer \$\{identity\.token\}`/)
 assert.match(session, /await tokenIsValid\(token, id\)/)

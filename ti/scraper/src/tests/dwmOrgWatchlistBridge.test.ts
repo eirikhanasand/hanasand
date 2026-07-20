@@ -788,6 +788,16 @@ describe("DWM org watchlist bridge", () => {
     }), options);
     expect(outsiderListResponse.status).toBe(403);
 
+    const spoofedMemberResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
+      headers: { authorization: "Bearer valid-session", id: "outsider-principal", "x-user-email": "member@org-bridge.example" }
+    }), options);
+    expect(spoofedMemberResponse.status).toBe(403);
+
+    const authenticatedMemberResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
+      headers: { authorization: "Bearer valid-session", id: "member-org-bridge", "x-user-email": "outsider@org-bridge.example" }
+    }), options);
+    expect(authenticatedMemberResponse.status).toBe(200);
+
     const otherOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
       method: "POST",
       headers: { "x-user-email": "owner-other@org-bridge.example" },

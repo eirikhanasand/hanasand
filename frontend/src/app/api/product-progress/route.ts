@@ -294,7 +294,7 @@ function forwardedHeaders(request: NextRequest) {
     const headers = new Headers()
     const cookie = request.headers.get('cookie')
     if (cookie) headers.set('cookie', cookie)
-    for (const name of ['authorization', 'x-tenant-id', 'x-organization-id', 'x-user-id', 'x-user-email', 'x-actor-id']) {
+    for (const name of ['authorization', 'x-tenant-id', 'x-organization-id']) {
         const value = request.headers.get(name)
         if (value) headers.set(name, value)
     }

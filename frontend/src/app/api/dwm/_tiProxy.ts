@@ -21,8 +21,9 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
         const cookieStore = await cookies()
         const { token, id } = session.identity
         const actorId = id
-        const userEmail = request.headers.get('x-user-email') || ''
         const impersonationToken = cookieStore.get('impersonation_token')?.value || request.headers.get('x-impersonation-token') || ''
+        const tenantId = request.headers.get('x-tenant-id') || ''
+        const organizationId = request.headers.get('x-organization-id') || ''
         const target = new URL(path, base)
         for (const [key, value] of request.nextUrl.searchParams.entries()) {
             target.searchParams.set(key, value)
@@ -34,12 +35,11 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
             cache: 'no-store',
             headers: {
                 'content-type': 'application/json',
-                'x-tenant-id': request.headers.get('x-tenant-id') || 'default',
-                'x-organization-id': request.headers.get('x-organization-id') || '',
+                ...(tenantId ? { 'x-tenant-id': tenantId } : {}),
+                ...(organizationId ? { 'x-organization-id': organizationId } : {}),
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 ...(id ? { id } : {}),
                 ...(actorId ? { 'x-actor-id': actorId, 'x-user-id': actorId } : {}),
-                ...(userEmail ? { 'x-user-email': userEmail } : {}),
                 ...(impersonationToken ? { 'x-impersonation-token': impersonationToken } : {}),
             },
             signal: AbortSignal.timeout(options.timeoutMs ?? 12000),
