@@ -61,4 +61,20 @@ describe("public collection boundary", () => {
     const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, maxItemsPerTask: 1, now: () => "2026-06-22T00:00:00.000Z", fetch: async () => new Response(oldEntry, { headers: { "content-type": "application/json" } }) });
     expect(cycle).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
   });
+
+  test("promotes bounded structured ransomware group rows without the text heuristic", async () => {
+    const groups = source({
+      id: "src_seed_ransomwarelive_groups", type: "api", url: "https://data.ransomware.live/groups.json",
+      catalog: { canonicalId: "community:ransomwarelive:groups" }, metadata: { extractionProfile: "ransomware_group_metadata", canaryPortfolio: true }
+    });
+    const payload = JSON.stringify([{ name: "Quiet Example", _victim_count: 3, locations: [{ type: "Chat", fqdn: `${"a".repeat(56)}.onion` }] }]);
+    const items = await fetchItems(groups, { id: "task_groups", targetUrl: groups.url }, async () => new Response(payload, { headers: { "content-type": "application/json" } }), "native_live_http", "2026-07-20T00:00:00.000Z", 512_000, 12_000, 1);
+    expect(items[0]).toMatchObject({ metadata: { fetchProvenance: { maxBytes: 2_000_000 }, extractionProfile: "ransomware_group_metadata" } });
+
+    const store = new InMemoryScraperStore();
+    store.saveSource(groups);
+    const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, maxItemsPerTask: 1, now: () => "2026-07-20T00:00:00.000Z", fetch: async () => new Response(payload, { headers: { "content-type": "application/json" } }) });
+    expect(cycle).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
+    expect(store.listExtractedEntities()).toContainEqual(expect.objectContaining({ type: "buyer_seller_communication", value: "public metadata lists an actor chat endpoint" }));
+  });
 });
