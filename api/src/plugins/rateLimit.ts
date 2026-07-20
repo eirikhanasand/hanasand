@@ -14,6 +14,7 @@ type RateLimitActor = {
     scope: RateLimitScope
     identifier: string
     apiKey?: Awaited<ReturnType<typeof validateApiKey>>
+    invalidApiKey?: boolean
 }
 
 const buckets = new Map<string, Bucket>()
@@ -56,6 +57,9 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
         }
 
         const actor = await resolveRateLimitActor(req)
+        if (actor.invalidApiKey) {
+            return res.status(401).send({ error: 'invalid_api_key', message: 'The presented API key is invalid, disabled, or expired.' })
+        }
         let apiKeyScope: ReturnType<typeof matchApiKeyScope> = null
         if (actor.apiKey) {
             ;(req as FastifyRequest & { apiKeyAuth?: typeof actor.apiKey }).apiKeyAuth = actor.apiKey
@@ -156,12 +160,12 @@ function resolveRouteRule(settings: RateLimitSettings, method: string, route: st
     return settings.defaults[scope]
 }
 
-export async function resolveRateLimitActor(req: FastifyRequest): Promise<RateLimitActor> {
+export async function resolveRateLimitActor(req: FastifyRequest, validate: typeof validateApiKey = validateApiKey): Promise<RateLimitActor> {
     const ip = getClientIp(req)
 
     const apiKeySecret = extractPresentedApiKey(req)
     if (apiKeySecret) {
-        const apiKey = await validateApiKey(apiKeySecret).catch(() => null)
+        const apiKey = await validate(apiKeySecret).catch(() => null)
         if (apiKey) {
             return {
                 scope: apiKey.roles.some((role) => isInternalRole(role.id, role.name)) ? 'internal' : 'authenticated',
@@ -169,6 +173,7 @@ export async function resolveRateLimitActor(req: FastifyRequest): Promise<RateLi
                 apiKey,
             }
         }
+        return { scope: 'anonymous', identifier: `ip:${ip}`, invalidApiKey: true }
     }
 
     const authHeader = req.headers.authorization

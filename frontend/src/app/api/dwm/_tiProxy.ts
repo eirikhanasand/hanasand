@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
 import requireApiSession from '@/utils/proxy/requireApiSession'
+import { authApiUrl } from '@/utils/auth/authApiUrl'
 
 type ProxyOptions = {
     method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
@@ -61,4 +62,47 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
             },
         }, { status: 502 })
     }
+}
+
+export async function proxyApiTiRequest(request: NextRequest, path: string, options: ProxyOptions = {}) {
+    const apiKey = presentedApiKey(request)
+    const session = apiKey ? undefined : await requireApiSession(request)
+    if (session && 'response' in session) return session.response
+
+    try {
+        const target = new URL(`${authApiUrl().replace(/\/$/, '')}${path}`)
+        const method = options.method || request.method as 'GET' | 'POST'
+        const response = await fetch(target, {
+            method,
+            cache: 'no-store',
+            headers: {
+                'content-type': 'application/json',
+                ...(apiKey ? { 'x-api-key': apiKey } : {
+                    Authorization: `Bearer ${session!.identity.token}`,
+                    id: session!.identity.id,
+                }),
+            },
+            ...(method === 'GET' ? {} : { body: await request.text() }),
+            signal: AbortSignal.timeout(options.timeoutMs ?? 15000),
+        })
+        const text = await response.text()
+        const headers = new Headers({
+            'cache-control': 'no-store',
+            'content-type': response.headers.get('content-type') || 'application/json',
+        })
+        for (const [name, value] of response.headers) {
+            if (name === 'retry-after' || name.startsWith('x-rate-limit-') || name.startsWith('x-api-key-rate-limit-')) headers.set(name, value)
+        }
+        return new NextResponse(text, { status: response.status, headers })
+    } catch {
+        return NextResponse.json({ error: 'ti_proxy_failed', message: 'Threat-intelligence API is temporarily unavailable.' }, { status: 502, headers: { 'cache-control': 'no-store' } })
+    }
+}
+
+export function presentedApiKey(request: Pick<NextRequest, 'headers'>) {
+    const header = request.headers.get('x-api-key')?.trim() || ''
+    if (header) return header
+    const authorization = request.headers.get('authorization') || ''
+    const bearer = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
+    return bearer.startsWith('hsk_') ? bearer : ''
 }

@@ -15,6 +15,11 @@ describe('public TI API boundary', () => {
         expect(await resolveRateLimitActor(request)).toEqual({ scope: 'anonymous', identifier: 'ip:172.20.0.1' })
     })
 
+    test('marks an invalid presented API key instead of silently treating it as anonymous', async () => {
+        const request = { ip: '203.0.113.10', headers: { 'x-api-key': 'hsk_invalid' } } as unknown as FastifyRequest
+        expect(await resolveRateLimitActor(request, async () => null)).toEqual({ scope: 'anonymous', identifier: 'ip:203.0.113.10', invalidApiKey: true })
+    })
+
     test('allows only configured browser origins', () => {
         expect(isAllowedApiOrigin(undefined)).toBe(true)
         expect(isAllowedApiOrigin('https://hanasand.com')).toBe(true)
