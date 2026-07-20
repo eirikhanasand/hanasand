@@ -13,7 +13,9 @@ const byId = new Map(jobs.map(job => [job.id, job]))
 assert.ok(byId.has('forgejo-standby-sync'), 'Forgejo standby sync should remain registered.')
 assert.ok(byId.has('forgejo-doctor'), 'Forgejo doctor should remain registered.')
 assert.ok(byId.has('db-dashboard-monitor'), 'Database dashboard monitor should be registered.')
+assert.ok(byId.has('ti-threat-intel-backup'), 'Threat-intelligence backup should be registered.')
 assert.ok(byId.has('ti-public-canary-collection'), 'TI collection loop should be registered even when TI backend is unavailable.')
+assert.ok(byId.has('ti-restricted-metadata-collection'), 'Restricted metadata collection loop should be registered even when TI backend is unavailable.')
 assert.ok(byId.has('ti-exposure-queue-collection'), 'Exposure queue collection should be registered.')
 assert.ok(byId.has('ti-exposure-parser'), 'Exposure parser should be registered.')
 assert.ok(byId.has('ti-dwm-alert-generation'), 'DWM alert generation should be registered.')
@@ -29,6 +31,9 @@ assert.equal(byId.get('db-dashboard-monitor')?.category, 'Backup/Database')
 assert.equal(byId.get('db-dashboard-monitor')?.service, 'database-monitor')
 assert.equal(byId.get('db-dashboard-monitor')?.schedule, '* * * * *')
 assert.ok(byId.get('db-dashboard-monitor')?.controls.includes('edit_schedule'), 'Database monitor schedule editing should stay available.')
+assert.equal(byId.get('ti-threat-intel-backup')?.schedule, '23 2 * * *')
+assert.equal(byId.get('ti-threat-intel-backup')?.category, 'Backup/Database')
+assert.ok(byId.get('ti-threat-intel-backup')?.controls.includes('edit_schedule'), 'Threat-intelligence backup schedule should be editable.')
 assert.ok(byId.get('ti-public-canary-collection')?.controls.length, 'TI collection should expose safe controls.')
 assert.ok(byId.get('ti-public-canary-collection')?.controls.includes('run_now'), 'TI collection should expose safe run-now control.')
 assert.equal(byId.get('api-agent-automations')?.controlMode, 'safe_control')
@@ -65,6 +70,23 @@ const tiMock = Bun.serve({
         }
 
         if (url.pathname === '/v1/ops/collection-scheduler') return json(tiSchedulerPayload())
+        if (url.pathname === '/health') return json({
+            ok: true,
+            collection: {
+                restrictedMetadata: {
+                    enabled: true,
+                    running: false,
+                    intervalSeconds: 900,
+                    cycleCount: 4,
+                    successCount: 3,
+                    errorCount: 1,
+                    failedSourceCount: 1,
+                    lastCycleAt: '2026-07-03T09:45:00.000Z',
+                    lastSuccessAt: '2026-07-03T09:45:30.000Z',
+                    nextCycleAt: '2026-07-03T10:00:30.000Z',
+                },
+            },
+        })
         if (url.pathname === '/v1/dwm/exposure-queue') return json({
             status: 'live',
             scheduler: { cadenceSeconds: 300 },
@@ -118,6 +140,8 @@ try {
     assert.equal(liveById.get('ti-source-pack-worker')?.controlMode, 'run_only')
     assert.equal(liveById.get('ti-frontier-queue')?.resourceUsage.queueDepth, 7)
     assert.equal(liveById.get('ti-public-canary-collection')?.resourceUsage.memoryRssMb, 321)
+    assert.equal(liveById.get('ti-restricted-metadata-collection')?.status, 'enabled')
+    assert.equal(liveById.get('ti-restricted-metadata-collection')?.nextRunAt, '2026-07-03T10:00:30.000Z')
 
     const controlDbAvailable = await scheduledJobControlsAvailable()
     if (controlDbAvailable) {

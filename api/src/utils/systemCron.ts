@@ -133,6 +133,18 @@ export const managedCronDefinitions: ManagedCronDefinition[] = [
         service: 'database-monitor',
         logPath: '/home/hanasand/monitor-state/db-dashboard-monitor.log',
     },
+    {
+        id: 'ti-threat-intel-backup',
+        name: 'Threat intelligence backup',
+        description: 'Creates and verifies a daily threat-intelligence database and evidence backup, runs a weekly restore drill, and retains 14 days.',
+        defaultSchedule: '23 2 * * *',
+        command: '/home/hanasand/hanasand/ops/threat-intel-backup/run-threat-intel-backup.sh >> /home/hanasand/monitor-state/threat-intel-backup.log 2>&1',
+        legacyCommands: [],
+        host: 'hanasand',
+        category: 'Backup/Database',
+        service: 'ti-scraper',
+        logPath: '/home/hanasand/monitor-state/threat-intel-backup.log',
+    },
 ]
 
 export function scheduledJobRegistryGuardrailEntries() {
@@ -141,6 +153,7 @@ export function scheduledJobRegistryGuardrailEntries() {
         ...apiBackgroundJobDefinitions.map(job => ({ id: job.id, source: job.source })),
         { id: 'deployment-compose-schedules', source: 'docker-compose.yml' },
         { id: 'ti-public-canary-collection', source: 'ti/scraper/src/ops/canaryCollection.ts' },
+        { id: 'ti-restricted-metadata-collection', source: 'ti/scraper/src/ops/restrictedMetadataCollection.ts' },
         { id: 'ti-exposure-queue-collection', source: 'ti/scraper/src/api/exposureQueueRoutes.ts' },
         { id: 'ti-exposure-parser', source: 'ti/scraper/src/api/exposureQueueRoutes.ts' },
         { id: 'ti-dwm-alert-generation', source: 'ti/scraper/src/api/dwmWorkflowRoutes.ts' },
@@ -506,8 +519,9 @@ async function listTiScheduledJobs(): Promise<UnifiedScheduledJob[]> {
     const base = tiBase()
     if (!base) return tiUnavailableJobs('TI_SCRAPER_API_BASE is not configured.')
 
-    const [scheduler, exposureQueue, parserHealth, alertReadiness, resources, sourcePacks, frontier] = await Promise.all([
+    const [scheduler, scraperHealth, exposureQueue, parserHealth, alertReadiness, resources, sourcePacks, frontier] = await Promise.all([
         fetchTiJson('/v1/ops/collection-scheduler'),
+        fetchTiJson('/health'),
         fetchTiJson('/v1/dwm/exposure-queue?limit=25'),
         fetchTiJson('/v1/dwm/exposure-parser/health'),
         fetchTiJson('/v1/dwm/alerts/generation-readiness?tenantId=default'),
@@ -533,12 +547,50 @@ async function listTiScheduledJobs(): Promise<UnifiedScheduledJob[]> {
 
     return [
         tiCollectionJob(scheduler, tiTelemetry),
+        tiRestrictedMetadataJob(scraperHealth, tiTelemetry),
         tiExposureQueueJob(exposureQueue, schedulerJson, tiTelemetry),
         tiExposureParserJob(parserHealth, schedulerJson, tiTelemetry),
         tiAlertGenerationJob(alertReadiness, tiTelemetry),
         tiSourcePackWorkerJob(sourcePacks, tiTelemetry),
         tiFrontierQueueJob(frontier, schedulerState, tiTelemetry),
     ]
+}
+
+function tiRestrictedMetadataJob(result: TiFetchResult, resourceUsage: ScheduledJobTelemetry): UnifiedScheduledJob {
+    const state = record(record(record(result.json).collection).restrictedMetadata)
+    const enabled = result.ok && state.enabled === true
+    const running = enabled && state.running === true
+    const cadenceSeconds = numberValue(state.intervalSeconds) ?? 900
+    const lastError = stringValue(state.lastError) ?? result.error
+    return {
+        id: 'ti-restricted-metadata-collection',
+        name: 'Restricted metadata collection loop',
+        description: 'Metadata-only collection from explicitly approved restricted sources through the configured proxy boundary.',
+        category: 'TI / Exposure',
+        source: 'ti/scraper/src/ops/restrictedMetadataCollection.ts',
+        service: 'ti-scraper',
+        schedule: secondsSchedule(cadenceSeconds),
+        cadenceSeconds,
+        enabled,
+        running,
+        status: !result.ok ? 'blocked' : !enabled ? 'paused' : running ? 'running' : lastError ? 'failed' : 'enabled',
+        lastRunAt: stringValue(state.lastCycleAt),
+        lastSuccessAt: stringValue(state.lastSuccessAt),
+        lastFinishedAt: stringValue(state.lastSuccessAt ?? state.lastErrorAt),
+        nextRunAt: enabled ? stringValue(state.nextCycleAt) : null,
+        currentRunDurationMs: running ? ageMs(stringValue(state.lastCycleAt)) : null,
+        averageRuntimeMs: null,
+        failureCount: numberValue(state.errorCount) ?? 0,
+        lastError,
+        logExcerpt: result.ok
+            ? `${state.cycleCount ?? 0} cycles; ${state.successCount ?? 0} successful; ${state.failedSourceCount ?? 0} sources failed in the latest cycle.`
+            : result.error,
+        controls: [],
+        controlMode: 'observable_only',
+        resourceUsage,
+        costEstimate: costEstimate(75, 'Shares the ti-scraper collection service power estimate.'),
+        assumptions: ['Enablement and proxy configuration are deployment policy; this card reports loop state without bypassing source approvals.'],
+    }
 }
 
 function tiCollectionJob(result: TiFetchResult, resourceUsage: ScheduledJobTelemetry): UnifiedScheduledJob {
@@ -746,6 +798,7 @@ function tiUnavailableJobs(reason: string): UnifiedScheduledJob[] {
     const unavailable = unavailableTelemetry(reason)
     return [
         blockedTiJob('ti-public-canary-collection', 'Public TI collection loop', 'Scraper-native recurring collection loop for public CTI and exposure sources.', 'ti/scraper/src/ops/canaryCollection.ts', ['pause', 'run_now'], unavailable),
+        blockedTiJob('ti-restricted-metadata-collection', 'Restricted metadata collection loop', 'Metadata-only collection from approved restricted sources.', 'ti/scraper/src/ops/restrictedMetadataCollection.ts', [], unavailable),
         blockedTiJob('ti-exposure-queue-collection', 'DWM exposure queue collection', 'Recurring exposure-claim queue populated by TI captures.', 'ti/scraper/src/api/exposureQueueRoutes.ts', [], unavailable),
         blockedTiJob('ti-exposure-parser', 'Exposure parser bridge', 'Exposure claim parser status for Hanasand AI/local fallback parsing.', 'ti/scraper/src/api/exposureQueueRoutes.ts', [], unavailable),
         blockedTiJob('ti-dwm-alert-generation', 'DWM alert generation readiness', 'Alert candidate and case-generation readiness for DWM workflows.', 'ti/scraper/src/api/dwmWorkflowRoutes.ts', ['run_now'], unavailable, 'Alerts'),
