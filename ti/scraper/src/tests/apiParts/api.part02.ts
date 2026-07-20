@@ -18,7 +18,7 @@ describe("api v1", () => {
         identityContract: {
           header: "id",
           bearerHeader: "authorization",
-          requiredForProtectedMutations: true
+          requiredForProtectedRoutes: true
         },
         secretHandling: {
           scraperDoesNotStoreSecrets: true,

@@ -4,6 +4,26 @@ import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { handleApiRequest } from "../api/server.ts";
 
 describe("durable mutation authentication", () => {
+  test("rejects spoofed sensitive reads while leaving health public", async () => {
+    const options = {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier(),
+      serviceToken: "mutation-test-secret"
+    };
+
+    for (const path of ["/v1/intel/runs/run_test", "/v1/cases", "/v1/dwm/watchlists", "/api/dwm/product"]) {
+      const response = await handleApiRequest(new Request(`http://local${path}`, {
+        headers: { "x-tenant-id": "spoofed", "x-actor-id": "spoofed" }
+      }), options);
+      expect(response.status).toBe(401);
+    }
+
+    expect((await handleApiRequest(new Request("http://local/v1/health"), options)).status).toBe(200);
+    expect((await handleApiRequest(new Request("http://local/v1/cases", {
+      headers: { "x-hanasand-service-token": "mutation-test-secret" }
+    }), options)).status).toBe(200);
+  });
+
   test("rejects spoofed user headers and accepts the configured service caller", async () => {
     const options = {
       store: new InMemoryScraperStore(),

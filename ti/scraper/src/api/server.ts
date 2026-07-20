@@ -55,7 +55,7 @@ async function handleDurableApiRequest(request: Request, options: ApiServerOptio
 export async function handleApiRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const url = new URL(request.url);
   try {
-    if (requiresAuthenticatedMutation(request.method, url.pathname)) {
+    if (requiresAuthenticatedRequest(url.pathname)) {
       const authentication = await authenticateOperatorRequest(request, options);
       if (authentication.error) return authentication.error;
     }
@@ -83,13 +83,13 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
           schemaVersion: "ti.enterprise_auth_boundary.v2",
           mode: "hanasand_session_validation",
           enforcedHere: true,
-          identityContract: { header: "id", bearerHeader: "authorization", requiredForProtectedMutations: true },
+          identityContract: { header: "id", bearerHeader: "authorization", requiredForProtectedRoutes: true },
           tenantContract: { header: "x-tenant-id", requiredForTenantScopedRoutes: true },
           organizationContract: { header: "x-organization-id", requiredForOrganizationScopedRoutes: true },
           validation: { authority: "hanasand_auth_api", cache: "no-store", failClosed: true },
           secretHandling: { scraperDoesNotStoreSecrets: true, bearerTokensAcceptedForValidation: true }
         },
-        notes: ["Protected mutations validate the Hanasand session before applying tenant-scoped changes."]
+        notes: ["Protected tenant routes validate the Hanasand session before reading or applying tenant-scoped changes."]
       });
     }
     if (url.pathname === "/v1/contracts") return json(contractIndex());
@@ -329,12 +329,13 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   }
 }
 
-function requiresAuthenticatedMutation(method: string, pathname: string): boolean {
-  if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return false;
+function requiresAuthenticatedRequest(pathname: string): boolean {
   return pathname === "/v1/intel/runs"
+    || pathname.startsWith("/v1/intel/runs/")
     || pathname === "/v1/cases"
     || pathname.startsWith("/v1/cases/")
-    || pathname.startsWith("/v1/dwm/");
+    || pathname.startsWith("/v1/dwm/")
+    || pathname.startsWith("/api/dwm/");
 }
 
 function orgAlertCaseActionLedgerRepository(options: ApiServerOptions): InMemoryOrgAlertCaseActionLedgerRepository {
