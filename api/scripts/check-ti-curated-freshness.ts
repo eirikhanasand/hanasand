@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { knownActorProfile } from '../src/utils/ti/search.ts'
+import { knownActorProfile, searchThreatIntel } from '../src/utils/ti/search.ts'
 
 for (const actor of ['APT29', 'APT28', 'LockBit']) {
     const profile = knownActorProfile(actor)
@@ -8,4 +8,10 @@ for (const actor of ['APT29', 'APT28', 'LockBit']) {
     if (profile.lastSeen) assert(Number.isFinite(Date.parse(profile.lastSeen)), `${actor} has an invalid last-seen date`)
 }
 
-console.log('Curated actor profiles do not fabricate current activity timestamps.')
+const previousScraperBase = process.env.TI_SCRAPER_API_BASE
+delete process.env.TI_SCRAPER_API_BASE
+const publicProfile = await searchThreatIntel({ query: 'APT29' })
+if (previousScraperBase) process.env.TI_SCRAPER_API_BASE = previousScraperBase
+assert.equal(publicProfile.status, 'partial', 'curated context without durable evidence must remain partial')
+
+console.log('Curated actor profiles do not fabricate freshness or claim durable readiness.')

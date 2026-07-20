@@ -929,7 +929,7 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
             query,
             generatedAt,
             mode: 'live_search',
-            status: known?.status ?? 'partial',
+            status: 'partial',
             refreshAfterSeconds: 3,
             summary: summarizeLiveResult(query, matches, known),
             confidence: known?.confidence ?? (known ? 0.62 : 0.48),
@@ -970,7 +970,7 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
         query,
         generatedAt: new Date().toISOString(),
         mode: 'live_search',
-        status: known?.status ?? buildAnalystLoop({ query, operationalStatus }).resultState,
+        status: known ? 'partial' : buildAnalystLoop({ query, operationalStatus }).resultState,
         refreshAfterSeconds: 3,
         summary: known?.summary ?? 'Searching',
         confidence: known?.confidence ?? (known ? 0.46 : 0.2),
@@ -999,7 +999,7 @@ function seededSearch(query: string): TiSearchResponse {
         query,
         generatedAt: new Date().toISOString(),
         mode: 'live_search',
-        status: known?.status ?? (analystLoop.resultState === 'searching' && known ? 'partial' : analystLoop.resultState),
+        status: known ? 'partial' : analystLoop.resultState,
         refreshAfterSeconds: 3,
         summary: analystLoop.metadataReviewInbox[0]?.company
             ? metadataReviewSummary(analystLoop.metadataReviewInbox[0])
