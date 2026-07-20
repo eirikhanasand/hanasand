@@ -56,7 +56,7 @@ The initial feasibility set must include at least one working feed of each selec
 - [ ] Operate an automated end-to-end collection pipeline continuously and recover safely from restarts and source failures.
 - [x] Collect from a defensible selected subset of RSS/news/blog sources.
 - [x] Collect from at least one long-lived public Telegram source through a compliant, reliable path.
-- [ ] Collect metadata from at least one dark-web source through an explicitly bounded, metadata-only path.
+- [x] Collect metadata from at least one dark-web source through an explicitly bounded, metadata-only path.
 - [x] Preserve immutable captures, source publication time, collection time, processing time, first-visible time, and alert-delivery time.
 - [x] Track collection runs, source health, parser outcomes, failures, freshness, useful-item yield, source family, actors observed, and legal/ethical operating mode.
 - [x] Deduplicate repeated material without losing capture lineage or changes over time.
@@ -108,7 +108,7 @@ The initial feasibility set must include at least one working feed of each selec
 
 ### Ethics and Safety
 
-- [ ] Enforce metadata-only handling where full content would redistribute stolen, harmful, or unlawful material.
+- [x] Enforce metadata-only handling where full content would redistribute stolen, harmful, or unlawful material.
 - [ ] Store source legality, access mode, collection justification, sensitivity, and retention/redaction policy as operational metadata.
 - [ ] Prevent secrets, personal data, unsafe payloads, and raw stolen datasets from leaking through logs, APIs, exports, alerts, or UI.
 - [ ] Document and implement deletion, correction, source takedown, and analyst-audit paths required by institutional and legal review.
@@ -144,7 +144,7 @@ The initial feasibility set must include at least one working feed of each selec
 - `/v1/intel/source-operations` now derives tenant-scoped operational status from persisted source-health observations, captures, extracted actors, and evaluation labels; it reports explicit unmeasured states and redacts source URLs and restricted failure details.
 - Publisher-verified CCN-CERT and SSSCIP/CERT-UA public Telegram sources now use an approved unauthenticated preview path with nested-message parsing, bounded fetches, no media downloads, multilingual relevance filtering, source health, and durable pipeline handoff. A live CCN-CERT run produced useful captures and incidents.
 - The selected CISA advisory RSS source completed the same live bounded production path with useful captures, entities, indicators, incidents, and persisted source-health output.
-- Restricted metadata collection now has a separate opt-in scheduler and HTTP-to-Tor boundary, enforces v3 onion and metadata-only policy, writes normalized run/source health, and strips raw page content before persistence. Docker proxy startup remains unverified locally because the Docker daemon was unavailable.
+- Restricted metadata collection has a separate opt-in scheduler and HTTP-to-Tor boundary, enforces v3 onion and metadata-only policy, writes normalized run/source health, and strips raw page content before persistence. Production collected BrainCipher and Deadlock in one bounded two-source cycle on 2026-07-20: both captures use `metadata_only` storage and `restricted_metadata` retention, contain no body or object reference, and retain normalized claim/incident lineage. Failed Blackout, Akira, and 0day attempts recorded bounded health failures and were rejected pending re-verification. The deployed safe-capture API also redacts bare onion hostnames embedded in metadata summaries.
 - Stable `/v1/intel` resources now cover sources, redacted captures, entities, actor profiles and aliases, incidents, evidence links and claims, validations, safe alerts, evaluation labels, health, runs, and timeliness. Missing tenant scope means global records only; header/query/body mismatches are rejected; restricted locators, object keys, raw bodies, tokens, and webhook configuration are removed from API DTOs.
 - Search, evidence reports, claim review and labeling writes, source administration reads, run status, and run results now share exact tenant scope. Pipeline persistence propagates capture tenant/source lineage to incidents, and run results are run-specific and body-redacted.
 - Restricted-source bootstrap now rejects every seed with validation errors, validates Tor metadata packs through a separate fail-closed contract, and always imports restricted records as inactive review candidates. The fake onion fixture was removed; a current public-discovery candidate is recorded as pending and unavailable rather than represented as working coverage.
