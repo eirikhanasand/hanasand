@@ -45,7 +45,7 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
       overall: latencySummary(timeliness),
       bySourceFamily: groupedLatencies(timeliness, (record) => sourceFamily(sourceById.get(record.sourceId)))
     },
-    coverage: coverage(sources, captures, entities, health),
+    coverage: coverage(sources, captures, entities, health, claims, rows),
     validation: {
       recordCount: validations.length,
       statuses: countBy(validations, (record) => record.status ?? "unknown"),
@@ -113,11 +113,17 @@ function groupedLatencies(records: any[], key: (record: any) => string) {
   return group(records, key).map(([name, values]) => ({ name, recordCount: values.length, metrics: latencySummary(values) }));
 }
 
-function coverage(sources: any[], captures: any[], entities: any[], health: any[]) {
+function coverage(sources: any[], captures: any[], entities: any[], health: any[], claims: any[], labels: any[]) {
   const active = sources.filter((source) => ["active", "canary", "probation", "degraded"].includes(source.status));
   const attempted = new Set(health.map((row) => row.sourceId));
   const successful = new Set(health.filter((row) => row.success).map((row) => row.sourceId));
   const useful = new Set(health.filter((row) => row.useful).map((row) => row.sourceId));
+  const activeIds = new Set(active.map((source) => source.id));
+  const activeAttempts = health.filter((row) => activeIds.has(row.sourceId));
+  const classifiedLabels = labels.filter((row) => row.bucket !== "needs_review");
+  const corroborated = claims.filter((claim) => claim.corroborationState === "corroborated");
+  const contradicted = claims.filter((claim) => claim.reviewState === "contradicted" || claim.corroborationState === "contradicted");
+  const observedItems = sum(health, "itemCount"), duplicates = sum(health, "duplicateCount");
   return {
     registeredSourceCount: sources.length,
     activeSourceCount: active.length,
@@ -129,9 +135,21 @@ function coverage(sources: any[], captures: any[], entities: any[], health: any[
     activeAttemptRate: ratio([...attempted].filter((sourceId) => active.some((source) => source.id === sourceId)).length, active.length),
     attemptSuccessRate: ratio(successful.size, attempted.size),
     usefulSourceRate: ratio(useful.size, attempted.size),
+    sourceAttemptCount: health.length,
+    activeSourceReliabilityRate: ratio(activeAttempts.filter((row) => row.success).length, activeAttempts.length),
+    usefulAttemptRate: ratio(health.filter((row) => row.useful).length, health.length),
+    duplicateObservationCount: duplicates,
+    duplicationRate: ratio(duplicates, observedItems),
+    claimCount: claims.length,
+    corroboratedClaimCount: corroborated.length,
+    contradictedClaimCount: contradicted.length,
+    corroborationRate: ratio(corroborated.length, claims.length),
+    falsePositiveRate: ratio(classifiedLabels.filter((row) => row.bucket === "false_positive").length, classifiedLabels.length),
+    falsePositiveSampleSize: classifiedLabels.length,
     sourceFamilies: countBy(sources, sourceFamily)
   };
 }
+function sum(rows: any[], field: string): number { return rows.reduce((total, row) => total + Math.max(0, Number(row[field]) || 0), 0); }
 
 function outcomeBucket(outcome: string): string {
   if (outcome === "true_positive" || outcome === "correct") return "true_positive";
