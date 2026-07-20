@@ -36,7 +36,8 @@ export const searchable = (capture: any) => `${capture.title ?? ""} ${capture.bo
 
 export function health(store: any, at: string, counters: any) {
   const captures = canaryCaptures(store), latest = captures.map((c) => c.collectedAt).sort().at(-1), incidents = store.listIncidents?.().length ?? 0;
-  return { freshnessSeconds: latest ? Math.max(0, (Date.parse(at) - Date.parse(latest)) / 1000) : Infinity, errorRate: rate(counters.failedTaskCount, counters.leasedTaskCount), duplicateRate: rate(counters.duplicateCaptureCount, (counters.duplicateCaptureCount ?? 0) + (counters.insertedCaptureCount ?? 0)), promotionYield: rate(counters.incidentCount ?? incidents, counters.insertedCaptureCount ?? captures.length) };
+  const processed = (counters.insertedCaptureCount ?? 0) + (counters.duplicateCaptureCount ?? 0);
+  return { freshnessSeconds: latest ? Math.max(0, (Date.parse(at) - Date.parse(latest)) / 1000) : Infinity, errorRate: rate(counters.failedTaskCount, counters.leasedTaskCount), duplicateRate: rate(counters.duplicateCaptureCount, processed), promotionYield: rate(counters.incidentCount ?? incidents, processed || captures.length) };
 }
 
 export function detachedState(at: string, queueLimit: number): CanaryLoopState {
