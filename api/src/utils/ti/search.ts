@@ -974,7 +974,7 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
         refreshAfterSeconds: 3,
         summary: known?.summary ?? 'Searching',
         confidence: known?.confidence ?? (known ? 0.46 : 0.2),
-        lastSeen: known?.lastSeen ?? new Date().toISOString(),
+        lastSeen: known?.lastSeen ?? '',
         aliases: known?.aliases ?? [],
         recentActivity: known?.recentActivity ?? [],
         targets: known?.targets ?? [],
@@ -1005,7 +1005,7 @@ function seededSearch(query: string): TiSearchResponse {
             ? metadataReviewSummary(analystLoop.metadataReviewInbox[0])
             : known?.summary ?? 'Searching',
         confidence: known?.confidence ?? (known ? 0.46 : 0.2),
-        lastSeen: known?.lastSeen ?? new Date().toISOString(),
+        lastSeen: known?.lastSeen ?? '',
         aliases: known?.aliases ?? [],
         recentActivity: known?.recentActivity ?? [],
         targets: known?.targets ?? [],
@@ -1707,7 +1707,7 @@ function uniqueCandidates(candidates: NonNullable<TiActionabilityContract['watch
     })
 }
 
-function knownActorProfile(query: string): KnownActorContext | null {
+export function knownActorProfile(query: string): KnownActorContext | null {
     const normalized = query.trim().toLowerCase()
     if (normalized === 'apt29' || normalized.includes('cozy bear') || normalized.includes('midnight blizzard')) {
         return withAutomaticProfileDefaults({
@@ -1978,34 +1978,17 @@ function knownActorProfile(query: string): KnownActorContext | null {
 }
 
 function withAutomaticProfileDefaults(profile: KnownActorContext, actorName: string, confidence: number): KnownActorContext {
-    const generatedAt = new Date().toISOString()
-    const automaticActivity: TiActivity = {
-        date: generatedAt.slice(0, 10),
-        title: `${actorName} actor profile updated`,
-        detail: `${actorName} was refreshed from actor directories, public reporting links, and monitored source records. Recent activity updates separately when new source evidence appears.`,
-        confidence,
-        sourceIds: ['google-cloud-apt-groups', 'mitre-attack-groups'],
-        claimType: 'general_activity',
-        affectedSectors: inferProfileSectors(profile.summary),
-        countries: inferProfileRegions(profile.summary),
-        impact: 'Keeps stable actor context available while recent activity is checked independently.',
-        firstReportedAt: generatedAt,
-        lastReportedAt: generatedAt,
-        publisherCount: 2,
-    }
-
     return {
         ...profile,
         status: profile.status ?? 'ready',
         confidence: profile.confidence ?? confidence,
-        lastSeen: profile.lastSeen ?? generatedAt,
-        recentActivity: mergeActivity(profile.recentActivity ?? [], [automaticActivity]),
+        recentActivity: profile.recentActivity ?? [],
         datasets: mergeDatasets(profile.datasets ?? [], automaticActorDatasets(actorName)),
         sources: mergeSources(profile.sources ?? [], automaticActorSources(actorName)),
         notes: [
             ...(profile.notes ?? []),
-            'Stable actor fields are refreshed by the background actor refresh job.',
-            'Recent attacks and monitored company mentions are refreshed separately from identity, alias, and TTP context.',
+            'Stable actor fields are curated background context and are not evidence of current activity.',
+            'Only dated public reports or durable captures update recent activity and last-seen time.',
         ],
     }
 }
@@ -2287,29 +2270,12 @@ function baselineKnownActorProfile(normalized: string): KnownActorContext | null
 
 function buildAutomaticBaselineProfile(profile: BaselineActorProfile): KnownActorContext {
     const primaryName = profile.aliases[0] || titleCaseWords(profile.names[0])
-    const generatedAt = new Date().toISOString()
     return {
         status: 'ready',
         confidence: 0.68,
-        lastSeen: generatedAt,
         summary: profile.summary,
         aliases: profile.aliases,
-        recentActivity: [
-            {
-                date: generatedAt.slice(0, 10),
-                title: `${primaryName} actor profile updated`,
-                detail: `${primaryName} aliases were matched against actor directories, public reporting links, monitored source records, and the actor catalog. Recent activity updates separately when new source evidence appears.`,
-                confidence: 0.68,
-                sourceIds: ['google-cloud-apt-groups', 'mitre-attack-groups', 'malpedia-actor-index'],
-                claimType: 'general_activity',
-                affectedSectors: inferProfileSectors(profile.summary),
-                countries: inferProfileRegions(profile.summary),
-                impact: 'Keeps stable actor context available while recent reporting and monitored source captures update independently.',
-                firstReportedAt: generatedAt,
-                lastReportedAt: generatedAt,
-                publisherCount: 2,
-            }
-        ],
+        recentActivity: [],
         targets: inferBaselineTargets(profile.summary),
         ttps: inferBaselineTtps(profile.summary),
         datasets: automaticActorDatasets(primaryName),
@@ -2387,8 +2353,8 @@ function automaticActorDatasets(actorName: string): TiDataset[] {
         {
             name: `${actorName} actor profile`,
             type: 'vendor_report',
-            coverage: 'Stable actor identity, aliases, targeting, tradecraft, source links, and analyst notes from the background actor refresh job.',
-            status: 'available',
+            coverage: 'Curated actor identity, aliases, targeting, tradecraft, source links, and analyst notes. This profile is background context, not current activity.',
+            status: 'planned',
         },
         {
             name: `${actorName} recent activity refresh`,

@@ -313,7 +313,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <EvidenceMetric label='Attribution' value={actorIntel.attribution || 'Public reporting'} />
                             <EvidenceMetric label='Motivation' value={actorIntel.motivation.slice(0, 2).join('; ') || 'Reported activity'} />
                             <EvidenceMetric label='Aliases' value={result.aliases.slice(0, 3).join(', ') || humanizeSlug(result.query)} />
-                            <EvidenceMetric label='Last seen' value={formatDate(result.lastSeen || result.generatedAt)} />
+                            <EvidenceMetric label='Last seen' value={result.lastSeen ? formatDate(result.lastSeen) : 'Observation date unavailable'} />
                         </div>
                     </section>
                     <section data-ti-map='true' className='min-w-0'>
@@ -3114,7 +3114,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         title: item.attackId ? `${item.attackId} ${item.name}` : item.name,
         subtitle: item.tactic,
         detail: item.detail,
-        timestamp: result.lastSeen || result.generatedAt,
+        timestamp: result.lastSeen || 'Observation date unavailable',
         source: 'Actor profile',
         provenance: item.attackId ? 'MITRE ATT&CK mapped profile field' : 'Profile tradecraft field',
         confidence: item.confidence,

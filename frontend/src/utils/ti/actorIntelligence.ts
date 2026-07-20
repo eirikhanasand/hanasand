@@ -109,7 +109,7 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
         ...(contract?.indicators ?? []),
         ...fallback.indicators,
     ]).slice(0, 12)
-    const lastSeen = contract?.lastSeen || result.lastSeen || result.generatedAt || fallback.lastSeen
+    const lastSeen = contract?.lastSeen || result.lastSeen || fallback.lastSeen
 
     return {
         actorClass: contract?.actorClass || fallback.actorClass,
@@ -141,7 +141,7 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
         actorClass: result.aliases.length ? 'Named threat actor or activity cluster' : 'Threat intelligence query',
         attribution: result.notes.find(note => /attribut/i.test(note)) || 'Attribution needs a cited source statement',
         firstSeen: result.recentActivity.map(item => item.firstReportedAt || item.date).filter(Boolean).sort()[0] || 'No dated activity yet',
-        lastSeen: result.lastSeen || result.generatedAt,
+        lastSeen: result.lastSeen || 'Observation date unavailable',
         motivation: [],
         malwareTools: [],
         campaigns: result.recentActivity.map(item => item.title).slice(0, 6),
@@ -315,7 +315,7 @@ function freshnessFor(generatedAt: string, lastSeen: string): TiActorIntelligenc
         generatedAt,
         lastSeen,
         stale,
-        reason: stale ? `Last observed date is older than 180 days at ${generatedAt}.` : 'Last observed date is within freshness policy or not date-parseable.',
+        reason: stale ? `Last observed date is older than 180 days at ${generatedAt}.` : Number.isFinite(last) ? 'Last observed date is within freshness policy.' : 'No dated activity is available; freshness is unknown.',
     }
 }
 

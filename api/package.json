@@ -7,6 +7,7 @@
     "start": "bun src/index.ts",
     "start:local": "PORT=${PORT:-8080} bun src/index.ts",
     "test": "bun scripts/index.ts",
+    "check:ti-curated-freshness": "bun scripts/check-ti-curated-freshness.ts",
     "lint": "eslint ./src ./scripts",
     "lint:fix": "eslint ./src ./scripts --fix",
     "audit": "bun scripts/audit-hanasand-api.mjs",
