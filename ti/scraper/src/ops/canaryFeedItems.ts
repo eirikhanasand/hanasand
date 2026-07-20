@@ -44,11 +44,12 @@ function jsonItems(source: any, task: any, fetched: string, at: string, metadata
 }
 
 function jsonItem(source: any, task: any, entry: any, at: string, metadata: any, index: number) {
+  const ransomwareGroup = extractionProfile(source) === "ransomware_group_metadata" ? ransomwareGroupMetadata(entry) : undefined;
   const title = stringField(entry, ["post_title", "title", "cveID", "id", "name", "group_name", "vendorProject"]) || source.name;
   const publishedAt = stringField(entry, ["discovered", "dateAdded", "published", "publishedDate", "lastModified", "lastModifiedDate", "updated"]);
   const url = stringField(entry, ["post_url", "link", "url", "source", "reference"]) || task.targetUrl;
-  const rawText = [source.name, title, jsonSummary(entry)].filter(Boolean).join("\n").slice(0, 24_000);
-  return row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true, structuredFields: structuredFields(entry) }, index, false);
+  const rawText = ransomwareGroup ? ransomwareGroupSummary(source.name, ransomwareGroup) : [source.name, title, jsonSummary(entry)].filter(Boolean).join("\n").slice(0, 24_000);
+  return row(source, task, /^https?:\/\//i.test(url) ? url : task.targetUrl, title, rawText, at, publishedAt, { ...metadata, jsonApi: true, structuredFields: structuredFields(entry), ransomwareGroup }, index, false);
 }
 
 function jsonRows(value: any): any[] {
@@ -67,6 +68,26 @@ function jsonSummary(value: any) {
 function structuredFields(value: any) {
   const fields = ["cveID", "vendorProject", "product", "vulnerabilityName", "dateAdded", "shortDescription", "requiredAction", "dueDate", "knownRansomwareCampaignUse"];
   return Object.fromEntries(fields.flatMap((field) => typeof value?.[field] === "string" && value[field].trim() ? [[field, value[field].trim().slice(0, 1_000)]] : []));
+}
+
+function ransomwareGroupMetadata(value: any) {
+  const channelTypes = [...new Set((Array.isArray(value?.locations) ? value.locations : []).map((location: any) => cleanGroupValue(location?.type)).filter(Boolean))];
+  const aliases = (Array.isArray(value?.altname) ? value.altname : [value?.altname]).map(cleanGroupValue).filter(Boolean);
+  const victimCount = Number(value?._victim_count);
+  return {
+    actorName: cleanGroupValue(value?.name), aliases, actorType: cleanGroupValue(value?.type), lineage: cleanGroupValue(value?.lineage),
+    description: cleanGroupValue(value?.description)?.slice(0, 1_000), channelTypes, victimCount: Number.isFinite(victimCount) && victimCount >= 0 ? victimCount : undefined,
+    metadataOnly: true, locatorsRetained: false
+  };
+}
+
+function ransomwareGroupSummary(sourceName: string, group: any) {
+  return [sourceName, group.actorName, group.aliases?.length ? `Aliases: ${group.aliases.join(", ")}` : "", group.actorType ? `Actor type: ${group.actorType}` : "", group.lineage ? `Lineage: ${group.lineage}` : "", group.channelTypes?.length ? `Public channel classes: ${group.channelTypes.join(", ")}` : "", Number.isFinite(group.victimCount) ? `Public victim listing count: ${group.victimCount}` : "", group.description].filter(Boolean).join("\n").slice(0, 4_000);
+}
+
+function cleanGroupValue(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  return value.replace(/\bhttps?:\/\/\S+/gi, "[public reference]").replace(/\b[a-z2-7]{56}\.onion\b/gi, "[restricted host]").replace(/\s+/g, " ").trim();
 }
 
 function safeJson(value: string) {
@@ -128,6 +149,7 @@ function row(source: any, task: any, url: string, title: string, rawText: string
 
 function extractionProfile(source: any) {
   if (source.metadata?.extractionProfile) return source.metadata.extractionProfile;
+  if (source.id === "src_seed_ransomwarelive_groups" || source.id === "src_canary_ransomwarelive_groups_json" || source.catalog?.canonicalId === "community:ransomwarelive:groups") return "ransomware_group_metadata";
   if (source.catalog?.canonicalId === "gov:us:cisa:known-exploited-vulnerabilities") return "cisa_kev";
   if (source.id === "src_ssscip_cert_ua_telegram") return "cert_ua_public_channel";
   if (source.id === "src_ccn_cert_telegram") return "ccn_cert_public_channel";

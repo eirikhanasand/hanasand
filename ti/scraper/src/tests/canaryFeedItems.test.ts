@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { feedItems } from "../ops/canaryFeedItems.ts";
+import { processCollectedItem } from "../pipeline/pipeline.ts";
 
 const source = { id: "src_feed", name: "Feed", url: "https://feed.test/rss.xml" };
 const task = { id: "task_feed", targetUrl: source.url };
@@ -46,6 +47,25 @@ describe("canary feed item extraction", () => {
         structuredFields: { cveID: "CVE-2026-4242", vendorProject: "Example Vendor", knownRansomwareCampaignUse: "Known" }
       }
     });
+  });
+
+  test("extracts locator-free ransomware group communication metadata", () => {
+    const groups = { ...source, id: "src_seed_ransomwarelive_groups", type: "api", catalog: { canonicalId: "community:ransomwarelive:groups" } };
+    const onion = `${"a".repeat(56)}.onion`;
+    const items = feedItems(groups, { ...task, targetUrl: "https://data.ransomware.live/groups.json" }, JSON.stringify([{
+      name: "Example Group", altname: ["Example Alias"], type: "ransomware", _victim_count: 12, description: `Profile at http://${onion}`,
+      locations: [{ type: "DLS", fqdn: onion }, { type: "Chat", fqdn: onion }, { type: "Telegram", fqdn: "t.me/example" }]
+    }]), "2026-07-20T00:00:00.000Z", metadata);
+
+    expect(items[0]).toMatchObject({ metadata: { extractionProfile: "ransomware_group_metadata", ransomwareGroup: { actorName: "Example Group", aliases: ["Example Alias"], channelTypes: ["DLS", "Chat", "Telegram"], victimCount: 12, metadataOnly: true, locatorsRetained: false } } });
+    expect(JSON.stringify(items[0])).not.toContain(onion);
+    const result = processCollectedItem(items[0]);
+    expect(result.entities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "actor", value: "Example Group", aliases: ["Example Alias"], assertionKind: "observed" }),
+      expect.objectContaining({ type: "buyer_seller_communication", value: "public metadata lists an actor chat endpoint", assertionKind: "observed" }),
+      expect.objectContaining({ type: "monetization_path", value: "ransom negotiation channel", assertionKind: "inferred" }),
+      expect.objectContaining({ type: "profitability_signal", value: "public dataset reports 12 victim listings", reviewReasons: ["listing volume does not establish payments, revenue, or profit"] })
+    ]));
   });
 });
 

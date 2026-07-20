@@ -7,9 +7,28 @@ export const SOURCE_SPECIFIC_EXTRACTOR_VERSION = "ti-source-specific-extractor-v
 export function extractSourceSpecificEntities(item: CollectedItem, context: ExtractionContext): ExtractedEntity[] {
   const profile = item.metadata?.extractionProfile;
   if (profile === "ransomware_victim_blog") return victimBlogEntities(item, context);
+  if (profile === "ransomware_group_metadata") return ransomwareGroupEntities(item, context);
   if (profile === "cisa_kev") return cisaKevEntities(item, context);
   if (profile === "cert_ua_public_channel") return certUaEntities(item, context);
   return [];
+}
+
+function ransomwareGroupEntities(item: CollectedItem, context: ExtractionContext): ExtractedEntity[] {
+  const fields = item.metadata?.ransomwareGroup ?? {}, channels = Array.isArray(fields.channelTypes) ? fields.channelTypes.map(meaningful).filter(Boolean) : [];
+  const actor = fieldEntity("actor", fields.actorName, 0.88, "actorName", item, context, "observed", []);
+  if (actor) (actor as any).aliases = Array.isArray(fields.aliases) ? fields.aliases.map(meaningful).filter(Boolean) : [];
+  const has = (type: string) => channels.some((channel: string) => channel.toLowerCase() === type.toLowerCase());
+  const victimCount = Number(fields.victimCount);
+  return compact([
+    actor,
+    ...channels.map((channel: string) => fieldEntity("channel_type", channel, 0.9, "channelTypes", item, context, "observed", [])),
+    fieldEntity("publication_strategy", has("DLS") ? "dedicated leak-site publication" : undefined, 0.9, "channelTypes", item, context, "observed", []),
+    fieldEntity("publicity_tactic", has("DLS") ? "public victim listing infrastructure" : undefined, 0.86, "channelTypes", item, context, "observed", []),
+    fieldEntity("buyer_seller_communication", has("Chat") ? "public metadata lists an actor chat endpoint" : undefined, 0.72, "channelTypes", item, context, "observed", ["endpoint purpose and counterparties require analyst verification"]),
+    fieldEntity("monetization_path", has("Chat") ? "ransom negotiation channel" : undefined, 0.58, "channelTypes", item, context, "inferred", ["inferred from ransomware-group chat classification; payment outcome is unknown"]),
+    fieldEntity("extortion_type", has("DLS") ? "leak-site extortion infrastructure" : undefined, 0.62, "channelTypes", item, context, "inferred", ["infrastructure does not prove a specific extortion event"]),
+    fieldEntity("profitability_signal", Number.isFinite(victimCount) ? `public dataset reports ${victimCount} victim listings` : undefined, 0.56, "victimCount", item, context, "inferred", ["listing volume does not establish payments, revenue, or profit"])
+  ]);
 }
 
 function victimBlogEntities(item: CollectedItem, context: ExtractionContext): ExtractedEntity[] {
