@@ -1,13 +1,15 @@
 import Link from 'next/link'
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Clock3, PlayCircle, Rows3 } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
-import { getTiAdminOverview, sourceById } from '@/utils/tiAdmin/ops'
+import { getTiAdminOverview, sourceById, type TiAdminOverview } from '@/utils/tiAdmin/ops'
+import TiDataAvailability from '../ti-data-availability'
 import ManualRunButton from '../manualRunButton'
 
 export const dynamic = 'force-dynamic'
 
-export default function TiRunsPage() {
-    const { runs, sources } = getTiAdminOverview()
+export default async function TiRunsPage() {
+    const overview = await getTiAdminOverview()
+    const { runs, sources } = overview
     const runQueries = [...new Set(sources.flatMap(source => source.domains).filter(domain => !domain.includes('only')))]
     const orderedRuns = [...runs].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
     const running = runs.filter(run => run.status === 'running' || run.status === 'queued').length
@@ -27,15 +29,16 @@ export default function TiRunsPage() {
                 description='Watch collectors run, publish evidence, and surface stale sources.'
                 actions={<ManualRunButton label='Start manual run' queries={runQueries} />}
             />
+            <TiDataAvailability availability={overview.availability} />
 
             <section className='grid gap-3 xl:grid-cols-[1.2fr_1fr_1fr]'>
                 <LiveRunCard
                     title='Collector now'
                     run={orderedRuns.find(run => run.status === 'running' || run.status === 'queued') || orderedRuns[0]}
-                    sourceName={orderedRuns[0] ? sourceById(orderedRuns[0].sourceId)?.name || orderedRuns[0].sourceId : 'Selecting source'}
+                    sourceName={orderedRuns[0] ? sourceById(overview, orderedRuns[0].sourceId)?.name || orderedRuns[0].sourceId : 'Selecting source'}
                 />
                 <LiveFact title='Evidence produced' value={`${captureTotal} captures`} detail={`${screenshotTotal} screenshots, ${rowTotal} parsed rows`} tone={captureTotal ? 'ok' : 'neutral'} />
-                <LiveFact title='Next source due' value={nextRun ? relativeUntil(nextRun.nextRunAt) : 'Selecting'} detail={nextRun ? sourceById(nextRun.sourceId)?.name || nextRun.sourceId : 'Scheduler is choosing the next source'} tone={nextRun && isOverdue(nextRun.nextRunAt) ? 'watch' : 'neutral'} />
+                <LiveFact title='Next source due' value={nextRun ? relativeUntil(nextRun.nextRunAt) : 'Selecting'} detail={nextRun ? sourceById(overview, nextRun.sourceId)?.name || nextRun.sourceId : 'Scheduler is choosing the next source'} tone={nextRun && isOverdue(nextRun.nextRunAt) ? 'watch' : 'neutral'} />
             </section>
 
             <details data-ti-runs-summary-disclosure className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
@@ -54,7 +57,7 @@ export default function TiRunsPage() {
                     <Metric title='Completed' value={String(completed)} detail='successful jobs' tone='ok' />
                     <Metric title='Failed' value={String(failed)} detail='needs retry' tone={failed ? 'warn' : 'ok'} />
                     <Metric title='Evidence' value={`${captureTotal} captures`} detail={`${screenshotTotal} screenshots · ${rowTotal} parsed rows`} tone='hold' />
-                    <Metric title='Next run' value={nextRun ? relativeUntil(nextRun.nextRunAt) : 'Selecting'} detail={nextRun ? sourceById(nextRun.sourceId)?.name || nextRun.sourceId : 'Scheduler is choosing the next source'} tone='hold' />
+                    <Metric title='Next run' value={nextRun ? relativeUntil(nextRun.nextRunAt) : 'Selecting'} detail={nextRun ? sourceById(overview, nextRun.sourceId)?.name || nextRun.sourceId : 'Scheduler is choosing the next source'} tone='hold' />
                 </div>
             </details>
 
@@ -84,7 +87,7 @@ export default function TiRunsPage() {
                             <span>Action</span>
                         </div>
                         {orderedRuns.map(run => {
-                            const source = sourceById(run.sourceId)
+                            const source = sourceById(overview, run.sourceId)
                             return (
                                 <div key={run.id} className='grid grid-cols-[1.15fr_1.25fr_0.7fr_0.75fr_0.75fr_0.75fr_0.9fr_0.85fr] gap-3 border-b border-ui-border px-4 py-2.5 text-sm last:border-b-0 hover:bg-ui-panel'>
                                     <div className='min-w-0'>
@@ -132,7 +135,7 @@ export default function TiRunsPage() {
                                 <Link key={run.id} href={`/dashboard/ti/sources/${run.sourceId}`} className='grid gap-3 rounded-md border border-ui-border bg-ui-canvas p-3 md:grid-cols-[1fr_auto] md:items-center hover:border-ui-primary/35'>
                                     <div>
                                         <p className='font-mono text-xs font-semibold text-ui-text'>{run.id}</p>
-                                        <p className='mt-1 text-sm text-ui-muted'>{sourceById(run.sourceId)?.name || run.sourceId} · {run.status} · next {relativeUntil(run.nextRunAt)}</p>
+                                        <p className='mt-1 text-sm text-ui-muted'>{sourceById(overview, run.sourceId)?.name || run.sourceId} · {run.status} · next {relativeUntil(run.nextRunAt)}</p>
                                     </div>
                                     <span className='inline-flex items-center gap-1 text-sm font-semibold text-ui-primary'>Open source <ArrowRight className='h-3.5 w-3.5' /></span>
                                 </Link>
@@ -191,7 +194,7 @@ function Metric({ title, value, detail, tone }: { title: string, value: string, 
     )
 }
 
-function LiveRunCard({ title, run, sourceName }: { title: string, run?: ReturnType<typeof getTiAdminOverview>['runs'][number], sourceName: string }) {
+function LiveRunCard({ title, run, sourceName }: { title: string, run?: TiAdminOverview['runs'][number], sourceName: string }) {
     return (
         <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
             <div className='flex items-center justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>

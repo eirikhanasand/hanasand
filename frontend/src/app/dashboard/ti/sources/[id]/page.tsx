@@ -2,19 +2,27 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Activity, AlertTriangle, ArrowLeft, Camera, CheckCircle2, Clock3, ExternalLink, Gauge, RadioTower, ShieldCheck, TimerReset } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
-import { ageDays, formatTiDate, getTiAdminSource, sourceCaptures, sourceRuns, type TiAdminSource } from '@/utils/tiAdmin/ops'
+import { ageDays, formatTiDate, getTiAdminOverview, sourceCaptures, sourceRuns, type TiAdminSource } from '@/utils/tiAdmin/ops'
 import ManualRunButton from '../../manualRunButton'
+import TiDataAvailability from '../../ti-data-availability'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TiSourceDetailPage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params
-    const source = getTiAdminSource(params.id)
+    const overview = await getTiAdminOverview()
+    const source = overview.sources.find(item => item.id === params.id)
 
-    if (!source) return notFound()
+    if (!source && overview.availability.state === 'live') return notFound()
+    if (!source) return (
+        <DashboardPage>
+            <DashboardHeader eyebrow='Threat intelligence source' title='Source unavailable' description='The live source record could not be loaded.' />
+            <TiDataAvailability availability={overview.availability} />
+        </DashboardPage>
+    )
 
-    const captures = sourceCaptures(source.id)
-    const runs = sourceRuns(source.id).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+    const captures = sourceCaptures(overview, source.id)
+    const runs = sourceRuns(overview, source.id).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
     const latestRun = runs[0]
     const avgRows = runs.length ? Math.round(runs.reduce((sum, run) => sum + run.rows, 0) / runs.length) : 0
     const avgCaptures = runs.length ? Math.round(runs.reduce((sum, run) => sum + run.captures, 0) / runs.length) : 0
@@ -39,6 +47,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                 description={`${health.label}. Last update ${relativeAge(source.lastRunAt)}. Next run ${relativeUntil(source.nextRunAt)}.`}
                 actions={<ManualRunButton sourceId={source.id} label='Run source now' queries={source.domains.filter(domain => !domain.includes('only'))} />}
             />
+            <TiDataAvailability availability={overview.availability} />
 
             <div className='flex'>
                 <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:bg-ui-raised'>

@@ -3,20 +3,26 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, Camera, CheckCircle2, Clock3, DatabaseZap, ExternalLink, Radio, ShieldAlert, Zap } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
-import { domainCaptures, formatTiDate, getTiAdminDomain, sourceById } from '@/utils/tiAdmin/ops'
+import { domainCaptures, formatTiDate, getTiAdminOverview, sourceById } from '@/utils/tiAdmin/ops'
+import TiDataAvailability from '../../ti-data-availability'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TiDomainDetailPage(props: { params: Promise<{ domain: string }> }) {
     const params = await props.params
-    const domain = getTiAdminDomain(params.domain)
+    const overview = await getTiAdminOverview()
+    const domain = overview.domains.find(item => item.domain === decodeURIComponent(params.domain))
 
-    if (!domain) {
-        return notFound()
-    }
+    if (!domain && overview.availability.state === 'live') return notFound()
+    if (!domain) return (
+        <DashboardPage>
+            <DashboardHeader eyebrow='Monitored entity' title='Entity unavailable' description='The live evidence record could not be loaded.' />
+            <TiDataAvailability availability={overview.availability} />
+        </DashboardPage>
+    )
 
-    const captures = domainCaptures(domain.domain).sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime())
-    const sources = domain.sourceIds.map(id => sourceById(id)).filter(source => Boolean(source))
+    const captures = domainCaptures(overview, domain.domain).sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime())
+    const sources = domain.sourceIds.map(id => sourceById(overview, id)).filter(source => Boolean(source))
     const staleSources = sources.filter(source => new Date(source!.nextRunAt).getTime() < Date.now())
     const latestCapture = captures[0]
     const statusTone = domain.status === 'review' ? 'watch' : domain.status === 'watching' ? 'ok' : 'neutral'
@@ -31,6 +37,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                 title={domain.company}
                 description={`${domain.domain} is being watched across ${sources.length} source${sources.length === 1 ? '' : 's'}.`}
             />
+            <TiDataAvailability availability={overview.availability} />
 
             <div className='flex flex-wrap items-center justify-between gap-3'>
                 <Link href='/dashboard/ti/domains' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text hover:border-ui-border hover:bg-ui-raised'>
@@ -94,7 +101,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                     icon={<DatabaseZap className='h-4 w-4' />}
                     title='Evidence stream'
                     value={latestCapture ? latestCapture.title : 'checking'}
-                    detail={latestCapture ? `${latestCapture.actor} via ${sourceById(latestCapture.sourceId)?.name || latestCapture.sourceId}` : 'collectors are checking this entity for new mentions'}
+                    detail={latestCapture ? `${latestCapture.actor} via ${sourceById(overview, latestCapture.sourceId)?.name || latestCapture.sourceId}` : 'collectors are checking this entity for new mentions'}
                     tone={captures.length ? 'ok' : 'neutral'}
                 />
             </div>
@@ -118,7 +125,7 @@ export default async function TiDomainDetailPage(props: { params: Promise<{ doma
                             </thead>
                             <tbody className='divide-y divide-ui-border bg-ui-canvas'>
                                 {captures.map(capture => {
-                                    const source = sourceById(capture.sourceId)
+                                    const source = sourceById(overview, capture.sourceId)
                                     return (
                                         <tr key={capture.id} className='align-top hover:bg-ui-panel'>
                                             <td className='px-4 py-3'>

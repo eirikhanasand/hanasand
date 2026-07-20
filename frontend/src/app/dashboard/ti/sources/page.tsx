@@ -2,12 +2,14 @@ import Link from 'next/link'
 import { AlertTriangle, ArrowRight, Bot, Camera, CheckCircle2, ChevronDown, Clock3, ExternalLink, PauseCircle, ShieldAlert } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { formatTiDate, getTiAdminOverview, type TiAdminSource } from '@/utils/tiAdmin/ops'
+import TiDataAvailability from '../ti-data-availability'
 import ManualRunButton from '../manualRunButton'
 
 export const dynamic = 'force-dynamic'
 
-export default function TiSourcesPage() {
-    const { sources, captures, runs } = getTiAdminOverview()
+export default async function TiSourcesPage() {
+    const overview = await getTiAdminOverview()
+    const { sources, captures, runs } = overview
     const sourceRows = sources.map(source => {
         const sourceCaptures = captures.filter(capture => capture.sourceId === source.id)
         const sourceRuns = runs.filter(run => run.sourceId === source.id)
@@ -34,6 +36,7 @@ export default function TiSourcesPage() {
                 description='Operate collection sources, review findings, and keep stale feeds moving.'
                 actions={<ManualRunButton label='Run all sources' />}
             />
+            <TiDataAvailability availability={overview.availability} />
 
             <details className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-ti-source-inventory-summary-disclosure>
                 <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>

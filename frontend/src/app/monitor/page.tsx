@@ -15,11 +15,11 @@ export const metadata: Metadata = buildRouteMetadata({
 })
 
 export default async function MonitorPage() {
-    const [trafficMetrics, domainTraffic] = await Promise.all([
+    const [trafficMetrics, domainTraffic, ti] = await Promise.all([
         getTrafficMetrics(),
         getMetrics('domain'),
+        getTiAdminOverview(),
     ])
-    const ti = getTiAdminOverview()
     const tiByDomain = new Map(ti.domains.map(domain => [domain.domain, domain]))
     const trafficRows = Array.isArray(domainTraffic) ? domainTraffic : []
     const topDomains = typeof trafficMetrics === 'string' ? [] : trafficMetrics.top_domains
@@ -28,8 +28,8 @@ export default async function MonitorPage() {
     const rows: MonitorRow[] = [...domains].filter(Boolean).map(domain => {
         const tiDomain = tiByDomain.get(domain)
         const traffic = trafficRows.find(row => row.value === domain)
-        const captures = domainCaptures(domain)
-        const sources = (tiDomain?.sourceIds || []).map(id => sourceById(id)?.name).filter((name): name is string => Boolean(name))
+        const captures = domainCaptures(ti, domain)
+        const sources = (tiDomain?.sourceIds || []).map(id => sourceById(ti, id)?.name).filter((name): name is string => Boolean(name))
 
         return {
             domain,

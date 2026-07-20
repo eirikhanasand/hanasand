@@ -3,14 +3,16 @@ import Link from 'next/link'
 import { Activity, AlertTriangle, ArrowRight, Camera, Clock3, DatabaseZap, ExternalLink, PlayCircle, Radar, Send, ShieldCheck, Webhook } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { getTiEnrichmentOverview } from '@/utils/tiAdmin/enrichment'
-import { formatTiDate, getTiAdminOverview, sourceById } from '@/utils/tiAdmin/ops'
+import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import { evidenceStrengthLabel } from '@/utils/dwm/display'
 import ManualRunButton from './manualRunButton'
+import TiDataAvailability from './ti-data-availability'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TiAdminPage() {
-    const { sources, domains, captures, runs } = getTiAdminOverview()
+    const overview = await getTiAdminOverview()
+    const { sources, domains, captures, runs } = overview
     const enrichment = await getTiEnrichmentOverview()
     const now = Date.now()
 
@@ -23,7 +25,7 @@ export default async function TiAdminPage() {
     const nextRun = [...sources].sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
     const latestRun = [...runs].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0]
     const latestCapture = [...captures].sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime())[0]
-    const currentSource = latestRun ? sourceById(latestRun.sourceId) : nextRun
+    const currentSource = latestRun ? sourceById(overview, latestRun.sourceId) : nextRun
     const actorRows = [...enrichment.updatedActors, ...enrichment.queuedActors]
     const activeActorRun = enrichment.pipeline?.latestRuns.find(run => run.status === 'running') || enrichment.pipeline?.latestRuns[0]
     const currentActor = actorRows.find(actor => activeActorRun && (sameKey(actor.name) === sameKey(activeActorRun.actor_name) || sameKey(actor.id) === sameKey(activeActorRun.actor_key))) || actorRows[0]
@@ -39,6 +41,7 @@ export default async function TiAdminPage() {
                 description='Watch collection, enrichment, evidence, and delivery work move in one place.'
                 actions={<ManualRunButton label='Run collection' queries={runQueries} />}
             />
+            <TiDataAvailability availability={overview.availability} />
 
             <section className='grid gap-3 xl:grid-cols-[1.1fr_1fr_1fr]'>
                 <LiveLane
@@ -206,7 +209,7 @@ export default async function TiAdminPage() {
                                         <td className='px-4 py-4'><StatusPill label={operationalStateLabel(domain.status)} tone={domain.status === 'review' ? 'watch' : domain.status === 'watching' ? 'ok' : 'neutral'} /></td>
                                         <td className='px-4 py-3 font-semibold text-ui-text'>{domain.resultCount}</td>
                                         <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatTiDate(domain.lastSeenAt)}</td>
-                                        <td className='px-4 py-3 text-ui-muted'>{domain.sourceIds.map(id => sourceById(id)?.name || id).join(', ')}</td>
+                                        <td className='px-4 py-3 text-ui-muted'>{domain.sourceIds.map(id => sourceById(overview, id)?.name || id).join(', ')}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -234,7 +237,7 @@ export default async function TiAdminPage() {
                                             <p className='mt-1 text-xs text-ui-muted'>{capture.domain}</p>
                                         </td>
                                         <td className='px-4 py-3 font-semibold text-ui-text'>{capture.actor}</td>
-                                        <td className='px-4 py-3 text-ui-muted'>{sourceById(capture.sourceId)?.name || capture.sourceId}</td>
+                                        <td className='px-4 py-3 text-ui-muted'>{sourceById(overview, capture.sourceId)?.name || capture.sourceId}</td>
                                         <td className='whitespace-nowrap px-4 py-3 text-ui-muted'>{formatTiDate(capture.capturedAt)}</td>
                                     </tr>
                                 ))}
@@ -291,11 +294,11 @@ export default async function TiAdminPage() {
 }
 
 function buildActionItems({ reviewDomains, candidateSources, staleSources, failedRuns, latestCapture }: {
-    reviewDomains: ReturnType<typeof getTiAdminOverview>['domains']
-    candidateSources: ReturnType<typeof getTiAdminOverview>['sources']
-    staleSources: ReturnType<typeof getTiAdminOverview>['sources']
-    failedRuns: ReturnType<typeof getTiAdminOverview>['runs']
-    latestCapture?: ReturnType<typeof getTiAdminOverview>['captures'][number]
+    reviewDomains: TiAdminOverview['domains']
+    candidateSources: TiAdminOverview['sources']
+    staleSources: TiAdminOverview['sources']
+    failedRuns: TiAdminOverview['runs']
+    latestCapture?: TiAdminOverview['captures'][number]
 }) {
     return [
         ...reviewDomains.map(domain => ({

@@ -1,3 +1,5 @@
+import { tiScraperApiBase } from '@/utils/dwm/scraperApiBase'
+
 export type TiAdminSource = {
     id: string
     name: string
@@ -78,400 +80,298 @@ export type TiAdminOverview = {
     domains: TiAdminDomain[]
     captures: TiAdminCapture[]
     runs: TiAdminRun[]
+    availability: {
+        state: 'live' | 'degraded'
+        failedResources: string[]
+    }
 }
 
-const sources: TiAdminSource[] = [
-    {
-        id: 'direct_actor_pages',
-        name: 'Direct leak-site verification',
-        family: 'ransomware_actor_infrastructure',
-        type: 'restricted_metadata',
-        accessMethod: 'approved safe-field fetch',
-        status: 'active',
-        risk: 'restricted',
-        owner: 'source-ops',
-        url: 'safe-field actor infrastructure registry',
-        domain: 'leak sites',
-        lastRunAt: '2026-06-27T16:41:00.000Z',
-        nextRunAt: '2026-06-27T17:11:00.000Z',
-        monitoredSince: '2026-06-21T08:00:00.000Z',
-        cadenceMinutes: 30,
-        usefulRows: 2432,
-        domains: ['ntdapparel.com', 'irec-sas.com', 'fjordenergy.example'],
-        resultTypes: ['victim_claim', 'actor_page_change', 'claimed_data_description'],
-        buyerValue: 'Confirms whether a company or vendor appears on monitored leak sites before a buyer gets a forwarded screenshot.',
-        legalNotes: 'Metadata-only collection. No account access, actor interaction, credential values, or leaked-file retrieval.',
-        screenshotIds: ['cap-akira-ntd', 'cap-ransomhouse-irec'],
-    },
-    {
-        id: 'ransomwarelive_seed',
-        name: 'ransomware.live corroboration seed',
-        family: 'public_ransomware_seed',
-        type: 'api',
-        accessMethod: 'public_http',
-        status: 'active',
-        risk: 'low',
-        owner: 'source-ops',
-        url: 'https://api.ransomware.live/v2/groups',
-        domain: 'ransomware.live',
-        lastRunAt: '2026-06-27T15:55:00.000Z',
-        nextRunAt: '2026-06-28T03:55:00.000Z',
-        monitoredSince: '2026-06-19T10:30:00.000Z',
-        cadenceMinutes: 720,
-        usefulRows: 29000,
-        domains: ['ntdapparel.com', 'aerospace-composites.example', 'irec-sas.com'],
-        resultTypes: ['victim_claim_seed', 'actor_group_profile', 'claim_date'],
-        buyerValue: 'Useful as a seed and corroboration layer, then direct leak-site checks decide whether it becomes an alert.',
-        legalNotes: 'Public metadata only; not resold as public-row bulk data.',
-        screenshotIds: ['cap-ransomlive-akira'],
-    },
-    {
-        id: 'urlscan_watchlist_search',
-        name: 'urlscan watchlist search',
-        family: 'phishing_brand_infrastructure',
-        type: 'api',
-        accessMethod: 'api_key',
-        status: 'candidate',
-        risk: 'medium',
-        owner: 'source-ops',
-        url: 'https://urlscan.io/docs/api/',
-        domain: 'urlscan.io',
-        lastRunAt: '2026-06-27T14:20:00.000Z',
-        nextRunAt: '2026-06-27T17:20:00.000Z',
-        monitoredSince: '2026-06-22T16:30:00.000Z',
-        cadenceMinutes: 180,
-        usefulRows: 184,
-        domains: ['hanasand.com', 'acme-payments.example', 'northwind.example'],
-        resultTypes: ['brand_impersonation_signal', 'phishing_page_signal', 'infrastructure_activity'],
-        buyerValue: 'Turns suspicious public web observations into customer-specific domain and brand alerts with screenshots, first-seen timing, hosting, and page metadata.',
-        legalNotes: 'Use approved API access only. Do not submit customer-private URLs as public scans.',
-        screenshotIds: ['cap-urlscan-acme'],
-    },
-    {
-        id: 'hibp_domain_metadata',
-        name: 'HIBP domain and stealer metadata',
-        family: 'breach_stealer_domain_exposure',
-        type: 'api',
-        accessMethod: 'api_key_paid_plan',
-        status: 'review',
-        risk: 'medium',
-        owner: 'source-ops',
-        url: 'https://haveibeenpwned.com/API/v3',
-        domain: 'haveibeenpwned.com',
-        lastRunAt: '2026-06-26T21:00:00.000Z',
-        nextRunAt: '2026-06-27T21:00:00.000Z',
-        monitoredSince: '2026-06-22T16:30:00.000Z',
-        cadenceMinutes: 1440,
-        usefulRows: 0,
-        domains: ['customer-owned domains only'],
-        resultTypes: ['domain_breach_exposure', 'stealer_domain_exposure'],
-        buyerValue: 'Adds authorized domain exposure metadata without credential values, then correlates it with company monitoring and vendor-risk workflows.',
-        legalNotes: 'Requires subscription and domain authorization. Store counts and metadata only.',
-        screenshotIds: [],
-    },
-    {
-        id: 'threatfox_recent_ioc',
-        name: 'ThreatFox recent IOC metadata',
-        family: 'malware_infrastructure',
-        type: 'api',
-        accessMethod: 'public_http',
-        status: 'candidate',
-        risk: 'low',
-        owner: 'source-ops',
-        url: 'https://threatfox.abuse.ch/',
-        domain: 'threatfox.abuse.ch',
-        lastRunAt: '2026-06-27T15:10:00.000Z',
-        nextRunAt: '2026-06-27T18:10:00.000Z',
-        monitoredSince: '2026-06-22T16:30:00.000Z',
-        cadenceMinutes: 180,
-        usefulRows: 412,
-        domains: ['loader-cdn.example', 'northwind.example'],
-        resultTypes: ['malware_infrastructure_signal', 'ioc_context'],
-        buyerValue: 'Adds fresh infrastructure context to actor and company monitoring without selling generic IOC volume.',
-        legalNotes: 'Metadata only; do not fetch malware payloads.',
-        screenshotIds: [],
-    },
-]
+type ApiPayload = Record<string, unknown>
+const TI_ADMIN_FETCH_TIMEOUT_MS = 2_500
 
-const domains: TiAdminDomain[] = [
-    {
-        domain: 'ntdapparel.com',
-        company: 'Ntd Apparel',
-        matchedTerms: ['Ntd Apparel', 'ntdapparel.com'],
-        sourceIds: ['direct_actor_pages', 'ransomwarelive_seed'],
-        resultCount: 4,
-        lastSeenAt: '2026-06-27T16:41:00.000Z',
-        status: 'review',
-    },
-    {
-        domain: 'irec-sas.com',
-        company: 'Irec Sas',
-        matchedTerms: ['Irec Sas', 'irec-sas.com'],
-        sourceIds: ['direct_actor_pages', 'ransomwarelive_seed'],
-        resultCount: 3,
-        lastSeenAt: '2026-06-27T15:55:00.000Z',
-        status: 'watching',
-    },
-    {
-        domain: 'hanasand.com',
-        company: 'Hanasand',
-        matchedTerms: ['hanasand.com', 'Hanasand'],
-        sourceIds: ['urlscan_watchlist_search'],
-        resultCount: 2,
-        lastSeenAt: '2026-06-27T14:20:00.000Z',
-        status: 'quiet',
-    },
-    {
-        domain: 'northwind.example',
-        company: 'Northwind Supplier',
-        matchedTerms: ['Northwind', 'northwind.example'],
-        sourceIds: ['urlscan_watchlist_search', 'threatfox_recent_ioc'],
-        resultCount: 6,
-        lastSeenAt: '2026-06-27T15:10:00.000Z',
-        status: 'watching',
-    },
-]
+export async function getTiAdminOverview(tenantId = 'default'): Promise<TiAdminOverview> {
+    const base = tiScraperApiBase()
+    const resources = await Promise.all([
+        fetchResource(base, '/v1/intel/sources', 'sources', tenantId),
+        fetchResource(base, '/v1/intel/captures', 'captures', tenantId),
+        fetchResource(base, '/v1/intel/collection-runs', 'collectionRuns', tenantId),
+        fetchResource(base, '/v1/intel/source-operations', 'sources', tenantId),
+    ])
+    const [sourceResult, captureResult, runResult, operationsResult] = resources
+    const rawCaptures = captureResult.records
+    const operationsBySource = new Map(operationsResult.records.map(row => [stringValue(row.id), row]))
+    const captures = rawCaptures.map(toCapture).filter((row): row is TiAdminCapture => Boolean(row))
+    const sources = sourceResult.records.map(row => toSource(row, operationsBySource.get(stringValue(row.id)), captures)).filter((row): row is TiAdminSource => Boolean(row))
+    const sourceById = new Map(sources.map(source => [source.id, source]))
+    const runs = runResult.records.map(row => toRun(row, sourceById)).filter((row): row is TiAdminRun => Boolean(row))
 
-const captures: TiAdminCapture[] = [
-    {
-        id: 'cap-akira-ntd',
-        sourceId: 'direct_actor_pages',
-        domain: 'ntdapparel.com',
-        actor: 'Akira',
-        title: 'Ntd Apparel ransomware listing',
-        publishedAt: '2026-06-27T15:52:00.000Z',
-        capturedAt: '2026-06-27T16:41:00.000Z',
-        monitoredSince: '2026-06-21T08:00:00.000Z',
-        owner: 'source-ops',
-        pageUrl: 'sensitive leak-site reference',
-        pageType: 'actor ransomware listing',
-        screenshotLabel: 'Leak-site listing with company name and data amount.',
-        screenshotTakenAt: '2026-06-27T16:41:04.000Z',
-        resultSummary: 'Company name, group name, listed size, source status, and page timing were extracted for review.',
-        metadata: [
-            { label: 'Data mentioned', value: '62 GB listed' },
-            { label: 'Status', value: 'current' },
-            { label: 'Safety rule', value: 'safe fields only' },
-            { label: 'Alert key', value: 'akira:ntdapparel.com:2026-06-27' },
-        ],
-    },
-    {
-        id: 'cap-ransomhouse-irec',
-        sourceId: 'direct_actor_pages',
-        domain: 'irec-sas.com',
-        actor: 'RansomHouse',
-        title: 'Irec Sas ransomware listing',
-        publishedAt: '2026-06-27T11:23:00.000Z',
-        capturedAt: '2026-06-27T12:00:00.000Z',
-        monitoredSince: '2026-06-21T08:00:00.000Z',
-        owner: 'source-ops',
-        pageUrl: 'sensitive leak-site reference',
-        pageType: 'actor ransomware listing',
-        screenshotLabel: 'Listing row with company name, group, and status.',
-        screenshotTakenAt: '2026-06-27T12:00:08.000Z',
-        resultSummary: 'New ransomware listing was captured and routed to company watchlist review.',
-        metadata: [
-            { label: 'Data mentioned', value: 'new company mention' },
-            { label: 'Status', value: 'recent' },
-            { label: 'Safety rule', value: 'safe fields only' },
-            { label: 'Alert key', value: 'ransomhouse:irec-sas.com:2026-06-27' },
-        ],
-    },
-    {
-        id: 'cap-urlscan-acme',
-        sourceId: 'urlscan_watchlist_search',
-        domain: 'acme-payments.example',
-        actor: 'Unknown infrastructure',
-        title: 'Acme Payments lookalike page',
-        publishedAt: '2026-06-27T13:40:00.000Z',
-        capturedAt: '2026-06-27T14:20:00.000Z',
-        monitoredSince: '2026-06-22T16:30:00.000Z',
-        owner: 'source-ops',
-        pageUrl: 'https://urlscan.io/result/example',
-        pageType: 'brand/domain infrastructure signal',
-        screenshotLabel: 'Rendered page thumbnail from public scan metadata.',
-        screenshotTakenAt: '2026-06-27T14:20:14.000Z',
-        resultSummary: 'Watched brand/domain term surfaced in public scan metadata and was held for customer-safe review.',
-        metadata: [
-            { label: 'Verdict', value: 'suspicious page signal' },
-            { label: 'First seen', value: '2026-06-27T13:40:00.000Z' },
-            { label: 'Signals', value: 'page title, final domain, screenshot hash' },
-            { label: 'Alert key', value: 'urlscan:acme-payments.example:pagehash' },
-        ],
-    },
-]
-
-const runs: TiAdminRun[] = [
-    {
-        id: 'run-direct-20260627-1641',
-        sourceId: 'direct_actor_pages',
-        status: 'completed',
-        startedAt: '2026-06-27T16:40:00.000Z',
-        finishedAt: '2026-06-27T16:43:24.000Z',
-        nextRunAt: '2026-06-27T17:11:00.000Z',
-        rows: 47,
-        captures: 9,
-        screenshots: 4,
-        message: 'Metadata-only leak-site verification completed.',
-    },
-    {
-        id: 'run-ransomlive-20260627-1555',
-        sourceId: 'ransomwarelive_seed',
-        status: 'completed',
-        startedAt: '2026-06-27T15:55:00.000Z',
-        finishedAt: '2026-06-27T15:56:18.000Z',
-        nextRunAt: '2026-06-28T03:55:00.000Z',
-        rows: 132,
-        captures: 0,
-        screenshots: 0,
-        message: 'Public seed refresh completed; direct verification remains separate.',
-    },
-    {
-        id: 'run-urlscan-20260627-1420',
-        sourceId: 'urlscan_watchlist_search',
-        status: 'completed',
-        startedAt: '2026-06-27T14:20:00.000Z',
-        finishedAt: '2026-06-27T14:21:34.000Z',
-        nextRunAt: '2026-06-27T17:20:00.000Z',
-        rows: 18,
-        captures: 2,
-        screenshots: 2,
-        message: 'Watchlist canary run completed.',
-    },
-]
-
-export function getTiAdminOverview(now = new Date()): TiAdminOverview {
-    const projectedSources = sources.map((source, index) => projectSource(source, index, now))
-    const sourceById = new Map(projectedSources.map(source => [source.id, source]))
-    const projectedDomains = domains.map(domain => projectDomain(domain, sourceById, now))
-    const projectedCaptures = captures.map((capture, index) => projectCapture(capture, sourceById.get(capture.sourceId), index))
-    const projectedRuns = projectedSources.map((source, index) => projectRun(source, index))
-    return { sources: projectedSources, domains: projectedDomains, captures: projectedCaptures, runs: projectedRuns }
+    return {
+        sources,
+        domains: domainsFromCaptures(captures),
+        captures: captures.sort((left, right) => right.capturedAt.localeCompare(left.capturedAt)),
+        runs: runs.sort((left, right) => right.startedAt.localeCompare(left.startedAt)),
+        availability: {
+            state: resources.every(result => result.ok) ? 'live' : 'degraded',
+            failedResources: resources.filter(result => !result.ok).map(result => result.resource),
+        },
+    }
 }
 
-export function getTiAdminSource(id: string) {
-    return getTiAdminOverview().sources.find(source => source.id === id) || null
+export async function getTiAdminSource(id: string) {
+    return (await getTiAdminOverview()).sources.find(source => source.id === id) || null
 }
 
-export function getTiAdminDomain(domain: string) {
+export async function getTiAdminDomain(domain: string) {
     const decoded = decodeURIComponent(domain)
-    return getTiAdminOverview().domains.find(item => item.domain === decoded) || null
+    return (await getTiAdminOverview()).domains.find(item => item.domain === decoded) || null
 }
 
-export function sourceRuns(sourceId: string) {
-    return getTiAdminOverview().runs.filter(run => run.sourceId === sourceId)
+export function sourceRuns(overview: TiAdminOverview, sourceId: string) {
+    return overview.runs.filter(run => run.sourceId === sourceId)
 }
 
-export function sourceCaptures(sourceId: string) {
-    return getTiAdminOverview().captures.filter(capture => capture.sourceId === sourceId)
+export function sourceCaptures(overview: TiAdminOverview, sourceId: string) {
+    return overview.captures.filter(capture => capture.sourceId === sourceId)
 }
 
-export function domainCaptures(domain: string) {
-    return getTiAdminOverview().captures.filter(capture => capture.domain === domain)
+export function domainCaptures(overview: TiAdminOverview, domain: string) {
+    return overview.captures.filter(capture => capture.domain === domain)
 }
 
-export function sourceById(id: string) {
-    return getTiAdminOverview().sources.find(source => source.id === id)
+export function sourceById(overview: TiAdminOverview, id: string) {
+    return overview.sources.find(source => source.id === id)
 }
 
 export function formatTiDate(value: string) {
+    const date = new Date(value)
+    if (!Number.isFinite(date.getTime())) return 'not recorded'
     return new Intl.DateTimeFormat('en', {
         dateStyle: 'medium',
         timeStyle: 'short',
         timeZone: 'Europe/Oslo',
-    }).format(new Date(value))
+    }).format(date)
 }
 
 export function ageDays(since: string) {
     const diff = Date.now() - new Date(since).getTime()
-    return Math.max(1, Math.round(diff / 86400000))
+    return Number.isFinite(diff) ? Math.max(1, Math.round(diff / 86400000)) : 0
 }
 
-function projectSource(source: TiAdminSource, index: number, now: Date): TiAdminSource {
-    const interval = Math.max(15, source.cadenceMinutes)
-    const minutesAgo = Math.max(5, Math.min(interval - 3, Math.round(interval * 0.42) + index * 3))
-    const lastRun = new Date(now.getTime() - minutesAgo * 60000)
-    const nextRun = new Date(lastRun.getTime() + interval * 60000)
-    const aiReview = sourceAiReview(source, lastRun)
-    return {
-        ...source,
-        status: aiReview && source.status !== 'paused' ? 'active' : source.status,
-        lastRunAt: lastRun.toISOString(),
-        nextRunAt: nextRun.toISOString(),
-        usefulRows: source.usefulRows + Math.max(0, index * 7),
-        aiReview,
+async function fetchResource(base: string, path: string, key: string, tenantId: string) {
+    const resource = path.split('/').at(-1) || key
+    try {
+        const target = new URL(path, base)
+        target.searchParams.set('tenantId', tenantId)
+        target.searchParams.set('limit', '500')
+        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(TI_ADMIN_FETCH_TIMEOUT_MS) })
+        if (!response.ok) return { resource, ok: false, records: [] as ApiPayload[] }
+        const payload = await response.json() as ApiPayload
+        return { resource, ok: true, records: recordArray(payload[key]) }
+    } catch {
+        return { resource, ok: false, records: [] as ApiPayload[] }
     }
 }
 
-function projectDomain(domain: TiAdminDomain, sourceById: Map<string, TiAdminSource>, now: Date): TiAdminDomain {
-    const latestSource = domain.sourceIds
-        .map(id => sourceById.get(id))
-        .filter(Boolean)
-        .sort((a, b) => new Date(b!.lastRunAt).getTime() - new Date(a!.lastRunAt).getTime())[0]
-    const aiReview = domain.status === 'review'
-        ? {
-            reviewer: 'hanasand-ai' as const,
-            status: 'monitoring' as const,
-            reviewedAt: new Date(now.getTime() - 11 * 60000).toISOString(),
-            qualityScore: 91,
-            summary: 'Matched company and domain evidence across bounded metadata sources; routed to monitoring with customer-safe provenance.',
-            checks: ['company/domain match', 'safe-field rule', 'alert key present', 'customer-safe excerpt'],
-        }
-        : undefined
+function toSource(record: ApiPayload, operations: ApiPayload | undefined, captures: TiAdminCapture[]): TiAdminSource | undefined {
+    const id = stringValue(record.id)
+    if (!id) return undefined
+    const collection = objectValue(record.collection)
+    const operatingMode = objectValue(record.operatingMode)
+    const health = objectValue(operations?.health)
+    const coverage = objectValue(operations?.coverage)
+    const cadenceMinutes = Math.max(1, Math.round(numberValue(collection.cadenceSeconds, 3600) / 60))
+    const monitoredSince = isoValue(collection.createdAt, collection.updatedAt)
+    const lastRunAt = isoValue(health.lastAttemptAt, health.lastSuccessAt, collection.updatedAt, monitoredSince)
+    const nextRunAt = isoValue(record.nextRunAt) || new Date(Date.parse(lastRunAt) + cadenceMinutes * 60_000).toISOString()
+    const sourceCaptures = captures.filter(capture => capture.sourceId === id)
+    const url = stringValue(record.url)
+
     return {
-        ...domain,
-        status: domain.status === 'review' ? 'watching' : domain.status,
-        lastSeenAt: latestSource?.lastRunAt || domain.lastSeenAt,
-        aiReview,
+        id,
+        name: textValue(record.name, id),
+        family: textValue(operations?.family, record.type, 'unknown'),
+        type: textValue(record.type, 'unknown'),
+        accessMethod: textValue(operatingMode.accessMethod, 'not recorded'),
+        status: sourceStatus(record.status),
+        risk: sourceRisk(operatingMode.risk ?? record.risk),
+        owner: textValue(record.owner, 'source-ops'),
+        url,
+        domain: hostname(url) || textValue(operations?.family, record.type, 'source'),
+        lastRunAt,
+        nextRunAt,
+        monitoredSince,
+        cadenceMinutes,
+        usefulRows: numberValue(coverage.captureCount, sourceCaptures.length),
+        domains: unique(sourceCaptures.map(capture => capture.domain).filter(domain => domain !== 'unresolved')),
+        resultTypes: unique(sourceCaptures.map(capture => capture.pageType).filter(Boolean)),
+        buyerValue: sourceCaptures.length ? `${sourceCaptures.length} stored capture${sourceCaptures.length === 1 ? '' : 's'} available for evidence review.` : 'No accepted captures are stored for this source.',
+        legalNotes: `${textValue(operatingMode.legalMode, 'operating mode not recorded')} · approval ${textValue(operatingMode.approvalState, 'not recorded')}`,
+        screenshotIds: sourceCaptures.filter(capture => capture.screenshotLabel !== 'not captured').map(capture => capture.id),
     }
 }
 
-function projectCapture(capture: TiAdminCapture, source: TiAdminSource | undefined, index: number): TiAdminCapture {
-    if (!source) return capture
-    const capturedAt = new Date(new Date(source.lastRunAt).getTime() - index * 7 * 60000)
-    const publishedAt = new Date(capturedAt.getTime() - (28 + index * 9) * 60000)
+function toCapture(record: ApiPayload): TiAdminCapture | undefined {
+    const id = stringValue(record.id)
+    const sourceId = stringValue(record.sourceId)
+    const capturedAt = isoValue(record.collectedAt)
+    if (!id || !sourceId || !capturedAt) return undefined
+    const metadata = objectValue(record.metadata)
+    const provenance = objectValue(record.provenance)
+    const publicUrl = stringValue(record.url)
+    const domain = captureDomain(metadata, publicUrl)
+    const screenshotId = textValue(metadata.screenshotId, metadata.screenshotHash)
+    const actor = textValue(metadata.actor, metadata.group, metadata.threatActor, 'Not extracted')
+    const title = textValue(metadata.title, metadata.headline, metadata.claimTitle, `${actor === 'Not extracted' ? 'Evidence' : actor} capture`)
+    const publishedAt = isoValue(record.publishedAt, capturedAt)
+    const pageType = textValue(metadata.pageType, metadata.kind, metadata.adapter, record.mediaType, record.storageKind, 'capture')
+
     return {
-        ...capture,
-        publishedAt: publishedAt.toISOString(),
-        capturedAt: capturedAt.toISOString(),
-        screenshotTakenAt: new Date(capturedAt.getTime() + 4000).toISOString(),
+        id,
+        sourceId,
+        domain,
+        actor,
+        title,
+        publishedAt,
+        capturedAt,
+        monitoredSince: isoValue(provenance.firstObservedAt, publishedAt, capturedAt),
+        owner: textValue(metadata.owner, 'source-ops'),
+        pageUrl: publicUrl || (record.locatorRedacted ? 'restricted locator redacted' : 'not recorded'),
+        pageType,
+        screenshotLabel: screenshotId || 'not captured',
+        screenshotTakenAt: isoValue(metadata.screenshotTakenAt, capturedAt),
+        resultSummary: textValue(metadata.summary, metadata.safeExcerpt, record.redactionReason, 'Captured evidence metadata is available for review.'),
+        metadata: captureMetadata(record, metadata),
     }
 }
 
-function projectRun(source: TiAdminSource, index: number): TiAdminRun {
-    const historical = runs.find(run => run.sourceId === source.id)
-    const startedAt = new Date(new Date(source.lastRunAt).getTime() - 60_000)
-    const rows = Math.max(1, Math.round(source.usefulRows / (source.cadenceMinutes >= 720 ? 220 : 52)) + index * 3)
-    const captures = source.screenshotIds.length || source.risk === 'restricted' ? Math.max(0, Math.min(9, source.screenshotIds.length + index)) : Math.max(0, Math.min(4, Math.round(rows / 12)))
+function toRun(record: ApiPayload, sources: Map<string, TiAdminSource>): TiAdminRun | undefined {
+    const id = stringValue(record.id)
+    const sourceId = stringValue(record.sourceId) || listValue(record.sourceIds).map(item => stringValue(item)).find(Boolean) || ''
+    const startedAt = isoValue(record.startedAt, record.createdAt)
+    if (!id || !sourceId || !startedAt) return undefined
+    const source = sources.get(sourceId)
     return {
-        id: `run-${source.id}-${source.lastRunAt.slice(0, 16).replace(/[-:T]/g, '')}`,
-        sourceId: source.id,
-        status: 'completed',
-        startedAt: startedAt.toISOString(),
-        finishedAt: source.lastRunAt,
-        nextRunAt: source.nextRunAt,
-        rows,
-        captures,
-        screenshots: Math.max(source.screenshotIds.length, historical?.screenshots || 0),
-        message: source.aiReview
-            ? `Hanasand AI reviewed source quality (${source.aiReview.qualityScore}%) and kept the run active.`
-            : 'Scheduled run completed.',
+        id,
+        sourceId,
+        status: runStatus(record.status),
+        startedAt,
+        finishedAt: optionalIso(record.finishedAt, record.completedAt, record.updatedAt),
+        nextRunAt: isoValue(record.nextRunAt, source?.nextRunAt, startedAt),
+        rows: numberValue(record.rows, record.rowCount, record.processedCount, record.itemCount),
+        captures: numberValue(record.captures, record.captureCount),
+        screenshots: numberValue(record.screenshots, record.screenshotCount),
+        message: textValue(record.message, record.error, `Collection run ${textValue(record.status, 'recorded')}.`),
     }
 }
 
-function sourceAiReview(source: TiAdminSource, reviewedNear: Date): TiAdminAiReview | undefined {
-    if (source.status !== 'candidate' && source.status !== 'review') return undefined
-    const paidPlanRestricted = source.id === 'hibp_domain_metadata'
-    return {
-        reviewer: 'hanasand-ai',
-        status: paidPlanRestricted ? 'monitoring' : 'approved',
-        reviewedAt: new Date(reviewedNear.getTime() - 90_000).toISOString(),
-        qualityScore: paidPlanRestricted ? 88 : source.risk === 'low' ? 96 : 92,
-        summary: paidPlanRestricted
-            ? 'Approved for authorized-domain safe fields; credential values and unchecked domains stay excluded.'
-            : 'Approved for automated monitoring after source details, safety rules, timing, and buyer value checks passed.',
-        checks: paidPlanRestricted
-            ? ['domain authorization required', 'safe-field storage', 'paid-plan access', 'no credential values']
-            : ['public or approved API', 'source details present', 'customer-safe fields only', 'run timing under SLA'],
+function domainsFromCaptures(captures: TiAdminCapture[]): TiAdminDomain[] {
+    const grouped = new Map<string, TiAdminCapture[]>()
+    for (const capture of captures) {
+        if (capture.domain === 'unresolved') continue
+        grouped.set(capture.domain, [...(grouped.get(capture.domain) || []), capture])
     }
+    return [...grouped.entries()].map(([domain, rows]) => ({
+        domain,
+        company: titleCase(domain.split('.')[0].replaceAll('-', ' ')),
+        matchedTerms: [domain],
+        sourceIds: unique(rows.map(row => row.sourceId)),
+        resultCount: rows.length,
+        lastSeenAt: rows.map(row => row.capturedAt).sort().at(-1)!,
+        status: 'review' as const,
+    })).sort((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt))
+}
+
+function captureMetadata(record: ApiPayload, metadata: ApiPayload) {
+    const rows = [
+        ['Content hash', record.contentHash],
+        ['Storage', record.storageKind],
+        ['Media type', record.mediaType],
+        ['Retention', record.retentionClass],
+        ['Parser', metadata.parserVersion ?? metadata.extractorVersion],
+        ['Review', metadata.reviewState],
+    ]
+    return rows.map(([label, value]) => ({ label: String(label), value: textValue(value) })).filter(row => row.value)
+}
+
+function captureDomain(metadata: ApiPayload, url: string) {
+    const direct = textValue(metadata.domain, metadata.victimDomain, metadata.hostname)
+    if (direct) return direct.toLowerCase()
+    const matched = listValue(metadata.matchedWatchTerms).map(item => stringValue(item)).find(value => value.includes('.'))
+    return (matched || hostname(url) || 'unresolved').toLowerCase()
+}
+
+function sourceStatus(value: unknown): TiAdminSource['status'] {
+    const status = stringValue(value).toLowerCase()
+    if (['active', 'approved', 'canary'].includes(status)) return 'active'
+    if (['paused', 'disabled', 'rejected'].includes(status)) return 'paused'
+    if (['review', 'approval_required'].includes(status)) return 'review'
+    return 'candidate'
+}
+
+function sourceRisk(value: unknown): TiAdminSource['risk'] {
+    const risk = stringValue(value).toLowerCase()
+    if (['restricted', 'high'].includes(risk)) return 'restricted'
+    if (risk === 'medium') return 'medium'
+    return 'low'
+}
+
+function runStatus(value: unknown): TiAdminRun['status'] {
+    const status = stringValue(value).toLowerCase()
+    if (['queued', 'pending'].includes(status)) return 'queued'
+    if (['running', 'leased', 'processing'].includes(status)) return 'running'
+    if (['failed', 'error', 'dead_letter'].includes(status)) return 'failed'
+    return 'completed'
+}
+
+function objectValue(value: unknown): ApiPayload {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as ApiPayload : {}
+}
+
+function recordArray(value: unknown): ApiPayload[] {
+    return Array.isArray(value) ? value.filter(item => item && typeof item === 'object') as ApiPayload[] : []
+}
+
+function listValue(value: unknown): unknown[] {
+    return Array.isArray(value) ? value : []
+}
+
+function stringValue(value: unknown) {
+    return typeof value === 'string' ? value.trim().slice(0, 500) : ''
+}
+
+function textValue(...values: unknown[]) {
+    return values.map(stringValue).find(Boolean) || ''
+}
+
+function numberValue(...values: unknown[]) {
+    for (const value of values) {
+        const number = Number(value)
+        if (Number.isFinite(number) && number >= 0) return number
+    }
+    return 0
+}
+
+function optionalIso(...values: unknown[]) {
+    for (const value of values) {
+        const date = new Date(stringValue(value))
+        if (Number.isFinite(date.getTime())) return date.toISOString()
+    }
+    return undefined
+}
+
+function isoValue(...values: unknown[]) {
+    return optionalIso(...values) || new Date(0).toISOString()
+}
+
+function hostname(value: string) {
+    try { return new URL(value).hostname }
+    catch { return '' }
+}
+
+function unique(values: string[]) {
+    return [...new Set(values)]
+}
+
+function titleCase(value: string) {
+    return value.replace(/\b\w/g, letter => letter.toUpperCase())
 }

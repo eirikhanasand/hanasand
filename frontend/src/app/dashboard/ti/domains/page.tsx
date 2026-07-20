@@ -2,15 +2,17 @@ import Link from 'next/link'
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Clock3, Globe2, Radar } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { domainCaptures, formatTiDate, getTiAdminOverview, sourceById } from '@/utils/tiAdmin/ops'
+import TiDataAvailability from '../ti-data-availability'
 
 export const dynamic = 'force-dynamic'
 
-export default function TiDomainsPage() {
-    const { domains } = getTiAdminOverview()
+export default async function TiDomainsPage() {
+    const overview = await getTiAdminOverview()
+    const { domains } = overview
     const rows = domains.map(domain => ({
         domain,
-        captures: domainCaptures(domain.domain),
-        sources: domain.sourceIds.map(id => sourceById(id)).filter(Boolean),
+        captures: domainCaptures(overview, domain.domain),
+        sources: domain.sourceIds.map(id => sourceById(overview, id)).filter(Boolean),
         ageMinutes: minutesSince(domain.lastSeenAt),
     })).sort((a, b) => statusWeight(b.domain.status) - statusWeight(a.domain.status) || b.domain.resultCount - a.domain.resultCount)
     const reviewCount = domains.filter(domain => domain.status === 'review').length
@@ -26,6 +28,7 @@ export default function TiDomainsPage() {
                 title='Monitored entities'
                 description='Triage companies, domains, vendors, and brands surfaced by monitored sources.'
             />
+            <TiDataAvailability availability={overview.availability} />
 
             <details data-ti-domains-summary-disclosure className='group overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
                 <summary className='flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 [&::-webkit-details-marker]:hidden'>

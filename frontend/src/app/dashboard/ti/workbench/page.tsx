@@ -3,9 +3,8 @@ import { ArrowUpRight, Inbox, Radar } from 'lucide-react'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import type { DwmAlert } from '@/utils/dwm/product'
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
-import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import { buildPublicTiHandoffCase, type DwmOrganizationState, type OperatorScope } from '../../operatorConsoleModel'
-import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence } from './workbenchClient'
+import AnalystWorkbenchClient, { type WorkbenchCase } from './workbenchClient'
 import { dwmAlertToWorkbenchCase } from './dwmAlertAdapter'
 
 export const dynamic = 'force-dynamic'
@@ -17,7 +16,6 @@ export default async function TiAnalystWorkbenchPage({
     searchParams?: Promise<Record<string, string | string[] | undefined>>
 }) {
     const params = await searchParams
-    const overview = getTiAdminOverview()
     const [liveAlerts, liveCases, deliveries] = await Promise.all([
         loadDwmAlerts(),
         loadDwmCases(),
@@ -37,7 +35,7 @@ export default async function TiAnalystWorkbenchPage({
         operations: null,
         liveAlertCount: liveAlerts.length,
     })
-    const cases = [...publicTiCases, ...buildWorkbenchCases(overview, alertsWithDelivery, liveCases)]
+    const cases = [...publicTiCases, ...buildWorkbenchCases(alertsWithDelivery, liveCases)]
     const initialSelectedId = selectedWorkbenchCaseId(cases, params) || publicTiCases[0]?.id
 
     return (
@@ -274,16 +272,13 @@ function attachDeliveriesToAlerts(alerts: DwmAlert[], deliveries: WorkbenchDwmDe
     }))
 }
 
-function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[], liveCases: WorkbenchDwmCaseListItem[] = []): WorkbenchCase[] {
+function buildWorkbenchCases(alerts: DwmAlert[], liveCases: WorkbenchDwmCaseListItem[] = []): WorkbenchCase[] {
     const alertCases = alerts.map(dwmAlertToWorkbenchCase)
     const alertIds = new Set(alerts.map(alert => alert.id))
     const linkedCaseRows = liveCases
         .filter(item => String(item.alertId || '') && !alertIds.has(String(item.alertId)))
         .map(dwmCaseToWorkbenchCase)
-    const domainCases = overview.domains.map(domain => domainToCase(domain, overview.captures))
-    const captureCases = overview.captures.map(captureToCase)
-
-    return [...linkedCaseRows, ...alertCases, ...domainCases, ...captureCases]
+    return [...linkedCaseRows, ...alertCases]
         .sort((a, b) => b.priority - a.priority || b.updatedAt.localeCompare(a.updatedAt))
 }
 
@@ -395,125 +390,6 @@ function caseDashboardHref(row: WorkbenchDwmCaseListItem) {
     params.set('route', 'ti_workbench')
     const query = params.toString()
     return `/dashboard/dwm/cases/${encodeURIComponent(caseId || 'case')}${query ? `?${query}` : ''}`
-}
-
-function domainToCase(domain: TiAdminDomain, captures: TiAdminCapture[]): WorkbenchCase {
-    const relatedCaptures = captures.filter(capture => capture.domain === domain.domain)
-    const latestCapture = relatedCaptures.sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0]
-    const severity = domain.status === 'review' ? 'high' : domain.status === 'watching' ? 'medium' : 'low'
-    const evidence: WorkbenchEvidence[] = relatedCaptures.map(capture => captureEvidence(capture))
-
-    return {
-        id: `domain_${domain.domain}`,
-        kind: 'ti_domain',
-        queue: domain.status === 'review' ? 'Domain review' : 'Watchlist monitoring',
-        title: domain.company,
-        subtitle: `${domain.domain} matched ${domain.resultCount} ${pluralize('result', domain.resultCount)} across ${domain.sourceIds.length} ${pluralize('source', domain.sourceIds.length)}.`,
-        severity,
-        status: domain.status,
-        priority: severityPriority(severity) + domain.resultCount,
-        confidence: relatedCaptures.length ? 78 : 62,
-        owner: 'source-ops',
-        createdAt: latestCapture?.publishedAt || domain.lastSeenAt,
-        updatedAt: domain.lastSeenAt,
-        company: domain.company,
-        matchedTerm: domain.matchedTerms.join(', '),
-        actor: latestCapture?.actor || 'Source correlation',
-        sourceLabel: domain.sourceIds.map(id => sourceById(id)?.name || id).join(', '),
-        recommendedAction: domain.status === 'review'
-            ? 'Open the related captures, verify the match belongs to the customer, then route as a DWM alert or keep it on low-noise watch.'
-            : 'Keep monitoring and promote only if another source corroborates the match or risk increases.',
-        routeLabel: domain.status === 'review' ? 'analyst review' : 'source watch',
-        persistent: false,
-        evidence,
-        timeline: [
-            {
-                id: `domain_${domain.domain}_last_seen`,
-                at: domain.lastSeenAt,
-                title: 'Domain last seen',
-                body: `${domain.domain} appeared in the TI corpus at ${formatTiDate(domain.lastSeenAt)}.`,
-            },
-            {
-                id: `domain_${domain.domain}_sources`,
-                at: domain.lastSeenAt,
-                title: 'Sources attached',
-                body: domain.sourceIds.map(id => sourceById(id)?.name || id).join(', '),
-            },
-        ],
-        nextTasks: [
-            'Check the source families and matched terms for false-positive risk.',
-            'Promote corroborated findings into DWM customer routing.',
-            'Add an analyst note with the decision rationale.',
-        ],
-        relatedLinks: [
-            { href: `/dashboard/ti/domains/${encodeURIComponent(domain.domain)}`, label: 'Open domain' },
-            { href: '/dashboard/ti/sources', label: 'Review sources' },
-        ],
-    }
-}
-
-function captureToCase(capture: TiAdminCapture): WorkbenchCase {
-    const source = sourceById(capture.sourceId)
-    const severity = source?.risk === 'restricted' ? 'high' : source?.status === 'candidate' ? 'medium' : 'low'
-
-    return {
-        id: `capture_${capture.id}`,
-        kind: 'source_capture',
-        queue: 'Evidence review',
-        title: capture.title,
-        subtitle: capture.resultSummary,
-        severity,
-        status: 'needs_review',
-        priority: severityPriority(severity) + 8,
-        confidence: source?.risk === 'restricted' ? 82 : 70,
-        owner: capture.owner,
-        createdAt: capture.publishedAt,
-        updatedAt: capture.capturedAt,
-        company: capture.domain,
-        matchedTerm: capture.domain,
-        actor: capture.actor,
-        sourceLabel: source?.name || capture.sourceId,
-        recommendedAction: 'Verify the captured metadata is customer-safe, attach the useful fields, and either promote it to a case or suppress it as benign.',
-        routeLabel: 'evidence review',
-        persistent: false,
-        evidence: [captureEvidence(capture)],
-        timeline: [
-            {
-                id: `${capture.id}_published`,
-                at: capture.publishedAt,
-                title: 'Observed by source',
-                body: capture.pageType,
-            },
-            {
-                id: `${capture.id}_captured`,
-                at: capture.capturedAt,
-                title: 'Capture normalized',
-                body: capture.screenshotLabel,
-            },
-        ],
-        nextTasks: [
-            'Validate redaction state and metadata boundaries.',
-            'Compare with domain and actor context before routing.',
-            'Suppress noisy source output if it does not map to a customer workflow.',
-        ],
-        relatedLinks: [
-            { href: `/dashboard/ti/sources/${capture.sourceId}`, label: 'Open source' },
-            { href: `/dashboard/ti/domains/${encodeURIComponent(capture.domain)}`, label: 'Open domain' },
-        ],
-    }
-}
-
-function captureEvidence(capture: TiAdminCapture): WorkbenchEvidence {
-    return {
-        id: capture.id,
-        sourceName: sourceById(capture.sourceId)?.name || capture.sourceId,
-        sourceFamily: capture.pageType,
-        captureMode: 'metadata only',
-        redactionState: 'customer safe',
-        contentHash: capture.metadata.find(item => item.label === 'Alert key')?.value || capture.id,
-        excerpt: capture.resultSummary,
-        metadata: capture.metadata,
-    }
 }
 
 function severityPriority(severity: WorkbenchCase['severity']) {
