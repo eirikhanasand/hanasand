@@ -9,7 +9,7 @@ export { exportGraphSnapshotToStixBundle } from "./stixGraphSnapshot.ts";
 
 export interface EvidenceBackedStixBundleInput {
   captures: RawCapture[];
-  options: StixExportOptions & { bundleKey?: string; includeMetadataOnlyCaptures?: boolean };
+  options: StixExportOptions & { bundleKey?: string; includeMetadataOnlyCaptures?: boolean; includeDerivedIntelligence?: boolean };
 }
 
 export function exportPipelineResultToStixBundle(result: PipelineResult, options: StixExportOptions): StixBundle {
@@ -49,7 +49,7 @@ export function exportEvidenceBackedStixBundle(input: EvidenceBackedStixBundleIn
   objects.set(identityObject(input.options).id, identityObject(input.options));
   for (const capture of input.captures) {
     const text = typeof capture.body === "string" ? capture.body : undefined;
-    if (text) merge(objects, withCaptureProvenance(exportPipelineResultToStixBundle(processCollectedItem({ sourceId: capture.sourceId, taskId: capture.taskId, url: capture.url, collectedAt: capture.collectedAt, title: String(capture.metadata?.title ?? "Captured evidence"), rawText: text, contentHash: capture.contentHash, links: [], metadata: capture.metadata ?? {}, sensitive: capture.sensitive }), input.options), capture));
+    if (text && input.options.includeDerivedIntelligence === true) merge(objects, withCaptureProvenance(exportPipelineResultToStixBundle(processCollectedItem({ sourceId: capture.sourceId, taskId: capture.taskId, url: capture.url, collectedAt: capture.collectedAt, title: String(capture.metadata?.title ?? "Captured evidence"), rawText: text, contentHash: capture.contentHash, links: [], metadata: capture.metadata ?? {}, sensitive: capture.sensitive }), input.options), capture));
     if (!text || input.options.includeMetadataOnlyCaptures !== false) objects.set(stixId("x-ti-evidence", capture.id), evidenceObject(capture, input.options.generatedAt));
   }
   return bundle(`${input.options.producerName}:${input.options.generatedAt}:${input.options.bundleKey ?? "evidence"}`, objects);

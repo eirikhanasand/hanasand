@@ -2,7 +2,7 @@ import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir, handleApiReq
 import type { AnalystClaimLedgerEntry, CanaryOperatorResponseForTest, CanaryReadinessResponseForTest, CanarySoakResponseForTest, RawCapture, SourceRecord } from "../apiTestHarness.ts";
 
 describe("api v1", () => {
-  test("exports STIX-like CTI from run captures even before incidents are persisted", async () => {
+  test("exports evidence-only STIX from run captures before claims are reviewed", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source());
     const options = { store, frontier: new FocusedFrontier() };
@@ -37,13 +37,15 @@ describe("api v1", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ runId: run.id, tenantId: "tenant_a", generatedAt: "2026-05-24T00:05:00.000Z" })
     }), options));
-    const objects = (exportResponse.bundle as { objects: Array<{ type: string; name?: string; x_ti_provenance?: Array<{ captureId: string }> }> }).objects;
+    const objects = (exportResponse.bundle as { objects: Array<{ type: string; x_ti_capture_id?: string; x_ti_source_id?: string }> }).objects;
 
-    expect(objects.some((object) => object.type === "indicator" && object.name === "ipv4:198.51.100.42")).toBe(true);
-    expect(objects.some((object) => object.type === "intrusion-set" && object.name === "APT29")).toBe(true);
-    expect(objects.some((object) => object.type === "report")).toBe(true);
-    expect(objects.every((object) =>
-      object.x_ti_provenance ? object.x_ti_provenance.every((item) => item.captureId === "cap_capture_only_stix") : true
-    )).toBe(true);
+    expect(objects.some((object) => object.type === "x-ti-evidence" && object.x_ti_capture_id === "cap_capture_only_stix" && object.x_ti_source_id === "src_rss")).toBe(true);
+    expect(objects.some((object) => ["indicator", "intrusion-set", "report"].includes(object.type))).toBe(false);
+    expect(exportResponse.exportPolicy).toMatchObject({
+      evidenceOnly: true,
+      derivedIntelligenceIncluded: false,
+      captureIds: ["cap_capture_only_stix"],
+      sourceIds: ["src_rss"]
+    });
   });
 });

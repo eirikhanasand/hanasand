@@ -94,7 +94,7 @@ The initial feasibility set must include at least one working feed of each selec
 - [ ] Ensure technical and non-technical users can explore the same evidence without misleading simplification.
 - [ ] Remove production placeholders and synthetic intelligence, while preserving intentional empty and degraded states.
 - [x] Provide a real source-operations view/API covering last attempt, last success, last useful item, parser success, false-positive rate, failures, family, actor coverage, and legal mode.
-- [ ] Keep optional third-party reporting bounded to defensible, evidence-linked exports if implemented.
+- [x] Keep optional third-party reporting bounded to defensible, evidence-linked exports if implemented.
 
 ### Validation and Evaluation
 

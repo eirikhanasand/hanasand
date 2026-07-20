@@ -66,8 +66,17 @@ export async function exportRunStix(request: Request, options: ApiServerOptions)
   const run = options.store.getRun?.(input.runId);
   if (!run || !inTenantScope(run, scope.tenantId)) return error("not_found", "Run not found", 404);
   const captures = options.store.listCaptures().filter((capture: any) => inTenantScope(capture, scope.tenantId) && captureRunId(capture) === run.id);
-  const bundle = exportEvidenceBackedStixBundle({ captures, options: { producerName: input.producerName ?? "ti-scraper", generatedAt: input.generatedAt ?? nowIso(), bundleKey: run.id } });
-  return json({ bundle });
+  const bundle = exportEvidenceBackedStixBundle({ captures, options: { producerName: input.producerName ?? "ti-scraper", generatedAt: input.generatedAt ?? nowIso(), bundleKey: run.id, includeDerivedIntelligence: false } });
+  return json({
+    bundle,
+    exportPolicy: {
+      evidenceOnly: true,
+      derivedIntelligenceIncluded: false,
+      reason: "Unreviewed parser output is withheld from third-party reporting.",
+      captureIds: captures.map((capture: any) => capture.id),
+      sourceIds: [...new Set(captures.map((capture: any) => capture.sourceId))]
+    }
+  });
 }
 
 function runFromPlan(plan: CollectionPlan, requestId: string): CollectionRun {
