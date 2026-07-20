@@ -12,8 +12,9 @@ const displaySource = readFileSync(new URL('../src/utils/dwm/display.ts', import
 for (const token of [
     'data-dwm-analyst-brief',
     'Analyst brief',
-    'What happened',
-    'Why it matters',
+    'Observed fact',
+    'Source claim',
+    'Analyst inference',
     'What to do next',
     'Evidence boundary',
     'Action status',

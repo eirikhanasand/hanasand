@@ -174,7 +174,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
       schemaVersion: "ti.query.actionability.v1",
       alertDisposition: watchlistCandidates.length ? "watchlist_required" : "needs_enrichment",
       shouldAlert: false,
-      rationale: watchlistCandidates.length ? "Evidence can seed a watchlist, but an organization-specific match and review are required before alerting." : "No evidence-backed organization or domain candidate is available for alerting.",
+      rationale: watchlistCandidates.length ? "Evidence can seed a watchlist, but an organization-specific match and review are required before alerting." : "No supported organization or domain candidate is available for alerting.",
       watchlistCandidates,
       sourceProvenance: structuredProvenance,
       enrichmentGaps: missing.map((field) => ({ id: `missing:${field}`, title: `Missing ${field}`, severity: "medium", detail: `Attach evidence for ${field} before promoting the profile.`, dependency: field })),
@@ -330,7 +330,7 @@ function qualityPayload(query: string, rows: any[], records: ReturnType<typeof s
       !assessment.confirmedClaimCount && "unreviewed",
       assessment.contradictedClaimCount && "contradicted"
     ]),
-    analystActions: rows.length ? [{ kind: "review_claims", label: "Review evidence-backed claims", manualOnly: true, evidenceIds: rows.map((row) => row.id) }] : [{ kind: "request_more_capture_evidence", label: "Collect evidence", manualOnly: false, evidenceIds: [] }]
+    analystActions: rows.length ? [{ kind: "review_claims", label: "Review claims", manualOnly: true, evidenceIds: rows.map((row) => row.id) }] : [{ kind: "request_more_capture_evidence", label: "Collect evidence", manualOnly: false, evidenceIds: [] }]
   };
 }
 
