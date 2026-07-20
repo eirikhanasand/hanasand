@@ -12,6 +12,7 @@
     "check:canary-proof-path": "bun run scripts/check-canary-proof-path.ts",
     "check:docker-contexts": "bun run scripts/check-docker-contexts.ts",
     "check:deploy-hygiene": "bun run scripts/check-deploy-hygiene.ts",
+    "check:backup-script": "sh -n scripts/threat-intel-backup.sh",
     "check:deployment-drift": "bun run scripts/check-deployment-drift.ts",
     "check:contract-index": "bun run scripts/check-contract-index.ts",
     "check:api-regression": "bun run scripts/check-api-regression.ts",

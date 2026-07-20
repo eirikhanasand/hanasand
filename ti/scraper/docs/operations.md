@@ -55,6 +55,12 @@
 - Roll back to the last known-good image tag if API health or safe-output checks fail.
 - Re-enable gradually by adapter family and source family.
 
+## Backup And Restore
+- Create and verify a database plus evidence-volume archive: `./ti/scraper/scripts/threat-intel-backup.sh backup /secure/path/ti-backup`.
+- Exercise an isolated restore without changing production: `./ti/scraper/scripts/threat-intel-backup.sh drill /secure/path/ti-backup`.
+- Stop collection and restore the isolated `threat_intel` schema and evidence volume: `TI_RESTORE_CONFIRM=restore-threat-intel ./ti/scraper/scripts/threat-intel-backup.sh restore /secure/path/ti-backup`.
+- Store archives encrypted outside the application host and run the drill before relying on a new backup.
+
 ## Incident Response
 - If unsafe output appears, stop affected source family, preserve hashes/metadata, and remove public exposure.
 - If disk free space is low, pause raw capture workers before API/search.
