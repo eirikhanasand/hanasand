@@ -13,7 +13,7 @@ describe("restricted metadata collection", () => {
       proxyUrl: "http://onion-tor:8118",
       fetcher: async (_url, init) => {
         proxy = (init as any).proxy;
-        return new Response("<html><head><title>Akira notices</title><meta name=\"description\" content=\"Victim: Northwind Health; Sector: healthcare; Country: NO; Data type: contracts; Extortion type: double extortion; Monetization path: ransom demand; Publicity tactic: countdown announcement; Buyer communication: auction contact channel; Intermediary communication: broker listing; Profitability signal: claimed paid victims\"></head><body><time datetime=\"2026-07-20T10:00:00Z\"></time>raw page content that must not persist</body></html>", { status: 200, headers: { "content-type": "text/html" } });
+        return new Response("<html><head><title>Akira notices</title><meta name=\"description\" content=\"Victim: Northwind Health; Sector: healthcare; Country: NO; Data type: contracts; Extortion type: double extortion; Monetization path: ransom demand; Publicity tactic: countdown announcement; Buyer communication: auction contact channel; Intermediary communication: broker listing; Profitability signal: claimed paid victims\"></head><body><article class=\"news-item\"><h2 class=\"headline\"><a>Fabrikam.example</a></h2></article><div class=\"post-title font\">Contoso Manufacturing</div><time datetime=\"2026-07-20T10:00:00Z\"></time>raw page content that must not persist</body></html>", { status: 200, headers: { "content-type": "text/html" } });
       }
     });
     store.saveSource({
@@ -37,6 +37,8 @@ describe("restricted metadata collection", () => {
     expect(result).toMatchObject({ status: "completed", sourceCount: 1, completedSourceCount: 1, failedSourceCount: 0, captureCount: 1, metadataOnly: true });
     expect(proxy).toBe("http://onion-tor:8118/");
     expect(capture).toMatchObject({ sourceId: "src_restricted_live", storageKind: "metadata_only", sensitive: true, body: undefined, metadata: { captureMode: "metadata_only", leakSite: { actorName: "Akira", victimName: "Northwind Health", extortionType: "double extortion", monetizationPath: "ransom demand", publicityTactic: "countdown announcement", buyerSellerCommunication: "auction contact channel", intermediaryCommunication: "broker listing", profitabilitySignal: "claimed paid victims", metadataOnly: true } } });
+    expect(capture.metadata.leakSite.victimNames).toEqual(["Fabrikam.example", "Contoso Manufacturing"]);
+    expect(store.listExtractedEntities().filter((entity) => entity.type === "victim").map((entity) => entity.value)).toEqual(["Northwind Health", "Fabrikam.example", "Contoso Manufacturing"]);
     expect(JSON.stringify(capture)).not.toContain("raw page content");
     expect(store.listSourceHealthObservations()).toEqual([expect.objectContaining({ sourceId: "src_restricted_live", success: true, useful: true, legalMode: "metadata_only" })]);
     expect(store.listRuns().at(-1)).toMatchObject({ id: result.runId, status: "completed", captureCount: 1 });

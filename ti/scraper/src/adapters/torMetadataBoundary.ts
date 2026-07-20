@@ -72,11 +72,13 @@ function metadataFromHtml(html: string, actorName?: string) {
   const title = clean(tag(html, "title") || tag(html, "h1")).slice(0, 300) || undefined;
   const visible = clean(html.replace(/<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<!--[\s\S]*?-->/gi, " "));
   const description = clean(meta(html, "description") || visible).slice(0, 1_000) || undefined;
+  const victimNames = victimNamesFromHtml(html);
   return {
     title,
     description,
     actorName,
-    victimName: labeled(description, ["victim", "company", "organization"]),
+    victimName: labeled(description, ["victim", "company", "organization"]) ?? victimNames[0],
+    victimNames,
     claimedSector: labeled(description, ["sector", "industry"]),
     claimedCountry: labeled(description, ["country", "location"]),
     claimedDataType: labeled(description, ["data type", "data"]),
@@ -91,6 +93,14 @@ function metadataFromHtml(html: string, actorName?: string) {
     sourceTimestamp: time(html),
     links: [...html.matchAll(/\bhref=["']([^"']+)["']/gi)].map((match) => match[1]).filter((value) => /^https?:\/\/[a-z2-7]{56}\.onion(?:\/|$)/i.test(value)).slice(0, 20)
   };
+}
+
+function victimNamesFromHtml(html: string): string[] {
+  const names = [
+    ...[...html.matchAll(/<article\b[^>]*class=["'][^"']*\bnews-item\b[^"']*["'][^>]*>[\s\S]*?<h2\b[^>]*class=["'][^"']*\bheadline\b[^"']*["'][^>]*>([\s\S]*?)<\/h2>/gi)].map((match) => clean(match[1])),
+    ...[...html.matchAll(/<div\b[^>]*class=["'][^"']*\bpost-title\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1]))
+  ];
+  return [...new Set(names.filter((name) => name.length >= 2 && name.length <= 160))].slice(0, 24);
 }
 
 function tag(html: string, name: string): string { return html.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`, "i"))?.[1] ?? ""; }

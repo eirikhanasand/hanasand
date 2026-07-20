@@ -14,14 +14,14 @@ export function extractSourceSpecificEntities(item: CollectedItem, context: Extr
 
 function victimBlogEntities(item: CollectedItem, context: ExtractionContext): ExtractedEntity[] {
   const fields = item.metadata?.leakSite ?? {};
-  const actor = meaningful(fields.actorName), victim = meaningful(fields.victimName), dataType = meaningful(fields.claimedDataType);
+  const actor = meaningful(fields.actorName), victims = [...new Set([fields.victimName, ...(Array.isArray(fields.victimNames) ? fields.victimNames : [])].map(meaningful).filter(Boolean))], dataType = meaningful(fields.claimedDataType);
   return compact([
     fieldEntity("actor", actor, 0.86, "actorName", item, context, "source_claim", []),
-    fieldEntity("victim", victim, 0.78, "victimName", item, context, "source_claim", ["unverified threat-actor claim"]),
+    ...victims.map((victim) => fieldEntity("victim", victim, 0.78, "victimName", item, context, "source_claim", ["unverified threat-actor claim"])),
     fieldEntity("sector", fields.claimedSector, 0.68, "claimedSector", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("country", fields.claimedCountry, 0.68, "claimedCountry", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("dataset", dataType, 0.64, "claimedDataType", item, context, "source_claim", ["advertised data type is unverified"]),
-    fieldEntity("extortion_type", fields.extortionType ?? (actor && victim ? "ransomware/extortion victim claim" : undefined), fields.extortionType ? 0.8 : 0.55, "extortionType", item, context, fields.extortionType ? "source_claim" : "inferred", fields.extortionType ? ["unverified threat-actor claim"] : ["inferred from publication in a governed victim-claim feed"]),
+    fieldEntity("extortion_type", fields.extortionType ?? (actor && victims.length ? "ransomware/extortion victim claim" : undefined), fields.extortionType ? 0.8 : 0.55, "extortionType", item, context, fields.extortionType ? "source_claim" : "inferred", fields.extortionType ? ["unverified threat-actor claim"] : ["inferred from publication in a governed victim-claim feed"]),
     fieldEntity("monetization_path", fields.monetizationPath, 0.72, "monetizationPath", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("publicity_tactic", fields.publicityTactic ?? "public victim naming", fields.publicityTactic ? 0.8 : 0.7, "publicityTactic", item, context, fields.publicityTactic ? "source_claim" : "observed", fields.publicityTactic ? ["unverified threat-actor claim"] : []),
     fieldEntity("publication_strategy", fields.publicationStrategy ?? "public victim listing", fields.publicationStrategy ? 0.8 : 0.95, "publicationStrategy", item, context, fields.publicationStrategy ? "source_claim" : "observed", fields.publicationStrategy ? ["unverified threat-actor claim"] : []),
