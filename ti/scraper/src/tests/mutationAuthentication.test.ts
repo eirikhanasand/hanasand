@@ -55,6 +55,12 @@ describe("durable mutation authentication", () => {
       headers: { ...outsiderHeaders, "x-user-id": "owner-user" }
     }), options);
     expect(rejectedEntitlements.status).toBe(403);
+    const rejectedActorReview = await handleApiRequest(new Request("http://local/v1/ti/actor-org-relevance", {
+      method: "POST",
+      headers: { ...outsiderHeaders, "content-type": "application/json", "x-actor-id": "owner-user" },
+      body: JSON.stringify({ organizationId: "org_owned" })
+    }), options);
+    expect(rejectedActorReview.status).toBe(403);
 
     const owner = await handleApiRequest(new Request("http://local/v1/organizations/org_owned/webhooks", {
       method: "POST",
@@ -66,5 +72,11 @@ describe("durable mutation authentication", () => {
       headers: { authorization: "Bearer valid", id: "owner-user" }
     }), options);
     expect(ownerEntitlements.status).toBe(200);
+    const ownerActorReview = await handleApiRequest(new Request("http://local/v1/ti/actor-org-relevance", {
+      method: "POST",
+      headers: { authorization: "Bearer valid", id: "owner-user", "content-type": "application/json" },
+      body: JSON.stringify({ organizationId: "org_owned" })
+    }), options);
+    expect(ownerActorReview.status).toBe(400);
   });
 });

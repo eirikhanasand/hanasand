@@ -74,7 +74,7 @@ type PublicWebhookDestination = Omit<WebhookDestination, "url"> & {
 };
 
 export async function listOrganizations(request: Request, options: ApiServerOptions): Promise<Response> {
-  const access = await organizationAccess(request, options);
+  const access = await authorizeOrganizationRequest(request, options);
   if (access.error) return access.error;
   const organizations = (options.store as any).listOrganizations?.() ?? [];
   if (!access.identity || access.privileged) return json({ organizations });
@@ -83,7 +83,7 @@ export async function listOrganizations(request: Request, options: ApiServerOpti
 }
 
 export async function createOrganization(request: Request, options: ApiServerOptions): Promise<Response> {
-  const access = await organizationAccess(request, options);
+  const access = await authorizeOrganizationRequest(request, options);
   if (access.error) return access.error;
   const body = await readJson<any>(request);
   const name = String(body.name ?? "").trim();
@@ -121,7 +121,7 @@ export async function createOrganization(request: Request, options: ApiServerOpt
 }
 
 export async function listOrganizationMembers(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
-  const access = await organizationAccess(request, options, organizationId);
+  const access = await authorizeOrganizationRequest(request, options, organizationId);
   if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
@@ -131,7 +131,7 @@ export async function listOrganizationMembers(request: Request, options: ApiServ
 }
 
 export async function createOrganizationInvites(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
-  const access = await organizationAccess(request, options, organizationId, true);
+  const access = await authorizeOrganizationRequest(request, options, organizationId, true);
   if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
@@ -172,7 +172,7 @@ export async function createOrganizationInvites(request: Request, options: ApiSe
 }
 
 export async function listWebhookDestinations(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
-  const access = await organizationAccess(request, options, organizationId);
+  const access = await authorizeOrganizationRequest(request, options, organizationId);
   if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
@@ -181,7 +181,7 @@ export async function listWebhookDestinations(request: Request, options: ApiServ
 }
 
 export async function createWebhookDestination(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
-  const access = await organizationAccess(request, options, organizationId, true);
+  const access = await authorizeOrganizationRequest(request, options, organizationId, true);
   if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
@@ -208,7 +208,7 @@ export async function createWebhookDestination(request: Request, options: ApiSer
 }
 
 export async function updateWebhookDestination(request: Request, options: ApiServerOptions, organizationId: string | undefined, destinationId: string | undefined): Promise<Response> {
-  const access = await organizationAccess(request, options, organizationId, true);
+  const access = await authorizeOrganizationRequest(request, options, organizationId, true);
   if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
@@ -237,7 +237,7 @@ export async function updateWebhookDestination(request: Request, options: ApiSer
 }
 
 export async function disableWebhookDestination(request: Request, options: ApiServerOptions, organizationId: string | undefined, destinationId: string | undefined): Promise<Response> {
-  const access = await organizationAccess(request, options, organizationId, true);
+  const access = await authorizeOrganizationRequest(request, options, organizationId, true);
   if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
@@ -249,7 +249,7 @@ export async function disableWebhookDestination(request: Request, options: ApiSe
 }
 
 export async function testOrganizationWebhook(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
-  const access = await organizationAccess(request, options, organizationId, true);
+  const access = await authorizeOrganizationRequest(request, options, organizationId, true);
   if (access.error) return access.error;
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
@@ -336,7 +336,7 @@ function scopeValues(...values: unknown[]): string[] {
   return values.map((value) => typeof value === "string" ? value.trim() : "").filter(Boolean);
 }
 
-async function organizationAccess(request: Request, options: ApiServerOptions, organizationId?: string, mutate = false): Promise<{ identity?: AuthenticatedIdentity; service?: boolean; privileged?: boolean; error?: Response }> {
+export async function authorizeOrganizationRequest(request: Request, options: ApiServerOptions, organizationId?: string, mutate = false, mutationRoles: OrganizationRole[] = ["owner", "admin"]): Promise<{ identity?: AuthenticatedIdentity; service?: boolean; privileged?: boolean; error?: Response }> {
   const authentication = await authenticateOperatorRequest(request, options);
   if (authentication.error) return { error: authentication.error };
   const identity = authentication.identity;
@@ -346,7 +346,7 @@ async function organizationAccess(request: Request, options: ApiServerOptions, o
   if (!organizationId || privileged) return { identity, service, privileged };
   const member = activeMembers(options).find((row) => row.organizationId === organizationId && memberMatchesIdentity(row, identity.id));
   if (!member) return { error: error("organization_access_denied", "Organization access requires an active membership", 403) };
-  if (mutate && !["owner", "admin"].includes(member.role)) {
+  if (mutate && !mutationRoles.includes(member.role)) {
     return { error: error("organization_admin_required", "Organization changes require an owner or administrator", 403) };
   }
   return { identity, service, privileged };

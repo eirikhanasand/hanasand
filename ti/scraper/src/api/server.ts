@@ -15,7 +15,7 @@ import { enrichExposureQueueCountries, exposureParserHealth, ingestExposureClaim
 import { error, json, numberQuery, readJson } from "./http.ts";
 import { handleEvidenceRequest } from "./evidenceRoutes.ts";
 import { handleOrgAlertCaseActionLedgerRequest } from "./orgAlertCaseActionLedgerRoutes.ts";
-import { createOrganization, createOrganizationInvites, createWebhookDestination, disableWebhookDestination, listOrganizationMembers, listOrganizations, listWebhookDestinations, resolveOrganizationScope, testOrganizationWebhook, updateWebhookDestination } from "./organizationRoutes.ts";
+import { authorizeOrganizationRequest, createOrganization, createOrganizationInvites, createWebhookDestination, disableWebhookDestination, listOrganizationMembers, listOrganizations, listWebhookDestinations, resolveOrganizationScope, testOrganizationWebhook, updateWebhookDestination } from "./organizationRoutes.ts";
 import { publicChannelApplyPlan, publicChannelStatus } from "./publicChannelDispatch.ts";
 import { qualityPayload } from "./qualityRoute.ts";
 import { buildRestrictedMetadataApplyPlanRouteResponse, buildRestrictedMetadataStatusRouteResponse } from "./restrictedMetadataRoutes.ts";
@@ -58,6 +58,14 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (requiresAuthenticatedMutation(request.method, url.pathname)) {
       const authentication = await authenticateOperatorRequest(request, options);
       if (authentication.error) return authentication.error;
+    }
+    if ((options.serviceToken || options.authApiBase || Bun.env.TI_SCRAPER_SERVICE_TOKEN || Bun.env.HANASAND_AUTH_API_BASE)
+      && (url.pathname === "/v1/ti/actor-org-relevance" || url.pathname.startsWith("/v1/ti/actor-org-relevance/"))) {
+      const body = request.method === "GET" ? undefined : await request.clone().json().catch(() => ({}));
+      const scope = resolveOrganizationScope({ body, url, request }, options);
+      if (scope.error) return scope.error;
+      const access = await authorizeOrganizationRequest(request, options, scope.organizationId, request.method !== "GET", ["owner", "admin", "analyst"]);
+      if (access.error) return access.error;
     }
     const orgAlertCaseActionLedgerResponse = await handleOrgAlertCaseActionLedgerRequest(request, {
       repository: orgAlertCaseActionLedgerRepository(options)
@@ -326,9 +334,7 @@ function requiresAuthenticatedMutation(method: string, pathname: string): boolea
   return pathname === "/v1/intel/runs"
     || pathname === "/v1/cases"
     || pathname.startsWith("/v1/cases/")
-    || pathname.startsWith("/v1/dwm/")
-    || pathname === "/v1/ti/actor-org-relevance"
-    || pathname.startsWith("/v1/ti/actor-org-relevance/");
+    || pathname.startsWith("/v1/dwm/");
 }
 
 function orgAlertCaseActionLedgerRepository(options: ApiServerOptions): InMemoryOrgAlertCaseActionLedgerRepository {
