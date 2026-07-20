@@ -6,6 +6,7 @@ export interface TiSearchRequest {
 
 export interface TiSearchResponse {
     query: string
+    queryKind?: 'actor' | 'domain' | 'cve' | 'indicator' | 'organization' | 'free_text'
     generatedAt: string
     mode: 'scraper' | 'seeded' | 'live_search'
     status?: TiResultState
@@ -426,22 +427,41 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
         throw new Error('query is required')
     }
 
+    const queryKind = classifyTiQuery(query)
     const cacheKey = query.toLowerCase()
     const cached = readTiResponseCache(cacheKey)
-    if (cached) return cached
+    if (cached) return { ...cached, queryKind }
 
     const scraperBase = process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
     if (scraperBase) {
         const scraperResult = await tryScraperSearch(scraperBase, query)
         if (scraperResult) {
-            writeTiResponseCache(cacheKey, scraperResult)
-            return scraperResult
+            const classified = { ...scraperResult, queryKind }
+            writeTiResponseCache(cacheKey, classified)
+            return classified
         }
     }
 
-    const result = seededSearch(query)
+    const result = { ...seededSearch(query), queryKind }
     writeTiResponseCache(cacheKey, result)
     return result
+}
+
+export function classifyTiQuery(query: string): NonNullable<TiSearchResponse['queryKind']> {
+    const clean = query.trim()
+    if (/^cve-\d{4}-\d{4,}$/i.test(clean)) return 'cve'
+    if (/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(clean)) return 'domain'
+    if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(clean) || /^(?:https?:\/\/|[a-f0-9]{32,128}$)/i.test(clean)) return 'indicator'
+    if (knownActorProfile(clean)) return 'actor'
+    if (/\b(?:inc|corp|corporation|company|limited|ltd|llc|group|bank|university|hospital)\b/i.test(clean) || clean.includes(' ')) return 'organization'
+    return 'free_text'
+}
+
+function scraperEntityType(query: string) {
+    const kind = classifyTiQuery(query)
+    if (kind === 'actor' || kind === 'cve' || kind === 'indicator') return kind
+    if (kind === 'domain') return 'domain'
+    return 'free_text'
 }
 
 export async function discoverThreatActorProfile(query: string): Promise<TiSearchResponse> {
@@ -717,19 +737,21 @@ function writeTiResponseCache(key: string, result: TiSearchResponse) {
 
 async function tryScraperSearch(scraperBase: string, query: string): Promise<TiSearchResponse | null> {
     try {
+        const refreshBucket = new Date().toISOString().slice(0, 13)
         const response = await fetch(`${scraperBase}/v1/intel/runs`, {
             method: 'POST',
             headers: {
                 'content-type': 'application/json',
-                'idempotency-key': `hanasand-ti-${query.toLowerCase()}`
+                'idempotency-key': `hanasand-ti-${hashString(`${scraperEntityType(query)}:${query.toLowerCase()}:${refreshBucket}`).slice(0, 32)}`
             },
             body: JSON.stringify({
                 query,
-                entityType: 'actor',
+                entityType: scraperEntityType(query),
                 includeClearWeb: true,
                 includeTelegram: true,
-                includeDarknetMetadata: true,
-                maxTasks: 40,
+                includeDarknetMetadata: false,
+                maxTasks: 4,
+                priority: 'urgent',
                 tenantId: 'hanasand-public-ti',
                 requesterId: 'hanasand.com/ti',
                 reason: 'public TI search page'
@@ -980,7 +1002,7 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
         targets: known?.targets ?? [],
         ttps: known?.ttps ?? [],
         datasets: mergeDatasets(liveDatasets(), known?.datasets ?? []),
-        sources: known?.sources?.length ? known.sources : [{ id: 'live:search:pending', name: 'Live discovery pending', type: 'live_search', provenance: 'Live discovery is in progress' }],
+        sources: known?.sources ?? [],
         notes: known?.notes ?? [],
         operationalStatus,
         analystLoop: buildAnalystLoop({ query, operationalStatus }),
@@ -1011,7 +1033,7 @@ function seededSearch(query: string): TiSearchResponse {
         targets: known?.targets ?? [],
         ttps: known?.ttps ?? [],
         datasets: mergeDatasets(liveDatasets(), known?.datasets ?? []),
-        sources: known?.sources?.length ? known.sources : [{ id: 'live:search:unavailable', name: 'Live discovery unavailable', type: 'system', provenance: 'Live source discovery is not available from this API process' }],
+        sources: known?.sources ?? [],
         notes: known?.notes ?? [],
         operationalStatus,
         analystLoop,

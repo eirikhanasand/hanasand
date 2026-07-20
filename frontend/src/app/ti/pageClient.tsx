@@ -182,7 +182,8 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
 
 function Results({ result }: { result: TiSearchResponse }) {
     const sourceUrlById = useMemo(() => new Map(result.sources.map(source => [source.id, source.url || linkFromText(source.provenance)])), [result.sources])
-    const sources = result.sources.length ? result.sources : defaultSourceLinks()
+    const sources = result.sources
+    const actorQuery = result.queryKind === 'actor'
     const victimObservations = useMemo(() => victimObservationsFor(result), [result])
     const actorIntel = useMemo(() => buildActorIntelligence(result, victimObservations), [result, victimObservations])
     const actionability = useMemo(() => buildTiActionability(result, actorIntel, victimObservations), [result, actorIntel, victimObservations])
@@ -225,7 +226,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedDeliveryPlan = selected ? selectedDeliveryReadinessPlanFor(result, selected, actionability, selectedAlertPlan, selectedCaseOwnership) : null
     const selectedConsoleLinks = selected ? selectedConsoleLinksFor(result, selected, selectedWatchlistPlan, selectedCaseCreateRequest, selectedAlertPlan, selectedSourceDrilldown, selectedArtifactHandoffs) : null
     const selectedTriageBrief = selected ? selectedTriageBriefFor(result, selected, actionability, watchlist, alertPacket, selectedCaseDraft) : null
-    const hasStableActorProfile = Boolean(actorIntel.attribution || actorIntel.motivation.length || victimObservations.length || actorIntel.sourceProvenance.length)
+    const hasStableActorProfile = actorQuery && Boolean(actorIntel.attribution || actorIntel.motivation.length || victimObservations.length || actorIntel.sourceProvenance.length)
     const heroVictimContext = victimObservations
         .filter(item => /democratic national committee|solarwinds|microsoft|government and policy/i.test(item.victim))
         .map(item => `${item.victim} (${item.country})`)
@@ -245,7 +246,7 @@ function Results({ result }: { result: TiSearchResponse }) {
             href: source.url || linkFromText(source.provenance),
             meta: source.reportDate ? formatDate(source.reportDate) : sourceStatusLabel(source.parserStatus || source.type),
         })),
-        ...actorIntel.provenanceRows.map(row => ({
+        ...(actorQuery ? actorIntel.provenanceRows : []).map(row => ({
             id: row.sourceId || `${row.sourceName}:${row.provenance}`,
             name: row.sourceName,
             detail: row.provenance,
@@ -303,22 +304,22 @@ function Results({ result }: { result: TiSearchResponse }) {
     return (
         <div className='grid gap-4'>
             <section data-ti-workspace='true' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
-                <div className='grid gap-4 xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)] xl:items-start'>
+                <div className={`grid gap-4 ${actorQuery ? 'xl:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.2fr)]' : ''} xl:items-start`}>
                     <section data-ti-actor-info='true' className='grid gap-4'>
                         <div>
                             <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{humanizeSlug(result.query)}</h1>
                             <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{actorProfileSummary}</p>
                         </div>
                         <div className='grid gap-3 sm:grid-cols-2'>
-                            <EvidenceMetric label='Attribution' value={actorIntel.attribution || 'Public reporting'} />
-                            <EvidenceMetric label='Motivation' value={actorIntel.motivation.slice(0, 2).join('; ') || 'Reported activity'} />
-                            <EvidenceMetric label='Aliases' value={result.aliases.slice(0, 3).join(', ') || humanizeSlug(result.query)} />
+                            <EvidenceMetric label={actorQuery ? 'Attribution' : 'Query type'} value={actorQuery ? actorIntel.attribution || 'Public reporting' : formatLabel(result.queryKind || 'free_text')} />
+                            <EvidenceMetric label={actorQuery ? 'Motivation' : 'Observed records'} value={actorQuery ? actorIntel.motivation.slice(0, 2).join('; ') || 'Reported activity' : `${result.recentActivity.length}`} />
+                            <EvidenceMetric label={actorQuery ? 'Aliases' : 'Sources'} value={actorQuery ? result.aliases.slice(0, 3).join(', ') || humanizeSlug(result.query) : `${result.sources.length}`} />
                             <EvidenceMetric label='Last seen' value={result.lastSeen ? formatDate(result.lastSeen) : 'Observation date unavailable'} />
                         </div>
                     </section>
-                    <section data-ti-map='true' className='min-w-0'>
+                    {actorQuery ? <section data-ti-map='true' className='min-w-0'>
                         <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
-                    </section>
+                    </section> : null}
                 </div>
 
                 <EvidenceBoundaryStrip result={result} />
@@ -2057,6 +2058,7 @@ function freshnessReviewPayloadFor(
         source: 'public-ti',
         sessionLocal: true,
         query,
+        queryKind: classifyPublicTiQuery(query),
         generatedAt: actor.freshness.generatedAt,
         actor: {
             actorClass: actor.actorClass,
@@ -9215,96 +9217,19 @@ function searchingResult(query: string): TiSearchResponse {
         recentActivity: [],
         targets: [],
         ttps: [],
-        datasets: defaultDatasets(),
-        sources: defaultSourceLinks(),
+        datasets: [],
+        sources: [],
         notes: []
     }
 }
 
-function defaultDatasets(): TiSearchResponse['datasets'] {
-    return [
-        {
-            name: 'Recent ransomware attacks',
-            type: 'darknet_metadata',
-            coverage: 'Recent company names, actor names, post dates, sector/country context, and data descriptions from monitored extortion sources and public indexes.',
-            status: 'available',
-            url: 'https://ransomware.live/'
-        },
-        {
-            name: 'Actor infrastructure monitoring',
-            type: 'darknet_metadata',
-            coverage: 'Company-first checks against actor-controlled public leak infrastructure so watched companies can be alerted when a new mention appears.',
-            status: 'metadata_only'
-        },
-        {
-            name: 'Vulnerability and exploitation context',
-            type: 'clear_web',
-            coverage: 'Recent NVD/CISA and public advisory context for CVEs, affected products, exploitation status, and actor-linked vulnerability activity.',
-            status: 'available',
-            url: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog'
-        },
-        {
-            name: 'Company and supplier watchlists',
-            type: 'vendor_report',
-            coverage: 'Customer-specific names, domains, brands, subsidiaries, and vendors matched against new actor posts and captured page text.',
-            status: 'planned'
-        }
-    ]
-}
-
-function defaultCollectionSources(): NonNullable<TiSearchResponse['collectionStrategy']>['sourcePosture'] {
-    return [
-        {
-            source: 'RansomLook and ransomware.live',
-            role: 'primary_seed',
-            summary: 'Used as starting coverage for recent attacks, actor names, company names, post dates, sector/country context, and data descriptions.',
-            buyerValue: 'Good seed data lets a small team detect obvious company mentions immediately, then spend engineering effort on direct verification and alert speed.'
-        },
-        {
-            source: 'Direct actor infrastructure collection',
-            role: 'owned_collection_target',
-            summary: 'Company-first collection from actor-controlled public leak/extortion infrastructure where policy allows.',
-            buyerValue: 'This is the valuable part: faster discovery, verified changes, freshness deltas, and watchlist alerts that are not just copied from another public index.'
-        },
-        {
-            source: 'Infostealer and credential-exposure records',
-            role: 'owned_collection_target',
-            summary: 'Company/domain exposure records reviewed without credential values, bulk dump content, or unsafe redistribution.',
-            buyerValue: 'Buyers care when their domain, vendor, executive, or portfolio company appears in fresh exposure records; the value is the alert and triage context, not dump access.'
-        },
-        {
-            source: 'NVD, CISA KEV, and public advisories',
-            role: 'corroboration',
-            summary: 'Used for enrichment, prioritization, and vulnerability context around actor activity.',
-            buyerValue: 'Public vulnerability data is not the product by itself, but it makes exposure alerts more actionable for security teams deciding what to patch or investigate first.'
-        }
-    ]
-}
-
-function defaultSourceLinks(): TiSearchResponse['sources'] {
-    return [
-        {
-            id: 'ransomware-live',
-            name: 'ransomware.live',
-            type: 'victim_claim_seed',
-            provenance: 'https://ransomware.live/',
-            url: 'https://ransomware.live/'
-        },
-        {
-            id: 'ransomlook',
-            name: 'RansomLook',
-            type: 'victim_claim_seed',
-            provenance: 'https://www.ransomlook.io/',
-            url: 'https://www.ransomlook.io/'
-        },
-        {
-            id: 'cisa-kev',
-            name: 'CISA Known Exploited Vulnerabilities',
-            type: 'vulnerability_context',
-            provenance: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog',
-            url: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog'
-        }
-    ]
+function classifyPublicTiQuery(query: string): NonNullable<TiSearchResponse['queryKind']> {
+    const clean = query.trim()
+    if (/^cve-\d{4}-\d{4,}$/i.test(clean)) return 'cve'
+    if (/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(clean)) return 'domain'
+    if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(clean) || /^(?:https?:\/\/|[a-f0-9]{32,128}$)/i.test(clean)) return 'indicator'
+    if (/^(?:apt\d+|lockbit|akira|cozy bear|midnight blizzard)$/i.test(clean)) return 'actor'
+    return clean.includes(' ') ? 'organization' : 'free_text'
 }
 
 function formatDate(value: string) {

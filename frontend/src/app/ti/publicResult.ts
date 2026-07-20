@@ -5,6 +5,7 @@ export function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): 
 
     const publicResult: TiSearchResponse = {
         query: result.query,
+        queryKind: result.queryKind,
         generatedAt: result.generatedAt,
         mode: result.mode,
         status: result.status,

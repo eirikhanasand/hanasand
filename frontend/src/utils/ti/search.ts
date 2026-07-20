@@ -6,6 +6,7 @@ const browserCachePrefix = 'hanasand:ti-search:'
 
 export interface TiSearchResponse {
     query: string
+    queryKind?: 'actor' | 'domain' | 'cve' | 'indicator' | 'organization' | 'free_text'
     generatedAt: string
     mode: 'scraper' | 'seeded' | 'live_search'
     status?: TiResultState
