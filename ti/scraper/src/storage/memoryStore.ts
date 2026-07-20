@@ -36,6 +36,7 @@ export class InMemoryScraperStore implements ScraperStore {
   private insertCapture(capture: RawCapture, delta: boolean) { this.captures.set(capture.id, capture); for (const key of dedupeIndexKeys(capture)) this.dedupe.set(key, capture.id); if (delta) this.recordCaptureDelta("added", capture); return capture; }
   getCapture(id: string) { return this.captures.get(id); }
   updateCaptureMetadata(id: string, update: (metadata: any) => any) { const previous = this.mustCapture(id); const next = { ...previous, metadata: update(previous.metadata ?? {}) }; this.captures.set(id, next); return next; }
+  replaceCaptureForRetention(capture: RawCapture) { const previous = this.mustCapture(capture.id); if (previous.contentHash !== capture.contentHash || previous.sourceId !== capture.sourceId) throw new Error(`Retention cannot change capture identity: ${capture.id}`); this.captures.set(capture.id, capture); return capture; }
   findDuplicateCapture(capture: RawCapture) { const prepared = prepareCapture(capture); for (const key of dedupeIndexKeys(prepared)) { const id = this.dedupe.get(key); if (id) return this.captures.get(id); } }
   listCaptures() { return mapValues(this.captures); }
   savePipelineResult(result: PipelineResult): PipelineResult {

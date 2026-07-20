@@ -196,6 +196,12 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     return capture;
   }
 
+  override replaceCaptureForRetention(capture: RawCapture): RawCapture {
+    const stored = super.replaceCaptureForRetention(capture);
+    this.enqueue(`capture-retention:${capture.id}`, () => this.persistCaptureRetention(stored));
+    return stored;
+  }
+
   override savePipelineResult(result: PipelineResult): PipelineResult {
     this.pipelineDepth++;
     try {
@@ -538,6 +544,17 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           extractor_version = ${nullable(capture.provenance?.extractorVersion)},
           processed_at = COALESCE(processed_at, ${nullable(capture.processedAt)}),
           first_visible_at = COALESCE(first_visible_at, ${nullable(capture.firstVisibleAt)})
+      WHERE id = ${capture.id}
+    `;
+  }
+
+  private async persistCaptureRetention(capture: any): Promise<void> {
+    await this.sql`
+      UPDATE threat_intel.captures
+      SET body = ${nullable(capture.body)},
+          object_ref = ${capture.objectRef ? toJson(capture.objectRef) : null}::text::jsonb,
+          storage_kind = ${capture.storageKind ?? "metadata_only"},
+          record = ${toJson(capture)}::text::jsonb
       WHERE id = ${capture.id}
     `;
   }

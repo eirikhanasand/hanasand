@@ -23,6 +23,7 @@ export class FileBackedScraperStore extends InMemoryScraperStore {
   }
   override saveCapture(capture: RawCapture): RawCapture { return this.saved(() => super.saveCapture(capture)); }
   override updateCaptureMetadata(id: string, update: (metadata: any) => any): RawCapture { return this.saved(() => super.updateCaptureMetadata(id, update)); }
+  override replaceCaptureForRetention(capture: RawCapture): RawCapture { return this.saved(() => super.replaceCaptureForRetention(capture)); }
   override saveCaptureWithDedupe(capture: RawCapture): CaptureWriteResult { return this.saved(() => super.saveCaptureWithDedupe(capture)); }
   override savePipelineResult(result: PipelineResult): PipelineResult { return this.saved(() => super.savePipelineResult(result)); }
   override saveIncident(candidate: IncidentCandidate): IncidentCandidate { return this.saved(() => super.saveIncident(candidate)); }

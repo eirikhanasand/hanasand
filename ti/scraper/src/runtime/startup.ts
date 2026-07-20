@@ -7,6 +7,7 @@ import { TorMetadataHttpBoundary } from "../adapters/torMetadataBoundary.ts";
 import { createLogger } from "../ops/logger.ts";
 import { FileObjectEvidenceStore } from "../storage/fileObjectStore.ts";
 import { PostgresScraperStore } from "../storage/postgresScraperStore.ts";
+import { enforceDefaultRetentionPolicies } from "../storage/retention.ts";
 import { bootstrapRuntimeSources } from "./sourceBootstrap.ts";
 import { buildRuntimeStores } from "./startupStores.ts";
 
@@ -16,12 +17,13 @@ export async function startScraperRuntime() {
   const paths = buildRuntimeStores(config);
   const store = await PostgresScraperStore.create();
   const legacyImport = await store.importLegacySnapshot(paths.evidenceMetadataPath);
+  const objectStore = new FileObjectEvidenceStore({ rootDir: paths.evidenceObjectDir });
+  const retention = await enforceDefaultRetentionPolicies(store, objectStore);
   const frontier = new FocusedFrontier({
     maxQueueSize: Number(Bun.env.TI_CANARY_MAX_QUEUE_SIZE ?? "500"),
     defaultPerSourceConcurrency: 1,
     crawlBudgetPolicies: { "public-canary": { taskLimit: Number(Bun.env.TI_CANARY_BUDGET_TASKS ?? "1000"), byteLimit: Number(Bun.env.TI_CANARY_BUDGET_BYTES ?? "512000000") } }
   });
-  const objectStore = new FileObjectEvidenceStore({ rootDir: paths.evidenceObjectDir });
   const sourceBootstrap = await bootstrapRuntimeSources(store as any);
   const canary = startCanaryCollectionLoop({
     store, frontier, objectStore,
@@ -50,6 +52,6 @@ export async function startScraperRuntime() {
     onError: (error: unknown) => logger.warn("restricted metadata collection failed", { event: "restricted_metadata.error", error: error instanceof Error ? error.message : String(error) })
   });
   const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, restrictedMetadataLoop: restrictedMetadata, sourceBootstrap });
-  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", sourceBootstrap, ...paths });
+  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", sourceBootstrap, ...paths });
   return { stop: async () => { canary.stop(); restrictedMetadata.stop(); server.stop(); await store.close(); } };
 }

@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
-import { DEFAULT_RETENTION_POLICIES, defaultRetentionClassForCapture, simulateRetentionEnforcement } from "../storage/retention.ts";
+import { DEFAULT_RETENTION_POLICIES, defaultRetentionClassForCapture, enforceRetentionPolicy, simulateRetentionEnforcement } from "../storage/retention.ts";
+import { InMemoryObjectEvidenceStore } from "../storage/memoryObjectEvidenceStore.ts";
 import { hashContent } from "../utils.ts";
 import { fixtureCapture } from "./helpers/storageFixtures.ts";
 
@@ -46,6 +47,20 @@ describe("storage provenance replay and retention", () => {
     expect(simulation.mutated.find((capture) => capture.id === "cap_chat_old")?.body).toBeUndefined();
     expect(simulation.mutated.find((capture) => capture.id === "cap_legal_hold")?.metadata).toEqual(legalHold.metadata);
     expect(simulation.mutated.find((capture) => capture.id === "cap_legal_hold")?.body).toBe("must stay");
+  });
+
+  test("enforces expired object retention once and records a safe audit", () => {
+    const store = new InMemoryScraperStore();
+    const objects = new InMemoryObjectEvidenceStore();
+    const capture = fixtureCapture({ id: "cap_expired_object", collectedAt: "2025-01-01T00:00:00.000Z", retentionClass: "public_raw", body: undefined, storageKind: "object_ref" });
+    const object = objects.putObject({ sourceId: capture.sourceId, captureId: capture.id, mediaType: capture.mediaType, body: "expired public evidence", contentHash: capture.contentHash, retentionClass: capture.retentionClass });
+    store.saveCapture({ ...capture, objectRef: object.ref });
+
+    const first = enforceRetentionPolicy(store, DEFAULT_RETENTION_POLICIES.public_raw, objects, "2026-12-31T00:00:00.000Z");
+    expect(first.deletionAudit).toHaveLength(1);
+    expect(objects.getObject(object.ref)).toBeUndefined();
+    expect(store.getCapture(capture.id)).toMatchObject({ storageKind: "metadata_only", objectRef: undefined, metadata: { retentionAudit: [expect.objectContaining({ action: "delete_object" })] } });
+    expect(enforceRetentionPolicy(store, DEFAULT_RETENTION_POLICIES.public_raw, objects, "2027-01-01T00:00:00.000Z").deletionAudit).toHaveLength(0);
   });
 
   test("classifies retention defaults by source and sensitivity", () => {
