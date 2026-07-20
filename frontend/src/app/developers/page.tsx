@@ -23,8 +23,8 @@ const endpoints = [
 const responseFields = [
     ['status', 'ready, partial, searching, or review_required'],
     ['confidence', 'Normalized 0-1 confidence for the returned answer'],
-    ['sources', 'Evidence references and source provenance'],
-    ['recentActivity', 'Dated evidence-backed activity rows'],
+    ['sources', 'Source references supporting the result'],
+    ['recentActivity', 'Dated recent activity rows'],
     ['actionability', 'Watchlist suitability and evidence gaps'],
     ['notes', 'Collection, freshness, and review limitations'],
 ]
@@ -46,7 +46,7 @@ export default function DevelopersPage() {
                         <p className='text-sm font-semibold uppercase text-ui-primary'>API reference</p>
                         <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>Threat intelligence search</h1>
                         <p className='max-w-2xl text-base leading-7 text-ui-muted'>
-                            Query the same evidence-aware search used by Hanasand. Responses preserve source provenance, confidence, freshness, review state, and explicit gaps.
+                            Query the same search used by Hanasand. Responses include cited sources, confidence, freshness, review state, and explicit gaps.
                         </p>
                         <div className='flex flex-wrap gap-3'>
                             <Link href='/contact?intent=api' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
