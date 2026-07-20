@@ -13,7 +13,9 @@ test('dashboard DWM operator copy avoids backend-shaped returned wording', async
 
     expect(dwmPage).toContain('The exposure monitor is showing live watchlists, sources, actors, and alerts.')
     expect(dwmPage).toContain('Collection is showing source and evidence state.')
-    expect(dwmPage).toContain('usingFallbackAlerts: !savedAlerts.length && snapshot.alerts.length > 0')
+    expect(dwmPage).toContain('alerts={savedAlerts}')
+    expect(dwmPage).not.toContain('mergeDwmAlerts')
+    expect(dwmPortal).not.toContain('fallbackAlerts')
     expect(dashboardPage).toContain('redirect(\'/dashboard/overview\')')
     expect(workflowActions).toContain('<RouteRunSummary route={lastRoute} organizationId={organizationId} />')
     expect(workflowActions).toContain('function organizationDestinationPath(organizationId: string, alertId?: string, caseId?: string)')

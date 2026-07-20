@@ -148,12 +148,12 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       if (access.error) return access.error;
       const tenantId = scope.tenantId;
       const explicitWatchlist = parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? url.searchParams.get("q") ?? "");
-      return json(withPersistedDwmProductAlerts(buildDwmProductSnapshot({
+      return json(buildDwmProductSnapshot({
         tenantId,
         watchlist: explicitWatchlist.length ? explicitWatchlist : storedWatchlistTerms(options, tenantId),
         sources: options.store.listSources(),
         captures: options.store.listCaptures()
-      }), options, tenantId, scope.organizationId));
+      }));
     }
     if ((url.pathname === "/v1/dwm/product" || url.pathname === "/api/dwm/product") && request.method === "POST") {
       const body = await readJson(request);
@@ -162,12 +162,12 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       const access = authorizeDwmWorkflowAccess({ options, scope, request, url, body, mode: "read" });
       if (access.error) return access.error;
       const tenantId = scope.tenantId;
-      return json(withPersistedDwmProductAlerts(buildDwmProductSnapshot({
+      return json(buildDwmProductSnapshot({
         tenantId,
         watchlist: Array.isArray(body.watchlist) ? body.watchlist : parseWatchlistParam(String(body.watchlist ?? body.terms ?? "")),
         sources: options.store.listSources(),
         captures: options.store.listCaptures()
-      }), options, tenantId, scope.organizationId));
+      }));
     }
     if ((url.pathname === "/v1/dwm/operations" || url.pathname === "/api/dwm/operations") && request.method === "GET") {
       const scope = resolveOrganizationScope({ url, request }, options);
@@ -326,25 +326,4 @@ function orgAlertCaseActionLedgerRepository(options: ApiServerOptions): InMemory
 
 function parseWatchlistParam(value: string): string[] {
   return value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
-}
-
-function withPersistedDwmProductAlerts(
-  snapshot: ReturnType<typeof buildDwmProductSnapshot>,
-  options: ApiServerOptions,
-  tenantId: string,
-  organizationId?: string
-): ReturnType<typeof buildDwmProductSnapshot> {
-  const persistedAlerts = ((options.store as any).listDwmAlerts?.() ?? [])
-    .filter((alert: any) => alert?.tenantId === tenantId)
-    .filter((alert: any) => !organizationId || alert?.organizationId === organizationId);
-  if (!persistedAlerts.length) return snapshot;
-
-  const seen = new Set<string>();
-  const alerts = [...persistedAlerts, ...snapshot.alerts].filter((alert: any) => {
-    const key = String(alert?.id ?? alert?.dedupeKey ?? "");
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  return { ...snapshot, alerts };
 }

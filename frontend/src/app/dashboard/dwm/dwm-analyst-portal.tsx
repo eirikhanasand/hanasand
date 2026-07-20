@@ -144,7 +144,6 @@ type DwmDataHealth = {
     operations: DataHealthItem
     alerts: DataHealthItem
     deliveries: DataHealthItem
-    usingFallbackAlerts: boolean
 }
 
 type DataHealthItem = {
@@ -207,7 +206,7 @@ export function DwmAnalystPortal({
     const watchTermCount = snapshot.watchlist.length
     const webhookState = deliverySummaryLabel(localDeliveries)
     const apiProblemCount = [dataHealth.snapshot, dataHealth.operations, dataHealth.alerts, dataHealth.deliveries]
-        .filter(item => item.state !== 'live').length + (dataHealth.usingFallbackAlerts ? 1 : 0)
+        .filter(item => item.state !== 'live').length
     const workflowTelemetry = {
         activeSourceCount,
         sourceCount,
@@ -238,7 +237,7 @@ export function DwmAnalystPortal({
         const params = dwmScopeSearchParams(tenantId, organizationId)
         void refreshDwmProduct(params, controller.signal, setSnapshot, setDataHealth)
         void refreshDwmOperations(params, controller.signal, setOperations, setDataHealth)
-        void refreshDwmAlerts(params, controller.signal, snapshot.alerts, setAlerts, setDataHealth)
+        void refreshDwmAlerts(params, controller.signal, setAlerts, setDataHealth)
         void refreshDwmDeliveries(params, controller.signal, setLocalDeliveries, setDataHealth)
         return () => {
             controller.abort()
@@ -696,7 +695,6 @@ async function refreshDwmOperations(
 async function refreshDwmAlerts(
     params: URLSearchParams,
     signal: AbortSignal,
-    fallbackAlerts: PortalAlert[],
     setAlerts: Dispatch<SetStateAction<PortalAlert[]>>,
     setDataHealth: Dispatch<SetStateAction<DwmDataHealth>>,
 ) {
@@ -705,8 +703,8 @@ async function refreshDwmAlerts(
         if (!response.ok) return
         const payload = await response.json() as { alerts?: PortalAlert[] }
         const savedAlerts = payload.alerts || []
-        setAlerts(savedAlerts.length ? mergePortalAlerts(savedAlerts, fallbackAlerts) : fallbackAlerts)
-        setDataHealth(current => ({ ...current, alerts: { state: 'live', label: 'Alerts live', detail: `${savedAlerts.length} saved alert(s).` }, usingFallbackAlerts: !savedAlerts.length && fallbackAlerts.length > 0 }))
+        setAlerts(savedAlerts)
+        setDataHealth(current => ({ ...current, alerts: { state: 'live', label: 'Alerts live', detail: `${savedAlerts.length} saved alert(s).` } }))
     } catch (error) {
         if (!isAbortError(error)) setDataHealth(current => ({ ...current, alerts: { ...current.alerts, state: current.alerts.state === 'live' ? 'live' : 'error' } }))
     }
@@ -728,24 +726,6 @@ async function refreshDwmDeliveries(
     } catch (error) {
         if (!isAbortError(error)) setDataHealth(current => ({ ...current, deliveries: { ...current.deliveries, state: current.deliveries.state === 'live' ? 'live' : 'error' } }))
     }
-}
-
-function mergePortalAlerts(savedAlerts: PortalAlert[], fallbackAlerts: PortalAlert[]) {
-    if (!savedAlerts.length) return fallbackAlerts
-    const fallbackById = new Map(fallbackAlerts.map(alert => [alert.id, alert]))
-    const merged = savedAlerts.map(alert => {
-        const fallback = fallbackById.get(alert.id)
-        if (!fallback) return alert
-        return {
-            ...fallback,
-            ...alert,
-            evidence: alert.evidence.length ? alert.evidence : fallback.evidence,
-            provenance: { ...(fallback.provenance ?? {}), ...(alert.provenance ?? {}) },
-            sourceProvenanceSummary: { ...(fallback.sourceProvenanceSummary ?? {}), ...(alert.sourceProvenanceSummary ?? {}) },
-        }
-    })
-    const savedIds = new Set(savedAlerts.map(alert => alert.id))
-    return [...merged, ...fallbackAlerts.filter(alert => !savedIds.has(alert.id))]
 }
 
 function isAbortError(error: unknown) {

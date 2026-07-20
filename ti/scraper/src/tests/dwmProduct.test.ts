@@ -225,6 +225,27 @@ describe("dwm product snapshot", () => {
     expect(body.sourceCoverage.find((row: any) => row.family === "telegram_public").activeCount).toBe(1);
   });
 
+  test("keeps persisted workflow alerts out of the derived product snapshot", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveDwmAlert({
+      id: "alert_saved_only",
+      tenantId: "tenant_acme",
+      dedupeKey: "saved-only",
+      evidence: [],
+      deliveryState: "pending_review"
+    });
+
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/product?tenantId=tenant_acme&watchlist=acme.com"), {
+      store,
+      frontier: new FocusedFrontier()
+    });
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(body.alerts).toEqual([]);
+    expect(store.listDwmAlerts()).toHaveLength(1);
+  });
+
   test("mounts the DWM operations API route with safe recent capture proof", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(telegramSource);

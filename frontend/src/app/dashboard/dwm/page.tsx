@@ -37,13 +37,11 @@ export default async function DashboardDwmPage({
     const operations = operationsResult.data
     const savedAlerts = alertsResult.data
     const deliveries = deliveriesResult.data
-    const alerts = mergeDwmAlerts(savedAlerts, snapshot.alerts)
     const dataHealth = {
         snapshot: snapshotResult,
         operations: operationsResult,
         alerts: alertsResult,
         deliveries: deliveriesResult,
-        usingFallbackAlerts: !savedAlerts.length && snapshot.alerts.length > 0
     }
 
     return (
@@ -53,7 +51,7 @@ export default async function DashboardDwmPage({
                 organizationId={scope.organizationId}
                 snapshot={snapshot}
                 operations={operations}
-                alerts={alerts}
+                alerts={savedAlerts}
                 deliveries={deliveries}
                 dataHealth={dataHealth}
                 initialAlertId={initialAlertId}
@@ -328,31 +326,6 @@ type DwmAlertInboxItem = DwmProductSnapshot['alerts'][number] & {
             captureIds?: string[]
         }
     }
-}
-
-function mergeDwmAlerts(savedAlerts: DwmAlertInboxItem[], snapshotAlerts: DwmProductSnapshot['alerts']): DwmAlertInboxItem[] {
-    if (!savedAlerts.length) return snapshotAlerts
-    const snapshotById = new Map(snapshotAlerts.map(alert => [alert.id, alert]))
-    const merged = savedAlerts.map(alert => {
-        const snapshotAlert = snapshotById.get(alert.id) as DwmAlertInboxItem | undefined
-        if (!snapshotAlert) return alert
-        return {
-            ...snapshotAlert,
-            ...alert,
-            evidence: alert.evidence.length ? alert.evidence : snapshotAlert.evidence,
-            provenance: mergeObject(snapshotAlert.provenance, alert.provenance),
-            sourceProvenanceSummary: mergeObject(snapshotAlert.sourceProvenanceSummary, alert.sourceProvenanceSummary),
-        }
-    })
-    const savedIds = new Set(savedAlerts.map(alert => alert.id))
-    return [...merged, ...snapshotAlerts.filter(alert => !savedIds.has(alert.id))]
-}
-
-function mergeObject<T>(fallback: T, override: T): T {
-    return {
-        ...(typeof fallback === 'object' && fallback ? fallback : {}),
-        ...(typeof override === 'object' && override ? override : {}),
-    } as T
 }
 
 type DwmDeliveryItem = {
