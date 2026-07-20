@@ -284,26 +284,6 @@ const apiBackgroundJobDefinitions: Array<{
         source: 'api/src/utils/mail/accounts.ts',
         controls: [],
     },
-    {
-        id: 'api-ti-profile-cache-warm',
-        name: 'Threat actor profile cache warmer',
-        description: 'Refreshes curated TI actor profile cache entries for fast analyst search results.',
-        category: 'TI / Exposure',
-        schedule: 'Every minute',
-        cadenceSeconds: API_CRON_CADENCE_SECONDS,
-        source: 'api/src/utils/ti/search.ts',
-        controls: [],
-    },
-    {
-        id: 'api-ti-autonomous-pipeline',
-        name: 'Autonomous TI discovery pipeline',
-        description: 'Discovers, enriches, and publishes threat actor profile changes in the API database.',
-        category: 'TI / Exposure',
-        schedule: 'Every minute',
-        cadenceSeconds: API_CRON_CADENCE_SECONDS,
-        source: 'api/src/utils/ti/autonomousPipeline.ts',
-        controls: [],
-    },
 ]
 
 export async function listManagedCronJobs(): Promise<ManagedCronJob[]> {

@@ -20,7 +20,6 @@ assert.ok(byId.has('ti-restricted-metadata-collection'), 'Restricted metadata co
 assert.ok(byId.has('ti-exposure-queue-collection'), 'Exposure queue collection should be registered.')
 assert.ok(byId.has('ti-exposure-parser'), 'Exposure parser should be registered.')
 assert.ok(byId.has('ti-dwm-alert-generation'), 'DWM alert generation should be registered.')
-assert.ok(byId.has('api-ti-autonomous-pipeline'), 'API autonomous TI pipeline should be registered.')
 assert.ok(byId.has('api-agent-automations'), 'Agent automation dispatcher should be registered.')
 assert.ok(byId.has('api-vulnerability-scanner'), 'Vulnerability image scanner should be registered.')
 

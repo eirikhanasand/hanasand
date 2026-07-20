@@ -8,8 +8,6 @@ import purgeDeletedAccounts from './auth/purgeDeletedAccounts.ts'
 import ensureAlwaysRunningVms from './vms/ensureAlwaysRunning.ts'
 import { runDueAutomations } from './automations.ts'
 import runProductionLogMonitors from './status/logMonitors.ts'
-import { recordThreatActorProfileWarmFailure, warmThreatActorProfileCache } from './ti/search.ts'
-import { runDueThreatIntelPipeline } from './ti/autonomousPipeline.ts'
 import { runTrackedBackgroundJob } from './backgroundJobRuntime.ts'
 import { runDueVulnerabilityScan, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
 import run, { queryOnce } from '#db'
@@ -24,22 +22,6 @@ const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     [VULNERABILITY_SCAN_JOB_ID]: runDueVulnerabilityScan,
     'api-agent-automations': runDueAutomations,
     'api-mail-account-provisioning': provisionExistingMailAccounts,
-    'api-ti-profile-cache-warm': async() => {
-        try {
-            return await warmThreatActorProfileCache()
-        } catch (error) {
-            recordThreatActorProfileWarmFailure(error)
-            throw error
-        }
-    },
-    'api-ti-autonomous-pipeline': async() => {
-        try {
-            return await runDueThreatIntelPipeline()
-        } catch (error) {
-            console.error('Failed to run autonomous threat intelligence pipeline', error)
-            throw error
-        }
-    },
 }
 
 export function canRunApiCronJobNow(id: string) {
@@ -99,8 +81,6 @@ export default function cron() {
                 runDueApiCronJob('api-vm-ensure-running'),
                 runDueApiCronJob(VULNERABILITY_SCAN_JOB_ID),
                 runDueApiCronJob('api-agent-automations'),
-                runDueApiCronJob('api-ti-profile-cache-warm'),
-                runDueApiCronJob('api-ti-autonomous-pipeline'),
             ]
 
             if (mailConfig.adminPassword) {

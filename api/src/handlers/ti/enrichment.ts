@@ -1,10 +1,4 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import {
-    getThreatActorEnrichmentOverview,
-    recordThreatActorProfileWarmFailure,
-    warmThreatActorProfileCache,
-} from '#utils/ti/search.ts'
-import { getThreatIntelPipelineOverview } from '#utils/ti/autonomousPipeline.ts'
 
 interface RunBody {
     batchSize?: number
@@ -13,34 +7,31 @@ interface RunBody {
 export async function getTiEnrichment(_req: FastifyRequest, res: FastifyReply) {
     res.header('cache-control', 'no-store, max-age=0')
     return res.send({
-        ...getThreatActorEnrichmentOverview(),
-        pipeline: await getThreatIntelPipelineOverview().catch(error => ({
-            worker: {
-                state: 'failed',
-                lastError: error instanceof Error ? error.message : String(error),
-            },
-        })),
+        generatedAt: new Date().toISOString(),
+        worker: {
+            state: 'unavailable',
+            mode: 'canonical_scraper_only',
+            intervalSeconds: 0,
+            batchSize: 0,
+            lastSweepStartedAt: null,
+            lastSweepFinishedAt: null,
+            lastError: 'The API-owned actor publisher is retired; canonical evidence is collected by the TI scraper.',
+            cursor: 0,
+        },
+        updatedActors: [],
+        queuedActors: [],
+        activity: [],
+        auditLog: [],
+        stats: { updatedLastHour: 0, queued: 0, auditedEvents: 0, automaticCoverage: 0, totalRefreshes: 0 },
     })
 }
 
 export async function postTiEnrichmentRun(req: FastifyRequest<{ Body: RunBody }>, res: FastifyReply) {
-    const batchSize = Math.min(Math.max(Number(req.body?.batchSize) || 8, 1), 50)
     res.header('cache-control', 'no-store, max-age=0')
-    try {
-        const warmed = await warmThreatActorProfileCache(batchSize)
-        return res.send({
-            ok: true,
-            warmed,
-            overview: getThreatActorEnrichmentOverview(),
-        })
-    } catch (error) {
-        recordThreatActorProfileWarmFailure(error)
-        req.log.warn({ error }, 'Failed to run threat actor enrichment manually')
-        return res.status(500).send({
-            ok: false,
-            error: 'ti_enrichment_failed',
-            message: error instanceof Error ? error.message : String(error),
-            overview: getThreatActorEnrichmentOverview(),
-        })
-    }
+    return res.status(409).send({
+        ok: false,
+        error: 'api_ti_enrichment_retired',
+        message: 'API-owned actor enrichment is retired. Run collection through the canonical TI scraper.',
+        canonicalRoute: '/v1/intel/search',
+    })
 }

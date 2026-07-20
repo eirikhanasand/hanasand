@@ -13,7 +13,6 @@ import recordLog from '#utils/logs/recordLog.ts'
 import recordTraffic from '#utils/traffic/recordTraffic.ts'
 import { recordHttpErrorResponse } from '#utils/logs/httpErrors.ts'
 import { provisionExistingMailAccounts } from '#utils/mail/accounts.ts'
-import { recordThreatActorProfileWarmFailure, warmThreatActorProfileCache } from '#utils/ti/search.ts'
 import { isAllowedApiOrigin, TRUSTED_API_PROXIES } from '#utils/http/publicBoundary.ts'
 
 process.on('uncaughtException', error => {
@@ -150,10 +149,6 @@ async function start() {
         }
         await fastify.listen({ port, host: '0.0.0.0' })
         if (browserWorkerOnly) return
-        void warmThreatActorProfileCache(8).catch(error => {
-            recordThreatActorProfileWarmFailure(error)
-            fastify.log.warn({ error }, 'Failed to warm threat actor profile cache')
-        })
         if (process.env.SKIP_REPOSITORY_SYNC !== '1') {
             void ensureRepositoryUpToDate().catch(error => {
                 fastify.log.warn({ error }, 'Failed to warm articles repository')
