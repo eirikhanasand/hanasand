@@ -31,7 +31,7 @@ describe("structured intelligence API boundary", () => {
       body: "stolen row that must never leave storage",
       sensitive: true,
       storageKind: "metadata_only",
-      metadata: { adapter: "darknet_metadata", captureMode: "metadata_only", token: "capture-secret", leakSite: { actorName: "Akira", victimName: "Example Corp" } }
+      metadata: { adapter: "darknet_metadata", captureMode: "metadata_only", token: "capture-secret", leakSite: { actorName: "Akira", victimName: "Example Corp", summary: `${"b".repeat(56)}.onion/download must not leak` } }
     }));
     store.saveExtractedEntity({ id: "entity_restricted_secret", tenantId: "tenant_a", sourceId: "src_restricted_a", captureId: "cap_restricted_a", type: "dataset", value: "secret dataset field", confidence: 0.99 });
     store.saveIntelligenceClaim({ id: "claim_restricted_secret", tenantId: "tenant_a", sourceIds: ["src_restricted_a"], captureIds: ["cap_restricted_a"], claimType: "dataset", value: { dataset: "secret claim value" }, summary: "secret claim summary", confidence: 0.99, reviewState: "confirmed", corroborationState: "corroborated" });

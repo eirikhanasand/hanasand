@@ -127,6 +127,7 @@ function sanitizeApiValue(value: unknown, path: string[]): unknown {
 function scrubSensitiveLocations(value: string): string {
   return value
     .replace(/\b(?:https?|socks5?):\/\/[^\s"'<>]*(?:\.onion|\.i2p)(?:[^\s"'<>]*)?/gi, "[restricted source]")
+    .replace(/\b[a-z2-7]{56}\.onion(?:\/[^\s"'<>]*)?/gi, "[restricted source]")
     .replace(/\bmetadata:\/\/darkweb\/[^\s"'<>]*/gi, "[restricted source]")
     .replace(/\bfreenet:[^\s"'<>]*/gi, "[restricted source]")
     .replace(/\b(https?:\/\/)[^\s/@:]+:[^\s/@]+@/gi, "$1[credentials-redacted]@")
