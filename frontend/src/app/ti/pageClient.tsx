@@ -402,6 +402,7 @@ function EvidenceBoundaryStrip({ result }: { result: TiSearchResponse }) {
     const incidents = result.incidents ?? []
     const reviewCount = claims.filter(claim => ['unreviewed', 'needs_review'].includes(claim.reviewState)).length
         + incidents.filter(incident => incident.reviewState !== 'confirmed').length
+    const reviewMeasured = Boolean(assessment || claims.length || incidents.length)
     const contradicted = assessment?.contradictedClaimCount ?? claims.filter(claim => claim.corroborationState === 'contradicted').length
     const missing = assessment?.missingFields ?? result.actorIntelligence?.missingFields ?? []
     const facts = [
@@ -409,7 +410,7 @@ function EvidenceBoundaryStrip({ result }: { result: TiSearchResponse }) {
         { label: 'Source claims', value: `${claims.length} claim${claims.length === 1 ? '' : 's'}` },
         { label: 'Inferred incidents', value: `${incidents.length} candidate${incidents.length === 1 ? '' : 's'}` },
         { label: 'Independent sources', value: `${sourceCount} source${sourceCount === 1 ? '' : 's'}` },
-        { label: 'Parser / review', value: reviewCount ? `${reviewCount} need review` : 'No open review' },
+        { label: 'Parser / review', value: reviewCount ? `${reviewCount} need review` : reviewMeasured ? 'No open review' : 'Review state pending' },
     ]
 
     return (
