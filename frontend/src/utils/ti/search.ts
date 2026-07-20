@@ -32,7 +32,14 @@ export interface TiSearchResponse {
         publisherCount?: number
         corroboratingSourceIds?: string[]
         contradictingSourceIds?: string[]
+        assertionKind?: 'source_claim'
+        reviewState?: string
+        corroborationState?: string
+        observationSummary?: string
     }>
+    claims?: TiClaimAssessment[]
+    incidents?: TiIncidentAssessment[]
+    evidenceAssessment?: TiEvidenceAssessment
     targets: Array<{
         sector: string
         regions: string[]
@@ -92,6 +99,7 @@ export interface TiActorIntelligenceContract {
     confidence?: number
     confidenceReasoning?: string[]
     sourceProvenance?: string[]
+    missingFields?: string[]
     structuredProvenance?: Array<{
         sourceId?: string
         sourceName: string
@@ -105,6 +113,52 @@ export interface TiActorIntelligenceContract {
         confidence?: number
         shownBecause: string
     }>
+}
+
+export interface TiClaimAssessment {
+    id: string
+    claimType?: string
+    summary?: string
+    confidence?: number
+    reviewState: string
+    corroborationState: string
+    sourceCount: number
+    evidenceCount: number
+    evidenceStage?: string
+    extractionMethod?: string
+    extractorVersion?: string
+    firstSeenAt?: string
+    lastSeenAt?: string
+    uncertaintyReasons: string[]
+}
+
+export interface TiIncidentAssessment {
+    id: string
+    title: string
+    summary?: string
+    confidence?: number
+    assertionKind: 'inferred'
+    reviewState: string
+    firstSeenAt?: string
+    sourceId?: string
+    captureId?: string
+    extractorVersion?: string
+    reviewReasons: string[]
+}
+
+export interface TiEvidenceAssessment {
+    ready: boolean
+    confidence: number
+    sourceCount: number
+    captureCount: number
+    confirmedClaimCount: number
+    corroboratedClaimCount: number
+    validationCount: number
+    contradictedClaimCount: number
+    metadataOnly: boolean
+    reasons: string[]
+    claimCounts?: { total: number; confirmed: number; needsReview: number; contradicted: number; corroborated: number }
+    missingFields: string[]
 }
 
 export interface TiActionabilityContract {

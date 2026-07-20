@@ -277,8 +277,31 @@ function exportEligible(claim: any) { return claim.reviewState === "confirmed" &
 function apiRecord(collection: string, record: any, url: URL, tenantId?: string): any {
   if (collection === "sources") return toSafeSourceDto(record);
   if (collection === "captures") return toSafeCaptureDto(record, { tenantId, includeBody: booleanQuery(url.searchParams.get("includeBody")) === true });
+  if (collection === "incidents") return safeIncidentDto(record);
   if (collection === "alerts") return safeAlertDto(record);
   return sanitizeDwmApiPayload(record);
+}
+
+function safeIncidentDto(incident: any) {
+  return sanitizeDwmApiPayload({
+    id: incident.id,
+    tenantId: incident.tenantId,
+    sourceId: incident.sourceId,
+    captureId: incident.captureId,
+    title: sanitizeDwmCustomerText(incident.title, undefined, 180),
+    summary: sanitizeDwmCustomerText(incident.summary),
+    firstSeenAt: incident.firstSeenAt,
+    confidence: confidenceValue(incident.confidence),
+    assertionKind: "inferred",
+    reviewState: incident.reviewReasons?.length ? "needs_review" : "unreviewed",
+    extractorVersion: incident.extractorVersion,
+    reviewReasons: incident.reviewReasons ?? []
+  });
+}
+
+function confidenceValue(value: unknown): number | undefined {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(1, number > 1 ? number / 100 : number)) : undefined;
 }
 
 function safeAlertDto(alert: any) {

@@ -129,6 +129,19 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     lastSeenAt: claim.lastSeenAt,
     uncertaintyReasons: claim.uncertaintyReasons ?? []
   }));
+  const incidents = records.incidents.map((incident) => ({
+    id: incident.id,
+    title: safeText(incident.title, 180),
+    summary: safeText(incident.summary, 500),
+    confidence: confidence(incident.confidence),
+    assertionKind: "inferred",
+    reviewState: incident.reviewReasons?.length ? "needs_review" : "unreviewed",
+    firstSeenAt: incident.firstSeenAt,
+    sourceId: incident.sourceId,
+    captureId: incident.captureId,
+    extractorVersion: incident.extractorVersion,
+    reviewReasons: incident.reviewReasons ?? []
+  }));
   const status = rows.length ? assessment.ready ? "ready" : "partial" : "searching";
   const restricted = searchDarkwebIndex({ query, sources: sourcesInScope, captures: options.store.listCaptures(), limit: 20 });
   const restrictedSourceCount = sourcesInScope.filter((source: any) => String(source.type).endsWith("_metadata")).length;
@@ -154,6 +167,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     rows: rows.map((row) => ({ ...row, confidence: rowConfidence(row.id, records, assessment.confidence), assertions: assertionsFor(row.id, records), reviewState: reviewStateFor(row.id, records) })),
     results: rows.map((row) => ({ ...row, confidence: rowConfidence(row.id, records, assessment.confidence), assertions: assertionsFor(row.id, records), reviewState: reviewStateFor(row.id, records) })),
     claims,
+    incidents,
     actorProfile: { query, actor, aliases, datasets: { evidenceStageCounts: stageCounts(records.claims), sourceCount: records.sourceCount }, provenance: structuredProvenance },
     actorIntelligence,
     actionability: {
@@ -269,10 +283,11 @@ function assess(rows: any[], records: ReturnType<typeof searchRecords>) {
 }
 
 function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackConfidence: number) {
-  const corroboratingSourceIds = unique(records.claims
-    .filter((claim: any) => claim.captureIds?.includes(row.id))
+  const rowClaims = records.claims.filter((claim: any) => claim.captureIds?.includes(row.id));
+  const corroboratingSourceIds = unique(rowClaims
     .flatMap((claim: any) => claim.sourceIds ?? [])
     .filter((sourceId) => sourceId !== row.sourceId));
+  const contradictingSourceIds = unique(rowClaims.flatMap((claim: any) => claim.contradictingSourceIds ?? []));
   return {
     date: row.publishedAt ?? row.collectedAt,
     title: row.title,
@@ -288,7 +303,16 @@ function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackC
     firstReportedAt: row.publishedAt,
     lastReportedAt: row.collectedAt,
     publisherCount: 1 + corroboratingSourceIds.length,
-    corroboratingSourceIds
+    corroboratingSourceIds,
+    contradictingSourceIds,
+    assertionKind: "source_claim",
+    reviewState: reviewStateFor(row.id, records),
+    corroborationState: rowClaims.some((claim: any) => claim.corroborationState === "contradicted")
+      ? "contradicted"
+      : rowClaims.some((claim: any) => claim.corroborationState === "corroborated")
+        ? "corroborated"
+        : "single_source",
+    observationSummary: `A captured source record matched the query. This confirms the source mention, not the underlying activity.`
   };
 }
 

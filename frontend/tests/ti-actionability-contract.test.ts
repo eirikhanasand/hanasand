@@ -58,6 +58,42 @@ assert(alertOnlyCaseContinuity.relatedCases.some(item =>
 assert(alertOnlyCaseContinuity.readiness.backedIds.casePaths.includes('/dashboard/dwm/cases/case_apt29_microsoft'), 'Derived related cases should feed readiness case paths.')
 
 const apt29WithHostedCopyResidue = apt29Result()
+apt29WithHostedCopyResidue.claims = [{
+    id: 'claim_apt29_microsoft',
+    claimType: 'victim',
+    summary: 'Microsoft reported the activity.',
+    confidence: 0.84,
+    reviewState: 'confirmed',
+    corroborationState: 'corroborated',
+    sourceCount: 2,
+    evidenceCount: 2,
+    uncertaintyReasons: [],
+}]
+apt29WithHostedCopyResidue.incidents = [{
+    id: 'incident_apt29_microsoft',
+    title: 'APT29 Microsoft incident candidate',
+    summary: 'Parser-generated candidate from the captured report.',
+    confidence: 0.8,
+    assertionKind: 'inferred',
+    reviewState: 'needs_review',
+    sourceId: 'src_microsoft_midnight_blizzard',
+    captureId: 'capture_microsoft_apt29_2024',
+    extractorVersion: 'deterministic-v1',
+    reviewReasons: ['Analyst confirmation is pending.'],
+}]
+apt29WithHostedCopyResidue.evidenceAssessment = {
+    ready: true,
+    confidence: 0.84,
+    sourceCount: 2,
+    captureCount: 2,
+    confirmedClaimCount: 1,
+    corroboratedClaimCount: 1,
+    validationCount: 1,
+    contradictedClaimCount: 0,
+    metadataOnly: false,
+    reasons: ['Two independent sources are represented.'],
+    missingFields: [],
+}
 apt29WithHostedCopyResidue.ttps[0]!.detail = 'Tradecraft aligns with returned ATT&CK techniques for credential and cloud activity.'
 apt29WithHostedCopyResidue.actionability!.watchlistCandidates![0]!.reason = 'Public reporting and returned actor profile include Microsoft email intrusion context.'
 apt29WithHostedCopyResidue.actionability!.handoffs!.watchlist!.payloads[0]!.notes = 'apt29: Actor target sector from returned profile: Technology and cloud services.'
@@ -70,6 +106,9 @@ apt29WithHostedCopyResidue.actionability!.enrichmentGaps = [{
 }]
 const sanitizedApt29Result = sanitizeTiResultForPublicPage(apt29WithHostedCopyResidue)
 assert(sanitizedApt29Result, 'Public /ti result sanitizer should return a result.')
+assert(sanitizedApt29Result?.claims?.[0]?.corroborationState === 'corroborated', 'Public /ti result sanitizer should preserve claim review and corroboration state.')
+assert(sanitizedApt29Result?.incidents?.[0]?.assertionKind === 'inferred', 'Public /ti result sanitizer should preserve inferred incident semantics.')
+assert(sanitizedApt29Result?.evidenceAssessment?.sourceCount === 2, 'Public /ti result sanitizer should preserve independent-source assessment.')
 assert(sanitizedApt29Result?.actorIntelligence?.structuredProvenance?.some(row =>
     row.sourceId === 'src_microsoft_midnight_blizzard'
     && row.captureId === 'capture_microsoft_apt29_2024'

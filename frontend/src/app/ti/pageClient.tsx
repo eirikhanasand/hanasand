@@ -321,6 +321,8 @@ function Results({ result }: { result: TiSearchResponse }) {
                     </section>
                 </div>
 
+                <EvidenceBoundaryStrip result={result} />
+
                 <section id='ti-activity' data-ti-activity='true' className='grid gap-3 border-t border-ui-border pt-4 dark:border-ui-border'>
                     <div className='flex flex-wrap items-end justify-between gap-3'>
                         <div>
@@ -344,7 +346,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     </div>
                                     <span className='wrap-break-word text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{displayRequirementText(item.title)}</span>
                                     <span className='line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(item.detail)}</span>
-                                    <span className='text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{item.source} · {sourceBasisLabel(item.confidence)}</span>
+                                    <span className='text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{assertionKindLabel(item.assertionKind)} · {item.source} · {sourceBasisLabel(item.confidence)}</span>
                                 </button>
                             )
                         })}
@@ -354,9 +356,13 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <div className='flex flex-wrap items-center gap-2'>
                                 <span className={`rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
                                 <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{kindLabel(selected.kind)}</span>
+                                <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{assertionKindLabel(selected.assertionKind)}</span>
+                                {selected.reviewState ? <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{formatLabel(selected.reviewState)}</span> : null}
+                                {selected.corroborationState ? <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1 text-xs font-semibold text-ui-muted dark:border-ui-border dark:bg-ui-panel dark:text-ui-muted'>{formatLabel(selected.corroborationState)}</span> : null}
                             </div>
                             <h3 className='mt-3 wrap-break-word text-2xl font-semibold text-ui-text dark:text-ui-text'>{displayRequirementText(selected.title)}</h3>
                             <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{displayRequirementText(selected.detail)}</p>
+                            {selected.observationSummary ? <p className='mt-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'><span className='font-semibold text-ui-text dark:text-ui-text'>Observed evidence:</span> {displayRequirementText(selected.observationSummary)}</p> : null}
                             {selectedTriageBrief ? <SelectedTriageBriefPanel brief={selectedTriageBrief} /> : null}
                         </section>
                     ) : null}
@@ -386,6 +392,46 @@ function Results({ result }: { result: TiSearchResponse }) {
         </div>
     )
 
+}
+
+function EvidenceBoundaryStrip({ result }: { result: TiSearchResponse }) {
+    const assessment = result.evidenceAssessment
+    const sourceCount = assessment?.sourceCount ?? new Set(result.sources.map(source => source.id)).size
+    const captureCount = assessment?.captureCount ?? result.recentActivity.length
+    const claims = result.claims ?? []
+    const incidents = result.incidents ?? []
+    const reviewCount = claims.filter(claim => ['unreviewed', 'needs_review'].includes(claim.reviewState)).length
+        + incidents.filter(incident => incident.reviewState !== 'confirmed').length
+    const contradicted = assessment?.contradictedClaimCount ?? claims.filter(claim => claim.corroborationState === 'contradicted').length
+    const missing = assessment?.missingFields ?? result.actorIntelligence?.missingFields ?? []
+    const facts = [
+        { label: 'Observed evidence', value: `${captureCount} captured record${captureCount === 1 ? '' : 's'}` },
+        { label: 'Source claims', value: `${claims.length} claim${claims.length === 1 ? '' : 's'}` },
+        { label: 'Inferred incidents', value: `${incidents.length} candidate${incidents.length === 1 ? '' : 's'}` },
+        { label: 'Independent sources', value: `${sourceCount} source${sourceCount === 1 ? '' : 's'}` },
+        { label: 'Parser / review', value: reviewCount ? `${reviewCount} need review` : 'No open review' },
+    ]
+
+    return (
+        <section data-ti-evidence-boundary='true' className='grid gap-3 border-y border-ui-border py-3 dark:border-ui-border'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Evidence boundary</p>
+                    <p className='mt-1 max-w-4xl text-xs leading-5 text-ui-muted dark:text-ui-muted'>Captured matches are observed evidence. Source statements remain claims. Incident records and profile conclusions are parser or analyst inferences until review and independent corroboration.</p>
+                </div>
+                <span className={sourceHealthChipClass(contradicted ? 'blocked' : assessment?.ready ? 'ready' : 'review')}>{contradicted ? `${contradicted} contradicted` : assessment?.ready ? 'reviewed evidence' : 'partial evidence'}</span>
+            </div>
+            <div className='grid grid-cols-2 gap-3 md:grid-cols-5'>
+                {facts.map(fact => (
+                    <div key={fact.label} className='min-w-0 border-l border-ui-border pl-2 dark:border-ui-border'>
+                        <p className='text-[10px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>{fact.label}</p>
+                        <p className='mt-1 wrap-break-word text-xs font-semibold text-ui-text dark:text-ui-text'>{fact.value}</p>
+                    </div>
+                ))}
+            </div>
+            {missing.length ? <p className='text-xs leading-5 text-ui-muted dark:text-ui-muted'><span className='font-semibold text-ui-text dark:text-ui-text'>Missing:</span> {missing.map(displayRequirementText).join(', ')}</p> : null}
+        </section>
+    )
 }
 
 function useMediaQuery(query: string) {
@@ -480,6 +526,10 @@ type AnalystWorkItem = {
     source: string
     provenance: string
     confidence: number
+    assertionKind: 'observed' | 'source_claim' | 'inferred' | 'extracted'
+    reviewState?: string
+    corroborationState?: string
+    observationSummary?: string
     href?: string
     evidence: string[]
     nextActions: string[]
@@ -3067,6 +3117,10 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
             source: activitySourceLabel(item.sourceIds.length),
             provenance: item.publisherCount ? `${item.publisherCount} publisher${item.publisherCount === 1 ? '' : 's'}` : 'Activity result',
             confidence: item.confidence,
+            assertionKind: item.assertionKind || 'source_claim',
+            reviewState: item.reviewState,
+            corroborationState: item.corroborationState,
+            observationSummary: item.observationSummary,
             href,
             evidence: [
                 item.title,
@@ -3095,6 +3149,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
             source: item.source,
             provenance: 'Country-level actor profile evidence',
             confidence: 0.76,
+            assertionKind: 'source_claim',
             evidence: [
                 `Country: ${item.country}`,
                 `Sector: ${item.sector}`,
@@ -3118,6 +3173,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         source: 'Actor profile',
         provenance: item.attackId ? 'MITRE ATT&CK mapped profile field' : 'Profile tradecraft field',
         confidence: item.confidence,
+        assertionKind: 'extracted',
         evidence: [item.tactic, item.detail],
         nextActions: ['Map to defensive detections or hunting queries.', 'Prioritize techniques that match current exposure or recent activity.', 'Close if this is generic background for the current shift.'],
     }))
@@ -3134,6 +3190,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         source: item.sourceHash ? `source hash ${item.sourceHash}` : 'Sensitive-source review inbox',
         provenance: item.provenance || 'Sensitive-source review',
         confidence: item.confidence,
+        assertionKind: 'source_claim',
         evidence: [
             item.affectedAccounts ? `Affected accounts: ${item.affectedAccounts}` : 'Affected accounts not stated.',
             item.accountSubjects ? `Account subjects: ${item.accountSubjects}` : 'Account subjects not stated.',
@@ -3158,6 +3215,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         source: 'TI search service',
         provenance: result.mode,
         confidence: result.confidence,
+        assertionKind: 'observed',
         evidence: result.notes.length ? result.notes : ['Keep polling or search a related alias for source evidence.'],
         nextActions: ['Leave this query open while polling continues.', 'Search an alias, domain, company name, CVE, or supplier term.', 'Open the customer console to save the work.'],
         priority: priorityByRow.get('collection-searching'),
@@ -9016,6 +9074,13 @@ function kindLabel(kind: AnalystWorkItem['kind']) {
     if (kind === 'tradecraft') return 'Tradecraft'
     if (kind === 'collection') return 'Collection'
     return 'Activity'
+}
+
+function assertionKindLabel(kind: AnalystWorkItem['assertionKind']) {
+    if (kind === 'observed') return 'Observed fact'
+    if (kind === 'inferred') return 'Inferred candidate'
+    if (kind === 'extracted') return 'Extracted field'
+    return 'Source claim'
 }
 
 function decisionLabel(status: LocalDecision['status']) {

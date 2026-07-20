@@ -127,7 +127,14 @@ describe("structured intelligence API boundary", () => {
     const search = await body(await handleApiRequest(api("/v1/intel/search?q=APT29", { headers: { "x-tenant-id": "tenant_a" } }), options));
     expect((search.rows as any[]).map((row) => row.id)).toEqual(["cap_a"]);
     expect(search).toMatchObject({ status: "partial", confidence: 0.69, actionability: { shouldAlert: false }, quality: { status: "partial", canPromoteToReady: false } });
+    expect(search).toMatchObject({
+      recentActivity: [{ assertionKind: "source_claim", reviewState: "unreviewed", observationSummary: expect.stringContaining("confirms the source mention") }],
+      incidents: [{ id: "incident_a", assertionKind: "inferred", reviewState: "unreviewed", captureId: "cap_a" }]
+    });
     expect(JSON.stringify(search)).not.toContain("Beta Bank");
+
+    const incidents = await body(await handleApiRequest(api("/v1/intel/incidents", { headers: { "x-tenant-id": "tenant_a" } }), options));
+    expect(incidents).toMatchObject({ incidents: [{ id: "incident_a", assertionKind: "inferred", reviewState: "unreviewed", captureId: "cap_a" }] });
 
     const evidence = await body(await handleApiRequest(api("/v1/evidence/trust-ledger?q=APT29", { headers: { "x-tenant-id": "tenant_a" } }), options));
     expect(evidence.trustLedger).toMatchObject({ tenantId: "tenant_a", counts: { claims: 1 }, claims: [{ claimId: "incident_a", captureId: "cap_a" }] });

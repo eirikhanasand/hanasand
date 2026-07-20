@@ -29,8 +29,28 @@ export function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): 
             lastReportedAt: item.lastReportedAt,
             publisherCount: item.publisherCount,
             corroboratingSourceIds: item.corroboratingSourceIds,
-            contradictingSourceIds: item.contradictingSourceIds
+            contradictingSourceIds: item.contradictingSourceIds,
+            assertionKind: item.assertionKind,
+            reviewState: item.reviewState,
+            corroborationState: item.corroborationState,
+            observationSummary: item.observationSummary ? publicTiText(item.observationSummary) : undefined
         })),
+        claims: result.claims?.map(claim => ({
+            ...claim,
+            summary: claim.summary ? publicTiText(claim.summary) : undefined,
+            uncertaintyReasons: claim.uncertaintyReasons.map(publicTiText)
+        })),
+        incidents: result.incidents?.map(incident => ({
+            ...incident,
+            title: publicTiText(incident.title),
+            summary: incident.summary ? publicTiText(incident.summary) : undefined,
+            reviewReasons: incident.reviewReasons.map(publicTiText)
+        })),
+        evidenceAssessment: result.evidenceAssessment ? {
+            ...result.evidenceAssessment,
+            reasons: result.evidenceAssessment.reasons.map(publicTiText),
+            missingFields: result.evidenceAssessment.missingFields.map(publicTiText)
+        } : undefined,
         targets: result.targets,
         ttps: result.ttps,
         datasets: result.datasets,
@@ -121,6 +141,7 @@ function sanitizeActorIntelligence(actorIntelligence?: TiActorIntelligenceContra
         confidence: actorIntelligence.confidence,
         confidenceReasoning: actorIntelligence.confidenceReasoning?.map(publicTiText),
         sourceProvenance: actorIntelligence.sourceProvenance?.map(publicTiText),
+        missingFields: actorIntelligence.missingFields?.map(publicTiText),
         structuredProvenance: actorIntelligence.structuredProvenance?.map(row => ({
             sourceId: row.sourceId,
             sourceName: publicTiText(row.sourceName),
