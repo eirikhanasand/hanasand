@@ -53,7 +53,7 @@ The initial feasibility set must include at least one working feed of each selec
 
 ### Collection and Tracking
 
-- [ ] Operate an automated end-to-end collection pipeline continuously and recover safely from restarts and source failures.
+- [x] Operate an automated end-to-end collection pipeline continuously and recover safely from restarts and source failures.
 - [x] Collect from a defensible selected subset of RSS/news/blog sources.
 - [x] Collect from at least one long-lived public Telegram source through a compliant, reliable path.
 - [x] Collect metadata from at least one dark-web source through an explicitly bounded, metadata-only path.
@@ -67,7 +67,7 @@ The initial feasibility set must include at least one working feed of each selec
 - [x] Retain keyword and pattern matching as transparent fallback classification.
 - [x] Correlate claims and incidents across sources while preserving contradictions and source independence.
 - [x] Resolve actor and victim entities conservatively, with confidence, provenance, temporal validity, and human review.
-- [ ] Track actor behavior and characterization changes over time.
+- [x] Track actor behavior and characterization changes over time.
 - [x] Structure extortion type, monetization path, victim-pressure tactic, buyer/seller communication signals, advertised data type, publication strategy, and channel type.
 
 ### Canonical Data and Evidence Contract
@@ -103,7 +103,7 @@ The initial feasibility set must include at least one working feed of each selec
 - [ ] Cross-reference claims with victim disclosures, news reports, vendor research, and other independent public records.
 - [x] Calculate extraction precision, recall, and error breakdown by entity type, parser, and source family.
 - [x] Measure median and p95 latency from first actor/victim report through publication, collection, processing, first visibility, and alert delivery.
-- [ ] Measure active source reliability, useful coverage, actor coverage, duplication, corroboration, and false-positive rates.
+- [x] Measure active source reliability, useful coverage, actor coverage, duplication, corroboration, and false-positive rates.
 - [x] Make evaluation repeatable from stored labels and timestamps without maintaining a parallel evidence system.
 
 ### Ethics and Safety
@@ -152,6 +152,9 @@ The initial feasibility set must include at least one working feed of each selec
 - The production pipeline now preserves source tenant IDs through public RSS/JSON, Telegram, static HTML, PDF, dynamic, public-advisory, and metadata-only Tor adapters. Source-specific extraction handles structured victim-blog claims, CISA KEV fields, and CERT-UA actor identifiers before the versioned deterministic fallback, and per-record extractor lineage survives persistence.
 - Live layout parsing now extracts bounded victim names from BrainCipher `news-item` headlines and Deadlock `post-title` cards without retaining page bodies. Production verification produced 23 BrainCipher and 10 Deadlock victim entities with source-specific provenance; the same records include actor and publication/publicity/channel/pressure fields. The live CISA path contains 161 CVEs, 121 products and vendors, 123 TTP observations, impacts, indicators, and incidents, while normalized actor aliases and the CERT-UA identifier parser cover the remaining priority-feed fields.
 - Durable claims correlate matching actor, victim, indicator, and incident observations while grouping syndicated publishers and identical content so copies do not inflate source independence; append-only analyst reviews preserve confirmation, rejection, correction, needs-review, and contradiction states. The production quality workbench exposes confidence-scored actor, victim, and infrastructure candidates with capture/source provenance, temporal observations, uncertainty, and the existing human-review endpoint. A live BrainCipher check returned 44 metadata-only review-required candidates and no restricted locator. Source-specific victim-blog entities also persist extortion, monetization, data type, publication, publicity, channel, pressure, communication, and profitability signals with explicit observed, claimed, or inferred status.
+- Public and restricted collection supervisors start after PostgreSQL hydration, prevent overlapping cycles, enforce bounded concurrency/cadence, and persist run, health, retry, and quadratic backoff state. Production restart verification resumed the public cycle after hydrating 1,472 sources; earlier unavailable restricted sources remained durably rejected or backed off while approved sources continued independently.
+- Actor profiles now merge provenance-backed victims, sectors, countries, TTPs, malware, impacts, datasets, extortion/monetization/publicity/channel/pressure/communication/profitability fields across captures and persist immutable per-capture temporal deltas without raw content or locators. The first production cycle on the new code wrote 21 added/updated actor-profile deltas, all `rawContentExposed=false`, with no HTTP or onion locator; profiles showed changing first/last-seen windows and multi-capture evidence counts.
+- Production `/v1/intel/evaluation` now measures attempt-level active-source reliability and useful yield, actor coverage, duplicates, corroborated and contradicted claims, and label-backed false-positive rate from durable records. The 2026-07-20 live snapshot covered 69 attempts, 865 claims, 159 duplicates, six corroborated claims, and 601 evaluated labels while retaining explicit recall and alert-latency limitations.
 - `/v1/intel/evaluation` computes tenant-scoped precision, recall, F1, false-positive/false-negative counts by label type, parser, source family, and dataset split from immutable durable labels. It also reports median/p95 stage latency, timestamp anomalies, active/useful source coverage, actor coverage, and public-validation status without a parallel evidence store.
 - Focused source-operations, storage/API, runtime evidence persistence, tenant-isolated alert lifecycle, type-check, and diff checks pass together.
 - The broad scraper suite still contains pre-existing failures in product areas outside the initial storage replacement. Those failures remain work; the database milestone does not make the overall product complete.
