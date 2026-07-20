@@ -58,6 +58,7 @@ export function contractIndex() {
     route("GET", "/v1/intel/claim-reviews"),
     route("GET", "/v1/intel/alerts"),
     route("POST", "/v1/intel/claims/:claimId/reviews"),
+    route("POST", "/v1/intel/governance-actions"),
     route("GET", "/v1/intel/collection-runs"),
     route("GET", "/v1/intel/source-health"),
     route("GET", "/v1/intel/source-operations"),

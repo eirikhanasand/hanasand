@@ -7,6 +7,7 @@ import { buildSourceOperationsSnapshot } from "./sourceOperations.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
+import { authenticateRequest } from "./requestAuthentication.ts";
 
 const listRoutes = {
   "/v1/intel/sources": ["sources", "listSources"],
@@ -41,6 +42,7 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     if (datasetSplit && !["train", "validation", "test", "unassigned"].includes(datasetSplit)) return error("invalid_dataset_split", "Unsupported evaluation dataset split", 400);
     return json(buildEvaluationMetrics(options.store, { tenantId: scope.tenantId, datasetSplit }));
   }
+  if (url.pathname === "/v1/intel/governance-actions" && request.method === "POST") return applyGovernanceAction(request, options);
   if (url.pathname === "/v1/intel/validation-records" && request.method === "POST") return createValidationRecord(request, options);
   if (url.pathname === "/v1/intel/evaluation-labels" && request.method === "POST") return createEvaluationLabel(request, options);
   if (/^\/v1\/intel\/claims\/[^/]+\/reviews$/.test(url.pathname) && request.method === "POST") return createClaimReview(request, options, url.pathname.split("/")[4]);
@@ -68,6 +70,48 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
     .map((record: any) => apiRecord(responseKey, record, url, tenantId))
     .filter((record: any) => !query || JSON.stringify(record).toLowerCase().includes(query));
   return json({ [responseKey]: filtered.slice(offset, offset + limit), total: filtered.length, nextCursor: offset + limit < filtered.length ? String(offset + limit) : undefined });
+}
+
+async function applyGovernanceAction(request: Request, options: ApiServerOptions): Promise<Response> {
+  const authentication = await authenticateRequest(request, options);
+  if (authentication.error) return authentication.error;
+  const body = await readJson<any>(request);
+  const scope = resolveTenantScope(request, new URL(request.url), body.tenantId);
+  if (scope.error) return scope.error;
+  const action = String(body.action ?? "");
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  const actor = authentication.identity!;
+  if (!reason || reason.length < 8 || containsForbiddenMaterial(body)) return error("invalid_governance_action", "Governance actions require a specific safe reason", 400);
+  const at = validIso(body.appliedAt) ?? nowIso();
+  const id = stableId("governance-action", `${scope.tenantId ?? "global"}:${action}:${body.sourceId ?? body.captureId ?? body.claimId}:${actor.id}:${reason}`);
+
+  if (action === "correct_claim") {
+    if (!actor.roles.some((role) => ["owner", "admin", "analyst"].includes(role))) return error("governance_action_forbidden", "Claim correction requires an analyst role", 403);
+    const claim = (options.store as any).getIntelligenceClaim?.(body.claimId);
+    if (!claim || !inTenantScope(claim, scope.tenantId)) return error("claim_not_found", "Intelligence claim not found", 404);
+    if (!safeEvaluationValue(body.correctedValue)) return error("invalid_governance_action", "A bounded correctedValue is required", 400);
+    const stored = (options.store as any).saveClaimReview({ id, tenantId: claim.tenantId, claimId: claim.id, action: "correct", reviewerId: actor.id, reason: reason.slice(0, 1_000), correctedValue: body.correctedValue, reviewedAt: at });
+    return json({ governanceAction: { id, action, targetId: claim.id, appliedAt: at, appliedBy: actor.id }, ...stored }, 201);
+  }
+
+  if (!actor.roles.some((role) => ["owner", "admin"].includes(role))) return error("governance_action_forbidden", "Evidence redaction and source takedown require an administrator role", 403);
+  if (action === "takedown_source") {
+    const source = (options.store as any).getSource?.(body.sourceId);
+    if (!source || !inTenantScope(source, scope.tenantId)) return error("source_not_found", "Source not found", 404);
+    const audit = { id, action, reason: reason.slice(0, 1_000), appliedAt: at, appliedBy: actor.id };
+    const saved = (options.store as any).saveSource({ ...source, status: "disabled", governance: { ...(source.governance ?? {}), takedown: audit, audit: [...(source.governance?.audit ?? []).filter((entry: any) => entry.id !== id), audit] }, updatedAt: at });
+    return json({ governanceAction: audit, source: toSafeSourceDto(saved) }, 201);
+  }
+  if (action === "redact_capture") {
+    const capture = (options.store as any).getCapture?.(body.captureId);
+    if (!capture || !inTenantScope(capture, scope.tenantId)) return error("capture_not_found", "Capture not found", 404);
+    if (capture.legalHold || capture.retentionClass === "legal_hold") return error("capture_on_legal_hold", "Release the legal hold before redaction", 409);
+    const audit = { id, action, reason: reason.slice(0, 1_000), appliedAt: at, appliedBy: actor.id };
+    if (capture.objectRef) (options.objectStore as any)?.deleteObject?.(capture.objectRef, `governance:${id}`);
+    const saved = (options.store as any).replaceCaptureForRetention({ ...capture, body: undefined, objectRef: undefined, storageKind: "metadata_only", metadata: { ...(capture.metadata ?? {}), governanceAudit: [...(capture.metadata?.governanceAudit ?? []).filter((entry: any) => entry.id !== id), audit] } });
+    return json({ governanceAction: audit, capture: toSafeCaptureDto(saved, { tenantId: scope.tenantId }) }, 201);
+  }
+  return error("invalid_governance_action", "Use action correct_claim, takedown_source, or redact_capture", 400);
 }
 
 async function createValidationRecord(request: Request, options: ApiServerOptions): Promise<Response> {

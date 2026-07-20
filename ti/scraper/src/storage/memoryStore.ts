@@ -325,7 +325,7 @@ function evidenceIndependence(store: any, captureIds: string[]) {
   const parent = evidence.map((_: any, index: number) => index);
   const find = (index: number): number => parent[index] === index ? index : (parent[index] = find(parent[index]));
   for (let left = 0; left < evidence.length; left++) for (let right = left + 1; right < evidence.length; right++) {
-    if (evidence[left].publisher === evidence[right].publisher || evidence[left].content === evidence[right].content) parent[find(right)] = find(left);
+    if (evidence[left].publisher === evidence[right].publisher || evidence[left].content && evidence[left].content === evidence[right].content) parent[find(right)] = find(left);
   }
   return {
     groupCount: new Set(evidence.map((_: any, index: number) => find(index))).size,
@@ -349,6 +349,7 @@ function strongerEvidenceStage(previous: string | undefined, next: string): stri
 function claimStateForReview(action: string, previous: string): string {
   if (action === "confirm") return "confirmed";
   if (action === "reject") return "rejected";
+  if (action === "correct") return "rejected";
   if (action === "mark_needs_review") return "needs_review";
   if (action === "mark_contradicted") return "contradicted";
   if (action === "reset") return "unreviewed";

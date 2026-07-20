@@ -103,6 +103,32 @@ describe("structured threat-intelligence storage contract", () => {
     expect(store.getIntelligenceClaim(claim.id)?.reviewState).toBe("confirmed");
     expect(store.listClaimReviews()).toHaveLength(1);
   });
+
+  test("applies authenticated takedown redaction and claim correction actions", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_governed", tenantId: "tenant_governed" }));
+    const result = store.savePipelineResult(pipeline("src_governed", "tenant_governed"));
+    const claim = store.listIntelligenceClaims().find((record: any) => record.claimType === "actor");
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      authApiBase: "http://auth.test/api",
+      authFetch: async () => Response.json({ id: "admin-test", roles: [{ id: "admin" }] })
+    } as any;
+    const governance = (body: any) => handleApiRequest(api("/v1/intel/governance-actions?tenantId=tenant_governed", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer test", id: "admin-test" },
+      body: JSON.stringify(body)
+    }), options);
+
+    expect((await governance({ action: "redact_capture", captureId: result.capture.id, reason: "Approved evidence removal request" })).status).toBe(201);
+    expect(store.getCapture(result.capture.id)).toMatchObject({ storageKind: "metadata_only", body: undefined, objectRef: undefined });
+    expect((await governance({ action: "takedown_source", sourceId: "src_governed", reason: "Publisher requested collection takedown" })).status).toBe(201);
+    expect(store.getSource("src_governed")?.status).toBe("disabled");
+    expect((await governance({ action: "correct_claim", claimId: claim.id, correctedValue: "APT28", reason: "Analyst verified the actor was misidentified" })).status).toBe(201);
+    expect(store.getIntelligenceClaim(claim.id)?.reviewState).toBe("rejected");
+    expect(store.listClaimReviews()).toContainEqual(expect.objectContaining({ action: "correct", correctedValue: "APT28", reviewerId: "admin-test" }));
+  });
 });
 
 const databaseUrl = Bun.env.TI_TEST_DATABASE_URL;
