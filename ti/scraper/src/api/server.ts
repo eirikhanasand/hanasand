@@ -31,6 +31,7 @@ import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertC
 import { buildSchedulerDiagnostics, SCHEDULER_CUTOVER_DESIGN } from "../frontier/schedulerProduction.ts";
 import { buildResourceSnapshot, estimateCapacity, sizeWorkerPools } from "../ops/resourceControls.ts";
 import { DEFAULT_RESOURCE_BUDGET } from "../ops/config.ts";
+import { authenticateOperatorRequest } from "./requestAuthentication.ts";
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 export function startApiServer(options: ApiServerOptions): ApiServerHandle {
   const serve = (port: number) => Bun.serve({ port, hostname: options.port === 0 ? "127.0.0.1" : undefined, fetch: (request) => handleDurableApiRequest(request, options) });
@@ -54,6 +55,10 @@ async function handleDurableApiRequest(request: Request, options: ApiServerOptio
 export async function handleApiRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const url = new URL(request.url);
   try {
+    if (requiresAuthenticatedMutation(request.method, url.pathname)) {
+      const authentication = await authenticateOperatorRequest(request, options);
+      if (authentication.error) return authentication.error;
+    }
     const orgAlertCaseActionLedgerResponse = await handleOrgAlertCaseActionLedgerRequest(request, {
       repository: orgAlertCaseActionLedgerRepository(options)
     });
@@ -314,6 +319,18 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   } catch (caught) {
     return error("internal_error", caught instanceof Error ? caught.message : String(caught), 500);
   }
+}
+
+function requiresAuthenticatedMutation(method: string, pathname: string): boolean {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return false;
+  return pathname === "/v1/intel/runs"
+    || pathname === "/v1/organizations"
+    || pathname.startsWith("/v1/organizations/")
+    || pathname === "/v1/cases"
+    || pathname.startsWith("/v1/cases/")
+    || pathname.startsWith("/v1/dwm/")
+    || pathname === "/v1/ti/actor-org-relevance"
+    || pathname.startsWith("/v1/ti/actor-org-relevance/");
 }
 
 function orgAlertCaseActionLedgerRepository(options: ApiServerOptions): InMemoryOrgAlertCaseActionLedgerRepository {

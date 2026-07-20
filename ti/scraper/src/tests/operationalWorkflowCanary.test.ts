@@ -8,6 +8,7 @@ test("runs the operational workflow canary through transport, watchlist, alert, 
   const result = await runOperationalWorkflowCanary({
     base: "http://canary.test",
     sinkUrl: "https://hanasand.com/api/dwm/webhook-sink",
+    serviceToken: "canary-test-secret",
     fetcher: async (input) => {
       const path = new URL(String(input)).pathname;
       paths.push(path);

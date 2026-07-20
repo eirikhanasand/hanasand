@@ -8,11 +8,14 @@ export async function runOperationalWorkflowCanary(input: {
   base?: string;
   sinkUrl?: string;
   fetcher?: Fetcher;
+  serviceToken?: string;
 } = {}) {
   const base = input.base ?? Bun.env.TI_SCRAPER_API_URL ?? "http://127.0.0.1:8097";
   const sinkUrl = input.sinkUrl ?? Bun.env.TI_WORKFLOW_CANARY_SINK_URL ?? "https://hanasand.com/api/dwm/webhook-sink";
   const fetcher = input.fetcher ?? fetch;
-  const headers = { "content-type": "application/json", "x-actor-id": OWNER_ID };
+  const serviceToken = input.serviceToken ?? Bun.env.TI_SCRAPER_SERVICE_TOKEN;
+  if (!serviceToken) throw new Error("TI_SCRAPER_SERVICE_TOKEN is required");
+  const headers = { "content-type": "application/json", "x-actor-id": OWNER_ID, "x-hanasand-service-token": serviceToken };
 
   await post(fetcher, `${base}/v1/organizations`, {
     id: ORGANIZATION_ID,
