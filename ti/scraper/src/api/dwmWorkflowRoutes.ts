@@ -1069,7 +1069,7 @@ function resolveDwmWatchlistScope(input: { watchlist: DwmWatchlist; body?: any; 
   return resolveOrganizationScope({ body, url: input.url, request: input.request }, options);
 }
 
-function authorizeDwmWorkflowAccess(input: { options: ApiServerOptions; scope: { organizationId?: string; organization?: unknown }; request?: Request; url?: URL; body?: any; mode: DwmWorkflowAccessMode }): DwmWorkflowAccessResult {
+export function authorizeDwmWorkflowAccess(input: { options: ApiServerOptions; scope: { organizationId?: string; organization?: unknown }; request?: Request; url?: URL; body?: any; mode: DwmWorkflowAccessMode }): DwmWorkflowAccessResult {
   const visibilityPolicy = organizationAlertVisibilityPolicy(input.scope.organization);
   const allowedRoles = allowedDwmVisibilityRoles(visibilityPolicy);
   const openDecision: DwmVisibilityDecision = { allowed: true, reason: null, alertVisibilityPolicy: visibilityPolicy, allowedRoles };

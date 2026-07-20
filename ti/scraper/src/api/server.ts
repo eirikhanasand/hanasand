@@ -1,7 +1,7 @@
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { getOrganizationEntitlementReadiness, getOrganizationEntitlements, upsertOrganizationEntitlements } from "./dwmEntitlementRoutes.ts";
 import { buildDwmSourcePackWorkerReadinessSnapshot, createDwmSourceRequest } from "./dwmSourceRequestRoute.ts";
-import { createDwmWatchlist, deliverDwmWebhooks, disableDwmWatchlist, getDwmAlertDetail, getDwmAlertGenerationReadiness, getDwmWatchlistDetail, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, replayDwmAlert, storedWatchlistTerms, testDwmWebhook, updateDwmAlert, updateDwmWatchlist } from "./dwmWorkflowRoutes.ts";
+import { authorizeDwmWorkflowAccess, createDwmWatchlist, deliverDwmWebhooks, disableDwmWatchlist, getDwmAlertDetail, getDwmAlertGenerationReadiness, getDwmWatchlistDetail, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, replayDwmAlert, storedWatchlistTerms, testDwmWebhook, updateDwmAlert, updateDwmWatchlist } from "./dwmWorkflowRoutes.ts";
 import { buildDwmProductSnapshot, normalizeWatchlist } from "../product/dwmProduct.ts";
 import { buildDwmOperationsSnapshot } from "../product/dwmOperations.ts";
 import { buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
@@ -144,6 +144,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if ((url.pathname === "/v1/dwm/product" || url.pathname === "/api/dwm/product") && request.method === "GET") {
       const scope = resolveOrganizationScope({ url, request }, options);
       if (scope.error) return scope.error;
+      const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
+      if (access.error) return access.error;
       const tenantId = scope.tenantId;
       const explicitWatchlist = parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? url.searchParams.get("q") ?? "");
       return json(withPersistedDwmProductAlerts(buildDwmProductSnapshot({
@@ -157,6 +159,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       const body = await readJson(request);
       const scope = resolveOrganizationScope({ body, url, request }, options);
       if (scope.error) return scope.error;
+      const access = authorizeDwmWorkflowAccess({ options, scope, request, url, body, mode: "read" });
+      if (access.error) return access.error;
       const tenantId = scope.tenantId;
       return json(withPersistedDwmProductAlerts(buildDwmProductSnapshot({
         tenantId,
@@ -168,6 +172,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if ((url.pathname === "/v1/dwm/operations" || url.pathname === "/api/dwm/operations") && request.method === "GET") {
       const scope = resolveOrganizationScope({ url, request }, options);
       if (scope.error) return scope.error;
+      const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
+      if (access.error) return access.error;
       const tenantId = scope.tenantId;
       const explicitWatchlist = parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? url.searchParams.get("q") ?? "");
       return json(buildDwmOperationsSnapshot({
@@ -182,6 +188,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if ((url.pathname === "/v1/dwm/source-inventory" || url.pathname === "/api/dwm/source-inventory") && request.method === "GET") {
       const scope = resolveOrganizationScope({ url, request }, options);
       if (scope.error) return scope.error;
+      const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
+      if (access.error) return access.error;
       const generatedAt = url.searchParams.get("generatedAt") ?? nowIso();
       return json({
         ...buildDwmSourceInventory({
