@@ -68,7 +68,6 @@ function isAllowedIncidentalSchedulerFile(file: string) {
         'api/src/handlers/onionSession/ws.ts',
         'api/src/handlers/systemCron.ts',
         'api/src/handlers/traffic/legacy.ts',
-        'api/src/utils/ti/search.ts',
         'api/src/utils/auth/tokenWrapper.ts',
         'ti/scraper/src/api/server.ts',
         'ti/scraper/src/runtime/startup.ts',

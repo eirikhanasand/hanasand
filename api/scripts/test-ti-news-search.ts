@@ -1,4 +1,4 @@
-import { buildActorSearchExpression, clusterLiveNews, parseGoogleNewsRss } from '../src/utils/ti/search.ts'
+import { buildActorSearchExpression, clusterLiveNews, parseGoogleNewsRss } from '../src/utils/ti/newsParsing.ts'
 
 const xml = `<?xml version="1.0"?>
 <rss><channel><item>
