@@ -40,6 +40,8 @@ export function buildCorroboratedEvaluationCorpus(claims: any[], captures: any[]
       outcome: "true_positive",
       datasetSplit: split(claim.id),
       labeledBy: LABELED_BY,
+      labelingMethod: "cross_source_corroboration",
+      independentFromExtractor: false,
       labeledAt,
       notes: `Claim value is supported by ${references.size} distinct public publisher hosts; no raw evidence is included.`
     });

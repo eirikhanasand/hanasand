@@ -169,6 +169,10 @@ async function createEvaluationLabel(request: Request, options: ApiServerOptions
   if (!["train", "validation", "test", "unassigned"].includes(body.datasetSplit ?? "unassigned")) {
     return error("invalid_dataset_split", "Unsupported evaluation dataset split", 400);
   }
+  const labelingMethods = new Set(["manual_source_review", "source_field_parity", "cross_source_corroboration"]);
+  if (!labelingMethods.has(body.labelingMethod) || body.labelingMethod === "manual_source_review" && body.independentFromExtractor !== true) {
+    return error("invalid_labeling_method", "Evaluation labels must declare their labeling method; manual review must confirm extractor independence", 400);
+  }
   if (!validEvaluationLabelType(body.labelType) || !cleanId(body.labeledBy) || !safeEvaluationValue(body.expectedValue) || !safeEvaluationValue(body.observedValue) || containsForbiddenMaterial(body)) {
     return error("invalid_evaluation_label", "Evaluation labels require labelType and labeledBy and cannot contain raw sensitive material", 400);
   }
@@ -185,6 +189,8 @@ async function createEvaluationLabel(request: Request, options: ApiServerOptions
     observedValue: body.observedValue,
     outcome: body.outcome,
     labeledBy: body.labeledBy.trim(),
+    labelingMethod: body.labelingMethod,
+    independentFromExtractor: body.labelingMethod === "manual_source_review",
     labeledAt,
     datasetSplit: body.datasetSplit ?? "unassigned",
     notes: typeof body.notes === "string" ? body.notes.trim().slice(0, 2_000) : undefined,

@@ -19,7 +19,7 @@ test("labels only claims corroborated by distinct safe public publishers", () =>
   ];
 
   const corpus = buildCorroboratedEvaluationCorpus([claim], captures);
-  expect(corpus.labels).toEqual([expect.objectContaining({ claimId: claim.id, labelType: "actor", expectedValue: "Akira", outcome: "true_positive" })]);
+  expect(corpus.labels).toEqual([expect.objectContaining({ claimId: claim.id, labelType: "actor", expectedValue: "Akira", outcome: "true_positive", labelingMethod: "cross_source_corroboration", independentFromExtractor: false })]);
   expect(corpus.validations).toHaveLength(2);
   expect(JSON.stringify(corpus)).not.toContain(".onion");
 

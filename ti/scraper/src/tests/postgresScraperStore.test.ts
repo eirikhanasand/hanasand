@@ -91,6 +91,8 @@ describe("structured threat-intelligence storage contract", () => {
         outcome: "true_positive",
         datasetSplit: "test",
         labeledBy: "analyst_test",
+        labelingMethod: "manual_source_review",
+        independentFromExtractor: true,
         labeledAt: collectedAt
       })
     }), options);

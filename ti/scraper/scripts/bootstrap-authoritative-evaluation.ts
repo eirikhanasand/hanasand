@@ -3,7 +3,7 @@ import { stableId } from "../src/utils.ts";
 const SOURCE_ID = "src_seed_cisa_known_exploited_vulns";
 const REFERENCE_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json";
 const LABELED_BY = "cisa-kev-authoritative-v1";
-const NOTES = "Expected fields come from the official CISA KEV structured entry; observed values come from ti-source-specific-extractor-v1.";
+const NOTES = "Structured-field parity check: expected and observed values derive from the same CISA KEV entry. This is diagnostic and is not an independent accuracy label.";
 
 export function buildCisaEvaluationCorpus(captures: any[], entities: any[]) {
   const labels: any[] = [], validations: any[] = [];
@@ -39,6 +39,8 @@ export function buildCisaEvaluationCorpus(captures: any[], entities: any[]) {
       outcome: capture.publishedAt === expectedDate ? "true_positive" : "false_negative",
       datasetSplit: split,
       labeledBy: LABELED_BY,
+      labelingMethod: "source_field_parity",
+      independentFromExtractor: false,
       labeledAt: capture.collectedAt,
       notes: NOTES
     });
@@ -66,6 +68,8 @@ function label(capture: any, split: string, type: string, expectedValue: string,
     outcome: entity ? "true_positive" : "false_negative",
     datasetSplit: split,
     labeledBy: LABELED_BY,
+    labelingMethod: "source_field_parity",
+    independentFromExtractor: false,
     labeledAt: capture.collectedAt,
     notes: NOTES
   };

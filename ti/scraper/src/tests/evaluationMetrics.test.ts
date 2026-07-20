@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
+import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { hashContent } from "../utils.ts";
 
@@ -14,9 +15,9 @@ describe("durable evaluation metrics", () => {
     const actor = store.listExtractedEntities().find((entity: any) => entity.type === "actor");
     const falsePositive = store.saveExtractedEntity({ id: "entity_false_positive", tenantId: "tenant_eval", sourceId: "src_eval", captureId: saved.capture.id, type: "ttp", value: "password spraying", extractorVersion: "test-parser", confidence: 0.6 });
     const labels = [
-      { id: "label_tp", tenantId: "tenant_eval", entityId: actor.id, labelType: "actor_extraction", expectedValue: "APT29", observedValue: "APT29", outcome: "true_positive", datasetSplit: "test", labeledBy: "analyst", labeledAt: at },
-      { id: "label_fp", tenantId: "tenant_eval", entityId: falsePositive.id, labelType: "ttp_extraction", observedValue: "password spraying", outcome: "false_positive", datasetSplit: "test", labeledBy: "analyst", labeledAt: at },
-      { id: "label_fn", tenantId: "tenant_eval", captureId: saved.capture.id, labelType: "victim_extraction", expectedValue: "Missing Victim Ltd", outcome: "false_negative", datasetSplit: "test", labeledBy: "analyst", labeledAt: at }
+      { id: "label_tp", tenantId: "tenant_eval", entityId: actor.id, labelType: "actor_extraction", expectedValue: "APT29", observedValue: "APT29", outcome: "true_positive", datasetSplit: "test", labeledBy: "analyst", labelingMethod: "manual_source_review", independentFromExtractor: true, labeledAt: at },
+      { id: "label_fp", tenantId: "tenant_eval", entityId: falsePositive.id, labelType: "ttp_extraction", observedValue: "password spraying", outcome: "false_positive", datasetSplit: "test", labeledBy: "analyst", labelingMethod: "manual_source_review", independentFromExtractor: true, labeledAt: at },
+      { id: "label_fn", tenantId: "tenant_eval", captureId: saved.capture.id, labelType: "victim_extraction", expectedValue: "Missing Victim Ltd", outcome: "false_negative", datasetSplit: "test", labeledBy: "analyst", labelingMethod: "manual_source_review", independentFromExtractor: true, labeledAt: at }
     ];
     for (const label of labels) store.saveEvaluationLabel(label);
     store.saveEvaluationLabel({ ...labels[0], id: "label_other_tenant", tenantId: "tenant_other", entityId: "entity_other" });
@@ -33,5 +34,15 @@ describe("durable evaluation metrics", () => {
     expect(body.coverage).toMatchObject({ activeSourceCount: 1, attemptedSourceCount: 1, successfulSourceCount: 1, usefulSourceCount: 1, actorCount: 1, sourceAttemptCount: 1, activeSourceReliabilityRate: 1, usefulAttemptRate: 1, duplicateObservationCount: 1, duplicationRate: 0.25, falsePositiveRate: 0.333, falsePositiveSampleSize: 3 });
     expect(body.validation).toMatchObject({ recordCount: 1, statuses: { supported: 1 }, referenceHostCount: 1 });
     expect(() => store.saveEvaluationLabel({ ...labels[0], outcome: "false_positive" })).toThrow("Evaluation label is immutable");
+  });
+
+  test("keeps automated parity labels out of independent accuracy", () => {
+    const store = new InMemoryScraperStore();
+    store.saveEvaluationLabel({ id: "label_parity", captureId: "capture_parity", labelType: "cve_extraction", outcome: "true_positive", datasetSplit: "test", labeledBy: "cisa-kev-authoritative-v1", labelingMethod: "source_field_parity", independentFromExtractor: false, labeledAt: "2026-07-20T00:00:00.000Z" });
+
+    const metrics = buildEvaluationMetrics(store, { datasetSplit: "test" });
+    expect(metrics.quality).toMatchObject({ status: "diagnostic_only", evaluatedUnitCount: 0, diagnosticUnitCount: 1, overall: { precision: null, recall: null } });
+    expect(metrics.quality.diagnostics.overall).toMatchObject({ truePositive: 1, precision: 1 });
+    expect(metrics.limitations).toContain("no independently reviewed evaluation labels in scope; automated checks are diagnostic only");
   });
 });

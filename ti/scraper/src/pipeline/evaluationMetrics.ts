@@ -16,7 +16,10 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
   const subjects = new Map([...entities, ...indicators, ...incidents, ...claims].map((record: any) => [record.id, record]));
   const labelEvents = scoped("listEvaluationLabels").filter((label: any) => !input.datasetSplit || label.datasetSplit === input.datasetSplit);
   const labels = latestLabels(labelEvents);
-  const rows = labels.map((label: any) => labelRow(label, subjects, captureById, sourceById));
+  const independentLabels = labels.filter(isIndependentEvaluationLabel);
+  const diagnosticLabels = labels.filter((label: any) => !isIndependentEvaluationLabel(label));
+  const rows = independentLabels.map((label: any) => labelRow(label, subjects, captureById, sourceById));
+  const diagnosticRows = diagnosticLabels.map((label: any) => labelRow(label, subjects, captureById, sourceById));
   const timeliness = scoped("listTimelinessRecords");
   const health = scoped("listSourceHealthObservations");
   const validations = scoped("listValidationRecords");
@@ -26,9 +29,10 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
     generatedAt: input.generatedAt ?? new Date().toISOString(),
     scope: { tenantId: input.tenantId ?? null, datasetSplit: input.datasetSplit ?? "all" },
     quality: {
-      status: labels.length ? "measured" : "unmeasured",
+      status: independentLabels.length ? "measured" : labels.length ? "diagnostic_only" : "unmeasured",
       labelEventCount: labelEvents.length,
-      evaluatedUnitCount: labels.length,
+      evaluatedUnitCount: independentLabels.length,
+      diagnosticUnitCount: diagnosticLabels.length,
       supersededLabelCount: labelEvents.length - labels.length,
       classifiedCount: rows.filter((row: any) => row.bucket !== "needs_review").length,
       needsReviewCount: rows.filter((row: any) => row.bucket === "needs_review").length,
@@ -36,7 +40,11 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
       byLabelType: groupedScores(rows, (row) => row.labelType),
       byParser: groupedScores(rows, (row) => row.parserVersion),
       bySourceFamily: groupedScores(rows, (row) => row.sourceFamily),
-      byDatasetSplit: groupedScores(rows, (row) => row.datasetSplit)
+      byDatasetSplit: groupedScores(rows, (row) => row.datasetSplit),
+      diagnostics: {
+        overall: score(diagnosticRows),
+        byLabelingMethod: groupedScores(diagnosticRows, (row) => row.labelingMethod)
+      }
     },
     timeliness: {
       status: timeliness.length ? "measured" : "unmeasured",
@@ -53,6 +61,7 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
     },
     limitations: [
       !labels.length && "no evaluation labels in scope",
+      labels.length > 0 && !independentLabels.length && "no independently reviewed evaluation labels in scope; automated checks are diagnostic only",
       !rows.some((row: any) => row.bucket === "false_negative") && "recall is unmeasured until false-negative labels exist",
       !timeliness.some((record: any) => record.alertedAt) && "alert-delivery latency is unmeasured"
     ].filter(Boolean)
@@ -68,9 +77,22 @@ function labelRow(label: any, subjects: Map<string, any>, captures: Map<string, 
     labelType: label.labelType ?? "unknown",
     datasetSplit: label.datasetSplit ?? "unassigned",
     bucket: outcomeBucket(label.outcome),
+    labelingMethod: evaluationLabelMethod(label),
     parserVersion: subject?.extractorVersion ?? capture?.metadata?.extractorVersion ?? capture?.provenance?.extractorVersion ?? "unknown",
     sourceFamily: sourceFamily(source)
   };
+}
+
+export function evaluationLabelMethod(label: any): string {
+  if (typeof label?.labelingMethod === "string" && label.labelingMethod.trim()) return label.labelingMethod.trim();
+  if (label?.labeledBy === "cisa-kev-authoritative-v1") return "source_field_parity";
+  if (label?.labeledBy === "cross-source-corroboration-v1") return "cross_source_corroboration";
+  if (label?.labeledBy === "thesis-evaluation-audit") return "manual_source_review";
+  return "unspecified";
+}
+
+export function isIndependentEvaluationLabel(label: any): boolean {
+  return evaluationLabelMethod(label) === "manual_source_review" && label?.independentFromExtractor !== false;
 }
 
 function latestLabels(labels: any[]): any[] {

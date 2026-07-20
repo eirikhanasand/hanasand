@@ -1,4 +1,5 @@
 import { buildEntityResolutionWorkbenchDto } from "../pipeline/entityResolution.ts";
+import { isIndependentEvaluationLabel } from "../pipeline/evaluationMetrics.ts";
 
 export function qualityPayload(query: string, store: any, tenantId?: string, generatedAt = new Date().toISOString()) {
   const normalizedQuery = query.trim().toLowerCase();
@@ -8,6 +9,7 @@ export function qualityPayload(query: string, store: any, tenantId?: string, gen
   const captureIds = new Set([...captures.map((capture) => capture.id), ...claims.flatMap((claim) => claim.captureIds ?? [])]);
   const entities = scoped("listExtractedEntities").filter((entity) => captureIds.has(entity.captureId) || normalized(entity.value) === normalizedQuery);
   const labels = scoped("listEvaluationLabels").filter((label) => captureIds.has(label.captureId) || entities.some((entity) => entity.id === label.entityId));
+  const independentLabels = labels.filter(isIndependentEvaluationLabel);
   const sources = new Set([...captures.map((capture) => capture.sourceId), ...claims.flatMap((claim) => claim.sourceIds ?? [])].filter(Boolean));
   const evidenceIds = [...new Set([...captures.map((capture) => capture.id), ...claims.map((claim) => claim.id)])];
   const aliasConflicts = aliasConflictIds(scoped("listActorAliases"), normalizedQuery);
@@ -17,7 +19,7 @@ export function qualityPayload(query: string, store: any, tenantId?: string, gen
   const status = contradicted ? "contradicted" : stale ? "stale" : reviewed ? "ready" : evidenceIds.length ? "partial" : "unmeasured";
   const scores = [...claims.map((claim) => score(claim.confidence)), ...entities.map((entity) => score(entity.confidence))].filter((value): value is number => value !== undefined);
   const qualityScore = scores.length ? round(scores.reduce((total, value) => total + value, 0) / scores.length) : null;
-  const warnings = warningCodes({ status, aliasConflicts, sources, labels, claims });
+  const warnings = warningCodes({ status, aliasConflicts, sources, labels: independentLabels, claims });
   const entityResolutionWorkbench = buildEntityResolutionWorkbenchDto({ query, evidence: resolutionEvidence(store, tenantId, captureIds), generatedAt });
 
   return {
@@ -30,7 +32,7 @@ export function qualityPayload(query: string, store: any, tenantId?: string, gen
       canPromoteToReady: status === "ready",
       publicWarningCodes: warnings,
       publicWarningText: warnings.map(warningText),
-      evidence: { evidenceCount: evidenceIds.length, captureCount: captures.length, claimCount: claims.length, sourceCount: sources.size, evaluatedLabelCount: labels.length },
+      evidence: { evidenceCount: evidenceIds.length, captureCount: captures.length, claimCount: claims.length, sourceCount: sources.size, evaluatedLabelCount: independentLabels.length, diagnosticLabelCount: labels.length - independentLabels.length },
       analystActions: actions(status, aliasConflicts.length > 0, evidenceIds)
     },
     dashboard: { useful: evidenceIds.length > 0, measured: qualityScore !== null, evidenceCount: evidenceIds.length, sourceCount: sources.size },
