@@ -25,7 +25,8 @@ import { InMemoryScraperStore } from "./memoryStore.ts";
 const DEFAULT_MIGRATIONS = [
   { version: "006_threat_intelligence_store", path: fileURLToPath(new URL("../../migrations/006_threat_intelligence_store.sql", import.meta.url)) },
   { version: "007_operational_intelligence_spine", path: fileURLToPath(new URL("../../migrations/007_operational_intelligence_spine.sql", import.meta.url)) },
-  { version: "008_intelligence_claims", path: fileURLToPath(new URL("../../migrations/008_intelligence_claims.sql", import.meta.url)) }
+  { version: "008_intelligence_claims", path: fileURLToPath(new URL("../../migrations/008_intelligence_claims.sql", import.meta.url)) },
+  { version: "009_preserve_changed_capture_evidence", path: fileURLToPath(new URL("../../migrations/009_preserve_changed_capture_evidence.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
