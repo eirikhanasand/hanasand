@@ -14,6 +14,7 @@ import recordTraffic from '#utils/traffic/recordTraffic.ts'
 import { recordHttpErrorResponse } from '#utils/logs/httpErrors.ts'
 import { provisionExistingMailAccounts } from '#utils/mail/accounts.ts'
 import { recordThreatActorProfileWarmFailure, warmThreatActorProfileCache } from '#utils/ti/search.ts'
+import { isAllowedApiOrigin, TRUSTED_API_PROXIES } from '#utils/http/publicBoundary.ts'
 
 process.on('uncaughtException', error => {
     if (isBunWebSocketErrorEvent(error)) {
@@ -29,7 +30,8 @@ process.on('uncaughtException', error => {
 })
 
 const fastify = Fastify({
-    logger: true
+    logger: true,
+    trustProxy: TRUSTED_API_PROXIES,
 })
 const port = Number(process.env.PORT) || 8081
 const browserWorkerOnly = process.env.BROWSER_SANDBOX_WORKER_ONLY === '1'
@@ -52,7 +54,7 @@ fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, b
 
 fastify.register(websocketPlugin)
 fastify.register(cors, {
-    origin: true,
+    origin: (origin, callback) => callback(null, isAllowedApiOrigin(origin)),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD']
 })
 

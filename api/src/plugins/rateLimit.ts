@@ -55,16 +55,12 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
             return
         }
 
-        const settings = await getRateLimitSettings()
-        if (!settings.enabled) {
-            return
-        }
-
         const actor = await resolveRateLimitActor(req)
+        let apiKeyScope: ReturnType<typeof matchApiKeyScope> = null
         if (actor.apiKey) {
             ;(req as FastifyRequest & { apiKeyAuth?: typeof actor.apiKey }).apiKeyAuth = actor.apiKey
-            const keyScope = matchApiKeyScope(actor.apiKey.apiKey.scopes, req.method, path)
-            if (!keyScope) {
+            apiKeyScope = matchApiKeyScope(actor.apiKey.apiKey.scopes, req.method, path)
+            if (!apiKeyScope) {
                 return res.status(403).send({
                     error: 'API key is not allowed to access this endpoint.',
                     route: path,
@@ -72,11 +68,19 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
                 })
             }
 
+        }
+
+        const settings = await getRateLimitSettings()
+        if (!settings.enabled) {
+            return
+        }
+
+        if (actor.apiKey && apiKeyScope) {
             const periodChecks = consumeApiKeyScopeBudgets({
                 apiKeyId: actor.apiKey.apiKey.id,
                 method: req.method,
                 route: path,
-                limits: keyScope.limits,
+                limits: apiKeyScope.limits,
             })
 
             applyApiKeyLimitHeaders(res, periodChecks)
@@ -212,12 +216,7 @@ function isInternalRole(roleId: string, roleName: string) {
         || normalizedId === 'administrator'
 }
 
-function getClientIp(req: FastifyRequest) {
-    const forwarded = req.headers['x-forwarded-for']
-    if (typeof forwarded === 'string' && forwarded.trim()) {
-        return forwarded.split(',')[0].trim()
-    }
-
+export function getClientIp(req: Pick<FastifyRequest, 'ip'>) {
     return req.ip || 'unknown'
 }
 

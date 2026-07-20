@@ -9,6 +9,8 @@ backend default {
 }
 
 sub vcl_recv {
+    set req.http.X-Forwarded-For = client.ip;
+
     if (req.http.Upgrade ~ "(?i)websocket") {
         return (pipe);
     }
@@ -33,6 +35,12 @@ sub vcl_recv {
 }
 
 sub vcl_backend_response {
+    if (bereq.url ~ "^/api/ti(/|$)") {
+        set beresp.ttl = 0s;
+        set beresp.http.Cache-Control = "no-store, max-age=0";
+        return (deliver);
+    }
+
     if (beresp.http.Cache-Control ~ "no-store") {
         set beresp.ttl = 0s;
         return (deliver);
