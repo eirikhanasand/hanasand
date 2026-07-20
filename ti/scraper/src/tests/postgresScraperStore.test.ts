@@ -56,11 +56,17 @@ describe("structured threat-intelligence storage contract", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_research" }));
     const result = store.savePipelineResult(pipeline("src_research"));
-    const options = { store, frontier: new FocusedFrontier() };
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      authApiBase: "http://auth.test/api",
+      authFetch: async () => Response.json({ id: "analyst_test", roles: [{ id: "analyst" }] })
+    } as any;
+    const analystHeaders = { "content-type": "application/json", authorization: "Bearer test", id: "analyst_test" };
 
     const validationResponse = await handleApiRequest(api("/v1/intel/validation-records", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: analystHeaders,
       body: JSON.stringify({
         incidentId: result.incident.id,
         validationType: "public_breach_confirmation",
@@ -76,13 +82,13 @@ describe("structured threat-intelligence storage contract", () => {
     const claim = store.listIntelligenceClaims().find((record: any) => record.claimType === "actor");
     const reviewResponse = await handleApiRequest(api(`/v1/intel/claims/${claim.id}/reviews`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-actor-id": "analyst_test" },
+      headers: analystHeaders,
       body: JSON.stringify({ action: "confirm", reason: "Verified against the cited public report." })
     }), options);
     expect(reviewResponse.status).toBe(201);
     const labelResponse = await handleApiRequest(api("/v1/intel/evaluation-labels", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: analystHeaders,
       body: JSON.stringify({
         entityId: entity.id,
         labelType: "actor_extraction",

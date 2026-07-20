@@ -92,18 +92,31 @@ describe("structured intelligence API boundary", () => {
     store.saveSource({ ...source({ id: "src_tenant_b" }), tenantId: "tenant_b" });
     const capture = store.saveCapture(fixtureCapture({ id: "cap_tenant_b", tenantId: "tenant_b", sourceId: "src_tenant_b" }));
     store.saveIntelligenceClaim({ id: "claim_tenant_b", tenantId: "tenant_b", reviewState: "unreviewed" });
-    const options = { store, frontier: new FocusedFrontier() };
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      authApiBase: "http://auth.test/api",
+      authFetch: async () => Response.json({ id: "analyst_a", roles: [{ id: "analyst" }] })
+    } as any;
+    const analystHeaders = { "content-type": "application/json", authorization: "Bearer test", id: "analyst_a", "x-tenant-id": "tenant_a" };
+
+    const unauthenticated = await handleApiRequest(api("/v1/intel/evaluation-labels", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ captureId: capture.id })
+    }), options);
+    expect(unauthenticated.status).toBe(401);
 
     const validation = await handleApiRequest(api("/v1/intel/validation-records", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-tenant-id": "tenant_a" },
+      headers: analystHeaders,
       body: JSON.stringify({ captureId: capture.id, validationType: "public_confirmation", status: "supported", referenceUrl: "https://example.test/report" })
     }), options);
     expect(validation.status).toBe(400);
 
     const review = await handleApiRequest(api("/v1/intel/claims/claim_tenant_b/reviews", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-tenant-id": "tenant_a", "x-actor-id": "analyst_a" },
+      headers: analystHeaders,
       body: JSON.stringify({ action: "confirm", reason: "Confirmed against a public report." })
     }), options);
     expect(review.status).toBe(404);

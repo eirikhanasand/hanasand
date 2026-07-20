@@ -115,6 +115,8 @@ async function applyGovernanceAction(request: Request, options: ApiServerOptions
 }
 
 async function createValidationRecord(request: Request, options: ApiServerOptions): Promise<Response> {
+  const authentication = await authenticateAnalystRequest(request, options);
+  if (authentication.error) return authentication.error;
   const body = await readJson<any>(request);
   const scope = resolveTenantScope(request, new URL(request.url), body.tenantId);
   if (scope.error) return scope.error;
@@ -141,6 +143,7 @@ async function createValidationRecord(request: Request, options: ApiServerOption
     validationType: body.validationType.trim(),
     matchedAt,
     referencePublishedAt: validIso(body.referencePublishedAt),
+    reviewerId: authentication.identity!.id,
     tenantId: scope.tenantId,
     updatedAt: nowIso()
   };
@@ -148,6 +151,8 @@ async function createValidationRecord(request: Request, options: ApiServerOption
 }
 
 async function createEvaluationLabel(request: Request, options: ApiServerOptions): Promise<Response> {
+  const authentication = await authenticateAnalystRequest(request, options);
+  if (authentication.error) return authentication.error;
   const body = await readJson<any>(request);
   const scope = resolveTenantScope(request, new URL(request.url), body.tenantId);
   if (scope.error) return scope.error;
@@ -173,8 +178,8 @@ async function createEvaluationLabel(request: Request, options: ApiServerOptions
   if (!labelingMethods.has(body.labelingMethod) || body.labelingMethod === "manual_source_review" && body.independentFromExtractor !== true) {
     return error("invalid_labeling_method", "Evaluation labels must declare their labeling method; manual review must confirm extractor independence", 400);
   }
-  if (!validEvaluationLabelType(body.labelType) || !cleanId(body.labeledBy) || !safeEvaluationValue(body.expectedValue) || !safeEvaluationValue(body.observedValue) || containsForbiddenMaterial(body)) {
-    return error("invalid_evaluation_label", "Evaluation labels require labelType and labeledBy and cannot contain raw sensitive material", 400);
+  if (!validEvaluationLabelType(body.labelType) || !safeEvaluationValue(body.expectedValue) || !safeEvaluationValue(body.observedValue) || containsForbiddenMaterial(body)) {
+    return error("invalid_evaluation_label", "Evaluation labels require labelType and cannot contain raw sensitive material", 400);
   }
   if (body.id !== undefined && !cleanId(body.id) || body.labeledAt !== undefined && !validIso(body.labeledAt)) {
     return error("invalid_evaluation_fields", "Evaluation ids and timestamps must use supported formats", 400);
@@ -188,7 +193,7 @@ async function createEvaluationLabel(request: Request, options: ApiServerOptions
     expectedValue: body.expectedValue,
     observedValue: body.observedValue,
     outcome: body.outcome,
-    labeledBy: body.labeledBy.trim(),
+    labeledBy: authentication.identity!.id,
     labelingMethod: body.labelingMethod,
     independentFromExtractor: body.labelingMethod === "manual_source_review",
     labeledAt,
@@ -201,6 +206,8 @@ async function createEvaluationLabel(request: Request, options: ApiServerOptions
 }
 
 async function createClaimReview(request: Request, options: ApiServerOptions, claimId: string, compatibilityAction?: string): Promise<Response> {
+  const authentication = await authenticateAnalystRequest(request, options);
+  if (authentication.error) return authentication.error;
   const body = await readJson<any>(request);
   const scope = resolveTenantScope(request, new URL(request.url), body.tenantId);
   if (scope.error) return scope.error;
@@ -209,7 +216,10 @@ async function createClaimReview(request: Request, options: ApiServerOptions, cl
   const action = compatibilityAction ?? body.action;
   const allowed = new Set(["confirm", "reject", "mark_needs_review", "mark_contradicted", "reset", "attach_legal_hold", "release_legal_hold"]);
   if (!allowed.has(action)) return error("invalid_claim_review_action", "Unsupported claim review action", 400);
-  const reviewerId = cleanId(body.reviewerId ?? request.headers.get("x-actor-id"));
+  if (["attach_legal_hold", "release_legal_hold"].includes(action) && !authentication.identity!.roles.some((role) => ["owner", "admin"].includes(role))) {
+    return error("claim_review_forbidden", "Legal hold changes require an administrator role", 403);
+  }
+  const reviewerId = authentication.identity!.id;
   const reason = typeof body.reason === "string" ? body.reason.trim() : "";
   if (!reviewerId || reason.length < 8 || containsForbiddenMaterial(body)) return error("invalid_claim_review", "Claim reviews require a reviewer and a specific safe reason", 400);
   const reviewedAt = validIso(body.reviewedAt) ?? nowIso();
@@ -277,6 +287,15 @@ async function analystClaimAction(request: Request, options: ApiServerOptions, c
 function analystEntryDto(entry: any) {
   const eligibilityBlockers = [entry.ledgerStatus !== "trusted" && "claim_not_trusted", entry.legalHold && "legal_hold"].filter(Boolean);
   return { ...entry, graphEligible: Boolean(entry.graphEligible && !entry.legalHold), stixEligible: Boolean(entry.stixEligible && !entry.legalHold), eligibilityBlockers };
+}
+
+async function authenticateAnalystRequest(request: Request, options: ApiServerOptions) {
+  const authentication = await authenticateRequest(request, options);
+  if (authentication.error) return authentication;
+  if (!authentication.identity!.roles.some((role) => ["owner", "admin", "analyst"].includes(role))) {
+    return { error: error("analyst_forbidden", "Intelligence review writes require an analyst role", 403) };
+  }
+  return authentication;
 }
 function exportEligible(claim: any) { return claim.reviewState === "confirmed" && claim.corroborationState !== "contradicted" && !claim.legalHold; }
 

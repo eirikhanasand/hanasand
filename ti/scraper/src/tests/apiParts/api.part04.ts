@@ -79,7 +79,15 @@ describe("api v1", () => {
       reviewState: "needs_review",
       corroborationState: "uncorroborated",
     });
-    const options = { store, frontier: new FocusedFrontier() };
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      authApiBase: "http://auth.test/api",
+      authFetch: async (input: string | URL | Request) => {
+        const id = new URL(String(input)).pathname.split("/").pop();
+        return Response.json({ id, roles: [{ id: id === "legal-1" ? "admin" : "analyst" }] });
+      }
+    } as any;
     const ledger = await body(
       await handleApiRequest(
         api("/v1/analyst/claim-ledger?q=Fjord&tenantId=tenant_claims"),
@@ -115,7 +123,8 @@ describe("api v1", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            "x-actor-id": "analyst-6",
+            authorization: "Bearer test",
+            id: "analyst-6",
           },
           body: JSON.stringify({
             action: "promote",
@@ -157,7 +166,8 @@ describe("api v1", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            "x-actor-id": "legal-1",
+            authorization: "Bearer test",
+            id: "legal-1",
           },
           body: JSON.stringify({
             action: "attach_legal_hold",
