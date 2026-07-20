@@ -270,7 +270,7 @@ function assess(rows: any[], records: ReturnType<typeof searchRecords>) {
   const reasons = unique([
     `${rows.length} capture(s) from ${records.sourceCount} independent source(s) match the query.`,
     records.sourceCount < 2 ? "Single-source evidence is capped below high confidence." : `${records.sourceCount} independent sources are represented.`,
-    rows.length && rows.every((row) => row.metadataOnly) ? "All matching captures are metadata-only and require review." : "At least one matching public capture has reviewable content.",
+    !rows.length ? "No matching public capture is available for review." : rows.every((row) => row.metadataOnly) ? "All matching captures are metadata-only and require review." : "At least one matching public capture has reviewable content.",
     confirmed ? `${confirmed} claim(s) are analyst-confirmed.` : "No claim is analyst-confirmed.",
     corroborated ? `${corroborated} claim(s) are corroborated across sources.` : "No claim is cross-source corroborated.",
     validated ? `${validated} independent validation record(s) support the evidence.` : "No supporting validation record is attached.",

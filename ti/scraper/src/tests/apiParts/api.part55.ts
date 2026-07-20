@@ -15,6 +15,8 @@ describe("api v1", () => {
     });
     expect(response.publicTiAnswer.waitReasons).toEqual(expect.arrayContaining([expect.objectContaining({ code: "capture_promotion" })]));
     expect(response.publicTiAnswer.evidenceLedgerReferences).toEqual([]);
+    expect(response.evidenceAssessment.reasons).toContain("No matching public capture is available for review.");
+    expect(response.evidenceAssessment.reasons).not.toContain("At least one matching public capture has reviewable content.");
     expect(response).not.toHaveProperty("collectionStrategy");
     expect(response.planner).not.toHaveProperty("decisions");
     expect(response.publicChannel).not.toHaveProperty("operatorStates");
