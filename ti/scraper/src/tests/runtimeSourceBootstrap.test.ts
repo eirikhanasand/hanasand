@@ -6,6 +6,12 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 describe("runtime source bootstrap and scheduler monitoring", () => {
+  test("keeps dry-run source-atlas candidates out of automatic production bootstrap", () => {
+    const result = bootstrapRuntimeSources(new InMemoryScraperStore(), { sourceTarget: 0 });
+    expect(result.seedPaths.some((path) => path.endsWith("high_value_exposure_source_candidates.json"))).toBe(false);
+    expect(result.errors.some((error) => error.path.endsWith("high_value_exposure_source_candidates.json"))).toBe(false);
+  });
+
   test("imports configured source bundles and reports the exact source target shortfall", () => {
     const store = new InMemoryScraperStore();
     const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-"));
