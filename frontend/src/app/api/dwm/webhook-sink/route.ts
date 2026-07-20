@@ -52,7 +52,6 @@ function validateDwmWebhookPayload(payload: Record<string, unknown> | null) {
 
     const requiredStrings = [
         'eventType',
-        'deliveredAt',
         'severity',
         'actor',
         'company',
@@ -70,6 +69,10 @@ function validateDwmWebhookPayload(payload: Record<string, unknown> | null) {
         }
     }
 
+    if (![payload.generatedAt, payload.deliveredAt].some(value => typeof value === 'string' && value.trim())) {
+        return 'Missing required DWM webhook field: generatedAt or deliveredAt.'
+    }
+
     if (payload.eventType !== 'darkweb.monitoring.match') {
         return 'Unsupported DWM webhook event type.'
     }
@@ -78,11 +81,11 @@ function validateDwmWebhookPayload(payload: Record<string, unknown> | null) {
         return 'DWM webhook confidence must be a number from 0 to 100.'
     }
 
-    if (!Array.isArray(payload.pivots)) {
-        return 'DWM webhook pivots must be an array.'
+    if (!Array.isArray(payload.selectedCaptureIds) && !Array.isArray(payload.pivots)) {
+        return 'DWM webhook evidence references must be an array.'
     }
 
-    if (!payload.webhookDelivery || typeof payload.webhookDelivery !== 'object') {
+    if (![payload.deliveryReadinessContext, payload.webhookDelivery].some(value => value && typeof value === 'object')) {
         return 'DWM webhook delivery metadata is required.'
     }
 

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 const validPayload = {
     eventType: 'darkweb.monitoring.match',
-    deliveredAt: '2026-07-03T02:14:00.000Z',
+    generatedAt: '2026-07-03T02:14:00.000Z',
     severity: 'critical',
     actor: 'Akira',
     company: 'Acme Payments',
@@ -17,10 +17,9 @@ const validPayload = {
     sourceCount: 5,
     reviewState: 'needs_review',
     recommendedAction: 'Confirm the company match and route to incident response.',
-    pivots: ['Akira', 'Acme Payments', 'acme.com'],
-    webhookDelivery: {
-        retryPolicy: 'signed delivery with retry and dead-letter review',
-        destinations: ['Slack', 'Jira'],
+    selectedCaptureIds: ['cap_akira_acme'],
+    deliveryReadinessContext: {
+        deliveryDedupeKey: 'dwm_dedupe_akira_acme',
     },
 }
 
@@ -52,6 +51,6 @@ test('public DWM webhook receiver validates sample payload shape before acceptin
     await expect(rejected.json()).resolves.toMatchObject({
         accepted: false,
         eventId: 'preview_contract_bad',
-        error: 'Missing required DWM webhook field: deliveredAt.',
+        error: 'Missing required DWM webhook field: severity.',
     })
 })
