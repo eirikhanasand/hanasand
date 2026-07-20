@@ -115,7 +115,7 @@ The initial feasibility set must include at least one working feed of each selec
 
 ### Production Quality
 
-- [ ] Make migrations forward-safe and verify clean installation, upgrade, restart persistence, backup, and restore.
+- [x] Make migrations forward-safe and verify clean installation, upgrade, restart persistence, backup, and restore.
 - [ ] Make collection idempotent, observable, rate-limited, and resilient to malformed or unavailable sources.
 - [ ] Establish authentication, authorization, tenant isolation, auditability, input validation, and safe outbound-fetch behavior across trust boundaries.
 - [ ] Remove dead production paths and avoid parallel sources of truth.
@@ -139,6 +139,7 @@ The initial feasibility set must include at least one working feed of each selec
 - Real PostgreSQL checks have covered restart persistence, deduplication, legacy hydration, schema isolation, lineage, alerts, validations, evaluation labels, and database pagination.
 - PostgreSQL migration 007 adds normalized actor aliases, collection runs, source-health observations, and timeliness records; both clean installation and upgrade from migration 006 have been exercised against PostgreSQL.
 - PostgreSQL migration 008 adds logical intelligence claims, direct extraction/capture evidence, and append-only analyst reviews; existing extracted and analyst claims migrate with portable IDs that remain correlatable with new observations.
+- A production backup on 2026-07-20 captured the `threat_intel` schema and evidence volume with verified checksums, restored both into isolated drill targets, cleaned up the temporary database, and left the live scraper healthy.
 - Compose configuration and runtime database readiness have been checked.
 - `/v1/intel/source-operations` now derives tenant-scoped operational status from persisted source-health observations, captures, extracted actors, and evaluation labels; it reports explicit unmeasured states and redacts source URLs and restricted failure details.
 - Publisher-verified CCN-CERT and SSSCIP/CERT-UA public Telegram sources now use an approved unauthenticated preview path with nested-message parsing, bounded fetches, no media downloads, multilingual relevance filtering, source health, and durable pipeline handoff. A live CCN-CERT run produced useful captures and incidents.
