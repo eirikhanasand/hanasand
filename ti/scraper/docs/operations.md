@@ -11,15 +11,15 @@
 ## Production Defaults
 - `SCRAPER_ENV=production`.
 - `SCRAPER_PORT=8097`.
-- `SCRAPER_MEMORY_TARGET_MB=98304`.
-- `SCRAPER_MEMORY_CEILING_MB=163840`.
+- `SCRAPER_MEMORY_TARGET_MB=8192`.
+- `SCRAPER_MEMORY_CEILING_MB=14336`.
 - `SCRAPER_HIGH_RISK_REQUIRES_APPROVAL=true`.
 - `SCRAPER_DARKNET_METADATA_ONLY=true`.
 - `TI_EVIDENCE_ROOT=/var/lib/ti-scraper/evidence`.
 
 ## Resource Budget
-- Keep the scraper near 96 GB RAM until sustained collection proves it needs more.
-- Treat 160 GB as a ceiling, not a target.
+- Keep the scraper near 8 GB RAM until sustained collection proves it needs more.
+- Treat 14 GB as the application ceiling inside the 16 GB container limit.
 - Keep Playwright/dynamic browser work disabled unless explicitly isolated.
 - Keep queues, captures, and object evidence disk-backed for sustained crawling.
 

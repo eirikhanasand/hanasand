@@ -12,8 +12,8 @@ export function readResourceLimits(env: Record<string, string | undefined>): Res
     maxConcurrentClearWebTasks: readInt(env.SCRAPER_CLEAR_WEB_CONCURRENCY, 64),
     maxConcurrentTelegramTasks: readInt(env.SCRAPER_TELEGRAM_CONCURRENCY, 8),
     maxConcurrentDarknetMetadataTasks: readInt(env.SCRAPER_DARKNET_METADATA_CONCURRENCY, 4),
-    maxMemoryMbTarget: readInt(env.SCRAPER_MEMORY_TARGET_MB, 96 * 1024),
-    maxMemoryMbCeiling: readInt(env.SCRAPER_MEMORY_CEILING_MB, 160 * 1024)
+    maxMemoryMbTarget: readInt(env.SCRAPER_MEMORY_TARGET_MB, 8 * 1024),
+    maxMemoryMbCeiling: readInt(env.SCRAPER_MEMORY_CEILING_MB, 14 * 1024)
   };
 }
 

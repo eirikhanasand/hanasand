@@ -38,7 +38,7 @@ export function buildRollbackTriggers(searchStatus: number, publicApiOk: boolean
   return [
     searchStatus >= 500 ? "scraper_http_5xx" : "",
     !publicApiOk ? "public_api_mismatch" : "",
-    memoryRssGb > 96 ? "memory_over_96gb" : "",
+    memoryRssGb > 14 ? "memory_over_14gb" : "",
     cpuPercent > 85 ? "cpu_over_85_percent" : "",
     queueAge > 120 ? "queue_age_over_120s" : "",
     rejectedUnsafeActions > 0 ? "unsafe_action_rejected_count_nonzero" : "",

@@ -35,10 +35,10 @@ describe("deploy hygiene", () => {
       "    environment:",
       "      TI_SCRAPER_API_BASE: ${TI_SCRAPER_API_BASE:-http://ti-scraper:8097}",
       "  ti-scraper:",
-      "    mem_limit: 96g",
+      "    mem_limit: 16g",
       "    environment:",
-      "      SCRAPER_MEMORY_TARGET_MB: 98304",
-      "      SCRAPER_MEMORY_CEILING_MB: 163840",
+      "      SCRAPER_MEMORY_TARGET_MB: 8192",
+      "      SCRAPER_MEMORY_CEILING_MB: 14336",
       "      TI_CANARY_AUTO_ACTIVATE: \"true\""
     ].join("\n"));
 
