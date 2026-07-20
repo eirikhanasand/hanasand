@@ -1,3 +1,5 @@
+import { buildEntityResolutionWorkbenchDto } from "../pipeline/entityResolution.ts";
+
 export function qualityPayload(query: string, store: any, tenantId?: string, generatedAt = new Date().toISOString()) {
   const normalizedQuery = query.trim().toLowerCase();
   const scoped = (method: string) => records(store, method).filter((record) => (record.tenantId || undefined) === tenantId);
@@ -16,6 +18,7 @@ export function qualityPayload(query: string, store: any, tenantId?: string, gen
   const scores = [...claims.map((claim) => score(claim.confidence)), ...entities.map((entity) => score(entity.confidence))].filter((value): value is number => value !== undefined);
   const qualityScore = scores.length ? round(scores.reduce((total, value) => total + value, 0) / scores.length) : null;
   const warnings = warningCodes({ status, aliasConflicts, sources, labels, claims });
+  const entityResolutionWorkbench = buildEntityResolutionWorkbenchDto({ query, evidence: resolutionEvidence(store, tenantId, captureIds), generatedAt });
 
   return {
     query,
@@ -31,10 +34,33 @@ export function qualityPayload(query: string, store: any, tenantId?: string, gen
       analystActions: actions(status, aliasConflicts.length > 0, evidenceIds)
     },
     dashboard: { useful: evidenceIds.length > 0, measured: qualityScore !== null, evidenceCount: evidenceIds.length, sourceCount: sources.size },
-    entityResolutionWorkbench: { query, aliasCollisionWarning: aliasConflicts.length > 0, conflictingActorProfileIds: aliasConflicts },
+    entityResolutionWorkbench: {
+      ...entityResolutionWorkbench,
+      aliasCollisionWarning: aliasConflicts.length > 0,
+      conflictingActorProfileIds: aliasConflicts,
+      humanReview: { method: "POST", endpointTemplate: "/v1/intel/claims/{claimId}/reviews", appendOnly: true, actions: ["confirm", "reject", "correct", "mark_needs_review", "mark_contradicted"] }
+    },
     examples: [],
     routeContract: { syntheticExamplesIncluded: false, rawEvidenceExposed: false, restrictedLocatorsExposed: false }
   };
+}
+
+function resolutionEvidence(store: any, tenantId: string | undefined, captureIds: Set<string>) {
+  const scoped = (method: string) => records(store, method).filter((record) => (record.tenantId || undefined) === tenantId);
+  const captures = scoped("listCaptures").filter((capture) => captureIds.has(capture.id));
+  const entities = scoped("listExtractedEntities");
+  const indicators = scoped("listIndicators");
+  const incidents = scoped("listIncidents");
+  return captures.map((capture) => ({
+    id: `resolution:${capture.id}`,
+    stage: capture.storageKind === "metadata_only" || capture.sensitive ? "metadata_only_claim" : capture.metadata?.evidenceStage === "reviewed_promoted" ? "reviewed_promoted" : capture.metadata?.adapter === "telegram_public" ? "public_channel_message" : "captured_page",
+    result: {
+      capture,
+      entities: entities.filter((entity) => entity.captureId === capture.id),
+      indicators: indicators.filter((indicator) => indicator.captureId === capture.id),
+      incident: incidents.find((incident) => incident.captureId === capture.id)
+    }
+  })) as any;
 }
 
 function warningCodes(input: { status: string; aliasConflicts: string[]; sources: Set<string>; labels: any[]; claims: any[] }): string[] {
