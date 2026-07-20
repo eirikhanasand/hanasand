@@ -64,12 +64,20 @@ export class InMemoryScraperStore implements ScraperStore {
       this.saveEvidenceLink(link(capture, "incident", incident.id, "supports", incident.confidence, extractorVersion));
       this.recordExtractionDelta("added", capture, incident.id);
     }
+    const actorEntities = entities.filter((entity: any) => entity.type === "actor" || entity.type === "ransomware_family");
+    const characterize = new Set(actorEntities.map(normalized)).size === 1;
+    const profiled = new Set<string>();
     for (const entity of entities) {
       this.saveEvidenceLink(link(capture, "entity", entity.id, "mentions", entity.confidence, extractorVersion));
       if (entity.type === "actor" || entity.type === "ransomware_family") {
-        const profile = mergeActorProfile(this.getActorProfile(actorProfileId(capture, entity)), capture, entity);
+        const profileId = actorProfileId(capture, entity);
+        if (profiled.has(profileId)) continue;
+        profiled.add(profileId);
+        const previous = this.getActorProfile(profileId);
+        const profile = mergeActorProfile(previous, capture, entity, characterize ? entities : []);
         this.saveActorProfile(profile);
         this.saveEvidenceLink(link(capture, "actor_profile", profile.id, "characterizes", entity.confidence, extractorVersion));
+        recordActorProfileDelta(this, previous, profile, capture, incident);
       }
     }
     for (const indicator of indicators) this.saveEvidenceLink(link(capture, "indicator", indicator.id, "observes", indicator.confidence, extractorVersion));
@@ -192,7 +200,7 @@ export { canonicalizeUrl, captureDedupeKey, InMemoryObjectEvidenceStore };
 function normalized(record: any): string { return String(record.normalizedValue ?? record.value ?? "").trim().toLowerCase(); }
 function actorProfileId(capture: any, entity: any): string { return stableId("actor", `${capture.tenantId ?? "global"}:${actorType(entity)}:${normalized(entity)}`); }
 function actorType(entity: any): string { return entity.type === "ransomware_family" ? "ransomware" : /^apt\d+$/i.test(String(entity.value)) ? "apt" : "threat_actor"; }
-function mergeActorProfile(previous: any, capture: any, entity: any): any {
+function mergeActorProfile(previous: any, capture: any, entity: any, entities: any[]): any {
   const observedAt = capture.publishedAt ?? capture.collectedAt;
   const captureIds = unique([...(previous?.captureIds ?? []), capture.id]);
   return {
@@ -209,8 +217,44 @@ function mergeActorProfile(previous: any, capture: any, entity: any): any {
     evidenceCount: captureIds.length,
     sourceIds: unique([...(previous?.sourceIds ?? []), capture.sourceId]),
     captureIds,
+    characterization: mergeCharacterization(previous?.characterization, entities, capture, observedAt),
     updatedAt: capture.collectedAt
   };
+}
+const CHARACTERIZATION_FIELDS: Record<string, string> = {
+  victim: "victims", sector: "sectors", country: "countries", ttp: "ttps", malware: "malwareTools", impact: "impacts", dataset: "datasets",
+  extortion_type: "extortionTypes", monetization_path: "monetizationPaths", publicity_tactic: "publicityTactics", publication_strategy: "publicationStrategies",
+  channel_type: "channelTypes", victim_pressure_tactic: "pressureTactics", buyer_seller_communication: "communications", intermediary_communication: "communications",
+  profitability_signal: "profitabilitySignals"
+};
+function mergeCharacterization(previous: any = {}, entities: any[], capture: any, observedAt: string): any {
+  const next = Object.fromEntries(Object.entries(previous).map(([field, rows]: any) => [field, [...rows]]));
+  for (const entity of entities) {
+    const field = CHARACTERIZATION_FIELDS[entity.type];
+    if (!field || !normalized(entity)) continue;
+    const rows = next[field] ?? (next[field] = []), index = rows.findIndex((row: any) => row.entityType === entity.type && row.normalizedValue === normalized(entity));
+    const prior = rows[index];
+    const observation = {
+      ...(prior ?? {}), value: entity.value, normalizedValue: normalized(entity), entityType: entity.type,
+      confidence: Math.max(prior?.confidence ?? 0, entity.confidence ?? 0), assertionKind: entity.assertionKind ?? prior?.assertionKind ?? "extracted",
+      reviewReasons: unique([...(prior?.reviewReasons ?? []), ...(entity.reviewReasons ?? [])]), firstSeenAt: earlier(prior?.firstSeenAt, observedAt), lastSeenAt: later(prior?.lastSeenAt, observedAt),
+      sourceIds: unique([...(prior?.sourceIds ?? []), capture.sourceId]), captureIds: unique([...(prior?.captureIds ?? []), capture.id]), entityIds: unique([...(prior?.entityIds ?? []), entity.id])
+    };
+    if (index < 0) rows.push(observation); else rows[index] = observation;
+  }
+  return next;
+}
+function recordActorProfileDelta(store: any, previous: any, profile: any, capture: any, incident: any): void {
+  const aliasesAdded = (profile.aliases ?? []).filter((alias: string) => !(previous?.aliases ?? []).some((value: string) => value.toLowerCase() === alias.toLowerCase()));
+  const characterization = Object.fromEntries(Object.entries(profile.characterization ?? {}).map(([field, rows]: any) => [field, rows.filter((row: any) => row.captureIds?.includes(capture.id) && !(previous?.characterization?.[field] ?? []).some((prior: any) => prior.entityType === row.entityType && prior.normalizedValue === row.normalizedValue && prior.captureIds?.includes(capture.id)))]).filter(([, rows]: any) => rows.length));
+  if (previous && !aliasesAdded.length && !Object.keys(characterization).length) return;
+  const metadata = capture.metadata ?? {};
+  store.saveEvidenceDelta({
+    id: stableId("delta", `actor-profile:${profile.id}:${capture.id}`), tenantId: capture.tenantId, query: metadata.query, normalizedQuery: metadata.normalizedQuery, runId: metadata.runId, cursor: "",
+    kind: previous ? "updated" : "added", subjectType: "actor_profile", subjectId: profile.id, observedAt: capture.publishedAt ?? capture.collectedAt, sourceId: capture.sourceId,
+    discoveryEvidenceIds: metadata.discoveryEvidenceId ? [metadata.discoveryEvidenceId] : [], captureIds: [capture.id], incidentIds: incident ? [incident.id] : [], relationshipIds: [], policyEventIds: [],
+    retentionClass: capture.retentionClass ?? "standard", metadata: { aliasesAdded, characterization, rawContentExposed: false }
+  });
 }
 function link(capture: any, subjectType: string, subjectId: string, relationship: string, confidence: number, extractorVersion: string): any {
   return { id: stableId("evidence-link", `${capture.id}:${subjectType}:${subjectId}:${relationship}`), tenantId: capture.tenantId, captureId: capture.id, subjectType, subjectId, relationship, confidence, extractorVersion, createdAt: capture.collectedAt };
