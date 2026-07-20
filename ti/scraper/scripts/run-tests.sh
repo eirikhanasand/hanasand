@@ -14,7 +14,7 @@ for suite in \
   src/tests/apiParts/api.part44.ts \
   src/tests/apiParts/api.part51.ts
 do
-  bun test "./$suite" || failed=1
+  bun test --max-concurrency 1 "./$suite" || failed=1
 done
 
 find src/tests/apiParts -name 'api.part*.ts' -type f | sort | grep -Ev "/($listener_parts)$" | sed 's#^#./#' | xargs -n 20 bun test --max-concurrency 20 || failed=1

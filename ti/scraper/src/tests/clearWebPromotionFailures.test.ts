@@ -30,11 +30,12 @@ describe("clear-web promotion failures", () => {
       "https://failure.example.test/research/unsupported-mime?utm=search#summary": responseFixture("%PDF-1.7", { status: 200, headers: { "content-type": "application/pdf" } }, "https://failure.example.test/research/unsupported-mime?utm=search#summary")
     });
     const firstProof = await promoteSearchResultToCanonicalCapture(store, clearWebSource, duplicateFirst, { fetcher });
-    const duplicateProof = await promoteSearchResultToCanonicalCapture(store, clearWebSource, duplicateSecond, { fetcher });
-    const proofs = [firstProof, duplicateProof, ...(await Promise.all(handoffs.map((item) => promoteSearchResultToCanonicalCapture(store, clearWebSource, item, { fetcher, maxBytes: item.resultId === "result_too-large" ? 128 : 1_000_000 }))))];
+    const changedProof = await promoteSearchResultToCanonicalCapture(store, clearWebSource, duplicateSecond, { fetcher });
+    const proofs = [firstProof, changedProof, ...(await Promise.all(handoffs.map((item) => promoteSearchResultToCanonicalCapture(store, clearWebSource, item, { fetcher, maxBytes: item.resultId === "result_too-large" ? 128 : 1_000_000 }))))];
 
     expect(firstProof.status).toBe("captured");
-    expect(duplicateProof).toMatchObject({ status: "duplicate", failureCategory: "duplicate_canonical", captureId: firstProof.captureId });
+    expect(changedProof).toMatchObject({ status: "captured", failureCategory: undefined });
+    expect(changedProof.captureId).not.toBe(firstProof.captureId);
     expect(failureByQuery(proofs, "Robots Blocked Actor")).toMatchObject({ status: "blocked", failureCategory: "robots_blocked" });
     expect(failureByQuery(proofs, "Rate Limited Actor")).toMatchObject({ status: "blocked", failureCategory: "rate_limited", responseStatus: 429, retryAfterSeconds: 30 });
     expect(failureByQuery(proofs, "Missing Actor")).toMatchObject({ status: "blocked", failureCategory: "not_found", responseStatus: 404 });
@@ -42,6 +43,6 @@ describe("clear-web promotion failures", () => {
     expect(failureByQuery(proofs, "Unsupported MIME Actor")).toMatchObject({ status: "blocked", failureCategory: "unsupported_mime", responseStatus: 200 });
     expect(proofs.filter((proof) => proof.status === "blocked").every((proof) => proof.apiPromotionMetadata.agent09.publicTiImpact === "blocked")).toBe(true);
     expect(store.listDiscoveryEvidence().every((item) => item.promotedToTaskId)).toBe(true);
-    expect(store.listCaptures()).toHaveLength(1);
+    expect(store.listCaptures()).toHaveLength(2);
   });
 });

@@ -33,7 +33,13 @@ import { buildResourceSnapshot, estimateCapacity, sizeWorkerPools } from "../ops
 import { DEFAULT_RESOURCE_BUDGET } from "../ops/config.ts";
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 export function startApiServer(options: ApiServerOptions): ApiServerHandle {
-  const server = Bun.serve({ port: options.port ?? 8097, fetch: (request) => handleDurableApiRequest(request, options) });
+  const serve = (port: number) => Bun.serve({ port, hostname: options.port === 0 ? "127.0.0.1" : undefined, fetch: (request) => handleDurableApiRequest(request, options) });
+  let server: ReturnType<typeof Bun.serve> | undefined;
+  for (let attempt = 0; attempt < (options.port === 0 ? 20 : 1); attempt++) {
+    try { server = serve(options.port === 0 ? 18_100 + attempt : options.port ?? 8097); break; }
+    catch (error) { if ((error as { code?: string }).code !== "EADDRINUSE") throw error; }
+  }
+  if (!server) throw new Error("Failed to allocate a loopback test server port");
   return { server, port: server.port ?? options.port ?? 8097, stop: () => server.stop(true) };
 }
 async function handleDurableApiRequest(request: Request, options: ApiServerOptions): Promise<Response> {

@@ -25,7 +25,7 @@ export function enforceSensitiveMetadataOnly(capture: RawCapture) {
 
 export function dedupeIndexKeys(capture: RawCapture) {
   const key = captureDedupeKey(capture), published = key.publishedAt ?? "", normalized = key.normalizedTextHash ?? "";
-  return [`source-url-published:${key.sourceId}:${key.canonicalUrl}:${published}`, `source-text-published:${key.sourceId}:${normalized}:${published}`, `source-content-published:${capture.sourceId}:${capture.contentHash}:${published}`].filter((v) => !v.includes("::"));
+  return [`source-text-published:${key.sourceId}:${normalized}:${published}`, `source-content-published:${capture.sourceId}:${capture.contentHash}:${published}`].filter((v) => !v.includes("::"));
 }
 
 export function deltaForSnapshot(kind: EvidenceDeltaKind, s: LiveSearchSnapshot): EvidenceDelta {
