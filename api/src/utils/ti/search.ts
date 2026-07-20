@@ -418,7 +418,25 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
         }
     }
 
-    const result = { ...seededSearch(query), queryKind }
+    const result: TiSearchResponse = {
+        query,
+        queryKind,
+        generatedAt: new Date().toISOString(),
+        mode: 'live_search',
+        status: 'searching',
+        refreshAfterSeconds: 5,
+        summary: 'Searching',
+        confidence: 0,
+        lastSeen: '',
+        aliases: [],
+        recentActivity: [],
+        targets: [],
+        ttps: [],
+        datasets: [],
+        sources: [],
+        notes: ['Canonical TI collection is temporarily unavailable; no intelligence was inferred.'],
+        actionability: actionabilityForQuery(query),
+    }
     writeTiResponseCache(cacheKey, result)
     return result
 }
