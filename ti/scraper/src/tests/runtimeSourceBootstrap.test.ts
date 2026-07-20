@@ -8,8 +8,10 @@ import { fileURLToPath } from "node:url";
 describe("runtime source bootstrap and scheduler monitoring", () => {
   test("keeps dry-run source-atlas candidates out of automatic production bootstrap", () => {
     const result = bootstrapRuntimeSources(new InMemoryScraperStore(), { sourceTarget: 0 });
+    const compose = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../../../docker-compose.yml"), "utf8");
     expect(result.seedPaths.some((path) => path.endsWith("high_value_exposure_source_candidates.json"))).toBe(false);
     expect(result.errors.some((error) => error.path.endsWith("high_value_exposure_source_candidates.json"))).toBe(false);
+    expect(compose.match(/TI_SOURCE_SEED_PATHS:.*high_value_exposure_source_candidates/)).toBeNull();
   });
 
   test("imports configured source bundles and reports the exact source target shortfall", () => {
