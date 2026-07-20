@@ -156,7 +156,7 @@ function resolveRouteRule(settings: RateLimitSettings, method: string, route: st
     return settings.defaults[scope]
 }
 
-async function resolveRateLimitActor(req: FastifyRequest): Promise<RateLimitActor> {
+export async function resolveRateLimitActor(req: FastifyRequest): Promise<RateLimitActor> {
     const ip = getClientIp(req)
 
     const apiKeySecret = extractPresentedApiKey(req)
@@ -195,13 +195,6 @@ async function resolveRateLimitActor(req: FastifyRequest): Promise<RateLimitActo
         }
     }
 
-    if (isInternalIp(ip)) {
-        return {
-            scope: 'internal',
-            identifier: `ip:${ip}`,
-        }
-    }
-
     return {
         scope: 'anonymous',
         identifier: `ip:${ip}`,
@@ -218,17 +211,6 @@ function isInternalRole(roleId: string, roleName: string) {
 
 export function getClientIp(req: Pick<FastifyRequest, 'ip'>) {
     return req.ip || 'unknown'
-}
-
-function isInternalIp(ip: string) {
-    return ip === '127.0.0.1'
-        || ip === '::1'
-        || ip.startsWith('10.')
-        || ip.startsWith('192.168.')
-        || /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)
-        || ip.startsWith('fc')
-        || ip.startsWith('fd')
-        || ip.startsWith('fe80:')
 }
 
 function normalizeRequestPath(req: FastifyRequest) {

@@ -1,13 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { isAllowedApiOrigin } from '#utils/http/publicBoundary.ts'
-import { getClientIp } from '#plugins/rateLimit.ts'
+import { getClientIp, resolveRateLimitActor } from '#plugins/rateLimit.ts'
 import { normalizeBatchQueries, postTiSearchBatch, TI_BATCH_MAX_QUERIES } from '../src/handlers/ti/search.ts'
 
 describe('public TI API boundary', () => {
     test('uses Fastify verified client IP instead of a caller-supplied forwarding header', () => {
         const request = { ip: '203.0.113.10', headers: { 'x-forwarded-for': '127.0.0.1' } } as unknown as FastifyRequest
         expect(getClientIp(request)).toBe('203.0.113.10')
+    })
+
+    test('does not grant internal limits to unauthenticated private proxy addresses', async () => {
+        const request = { ip: '172.20.0.1', headers: {} } as unknown as FastifyRequest
+        expect(await resolveRateLimitActor(request)).toEqual({ scope: 'anonymous', identifier: 'ip:172.20.0.1' })
     })
 
     test('allows only configured browser origins', () => {
