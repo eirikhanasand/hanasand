@@ -225,12 +225,13 @@ function recordClaim(store: any, capture: any, subjectType: "incident" | "entity
   const previousEvidence = store.getClaimEvidence(evidenceId);
   const sourceIds = unique([...(previous?.sourceIds ?? []), capture.sourceId]);
   const captureIds = unique([...(previous?.captureIds ?? []), capture.id]);
+  const independence = evidenceIndependence(store, captureIds);
   const observedAt = capture.publishedAt ?? capture.collectedAt;
   const stage = evidenceStage(capture);
   const uncertaintyReasons = unique([...(previous?.uncertaintyReasons ?? []), ...(subject.reviewReasons ?? []), ...(stage === "metadata_only_claim" ? ["metadata-only evidence requires review"] : [])]);
   const defaultReviewState = subject.confidence < 0.65 || uncertaintyReasons.length ? "needs_review" : "unreviewed";
   const reviewState = previous?.reviewState && !["unreviewed", "needs_review"].includes(previous.reviewState) ? previous.reviewState : previous?.reviewState === "needs_review" || defaultReviewState === "needs_review" ? "needs_review" : "unreviewed";
-  const corroborationState = reviewState === "contradicted" ? "contradicted" : sourceIds.length >= 2 ? "corroborated" : "single_source";
+  const corroborationState = reviewState === "contradicted" ? "contradicted" : independence.groupCount >= 2 ? "corroborated" : "single_source";
   const value = subjectType === "incident"
     ? { title: subject.title, summary: subject.summary }
     : { type: subject.type, value: subject.value, normalizedValue: subject.normalizedValue ?? subject.value };
@@ -249,7 +250,8 @@ function recordClaim(store: any, capture: any, subjectType: "incident" | "entity
     extractorVersion: subject.extractorVersion ?? capture.provenance?.extractorVersion,
     reviewState,
     corroborationState,
-    sourceCount: sourceIds.length,
+    sourceCount: independence.groupCount,
+    sourceIndependence: independence,
     evidenceCount: (previous?.evidenceCount ?? 0) + (previousEvidence ? 0 : 1),
     firstSeenAt: earlier(previous?.firstSeenAt, observedAt),
     lastSeenAt: later(previous?.lastSeenAt, observedAt),
@@ -311,6 +313,30 @@ function claimFromAnalystEntry(entry: any, previous?: any): any {
     createdAt: previous?.createdAt ?? entry.createdAt ?? observedAt,
     updatedAt: entry.updatedAt ?? entry.reviewedAt ?? observedAt
   };
+}
+
+function evidenceIndependence(store: any, captureIds: string[]) {
+  const evidence = captureIds.map((id) => store.getCapture(id)).filter(Boolean).map((capture: any) => ({
+    publisher: publisherKey(store.getSource?.(capture.sourceId), capture.sourceId),
+    content: capture.normalizedTextHash || capture.contentHash
+  }));
+  if (!evidence.length) return { groupCount: 1, publisherKeys: [], method: "publisher_or_identical_content" };
+  // ponytail: claim evidence sets are small; replace this O(n^2) union scan only if measured corpus size makes it material.
+  const parent = evidence.map((_: any, index: number) => index);
+  const find = (index: number): number => parent[index] === index ? index : (parent[index] = find(parent[index]));
+  for (let left = 0; left < evidence.length; left++) for (let right = left + 1; right < evidence.length; right++) {
+    if (evidence[left].publisher === evidence[right].publisher || evidence[left].content === evidence[right].content) parent[find(right)] = find(left);
+  }
+  return {
+    groupCount: new Set(evidence.map((_: any, index: number) => find(index))).size,
+    publisherKeys: unique(evidence.map((item: any) => item.publisher)),
+    method: "publisher_or_identical_content"
+  };
+}
+
+function publisherKey(source: any, fallback: string) {
+  const value = source?.catalog?.publisher?.homepage || source?.url;
+  try { return new URL(String(value)).hostname.toLowerCase().replace(/^www\./, ""); } catch { return String(source?.catalog?.publisher?.name || fallback).trim().toLowerCase(); }
 }
 function recordAnalystClaimEvidence(store: any, capture: any, entry: any): void {
   const id = stableId("claim-evidence", `${entry.id}:${capture.id}:analyst:${entry.id}`);

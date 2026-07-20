@@ -37,9 +37,19 @@ describe("structured threat-intelligence storage contract", () => {
     expect(store.listClaimEvidence().every((evidence: any) => evidence.captureId === result.capture.id && evidence.subjectId)).toBe(true);
     expect(store.listTimelinessRecords()).toEqual([expect.objectContaining({ incidentId: result.incident.id, collectedAt, processedAt: expect.any(String), firstVisibleAt: expect.any(String) })]);
 
-    store.saveSource(source({ id: "src_corroborating" }));
-    store.savePipelineResult(pipeline("src_corroborating"));
+    store.saveSource(source({ id: "src_corroborating", url: "https://independent.test/feed" }));
+    store.savePipelineResult(pipeline("src_corroborating", undefined, " Independent reporting confirmed the activity."));
     expect(store.listIntelligenceClaims().find((claim: any) => claim.claimType === "actor")).toMatchObject({ sourceCount: 2, corroborationState: "corroborated" });
+
+    store.saveSource(source({ id: "src_syndicated", url: "https://independent.test/second-feed" }));
+    store.savePipelineResult(pipeline("src_syndicated", undefined, " A separately formatted copy repeated the activity."));
+    store.saveSource(source({ id: "src_identical_copy", url: "https://copy.test/feed" }));
+    store.savePipelineResult(pipeline("src_identical_copy", undefined, " Independent reporting confirmed the activity."));
+    expect(store.listIntelligenceClaims().find((claim: any) => claim.claimType === "actor")).toMatchObject({
+      sourceCount: 2,
+      sourceIds: ["src_structured", "src_corroborating", "src_syndicated", "src_identical_copy"],
+      sourceIndependence: { groupCount: 2, method: "publisher_or_identical_content" }
+    });
   });
 
   test("exposes validation and evaluation records through the JSON API", async () => {
@@ -286,8 +296,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
   });
 });
 
-function pipeline(sourceId: string, tenantId?: string) {
-  const rawText = "APT29 used phishing against Northwind Health with CVE-2026-1234.";
+function pipeline(sourceId: string, tenantId?: string, suffix = "") {
+  const rawText = `APT29 used phishing against Northwind Health with CVE-2026-1234.${suffix}`;
   const result = processCollectedItem({
     sourceId,
     url: `https://example.test/${sourceId}/report`,
