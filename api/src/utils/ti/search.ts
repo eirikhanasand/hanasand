@@ -410,7 +410,7 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
 
     const scraperBase = process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
     if (scraperBase) {
-        const scraperResult = await tryScraperSearch(scraperBase, query)
+        const scraperResult = await fetchCanonicalScraperSearch(scraperBase, query)
         if (scraperResult) {
             const classified = { ...scraperResult, queryKind }
             writeTiResponseCache(cacheKey, classified)
@@ -428,7 +428,7 @@ export function classifyTiQuery(query: string): NonNullable<TiSearchResponse['qu
     if (/^cve-\d{4}-\d{4,}$/i.test(clean)) return 'cve'
     if (/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(clean)) return 'domain'
     if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(clean) || /^(?:https?:\/\/|[a-f0-9]{32,128}$)/i.test(clean)) return 'indicator'
-    if (knownActorProfile(clean)) return 'actor'
+    if (/^(?:apt\d+|unc\d+|ta\d+)$/i.test(clean)) return 'actor'
     if (/\b(?:inc|corp|corporation|company|limited|ltd|llc|group|bank|university|hospital)\b/i.test(clean) || clean.includes(' ')) return 'organization'
     return 'free_text'
 }
@@ -445,34 +445,23 @@ export async function discoverThreatActorProfile(query: string): Promise<TiSearc
     if (!normalized) {
         throw new Error('query is required')
     }
+    return searchThreatIntel({ query: normalized })
+}
 
-    const seeded = seededSearch(normalized)
-    const discovered = await liveSearch(normalized).catch(() => seeded)
-    const result: TiSearchResponse = {
-        ...seeded,
-        ...discovered,
-        generatedAt: new Date().toISOString(),
-        status: discovered.status === 'searching' ? seeded.status : discovered.status,
-        summary: discovered.summary === 'Searching' ? seeded.summary : discovered.summary,
-        confidence: Math.max(seeded.confidence, discovered.confidence),
-        lastSeen: latestIso(discovered.lastSeen, seeded.lastSeen),
-        aliases: uniqueStrings([...seeded.aliases, ...discovered.aliases]),
-        recentActivity: mergeActivity(discovered.recentActivity, seeded.recentActivity),
-        targets: mergeTargets(discovered.targets, seeded.targets),
-        ttps: mergeTtps(discovered.ttps, seeded.ttps),
-        datasets: mergeDatasets(discovered.datasets, seeded.datasets),
-        sources: mergeSources(discovered.sources, seeded.sources),
-        actorIntelligence: discovered.actorIntelligence ?? seeded.actorIntelligence,
-        actionability: discovered.actionability ?? seeded.actionability,
-        notes: uniqueStrings([
-            ...seeded.notes,
-            ...discovered.notes,
-            'Autonomous discovery refresh completed; profile changes are published through the API state ledger.',
-        ]),
+async function fetchCanonicalScraperSearch(scraperBase: string, query: string): Promise<TiSearchResponse | null> {
+    try {
+        const target = new URL(`${scraperBase}/v1/intel/search`)
+        target.searchParams.set('q', query)
+        target.searchParams.set('entityType', scraperEntityType(query))
+        target.searchParams.set('limit', '50')
+        const response = await fetch(target)
+        if (!response.ok) return null
+        const result = await response.json() as TiSearchResponse
+        if (result.query !== query || !Array.isArray(result.sources) || !Array.isArray(result.recentActivity)) return null
+        return { ...result, mode: 'scraper' }
+    } catch {
+        return null
     }
-
-    writeTiResponseCache(normalized.toLowerCase(), result)
-    return result
 }
 
 export async function warmThreatActorProfileCache(batchSize = 5): Promise<TiProfileWarmResult[]> {
@@ -711,7 +700,7 @@ function writeTiResponseCache(key: string, result: TiSearchResponse) {
     }
 }
 
-async function tryScraperSearch(scraperBase: string, query: string): Promise<TiSearchResponse | null> {
+export async function tryScraperSearch(scraperBase: string, query: string): Promise<TiSearchResponse | null> {
     try {
         const refreshBucket = new Date().toISOString().slice(0, 13)
         const response = await fetch(`${scraperBase}/v1/intel/runs`, {
@@ -1604,7 +1593,12 @@ function watchlistCandidatesForQuery(query: string): NonNullable<TiActionability
     return []
 }
 
-export function knownActorProfile(query: string): KnownActorContext | null {
+export function knownActorProfile(_query: string): KnownActorContext | null {
+    void _query
+    return null
+}
+
+export function legacyKnownActorProfile(query: string): KnownActorContext | null {
     const normalized = query.trim().toLowerCase()
     if (normalized === 'apt29' || normalized.includes('cozy bear') || normalized.includes('midnight blizzard')) {
         return withAutomaticProfileDefaults({
@@ -2150,13 +2144,8 @@ const BASELINE_ACTOR_PROFILES: BaselineActorProfile[] = [
     }
 ]
 
-export function automaticThreatActorWarmList() {
-    return [
-        'apt29',
-        'apt42',
-        'apt49',
-        ...BASELINE_ACTOR_PROFILES.map(profile => profile.names[0]!),
-    ]
+export function automaticThreatActorWarmList(): string[] {
+    return []
 }
 
 function baselineKnownActorProfile(normalized: string): KnownActorContext | null {
@@ -2371,14 +2360,6 @@ function truncateSentence(value: string, maxLength: number) {
     const normalized = value.replace(/\s+/g, ' ').trim()
     if (normalized.length <= maxLength) return normalized
     return `${normalized.slice(0, maxLength - 1).trimEnd()}...`
-}
-
-function latestIso(left: string, right: string) {
-    const leftTime = Date.parse(left)
-    const rightTime = Date.parse(right)
-    if (Number.isNaN(leftTime)) return right
-    if (Number.isNaN(rightTime)) return left
-    return leftTime >= rightTime ? left : right
 }
 
 interface LiveSearchMatch {

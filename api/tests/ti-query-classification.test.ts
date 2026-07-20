@@ -26,3 +26,24 @@ test('keeps unavailable capabilities out of no-evidence results', async () => {
         else process.env.TI_SCRAPER_API_BASE = previousScraperBase
     }
 })
+
+test('does not synthesize an actor profile when canonical evidence is unavailable', async () => {
+    const previousScraperBase = process.env.TI_SCRAPER_API_BASE
+    delete process.env.TI_SCRAPER_API_BASE
+    try {
+        const result = await searchThreatIntel({ query: 'APT29' })
+        expect(result.status).toBe('searching')
+        expect(result.summary).toBe('Searching')
+        expect(result.confidence).toBe(0.2)
+        expect(result.aliases).toEqual([])
+        expect(result.recentActivity).toEqual([])
+        expect(result.targets).toEqual([])
+        expect(result.ttps).toEqual([])
+        expect(result.datasets).toEqual([])
+        expect(result.sources).toEqual([])
+        expect(result.actorIntelligence).toBeUndefined()
+    } finally {
+        if (previousScraperBase === undefined) delete process.env.TI_SCRAPER_API_BASE
+        else process.env.TI_SCRAPER_API_BASE = previousScraperBase
+    }
+})
