@@ -56,7 +56,7 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
     runOnce: () => cycle()
   };
 }
-async function runLeasedTask(options: any, runId: string, generatedAt: string, fetcher: any, mode: string, maxBytes: number, counters: any, latestCaptureIds: string[], errors: any[]) {
+export async function runLeasedTask(options: any, runId: string, generatedAt: string, fetcher: any, mode: string, maxBytes: number, counters: any, latestCaptureIds: string[], errors: any[]) {
   const leased = options.frontier.next(new Date(generatedAt), (task: any) => task.runId === runId); if (!leased) return;
   const task = leased.task, source = options.store.getSource?.(task.sourceId), startedMs = Date.now(); counters.leasedTaskCount++;
   const taskMetrics: any = { itemCount: 0, captureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, actorIds: new Set<string>(), publishedAt: [] };
@@ -71,7 +71,7 @@ async function runLeasedTask(options: any, runId: string, generatedAt: string, f
     counters.skippedLowValueCount += collectedItems.length - sellableItems.length;
     for (const collected of sellableItems.slice(0, itemLimit(source, options))) {
       collected.tenantId = source.tenantId;
-      collected.metadata = { ...collected.metadata, sellableCandidate: true, sellableReason: sellableReason(collected.rawText) };
+      collected.metadata = { ...collected.metadata, runId, queryTerms: task.planning?.queryTerms ?? [], sellableCandidate: true, sellableReason: sellableReason(collected.rawText) };
       let pipeline = processCollectedItem(collected);
       if (pipeline.capture.body && options.objectStore) pipeline = { ...pipeline, capture: externalize(pipeline.capture, options.objectStore) };
       const duplicate = options.store.findDuplicateCapture?.(pipeline.capture), saved = options.store.savePipelineResult(pipeline);

@@ -20,6 +20,7 @@ export async function createRun(request: Request, options: ApiServerOptions): Pr
   if (existingPlan) {
     if ((existingPlan as any).requestHash !== requestHash) return error("idempotency_conflict", "Idempotency key was already used for a different request", 409);
     const existingRun = options.store.listRuns?.().find((run: any) => run.planId === existingPlan.id);
+    if (existingRun && ["queued", "running"].includes(existingRun.status)) options.runExecutor?.(existingRun.id);
     return json({ run: existingRun, plan: existingPlan, scheduler: { queued: options.frontier.size() } });
   }
   const createdAt = nowIso();
@@ -27,10 +28,12 @@ export async function createRun(request: Request, options: ApiServerOptions): Pr
   const planned = createCollectionPlan({ ...input, id: requestId, createdAt }, options.store.listSources().filter((source: any) => !source.tenantId || source.tenantId === scope.tenantId), options.frontier);
   const plan = { ...planned, id: stableId("plan", requestId), requestId, tenantId: scope.tenantId, idempotencyKey, requestHash } as CollectionPlan;
   const run = runFromPlan(plan, requestId);
-  options.store.savePlan?.(plan);
+  const executablePlan = { ...plan, tasks: plan.tasks.map((task: any) => ({ ...task, runId: run.id, planId: plan.id, crawlBudgetKey: undefined })) } as CollectionPlan;
+  options.store.savePlan?.(executablePlan);
   options.store.saveRun?.(run);
-  for (const task of plan.tasks) options.frontier.enqueueTask(task);
-  return json({ run, plan, scheduler: { runId: run.id, planId: plan.id, queued: options.frontier.size() } }, 201);
+  for (const task of executablePlan.tasks) options.frontier.enqueueTask(task);
+  options.runExecutor?.(run.id);
+  return json({ run, plan: executablePlan, scheduler: { runId: run.id, planId: plan.id, queued: options.frontier.size() } }, 201);
 }
 
 export function runStatus(request: Request, options: ApiServerOptions, runId: string): Response {
@@ -46,12 +49,14 @@ export function runResults(request: Request, options: ApiServerOptions, runId: s
   if (scope.error) return scope.error;
   const run = options.store.getRun?.(runId);
   if (!run || !inTenantScope(run, scope.tenantId)) return error("not_found", "Run not found", 404);
-  const captures = options.store.listCaptures().filter((capture: any) => inTenantScope(capture, scope.tenantId) && captureRunId(capture) === runId);
+  const runCaptureIds = new Set(run.captureIds ?? []);
+  const captures = options.store.listCaptures().filter((capture: any) => runCaptureIds.has(capture.id) || captureRunId(capture) === runId);
   const captureIds = new Set(captures.map((capture: any) => capture.id));
-  const incidents = (options.store.listIncidents?.() ?? []).filter((incident: any) => inTenantScope(incident, scope.tenantId) && captureIds.has(incident.captureId));
-  const indicators = ((options.store as any).listIndicators?.() ?? []).filter((record: any) => inTenantScope(record, scope.tenantId) && captureIds.has(record.captureId));
-  const entities = ((options.store as any).listExtractedEntities?.() ?? []).filter((record: any) => inTenantScope(record, scope.tenantId) && captureIds.has(record.captureId));
-  const relationships = ((options.store as any).listEvidenceLinks?.() ?? []).filter((record: any) => inTenantScope(record, scope.tenantId) && captureIds.has(record.captureId));
+  const belongsToRun = (record: any) => captureIds.has(record.captureId) && (!record.tenantId || record.tenantId === scope.tenantId);
+  const incidents = (options.store.listIncidents?.() ?? []).filter(belongsToRun);
+  const indicators = ((options.store as any).listIndicators?.() ?? []).filter(belongsToRun);
+  const entities = ((options.store as any).listExtractedEntities?.() ?? []).filter(belongsToRun);
+  const relationships = ((options.store as any).listEvidenceLinks?.() ?? []).filter(belongsToRun);
   const requested = new Set((url.searchParams.get("include") ?? "captures,incidents,indicators,entities,relationships").split(",").map((item) => item.trim()).filter(Boolean));
   const collections: Record<string, any[]> = { captures: captures.map((capture: any) => toSafeCaptureDto(capture, { tenantId: scope.tenantId })), incidents, indicators, entities, relationships };
   const results = Object.fromEntries(Object.entries(collections).filter(([name]) => requested.has(name)).map(([name, items]) => [name, { items, total: items.length }]));
@@ -65,7 +70,8 @@ export async function exportRunStix(request: Request, options: ApiServerOptions)
   if (scope.error) return scope.error;
   const run = options.store.getRun?.(input.runId);
   if (!run || !inTenantScope(run, scope.tenantId)) return error("not_found", "Run not found", 404);
-  const captures = options.store.listCaptures().filter((capture: any) => inTenantScope(capture, scope.tenantId) && captureRunId(capture) === run.id);
+  const runCaptureIds = new Set(run.captureIds ?? []);
+  const captures = options.store.listCaptures().filter((capture: any) => (!capture.tenantId || capture.tenantId === scope.tenantId) && (runCaptureIds.has(capture.id) || captureRunId(capture) === run.id));
   const bundle = exportEvidenceBackedStixBundle({ captures, options: { producerName: input.producerName ?? "ti-scraper", generatedAt: input.generatedAt ?? nowIso(), bundleKey: run.id, includeDerivedIntelligence: false } });
   return json({
     bundle,
@@ -80,7 +86,7 @@ export async function exportRunStix(request: Request, options: ApiServerOptions)
 }
 
 function runFromPlan(plan: CollectionPlan, requestId: string): CollectionRun {
-  return { id: stableId("run", plan.id), tenantId: (plan as any).tenantId ?? plan.request?.tenantId, planId: plan.id, requestId, status: "queued", createdAt: nowIso(), startedAt: nowIso(), updatedAt: nowIso(), taskCount: plan.tasks.length, reviewTaskCount: plan.reviewRequired.length, rejectedSourceCount: plan.rejected.length, captureCount: 0, incidentCount: 0 } as CollectionRun;
+  return { id: stableId("run", plan.id), tenantId: (plan as any).tenantId ?? plan.request?.tenantId, planId: plan.id, requestId, status: "queued", createdAt: nowIso(), updatedAt: nowIso(), taskCount: plan.tasks.length, reviewTaskCount: plan.reviewRequired.length, rejectedSourceCount: plan.rejected.length, captureCount: 0, incidentCount: 0 } as CollectionRun;
 }
 
 function captureRunId(capture: any): string | undefined {

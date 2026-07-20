@@ -10,6 +10,7 @@ import { PostgresScraperStore } from "../storage/postgresScraperStore.ts";
 import { enforceDefaultRetentionPolicies, normalizeDefaultRetentionClasses } from "../storage/retention.ts";
 import { bootstrapRuntimeSources } from "./sourceBootstrap.ts";
 import { buildRuntimeStores } from "./startupStores.ts";
+import { executeScheduledCollectionRun, recoverCollectionRuns } from "../ops/scheduledCollection.ts";
 
 export async function startScraperRuntime() {
   const config = loadRuntimeConfig();
@@ -52,7 +53,26 @@ export async function startScraperRuntime() {
     maxSources: Number(Bun.env.TI_RESTRICTED_METADATA_MAX_SOURCES ?? "2"),
     onError: (error: unknown) => logger.warn("restricted metadata collection failed", { event: "restricted_metadata.error", error: error instanceof Error ? error.message : String(error) })
   });
-  const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, restrictedMetadataLoop: restrictedMetadata, sourceBootstrap });
-  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", sourceBootstrap, ...paths });
-  return { stop: async () => { canary.stop(); restrictedMetadata.stop(); server.stop(); await store.close(); } };
+  const runTimers = new Map<string, Timer>();
+  const executeRun = (runId: string) => {
+    const existingTimer = runTimers.get(runId);
+    if (existingTimer) clearTimeout(existingTimer);
+    runTimers.delete(runId);
+    void executeScheduledCollectionRun({
+      store,
+      frontier,
+      objectStore,
+      maxConcurrentTasks: Math.min(4, Number(Bun.env.TI_CANARY_MAX_CONCURRENT_TASKS ?? "4")),
+      timeoutMs: Number(Bun.env.TI_CANARY_TIMEOUT_MS ?? Bun.env.SCRAPER_DEFAULT_TIMEOUT_MS ?? "12000"),
+      maxItemsPerTask: Number(Bun.env.TI_CANARY_MAX_ITEMS_PER_TASK ?? "4"),
+    }, runId).then((run: any) => {
+      if (run?.status !== "queued" || !run.nextAttemptAt) return;
+      const delay = Math.max(0, Date.parse(run.nextAttemptAt) - Date.now());
+      runTimers.set(runId, setTimeout(() => executeRun(runId), delay));
+    }).catch((error) => logger.warn("scheduled collection run failed", { event: "scheduled_run.error", runId, error: error instanceof Error ? error.message : String(error) }));
+  };
+  const recoveredRuns = recoverCollectionRuns({ store, execute: executeRun });
+  const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, restrictedMetadataLoop: restrictedMetadata, sourceBootstrap, runExecutor: executeRun });
+  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", recoveredRuns, sourceBootstrap, ...paths });
+  return { stop: async () => { for (const timer of runTimers.values()) clearTimeout(timer); canary.stop(); restrictedMetadata.stop(); server.stop(); await store.close(); } };
 }
