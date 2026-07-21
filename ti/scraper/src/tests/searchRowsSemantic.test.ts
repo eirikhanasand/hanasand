@@ -1,0 +1,19 @@
+import { describe, expect, test } from "bun:test";
+import { rowFromCapture } from "../api/searchRows.ts";
+
+describe("search row semantics", () => {
+  test("removes repeated titles and navigation tails from persisted public captures", () => {
+    const row = rowFromCapture({
+      id: "cap_mitre_apt29",
+      sourceId: "src_seed_mitre_attack_apt29",
+      url: "https://attack.mitre.org/groups/G0016/",
+      title: "MITRE ATT&CK APT29 Group",
+      body: "MITRE ATT&CK APT29 Group MITRE ATT&CK APT29 Group APT29, NOBELIUM, Cozy Bear, Group G0016 | MITRE ATT&CK® Matrices Enterprise Mobile ICS Tactics Enterprise Mobile ICS Techniques",
+      collectedAt: "2026-07-21T09:53:53.332Z"
+    }, { name: "MITRE ATT&CK APT29 Group", type: "static_web" });
+
+    expect(row.summary).toBe("APT29, NOBELIUM, Cozy Bear, Group G0016");
+    expect(row.summary).not.toMatch(/Matrices|Tactics|Techniques/);
+    expect(row.publishedAt).toBeUndefined();
+  });
+});

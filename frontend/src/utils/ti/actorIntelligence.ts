@@ -167,7 +167,7 @@ function buildProvenanceRows(result: TiSearchResponse): TiActorSourceProvenance[
         sourceId: source.id,
         sourceName: source.name,
         provenance: source.url || source.provenance || source.name,
-        reportDate: source.reportDate || source.lastCollectedAt,
+        reportDate: source.reportDate,
         captureId: source.captureId,
         sourceFamily: source.sourceFamily,
         parserStatus: source.parserStatus,

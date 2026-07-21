@@ -9647,7 +9647,7 @@ function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnT
                         <div data-ti-geo-sources='true' data-ti-geo-provenance='true' className='mt-2 grid gap-1 border-t border-ui-border pt-2'>
                             {handoff.evidenceRows.slice(0, 2).map(row => (
                                 <p key={`${point.code}-${row.victim}-${row.reportDate}`} className='wrap-break-word text-[11px] leading-5 text-ui-muted dark:text-ui-muted'>
-                                    {row.victim} · {formatDate(row.reportDate)} · {sourceBasisLabel(row.confidence)} · {sourceReferenceCountLabel(row.sourceIds, row.source)}
+                                    {row.victim} · {row.reportDate ? formatDate(row.reportDate) : 'Observation date unavailable'} · {sourceBasisLabel(row.confidence)} · {sourceReferenceCountLabel(row.sourceIds, row.source)}
                                 </p>
                             ))}
                         </div>

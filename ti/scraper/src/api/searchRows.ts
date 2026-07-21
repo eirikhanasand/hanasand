@@ -4,8 +4,9 @@ import { tagsFor } from "./searchTags.ts";
 
 export function rowFromCapture(capture: any, source?: any) {
   const metadataOnly = isMetadataOnlyCapture(capture);
-  const summary = cleanSearchText(metadataOnly ? safeMetadataText(capture.metadata) : capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "");
-  const title = cleanTitle(capture.title, summary, source?.name);
+  const rawSummary = cleanSearchText(metadataOnly ? safeMetadataText(capture.metadata) : capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "");
+  const title = cleanTitle(capture.title, rawSummary, source?.name);
+  const summary = cleanActivitySummary(rawSummary, title);
   const url = safePublicUrl(capture.url, capture.metadata);
   const claim = victimClaim(title);
   return {
@@ -26,6 +27,14 @@ export function rowFromCapture(capture: any, source?: any) {
     provenanceHash: hashContent(capture.id),
     metadataOnly
   };
+}
+
+function cleanActivitySummary(summary: string, title: string) {
+  let cleaned = summary.trim();
+  const normalizedTitle = title.trim().toLowerCase();
+  while (normalizedTitle && cleaned.toLowerCase().startsWith(`${normalizedTitle} `)) cleaned = cleaned.slice(title.length).trim();
+  cleaned = cleaned.replace(/\s+\|\s+(?:(?:MITRE ATT&CK®?|ATT&CK®?)\s+)?(?:matrices|navigation|home|search|products|resources)\b[\s\S]*$/i, "").trim();
+  return cleanSearchText(cleaned || summary);
 }
 
 function victimClaim(title: string) {

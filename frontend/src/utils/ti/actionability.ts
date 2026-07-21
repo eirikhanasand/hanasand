@@ -725,7 +725,7 @@ export type GeographyHandoff = {
         source: string
         sourceIds: string[]
         provenanceRefs: string[]
-        reportDate: string
+        reportDate?: string
         confidence: number
     }>
 }
@@ -3348,7 +3348,7 @@ function buildGeographyHandoffs(result: TiSearchResponse, victimObservations: Vi
             source: uniqueStrings(originSources.map(source => source.sourceName)).join(', '),
             sourceIds: uniqueStrings(originSources.map(source => source.sourceId)),
             provenanceRefs: uniqueStrings(originSources.map(source => source.provenance)),
-            reportDate: newestTimestamp(originSources.map(source => source.reportDate || source.lastCollectedAt)) ?? result.generatedAt,
+            reportDate: newestTimestamp(originSources.map(source => source.reportDate)),
             confidence: result.actorIntelligence?.confidence ?? result.confidence,
         }],
     }] : []

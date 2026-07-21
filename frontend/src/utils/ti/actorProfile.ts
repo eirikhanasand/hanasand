@@ -22,7 +22,7 @@ export type VictimObservation = {
     source: string
     sourceIds: string[]
     provenanceRefs: string[]
-    reportDate: string
+    reportDate?: string
     confidence: number
 }
 
@@ -124,7 +124,7 @@ export function victimObservationsFor(result: TiSearchResponse): VictimObservati
                 source: activitySourceLabel(item.sourceIds.length),
                 sourceIds: item.sourceIds,
                 provenanceRefs,
-                reportDate: item.firstReportedAt || item.date || result.generatedAt,
+                reportDate: item.firstReportedAt || item.date,
                 confidence: item.confidence,
             }
         })

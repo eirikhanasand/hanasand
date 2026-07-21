@@ -42,6 +42,7 @@ describe("static web adapter fixtures", () => {
   test("canonicalizes URLs and extracts safe readable text", () => {
     expect(canonicalizeUrl("HTTPS://Example.TEST:443//a?b=2&a=1#frag")).toBe("https://example.test/a?a=1&b=2");
     expect(extractReadableText("<script>bad()</script><p>Threat &amp; CVE</p>")).toBe("Threat & CVE");
+    expect(extractReadableText("<header>Products Resources</header><main><h1>APT29 report</h1><p>Observed credential theft.</p></main><footer>Privacy</footer>")).toBe("APT29 report Observed credential theft.");
     expect(extractLinks("<a href=\"/one#x\">One</a><a href=\"mailto:a@example.test\">Mail</a>", "https://example.test/base")).toEqual(["https://example.test/one"]);
   });
 });
