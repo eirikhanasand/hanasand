@@ -33,11 +33,12 @@ export function buildDwmOrganizationMirrorPayload(input: { organizationPayload: 
     const id = stringValue(organization.id)
     const name = stringValue(organization.name)
     if (!id || !name) return null
+    const lifecycleStatus = String(organization.lifecycleStatus ?? organization.status ?? 'active').toLowerCase()
     return {
         id,
         name,
         slug: stringValue(organization.slug),
-        status: String(organization.status ?? '').toLowerCase() === 'active' ? 'active' : 'suspended',
+        status: lifecycleStatus === 'active' ? 'active' : 'suspended',
         ownerUserId: input.ownerUserId,
     }
 }

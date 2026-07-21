@@ -15,7 +15,7 @@ const dwmAnalystPortalSource = readFileSync(new URL('../src/app/dashboard/dwm/dw
 
 test('mirrors a customer organization and authenticated owner before watchlist creation', async () => {
     const mirrorPayload = buildDwmOrganizationMirrorPayload({
-        organizationPayload: { organization: { id: 'org_acme', name: 'Acme', slug: 'acme', status: 'active' } },
+        organizationPayload: { organization: { id: 'org_acme', name: 'Acme', slug: 'acme', lifecycleStatus: 'active' } },
         ownerUserId: 'owner-1',
     })
     assert.deepEqual(mirrorPayload, {
