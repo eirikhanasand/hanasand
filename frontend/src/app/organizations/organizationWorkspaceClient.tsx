@@ -321,7 +321,6 @@ const destinationKinds: DestinationDraft['kind'][] = ['discord', 'webhook']
 const webhookPolicies = ['active_destinations', 'manual_selection', 'disabled']
 const alertPolicies = ['members', 'admins', 'owners']
 const lifecycleStatuses = ['active', 'archived']
-const liveDwmAlertId = 'dwm_alert_c6ef012afc7016b5'
 const optionalContextEndpoints = new Set(['alerts', 'cases', 'deliveries'])
 
 function sanitizeOrganizationDisplayCopy(value: unknown) {
@@ -616,9 +615,7 @@ export default function OrganizationWorkspaceClient() {
     const [settingsDraft, setSettingsDraft] = useState<OrganizationSettings>({})
     const [editingWatchlist, setEditingWatchlist] = useState<Record<string, { kind: WatchlistKind, value: string, notes: string }>>({})
     const [destinationCreateDraft, setDestinationCreateDraft] = useState<DestinationCreateDraft>({ name: '', kind: 'discord', url: '' })
-    const [destinationDrafts, setDestinationDrafts] = useState<Record<string, DestinationDraft>>({})
     const [editingDestinations, setEditingDestinations] = useState<Record<string, DestinationEditDraft>>({})
-    const [deliveryResults, setDeliveryResults] = useState<Record<string, DeliveryRow>>({})
     const [rowMessages, setRowMessages] = useState<Record<string, RowMessage>>({})
     const [activity, setActivity] = useState<ActivityItem[]>([])
     const [selectedActivitySubject, setSelectedActivitySubject] = useState<ActivitySubject>({ type: 'organization', id: 'organization' })
@@ -645,10 +642,9 @@ export default function OrganizationWorkspaceClient() {
     const pendingInvites = bundle.invites.filter(invite => invite.status.toLowerCase() === 'pending')
     const configuredDestinationCount = organizationConfiguredDestinationCount(bundle)
     const hasConfiguredDestination = configuredDestinationCount > 0
-    const hasSavedDestination = bundle.webhooks.some(organizationDestinationConfigured)
     const watchlistDraftDuplicate = isDuplicateWatchlistTerm(bundle.watchlists, watchlistDraft.kind, watchlistDraft.value)
     const watchlistSuggestions = selectedOrganization ? starterWatchlistSuggestions(selectedOrganization, bundle.watchlists) : []
-    const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
+    const selectedAlertId = bundle.alerts[0]?.id || ''
     const activityRows = useMemo(() => organizationActivityRows(activity, bundle, selectedOrganization?.id), [activity, bundle, selectedOrganization?.id])
     const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedDeliveryId || requestedInviteId || requestedMemberId || requestedFocus)
     const settingsDirty = useMemo(() => !settingsEqual(settingsDraft, bundle.settings || {}), [settingsDraft, bundle.settings])
@@ -735,11 +731,11 @@ export default function OrganizationWorkspaceClient() {
                 nextBundle.invites = arrayValue<OrganizationInvite>(payload.invites)
             }
             if (key === 'watchlists') {
-                nextBundle.watchlists = arrayValue<WatchlistItem>(payload.watchlistItems ?? payload.watchlists ?? payload.items)
+                nextBundle.watchlists = normalizeAlertGenerationRecords<WatchlistItem>(payload.watchlistItems ?? payload.watchlists ?? payload.items)
             }
             if (key === 'alertTerms') {
                 const exportPayload = objectValue(payload.alertTermsExport)
-                nextBundle.alertTerms = arrayValue<AlertTerm>(payload.activeTerms ?? exportPayload?.activeTerms ?? payload.terms)
+                nextBundle.alertTerms = normalizeAlertGenerationRecords<AlertTerm>(payload.activeTerms ?? exportPayload?.activeTerms ?? payload.terms)
             }
             if (key === 'alertCaseVisibility') {
                 nextBundle.alertCaseVisibility = payload
@@ -1099,51 +1095,12 @@ export default function OrganizationWorkspaceClient() {
         return count === undefined ? 'Archived watchlists cleaned up.' : `${count} archived watchlist${count === 1 ? '' : 's'} cleaned up.`
     }, 'watchlists-cleanup')
 
-    const testWatchlistDestination = (item: WatchlistItem, mode: 'save' | 'replay') => selectedOrganization && runAction(mode === 'save' ? 'save-destination' : 'replay-destination', async () => {
-        requireManage()
-        const draft = destinationDrafts[item.id] || { kind: 'discord', url: '' }
-        const withUrl = mode === 'save'
-        const url = draft.url.trim()
-        if (withUrl && !url) throw new Error('Enter a destination URL before testing.')
-        if (withUrl && !validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
-        const alert = alertForWatchlist(item, bundle.alerts)
-        const payload: Record<string, unknown> = {
-            alertId: alert?.id || liveDwmAlertId,
-            organizationId: selectedOrganization.id,
-            tenantId: item.tenantId || selectedOrganization.tenantId || 'default',
-            watchlistId: item.id,
-            watchlistItemId: item.id,
-            dryRun: true,
-            limit: 1,
-            requestId: `org-ui-${Date.now()}`,
-        }
-        if (withUrl) {
-            payload.webhookUrl = url
-            payload.destinationType = draft.kind
-            payload.attachToWatchlist = true
-        }
-        const result = await requestJson<DeliveryResult>('/api/dwm/webhooks/deliver', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-        })
-        const delivery = firstDelivery(result)
-        if (delivery) {
-            setDeliveryResults(current => ({ ...current, [item.id]: delivery }))
-        }
-        if (withUrl) {
-            setDestinationDrafts(current => ({ ...current, [item.id]: { ...draft, url: '' } }))
-        }
-        const resultText = deliveryActionResultSummary(delivery, withUrl ? 'Destination tested and saved.' : 'Saved destination tested.')
-        return withUrl ? `${resultText} Destination saved for this watchlist.` : resultText
-    }, `watchlist-${item.id}`)
-
     const testSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('test-destination', async () => {
         requireManage()
         const result = await requestJson<DeliveryResult>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/test`, {
             method: 'POST',
             body: JSON.stringify({
                 destinationId: destination.id,
-                alertId: selectedAlertId,
                 organizationId: selectedOrganization.id,
                 tenantId: selectedOrganization.tenantId || 'default',
                 dryRun: true,
@@ -1423,7 +1380,6 @@ export default function OrganizationWorkspaceClient() {
                                     canManage={canManage}
                                     hasWatchlists={bundle.watchlists.length > 0}
                                     hasDestination={hasConfiguredDestination}
-                                    hasSavedDestination={hasSavedDestination}
                                 />
                                 <PermissionStrip
                                     role={selectedOrganization.role || 'member'}
@@ -1438,7 +1394,6 @@ export default function OrganizationWorkspaceClient() {
                                     inviteCount={pendingInvites.length}
                                     watchlistCount={bundle.watchlists.length}
                                     destinationCount={configuredDestinationCount}
-                                    hasSavedDestination={hasSavedDestination}
                                     alertCount={bundle.alerts.length}
                                     caseCount={bundle.cases.length}
                                     alertId={selectedAlertId}
@@ -1465,10 +1420,6 @@ export default function OrganizationWorkspaceClient() {
                                             organization={selectedOrganization}
                                             alerts={bundle.alerts}
                                             deliveries={bundle.deliveries}
-                                            destinationDrafts={destinationDrafts}
-                                            deliveryResults={deliveryResults}
-                                            setDestinationDrafts={setDestinationDrafts}
-                                            onTestDestination={(item, mode) => void testWatchlistDestination(item, mode)}
                                             onCleanup={() => void cleanupWatchlists()}
                                             rowMessages={rowMessages}
                                             draftDuplicate={watchlistDraftDuplicate}
@@ -1801,7 +1752,7 @@ function DwmHandoffBanner({ organization, bundle, selectedSubject, alertId, case
     )
 }
 
-function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, hasDestination, hasSavedDestination }: { organizationId: string, alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean, hasSavedDestination: boolean }) {
+function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, hasDestination }: { organizationId: string, alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
     const actions: Array<{ href: string, icon: ReactNode, label: string, disabled?: boolean, disabledReason?: string }> = []
     actions.push({
         href: '#watchlists',
@@ -1818,7 +1769,7 @@ function OrgActionStrip({ organizationId, alertId, canManage, hasWatchlists, has
         disabledReason: canManage ? undefined : 'Admin access is required to invite team members.',
     })
     actions.push({
-        href: hasSavedDestination ? '#destinations' : '#watchlists',
+        href: '#destinations',
         icon: <Webhook className='h-4 w-4' />,
         label: 'Test destination',
         disabled: !canManage || !hasWatchlists,
@@ -1895,14 +1846,13 @@ function PermissionStrip({ role, canManage, hasWatchlists, hasDestination }: { r
     )
 }
 
-function OrgSetupProgress({ organizationId, canManage, memberCount, inviteCount, watchlistCount, destinationCount, hasSavedDestination, alertCount, caseCount, alertId }: {
+function OrgSetupProgress({ organizationId, canManage, memberCount, inviteCount, watchlistCount, destinationCount, alertCount, caseCount, alertId }: {
     organizationId: string
     canManage: boolean
     memberCount: number
     inviteCount: number
     watchlistCount: number
     destinationCount: number
-    hasSavedDestination: boolean
     alertCount: number
     caseCount: number
     alertId: string
@@ -1933,7 +1883,7 @@ function OrgSetupProgress({ organizationId, canManage, memberCount, inviteCount,
             title: 'Delivery destination',
             body: destinationCount ? `${destinationCount} destination${destinationCount === 1 ? '' : 's'} saved` : watchlistCount ? 'Test and save a destination' : 'Create a watchlist first',
             reason: !canManage ? 'Owner or admin access is required to test delivery.' : watchlistCount ? 'Test a Discord or webhook destination before customer delivery.' : 'Create a shared watchlist term before testing delivery.',
-            href: hasSavedDestination ? '#destinations' : '#watchlists',
+            href: '#destinations',
             ready: destinationCount > 0,
             blocked: !watchlistCount || !canManage,
             action: destinationCount ? 'Review destination' : 'Test destination',
@@ -2638,7 +2588,7 @@ function DestinationPanel({ destinations, deliveries, canManage, busy, rowMessag
     )
 }
 
-function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], members: OrganizationMember[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
+function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, draft, setDraft, suggestions, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, onCleanup, rowMessages, draftDuplicate, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], members: OrganizationMember[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, suggestions: WatchlistSuggestion[], editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], onCleanup: () => void, rowMessages: Record<string, RowMessage>, draftDuplicate: boolean, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const [watchlistQuery, setWatchlistQuery] = useState('')
     const [watchlistStatusFilter, setWatchlistStatusFilter] = useState('all')
     const activeCount = watchlists.filter(item => item.status.toLowerCase() === 'active').length
@@ -2851,7 +2801,7 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                                                 {activeAlertTerm?.provenanceHash && <span className='truncate'>Provenance: {compactReference(activeAlertTerm.provenanceHash, 'hash')}</span>}
                                             </div>
                                         </div>
-                                        <WatchlistDestinationSummary item={item} delivery={deliveryResults[item.id] || latestDeliveryForWatchlist(item, deliveries)} />
+                                        <WatchlistDestinationSummary item={item} delivery={latestDeliveryForWatchlist(item, deliveries)} />
                                         <div className='flex flex-wrap gap-2' onClick={event => event.stopPropagation()} onKeyDown={stopRowSelectionKeys}>
                                             {canManage ? (
                                                 <>
@@ -2870,18 +2820,6 @@ function WatchlistPanel({ watchlists, activeTerms, members, canManage, busy, dra
                                             )}
                                         </div>
                                     </div>
-                                    <DestinationControls
-                                        item={item}
-                                        organization={organization}
-                                        alert={alertForWatchlist(item, alerts)}
-                                        delivery={deliveryResults[item.id] || latestDeliveryForWatchlist(item, deliveries)}
-                                        draft={destinationDrafts[item.id] || { kind: 'discord', url: '' }}
-                                        canManage={canManage}
-                                        busy={busy}
-                                        onDraftChange={next => setDestinationDrafts(current => ({ ...current, [item.id]: next }))}
-                                        onSelect={() => onSelectSubject({ type: 'watchlist', id: item.id })}
-                                        onTest={mode => onTestDestination(item, mode)}
-                                    />
                                     <RowStatus message={rowMessages[`watchlist-${item.id}`]} />
                                 </div>
                             )}
@@ -2909,6 +2847,10 @@ function WatchlistDestinationSummary({ item, delivery }: { item: WatchlistItem, 
             {endpoint && <span className='truncate text-ui-muted dark:text-ui-muted'>Route: {endpoint}</span>}
             <span className='truncate text-ui-muted dark:text-ui-muted'>{delivery ? `Last ${delivery.dryRun ? 'test' : 'delivery'} ${delivery.status || 'attempted'}` : 'No delivery history yet'}</span>
             <span className='truncate text-ui-muted dark:text-ui-muted'>History: {delivery ? formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt) : 'waiting for test'}</span>
+            <a href='#destinations' className='mt-1 inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary dark:border-ui-border dark:bg-ui-canvas dark:text-ui-text' onClick={event => event.stopPropagation()}>
+                <Webhook className='h-4 w-4' />
+                Configure delivery
+            </a>
         </div>
     )
 }
@@ -2987,66 +2929,6 @@ function DeliveryPayloadPreview({ delivery, compact = false }: { delivery: Deliv
 function safeDeliveryRoute(value?: string | null) {
     const route = value?.trim() || ''
     return route.startsWith('/') || /^https?:\/\//.test(route) ? route : ''
-}
-
-function DestinationControls({ item, organization, alert, delivery, draft, canManage, busy, onDraftChange, onSelect, onTest }: { item: WatchlistItem, organization: OrganizationSummary, alert?: ScopedAlert, delivery?: DeliveryRow | null, draft: DestinationDraft, canManage: boolean, busy: string, onDraftChange: (next: DestinationDraft) => void, onSelect: () => void, onTest: (mode: 'save' | 'replay') => void }) {
-    const configured = destinationConfigured(item)
-    const destinationState = destinationDisplayState(item)
-    const selectedAlertId = alert?.id || liveDwmAlertId
-    const deliveryStatus = delivery?.status || (configured ? 'Configured' : 'None')
-    const replayLabel = delivery?.status === 'failed' || delivery?.status === 'skipped' ? 'Retry' : 'Replay'
-    const replayDisabledReason = !canManage ? 'Owner or admin required' : !configured ? 'Save a destination before replay.' : ''
-    const destinationUrl = draft.url.trim()
-    const destinationUrlInvalid = Boolean(destinationUrl) && !validDestinationUrl(destinationUrl)
-    return (
-        <div className='grid min-w-0 gap-3 overflow-hidden rounded-lg border border-ui-border bg-ui-raised p-3 dark:border-ui-border dark:bg-ui-canvas' onClick={event => {
-            event.stopPropagation()
-            onSelect()
-        }} onKeyDown={stopRowSelectionKeys}>
-            <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
-                <div className='min-w-0'>
-                    <p className='flex flex-wrap items-center gap-2 text-sm font-semibold text-ui-text dark:text-ui-text'>
-                        <Webhook className='h-4 w-4 text-ui-primary' />
-                        Destination
-                        <StatusPill status={configured ? 'configured' : 'route needed'} />
-                    </p>
-                    <p className='mt-1 truncate text-xs text-ui-muted dark:text-ui-muted'>{destinationState}</p>
-                </div>
-                <div className='grid grid-cols-2 gap-2 sm:flex'>
-                    <button type='button' className={secondaryButtonClass} disabled={!canManage || !configured || Boolean(busy)} title={replayDisabledReason || undefined} aria-label={replayDisabledReason ? `${replayLabel}: ${replayDisabledReason}` : replayLabel} onClick={() => onTest('replay')}>
-                        <Play className='h-4 w-4' />
-                        {replayLabel}
-                    </button>
-                    <a href='#delivery-history' className={secondaryButtonClass}>
-                        <ExternalLink className='h-4 w-4' />
-                        History
-                    </a>
-                </div>
-            </div>
-            <div className='grid min-w-0 gap-2 lg:grid-cols-[8rem_minmax(0,1fr)] 2xl:grid-cols-[8rem_minmax(0,1fr)_auto]'>
-                <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={!canManage || Boolean(busy)} onChange={value => onDraftChange({ ...draft, kind: value as DestinationDraft['kind'] })} />
-                <label className='grid min-w-0 gap-1 text-sm font-medium text-ui-text dark:text-ui-muted'>
-                    URL
-                    <input value={draft.url} disabled={!canManage || Boolean(busy)} onChange={event => onDraftChange({ ...draft, url: event.target.value })} className={inputClass} placeholder='https://discord.com/api/webhooks/...' />
-                    {destinationUrlInvalid && <span className='text-xs font-semibold text-ui-danger dark:text-ui-danger'>Use a valid HTTPS URL.</span>}
-                </label>
-                <label className='grid content-end lg:col-span-2 2xl:col-span-1'>
-                    <span className='sr-only'>Test destination</span>
-                    <button type='button' className={`${primaryButtonClass} whitespace-nowrap`} disabled={!canManage || !destinationUrl || destinationUrlInvalid || Boolean(busy)} onClick={() => onTest('save')}>
-                        <CheckCircle2 className='h-4 w-4' />
-                        Test and save
-                    </button>
-                </label>
-            </div>
-            <div className='grid gap-2 text-xs text-ui-muted dark:text-ui-muted sm:grid-cols-3'>
-                <span className='truncate'>Alert: {compactReference(selectedAlertId, 'alert')}</span>
-                <span className='truncate'>Last delivery: {deliveryStatus}</span>
-                <span className='truncate'>Scope: {organizationDisplayName(organization)}</span>
-            </div>
-            {delivery?.error && <p className='rounded-md bg-ui-warning/10 px-3 py-2 text-xs font-medium text-ui-warning dark:bg-ui-warning/10 dark:text-ui-warning'>{deliveryFailureSummary(delivery)}</p>}
-            {delivery && <DeliveryPayloadPreview delivery={delivery} compact />}
-        </div>
-    )
 }
 
 function DeliveryHistoryPanel({ organization, deliveries, destinations, selectedSubject, canManage, busy, rowMessages, onReplay }: { organization: OrganizationSummary, deliveries: DeliveryRow[], destinations: WebhookDestination[], selectedSubject: ActivitySubject, canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, onReplay: (delivery: DeliveryRow) => void }) {
@@ -3688,6 +3570,24 @@ function objectValue(value: unknown): Record<string, unknown> | null {
 
 function arrayValue<T>(value: unknown): T[] {
     return Array.isArray(value) ? value as T[] : []
+}
+
+export function alertGenerationReference(value: unknown) {
+    const direct = cleanString(value)
+    if (direct) return direct
+    const reference = objectValue(value)
+    const dedupe = objectValue(reference?.dedupe)
+    return cleanString(dedupe?.key)
+        || cleanString(reference?.watchlistItemId)
+        || cleanString(reference?.itemId)
+        || cleanString(reference?.term)
+}
+
+function normalizeAlertGenerationRecords<T extends { alertGenerationRef?: string }>(value: unknown): T[] {
+    return arrayValue<Record<string, unknown>>(value).map(record => ({
+        ...record,
+        alertGenerationRef: alertGenerationReference(record.alertGenerationRef),
+    }) as T)
 }
 
 function cleanString(value: unknown) {
@@ -4543,10 +4443,6 @@ function alertsForWatchlist(item: WatchlistItem, alerts: ScopedAlert[]) {
         if (alert.watchlistIds?.includes(item.id)) return true
         return false
     })
-}
-
-function alertForWatchlist(item: WatchlistItem, alerts: ScopedAlert[]) {
-    return alertsForWatchlist(item, alerts)[0] || alerts[0]
 }
 
 function latestDeliveryForWatchlist(item: WatchlistItem, deliveries: DeliveryRow[]) {

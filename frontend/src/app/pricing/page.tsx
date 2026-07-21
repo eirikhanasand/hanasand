@@ -15,11 +15,11 @@ const plans = [
         name: 'Pilot',
         price: '$49',
         cadence: '/ month',
-        detail: 'Start monitoring a focused set of companies and domains.',
-        cta: 'Start pilot',
-        href: '/contact?plan=pilot',
+        detail: 'Create a workspace and evaluate a focused set of companies and domains before paid activation.',
+        cta: 'Start evaluation',
+        href: '/register?path=/organizations',
         icon: BellRing,
-        features: ['25 watched names or domains', 'Recent actor-claim matches', 'Email notifications', 'Company and actor pivots'],
+        features: ['5 evaluation watch terms', 'One webhook destination', '5 alert refreshes per day', 'Up to 10 open cases'],
     },
     {
         name: 'Company Monitor',
@@ -30,7 +30,7 @@ const plans = [
         href: '/contact?plan=company-monitor',
         icon: ShieldCheck,
         featured: true,
-        features: ['250 watched names or domains', 'Faster refreshes', 'Structured alert export', 'Weekly coverage review'],
+        features: ['250 watched names or domains', '5 webhook destinations', '100 alert refreshes per day', 'Up to 100 open cases'],
     },
     {
         name: 'Portfolio',
@@ -40,7 +40,7 @@ const plans = [
         cta: 'Talk through coverage',
         href: '/contact?plan=portfolio',
         icon: Building2,
-        features: ['1,500 watched names or domains', 'Priority source expansion', 'Custom delivery format', 'Shared review workspace'],
+        features: ['1,500 watched names or domains', '20 webhook destinations', '500 alert refreshes per day', 'Up to 500 open cases'],
     },
 ]
 
@@ -199,13 +199,13 @@ export default function PricingPage() {
                     <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
                         <div>
                             <p className='text-sm font-semibold uppercase text-ui-primary'>Pilot path</p>
-                            <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>A buyer should know what happens after clicking contact.</h2>
+                            <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>A buyer should know what happens after starting.</h2>
                             <p className='mt-2 max-w-3xl text-sm leading-6 text-ui-muted'>
                                 Start narrow, connect one delivery path, and judge the first real matches before expanding scope.
                             </p>
                         </div>
-                        <Link href='/contact?intent=dwm' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
-                            Start the pilot
+                        <Link href='/register?path=/organizations' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                            Start evaluation
                             <ArrowRight className='h-4 w-4' />
                         </Link>
                     </div>

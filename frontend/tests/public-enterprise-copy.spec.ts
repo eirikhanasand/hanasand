@@ -68,6 +68,8 @@ test('pricing keeps endpoint checks secondary to exposure monitoring', async () 
     expect(pricing).not.toContain('const loadTestingPlans')
     expect(pricing).not.toContain('Starter checks')
     expect(pricing).not.toContain('Team checks')
+    expect(pricing).toContain('href: \'/register?path=/organizations\'')
+    expect(pricing).toContain('href=\'/register?path=/organizations\'')
     expect(pricing.indexOf('Common buying scenarios')).toBeLessThan(pricing.indexOf('Utility tool'))
 })
 
