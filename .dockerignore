@@ -21,8 +21,10 @@ frontend/coverage
 frontend/.turbo
 frontend/.vercel
 frontend/npm-debug.log
+frontend/*.tsbuildinfo
 
 api/node_modules
+api/articles
 api/.env
 api/.env.*
 api/coverage
@@ -36,6 +38,7 @@ ti/scraper/coverage
 ti/scraper/dist
 ti/scraper/npm-debug.log
 ti/scraper/bun-debug.log
+ti/scraper/.tmp
 
 **/*.pem
 **/*.key

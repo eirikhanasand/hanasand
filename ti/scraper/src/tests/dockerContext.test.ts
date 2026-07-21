@@ -44,4 +44,20 @@ describe("docker context guard", () => {
     expect(estimate.status).toBe("critical");
     expect(() => assertDockerContextsWithinLimits([estimate])).toThrow("too-large Docker context");
   });
+
+  test("uses a Dockerfile-specific ignore file for a shared root context", () => {
+    const root = mkdtempSync(join(tmpdir(), "ti-docker-context-specific-"));
+    mkdirSync(join(root, "service"), { recursive: true });
+    writeFileSync(join(root, ".dockerignore"), "\n");
+    writeFileSync(join(root, "service", "Dockerfile.dockerignore"), "*\n!service/**\n");
+    writeFileSync(join(root, "service", "app.ts"), "x".repeat(100));
+    writeFileSync(join(root, "unrelated.bin"), "x".repeat(10_000));
+
+    const dockerignorePath = join(root, "service", "Dockerfile.dockerignore");
+    const estimate = estimateDockerContext({ name: "service", contextDir: root, dockerignorePath, maxBytes: 1_000 });
+
+    expect(estimate.status).toBe("ok");
+    expect(estimate.dockerignorePath).toBe(dockerignorePath);
+    expect(estimate.includedFiles).toBe(2);
+  });
 });

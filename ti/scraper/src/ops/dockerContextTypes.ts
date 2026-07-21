@@ -1,6 +1,7 @@
 export interface DockerContextLimit {
   name: string;
   contextDir: string;
+  dockerignorePath?: string;
   maxBytes: number;
 }
 

@@ -25,6 +25,7 @@ describe("deploy hygiene", () => {
     mkdirSync(join(root, "ti", "scraper"), { recursive: true });
     writeFileSync(join(root, ".dockerignore"), "node_modules\n");
     writeFileSync(join(root, "ti", "scraper", ".dockerignore"), "node_modules\n");
+    writeFileSync(join(root, "ti", "scraper", "Dockerfile.dockerignore"), "*\n!ti/scraper/**\n");
     writeFileSync(join(root, "ti", "scraper", "Dockerfile"), [
       "FROM oven/bun:1.3.11-alpine AS test",
       "RUN bun test",

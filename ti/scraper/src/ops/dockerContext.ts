@@ -7,7 +7,7 @@ import type { DockerContextEstimate, DockerContextLimit } from "./dockerContextT
 
 export function estimateDockerContext(limit: DockerContextLimit): DockerContextEstimate {
   const contextDir = resolve(limit.contextDir);
-  const dockerignorePath = join(contextDir, ".dockerignore");
+  const dockerignorePath = resolve(limit.dockerignorePath ?? join(contextDir, ".dockerignore"));
   const rules = existsSync(dockerignorePath) ? parseDockerignore(readFileSync(dockerignorePath, "utf8")) : [];
   const totals = walkContext(contextDir, contextDir, rules);
   const ratio = totals.totalBytes / limit.maxBytes;
@@ -38,6 +38,11 @@ export function defaultDockerContextLimits(repoRoot = resolve("../../..")): Dock
     { name: "root-deploy", contextDir: repoRoot, maxBytes: 40 * mb },
     { name: "frontend", contextDir: join(repoRoot, "frontend"), maxBytes: 25 * mb },
     { name: "api", contextDir: join(repoRoot, "api"), maxBytes: 25 * mb },
-    { name: "ti-scraper", contextDir: join(repoRoot, "ti", "scraper"), maxBytes: 25 * mb }
+    {
+      name: "ti-scraper",
+      contextDir: repoRoot,
+      dockerignorePath: join(repoRoot, "ti", "scraper", "Dockerfile.dockerignore"),
+      maxBytes: 25 * mb
+    }
   ];
 }
