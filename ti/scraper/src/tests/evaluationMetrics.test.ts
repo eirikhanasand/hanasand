@@ -89,11 +89,16 @@ describe("durable evaluation metrics", () => {
       zeroSecondEvidence: { publicationToCollectionSeconds: { verified: true } },
       timestampAnomalies: []
     });
+    store.saveTimelinessRecord({
+      id: "incident_legacy_zero",
+      latencies: { publicationToCollectionSeconds: 0, processingToVisibilitySeconds: null },
+      timestampAnomalies: []
+    });
 
     const metrics = buildEvaluationMetrics(store);
 
     expect(metrics.timeliness.overall.publicationToCollectionSeconds).toEqual({ sampleSize: 1, medianSeconds: 0, p95Seconds: 0 });
-    expect(metrics.timeliness).toMatchObject({ verifiedZeroSecondCount: 1, unverifiedZeroSecondCount: 1, anomalyCount: 1 });
+    expect(metrics.timeliness).toMatchObject({ verifiedZeroSecondCount: 1, unverifiedZeroSecondCount: 2, anomalyCount: 2 });
   });
 
   test("requires a complete stratified held-out benchmark before reporting validation", () => {

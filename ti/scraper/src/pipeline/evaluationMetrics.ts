@@ -115,9 +115,9 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
       reportToDeliveredRecordCount: timeliness.filter((record: any) => (record.firstReportedAt ?? record.reportedAt) && record.deliveredAt).length,
       completeTimelineRecordCount: timeliness.filter(completeTimeline).length,
       firstReportedByKind: countBy(timeliness.filter((record: any) => record.firstReportedKind), (record) => record.firstReportedKind),
-      verifiedZeroSecondCount: timeliness.reduce((total: number, record: any) => total + Object.values(record.zeroSecondEvidence ?? {}).filter((evidence: any) => evidence.verified === true).length, 0),
-      unverifiedZeroSecondCount: timeliness.reduce((total: number, record: any) => total + Object.values(record.zeroSecondEvidence ?? {}).filter((evidence: any) => evidence.verified !== true).length, 0),
-      anomalyCount: timeliness.filter((record: any) => record.timestampAnomalies?.length).length,
+      verifiedZeroSecondCount: zeroSecondCount(timeliness, true),
+      unverifiedZeroSecondCount: zeroSecondCount(timeliness, false),
+      anomalyCount: timeliness.filter((record: any) => record.timestampAnomalies?.length || unverifiedZeroSecondFields(record).length).length,
       overall: latencySummary(timeliness),
       byPipelineStage: pipelineStageLatencies(timeliness),
       bySourceFamily: groupedLatencies(timeliness, (record) => sourceFamily(sourceById.get(record.sourceId))),
@@ -232,13 +232,31 @@ function calibration(rows: any[]) {
 function latencySummary(records: any[]) {
   return Object.fromEntries(LATENCIES.map((field) => {
     const values = records.flatMap((record) => {
-      const value = Number(record.latencies?.[field]);
-      if (!Number.isFinite(value) || value < 0) return [];
+      const value = numericLatency(record, field);
+      if (value === undefined || value < 0) return [];
       if (value === 0 && record.zeroSecondEvidence?.[field]?.verified !== true) return [];
       return [value];
     });
     return [field, { sampleSize: values.length, medianSeconds: percentile(values, 0.5), p95Seconds: percentile(values, 0.95) }];
   }));
+}
+
+function unverifiedZeroSecondFields(record: any): string[] {
+  return LATENCIES.filter((field) => numericLatency(record, field) === 0 && record.zeroSecondEvidence?.[field]?.verified !== true);
+}
+
+function zeroSecondCount(records: any[], verified: boolean): number {
+  return records.reduce((total, record) => total + LATENCIES.filter((field) => {
+    if (numericLatency(record, field) !== 0) return false;
+    return (record.zeroSecondEvidence?.[field]?.verified === true) === verified;
+  }).length, 0);
+}
+
+function numericLatency(record: any, field: string): number | undefined {
+  const raw = record.latencies?.[field];
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
 }
 
 function groupedLatencies(records: any[], key: (record: any) => string) {
@@ -263,7 +281,7 @@ function actorNamesByCapture(entities: any[]) {
 }
 
 function completeTimeline(record: any) {
-  return Boolean((record.firstReportedAt ?? record.reportedAt) && record.publishedAt && record.collectedAt && record.processedAt && record.firstVisibleAt && (record.alertCreatedAt ?? record.alertedAt) && record.deliveryAttemptedAt && record.deliveredAt && record.firstReportedProvenance && record.alertCreatedProvenance && record.deliveryAttemptProvenance && record.deliveredProvenance && !record.timestampAnomalies?.length);
+  return Boolean((record.firstReportedAt ?? record.reportedAt) && record.publishedAt && record.collectedAt && record.processedAt && record.firstVisibleAt && (record.alertCreatedAt ?? record.alertedAt) && record.deliveryAttemptedAt && record.deliveredAt && record.firstReportedProvenance && record.alertCreatedProvenance && record.deliveryAttemptProvenance && record.deliveredProvenance && !record.timestampAnomalies?.length && !unverifiedZeroSecondFields(record).length);
 }
 
 function coverage(sources: any[], captures: any[], entities: any[], health: any[], claims: any[], labels: any[]) {
