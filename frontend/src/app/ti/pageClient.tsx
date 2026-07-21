@@ -2,7 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars -- dormant TI workbench sections are unused while the simplified public result view ships. */
 
-import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
+import searchThreatIntel, { evidenceTimestamp, TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, countryFromValue, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
 import { buildTiActionability, type TiActionabilityModel } from '@/utils/ti/actionability'
@@ -343,7 +343,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 >
                                     <div className='flex min-w-0 items-center justify-between gap-2'>
                                         <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${severityClass(item.severity)}`}>{item.severity}</span>
-                                        <span className='truncate text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{item.timestamp}</span>
+                                        <span className='truncate text-[11px] font-semibold text-ui-muted dark:text-ui-muted'>{formatDate(item.timestamp)}</span>
                                     </div>
                                     <span className='wrap-break-word text-sm font-semibold leading-5 text-ui-text dark:text-ui-text'>{displayRequirementText(item.title)}</span>
                                     <span className='line-clamp-2 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{displayRequirementText(item.detail)}</span>
@@ -3117,7 +3117,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
             title: item.victimName || item.title,
             subtitle: item.impact || item.detail,
             detail: item.detail,
-            timestamp: item.firstReportedAt || item.date || result.generatedAt,
+            timestamp: evidenceTimestamp(item.firstReportedAt, item.date),
             source: activitySourceLabel(item.sourceIds.length),
             provenance: item.publisherCount ? `${item.publisherCount} publisher${item.publisherCount === 1 ? '' : 's'}` : 'Activity result',
             confidence: item.confidence,
@@ -3190,7 +3190,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         title: item.company || item.victim || 'Recent attack mention',
         subtitle: [item.affectedAccounts, item.datasetSize, item.claimedDate].filter(Boolean).join(' · ') || 'Sensitive-source review item',
         detail: item.actorStatement || 'Review the captured safe fields before taking action.',
-        timestamp: item.claimedDate || result.generatedAt,
+        timestamp: evidenceTimestamp(item.claimedDate),
         source: item.sourceHash ? `source hash ${item.sourceHash}` : 'Sensitive-source review inbox',
         provenance: item.provenance || 'Sensitive-source review',
         confidence: item.confidence,
@@ -6359,7 +6359,7 @@ function timelineFor(result: TiSearchResponse, selected?: AnalystWorkItem) {
         }] : []),
         ...result.recentActivity.slice(0, 4).map((item, index) => ({
             id: `activity-${index}`,
-            at: item.firstReportedAt || item.date || result.generatedAt,
+            at: evidenceTimestamp(item.firstReportedAt, item.date),
             label: item.title,
             detail: item.detail,
         })),
@@ -9215,9 +9215,9 @@ function classifyPublicTiQuery(query: string): NonNullable<TiSearchResponse['que
 }
 
 function formatDate(value: string) {
-    if (!value) return 'Now'
+    if (!value) return 'Date unavailable'
     const parsed = new Date(value)
-    if (Number.isNaN(parsed.getTime())) return value.slice(0, 10)
+    if (Number.isNaN(parsed.getTime())) return value
     return parsed.toISOString().slice(0, 10)
 }
 

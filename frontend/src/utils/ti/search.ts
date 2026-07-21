@@ -473,6 +473,9 @@ function isTiSearchResponse(value: unknown): value is TiSearchResponse {
         && Array.isArray((value as TiSearchResponse).sources)
 }
 
+export const evidenceTimestamp = (...values: Array<string | null | undefined>) =>
+    values.find(value => value?.trim()) ?? 'Observation date unavailable'
+
 function readCachedResult(key: string) {
     const now = Date.now()
     const memoryHit = memoryCache.get(key)
