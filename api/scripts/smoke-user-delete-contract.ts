@@ -16,6 +16,11 @@ for (const source of [deleteUser, deleteSelf]) {
 assert.match(deleteUser, /id: actorId/)
 assert.match(deleteUser, /revokedBy: actorId/)
 assert.match(deleteSelf, /revokedBy: id/)
+assert.match(purgeDeletedAccounts, /WITH due_users AS MATERIALIZED/)
+assert.match(purgeDeletedAccounts, /DELETE FROM tokens/)
+assert.match(purgeDeletedAccounts, /SET revoked_by = NULL/)
+assert.match(purgeDeletedAccounts, /DELETE FROM login_events/)
+assert.match(purgeDeletedAccounts, /DELETE FROM attempts/)
 assert.match(purgeDeletedAccounts, /DELETE FROM users/)
 assert.match(purgeDeletedAccounts, /deletion_scheduled_at <= NOW\(\)/)
 
