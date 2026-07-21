@@ -9,16 +9,21 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
   const scraperDockerfilePath = join(root, "ti", "scraper", "Dockerfile");
   const rootDockerignorePath = join(root, ".dockerignore");
   const scraperDockerignorePath = join(root, "ti", "scraper", ".dockerignore");
+  const backupWrapperPath = join(root, "ops", "threat-intel-backup", "run-threat-intel-backup.sh");
+  const backupScriptPath = join(root, "ti", "scraper", "scripts", "threat-intel-backup.sh");
   const compose = readIfExists(composePath);
   const scraperDockerfile = readIfExists(scraperDockerfilePath);
   const rootDockerignore = readIfExists(rootDockerignorePath);
   const scraperDockerignore = readIfExists(scraperDockerignorePath);
+  const backupWrapper = readIfExists(backupWrapperPath);
+  const backupScript = readIfExists(backupScriptPath);
 
   const checks: DeployHygieneCheck[] = [
     check("required.compose", Boolean(compose), "root docker-compose.yml exists"),
     check("required.scraper_dockerfile", Boolean(scraperDockerfile), "ti/scraper Dockerfile exists"),
     check("required.root_dockerignore", Boolean(rootDockerignore), "root .dockerignore exists"),
     check("required.scraper_dockerignore", Boolean(scraperDockerignore), "ti/scraper .dockerignore exists"),
+    check("required.backup_scripts", Boolean(backupWrapper && backupScript), "threat-intelligence backup scripts exist"),
     check("dockerfile.test_enforced", /FROM\s+test\s+AS\s+runtime/i.test(scraperDockerfile), "scraper runtime stage depends on test stage"),
     check("dockerfile.runs_tests", /RUN\s+bun\s+(?:run\s+)?test/.test(scraperDockerfile) && /RUN\s+bun\s+run\s+check/.test(scraperDockerfile), "scraper Docker build runs tests and type-check"),
     check("compose.scraper_service", /ti-scraper:\s*\n/.test(compose), "compose declares ti-scraper service"),
@@ -35,7 +40,9 @@ export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygien
     check("dockerignore.scraper_excludes_node_modules", /(^|\n)node_modules(\n|$)/.test(scraperDockerignore), "scraper .dockerignore excludes node_modules"),
     check("dockerignore.root_excludes_env", /(^|\n)frontend\/\.env(\n|$)/.test(rootDockerignore) && /(^|\n)api\/\.env(\n|$)/.test(rootDockerignore), "root .dockerignore excludes frontend/api env files"),
     check("dockerignore.root_excludes_secret_material", /\*\*\/\*\.pem/.test(rootDockerignore) && /\*\*\/\*\.key/.test(rootDockerignore) && /\*\*\/\*secret\*/.test(rootDockerignore), "root .dockerignore excludes key and secret-like files"),
-    check("dockerignore.scraper_excludes_env", /(^|\n)\.env(\n|$)/.test(scraperDockerignore) && /(^|\n)\.env\.\*(\n|$)/.test(scraperDockerignore), "scraper .dockerignore excludes env files")
+    check("dockerignore.scraper_excludes_env", /(^|\n)\.env(\n|$)/.test(scraperDockerignore) && /(^|\n)\.env\.\*(\n|$)/.test(scraperDockerignore), "scraper .dockerignore excludes env files"),
+    check("backup.private_permissions", /umask 077/.test(backupWrapper) && /chmod 700 "\$backup_root"/.test(backupWrapper) && /umask 077/.test(backupScript) && /chmod 700 "\$archive"/.test(backupScript), "backup archives use private permissions"),
+    check("backup.atomic_completion", /partial="\$archive\.partial\.\$\$"/.test(backupWrapper) && /mv "\$partial" "\$archive"/.test(backupWrapper), "backup archives are published only after verification")
   ];
 
   return { ok: checks.every((item) => item.ok), repoRoot: root, checks };

@@ -15,6 +15,8 @@ describe("deploy hygiene", () => {
     expect(report.checks.find((item) => item.name === "compose.scraper_evidence_volume")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "compose.scraper_canary_no_auto_activate")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "dockerignore.root_excludes_env")?.ok).toBe(true);
+    expect(report.checks.find((item) => item.name === "backup.private_permissions")?.ok).toBe(true);
+    expect(report.checks.find((item) => item.name === "backup.atomic_completion")?.ok).toBe(true);
     expect(() => assertDeployHygiene(report)).not.toThrow();
   });
 

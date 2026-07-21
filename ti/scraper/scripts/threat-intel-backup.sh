@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 077
 
 action=${1:-}
 archive=${2:-}
@@ -25,6 +26,7 @@ verify() {
 case "$action" in
   backup)
     mkdir -p "$archive"
+    chmod 700 "$archive"
     compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --schema=threat_intel --no-owner' > "$dump"
     compose exec -T ti-scraper tar -C /var/lib/ti-scraper/evidence -czf - . > "$objects"
     (cd "$archive" && shasum -a 256 threat-intel.dump evidence.tar.gz > SHA256SUMS)
