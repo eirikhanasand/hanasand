@@ -113,7 +113,8 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     confidence: Math.min(assessment.confidence, 0.69)
   }));
   const missing = missingFields({ actor, victims, sectors, countries, ttps, records, rows });
-  const attribution = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
+  const attributionEvidence = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
+  const attribution = attributionEvidence?.statement;
   const actorIntelligence = {
     actorClass: profile?.actorType ?? (actor ? "observed_threat_actor" : "unclassified_query"),
     attribution,
@@ -130,6 +131,13 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     confidenceReasoning: assessment.reasons,
     sourceProvenance: sources.map((source) => source.provenance),
     structuredProvenance,
+    attributionEvidence: attributionEvidence ? {
+      sourceId: attributionEvidence.row.sourceId,
+      sourceName: attributionEvidence.row.sourceName,
+      provenance: attributionEvidence.row.url ?? attributionEvidence.row.sourceName,
+      reportDate: attributionEvidence.row.publishedAt,
+      captureId: attributionEvidence.row.id,
+    } : undefined,
     missingFields: missing
   };
   const claims = records.claims.map((claim) => ({
@@ -479,7 +487,9 @@ function actorAttribution(rows: any[], names: string[]) {
   const origin = /\b(?:russia(?:n)?|svr|china|chinese|iran(?:ian)?|north korea(?:n)?|dprk|united states|u\.s\.|american)\b/i;
   for (const row of rows) {
     for (const sentence of String(row.summary ?? "").split(/(?<=[.!?])\s+|\n+/)) {
-      if (namePattern.test(sentence) && direct.test(sentence) && origin.test(sentence)) return safeText(sentence, 320);
+      if (namePattern.test(sentence) && direct.test(sentence) && origin.test(sentence)) {
+        return { statement: safeText(sentence, 320), row };
+      }
     }
   }
 }

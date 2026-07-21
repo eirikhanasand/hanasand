@@ -189,8 +189,9 @@ function Results({ result }: { result: TiSearchResponse }) {
     const actionability = useMemo(() => buildTiActionability(result, actorIntel, victimObservations), [result, actorIntel, victimObservations])
     const actorArtifacts = useMemo(() => buildActorArtifacts(result, actorIntel, victimObservations, actionability), [result, actorIntel, victimObservations, actionability])
     const workItems = useMemo(() => analystWorkItemsFor(result, victimObservations, sourceUrlById, actionability), [result, victimObservations, sourceUrlById, actionability])
+    const recentItems = useMemo(() => workItems.filter(item => item.kind === 'activity' || item.kind === 'exposure'), [workItems])
     const watchlist = useMemo(() => watchlistRelevanceFor(result, victimObservations, sources, actorIntel, actionability), [result, victimObservations, sources, actorIntel, actionability])
-    const [selectedId, setSelectedId] = useState(workItems[0]?.id ?? '')
+    const [selectedId, setSelectedId] = useState(recentItems[0]?.id ?? '')
     const [selectedArtifactId, setSelectedArtifactId] = useState(actorArtifacts[0]?.id ?? '')
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const [relevanceMarks, setRelevanceMarks] = useState<Record<string, LocalRelevanceMark>>({})
@@ -207,7 +208,7 @@ function Results({ result }: { result: TiSearchResponse }) {
         sort: queueSort,
     }), [queueConfidenceFilter, queueKindFilter, queueSort, queueSourceFilter, workItems])
     const queueSourceCounts = useMemo(() => sourceCountsFor(filteredWorkItems), [filteredWorkItems])
-    const selected = filteredWorkItems.find(item => item.id === selectedId) ?? filteredWorkItems[0] ?? workItems.find(item => item.id === selectedId) ?? workItems[0]
+    const selected = recentItems.find(item => item.id === selectedId) ?? recentItems[0]
     const selectedArtifact = actorArtifacts.find(item => item.id === selectedArtifactId) ?? actorArtifacts[0]
     const selectedArtifactHandoffs = selectedArtifact ? buildActorArtifactHandoffs(result, selectedArtifact, actionability) : null
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
@@ -262,13 +263,9 @@ function Results({ result }: { result: TiSearchResponse }) {
         })) ?? []),
     ], row => row.id).slice(0, 12)
     useEffect(() => {
-        if (!workItems.length) return
-        if (filteredWorkItems.length && !filteredWorkItems.some(item => item.id === selectedId)) {
-            setSelectedId(filteredWorkItems[0]?.id ?? '')
-            return
-        }
-        if (!filteredWorkItems.length && !workItems.some(item => item.id === selectedId)) setSelectedId(workItems[0]?.id ?? '')
-    }, [filteredWorkItems, selectedId, workItems])
+        if (!recentItems.length) return
+        if (!recentItems.some(item => item.id === selectedId)) setSelectedId(recentItems[0]?.id ?? '')
+    }, [recentItems, selectedId])
 
     useEffect(() => {
         if (!actorArtifacts.length) return
@@ -328,11 +325,11 @@ function Results({ result }: { result: TiSearchResponse }) {
                     <div className='flex flex-wrap items-end justify-between gap-3'>
                         <div>
                             <h2 className='text-base font-semibold text-ui-text dark:text-ui-text'>Recent activity</h2>
-                            <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>{workItems.length} recent result{workItems.length === 1 ? '' : 's'}</p>
+                            <p className='mt-1 text-xs text-ui-muted dark:text-ui-muted'>{recentItems.length} recent result{recentItems.length === 1 ? '' : 's'}</p>
                         </div>
                     </div>
                     <div className='grid gap-2 md:grid-cols-2 xl:grid-cols-3'>
-                        {workItems.slice(0, 9).map(item => {
+                        {recentItems.slice(0, 9).map(item => {
                             const active = selected?.id === item.id
                             return (
                                 <button
@@ -351,7 +348,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 </button>
                             )
                         })}
-                        {!workItems.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted dark:border-ui-border dark:text-ui-muted'>No reviewable activity is ready for this query.</p> : null}
+                        {!recentItems.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted dark:border-ui-border dark:text-ui-muted'>No reviewable activity is ready for this query.</p> : null}
                     </div>
                     {selected ? (
                         <section data-ti-selected-summary='true' className='rounded-lg border border-ui-border bg-ui-raised p-4 dark:border-ui-border dark:bg-ui-raised'>
@@ -3173,7 +3170,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         title: item.attackId ? `${item.attackId} ${item.name}` : item.name,
         subtitle: item.tactic,
         detail: item.detail,
-        timestamp: result.lastSeen || 'Observation date unavailable',
+        timestamp: 'Observation date unavailable',
         source: 'Actor profile',
         provenance: item.attackId ? 'MITRE ATT&CK mapped profile field' : 'Profile tradecraft field',
         confidence: item.confidence,

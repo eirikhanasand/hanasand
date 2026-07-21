@@ -99,6 +99,13 @@ describe("api v1", () => {
     expect(response.rows).toEqual([expect.objectContaining({ id: "cap_apt29_attribution" })]);
     expect(response.actorProfile.actor).toBe("APT29");
     expect(response.actorIntelligence.attribution).toBe("APT29 is linked to Russia's SVR in the cited public report.");
+    expect(response.actorIntelligence.attributionEvidence).toEqual({
+      sourceId: "src_apt29_attribution",
+      sourceName: "Public attribution report",
+      provenance: "https://example.test/api-evidence",
+      reportDate: "2026-07-18T00:00:00.000Z",
+      captureId: "cap_apt29_attribution"
+    });
     expect(response.targets).toEqual([]);
     expect(response.actorIntelligence.geographies).toEqual([]);
   });
@@ -134,6 +141,7 @@ describe("api v1", () => {
 
     expect(response.rows.map((row: any) => row.id)).toEqual(["cap_midnight_blizzard"]);
     expect(response.actorIntelligence.attribution).toBe("Midnight Blizzard is linked to Russia's SVR in this public threat-actor espionage report.");
+    expect(response.actorIntelligence.attributionEvidence).toMatchObject({ sourceId: "src_actor_identity", reportDate: "2026-07-20T00:00:00.000Z", captureId: "cap_midnight_blizzard" });
   });
 
   test("uses persisted incident headlines for legacy captures without trusting inferred actor titles", async () => {

@@ -133,6 +133,7 @@ export function victimObservationsFor(result: TiSearchResponse): VictimObservati
 }
 
 function operatorOriginFor(result: TiSearchResponse) {
+    if (!result.actorIntelligence?.attributionEvidence) return null
     const sourceText = result.actorIntelligence?.attribution?.toLowerCase() ?? ''
     if (/\brussian\b|\brussia\b|\bsvr\b/.test(sourceText)) return countries.russia
     return null

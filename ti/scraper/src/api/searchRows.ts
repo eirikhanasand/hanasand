@@ -6,7 +6,7 @@ export function rowFromCapture(capture: any, source?: any) {
   const metadataOnly = isMetadataOnlyCapture(capture);
   const rawSummary = cleanSearchText(metadataOnly ? safeMetadataText(capture.metadata) : capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "");
   const title = cleanTitle(capture.title, rawSummary, source?.name);
-  const summary = cleanActivitySummary(rawSummary, title);
+  const summary = cleanActivitySummary(rawSummary, title, source?.name);
   const url = safePublicUrl(capture.url, capture.metadata);
   const claim = victimClaim(title);
   return {
@@ -29,12 +29,22 @@ export function rowFromCapture(capture: any, source?: any) {
   };
 }
 
-function cleanActivitySummary(summary: string, title: string) {
+function cleanActivitySummary(summary: string, title: string, sourceName?: string) {
   let cleaned = summary.trim();
+  cleaned = stripLeadingText(cleaned, sourceName);
   const normalizedTitle = title.trim().toLowerCase();
-  while (normalizedTitle && cleaned.toLowerCase().startsWith(`${normalizedTitle} `)) cleaned = cleaned.slice(title.length).trim();
+  while (normalizedTitle && cleaned.toLowerCase().startsWith(normalizedTitle)) cleaned = cleaned.slice(title.length).trim();
+  const [headline, publisher] = title.split(/\s+-\s+(.+)/, 2);
+  cleaned = stripLeadingText(cleaned, headline);
+  if (publisher && cleanSearchText(cleaned).toLowerCase() === cleanSearchText(publisher).toLowerCase()) cleaned = "";
   cleaned = cleaned.replace(/\s+\|\s+(?:(?:MITRE ATT&CK®?|ATT&CK®?)\s+)?(?:matrices|navigation|home|search|products|resources)\b[\s\S]*$/i, "").trim();
-  return cleanSearchText(cleaned || summary);
+  return cleanSearchText(cleaned || (sourceName ? `Captured source record from ${sourceName}.` : title));
+}
+
+function stripLeadingText(value: string, prefix?: string) {
+  const cleanPrefix = cleanSearchText(prefix);
+  if (!cleanPrefix || !value.toLowerCase().startsWith(cleanPrefix.toLowerCase())) return value;
+  return value.slice(cleanPrefix.length).replace(/^[\s:|\-–—]+/, "").trim();
 }
 
 function victimClaim(title: string) {

@@ -101,6 +101,13 @@ export interface TiActorIntelligenceContract {
     confidenceReasoning?: string[]
     sourceProvenance?: string[]
     missingFields?: string[]
+    attributionEvidence?: {
+        sourceId?: string
+        sourceName: string
+        provenance: string
+        reportDate?: string
+        captureId?: string
+    }
     structuredProvenance?: Array<{
         sourceId?: string
         sourceName: string

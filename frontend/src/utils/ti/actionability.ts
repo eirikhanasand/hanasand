@@ -3335,8 +3335,8 @@ function buildGeographyHandoffs(result: TiSearchResponse, victimObservations: Vi
     })
 
     const origin = actorGeoProfile(result).points.find(point => point.role === 'operator')
-    const originSources = result.actorIntelligence?.structuredProvenance ?? []
-    const originRows: GeographyHandoff[] = origin && originSources.length ? [{
+    const attributionEvidence = result.actorIntelligence?.attributionEvidence
+    const originRows: GeographyHandoff[] = origin && attributionEvidence ? [{
         code: origin.code,
         country: origin.label,
         role: 'operator',
@@ -3345,10 +3345,10 @@ function buildGeographyHandoffs(result: TiSearchResponse, victimObservations: Vi
         provenanceSummary: result.actorIntelligence?.attribution ?? 'Attributed operator origin.',
         evidenceRows: [{
             victim: 'Operator attribution',
-            source: uniqueStrings(originSources.map(source => source.sourceName)).join(', '),
-            sourceIds: uniqueStrings(originSources.map(source => source.sourceId)),
-            provenanceRefs: uniqueStrings(originSources.map(source => source.provenance)),
-            reportDate: newestTimestamp(originSources.map(source => source.reportDate)),
+            source: attributionEvidence.sourceName,
+            sourceIds: attributionEvidence.sourceId ? [attributionEvidence.sourceId] : [],
+            provenanceRefs: [attributionEvidence.provenance],
+            reportDate: attributionEvidence.reportDate,
             confidence: result.actorIntelligence?.confidence ?? result.confidence,
         }],
     }] : []

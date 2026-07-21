@@ -26,6 +26,11 @@ const result: TiSearchResponse = {
     notes: [],
     actorIntelligence: {
         attribution: 'Russia-linked SVR/APT29 activity in public reporting.',
+        attributionEvidence: {
+            sourceId: 'src_seed_mitre_attack_apt29',
+            sourceName: 'MITRE ATT&CK APT29 Group',
+            provenance: 'https://attack.mitre.org/groups/G0016/',
+        },
         confidence: 0.6,
         structuredProvenance: [{
             sourceId: 'src_seed_mitre_attack_apt29',
@@ -45,3 +50,52 @@ const operatorEvidence = actionability.geographyHandoffs.find(row => row.role ==
 
 assert.equal(actor.sourceCoverage.latestReportDate, undefined)
 assert.equal(operatorEvidence?.reportDate, undefined)
+
+const datedAttributionResult: TiSearchResponse = {
+    ...result,
+    sources: [{
+        id: 'src_newer_unrelated',
+        name: 'Newer unrelated report',
+        type: 'rss',
+        provenance: 'https://example.test/newer',
+        reportDate: '2026-02-12T08:00:00.000Z',
+    }, {
+        id: 'src_attribution',
+        name: 'Recorded Future News',
+        type: 'rss',
+        provenance: 'https://example.test/attribution',
+        reportDate: '2025-09-02T07:00:00.000Z',
+    }],
+    actorIntelligence: {
+        ...result.actorIntelligence,
+        attribution: 'APT29 activity was attributed to Russia in the cited report.',
+        attributionEvidence: {
+            sourceId: 'src_attribution',
+            sourceName: 'Recorded Future News',
+            provenance: 'https://example.test/attribution',
+            reportDate: '2025-09-02T07:00:00.000Z',
+            captureId: 'cap_attribution',
+        },
+        structuredProvenance: [{
+            sourceId: 'src_newer_unrelated',
+            sourceName: 'Newer unrelated report',
+            provenance: 'https://example.test/newer',
+            reportDate: '2026-02-12T08:00:00.000Z',
+            shownBecause: 'The report mentions APT29 without attribution.',
+        }, {
+            sourceId: 'src_attribution',
+            sourceName: 'Recorded Future News',
+            provenance: 'https://example.test/attribution',
+            reportDate: '2025-09-02T07:00:00.000Z',
+            captureId: 'cap_attribution',
+            shownBecause: 'The report contains the attribution statement.',
+        }],
+    },
+}
+const datedVictims = victimObservationsFor(datedAttributionResult)
+const datedActor = buildActorIntelligence(datedAttributionResult, datedVictims)
+const datedOperatorEvidence = buildTiActionability(datedAttributionResult, datedActor, datedVictims)
+    .geographyHandoffs.find(row => row.role === 'operator')?.evidenceRows[0]
+
+assert.equal(datedOperatorEvidence?.reportDate, '2025-09-02T07:00:00.000Z')
+assert.deepEqual(datedOperatorEvidence?.sourceIds, ['src_attribution'])

@@ -143,6 +143,13 @@ function sanitizeActorIntelligence(actorIntelligence?: TiActorIntelligenceContra
         confidenceReasoning: actorIntelligence.confidenceReasoning?.map(publicTiText),
         sourceProvenance: actorIntelligence.sourceProvenance?.map(publicTiText),
         missingFields: actorIntelligence.missingFields?.map(publicTiText),
+        attributionEvidence: actorIntelligence.attributionEvidence ? {
+            sourceId: actorIntelligence.attributionEvidence.sourceId,
+            sourceName: publicTiText(actorIntelligence.attributionEvidence.sourceName),
+            provenance: publicTiText(actorIntelligence.attributionEvidence.provenance),
+            reportDate: actorIntelligence.attributionEvidence.reportDate,
+            captureId: actorIntelligence.attributionEvidence.captureId,
+        } : undefined,
         structuredProvenance: actorIntelligence.structuredProvenance?.map(row => ({
             sourceId: row.sourceId,
             sourceName: publicTiText(row.sourceName),

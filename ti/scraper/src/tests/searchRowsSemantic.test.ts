@@ -16,4 +16,16 @@ describe("search row semantics", () => {
     expect(row.summary).not.toMatch(/Matrices|Tactics|Techniques/);
     expect(row.publishedAt).toBeUndefined();
   });
+
+  test("collapses repeated RSS source, headline, and publisher wrappers", () => {
+    const row = rowFromCapture({
+      id: "cap_google_apt29",
+      sourceId: "src_gen_google_threat_apt29",
+      title: "What is APT29? - wiz.io",
+      body: "Google News threat RSS: APT29 What is APT29? - wiz.io What is APT29? wiz.io",
+      publishedAt: "2026-02-12T08:00:00.000Z",
+    }, { name: "Google News threat RSS: APT29", type: "rss" });
+
+    expect(row.summary).toBe("Captured source record from Google News threat RSS: APT29.");
+  });
 });
