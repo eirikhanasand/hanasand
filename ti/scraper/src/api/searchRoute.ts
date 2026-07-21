@@ -115,7 +115,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const claims = records.claims.map((claim) => ({
     id: claim.id,
     claimType: claim.claimType,
-    value: sanitizeDwmApiPayload(claim.value),
+    value: safeClaimValue(claim.value),
     summary: safeText(claim.summary, 500),
     confidence: confidence(claim.confidence),
     reviewState: claim.reviewState ?? "unreviewed",
@@ -428,6 +428,14 @@ function scopedSource(source: any, tenantId?: string) {
 
 function safeText(value: unknown, maxLength: number) {
   return cleanSearchText(value, maxLength);
+}
+
+function safeClaimValue(value: unknown): unknown {
+  const safe = sanitizeDwmApiPayload(value);
+  if (typeof safe === "string") return cleanSearchText(safe);
+  if (Array.isArray(safe)) return safe.map(safeClaimValue);
+  if (safe && typeof safe === "object") return Object.fromEntries(Object.entries(safe).map(([key, nested]) => [key, safeClaimValue(nested)]));
+  return safe;
 }
 
 function confidence(value: unknown) {
