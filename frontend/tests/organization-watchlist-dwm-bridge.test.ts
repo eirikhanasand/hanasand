@@ -2,14 +2,45 @@ import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
+    buildDwmOrganizationMirrorPayload,
     buildDwmWatchlistMirrorAlertPreview,
     buildDwmWatchlistMirrorPayload,
     buildDwmWatchlistMirrorPayloads,
     mirrorOrganizationWatchlistToDwmResult,
+    mirrorOrganizationToDwmResult,
 } from '@/app/api/organizations/_organizationWatchlistDwmBridge'
 
 const organizationWorkspaceSource = readFileSync(new URL('../src/app/organizations/organizationWorkspaceClient.tsx', import.meta.url), 'utf8')
 const dwmAnalystPortalSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-analyst-portal.tsx', import.meta.url), 'utf8')
+
+test('mirrors a customer organization and authenticated owner before watchlist creation', async () => {
+    const mirrorPayload = buildDwmOrganizationMirrorPayload({
+        organizationPayload: { organization: { id: 'org_acme', name: 'Acme', slug: 'acme', status: 'active' } },
+        ownerUserId: 'owner-1',
+    })
+    assert.deepEqual(mirrorPayload, {
+        id: 'org_acme',
+        name: 'Acme',
+        slug: 'acme',
+        status: 'active',
+        ownerUserId: 'owner-1',
+    })
+
+    const calls: Array<{ url: string, body: unknown }> = []
+    const result = await mirrorOrganizationToDwmResult({
+        base: 'http://scraper.local',
+        mirrorPayload: mirrorPayload!,
+        authHeaders: { authorization: 'Bearer user-token', id: 'owner-1' },
+        fetchImpl: (async (input, init) => {
+            calls.push({ url: String(input), body: JSON.parse(String(init?.body)) })
+            return Response.json({ organization: { id: 'org_acme' } }, { status: 201 })
+        }) as typeof fetch,
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.organizationId, 'org_acme')
+    assert.deepEqual(calls, [{ url: 'http://scraper.local/v1/organizations', body: mirrorPayload }])
+})
 
 test('organization workspace exposes destination lifecycle controls safely', () => {
     assert.match(organizationWorkspaceSource, /validDestinationUrl\(url\)/, 'destination save should validate URL shape before dry-run.')
@@ -34,7 +65,7 @@ test('organization workspace exposes destination lifecycle controls safely', () 
     assert.match(organizationWorkspaceSource, /selectedContextRows\(selectedSubject, organization, bundle\)/, 'activity copy should include selected row context.')
     assert.match(organizationWorkspaceSource, /Activity copied\./, 'activity copy should expose a compact success state.')
     assert.match(organizationWorkspaceSource, /DestinationDeliverySummary/, 'saved destination rows should include delivery history context.')
-    assert.match(organizationWorkspaceSource, /latestDeliveryForDestination\(destination, deliveries\)/, 'saved destination rows should resolve latest delivery by destination.')
+    assert.match(organizationWorkspaceSource, /deliveriesForDestination\(destination, deliveries\)/, 'saved destination rows should resolve delivery history by destination.')
     assert.match(organizationWorkspaceSource, /data-org-destination-latest='true'/, 'saved destination delivery history should expose a stable marker.')
     assert.match(organizationWorkspaceSource, /destinationSearchText\(destination, destinationDeliveries\)/, 'saved destinations should be searchable by destination and delivery history context.')
     assert.match(organizationWorkspaceSource, /function deliveriesForDestination/, 'saved destination search should inspect all matching delivery rows, not only the latest attempt.')
@@ -51,18 +82,18 @@ test('organization workspace exposes destination lifecycle controls safely', () 
     assert.match(organizationWorkspaceSource, /method: 'POST'/, 'destination creation should use POST through the frontend org proxy.')
     assert.match(organizationWorkspaceSource, /endpointUrl: url/, 'destination creation should send the endpoint only to the backend proxy.')
     assert.match(organizationWorkspaceSource, /webhookUrl: url/, 'destination creation should preserve legacy backend URL compatibility.')
-    assert.match(organizationWorkspaceSource, /Destination added\./, 'destination creation should return a concrete operator result.')
+    assert.match(organizationWorkspaceSource, /destination added\./, 'destination creation should return a concrete operator result.')
     assert.match(organizationWorkspaceSource, /function deliveryActionResultSummary/, 'destination actions should summarize the actual delivery result, not only request state.')
     assert.match(organizationWorkspaceSource, /Dry-run rendered the Discord\/webhook payload without sending externally\./, 'destination tests should explain dry-run behavior clearly.')
     assert.match(organizationWorkspaceSource, /Destination saved for this watchlist\./, 'watchlist destination setup should confirm the saved scope.')
-    assert.match(organizationWorkspaceSource, /Destination test requested\./, 'saved destination tests should keep a fallback result when the backend has no row.')
+    assert.match(organizationWorkspaceSource, /\$\{destination\.name \|\| destination\.id\} tested\./, 'saved destination tests should keep a fallback result when the backend has no row.')
     assert.match(organizationWorkspaceSource, /Delivery replay requested\./, 'delivery replay should keep a fallback result when the backend has no row.')
     assert.match(organizationWorkspaceSource, /\/api\/organizations\/\$\{encodeURIComponent\(selectedOrganization\.id\)\}\/webhooks\/\$\{encodeURIComponent\(destination\.id\)\}/, 'saved destination updates should use the org-scoped destination proxy.')
     assert.match(organizationWorkspaceSource, /method: 'PATCH'/, 'saved destination edits should use PATCH through the frontend org proxy.')
-    assert.match(organizationWorkspaceSource, /aria-label='Edit destination'/, 'saved destinations should expose an edit action.')
+    assert.match(organizationWorkspaceSource, /: 'Edit destination'\}/, 'saved destinations should expose an edit action.')
     assert.match(organizationWorkspaceSource, /Disable/, 'active destinations should expose disable action.')
     assert.match(organizationWorkspaceSource, /Enable/, 'paused destinations should expose enable action.')
-    assert.match(organizationWorkspaceSource, /latestDeliveryForDestination\(destination, deliveries\)/, 'saved destination rows should derive the latest delivery from the ledger.')
+    assert.match(organizationWorkspaceSource, /destinationDeliveries\.sort\(\(left, right\) => deliveryTime\(right\) - deliveryTime\(left\)\)\[0\]/, 'saved destination rows should derive the latest delivery from the ledger.')
     assert.match(organizationWorkspaceSource, /data-org-destination-latest='true'/, 'saved destination rows should show the latest test or replay result.')
     assert.match(organizationWorkspaceSource, /Last \{delivery\.dryRun \? 'test' : 'delivery'\}/, 'saved destination rows should distinguish tests from live delivery attempts.')
     assert.match(organizationWorkspaceSource, /deliveryTraceLabel\(delivery\)/, 'saved destination rows should expose audit or request trace labels.')
@@ -72,14 +103,14 @@ test('organization workspace exposes destination lifecycle controls safely', () 
     assert.match(organizationWorkspaceSource, /data-org-delivery-mobile-row='true'/, 'delivery history mobile rows should expose stable render markers.')
     assert.match(organizationWorkspaceSource, /data-org-delivery-desktop-table='true'/, 'delivery history should keep the dense desktop table for operator scanning.')
     assert.match(organizationWorkspaceSource, /function DeliveryHistoryMobileRow/, 'mobile delivery rows should render the same trace, alert, case, and retry context as desktop rows.')
-    assert.match(organizationWorkspaceSource, /deliveryMatchesSubject\(delivery, selectedSubject\)/, 'delivery history should filter by the selected org row.')
-    assert.match(organizationWorkspaceSource, /const matchingDeliveries = deliveries[\s\S]*\.filter\(delivery => deliveryMatchesSubject\(delivery, selectedSubject\)\)[\s\S]*\.sort\(\(left, right\) => deliveryTime\(right\) - deliveryTime\(left\)\)/, 'delivery history should count the full selected delivery set before limiting visible rows.')
-    assert.match(organizationWorkspaceSource, /const scopedDeliveries = matchingDeliveries[\s\S]*\.slice\(0, 8\)/, 'delivery history should keep the visible table compact without corrupting total counts.')
+    assert.match(organizationWorkspaceSource, /deliveryMatchesSubject\(delivery, selectedSubject, destinations\)/, 'delivery history should filter by the selected org row.')
+    assert.match(organizationWorkspaceSource, /const matchingDeliveries = deliveries[\s\S]*\.filter\(delivery => deliveryMatchesSubject\(delivery, selectedSubject, destinations\)\)[\s\S]*\.sort\(\(left, right\) => deliveryTime\(right\) - deliveryTime\(left\)\)/, 'delivery history should count the full selected delivery set before limiting visible rows.')
+    assert.match(organizationWorkspaceSource, /const scopedDeliveries = matchingDeliveries[\s\S]*\.slice\(0, showAll \? matchingDeliveries\.length : 8\)/, 'delivery history should keep the visible table compact without corrupting total counts.')
     assert.match(organizationWorkspaceSource, /\$\{matchingDeliveries\.length\} total/, 'delivery history should show total matching attempts, not only visible rows.')
     assert.match(organizationWorkspaceSource, /hiddenDeliveryCount > 0/, 'delivery history should disclose older hidden attempts when the compact list is capped.')
     assert.match(organizationWorkspaceSource, /nextRetryAt/, 'delivery history should show retry scheduling when present.')
     assert.match(organizationWorkspaceSource, /replayDelivery/, 'delivery history should expose a replay action.')
-    assert.match(organizationWorkspaceSource, /canReplayDelivery\(delivery\)/, 'delivery replay should require enough destination and alert context.')
+    assert.match(organizationWorkspaceSource, /canReplayDelivery\(delivery, destinations\)/, 'delivery replay should require enough destination and alert context.')
     assert.match(organizationWorkspaceSource, /requestJson<DeliveryResult>\('\/api\/dwm\/webhooks\/deliver'/, 'history replay should use the existing DWM delivery route.')
     assert.match(organizationWorkspaceSource, /dryRun: true,[\s\S]*replay: true/, 'history replay should stay no-network by default.')
     assert.match(organizationWorkspaceSource, /auditEventId\?: string/, 'delivery rows should preserve audit event ids.')
@@ -93,12 +124,12 @@ test('organization workspace exposes destination lifecycle controls safely', () 
     assert.match(organizationWorkspaceSource, /deliveryId: requestedDeliveryId/, 'requested subject resolution should receive the DWM delivery id.')
     assert.match(organizationWorkspaceSource, /function requestedDeliveryFromSearch/, 'organization workspace should resolve delivery-row handoff ids from delivery history.')
     assert.match(organizationWorkspaceSource, /delivery\.requestId === deliveryId[\s\S]*delivery\.auditEventId === deliveryId[\s\S]*delivery\.dedupeKey === deliveryId/, 'delivery-row handoff should match request, audit, and dedupe ids.')
-    assert.match(organizationWorkspaceSource, /const deliveryDestinationId = delivery\.webhookDestinationId \|\| delivery\.destinationId/, 'delivery-row handoff should select the saved destination when available.')
-    assert.match(organizationWorkspaceSource, /\['Delivery', compactReference\(deliveryId, 'Delivery'\)\]/, 'DWM handoff banner should expose a compact selected delivery trace.')
-    assert.match(organizationWorkspaceSource, /delivery\.destinationId === subject\.id/, 'destination delivery history should include rows keyed by either destination field.')
-    assert.match(organizationWorkspaceSource, /subject\.type === 'watchlist'[\s\S]*label: 'Delivery activity'/, 'watchlist selection should offer a direct delivery history action.')
-    assert.match(organizationWorkspaceSource, /subject\.type === 'alert'[\s\S]*label: 'Delivery activity'/, 'alert selection should offer a direct delivery history action.')
-    assert.match(organizationWorkspaceSource, /subject\.type === 'case'[\s\S]*label: 'Delivery activity'/, 'case selection should offer a direct delivery history action.')
+    assert.match(organizationWorkspaceSource, /const deliveryDestinationId = deliveryDestinationIds\(delivery, bundle\.webhooks\)\[0\]/, 'delivery-row handoff should select the saved destination when available.')
+    assert.match(organizationWorkspaceSource, /\['Delivery', compactReference\(effectiveDeliveryId, 'Delivery'\)\]/, 'DWM handoff banner should expose a compact selected delivery trace.')
+    assert.match(organizationWorkspaceSource, /deliveryDestinationIds\(delivery, destinations\)\.includes\(subject\.id\)/, 'destination delivery history should include rows keyed by either destination field.')
+    assert.match(organizationWorkspaceSource, /subject\.type === 'watchlist'[\s\S]*label: 'Delivery'/, 'watchlist selection should offer a direct delivery history action.')
+    assert.match(organizationWorkspaceSource, /subject\.type === 'alert'[\s\S]*label: 'Delivery'/, 'alert selection should offer a direct delivery history action.')
+    assert.match(organizationWorkspaceSource, /subject\.type === 'case'[\s\S]*label: 'Delivery'/, 'case selection should offer a direct delivery history action.')
     assert.match(organizationWorkspaceSource, /\/dashboard\/dwm\/cases\/\$\{encodeURIComponent\(delivery\.caseId\)\}/, 'delivery history should link case context.')
     assert.match(organizationWorkspaceSource, /input\.focus === 'destinations' \|\| input\.focus === 'webhooks'/, 'DWM destination links should focus saved destinations, including legacy webhook links.')
     assert.match(dwmAnalystPortalSource, /organizationDeliveryWorkspaceHref\(\{ organizationId: orgId, alertId: alert\?\.id, caseId, delivery \}\)/, 'DWM delivery panel should build destination management links from each delivery row.')

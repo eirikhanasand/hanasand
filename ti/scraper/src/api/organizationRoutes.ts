@@ -27,7 +27,7 @@ export type Organization = {
 export type OrganizationMember = {
   id: string;
   organizationId: string;
-  email: string;
+  email?: string;
   userId?: string;
   role: OrganizationRole;
   status: MemberStatus;
@@ -107,10 +107,13 @@ export async function createOrganization(request: Request, options: ApiServerOpt
 
   (options.store as any).saveOrganization(organization);
   const ownerEmail = normalizeEmail(body.ownerEmail ?? body.email ?? request.headers.get("x-user-email"));
-  const owner = ownerEmail ? upsertMember(options, {
+  const ownerUserId = access.identity && !access.service
+    ? access.identity.id
+    : String(body.ownerUserId ?? "").trim() || undefined;
+  const owner = ownerEmail || ownerUserId ? upsertMember(options, {
     organizationId: organization.id,
     email: ownerEmail,
-    userId: access.identity && !access.service ? access.identity.id : body.ownerUserId ? String(body.ownerUserId) : undefined,
+    userId: ownerUserId,
     role: "owner",
     status: "active",
     acceptedAt: generatedAt,
@@ -454,12 +457,17 @@ export function webhookHeaders(eventType: string, deliveryId: string, dedupeKey:
   };
 }
 
-function upsertMember(options: ApiServerOptions, input: { organizationId: string; email: string; userId?: string; role: OrganizationRole; status: MemberStatus; invitedAt?: string; acceptedAt?: string; generatedAt: string }): OrganizationMember {
-  const existing = ((options.store as any).listOrganizationMembers?.() ?? []).find((row: OrganizationMember) => row.organizationId === input.organizationId && row.email === input.email);
+function upsertMember(options: ApiServerOptions, input: { organizationId: string; email?: string; userId?: string; role: OrganizationRole; status: MemberStatus; invitedAt?: string; acceptedAt?: string; generatedAt: string }): OrganizationMember {
+  const identity = input.userId ?? input.email;
+  if (!identity) throw new Error("Organization membership requires a user id or email.");
+  const existing = ((options.store as any).listOrganizationMembers?.() ?? []).find((row: OrganizationMember) => (
+    row.organizationId === input.organizationId
+    && ((input.userId && row.userId === input.userId) || (input.email && row.email === input.email))
+  ));
   const member: OrganizationMember = {
-    id: existing?.id ?? stableId("org_member", `${input.organizationId}:${input.email}`),
+    id: existing?.id ?? stableId("org_member", `${input.organizationId}:${identity}`),
     organizationId: input.organizationId,
-    email: input.email,
+    email: input.email ?? existing?.email,
     userId: input.userId ?? existing?.userId,
     role: input.role,
     status: input.status,

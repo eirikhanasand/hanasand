@@ -1,4 +1,7 @@
 import crypto from 'node:crypto'
+import { lookup } from 'node:dns/promises'
+import { request as httpsRequest } from 'node:https'
+import { isIP } from 'node:net'
 import run from '#db'
 import { organizationVisibilityDecision, type OrganizationRole, type OrganizationVisibilityDecisionInput } from '#utils/organizations.ts'
 
@@ -226,6 +229,7 @@ type NormalizedDestinationInput = {
     orgId: string
     name: string
     kind: DwmWebhookKind
+    endpointUrl: string | null
     endpointEncrypted: string | null
     endpointHint: string | null
     endpointHash: string | null
@@ -347,6 +351,7 @@ export function normalizeDwmWebhookDestinationInput(
         orgId,
         name: name.slice(0, 120),
         kind,
+        endpointUrl,
         endpointEncrypted: endpointUrl ? encryptWebhookSecret(endpointUrl) : null,
         endpointHint: endpointUrl ? redactWebhookEndpoint(endpointUrl) : null,
         endpointHash: endpointUrl ? hashValue('endpoint', endpointUrl) : null,
@@ -382,9 +387,10 @@ export async function listDwmWebhookDestinations(ownerId: string, orgId?: string
 
 export async function createDwmWebhookDestination(ownerId: string, input: DwmWebhookDestinationInput) {
     const normalized = normalizeDwmWebhookDestinationInput(input, ownerId)
-    if (!normalized.endpointEncrypted || !normalized.endpointHint) {
+    if (!normalized.endpointUrl || !normalized.endpointEncrypted || !normalized.endpointHint) {
         throw new Error('endpointUrl is required.')
     }
+    await assertPublicWebhookTarget(normalized.endpointUrl)
 
     const result = await run(`
         INSERT INTO dwm_webhook_destinations (
@@ -440,6 +446,7 @@ export async function updateDwmWebhookDestination(ownerId: string, id: string, i
     if (!existing) return null
 
     const normalized = normalizeDwmWebhookDestinationInput(input, ownerId, existing)
+    if (normalized.endpointUrl) await assertPublicWebhookTarget(normalized.endpointUrl)
     const result = await run(`
         UPDATE dwm_webhook_destinations
            SET org_id = $2,
@@ -8127,19 +8134,11 @@ async function deliverToDwmWebhookDestination({
     if (shouldSendLive) {
         try {
             const endpoint = decryptWebhookSecret(destination.endpoint_encrypted)
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'content-type': 'application/json',
-                    'user-agent': 'hanasand-dwm-webhooks/1.0',
-                },
-                body: JSON.stringify(payload),
-                signal: AbortSignal.timeout(Number(process.env.DWM_WEBHOOK_TIMEOUT_MS || 8000)),
-            })
+            const response = await postPublicWebhook(endpoint, JSON.stringify(payload))
             responseStatus = response.status
-            responseBody = sanitizeDwmWebhookDeliveryDiagnostic(await response.text().catch(() => ''))
-            status = response.ok ? 'delivered' : 'failed'
-            error = response.ok ? null : sanitizeDwmWebhookDeliveryDiagnostic(`Webhook returned HTTP ${response.status}.`)
+            responseBody = sanitizeDwmWebhookDeliveryDiagnostic(response.body)
+            status = response.status >= 200 && response.status < 300 ? 'delivered' : 'failed'
+            error = status === 'delivered' ? null : sanitizeDwmWebhookDeliveryDiagnostic(`Webhook returned HTTP ${response.status}.`)
         } catch (sendError) {
             status = 'failed'
             error = sanitizeDwmWebhookDeliveryDiagnostic(sendError instanceof Error ? sendError.message : String(sendError))
@@ -8727,11 +8726,96 @@ function normalizeWebhookUrl(raw: string) {
         throw new Error('endpointUrl must be a valid URL.')
     }
 
-    if (url.protocol !== 'https:') {
+    if (url.protocol !== 'https:' || url.username || url.password) {
         throw new Error('Webhook destinations must use HTTPS.')
     }
+    if (privateWebhookTarget(url.hostname)) throw new Error('Webhook destinations must use a public network target.')
 
     return url.toString()
+}
+
+type WebhookResolver = (hostname: string, options: { all: true, verbatim: true }) => Promise<Array<{ address: string, family: number }>>
+
+export async function assertPublicWebhookTarget(value: string, resolver: WebhookResolver = lookup) {
+    return (await resolvePublicWebhookTarget(value, resolver)).normalized
+}
+
+async function resolvePublicWebhookTarget(value: string, resolver: WebhookResolver = lookup) {
+    const normalized = normalizeWebhookUrl(value)
+    const hostname = new URL(normalized).hostname.replace(/^\[|\]$/g, '')
+    const addresses = await resolver(hostname, { all: true, verbatim: true })
+    if (!addresses.length || addresses.some(item => privateWebhookTarget(item.address))) {
+        throw new Error('Webhook destination resolved to a private network target.')
+    }
+    return { normalized, addresses }
+}
+
+async function postPublicWebhook(endpoint: string, body: string) {
+    const { normalized, addresses } = await resolvePublicWebhookTarget(endpoint)
+    const url = new URL(normalized)
+    const timeoutMs = Math.max(1000, Math.min(Number(process.env.DWM_WEBHOOK_TIMEOUT_MS || 8000), 30000))
+
+    return new Promise<{ status: number, body: string }>((resolve, reject) => {
+        const request = httpsRequest(url, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                'content-length': Buffer.byteLength(body),
+                'user-agent': 'hanasand-dwm-webhooks/1.0',
+            },
+            lookup: ((_hostname: string, options: { family?: number } | number, callback: (error: Error | null, address?: string, family?: number) => void) => {
+                const family = typeof options === 'number' ? options : options?.family
+                const selected = addresses.find(item => !family || item.family === family) ?? addresses[0]
+                callback(null, selected.address, selected.family)
+            }) as never,
+        }, response => {
+            response.setEncoding('utf8')
+            let responseBody = ''
+            response.on('data', chunk => {
+                if (responseBody.length < 4096) responseBody += String(chunk).slice(0, 4096 - responseBody.length)
+            })
+            response.on('end', () => resolve({ status: response.statusCode ?? 0, body: responseBody }))
+        })
+        request.setTimeout(timeoutMs, () => request.destroy(new Error('Webhook request timed out.')))
+        request.on('error', reject)
+        request.end(body)
+    })
+}
+
+function privateWebhookTarget(value: string): boolean {
+    const hostname = value.trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
+    if (!hostname || hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local')) return true
+    if (isIP(hostname) === 4) {
+        const [a, b] = hostname.split('.').map(Number)
+        return a === 0
+            || a === 10
+            || a === 127
+            || (a === 100 && b >= 64 && b <= 127)
+            || (a === 169 && b === 254)
+            || (a === 172 && b >= 16 && b <= 31)
+            || (a === 192 && (b === 0 || b === 168))
+            || (a === 198 && (b === 18 || b === 19))
+            || a >= 224
+    }
+    if (isIP(hostname) === 6) {
+        if (hostname === '::' || hostname === '::1' || hostname.startsWith('fc') || hostname.startsWith('fd') || /^fe[89abcf]/.test(hostname) || hostname.startsWith('ff')) return true
+        const mapped = ipv4FromMappedIpv6(hostname)
+        return mapped ? privateWebhookTarget(mapped) : hostname.startsWith('::')
+    }
+    return false
+}
+
+function ipv4FromMappedIpv6(value: string): string | null {
+    const suffix = value.match(/^::ffff:(.+)$/)?.[1]
+    if (!suffix) return null
+    if (isIP(suffix) === 4) return suffix
+    const groups = suffix.split(':')
+    if (groups.length !== 2 || groups.some(group => !/^[0-9a-f]{1,4}$/.test(group))) return null
+    const bytes = groups.flatMap(group => {
+        const number = Number.parseInt(group, 16)
+        return [number >> 8, number & 255]
+    })
+    return bytes.join('.')
 }
 
 function parseKind(value: unknown, endpointUrl?: string | null, fallback?: DwmWebhookKind): DwmWebhookKind {

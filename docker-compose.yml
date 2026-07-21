@@ -81,6 +81,7 @@ services:
     environment:
       TI_SCRAPER_API_BASE: ${TI_SCRAPER_API_BASE:-http://ti-scraper:8097}
       TI_SCRAPER_SERVICE_TOKEN: ${TI_SCRAPER_SERVICE_TOKEN:-}
+      DWM_WEBHOOK_LIVE_DELIVERY: ${DWM_WEBHOOK_LIVE_DELIVERY:-true}
       API_CORS_ALLOWED_ORIGINS: ${API_CORS_ALLOWED_ORIGINS:-https://hanasand.com,https://www.hanasand.com}
       MAIL_INTERNAL_URL: ${MAIL_INTERNAL_URL:-http://host.docker.internal:${MAIL_HTTP_LOCAL_PORT:-8081}}
       MAIL_HOST: ${MAIL_HOST:-mail.hanasand.com}

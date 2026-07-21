@@ -99,4 +99,24 @@ describe("durable mutation authentication", () => {
     }), options);
     expect(ownerActorReview.status).toBe(400);
   });
+
+  test("creates an authenticated owner membership without inventing an email address", async () => {
+    const options: any = {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier(),
+      authApiBase: "https://auth.test/api",
+      authFetch: async () => Response.json({ id: "owner-without-email", roles: [] })
+    };
+    const response = await handleApiRequest(new Request("http://local/v1/organizations", {
+      method: "POST",
+      headers: { authorization: "Bearer valid", id: "owner-without-email", "content-type": "application/json" },
+      body: JSON.stringify({ id: "org_without_email", name: "No synthetic email" })
+    }), options);
+    const payload = await response.json() as any;
+
+    expect(response.status).toBe(201);
+    expect(payload.owner.userId).toBe("owner-without-email");
+    expect(payload.owner.email).toBeUndefined();
+    expect(options.store.listOrganizationMembers()).toHaveLength(1);
+  });
 });
