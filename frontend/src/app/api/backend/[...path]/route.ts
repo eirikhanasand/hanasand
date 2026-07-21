@@ -55,10 +55,11 @@ async function handler(req: NextRequest, context: Context) {
 
     let response: Response
     try {
+        const body = req.method === 'GET' || req.method === 'HEAD' || !req.headers.has('content-type') ? undefined : req.body
         response = await fetch(target, {
             method: req.method,
             headers,
-            body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.body,
+            body,
             duplex: 'half',
             cache: 'no-store',
             signal: AbortSignal.timeout(BACKEND_PROXY_TIMEOUT_MS),
