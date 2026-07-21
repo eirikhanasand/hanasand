@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import type { CollectedItem, ExtractedEntity, IncidentCandidate, Indicator } from "../types.ts";
-import { normalizeWhitespace, stableId } from "../utils.ts";
+import { normalizeWhitespace } from "../utils.ts";
+import { canonicalizeUrl } from "../storage/memoryStoreHelpers.ts";
 import { buildReviewReasons, reviewReasonDetail, scoreIncidentConfidence } from "./incidentScoring.ts";
 
 export const INCIDENT_CLASSIFIER_VERSION = "ti-incident-classifier-v3";
@@ -44,9 +46,10 @@ export function buildIncidentCandidate(
   const reviewReasons = buildReviewReasons(item.rawText, confidence, indicators, entities, item.sensitive);
   const relatedEntities = entities.filter((entity) => entity.confidence >= 0.55);
   const relatedIndicators = indicators.filter((indicator) => indicator.confidence >= 0.6);
+  const logicalIdentity = logicalIncidentIdentity(item);
 
   return {
-    id: stableId("inc", `${item.sourceId}:${item.url}:${item.contentHash}`),
+    id: `inc_${logicalIdentity.keyHash.slice(0, 24)}`,
     sourceId: item.sourceId,
     captureId,
     extractorVersion: INCIDENT_CLASSIFIER_VERSION,
@@ -57,8 +60,26 @@ export function buildIncidentCandidate(
     entities: relatedEntities,
     indicators: relatedIndicators,
     reviewReasons,
-    reviewReasonDetails: reviewReasons.map((reason) => reviewReasonDetail(reason, indicators, entities))
+    reviewReasonDetails: reviewReasons.map((reason) => reviewReasonDetail(reason, indicators, entities)),
+    logicalIdentity
   };
+}
+
+export function logicalIncidentIdentity(item: CollectedItem) {
+  const tenant = String(item.tenantId ?? "global");
+  const source = String(item.sourceId);
+  const metadata = item.metadata ?? {};
+  const fields = metadata.structuredFields && typeof metadata.structuredFields === "object" ? metadata.structuredFields as Record<string, unknown> : {};
+  const cve = normalizeCve(fields.cveID);
+  const messageId = meaningful(metadata.messageId) || typeof metadata.messageId === "number" ? String(metadata.messageId) : undefined;
+  const channel = meaningful(metadata.channel) ? normalizeIdentity(metadata.channel) : undefined;
+  const canonicalUrl = canonicalizeUrl(item.url);
+  const publishedAt = normalizedTimestamp(item.publishedAt);
+  const title = normalizeIdentity(item.title);
+  const strategy = cve ? "cve" : messageId && channel ? "public_message" : metadata.feedItem === true ? "feed_entry_fallback" : "canonical_url";
+  const subject = cve ?? (messageId && channel ? `${channel}:${messageId}` : strategy === "feed_entry_fallback" ? `${canonicalUrl}:${publishedAt ?? "unknown"}:${title}` : canonicalUrl);
+  const keyHash = createHash("sha256").update(`${tenant}:${source}:${strategy}:${subject}`).digest("hex");
+  return { version: "incident-identity-v1", strategy, keyHash, sourceScoped: true };
 }
 
 function meaningful(value: unknown): boolean {
@@ -67,6 +88,16 @@ function meaningful(value: unknown): boolean {
 
 function normalizeIdentity(value: unknown): string {
   return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function normalizeCve(value: unknown): string | undefined {
+  const match = String(value ?? "").trim().toUpperCase().match(/^CVE-\d{4}-\d{4,}$/);
+  return match?.[0];
+}
+
+function normalizedTimestamp(value: unknown): string | undefined {
+  const timestamp = Date.parse(String(value ?? ""));
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
 }
 
 function safeIncidentSummary(item: CollectedItem): string {
