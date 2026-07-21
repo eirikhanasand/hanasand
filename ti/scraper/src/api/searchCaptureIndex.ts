@@ -24,7 +24,7 @@ function docsForStore(store: any): SearchDoc[] {
   const signature = `${captures.length}:${captures.at(-1)?.id ?? ""}:${captures.at(-1)?.contentHash ?? ""}:${sources.size}`;
   const previous = cache.get(store);
   if (previous?.signature === signature) return previous.docs;
-  const docs = captures.filter(sellableCapture)
+  const docs = captures.filter((capture: any) => sellableCapture(capture, sources.get(capture.sourceId)))
     .map((capture: any) => docFor(capture, sources.get(capture.sourceId)))
     .sort((a, b) => b.collectedAt.localeCompare(a.collectedAt));
   cache.set(store, { signature, docs });
@@ -34,9 +34,9 @@ function docFor(capture: any, source: any): SearchDoc {
   const text = searchableText(capture);
   return { capture, title: norm(capture.title), collectedAt: capture.collectedAt ?? "", text: unique([text, sourceHints(source), derivedHints(text)]).join(" ").toLowerCase() };
 }
-function sellableCapture(capture: any) {
+function sellableCapture(capture: any, source: any) {
   if (capture?.metadata?.exposureClaim || capture?.metadata?.leakSite) return true;
-  return isSellableIntelText({ text: searchableText(capture), title: capture.title, sourceId: capture.sourceId, publishedAt: capture.publishedAt, collectedAt: capture.collectedAt });
+  return isSellableIntelText({ text: searchableText(capture), title: capture.title, sourceId: capture.sourceId, publishedAt: capture.publishedAt, collectedAt: capture.collectedAt, maxAgeDays: source?.metadata?.queryClass === "threat-intel" ? 365 : 30 });
 }
 function searchableText(capture: any) {
   const leak = capture.metadata?.leakSite ?? {};
