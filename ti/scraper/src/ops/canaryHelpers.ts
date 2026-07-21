@@ -14,7 +14,7 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
   const { response: res, finalUrl, redirectCount } = await fetchPublicResponse(fetcher, requestedUrl, timeoutMs);
   if (!res.ok) throw httpError(res.status);
   const contentType = res.headers.get("content-type") ?? undefined;
-  if (contentType && !/^(?:text\/|application\/(?:rss\+xml|atom\+xml|xml|json|xhtml\+xml))/i.test(contentType)) throw new Error(`unsupported media type: ${contentType}`);
+  if (contentType && !/^(?:text\/|application\/(?:rss\+xml|x-rss\+xml|atom\+xml|rdf\+xml|xml|json|xhtml\+xml))/i.test(contentType)) throw new Error(`unsupported media type: ${contentType}`);
   const body = await boundedText(res, maxBytes);
   const fetched = body.text;
   const metadata = { canaryPortfolio: true, fetchMode: mode, finalUrlHash: hashContent(finalUrl), responseBytes: body.bytesReceived, fetchProvenance: { mode, adapterVersion: "public_canary_fetcher:v2", requestedUrlHash: hashContent(requestedUrl), sourceUrlHash: hashContent(task.targetUrl), finalUrlHash: hashContent(finalUrl), httpStatus: res.status, ok: res.ok, contentType, fetchedAt: at, durationMs: Date.now() - started, bytesReceived: body.bytesReceived, maxBytes, truncated: body.truncated, bounded: true, redirectCount, userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" } };
