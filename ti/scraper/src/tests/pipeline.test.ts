@@ -107,6 +107,16 @@ describe("compact pipeline value path", () => {
     ]);
   });
 
+  test("reuses a migrated global profile whose tenant is stored as null", () => {
+    const store = new InMemoryScraperStore();
+    store.saveActorProfile({ id: "actor_legacy_akira", tenantId: null, canonicalName: "Akira", normalizedName: "akira", actorType: "ransomware", confidence: 0.8, aliases: ["Akira"], sourceIds: ["src_legacy"], captureIds: ["cap_legacy"], evidenceCount: 1 });
+    store.savePipelineResult(processCollectedItem({ sourceId: "src_current", url: "https://example.test/current", collectedAt: "2026-07-21T00:00:00.000Z", rawText: "Akira was referenced in a public report.", contentHash: hashContent("current"), links: [], metadata: {}, sensitive: false }));
+
+    expect(store.listActorProfiles()).toEqual([
+      expect.objectContaining({ id: "actor_legacy_akira", actorType: "ransomware", evidenceCount: 2, captureIds: ["cap_legacy", expect.stringMatching(/^cap_/)] })
+    ]);
+  });
+
   test("builds compact analyst feedback and learning queues", () => {
     const feedback = buildAnalystFeedbackLoopDto({ items: [{ id: "row_1", mark: "needs_review" }] });
     const review = buildAnalystQualityReviewQueueDto({ rows: [{ id: "row_1", state: "queued" }] });

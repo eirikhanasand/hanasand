@@ -71,7 +71,7 @@ export class InMemoryScraperStore implements ScraperStore {
       this.saveEvidenceLink(link(capture, "entity", entity.id, "mentions", entity.confidence, extractorVersion));
       if (entity.type === "actor" || entity.type === "ransomware_family") {
         const profileId = actorProfileId(capture, entity);
-        const previous = this.getActorProfile(profileId) ?? this.listActorProfiles().find((profile: any) => profile.tenantId === capture.tenantId && profile.normalizedName === normalized(entity));
+        const previous = this.getActorProfile(profileId) ?? this.listActorProfiles().find((profile: any) => (profile.tenantId ?? null) === (capture.tenantId ?? null) && profile.normalizedName === normalized(entity));
         const profile = mergeActorProfile(previous, capture, entity, characterize ? entities : []);
         this.saveActorProfile(profile);
         this.saveEvidenceLink(link(capture, "actor_profile", profile.id, "characterizes", entity.confidence, extractorVersion));
