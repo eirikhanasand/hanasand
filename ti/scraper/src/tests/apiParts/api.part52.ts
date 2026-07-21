@@ -33,7 +33,7 @@ describe("api v1", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_identity_a", tenantId: "tenant_api", name: "MITRE APT29" }));
     store.saveSource(source({ id: "src_identity_b", tenantId: "tenant_api", name: "Vendor APT29" }));
-    store.saveCapture(fixtureCapture({ id: "cap_identity_a", sourceId: "src_identity_a", title: "MITRE APT29.display: none; window.dataLayer = window.dataLayer || []", body: "APT29 actor reference.", publishedAt: "2026-07-20T00:00:00.000Z" }));
+    store.saveCapture(fixtureCapture({ id: "cap_identity_a", sourceId: "src_identity_a", title: "MITRE APT29.display: none; window.dataLayer = window.dataLayer || []", body: "MITRE APT29 .osano-cm-widget{display: none;} window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'UA-62667723-1'); APT29 actor reference &reg; &nbsp; evidence.", publishedAt: "2026-07-20T00:00:00.000Z" }));
     store.saveCapture(fixtureCapture({ id: "cap_identity_b", sourceId: "src_identity_b", url: "https://example.test/vendor", title: "Vendor APT29 reference", body: "APT29 actor reference.", publishedAt: "2026-07-19T00:00:00.000Z" }));
     store.saveIntelligenceClaim({ id: "claim_identity", tenantId: "tenant_api", sourceIds: ["src_identity_a", "src_identity_b"], captureIds: ["cap_identity_a", "cap_identity_b"], claimType: "actor", value: { actor: "APT29" }, summary: "actor: APT29", confidence: 0.84, reviewState: "unreviewed", corroborationState: "corroborated" });
 
@@ -42,6 +42,9 @@ describe("api v1", () => {
     expect(response.evidenceAssessment.corroboratedClaimCount).toBe(0);
     expect(response.claims).toEqual([expect.objectContaining({ id: "claim_identity", corroborationState: "corroborated", sourceCount: 2 })]);
     expect(response.rows[0].title).toBe("MITRE APT29");
+    expect(response.rows[0].summary).toBe("MITRE APT29 APT29 actor reference ® evidence.");
+    expect(JSON.stringify(response)).not.toContain("window.dataLayer");
+    expect(JSON.stringify(response)).not.toContain("osano-cm-widget");
     expect(response.recentActivity).toEqual(expect.arrayContaining([
       expect.objectContaining({ publisherCount: 1, corroboratingSourceIds: [], corroborationState: "single_source" })
     ]));

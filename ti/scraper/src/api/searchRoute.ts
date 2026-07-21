@@ -2,9 +2,9 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 import { error, json, numberQuery, readJson } from "./http.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { findSearchCaptures } from "./searchCaptureIndex.ts";
-import { isMetadataOnlyCapture, rowFromCapture } from "./searchRows.ts";
+import { cleanSearchText, isMetadataOnlyCapture, rowFromCapture } from "./searchRows.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
-import { sanitizeDwmApiPayload, sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
+import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
 import { createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
 import { buildPublicChannelStatusRouteResponse } from "./publicChannelRoutes.ts";
 import { searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
@@ -427,7 +427,7 @@ function scopedSource(source: any, tenantId?: string) {
 }
 
 function safeText(value: unknown, maxLength: number) {
-  return sanitizeDwmCustomerText(value, undefined, maxLength) ?? "";
+  return cleanSearchText(value, maxLength);
 }
 
 function confidence(value: unknown) {
