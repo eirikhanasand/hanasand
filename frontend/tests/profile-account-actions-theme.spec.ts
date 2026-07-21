@@ -9,10 +9,12 @@ test('profile account actions use shared theme tokens for destructive controls',
 
     expect(source).toContain('Delete account')
     expect(source).toContain('Delete account?')
+    expect(source).toContain('fetch(\'/api/backend/user/self\', { method: \'DELETE\' })')
     expect(source).toContain('bg-ui-danger px-4 text-sm font-bold text-ui-canvas')
     expect(source).toContain('border-ui-danger/40 bg-ui-danger/10')
 
     expect(source).not.toContain('text-white')
+    expect(source).not.toContain('config.url.api}/user/self')
     expect(source).not.toContain('dark:text-ui-canvas')
     expect(source).not.toMatch(/\b(?:bg|text|border)-\[#/)
 })

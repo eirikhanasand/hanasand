@@ -1,8 +1,7 @@
 'use client'
 
-import config from '@/config'
 import { DashboardPanel } from '@/components/dashboard/ui'
-import { getCookie, removeCookies } from '@/utils/cookies/cookies'
+import { removeCookies } from '@/utils/cookies/cookies'
 import { Check, Fingerprint, LogOut, Pencil, Trash2, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -42,19 +41,11 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
     }
 
     async function deleteAccount() {
-        const token = getCookie('access_token')
-        const id = getCookie('id')
-        if (!token || !id || busy) return
+        if (busy) return
         setBusy(true)
         setMessage('')
         try {
-            const response = await fetch(`${config.url.api}/user/self`, {
-                method: 'DELETE',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    id,
-                },
-            })
+            const response = await fetch('/api/backend/user/self', { method: 'DELETE' })
             const data = await response.json().catch(() => null)
             if (!response.ok) {
                 setMessage(data?.error || 'Unable to schedule deletion.')
