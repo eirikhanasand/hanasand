@@ -9,7 +9,7 @@ export default function TiEvaluationPage() {
             <DashboardHeader
                 eyebrow='Threat intelligence'
                 title='Extraction evaluation'
-                description='Independent, prediction-hidden review of actors, victims, techniques, and impact.'
+                description='Independent, prediction-hidden review across threat actors, ransomware, victims, vulnerabilities, malware, techniques, geography, sectors, impact, and datasets.'
             />
             <EvaluationBenchmarkClient />
         </DashboardPage>

@@ -7,7 +7,8 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 
 const BASE = "/v1/intel/evaluation/benchmarks";
-const LABEL_TYPES = new Set(["actor", "victim", "ttp", "impact"]);
+const LABEL_TYPES = ["actor", "ransomware", "victim", "cve", "malware", "ttp", "country", "sector", "impact", "dataset"] as const;
+const LABEL_TYPE_SET = new Set<string>(LABEL_TYPES);
 
 export async function handleEvaluationBenchmarkRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
   const url = new URL(request.url);
@@ -41,8 +42,8 @@ async function createBenchmark(request: Request, options: ApiServerOptions, acto
   const body = await readJson<any>(request);
   const scope = resolveTenantScope(request, new URL(request.url), body.tenantId);
   if (scope.error) return scope.error;
-  const labelTypes: string[] = unique((Array.isArray(body.labelTypes) ? body.labelTypes : ["actor", "victim", "ttp", "impact"]).map(String).map((value) => value.trim().toLowerCase()));
-  if (!labelTypes.length || labelTypes.some((value) => !LABEL_TYPES.has(value))) return error("invalid_benchmark_label_types", "Use actor, victim, ttp, or impact label types", 400);
+  const labelTypes: string[] = unique((Array.isArray(body.labelTypes) ? body.labelTypes : LABEL_TYPES).map(String).map((value) => value.trim().toLowerCase()));
+  if (!labelTypes.length || labelTypes.some((value) => !LABEL_TYPE_SET.has(value))) return error("invalid_benchmark_label_types", `Use ${LABEL_TYPES.join(", ")} label types`, 400);
   const sampleSize = Math.max(1, Math.min(200, Math.floor(Number(body.sampleSize) || 100)));
   const requiredReviewers = Math.max(2, Math.min(3, Math.floor(Number(body.requiredReviewers) || 2)));
   const datasetSplit = ["validation", "test"].includes(body.datasetSplit) ? body.datasetSplit : "test";
@@ -59,10 +60,12 @@ async function createBenchmark(request: Request, options: ApiServerOptions, acto
   const entities = records(options.store, "listExtractedEntities").filter((entity) => inTenantScope(entity, scope.tenantId));
   const manifest = selected.flatMap((capture) => labelTypes.map((labelType) => {
     const predictions = entities.filter((entity) => entity.captureId === capture.id && entityMatches(labelType, entity.type));
+    const observedPredictions = predictionSnapshot(predictions);
     return {
-      id: stableId("evaluation-task", `${id}:${capture.id}:${labelType}`), captureId: capture.id, labelType,
+      id: stableId("evaluation-task", `${id}:${capture.id}:${labelType}`), benchmarkId: id, captureId: capture.id, labelType,
       contentHash: capture.contentHash, excerptHash: hashContent(blindExcerpt(capture)), sourceFamily: sourceFamily(sourceById.get(capture.sourceId), capture),
-      observedValues: unique(predictions.map((entity) => String(entity.value ?? entity.normalizedValue ?? "").trim()).filter(Boolean)),
+      observedValues: observedPredictions.map((prediction) => prediction.value),
+      observedPredictions,
       extractorVersions: unique(predictions.map((entity) => String(entity.extractorVersion ?? "unknown"))).sort()
     };
   }));
@@ -83,7 +86,13 @@ async function createBenchmark(request: Request, options: ApiServerOptions, acto
     taskCount: manifest.length,
     manifest,
     manifestHash: hashContent(JSON.stringify(manifest)),
-    protocol: { blinded: true, predictionHiddenUntilSubmission: true, predictionHiddenFromReviewers: true, predictionSnapshotAt: createdAt, exhaustiveExpectedValues: true, consensusRequired: true, independentAdjudicatorForDisagreement: true },
+    protocol: {
+      version: "ti.independent_extraction_benchmark.v2", labelSchemaVersion: "ti.extraction_label.v2",
+      blinded: true, predictionHiddenUntilSubmission: true, predictionHiddenFromReviewers: true, predictionSnapshotAt: createdAt,
+      exhaustiveExpectedValues: true, consensusRequired: true, independentAdjudicatorForDisagreement: true,
+      reviewerIndependenceAttestationRequired: true, holdoutLockedAt: createdAt,
+      datasetUsage: datasetSplit === "test" ? "locked_final_evaluation" : "model_selection_only", testSplitLocked: datasetSplit === "test"
+    },
     createdBy: actor.id,
     createdAt,
     updatedAt: createdAt
@@ -112,6 +121,7 @@ async function createAnnotation(request: Request, options: ApiServerOptions, ben
   if (benchmarkAdjudications(options.store, benchmark.id).some((row) => row.taskId === task.id)) return error("task_already_adjudicated", "Evaluation task is already adjudicated", 409);
   const expectedValues = annotationValues(body.expectedValues);
   if (!expectedValues) return error("invalid_annotation_values", "expectedValues must be a bounded array of entity values", 400);
+  if (body.independenceAttested !== true) return error("reviewer_independence_required", "Confirm that the review was completed independently from extractor development and without prediction access", 400);
   const id = stableId("evaluation-annotation", `${benchmark.id}:${task.id}:${reviewerId}`);
   if ((options.store as any).getEvaluationAnnotation(id)) return error("annotation_already_submitted", "This reviewer already submitted the task", 409);
   const capture = (options.store as any).getCapture(task.captureId);
@@ -121,7 +131,7 @@ async function createAnnotation(request: Request, options: ApiServerOptions, ben
   const annotation = {
     id, tenantId: benchmark.tenantId, benchmarkId: benchmark.id, taskId: task.id, captureId: task.captureId, labelType: task.labelType,
     reviewerId, expectedValues, notes: cleanText(body.notes, 1_000), sourceExcerptHash: task.excerptHash,
-    blinded: true, predictionAccessed: false, annotatedAt, createdAt: annotatedAt, updatedAt: annotatedAt
+    blinded: true, predictionAccessed: false, independenceAttested: true, annotatedAt, createdAt: annotatedAt, updatedAt: annotatedAt
   };
   (options.store as any).saveEvaluationAnnotation(annotation);
   const adjudication = autoAdjudicate(options.store, benchmark, task);
@@ -140,6 +150,7 @@ async function adjudicateTask(request: Request, options: ApiServerOptions, bench
   if (annotations.some((row) => row.reviewerId === reviewerId)) return error("adjudicator_not_independent", "A disagreement must be resolved by a reviewer who did not submit either annotation", 409);
   const expectedValues = annotationValues(body.expectedValues);
   if (!expectedValues) return error("invalid_annotation_values", "expectedValues must be a bounded array of entity values", 400);
+  if (body.independenceAttested !== true) return error("reviewer_independence_required", "Confirm that adjudication was completed independently from extractor development and without prediction access", 400);
   if ((options.store as any).getEvaluationAdjudication(stableId("evaluation-adjudication", task.id))) return error("task_already_adjudicated", "Evaluation task is already adjudicated", 409);
   const adjudicatedAt = nowIso();
   const adjudication = saveAdjudication(options.store, benchmark, task, expectedValues, reviewerId, annotations.map((row) => row.id), "independent_adjudicator", adjudicatedAt);
@@ -160,7 +171,7 @@ function saveAdjudication(store: any, benchmark: any, task: any, expectedValues:
   const id = stableId("evaluation-adjudication", task.id);
   const existing = store.getEvaluationAdjudication(id);
   if (existing) return existing;
-  const adjudication = { id, tenantId: benchmark.tenantId, benchmarkId: benchmark.id, taskId: task.id, captureId: task.captureId, labelType: task.labelType, expectedValues, annotationIds, method, adjudicatedBy, adjudicatedAt, createdAt: adjudicatedAt, updatedAt: adjudicatedAt };
+  const adjudication = { id, tenantId: benchmark.tenantId, benchmarkId: benchmark.id, taskId: task.id, captureId: task.captureId, labelType: task.labelType, expectedValues, annotationIds, method, adjudicatedBy, independenceAttested: true, adjudicatedAt, createdAt: adjudicatedAt, updatedAt: adjudicatedAt };
   store.saveEvaluationAdjudication(adjudication);
   for (const label of labelsForAdjudication(store, benchmark, task, adjudication)) store.saveEvaluationLabel(label);
   return adjudication;
@@ -174,12 +185,14 @@ function labelsForAdjudication(_store: any, benchmark: any, task: any, adjudicat
   return units.map((unit) => {
     const expectedValue = expected.get(unit);
     const observedValue = observed.get(unit);
+    const observedPrediction = (task.observedPredictions ?? []).find((prediction: any) => normalize(prediction.value) === unit);
     const outcome = unit === "__none__" ? "true_negative" : expectedValue && observedValue ? "true_positive" : expectedValue ? "false_negative" : "false_positive";
     const evaluationUnitId = `${task.id}:${unit}`;
     return {
       id: stableId("evaluation-label", evaluationUnitId), tenantId: benchmark.tenantId, captureId: task.captureId,
       evaluationUnitId, benchmarkId: benchmark.id, taskId: task.id, annotationIds: adjudication.annotationIds,
       labelType: `${task.labelType}_extraction`, expectedValue: expectedValue ?? null, observedValue: observedValue ?? null, outcome,
+      predictionConfidence: observedValue ? normalizedConfidence(observedPrediction?.confidence) ?? null : 0,
       datasetSplit: benchmark.datasetSplit, labeledBy: adjudication.adjudicatedBy, labelingMethod: "manual_source_review",
       parserVersion: task.extractorVersions?.join(",") || "unknown", sourceFamily: task.sourceFamily,
       independentFromExtractor: true, blinded: true, exhaustiveExpectedValues: true, adjudicationStatus: "adjudicated", adjudicationMethod: adjudication.method,
@@ -274,8 +287,31 @@ function unique<T>(values: T[]): T[] { return [...new Set(values)]; }
 function cleanText(value: unknown, max: number): string | undefined { return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined; }
 function entityMatches(labelType: string, entityType: string) {
   const type = String(entityType).toLowerCase();
-  if (labelType === "actor") return ["actor", "threat_actor", "ransomware_family"].includes(type);
+  if (labelType === "actor") return ["actor", "threat_actor"].includes(type);
+  if (labelType === "ransomware") return type === "ransomware_family";
   if (labelType === "victim") return type === "victim";
+  if (labelType === "cve") return type === "cve";
+  if (labelType === "malware") return ["malware", "malware_tool", "tool"].includes(type);
   if (labelType === "ttp") return ["ttp", "attack_technique", "technique"].includes(type);
-  return labelType === "impact" && type === "impact";
+  if (labelType === "country") return type === "country";
+  if (labelType === "sector") return type === "sector";
+  if (labelType === "impact") return type === "impact";
+  return labelType === "dataset" && ["dataset", "data_type"].includes(type);
+}
+
+function predictionSnapshot(predictions: any[]) {
+  const byValue = new Map<string, { value: string; confidence?: number; entityType: string; extractorVersion: string }>();
+  for (const prediction of predictions) {
+    const value = String(prediction.value ?? prediction.normalizedValue ?? "").trim();
+    if (!value) continue;
+    const key = normalize(value), confidence = normalizedConfidence(prediction.confidence), current = byValue.get(key);
+    if (!current || (confidence ?? -1) > (current.confidence ?? -1)) byValue.set(key, { value, confidence, entityType: String(prediction.type ?? "unknown"), extractorVersion: String(prediction.extractorVersion ?? "unknown") });
+  }
+  return [...byValue.values()].sort((left, right) => normalize(left.value).localeCompare(normalize(right.value)));
+}
+
+function normalizedConfidence(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) ? Number(Math.max(0, Math.min(1, number > 1 ? number / 100 : number)).toFixed(3)) : undefined;
 }

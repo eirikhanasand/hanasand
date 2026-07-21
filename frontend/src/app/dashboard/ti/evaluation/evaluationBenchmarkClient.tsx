@@ -56,7 +56,16 @@ type CreateFormState = {
     scope: 'default' | 'global'
 }
 
-const LABEL_TYPES = ['actor', 'victim', 'ttp', 'impact'] as const
+type EvaluationMetrics = {
+    quality: {
+        status: string
+        evaluatedUnitCount: number
+        overall: { precision: number | null, recall: number | null, f1: number | null, calibration: { sampleSize: number, brierScore: number | null, expectedCalibrationError: number | null } }
+        benchmarkEvidence: { validationStatus: string, heldOutCaptureCount: number, heldOutReviewerCount: number, stratifiedCoverageComplete: boolean }
+    }
+}
+
+const LABEL_TYPES = ['actor', 'ransomware', 'victim', 'cve', 'malware', 'ttp', 'country', 'sector', 'impact', 'dataset'] as const
 const FILTERS = ['open', 'mine', 'adjudication', 'complete'] as const
 
 export default function EvaluationBenchmarkClient() {
@@ -67,6 +76,8 @@ export default function EvaluationBenchmarkClient() {
     const [filter, setFilter] = useState<(typeof FILTERS)[number]>('open')
     const [values, setValues] = useState('')
     const [notes, setNotes] = useState('')
+    const [independenceAttested, setIndependenceAttested] = useState(false)
+    const [metrics, setMetrics] = useState<EvaluationMetrics | null>(null)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
@@ -106,6 +117,11 @@ export default function EvaluationBenchmarkClient() {
         })
     }, [benchmarks])
 
+    const loadMetrics = useCallback(async (benchmark?: Benchmark) => {
+        if (!benchmark) return setMetrics(null)
+        setMetrics(await api<EvaluationMetrics>(`/api/ti/evaluation?scope=${benchmarkScope(benchmark)}&datasetSplit=${benchmark.datasetSplit}`))
+    }, [])
+
     const refresh = useCallback(async () => {
         setLoading(true)
         setError('')
@@ -122,9 +138,10 @@ export default function EvaluationBenchmarkClient() {
     useEffect(() => {
         setValues('')
         setNotes('')
-        void loadTasks(selectedBenchmarkId).catch(cause => setError(message(cause)))
-    }, [loadTasks, selectedBenchmarkId])
-    useEffect(() => { setValues(''); setNotes('') }, [selectedTask?.id])
+        setIndependenceAttested(false)
+        void Promise.all([loadTasks(selectedBenchmarkId), loadMetrics(selectedBenchmark)]).catch(cause => setError(message(cause)))
+    }, [loadMetrics, loadTasks, selectedBenchmark, selectedBenchmarkId])
+    useEffect(() => { setValues(''); setNotes(''); setIndependenceAttested(false) }, [selectedTask?.id])
 
     async function createBenchmark() {
         if (!createForm.labelTypes.length) return setError('Select at least one label type.')
@@ -156,7 +173,7 @@ export default function EvaluationBenchmarkClient() {
         try {
             await api(path, {
                 method: 'POST',
-                body: JSON.stringify({ taskId: selectedTask.id, expectedValues: parseValues(values), notes: notes.trim() || undefined }),
+                body: JSON.stringify({ taskId: selectedTask.id, expectedValues: parseValues(values), notes: notes.trim() || undefined, independenceAttested }),
             })
             await Promise.all([loadBenchmarks(selectedBenchmark.id), loadTasks(selectedBenchmark.id, scope)])
             setValues('')
@@ -168,7 +185,8 @@ export default function EvaluationBenchmarkClient() {
         }
     }
 
-    const blocked = !selectedTask || selectedTask.evidence.unavailable || selectedTask.status === 'adjudicated' || selectedTask.submittedByCurrentReviewer
+    const readOnly = !selectedTask || selectedTask.evidence.unavailable || selectedTask.status === 'adjudicated' || selectedTask.submittedByCurrentReviewer
+    const blocked = readOnly || !independenceAttested
 
     return (
         <>
@@ -192,6 +210,7 @@ export default function EvaluationBenchmarkClient() {
                 </div>
                 {showCreate ? <CreateForm value={createForm} onChange={setCreateForm} onSubmit={() => void createBenchmark()} saving={saving} /> : null}
                 {error ? <div role='alert' className='flex items-start gap-2 border-t border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'><AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />{error}</div> : null}
+                {metrics ? <MetricsSummary metrics={metrics} /> : null}
             </DashboardPanel>
 
             <div className='grid min-h-[38rem] gap-3 xl:grid-cols-[22rem_minmax(0,1fr)]'>
@@ -251,12 +270,16 @@ export default function EvaluationBenchmarkClient() {
                             <aside className='grid content-start gap-3 p-3'>
                                 <div>
                                     <label htmlFor='expected-values' className='text-xs font-semibold text-ui-text'>Expected {selectedTask.labelType} values</label>
-                                    <textarea id='expected-values' value={values} onChange={event => setValues(event.target.value)} disabled={blocked} rows={8} placeholder='One value per line. Leave empty when none are present.' className='mt-1.5 w-full resize-y rounded-md border border-ui-border bg-ui-canvas p-2 text-sm text-ui-text placeholder:text-ui-muted disabled:opacity-60' />
+                                    <textarea id='expected-values' value={values} onChange={event => setValues(event.target.value)} disabled={readOnly} rows={8} placeholder='One value per line. Leave empty when none are present.' className='mt-1.5 w-full resize-y rounded-md border border-ui-border bg-ui-canvas p-2 text-sm text-ui-text placeholder:text-ui-muted disabled:opacity-60' />
                                 </div>
                                 <div>
                                     <label htmlFor='review-notes' className='text-xs font-semibold text-ui-text'>Review notes</label>
-                                    <textarea id='review-notes' value={notes} onChange={event => setNotes(event.target.value)} disabled={blocked} rows={4} maxLength={1000} className='mt-1.5 w-full resize-y rounded-md border border-ui-border bg-ui-canvas p-2 text-sm text-ui-text disabled:opacity-60' />
+                                    <textarea id='review-notes' value={notes} onChange={event => setNotes(event.target.value)} disabled={readOnly} rows={4} maxLength={1000} className='mt-1.5 w-full resize-y rounded-md border border-ui-border bg-ui-canvas p-2 text-sm text-ui-text disabled:opacity-60' />
                                 </div>
+                                <label className='flex items-start gap-2 text-xs leading-5 text-ui-muted'>
+                                    <input type='checkbox' checked={independenceAttested} onChange={event => setIndependenceAttested(event.target.checked)} disabled={readOnly} className='mt-0.5 h-4 w-4 shrink-0 accent-ui-primary' />
+                                    I reviewed this evidence independently from extractor development and without seeing its predictions.
+                                </label>
                                 <button type='button' onClick={() => void submitReview()} disabled={saving || blocked} className='inline-flex h-10 items-center justify-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'>
                                     {saving ? <LoaderCircle className='h-4 w-4 animate-spin' /> : selectedTask.status === 'needs_adjudication' ? <Scale className='h-4 w-4' /> : <ClipboardCheck className='h-4 w-4' />}
                                     {selectedTask.status === 'needs_adjudication' ? 'Submit adjudication' : selectedTask.submittedByCurrentReviewer ? 'Review submitted' : selectedTask.status === 'adjudicated' ? 'Adjudicated' : 'Submit review'}
@@ -269,6 +292,19 @@ export default function EvaluationBenchmarkClient() {
             </div>
         </>
     )
+}
+
+function MetricsSummary({ metrics }: { metrics: EvaluationMetrics }) {
+    const { overall, benchmarkEvidence, evaluatedUnitCount } = metrics.quality
+    return <dl className='grid grid-cols-2 gap-px border-t border-ui-border bg-ui-border sm:grid-cols-4 lg:grid-cols-7'>
+        <ScoreDatum label='Validation' value={benchmarkEvidence.validationStatus.replaceAll('_', ' ')} />
+        <ScoreDatum label='Units' value={String(evaluatedUnitCount)} />
+        <ScoreDatum label='Precision' value={percent(overall.precision)} />
+        <ScoreDatum label='Recall' value={percent(overall.recall)} />
+        <ScoreDatum label='F1' value={percent(overall.f1)} />
+        <ScoreDatum label='Brier' value={decimal(overall.calibration.brierScore)} />
+        <ScoreDatum label='Held-out evidence' value={`${benchmarkEvidence.heldOutCaptureCount} captures / ${benchmarkEvidence.heldOutReviewerCount} reviewers`} />
+    </dl>
 }
 
 function CreateForm({ value, onChange, onSubmit, saving }: { value: CreateFormState, onChange: (value: CreateFormState) => void, onSubmit: () => void, saving: boolean }) {
@@ -299,12 +335,15 @@ function BenchmarkProgress({ benchmark }: { benchmark: Benchmark }) {
 }
 
 function Metric({ label, value }: { label: string, value: number }) { return <span><strong className='mr-1 text-sm text-ui-text'>{value}</strong>{label}</span> }
+function ScoreDatum({ label, value }: { label: string, value: string }) { return <div className='bg-ui-panel px-3 py-2'><dt className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</dt><dd className='mt-0.5 text-xs font-semibold capitalize text-ui-text'>{value}</dd></div> }
 function Datum({ label, value }: { label: string, value?: string }) { return <div><dt className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</dt><dd className='mt-0.5 truncate text-xs text-ui-text'>{value || 'Unknown'}</dd></div> }
 function Status({ label }: { label: string }) { return <span className='rounded-full bg-ui-primary/15 px-2 py-1 text-[10px] font-semibold capitalize text-ui-primary'>{label.replaceAll('_', ' ')}</span> }
 function TaskIcon({ task }: { task: Task }) { return task.status === 'adjudicated' ? <Check className='h-4 w-4 shrink-0 text-ui-success' /> : task.status === 'needs_adjudication' ? <Scale className='h-4 w-4 shrink-0 text-ui-warning' /> : <ClipboardCheck className='h-4 w-4 shrink-0 text-ui-muted' /> }
 function parseValues(value: string) { return [...new Set(value.split('\n').map(item => item.trim()).filter(Boolean))] }
 function benchmarkScope(benchmark?: Benchmark): 'default' | 'global' { return benchmark?.tenantId === 'default' ? 'default' : 'global' }
 function formatDate(value?: string) { return value ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : undefined }
+function percent(value: number | null) { return value === null ? 'Unmeasured' : `${Math.round(value * 1000) / 10}%` }
+function decimal(value: number | null) { return value === null ? 'Unmeasured' : value.toFixed(3) }
 function message(error: unknown) { return error instanceof Error ? error.message : 'The evaluation request failed.' }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {

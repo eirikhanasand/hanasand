@@ -44,29 +44,30 @@ describe("independent evaluation benchmark", () => {
 
     const expected: Record<string, string[]> = { actor: ["APT29"], victim: ["Northwind Health"], ttp: [], impact: [] };
     for (const task of tasks.tasks) {
-      expect((await call(`/v1/intel/evaluation/benchmarks/${created.benchmark.id}/annotations`, "reviewer_one", { tenantId: "tenant_benchmark", taskId: task.id, expectedValues: expected[task.labelType] })).status).toBe(201);
+      expect((await call(`/v1/intel/evaluation/benchmarks/${created.benchmark.id}/annotations`, "reviewer_one", { tenantId: "tenant_benchmark", taskId: task.id, expectedValues: expected[task.labelType], independenceAttested: true })).status).toBe(201);
     }
     const secondReviewerView = await (await call(`/v1/intel/evaluation/benchmarks/${created.benchmark.id}/tasks`, "reviewer_two")).json() as any;
     expect(JSON.stringify(secondReviewerView)).not.toContain("expectedValues");
     for (const task of secondReviewerView.tasks) {
-      expect((await call(`/v1/intel/evaluation/benchmarks/${created.benchmark.id}/annotations`, "reviewer_two", { tenantId: "tenant_benchmark", taskId: task.id, expectedValues: expected[task.labelType] })).status).toBe(201);
+      expect((await call(`/v1/intel/evaluation/benchmarks/${created.benchmark.id}/annotations`, "reviewer_two", { tenantId: "tenant_benchmark", taskId: task.id, expectedValues: expected[task.labelType], independenceAttested: true })).status).toBe(201);
     }
 
     const completed = await (await call("/v1/intel/evaluation/benchmarks", "reviewer_one")).json() as any;
     expect(completed.benchmarks[0]).toMatchObject({ status: "complete", progress: { adjudicatedTaskCount: 4, reviewerCount: 2, exactSetAgreement: 1 } });
     expect(store.listEvaluationLabels().map((label: any) => label.outcome).sort()).toEqual(["false_negative", "false_positive", "true_negative", "true_positive"]);
     expect(store.listEvaluationLabels().every((label: any) => label.blinded && label.adjudicationStatus === "adjudicated" && label.exhaustiveExpectedValues)).toBe(true);
+    expect(store.listEvaluationLabels().map((label: any) => label.predictionConfidence).sort()).toEqual([0, 0, 0.5, 0.9]);
 
     const metrics = buildEvaluationMetrics(store, { tenantId: "tenant_benchmark", datasetSplit: "test" });
-    expect(metrics.quality).toMatchObject({ overall: { precision: 0.5, recall: 0.5, specificity: 0.5, recallSampleSize: 2, f1: 0.5 }, benchmarkEvidence: { completedBenchmarkCount: 1, completedTaskCount: 4, completedCaptureCount: 1, reviewerCount: 2, validationStatus: "pilot_only" } });
+    expect(metrics.quality).toMatchObject({ overall: { precision: 0.5, recall: 0.5, specificity: 0.5, recallSampleSize: 2, f1: 0.5, calibration: { sampleSize: 4, brierScore: 0.315, expectedCalibrationError: 0.4 } }, benchmarkEvidence: { completedBenchmarkCount: 1, completedTaskCount: 4, completedCaptureCount: 1, reviewerCount: 2, heldOutBenchmarkCount: 1, heldOutCaptureCount: 1, heldOutReviewerCount: 2, validationStatus: "pilot_only" } });
     expect(metrics.limitations).not.toContain("recall is unmeasured until an exhaustive prediction-hidden benchmark is adjudicated");
 
     const disputed = await (await call("/v1/intel/evaluation/benchmarks", "reviewer_three", { tenantId: "tenant_benchmark", name: "Adjudication test", sampleSize: 1, labelTypes: ["actor"], requiredReviewers: 2 })).json() as any;
     const [disputedTask] = (await (await call(`/v1/intel/evaluation/benchmarks/${disputed.benchmark.id}/tasks`, "reviewer_three")).json() as any).tasks;
-    expect((await call(`/v1/intel/evaluation/benchmarks/${disputed.benchmark.id}/annotations`, "reviewer_three", { tenantId: "tenant_benchmark", taskId: disputedTask.id, expectedValues: ["APT28"] })).status).toBe(201);
-    expect((await call(`/v1/intel/evaluation/benchmarks/${disputed.benchmark.id}/annotations`, "reviewer_four", { tenantId: "tenant_benchmark", taskId: disputedTask.id, expectedValues: ["APT29"] })).status).toBe(201);
-    expect((await call(`/v1/intel/evaluation/benchmarks/${disputed.benchmark.id}/tasks/${disputedTask.id}/adjudicate`, "reviewer_three", { tenantId: "tenant_benchmark", expectedValues: ["APT29"] })).status).toBe(409);
-    const adjudicated = await call(`/v1/intel/evaluation/benchmarks/${disputed.benchmark.id}/tasks/${disputedTask.id}/adjudicate`, "reviewer_five", { tenantId: "tenant_benchmark", expectedValues: ["APT29"] });
+    expect((await call(`/v1/intel/evaluation/benchmarks/${disputed.benchmark.id}/annotations`, "reviewer_three", { tenantId: "tenant_benchmark", taskId: disputedTask.id, expectedValues: ["APT28"], independenceAttested: true })).status).toBe(201);
+    expect((await call(`/v1/intel/evaluation/benchmarks/${disputed.benchmark.id}/annotations`, "reviewer_four", { tenantId: "tenant_benchmark", taskId: disputedTask.id, expectedValues: ["APT29"], independenceAttested: true })).status).toBe(201);
+    expect((await call(`/v1/intel/evaluation/benchmarks/${disputed.benchmark.id}/tasks/${disputedTask.id}/adjudicate`, "reviewer_three", { tenantId: "tenant_benchmark", expectedValues: ["APT29"], independenceAttested: true })).status).toBe(409);
+    const adjudicated = await call(`/v1/intel/evaluation/benchmarks/${disputed.benchmark.id}/tasks/${disputedTask.id}/adjudicate`, "reviewer_five", { tenantId: "tenant_benchmark", expectedValues: ["APT29"], independenceAttested: true });
     expect(adjudicated.status).toBe(201);
     expect(await adjudicated.json()).toMatchObject({ adjudication: { method: "independent_adjudicator", adjudicatedBy: "reviewer_five" }, predictionDisclosed: false });
 
@@ -75,7 +76,25 @@ describe("independent evaluation benchmark", () => {
     store.updateCaptureMetadata("cap_benchmark", (metadata) => ({ ...metadata, safeExcerpt: "Evidence changed after benchmark creation." }));
     const changedView = await (await call(`/v1/intel/evaluation/benchmarks/${changed.benchmark.id}/tasks`, "reviewer_one")).json() as any;
     expect(changedView.tasks[0].evidence).toMatchObject({ unavailable: true, reason: "evidence_changed_after_sampling" });
-    expect((await call(`/v1/intel/evaluation/benchmarks/${changed.benchmark.id}/annotations`, "reviewer_one", { tenantId: "tenant_benchmark", taskId: changedTask.id, expectedValues: [] })).status).toBe(409);
+    expect((await call(`/v1/intel/evaluation/benchmarks/${changed.benchmark.id}/annotations`, "reviewer_one", { tenantId: "tenant_benchmark", taskId: changedTask.id, expectedValues: [], independenceAttested: true })).status).toBe(409);
+
+    for (const [id, type, value] of [
+      ["entity_ransomware", "ransomware_family", "Akira"], ["entity_cve", "cve", "CVE-2026-11111"],
+      ["entity_malware", "malware", "Cobalt Strike"], ["entity_country", "country", "Norway"],
+      ["entity_sector", "sector", "healthcare"], ["entity_impact", "impact", "data theft"], ["entity_dataset", "dataset", "customer records"]
+    ]) store.saveExtractedEntity({ id, tenantId: "tenant_benchmark", sourceId: "src_benchmark", captureId: "cap_benchmark", type, value, normalizedValue: String(value).toLowerCase(), confidence: 0.7, extractorVersion: "comprehensive-parser" });
+    const comprehensiveResponse = await call("/v1/intel/evaluation/benchmarks", "reviewer_one", { tenantId: "tenant_benchmark", name: "Comprehensive test", sampleSize: 1, requiredReviewers: 2 });
+    const comprehensive = await comprehensiveResponse.json() as any;
+    expect(comprehensiveResponse.status).toBe(201);
+    expect(comprehensive.benchmark).toMatchObject({ taskCount: 10, labelTypes: ["actor", "ransomware", "victim", "cve", "malware", "ttp", "country", "sector", "impact", "dataset"], protocol: { version: "ti.independent_extraction_benchmark.v2", datasetUsage: "locked_final_evaluation", reviewerIndependenceAttestationRequired: true } });
+    const manifest = store.getEvaluationBenchmark(comprehensive.benchmark.id).manifest;
+    for (const labelType of comprehensive.benchmark.labelTypes) expect(manifest.find((task: any) => task.labelType === labelType)).toBeDefined();
+    const comprehensiveTasks = await (await call(`/v1/intel/evaluation/benchmarks/${comprehensive.benchmark.id}/tasks`, "reviewer_one")).text();
+    for (const forbidden of ["observedPredictions", "observedValues", "predictionConfidence", "comprehensive-parser"]) expect(comprehensiveTasks).not.toContain(forbidden);
+
+    const unattested = await call(`/v1/intel/evaluation/benchmarks/${comprehensive.benchmark.id}/annotations`, "reviewer_one", { tenantId: "tenant_benchmark", taskId: manifest[0].id, expectedValues: [] });
+    expect(unattested.status).toBe(400);
+    expect(await unattested.json()).toMatchObject({ error: { code: "reviewer_independence_required" } });
 
     const serviceOptions = { ...options, serviceToken: "evaluation-service-token" };
     const serviceCreate = await handleApiRequest(new Request("http://local/v1/intel/evaluation/benchmarks", {

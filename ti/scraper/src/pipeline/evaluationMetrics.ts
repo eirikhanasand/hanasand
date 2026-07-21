@@ -8,6 +8,7 @@ const LATENCIES = [
   "reportToVisibilitySeconds",
   "reportToAlertSeconds"
 ] as const;
+const REQUIRED_BENCHMARK_LABEL_TYPES = ["actor", "ransomware", "victim", "cve", "malware", "ttp", "country", "sector", "impact", "dataset"];
 
 export function buildEvaluationMetrics(store: any, input: { tenantId?: string; datasetSplit?: string; generatedAt?: string } = {}) {
   const scoped = (method: string) => records(store, method).filter((record) => sameTenant(record.tenantId, input.tenantId));
@@ -17,10 +18,6 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
   const subjects = new Map([...entities, ...indicators, ...incidents, ...claims].map((record: any) => [record.id, record]));
   const labelEvents = scoped("listEvaluationLabels").filter((label: any) => !input.datasetSplit || label.datasetSplit === input.datasetSplit);
   const labels = latestLabels(labelEvents);
-  const independentLabels = labels.filter(isIndependentEvaluationLabel);
-  const diagnosticLabels = labels.filter((label: any) => !isIndependentEvaluationLabel(label));
-  const rows = independentLabels.map((label: any) => labelRow(label, subjects, captureById, sourceById));
-  const diagnosticRows = diagnosticLabels.map((label: any) => labelRow(label, subjects, captureById, sourceById));
   const timeliness = scoped("listTimelinessRecords");
   const health = scoped("listSourceHealthObservations");
   const validations = scoped("listValidationRecords");
@@ -30,14 +27,30 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
   const adjudications = scoped("listEvaluationAdjudications").filter((adjudication: any) => benchmarkIds.has(adjudication.benchmarkId));
   const completedBenchmarks = benchmarks.filter((benchmark: any) => benchmark.status === "complete" && new Set(adjudications.filter((row: any) => row.benchmarkId === benchmark.id).map((row: any) => row.taskId)).size === Number(benchmark.taskCount));
   const completedBenchmarkIds = new Set(completedBenchmarks.map((benchmark: any) => benchmark.id));
+  const independentLabels = labels.filter((label: any) => isIndependentEvaluationLabel(label) && completedBenchmarkIds.has(label.benchmarkId));
+  const diagnosticLabels = labels.filter((label: any) => !independentLabels.includes(label));
+  const rows = independentLabels.map((label: any) => labelRow(label, subjects, captureById, sourceById));
+  const diagnosticRows = diagnosticLabels.map((label: any) => labelRow(label, subjects, captureById, sourceById));
   const completedAnnotations = annotations.filter((annotation: any) => completedBenchmarkIds.has(annotation.benchmarkId));
   const completedAdjudications = adjudications.filter((adjudication: any) => completedBenchmarkIds.has(adjudication.benchmarkId));
   const benchmarkReviewerCount = new Set(completedAnnotations.map((annotation: any) => annotation.reviewerId)).size;
   const benchmarkTaskCount = new Set(completedAdjudications.map((adjudication: any) => `${adjudication.benchmarkId}:${adjudication.taskId}`)).size;
   const benchmarkCaptureCount = new Set(completedBenchmarks.flatMap((benchmark: any) => benchmark.captureIds ?? [])).size;
+  const heldOutBenchmarks = completedBenchmarks.filter((benchmark: any) => benchmark.datasetSplit === "test" && benchmark.protocol?.testSplitLocked === true && benchmark.protocol?.datasetUsage === "locked_final_evaluation");
+  const heldOutBenchmarkIds = new Set(heldOutBenchmarks.map((benchmark: any) => benchmark.id));
+  const heldOutRows = rows.filter((row: any) => heldOutBenchmarkIds.has(row.benchmarkId));
+  const heldOutAnnotations = completedAnnotations.filter((annotation: any) => heldOutBenchmarkIds.has(annotation.benchmarkId));
+  const heldOutCaptureCount = new Set(heldOutBenchmarks.flatMap((benchmark: any) => benchmark.captureIds ?? [])).size;
+  const heldOutReviewerCount = new Set(heldOutAnnotations.map((annotation: any) => annotation.reviewerId)).size;
+  const labelTypeCoverage = REQUIRED_BENCHMARK_LABEL_TYPES.map((name) => {
+    const values = heldOutRows.filter((row: any) => row.labelType === `${name}_extraction`);
+    return { name, sampleSize: values.length, positiveCount: values.filter((row: any) => ["true_positive", "false_negative"].includes(row.bucket)).length, negativeCount: values.filter((row: any) => ["true_negative", "false_positive"].includes(row.bucket)).length };
+  });
+  const stratifiedCoverageComplete = labelTypeCoverage.every((row) => row.positiveCount >= 5 && row.negativeCount >= 5);
+  const heldOutBenchmarkCount = heldOutBenchmarks.length;
 
   return {
-    schemaVersion: "ti.evaluation_metrics.v1",
+    schemaVersion: "ti.evaluation_metrics.v2",
     generatedAt: input.generatedAt ?? new Date().toISOString(),
     scope: { tenantId: input.tenantId ?? null, datasetSplit: input.datasetSplit ?? "all" },
     quality: {
@@ -53,6 +66,13 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
       byParser: groupedScores(rows, (row) => row.parserVersion),
       bySourceFamily: groupedScores(rows, (row) => row.sourceFamily),
       byDatasetSplit: groupedScores(rows, (row) => row.datasetSplit),
+      errorBreakdown: {
+        byOutcome: countBy(rows, (row) => row.bucket),
+        byLabelType: groupedErrors(rows, (row) => row.labelType),
+        byParser: groupedErrors(rows, (row) => row.parserVersion),
+        bySourceFamily: groupedErrors(rows, (row) => row.sourceFamily),
+        byDatasetSplit: groupedErrors(rows, (row) => row.datasetSplit)
+      },
       benchmarkEvidence: {
         benchmarkCount: benchmarks.length,
         completedBenchmarkCount: completedBenchmarks.length,
@@ -61,7 +81,12 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
         annotationCount: annotations.length,
         adjudicationCount: adjudications.length,
         reviewerCount: benchmarkReviewerCount,
-        validationStatus: completedBenchmarks.length > 0 && benchmarkCaptureCount >= 50 && benchmarkReviewerCount >= 2 ? "validated" : benchmarks.length ? "pilot_only" : "not_started"
+        heldOutBenchmarkCount,
+        heldOutCaptureCount,
+        heldOutReviewerCount,
+        labelTypeCoverage,
+        stratifiedCoverageComplete,
+        validationStatus: heldOutBenchmarkCount > 0 && heldOutCaptureCount >= 50 && heldOutReviewerCount >= 2 && stratifiedCoverageComplete ? "validated" : benchmarks.length ? "pilot_only" : "not_started"
       },
       diagnostics: {
         overall: score(diagnosticRows),
@@ -101,12 +126,14 @@ function labelRow(label: any, subjects: Map<string, any>, captures: Map<string, 
   const capture = captures.get(label.captureId ?? subject?.captureId ?? subject?.captureIds?.[0]);
   const source = sources.get(capture?.sourceId ?? subject?.sourceId ?? subject?.sourceIds?.[0]);
   return {
+    benchmarkId: label.benchmarkId,
     labelType: label.labelType ?? "unknown",
     datasetSplit: label.datasetSplit ?? "unassigned",
     bucket: outcomeBucket(label.outcome),
     labelingMethod: evaluationLabelMethod(label),
     parserVersion: label.parserVersion ?? subject?.extractorVersion ?? capture?.metadata?.extractorVersion ?? capture?.provenance?.extractorVersion ?? "unknown",
     sourceFamily: label.sourceFamily ?? sourceFamily(source),
+    predictionConfidence: normalizedConfidence(label.predictionConfidence),
     exhaustiveExpectedValues: label.exhaustiveExpectedValues === true && label.blinded === true && label.adjudicationStatus === "adjudicated"
   };
 }
@@ -120,8 +147,12 @@ export function evaluationLabelMethod(label: any): string {
 }
 
 export function isIndependentEvaluationLabel(label: any): boolean {
-  if (evaluationLabelMethod(label) !== "manual_source_review" || label?.independentFromExtractor === false) return false;
-  return !label?.benchmarkId || label.blinded === true && label.adjudicationStatus === "adjudicated";
+  return evaluationLabelMethod(label) === "manual_source_review"
+    && label?.independentFromExtractor === true
+    && Boolean(label?.benchmarkId)
+    && label?.blinded === true
+    && label?.exhaustiveExpectedValues === true
+    && label?.adjudicationStatus === "adjudicated";
 }
 
 function latestLabels(labels: any[]): any[] {
@@ -152,11 +183,29 @@ function score(rows: any[]) {
   const exhaustiveFalsePositive = exhaustive.filter((row: any) => row.bucket === "false_positive").length;
   const recall = ratio(exhaustiveTruePositive, exhaustiveTruePositive + exhaustiveFalseNegative);
   const specificity = ratio(exhaustiveTrueNegative, exhaustiveTrueNegative + exhaustiveFalsePositive);
-  return { ...counts, precision, recall, specificity, recallSampleSize: exhaustiveTruePositive + exhaustiveFalseNegative, f1: precision === null || recall === null || precision + recall === 0 ? null : round((2 * precision * recall) / (precision + recall)) };
+  return { ...counts, precision, recall, specificity, recallSampleSize: exhaustiveTruePositive + exhaustiveFalseNegative, f1: precision === null || recall === null ? null : precision + recall === 0 ? 0 : round((2 * precision * recall) / (precision + recall)), calibration: calibration(rows) };
 }
 
 function groupedScores(rows: any[], key: (row: any) => string) {
   return group(rows, key).map(([name, values]) => ({ name, sampleSize: values.length, ...score(values) }));
+}
+
+function groupedErrors(rows: any[], key: (row: any) => string) {
+  return group(rows.filter((row) => row.bucket === "false_positive" || row.bucket === "false_negative"), key).map(([name, values]) => ({ name, falsePositive: values.filter((row) => row.bucket === "false_positive").length, falseNegative: values.filter((row) => row.bucket === "false_negative").length }));
+}
+
+function calibration(rows: any[]) {
+  const values = rows.filter((row) => row.predictionConfidence !== undefined).map((row) => ({ confidence: row.predictionConfidence as number, target: row.bucket === "true_positive" || row.bucket === "false_negative" ? 1 : 0 }));
+  if (!values.length) return { sampleSize: 0, brierScore: null, expectedCalibrationError: null, bins: [] };
+  const bins = Array.from({ length: 5 }, (_, index) => {
+    const selected = values.filter((row) => Math.min(4, Math.floor(row.confidence * 5)) === index);
+    const averageConfidence = selected.length ? round(selected.reduce((sum, row) => sum + row.confidence, 0) / selected.length) : null;
+    const observedFrequency = selected.length ? round(selected.reduce((sum, row) => sum + row.target, 0) / selected.length) : null;
+    return { lowerBound: index / 5, upperBound: (index + 1) / 5, sampleSize: selected.length, averageConfidence, observedFrequency };
+  }).filter((bin) => bin.sampleSize > 0);
+  const brierScore = round(values.reduce((sum, row) => sum + ((row.confidence - row.target) ** 2), 0) / values.length);
+  const expectedCalibrationError = round(bins.reduce((sum, bin) => sum + (bin.sampleSize / values.length) * Math.abs((bin.averageConfidence ?? 0) - (bin.observedFrequency ?? 0)), 0));
+  return { sampleSize: values.length, brierScore, expectedCalibrationError, bins };
 }
 
 function latencySummary(records: any[]) {
@@ -224,4 +273,5 @@ function countBy(values: any[], key: (value: any) => string): Record<string, num
 function ratio(numerator: number, denominator: number): number | null { return denominator > 0 ? round(numerator / denominator) : null; }
 function percentile(values: number[], percentileValue: number): number | null { if (!values.length) return null; const sorted = [...values].sort((a, b) => a - b); return sorted[Math.max(0, Math.ceil(sorted.length * percentileValue) - 1)] ?? null; }
 function round(value: number): number { return Number(value.toFixed(3)); }
+function normalizedConfidence(value: unknown): number | undefined { if (value === null || value === undefined || value === "") return undefined; const number = Number(value); return Number.isFinite(number) && number >= 0 && number <= 1 ? number : undefined; }
 function hostname(value: unknown): string | undefined { try { return new URL(String(value)).hostname.toLowerCase(); } catch { return undefined; } }
