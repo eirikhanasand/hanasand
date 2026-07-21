@@ -91,18 +91,18 @@ The initial feasibility set must include at least one working feed of each selec
 - [x] Expose stable JSON API resources for sources, captures, entities, actors, incidents, evidence, validations, alerts, evaluation, health, and timeliness.
 - [x] Make actor pages, search results, incidents, and alerts distinguish evidence-backed facts from inferred summaries.
 - [x] Show confidence, freshness, source count and independence, contradictions, missing fields, parser/review state, and provenance where relevant.
-- [ ] Ensure technical and non-technical users can explore the same evidence without misleading simplification.
-- [ ] Remove production placeholders and synthetic intelligence, while preserving intentional empty and degraded states.
+- [x] Ensure technical and non-technical users can explore the same evidence without misleading simplification.
+- [x] Remove production placeholders and synthetic intelligence, while preserving intentional empty and degraded states.
 - [x] Provide a real source-operations view/API covering last attempt, last success, last useful item, parser success, false-positive rate, failures, family, actor coverage, and legal mode.
 - [x] Keep optional third-party reporting bounded to defensible, evidence-linked exports if implemented.
 
 ### Validation and Evaluation
 
 - [x] Support durable analyst labels and ground truth for actor, victim, date, source, TTP, impact, and dataset/leak type.
-- [x] Build a representative labeled corpus from real captures and independently verifiable public incidents, growing beyond the initial 50-100 items.
+- [ ] Build a representative labeled corpus from real captures and independently verifiable public incidents, growing beyond the initial 50-100 items.
 - [x] Cross-reference claims with victim disclosures, news reports, vendor research, and other independent public records.
-- [x] Calculate extraction precision, recall, and error breakdown by entity type, parser, and source family.
-- [x] Measure median and p95 latency from first actor/victim report through publication, collection, processing, first visibility, and alert delivery.
+- [ ] Calculate extraction precision, recall, and error breakdown by entity type, parser, and source family.
+- [ ] Measure median and p95 latency from first actor/victim report through publication, collection, processing, first visibility, and alert delivery.
 - [x] Measure active source reliability, useful coverage, actor coverage, duplication, corroboration, and false-positive rates.
 - [x] Make evaluation repeatable from stored labels and timestamps without maintaining a parallel evidence system.
 
@@ -116,12 +116,12 @@ The initial feasibility set must include at least one working feed of each selec
 ### Production Quality
 
 - [x] Make migrations forward-safe and verify clean installation, upgrade, restart persistence, backup, and restore.
-- [ ] Make collection idempotent, observable, rate-limited, and resilient to malformed or unavailable sources.
-- [ ] Establish authentication, authorization, tenant isolation, auditability, input validation, and safe outbound-fetch behavior across trust boundaries.
-- [ ] Remove dead production paths and avoid parallel sources of truth.
-- [ ] Keep type checks and focused tests green, then resolve or explicitly retire all existing failing broader tests as the affected product areas are hardened.
-- [ ] Verify the complete product at representative desktop and mobile viewports without significant landing-page design changes.
-- [ ] Produce deployment and operational behavior suitable for a sustained thesis evaluation period, including actionable health and failure reporting.
+- [x] Make collection idempotent, observable, rate-limited, and resilient to malformed or unavailable sources.
+- [x] Establish authentication, authorization, tenant isolation, auditability, input validation, and safe outbound-fetch behavior across trust boundaries.
+- [x] Remove dead production paths and avoid parallel sources of truth.
+- [x] Keep type checks and focused tests green, then resolve or explicitly retire all existing failing broader tests as the affected product areas are hardened.
+- [x] Verify the complete product at representative desktop and mobile viewports without significant landing-page design changes.
+- [x] Produce deployment and operational behavior suitable for a sustained thesis evaluation period, including actionable health and failure reporting.
 
 ## Priority Order
 
@@ -154,12 +154,15 @@ The initial feasibility set must include at least one working feed of each selec
 - Durable claims correlate matching actor, victim, indicator, and incident observations while grouping syndicated publishers and identical content so copies do not inflate source independence; append-only analyst reviews preserve confirmation, rejection, correction, needs-review, and contradiction states. The production quality workbench exposes confidence-scored actor, victim, and infrastructure candidates with capture/source provenance, temporal observations, uncertainty, and the existing human-review endpoint. A live BrainCipher check returned 44 metadata-only review-required candidates and no restricted locator. Source-specific victim-blog entities also persist extortion, monetization, data type, publication, publicity, channel, pressure, communication, and profitability signals with explicit observed, claimed, or inferred status.
 - Public and restricted collection supervisors start after PostgreSQL hydration, prevent overlapping cycles, enforce bounded concurrency/cadence, and persist run, health, retry, and quadratic backoff state. Production restart verification resumed the public cycle after hydrating 1,472 sources; earlier unavailable restricted sources remained durably rejected or backed off while approved sources continued independently.
 - Actor profiles now merge provenance-backed victims, sectors, countries, TTPs, malware, impacts, datasets, extortion/monetization/publicity/channel/pressure/communication/profitability fields across captures and persist immutable per-capture temporal deltas without raw content or locators. The first production cycle on the new code wrote 21 added/updated actor-profile deltas, all `rawContentExposed=false`, with no HTTP or onion locator; profiles showed changing first/last-seen windows and multi-capture evidence counts.
-- Production `/v1/intel/evaluation` now measures attempt-level active-source reliability and useful yield, actor coverage, duplicates, corroborated and contradicted claims, and label-backed false-positive rate from durable records. The 2026-07-20 live snapshot covered 69 attempts, 865 claims, 159 duplicates, six corroborated claims, and 601 evaluated labels while retaining explicit recall and alert-latency limitations.
+- Production `/v1/intel/evaluation` now measures attempt-level active-source reliability and useful yield, actor coverage, duplicates, corroborated and contradicted claims, and label-backed false-positive rate from durable records. The 2026-07-21 live snapshot contains 618 label events, but 617 are explicitly diagnostic and only one independently reviewed unit is current. Precision is therefore a one-item pilot result; recall, specificity, and F1 remain null rather than being inferred from automated source-field parity.
 - The approved public Ransomware.live group dataset now uses a bounded 2 MB, locator-free source-specific parser instead of serializing nested onion/HTTP metadata. A live one-source cycle processed 120 records into 118 new captures and two duplicates with no skipped rows or locator leakage, yielding 128 actor, 115 extortion/publication/publicity, 120 activity-scale profitability, and nine chat/negotiation observations. These fields distinguish observed channel classes from inferred monetization and explicitly state that listing volume does not establish payment, revenue, or profit and that endpoint counterparties require analyst verification; no conversation or leak content is retained.
 - Production stores access method, risk/sensitivity, legal notes, and collection justification for all 1,472 sources. All 681 audited captures have a retention class, sensitivity flag, and redaction policy, with PostgreSQL rejecting sensitive rows unless they are bodyless metadata-only captures. `docs/governance_operations.md` documents authenticated tenant-scoped redaction, source takedown, append-only correction, legal holds, retention, audit verification, and failure handling; the focused governance/security/retention suite passes 22 tests and 107 assertions, with four local Docker-only cases covered by the production PostgreSQL restart/restore checks.
-- `/v1/intel/evaluation` computes tenant-scoped precision, recall, F1, false-positive/false-negative counts by label type, parser, source family, and dataset split from immutable durable labels. It also reports median/p95 stage latency, timestamp anomalies, active/useful source coverage, actor coverage, and public-validation status without a parallel evidence store.
-- Focused source-operations, storage/API, runtime evidence persistence, tenant-isolated alert lifecycle, type-check, and diff checks pass together.
-- The broad scraper suite still contains pre-existing failures in product areas outside the initial storage replacement. Those failures remain work; the database milestone does not make the overall product complete.
+- `/v1/intel/evaluation` computes tenant-scoped precision, recall, specificity, F1, false-positive/false-negative counts by label type, parser, source family, and dataset split from immutable durable labels when the required independent evidence exists, and reports explicit nulls otherwise. It also reports median/p95 stage latency, timestamp anomalies, active/useful source coverage, actor coverage, and public-validation status without a parallel evidence store.
+- A prediction-hidden benchmark workflow now samples real captures, hides extractor predictions, requires two or three independent reviewers, preserves immutable annotations and adjudications, and only materializes exhaustive TP/FP/FN/TN labels after consensus or independent adjudication. Production currently has zero completed benchmarks and no independently timestamped first-report observations, so external validation and complete report-to-alert latency measurement remain thesis work rather than being represented as finished software evidence.
+- Production commit `0e97471e` removed public RSS metadata and transport canaries from the restricted-network index. The live index now contains 55 actor/victim-bearing metadata records from two restricted sources, of which 53 meet the buyer-row evidence gate; APT29 search returns three relevant evidence rows, seven complete aliases, no fabricated targets, and no restricted metadata match.
+- The 2026-07-21 production scheduler is operational with 1,473 registered sources, 908 active daily sources, 839 attempted sources (92.40% attempt coverage), zero queued or leased tasks, zero dead letters, and no operational blocker. Its post-deploy run completed all 25 tasks with no failed or exhausted retry.
+- The complete scraper test script and TypeScript check pass locally and in the production Docker build. The supported frontend contract suite, lint, and TypeScript check pass; the public product was checked at 1440x900 and 390x844 across the landing page, threat-intelligence actor and dark-web views, DWM redirect, protected organization redirect, trust, and status pages without horizontal overflow, broken images, unlabeled visible controls, or landing-page redesign.
+- The remaining unchecked work is evidence collection with independent human reviewers: complete a representative blinded benchmark large enough for validated precision/recall/error breakdowns, and attach independently timestamped first-report observations for end-to-end latency measurement. Until that work is complete, this file must remain.
 
 ## Removal Rule
 
