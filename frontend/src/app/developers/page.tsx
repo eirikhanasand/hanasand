@@ -21,7 +21,7 @@ const endpoints = [
 ]
 
 const responseFields = [
-    ['status', 'ready, partial, searching, or review_required'],
+    ['status', 'ready, partial, or searching'],
     ['confidence', 'Normalized 0-1 confidence for the returned answer'],
     ['sources', 'Source references supporting the result'],
     ['recentActivity', 'Dated recent activity rows'],
@@ -91,7 +91,7 @@ export default function DevelopersPage() {
                             <tbody>{endpoints.map(endpoint => <tr key={endpoint.path} className='border-t border-ui-border'><td className='p-3 font-semibold text-ui-success'>{endpoint.method}</td><td className='p-3 font-mono'>{endpoint.path}</td><td className='p-3 font-mono'>{endpoint.body}</td><td className='p-3 text-ui-muted'>{endpoint.limit}</td></tr>)}</tbody>
                         </table>
                     </div>
-                    <p className='mt-4 text-sm text-ui-muted'>Batch results preserve input order. Search responses use <code>Cache-Control: no-store</code>. Rate-limit and reset headers are returned with each request.</p>
+                    <p className='mt-4 text-sm text-ui-muted'>Batch duplicates are removed case-insensitively and first-occurrence order is preserved. Search responses use <code>Cache-Control: no-store</code>. Authenticated responses include global and API-key quota headers with remaining counts and reset times.</p>
                 </div>
             </section>
 

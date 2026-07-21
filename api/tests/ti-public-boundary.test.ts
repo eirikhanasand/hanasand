@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { isAllowedApiOrigin } from '#utils/http/publicBoundary.ts'
 import { getClientIp, resolveRateLimitActor } from '#plugins/rateLimit.ts'
-import { normalizeBatchQueries, postTiSearchBatch, TI_BATCH_MAX_QUERIES } from '../src/handlers/ti/search.ts'
+import postTiSearch, { normalizeBatchQueries, postTiSearchBatch, TI_BATCH_MAX_QUERIES } from '../src/handlers/ti/search.ts'
 
 describe('public TI API boundary', () => {
     test('uses Fastify verified client IP instead of a caller-supplied forwarding header', () => {
@@ -33,6 +33,16 @@ describe('public TI API boundary', () => {
     })
 
     test('requires authentication and rejects oversized batches before search work starts', async () => {
+        const single = reply()
+        const singleResult = await postTiSearch({ body: { query: 'APT29' } } as FastifyRequest<{ Body: { query: string } }>, single as unknown as FastifyReply) as any
+        expect(singleResult.statusCode).toBe(401)
+        expect(singleResult.payload.error).toBe('authentication_required')
+
+        const unexpected = reply()
+        const unexpectedResult = await postTiSearch({ body: { query: 'APT29', tenantId: 'other' }, apiKeyAuth: {} } as any, unexpected as unknown as FastifyReply) as any
+        expect(unexpectedResult.statusCode).toBe(400)
+        expect(unexpectedResult.payload.error).toBe('invalid_request')
+
         const anonymous = reply()
         const anonymousResult = await postTiSearchBatch({ body: { queries: ['APT29'] } } as FastifyRequest<{ Body: { queries: string[] } }>, anonymous as unknown as FastifyReply) as any
         expect(anonymousResult.statusCode).toBe(401)
@@ -44,6 +54,11 @@ describe('public TI API boundary', () => {
         const oversizedResult = await postTiSearchBatch({ body: { queries }, apiKeyAuth: {} } as any, authenticated as unknown as FastifyReply) as any
         expect(oversizedResult.statusCode).toBe(400)
         expect(oversizedResult.payload.error).toBe('too_many_queries')
+
+        const duplicateFlood = reply()
+        const duplicateFloodResult = await postTiSearchBatch({ body: { queries: Array(TI_BATCH_MAX_QUERIES + 1).fill('APT29') }, apiKeyAuth: {} } as any, duplicateFlood as unknown as FastifyReply) as any
+        expect(duplicateFloodResult.statusCode).toBe(400)
+        expect(duplicateFloodResult.payload.error).toBe('too_many_queries')
     })
 })
 

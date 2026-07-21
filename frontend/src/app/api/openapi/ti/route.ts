@@ -9,20 +9,58 @@ const errorSchema = {
     },
 }
 
+const sourceSchema = {
+    type: 'object',
+    required: ['id', 'name', 'type', 'provenance'],
+    properties: {
+        id: { type: 'string' },
+        name: { type: 'string' },
+        type: { type: 'string' },
+        provenance: { type: 'string' },
+        url: { type: 'string', format: 'uri' },
+        captureId: { type: 'string' },
+        sourceRequestId: { type: 'string' },
+        sourceFamily: { type: 'string' },
+        parserStatus: { type: 'string' },
+        reportDate: { type: 'string' },
+        lastCollectedAt: { type: 'string' },
+    },
+}
+
 const searchSchema = {
     type: 'object',
-    required: ['query', 'generatedAt', 'status', 'summary', 'confidence', 'sources'],
+    required: ['query', 'queryKind', 'generatedAt', 'mode', 'status', 'summary', 'confidence', 'lastSeen', 'aliases', 'recentActivity', 'targets', 'ttps', 'datasets', 'sources', 'notes', 'actionability'],
     properties: {
         query: { type: 'string' },
+        queryKind: { type: 'string', enum: ['actor', 'domain', 'cve', 'indicator', 'organization', 'free_text'] },
         generatedAt: { type: 'string', format: 'date-time' },
-        status: { type: 'string', enum: ['ready', 'partial', 'searching', 'review_required'] },
+        mode: { type: 'string', enum: ['scraper', 'seeded', 'live_search'] },
+        status: { type: 'string', enum: ['ready', 'partial', 'searching'] },
         summary: { type: 'string' },
         confidence: { type: 'number', minimum: 0, maximum: 1 },
-        sources: { type: 'array', items: { type: 'object' } },
-        recentActivity: { type: 'array', items: { type: 'object' } },
-        actionability: { type: 'object' },
+        lastSeen: { type: 'string' },
+        aliases: { type: 'array', items: { type: 'string' } },
+        sources: { type: 'array', items: sourceSchema },
+        recentActivity: {
+            type: 'array',
+            items: {
+                type: 'object',
+                required: ['date', 'title', 'detail', 'confidence', 'sourceIds'],
+                properties: {
+                    date: { type: 'string' }, title: { type: 'string' }, detail: { type: 'string' },
+                    confidence: { type: 'number', minimum: 0, maximum: 1 }, sourceIds: { type: 'array', items: { type: 'string' } },
+                    url: { type: 'string', format: 'uri' }, claimType: { type: 'string' }, victimName: { type: 'string' },
+                    affectedSectors: { type: 'array', items: { type: 'string' } }, countries: { type: 'array', items: { type: 'string' } }, impact: { type: 'string' },
+                },
+            },
+        },
+        targets: { type: 'array', items: { type: 'object', required: ['sector', 'regions', 'rationale', 'confidence'], properties: { sector: { type: 'string' }, regions: { type: 'array', items: { type: 'string' } }, rationale: { type: 'string' }, confidence: { type: 'number', minimum: 0, maximum: 1 } } } },
+        ttps: { type: 'array', items: { type: 'object', required: ['name', 'tactic', 'detail', 'confidence'], properties: { name: { type: 'string' }, attackId: { type: 'string' }, tactic: { type: 'string' }, detail: { type: 'string' }, confidence: { type: 'number', minimum: 0, maximum: 1 } } } },
+        datasets: { type: 'array', items: { type: 'object', required: ['name', 'type', 'coverage', 'status'], properties: { name: { type: 'string' }, type: { type: 'string' }, coverage: { type: 'string' }, status: { type: 'string' }, url: { type: 'string', format: 'uri' } } } },
+        actionability: { type: 'object', required: ['schemaVersion', 'alertDisposition', 'shouldAlert', 'rationale'], properties: { schemaVersion: { type: 'string', const: 'ti.query.actionability.v1' }, alertDisposition: { type: 'string' }, shouldAlert: { type: 'boolean' }, rationale: { type: 'string' }, watchlistCandidates: { type: 'array', items: { type: 'object' } } } },
         notes: { type: 'array', items: { type: 'string' } },
     },
+    additionalProperties: true,
 }
 
 const searchRequest = {

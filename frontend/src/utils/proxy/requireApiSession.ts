@@ -30,5 +30,5 @@ function bearerToken(value: string | null) {
 }
 
 function authError(status: number, code: string, message: string) {
-    return NextResponse.json({ ok: false, error: { code, message } }, { status })
+    return NextResponse.json({ ok: false, error: { code, message } }, { status, headers: { 'cache-control': 'no-store' } })
 }

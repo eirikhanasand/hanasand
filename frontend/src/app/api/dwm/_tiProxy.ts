@@ -67,7 +67,9 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
 export async function proxyApiTiRequest(request: NextRequest, path: string, options: ProxyOptions = {}) {
     const apiKey = presentedApiKey(request)
     const session = apiKey ? undefined : await requireApiSession(request)
-    if (session && 'response' in session) return session.response
+    if (session && 'response' in session) {
+        return NextResponse.json({ error: 'authentication_required', message: 'A valid API key or Hanasand session is required.' }, { status: 401, headers: { 'cache-control': 'no-store' } })
+    }
 
     try {
         const target = new URL(`${authApiUrl().replace(/\/$/, '')}${path}`)

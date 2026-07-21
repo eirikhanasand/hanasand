@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { searchThreatIntel, type TiSearchResponse } from '#utils/ti/search.ts'
+import { classifyTiQuery, searchThreatIntel, type TiSearchResponse } from '#utils/ti/search.ts'
 
 interface SearchBody {
     query?: string
@@ -12,6 +12,12 @@ const TI_BATCH_CONCURRENCY = 3
 
 export default async function postTiSearch(req: FastifyRequest<{ Body: SearchBody }>, res: FastifyReply) {
     setNoStore(res)
+    if (!hasAuthenticatedPrincipal(req)) {
+        return res.status(401).send({ error: 'authentication_required', message: 'an API key or authenticated session is required for search' })
+    }
+    if (hasUnexpectedFields(req.body, ['query'])) {
+        return res.status(400).send({ error: 'invalid_request', message: 'search accepts only the query field' })
+    }
     const query = normalizeQuery(req.body?.query)
 
     if (!query) {
@@ -27,7 +33,13 @@ export async function postTiSearchBatch(req: FastifyRequest<{ Body: SearchBody }
     if (!hasAuthenticatedPrincipal(req)) {
         return res.status(401).send({ error: 'authentication_required', message: 'an API key or authenticated session is required for batch search' })
     }
+    if (hasUnexpectedFields(req.body, ['queries'])) {
+        return res.status(400).send({ error: 'invalid_request', message: 'batch search accepts only the queries field' })
+    }
 
+    if (Array.isArray(req.body?.queries) && req.body.queries.length > TI_BATCH_MAX_QUERIES) {
+        return res.status(400).send({ error: 'too_many_queries', message: `batch search accepts at most ${TI_BATCH_MAX_QUERIES} input queries` })
+    }
     const queries = normalizeBatchQueries(req.body?.queries)
     if (!queries.length) {
         return res.status(400).send({ error: 'invalid_queries', message: `queries must contain values of 2-${TI_QUERY_MAX_LENGTH} characters` })
@@ -69,6 +81,10 @@ function normalizeQuery(value: unknown) {
     return query.length >= 2 && query.length <= TI_QUERY_MAX_LENGTH ? query : ''
 }
 
+function hasUnexpectedFields(value: unknown, allowed: string[]) {
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).some((key) => !allowed.includes(key)))
+}
+
 function hasAuthenticatedPrincipal(req: FastifyRequest) {
     const request = req as FastifyRequest & { apiKeyAuth?: unknown; rateLimitSession?: unknown }
     return Boolean(request.apiKeyAuth || request.rateLimitSession)
@@ -84,6 +100,6 @@ async function safeSearch(query: string): Promise<TiSearchResponse> {
         return await searchThreatIntel({ query })
     } catch {
         const generatedAt = new Date().toISOString()
-        return { query, generatedAt, mode: 'live_search', status: 'searching', summary: 'Searching', confidence: 0, lastSeen: '', aliases: [], recentActivity: [], targets: [], ttps: [], datasets: [], sources: [], notes: ['transient_search_failure'] }
+        return { query, queryKind: classifyTiQuery(query), generatedAt, mode: 'live_search', status: 'searching', summary: 'Searching', confidence: 0, lastSeen: '', aliases: [], recentActivity: [], targets: [], ttps: [], datasets: [], sources: [], notes: ['transient_search_failure'], actionability: { schemaVersion: 'ti.query.actionability.v1', alertDisposition: 'needs_enrichment', shouldAlert: false, rationale: 'Search failed before evidence could be evaluated.' } }
     }
 }
