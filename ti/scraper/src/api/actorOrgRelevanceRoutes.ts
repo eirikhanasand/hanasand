@@ -38,7 +38,7 @@ export async function submitActorOrgRelevanceReview(request: Request, options: A
   const record = buildActorOrgRelevanceReviewRecord({
     tenantId,
     organizationId,
-    requestedByUserId: body.requestedByUserId || request.headers.get("x-actor-id") || undefined,
+    requestedByUserId: request.headers.get("id") || body.requestedByUserId || request.headers.get("x-actor-id") || undefined,
     orgRelevance: body.orgRelevance,
     staleEvidenceBefore: body.staleEvidenceBefore,
     generatedAt: body.generatedAt || nowIso(),
@@ -120,7 +120,7 @@ export async function updateActorOrgRelevanceReview(request: Request, options: A
   const body = await readJson<any>(request);
   const update = updateActorOrgRelevanceReviewWorkflow(record!, {
     action: body.action,
-    actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+    actorId: auditActorId(request, body),
     assignedTo: body.assignedTo,
     decision: body.decision,
     rationale: body.rationale,
@@ -148,7 +148,7 @@ export async function updateActorOrgRelevanceReviewEvidence(request: Request, op
     captureId: body.captureId,
     provenance: body.provenance,
     status: body.status,
-    actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+    actorId: auditActorId(request, body),
     rationale: body.rationale,
     generatedAt: body.generatedAt || nowIso()
   });
@@ -181,7 +181,7 @@ export async function createActorOrgRelevanceReviewSourceCollectionRequest(reque
       sourceId: body.sourceId,
       captureId: body.captureId,
       provenance: body.provenance,
-      actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+      actorId: auditActorId(request, body),
       rationale: body.rationale,
       priority: body.priority,
       generatedAt: body.generatedAt || nowIso()
@@ -217,7 +217,7 @@ export async function materializeActorOrgRelevanceReviewWatchlist(request: Reque
     record: record!,
     existing,
     materialize: {
-      actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+      actorId: auditActorId(request, body),
       watchlistId,
       webhookDestinationId: body.webhookDestinationId,
       generatedAt: body.generatedAt || nowIso()
@@ -249,7 +249,7 @@ export async function createActorOrgRelevanceReviewAlertGenerationRequest(reques
     record: record!,
     watchlist,
     request: {
-      actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+      actorId: auditActorId(request, body),
       generatedAt: body.generatedAt || nowIso()
     }
   });
@@ -274,7 +274,7 @@ export async function createActorOrgRelevanceReviewCaseHandoffRequest(request: R
   const result = createActorOrgRelevanceCaseHandoffRequest({
     record: record!,
     request: {
-      actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+      actorId: auditActorId(request, body),
       generatedAt: body.generatedAt || nowIso()
     }
   });
@@ -299,7 +299,7 @@ export async function createActorOrgRelevanceReviewWebhookTriggerRequest(request
   const result = createActorOrgRelevanceWebhookTriggerRequest({
     record: record!,
     request: {
-      actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+      actorId: auditActorId(request, body),
       dryRun: body.dryRun !== false,
       generatedAt: body.generatedAt || nowIso()
     }
@@ -325,7 +325,7 @@ export async function createActorOrgRelevanceReviewCustomerNotification(request:
   const result = createActorOrgRelevanceCustomerNotification({
     record: record!,
     request: {
-      actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+      actorId: auditActorId(request, body),
       deliveryMode: body.deliveryMode,
       externalReference: body.externalReference,
       rationale: body.rationale,
@@ -353,7 +353,7 @@ export async function cancelActorOrgRelevanceReviewPreparedHandoff(request: Requ
   const result = cancelActorOrgRelevancePreparedHandoff(record!, {
     target: body.target,
     receiptId: body.receiptId,
-    actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+    actorId: auditActorId(request, body),
     rationale: body.rationale,
     generatedAt: body.generatedAt || nowIso()
   });
@@ -371,6 +371,10 @@ export async function cancelActorOrgRelevanceReviewPreparedHandoff(request: Requ
     record: result.record,
     summary: summarizeActorOrgRelevanceReview(result.record)
   });
+}
+
+function auditActorId(request: Request, body: any) {
+  return request.headers.get("id") || body.actorId || request.headers.get("x-actor-id") || undefined;
 }
 
 function findExistingReview(

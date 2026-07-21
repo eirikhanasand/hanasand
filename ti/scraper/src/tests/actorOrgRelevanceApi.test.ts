@@ -5,6 +5,25 @@ import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 
 describe("actor org relevance API", () => {
+  test("records the validated identity instead of spoofed audit actors", async () => {
+    const store = new InMemoryScraperStore();
+    const createdResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/ti/actor-org-relevance", {
+      method: "POST",
+      headers: { "content-type": "application/json", id: "trusted-user", "x-actor-id": "spoofed-header" },
+      body: JSON.stringify({ tenantId: "tenant_microsoft", organizationId: "org_microsoft", requestedByUserId: "spoofed-body", orgRelevance: readyRelevance() })
+    }), { store, frontier: new FocusedFrontier() });
+    const created = await createdResponse.json() as any;
+    expect(created.record.requestedByUserId).toBe("trusted-user");
+
+    const updatedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", id: "trusted-user", "x-actor-id": "spoofed-header" },
+      body: JSON.stringify({ action: "assign", assignedTo: "analyst_mira", actorId: "spoofed-body" })
+    }), { store, frontier: new FocusedFrontier() });
+    const updated = await updatedResponse.json() as any;
+    expect(updated.record.timeline).toEqual(expect.arrayContaining([expect.objectContaining({ eventType: "assigned", actorId: "trusted-user" })]));
+  });
+
   test("stores a ready actor relevance review with alert, case, webhook, and provenance handoffs", async () => {
     const store = new InMemoryScraperStore();
     const response = await handleApiRequest(new Request("http://127.0.0.1/v1/ti/actor-org-relevance", {
