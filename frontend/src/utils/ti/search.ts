@@ -14,7 +14,7 @@ export interface TiSearchResponse {
     refreshAfterSeconds?: number
     summary: string
     confidence: number
-    lastSeen: string
+    lastSeen?: string
     aliases: string[]
     recentActivity: Array<{
         date: string

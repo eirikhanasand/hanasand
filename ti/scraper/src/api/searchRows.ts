@@ -21,7 +21,7 @@ export function rowFromCapture(capture: any, source?: any) {
     urlHash: hashContent(String(capture.url ?? capture.id)).slice(0, 16),
     tags: tagsFor(`${title} ${summary}`),
     ...claim,
-    actor: claim.actor ?? text(capture.metadata?.leakSite?.actorName ?? capture.metadata?.actorName),
+    actor: claim.actor ?? text(capture.metadata?.leakSite?.actorName ?? capture.metadata?.ransomwareGroup?.actorName ?? capture.metadata?.actorName),
     victimName: claim.victimName ?? text(capture.metadata?.leakSite?.victimName ?? capture.metadata?.victimName),
     provenanceHash: hashContent(capture.id),
     metadataOnly
@@ -75,6 +75,7 @@ export function cleanSearchText(value: unknown, maxLength = 500) {
   const cleaned = String(value ?? "")
     .replace(/<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<noscript\b[\s\S]*?<\/noscript>|<!--[\s\S]*?-->/gi, " ")
     .replace(/\.[a-z][\w-]*\s*\{[^{}]{0,500}\}/gi, " ")
+    .replace(/(?:^|\s|\.)(?:[#.][a-z][\w-]*|[a-z][\w-]{2,})\s+display\s*:\s*none\s*;?/gi, " ")
     .replace(/window\.dataLayer\s*=\s*window\.dataLayer\s*\|\|\s*\[\]\s*;?/gi, " ")
     .replace(/function\s+gtag\s*\(\s*\)\s*\{\s*dataLayer\.push\(arguments\)\s*;?\s*\}\s*;?/gi, " ")
     .replace(/gtag\s*\(\s*['"]js['"]\s*,\s*new Date\(\)\s*\)\s*;?/gi, " ")

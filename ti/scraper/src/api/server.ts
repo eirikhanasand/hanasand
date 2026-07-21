@@ -149,7 +149,17 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/intel\/runs\/[^/]+\/results$/.test(url.pathname) && request.method === "GET") return runResults(request, options, url.pathname.split("/")[4]);
     if (url.pathname === "/v1/exports/stix" && request.method === "POST") return exportRunStix(request, options);
     if (url.pathname === "/v1/darkweb/status") return json({ status: buildDarkwebIndexStatus({ sources: options.store.listSources(), captures: options.store.listCaptures() } as any) });
-    if (url.pathname === "/v1/darkweb/search") return json(searchDarkwebIndex({ query: url.searchParams.get("q") ?? "", sources: options.store.listSources(), captures: options.store.listCaptures(), limit: numberQuery(url.searchParams.get("limit")) ?? 50 } as any));
+    if (url.pathname === "/v1/darkweb/search") return json(searchDarkwebIndex({
+      query: url.searchParams.get("q") ?? "",
+      network: url.searchParams.get("network") ?? undefined,
+      category: url.searchParams.get("category") ?? undefined,
+      legalTriage: url.searchParams.get("legalTriage") ?? undefined,
+      reviewState: url.searchParams.get("reviewState") ?? undefined,
+      sources: options.store.listSources(),
+      captures: options.store.listCaptures(),
+      limit: numberQuery(url.searchParams.get("limit")) ?? 50,
+      cursor: url.searchParams.get("cursor") ?? undefined,
+    }));
     if ((url.pathname === "/v1/dwm/exposure-queue" || url.pathname === "/api/dwm/exposure-queue") && request.method === "GET") return listExposureQueue(request, url, options);
     if ((url.pathname === "/v1/dwm/exposure-queue/enrich-countries" || url.pathname === "/api/dwm/exposure-queue/enrich-countries") && request.method === "POST") return enrichExposureQueueCountries(request, options);
     if ((url.pathname === "/v1/dwm/exposure-claims/ingest" || url.pathname === "/api/dwm/exposure-claims/ingest") && request.method === "POST") return ingestExposureClaims(request, options);

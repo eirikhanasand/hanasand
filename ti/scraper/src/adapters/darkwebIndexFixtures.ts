@@ -5,7 +5,7 @@ export function darkwebIndexFixtureRecords(count = 100): DarkwebIndexRecord[] {
   return Array.from({ length: count }, (_, index) => {
     const actor = actors[index % actors.length], category = categories[index % categories.length], triage = legal[index % legal.length];
     const firstSeen = new Date(Date.UTC(2026, 5, 1 + (index % 20))).toISOString();
-    return {
+    const record: DarkwebIndexRecord = {
       id: `dw_${String(index + 1).padStart(5, "0")}`,
       network: networks[index % networks.length],
       category,
@@ -29,7 +29,8 @@ export function darkwebIndexFixtureRecords(count = 100): DarkwebIndexRecord[] {
       isolationBoundary: { metadataOnly: true, noPayloadFollowing: true, noCredentialDownloads: true, noThreatActorInteraction: true },
       valueScore: 0
     };
-  }).map((record) => ({ ...record, valueScore: valueScore(record) }));
+    return { ...record, valueScore: valueScore(record) };
+  });
 }
 
 export function rowsFromRuntime(input: { sources?: any[]; captures?: any[] }): DarkwebIndexRecord[] {

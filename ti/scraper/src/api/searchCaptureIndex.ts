@@ -40,7 +40,8 @@ function sellableCapture(capture: any, source: any) {
 }
 function searchableText(capture: any) {
   const leak = capture.metadata?.leakSite ?? {};
-  return unique([capture.id, capture.sourceId, capture.title, capture.body, capture.rawText, capture.metadata?.safeExcerpt, capture.metadata?.adapter, leak.actorName, leak.victimName, leak.claimedSector, leak.claimedCountry, leak.claimedDataCategory]).join(" ").toLowerCase();
+  const ransomwareGroup = capture.metadata?.ransomwareGroup ?? {};
+  return unique([capture.id, capture.sourceId, capture.title, capture.body, capture.rawText, capture.metadata?.safeExcerpt, capture.metadata?.adapter, leak.actorName, leak.victimName, leak.claimedSector, leak.claimedCountry, leak.claimedDataCategory, ransomwareGroup.actorName, ...(ransomwareGroup.aliases ?? [])]).join(" ").toLowerCase();
 }
 function sourceHints(source: any) {
   return unique([source?.name, source?.metadata?.sourceFamily]).join(" ");

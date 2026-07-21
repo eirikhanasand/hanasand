@@ -1939,7 +1939,7 @@ function ActorIntelligenceDossier({ actor, actionability, result, artifacts, sel
                 </div>
                 <div className='grid w-full min-w-0 basis-full grid-cols-2 gap-2 text-center text-xs sm:min-w-52 md:grid-cols-4 lg:w-auto lg:basis-auto'>
                     <EvidenceMetric label='First seen' value={actor.firstSeen} />
-                    <EvidenceMetric label='Last seen' value={formatDate(actor.lastSeen || result.lastSeen)} />
+                    <EvidenceMetric label='Last seen' value={actor.lastSeen ? formatDate(actor.lastSeen) : result.lastSeen ? formatDate(result.lastSeen) : 'Observation date unavailable'} />
                     <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(actor.confidence)} />
                     <EvidenceMetric label='Freshness' value={actor.freshness.stale ? 'Needs refresh' : 'Current'} />
                 </div>
@@ -9195,7 +9195,6 @@ function searchingResult(query: string): TiSearchResponse {
         refreshAfterSeconds: 3,
         summary: 'Checking sources',
         confidence: 0.2,
-        lastSeen: now,
         aliases: [],
         recentActivity: [],
         targets: [],

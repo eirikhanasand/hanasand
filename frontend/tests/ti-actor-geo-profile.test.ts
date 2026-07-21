@@ -14,9 +14,25 @@ assert(countries.get('US')?.role === 'target', 'APT29 should mark United States 
 assert(!countries.has('GB'), 'Actor geography must not add a country absent from the response.')
 assert(!countries.has('DE'), 'Actor geography must not add a country absent from the response.')
 assert(![...countries.values()].some(country => /north america|europe|nato|source/i.test(country.label)), 'Actor map should not contain pseudo-location labels.')
-assert(countries.get('US')?.count === 2, 'United States count should reflect only concrete response observations.')
+assert(countries.get('US')?.count === 1, 'United States count should reflect the one concrete victim observation.')
 assert(victims.some(item => item.victim === 'Microsoft corporate email accounts' && item.country === 'United States'), 'Victim table should include Microsoft corporate email accounts.')
 assert(!victims.some(item => /Hewlett Packard|SolarWinds/i.test(item.victim)), 'Victim table must not add actor-name fixtures absent from the response.')
+
+const genericMentionGeo = actorGeoProfile({
+    ...result,
+    actorIntelligence: undefined,
+    recentActivity: [{ ...result.recentActivity[0], claimType: 'general_activity', victimName: undefined, countries: ['Russia'], affectedSectors: ['Defense'] }],
+    targets: [],
+})
+assert(genericMentionGeo.points.length === 0, 'Generic country and sector mentions must not become victim or target geography.')
+
+const targetOnly = {
+    ...result,
+    actorIntelligence: undefined,
+    recentActivity: [],
+}
+assert(victimObservationsFor(targetOnly).length === 0, 'A target summary without a victim observation must not fabricate a victim row.')
+assert(actorGeoProfile(targetOnly).points.length === 0, 'A target summary without victim evidence must not create map points.')
 
 function apt29Fixture(): TiSearchResponse {
     return {

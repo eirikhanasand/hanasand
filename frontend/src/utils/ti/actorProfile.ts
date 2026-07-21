@@ -77,12 +77,6 @@ export function actorGeoProfile(result: TiSearchResponse) {
     for (const observation of victimObservationsFor(result)) {
         addTarget(observation.country, observation.victim)
     }
-    for (const item of result.recentActivity) {
-        for (const country of item.countries ?? []) addTarget(country, item.victimName || item.title)
-    }
-    for (const target of result.targets) {
-        for (const region of target.regions) addTarget(region, target.sector)
-    }
 
     for (const { country, victims, fallbackCount } of targetCounts.values()) {
         points.set(`target:${country.code}`, {
@@ -135,23 +129,7 @@ export function victimObservationsFor(result: TiSearchResponse): VictimObservati
             }
         })
 
-    if (fromActivity.length) return fromActivity.slice(0, 8)
-
-    return result.targets.flatMap(target => target.regions.map(region => {
-        const country = countryFromValue(region)
-        return {
-            victim: target.sector,
-            country: country?.label ?? region,
-            sector: target.sector,
-            incident: target.rationale,
-            timeframe: 'Profile observation',
-            source: 'profile target evidence',
-            sourceIds: [],
-            provenanceRefs: [],
-            reportDate: result.generatedAt,
-            confidence: target.confidence,
-        }
-    })).filter(item => countryFromValue(item.country)).slice(0, 8)
+    return fromActivity.slice(0, 8)
 }
 
 function operatorOriginFor(result: TiSearchResponse) {

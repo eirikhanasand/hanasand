@@ -84,17 +84,18 @@ export type TiActorIntelligenceProfile = {
 export function buildActorIntelligence(result: TiSearchResponse, victimObservations: VictimObservation[]): TiActorIntelligenceProfile {
     const contract = result.actorIntelligence
     const fallback = fallbackActorIntelligence(result, victimObservations)
+    const victimActivity = result.recentActivity.filter(item => item.victimName || item.claimType === 'victim_claim')
     const targetSectors = unique([
         ...(contract?.targetSectors ?? []),
         ...result.targets.map(target => target.sector),
         ...victimObservations.map(item => item.sector),
-        ...result.recentActivity.flatMap(item => item.affectedSectors ?? []),
+        ...victimActivity.flatMap(item => item.affectedSectors ?? []),
     ]).filter(item => !/not stated/i.test(item))
     const geographies = unique([
         ...(contract?.geographies ?? []),
         ...result.targets.flatMap(target => target.regions),
         ...victimObservations.map(item => item.country),
-        ...result.recentActivity.flatMap(item => item.countries ?? []),
+        ...victimActivity.flatMap(item => item.countries ?? []),
     ]).filter(item => !/not stated|global|multiple|various|unknown|north america|europe|nato-aligned/i.test(item))
     const sourceProvenance = unique([
         ...(contract?.sourceProvenance ?? []),

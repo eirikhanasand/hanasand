@@ -21,12 +21,11 @@ interface DarkwebStatusResponse {
 }
 
 interface DarkwebStatus {
-    targetRecordCount?: number
-    indexedRecordEstimate?: number
-    fixtureRecordCount?: number
+    indexedRecordCount?: number
+    monitoredSourceCount?: number
     metadataOnly?: boolean
     generatedAt?: string
-    publicUiTarget?: string
+    latestRecordAt?: string
     counts?: {
         byNetwork?: Record<string, number>
         byLegalTriage?: Record<string, number>
@@ -39,48 +38,32 @@ interface DarkwebStatus {
 }
 
 interface DarkwebSearchResponse {
-    darkwebIndex?: {
-        generatedAt?: string
-        totalMatches?: number
-        nextCursor?: string
-        records?: DarkwebRecord[]
-        noLeakSerialization?: {
-            passed?: boolean
-        }
+    generatedAt?: string
+    count?: number
+    nextCursor?: string
+    rows?: DarkwebRecord[]
+    noLeakSerialization?: {
+        passed?: boolean
     }
 }
 
 interface DarkwebRecord {
     id: string
     network: string
-    redactedDisplayUrl: string
     title: string
     safeSummary: string
     category: string
     legalTriage: string
-    language: string
     liveness: string
     firstSeen: string
     lastSeen: string
-    lastChecked: string
-    confidence: number
     reviewState: string
-    blockedReason?: string
     actorHints?: string[]
     victimHints?: string[]
-    ttpHints?: string[]
-    retentionClass?: string
-    classification?: {
-        label: string
-        confidence: number
-        reasons: string[]
-    }
-    provenance?: {
-        sourceType?: string
-        sourceHash?: string
-        discoveryPathHash?: string
-        collector?: string
-    }
+    datasetHints?: string[]
+    sectorHints?: string[]
+    countryHints?: string[]
+    safeLocatorHash: string
 }
 
 export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPageProps) {
@@ -96,8 +79,7 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
         fetchDarkwebSearch({ query, category, legalTriage, network, reviewState })
     ])
     const statusIndex = status?.darkwebIndex ?? status?.status
-    const searchIndex = search?.darkwebIndex
-    const records = searchIndex?.records ?? []
+    const records = search?.rows ?? []
 
     return (
         <main className='min-h-[90.5vh] w-full bg-ui-canvas px-4 py-8 text-ui-text md:px-8'>
@@ -114,10 +96,10 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                         </p>
                     </div>
                     <div className='grid gap-2 text-sm'>
-                        <Metric icon={<Database className='h-4 w-4' />} label='Watch targets' value={formatNumber(statusIndex?.targetRecordCount, 'Ready')} />
-                        <Metric icon={<Search className='h-4 w-4' />} label='Indexed pages' value={formatNumber(statusIndex?.indexedRecordEstimate, 'Active')} />
-                        <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Matches' value={formatNumber(searchIndex?.totalMatches, records.length ? 'Matched' : 'No current match')} />
-                        <Metric icon={<BellRing className='h-4 w-4' />} label='Updated' value={formatDate(searchIndex?.generatedAt ?? statusIndex?.generatedAt, 'Live checks')} />
+                        <Metric icon={<Database className='h-4 w-4' />} label='Monitored sources' value={formatNumber(statusIndex?.monitoredSourceCount, 'Unavailable')} />
+                        <Metric icon={<Search className='h-4 w-4' />} label='Indexed records' value={formatNumber(statusIndex?.indexedRecordCount, 'Unavailable')} />
+                        <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Matches' value={formatNumber(search?.count, records.length ? 'Matched' : 'No current match')} />
+                        <Metric icon={<BellRing className='h-4 w-4' />} label='Latest record' value={formatDate(statusIndex?.latestRecordAt, 'No records')} />
                     </div>
                 </section>
 
@@ -156,16 +138,15 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                 <section className='grid gap-3'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <h2 className='text-lg font-semibold text-ui-text'>Exposure activity</h2>
-                        <p className='text-xs text-ui-muted'>{records.length} shown{searchIndex?.nextCursor ? ' · more available' : ''}</p>
+                        <p className='text-xs text-ui-muted'>{records.length} shown{search?.nextCursor ? ' · more available' : ''}</p>
                     </div>
                     {records.length ? (
                         <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
-                            <div className='hidden grid-cols-[1fr_0.55fr_0.7fr_0.55fr_0.5fr_0.55fr] gap-3 border-b border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold uppercase text-ui-muted lg:grid'>
+                            <div className='hidden grid-cols-[1fr_0.55fr_0.7fr_0.55fr_0.55fr] gap-3 border-b border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold uppercase text-ui-muted lg:grid'>
                                 <span>Mention</span>
                                 <span>Activity type</span>
                                 <span>Review</span>
                                 <span>Freshness</span>
-                                <span>Language</span>
                                 <span>Last seen</span>
                             </div>
                             {records.map(record => <RecordRow key={record.id} record={record} />)}
@@ -198,33 +179,29 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
 
 function RecordRow({ record }: { record: DarkwebRecord }) {
     return (
-        <article className='grid gap-3 border-b border-ui-border px-3 py-4 last:border-b-0 lg:grid-cols-[1fr_0.55fr_0.7fr_0.55fr_0.5fr_0.55fr]'>
+        <article className='grid gap-3 border-b border-ui-border px-3 py-4 last:border-b-0 lg:grid-cols-[1fr_0.55fr_0.7fr_0.55fr_0.55fr]'>
             <div className='grid gap-2'>
                 <div className='grid gap-1'>
-                    <h3 className='wrap-break-word text-sm font-semibold text-ui-text'>{record.title || record.redactedDisplayUrl}</h3>
-                    <p className='text-xs text-ui-muted'>{record.redactedDisplayUrl}</p>
+                    <h3 className='wrap-break-word text-sm font-semibold text-ui-text'>{record.title}</h3>
+                    <p className='text-xs text-ui-muted'>Reference {record.safeLocatorHash}</p>
                 </div>
                 <p className='text-sm leading-6 text-ui-muted'>{record.safeSummary}</p>
                 <div className='flex flex-wrap gap-2 text-xs text-ui-muted'>
                     <span>{record.network}</span>
                     <span>{formatLabel(record.reviewState)}</span>
-                    <span>{sourceCountText(record)}</span>
-                    {record.retentionClass ? <span>{record.retentionClass}</span> : null}
                 </div>
                 <Hints label='Groups' values={record.actorHints} />
                 <Hints label='Companies' values={record.victimHints} />
-                <Hints label='TTPs' values={record.ttpHints} />
-                {record.blockedReason ? <p className='text-xs text-ui-warning'>Needs analyst review before customer alerting.</p> : null}
-                {record.classification?.reasons?.length ? <p className='text-xs leading-5 text-ui-muted'>{record.classification.reasons.join(' · ')}</p> : null}
+                <Hints label='Data claims' values={record.datasetHints} />
+                <Hints label='Sectors' values={record.sectorHints} />
+                <Hints label='Countries' values={record.countryHints} />
             </div>
             <Cell label='Activity type' value={formatLabel(record.category)} />
             <Cell label='Review' value={formatLabel(record.legalTriage)} />
             <Cell label='Freshness' value={formatLabel(record.liveness)} />
-            <Cell label='Language' value={record.language} />
             <div className='grid content-start gap-1 text-sm text-ui-muted'>
                 <span className='text-xs uppercase text-ui-muted lg:hidden'>Last seen</span>
                 <span>{formatDate(record.lastSeen)}</span>
-                <span className='text-xs text-ui-muted'>checked {formatDate(record.lastChecked)}</span>
             </div>
         </article>
     )
@@ -323,16 +300,6 @@ function formatDate(value: string | undefined, fallback = 'Checking') {
 
 function formatLabel(value: string) {
     return value.replaceAll('_', ' ')
-}
-
-function sourceCountText(record: DarkwebRecord) {
-    const count = [
-        record.provenance?.sourceHash,
-        record.provenance?.discoveryPathHash,
-        ...(record.classification?.reasons ?? []),
-    ].filter(Boolean).length
-    if (count <= 0) return 'source recorded'
-    return `${count} source detail${count === 1 ? '' : 's'}`
 }
 
 async function fetchDarkwebStatus(): Promise<DarkwebStatusResponse | null> {

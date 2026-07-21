@@ -8,6 +8,9 @@ import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
 import { createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
 import { buildPublicChannelStatusRouteResponse } from "./publicChannelRoutes.ts";
 import { searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
+import { ACTOR_ALIAS_RECORDS } from "../pipeline/actorAliases.ts";
+
+type SearchEntityType = "actor" | "domain" | "cve" | "indicator" | "organization" | "free_text";
 
 export async function searchResponse(request: Request, options: ApiServerOptions, url: URL): Promise<Response> {
   const body: any = request.method === "POST" ? await readJson(request) : {};
@@ -17,7 +20,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   if (!query || query.length > 300) return error("invalid_search_query", "Search query must contain 1-300 characters", 400);
 
   const generatedAt = nowIso();
-  const entityType = String(body.entityType ?? url.searchParams.get("entityType") ?? "actor");
+  const entityType = searchEntityType(query, body.entityType ?? url.searchParams.get("entityType"), options.store, scope.tenantId);
   const sourcesInScope = options.store.listSources().filter((source: any) => !source.tenantId || source.tenantId === scope.tenantId);
   const liveSearch = createLiveSearchPlan({
     request: { query, entityType, tenantId: scope.tenantId, createdAt: generatedAt },
@@ -33,15 +36,28 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     { store: options.store, publicTelegramSourcePacks: options.publicTelegramSourcePacks as any, generatedAt },
   );
   const limit = Math.max(1, Math.min(numberQuery(url.searchParams.get("limit")) ?? 50, 100));
-  const captures = findSearchCaptures(options.store, query, limit * 3, scope.tenantId);
+  const identity = actorIdentity(options.store, scope.tenantId, query);
+  const captures = searchCaptures(options.store, query, entityType, identity, limit * 3, scope.tenantId);
   const rows = dedupeRows(captures.map((capture: any) => rowFromCapture(capture, scopedSource(options.store.getSource?.(capture.sourceId), scope.tenantId)))).slice(0, limit);
   const captureIds = new Set(rows.map((row) => row.id));
   const sourceIds = new Set(rows.map((row) => row.sourceId));
   const records = searchRecords(options.store, scope.tenantId, captureIds, sourceIds);
   const assessment = assess(rows, records);
-  const lastSeen = latest(rows.map((row) => row.publishedAt ?? row.collectedAt)) ?? generatedAt;
-  const aliases = actorAliases(records, rows);
+  const lastSeen = latest(rows.map((row) => row.publishedAt ?? row.collectedAt));
+  const profile = actorProfileForQuery(records, identity);
+  const aliases = actorAliases(records, rows, profile, identity);
   const recentActivity = rows.map((row) => activity(row, records, assessment.confidence));
+  const victimActivity = recentActivity.filter((item) => item.victimName);
+  const victimTargetSectors = unique(victimActivity.flatMap((item) => item.affectedSectors));
+  const victimGeographies = unique(victimActivity.flatMap((item) => item.countries));
+  const targets = uniqueBy(recentActivity
+    .filter((item) => item.victimName && item.affectedSectors.length && item.countries.length)
+    .map((item) => ({
+      sector: item.affectedSectors.join(", "),
+      regions: item.countries,
+      rationale: `Victim-linked fields from captured source ${item.sourceIds[0]}; analyst confirmation is required.`,
+      confidence: item.confidence
+    })), (target) => `${target.sector}:${target.regions.join(",")}`);
   const sources = uniqueBy(rows.map((row) => ({
     id: row.sourceId,
     name: row.sourceName,
@@ -68,7 +84,9 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const sectors = entityValues(records.entities, "sector");
   const countries = entityValues(records.entities, "country");
   const victims = unique([...entityValues(records.entities, "victim"), ...rows.map((row) => row.victimName)]);
-  const actor = records.profiles[0]?.canonicalName ?? entityValues(records.entities, "actor")[0] ?? rows.map((row) => row.actor).find(Boolean);
+  const actor = profile?.canonicalName
+    ?? records.entities.find((entity) => ["actor", "ransomware_family"].includes(entity.type) && identity.normalizedTerms.has(normalizeActorName(entity.value)))?.value
+    ?? rows.find((row) => row.actor && identity.normalizedTerms.has(normalizeActorName(row.actor)))?.actor;
   const campaigns = unique(records.incidents.map((incident) => safeText(incident.title ?? incident.summary, 180)));
   const malwareTools = entityValues(records.entities, "malware");
   const indicators = safeIndicators(records.indicators);
@@ -94,18 +112,19 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     confidence: Math.min(assessment.confidence, 0.69)
   }));
   const missing = missingFields({ actor, victims, sectors, countries, ttps, records, rows });
+  const attribution = actor ? actorAttribution(rows, [actor, ...aliases]) : undefined;
   const actorIntelligence = {
-    actorClass: records.profiles[0]?.actorType ?? (actor ? "observed_threat_actor" : "unclassified_query"),
-    attribution: undefined,
-    firstSeen: records.profiles[0]?.firstSeenAt ?? earliest(rows.map((row) => row.publishedAt ?? row.collectedAt)) ?? generatedAt,
+    actorClass: profile?.actorType ?? (actor ? "observed_threat_actor" : "unclassified_query"),
+    attribution,
+    firstSeen: profile?.firstSeenAt ?? earliest(rows.map((row) => row.publishedAt ?? row.collectedAt)),
     lastSeen,
     motivation: entityValues(records.entities, "motivation"),
     malwareTools,
     campaigns,
     infrastructure,
     indicators,
-    targetSectors: sectors,
-    geographies: countries,
+    targetSectors: victimTargetSectors,
+    geographies: victimGeographies,
     confidence: assessment.confidence,
     confidenceReasoning: assessment.reasons,
     sourceProvenance: sources.map((source) => source.provenance),
@@ -148,6 +167,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const restrictedDisabled = Number((options.config as any)?.limits?.maxConcurrentDarknetMetadataTasks) === 0;
   const response = {
     query,
+    queryKind: entityType,
     tenantId: scope.tenantId,
     generatedAt,
     mode: "scraper",
@@ -159,7 +179,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     lastSeen,
     aliases,
     recentActivity,
-    targets: sectors.map((sector) => ({ sector, regions: countries, rationale: "Co-mentioned in extracted evidence; this is not independently verified targeting.", confidence: assessment.confidence })),
+    targets,
     ttps,
     datasets: entityValues(records.entities, "dataset").map((name) => ({ name, type: "advertised_dataset", coverage: `${records.sourceCount} source(s)`, status: assessment.ready ? "reviewed_or_corroborated" : "needs_review" })),
     sources,
@@ -372,8 +392,96 @@ function rowConfidence(captureId: string, records: ReturnType<typeof searchRecor
   return values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(3)) : Math.min(fallback, 0.4);
 }
 
-function actorAliases(records: ReturnType<typeof searchRecords>, rows: any[]) {
-  return unique([...records.profiles.map((profile: any) => profile.canonicalName), ...records.aliases.map((alias: any) => alias.alias), ...entityValues(records.entities, "actor"), ...rows.map((row) => row.actor)]);
+function actorAliases(records: ReturnType<typeof searchRecords>, rows: any[], profile: any, identity: ReturnType<typeof actorIdentity>) {
+  const profileAliases = profile
+    ? records.aliases.filter((alias: any) => alias.actorProfileId === profile.id).map((alias: any) => alias.alias)
+    : [];
+  return unique([
+    profile?.canonicalName,
+    ...(profile?.aliases ?? []),
+    ...profileAliases,
+    ...records.entities.filter((entity: any) => ["actor", "ransomware_family"].includes(entity.type) && identity.normalizedTerms.has(normalizeActorName(entity.value))).map((entity: any) => entity.value),
+    ...rows.filter((row) => row.actor && identity.normalizedTerms.has(normalizeActorName(row.actor))).map((row) => row.actor)
+  ]);
+}
+
+function searchEntityType(query: string, requested: unknown, store: any, tenantId?: string): SearchEntityType {
+  const explicit = String(requested ?? "").trim();
+  if (["actor", "domain", "cve", "indicator", "organization", "free_text"].includes(explicit)) return explicit as SearchEntityType;
+  if (/^cve-\d{4}-\d{4,}$/i.test(query)) return "cve";
+  if (/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(query)) return "domain";
+  if (/^(?:https?:\/\/|(?:\d{1,3}\.){3}\d{1,3}$|[a-f0-9]{32,128}$)/i.test(query)) return "indicator";
+  if (/^apt\d+$/i.test(query) || actorIdentity(store, tenantId, query).matched) return "actor";
+  return query.includes(" ") ? "organization" : "free_text";
+}
+
+function searchCaptures(store: any, query: string, entityType: SearchEntityType, identity: ReturnType<typeof actorIdentity>, limit: number, tenantId?: string) {
+  if (entityType !== "actor") return findSearchCaptures(store, query, limit, tenantId);
+  const candidates = uniqueBy(identity.terms.flatMap((term) => findSearchCaptures(store, term, limit, tenantId)), (capture: any) => capture.id)
+    .sort((a: any, b: any) => String(b.collectedAt ?? "").localeCompare(String(a.collectedAt ?? "")));
+  const entitiesByCapture = new Map<string, any[]>();
+  for (const entity of store.listExtractedEntities?.() ?? []) {
+    if ((entity.tenantId || undefined) !== tenantId || !["actor", "ransomware_family"].includes(entity.type)) continue;
+    const rows = entitiesByCapture.get(entity.captureId) ?? [];
+    rows.push(entity);
+    entitiesByCapture.set(entity.captureId, rows);
+  }
+  return candidates.filter((capture: any) => actorCaptureMatches(capture, entitiesByCapture.get(capture.id) ?? [], identity.normalizedTerms)).slice(0, limit);
+}
+
+function actorIdentity(store: any, tenantId: string | undefined, query: string) {
+  const normalizedQuery = normalizeActorName(query);
+  const dictionary = ACTOR_ALIAS_RECORDS.find((record) => [record.canonical, ...record.aliases].some((value) => normalizeActorName(value) === normalizedQuery));
+  const profiles = (store.listActorProfiles?.() ?? []).filter((profile: any) => (profile.tenantId || undefined) === tenantId);
+  const aliases = (store.listActorAliases?.() ?? []).filter((alias: any) => (alias.tenantId || undefined) === tenantId);
+  const matchedProfileIds = new Set([
+    ...profiles.filter((profile: any) => [profile.canonicalName, ...(profile.aliases ?? [])].some((value) => normalizeActorName(value) === normalizedQuery)).map((profile: any) => profile.id),
+    ...aliases.filter((alias: any) => normalizeActorName(alias.normalizedAlias ?? alias.alias) === normalizedQuery).map((alias: any) => alias.actorProfileId)
+  ]);
+  const matchedProfiles = profiles.filter((profile: any) => matchedProfileIds.has(profile.id));
+  const terms = unique([
+    query,
+    dictionary?.canonical,
+    ...(dictionary?.aliases ?? []),
+    ...matchedProfiles.flatMap((profile: any) => [profile.canonicalName, ...(profile.aliases ?? [])]),
+    ...aliases.filter((alias: any) => matchedProfileIds.has(alias.actorProfileId)).map((alias: any) => alias.alias)
+  ]);
+  return { matched: Boolean(dictionary || matchedProfiles.length), terms, normalizedTerms: new Set(terms.map(normalizeActorName)) };
+}
+
+function actorCaptureMatches(capture: any, entities: any[], normalizedTerms: Set<string>) {
+  const metadataNames = unique([
+    capture.metadata?.leakSite?.actorName,
+    capture.metadata?.ransomwareGroup?.actorName,
+    capture.metadata?.actorName,
+    capture.metadata?.actor
+  ]);
+  const names = metadataNames.length ? metadataNames : entities.map((entity) => entity.value);
+  return !names.length || names.some((name) => normalizedTerms.has(normalizeActorName(name)));
+}
+
+function actorProfileForQuery(records: ReturnType<typeof searchRecords>, identity: ReturnType<typeof actorIdentity>) {
+  const aliasProfileIds = new Set(records.aliases.filter((alias: any) => identity.normalizedTerms.has(normalizeActorName(alias.alias))).map((alias: any) => alias.actorProfileId));
+  return records.profiles.find((profile: any) => identity.normalizedTerms.has(normalizeActorName(profile.canonicalName)) || aliasProfileIds.has(profile.id));
+}
+
+function actorAttribution(rows: any[], names: string[]) {
+  const namePattern = new RegExp(`\\b(?:${names.map((name) => escapeRegex(name)).sort((a, b) => b.length - a.length).join("|")})\\b`, "i");
+  const direct = /\b(?:attribut(?:ed|ion)|linked|associated|operated|sponsored|connected)\b/i;
+  const origin = /\b(?:russia(?:n)?|svr|china|chinese|iran(?:ian)?|north korea(?:n)?|dprk|united states|u\.s\.|american)\b/i;
+  for (const row of rows) {
+    for (const sentence of String(row.summary ?? "").split(/(?<=[.!?])\s+|\n+/)) {
+      if (namePattern.test(sentence) && direct.test(sentence) && origin.test(sentence)) return safeText(sentence, 320);
+    }
+  }
+}
+
+function normalizeActorName(value: unknown) {
+  return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function missingFields(input: { actor?: string; victims: string[]; sectors: string[]; countries: string[]; ttps: any[]; records: ReturnType<typeof searchRecords>; rows: any[] }) {
