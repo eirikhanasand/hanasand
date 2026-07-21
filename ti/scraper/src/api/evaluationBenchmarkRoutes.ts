@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
-import { authenticateRequest } from "./requestAuthentication.ts";
+import { authenticateOperatorRequest } from "./requestAuthentication.ts";
 import { error, json, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
@@ -12,10 +12,13 @@ const LABEL_TYPES = new Set(["actor", "victim", "ttp", "impact"]);
 export async function handleEvaluationBenchmarkRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith(BASE)) return undefined;
-  const authentication = await authenticateRequest(request, options);
+  const authentication = await authenticateOperatorRequest(request, options);
   if (authentication.error) return authentication.error;
-  if (!authentication.identity!.roles.some((role) => ["owner", "admin", "analyst"].includes(role))) return error("analyst_forbidden", "Evaluation benchmarks require an analyst role", 403);
-  const actor = authentication.identity!;
+  if (!authentication.identity) return error("authentication_required", "A valid analyst or service session is required", 401);
+  const service = authentication.identity.roles.includes("service");
+  if (service && !(url.pathname === BASE && request.method === "POST")) return error("analyst_forbidden", "Automated identities may create benchmark manifests but cannot review them", 403);
+  if (!service && !authentication.identity.roles.some((role) => ["admin", "administrator", "system_admin", "analyst"].includes(role))) return error("analyst_forbidden", "Evaluation benchmarks require an analyst role", 403);
+  const actor = authentication.identity;
 
   if (url.pathname === BASE && request.method === "GET") {
     const scope = resolveTenantScope(request, url);

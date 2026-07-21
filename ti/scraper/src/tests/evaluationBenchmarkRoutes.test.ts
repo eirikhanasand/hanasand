@@ -76,5 +76,14 @@ describe("independent evaluation benchmark", () => {
     const changedView = await (await call(`/v1/intel/evaluation/benchmarks/${changed.benchmark.id}/tasks`, "reviewer_one")).json() as any;
     expect(changedView.tasks[0].evidence).toMatchObject({ unavailable: true, reason: "evidence_changed_after_sampling" });
     expect((await call(`/v1/intel/evaluation/benchmarks/${changed.benchmark.id}/annotations`, "reviewer_one", { tenantId: "tenant_benchmark", taskId: changedTask.id, expectedValues: [] })).status).toBe(409);
+
+    const serviceOptions = { ...options, serviceToken: "evaluation-service-token" };
+    const serviceCreate = await handleApiRequest(new Request("http://local/v1/intel/evaluation/benchmarks", {
+      method: "POST", headers: { "content-type": "application/json", "x-hanasand-service-token": "evaluation-service-token", "x-tenant-id": "tenant_benchmark" }, body: JSON.stringify({ sampleSize: 1, labelTypes: ["actor"] })
+    }), serviceOptions);
+    const serviceBenchmark = await serviceCreate.json() as any;
+    expect(serviceCreate.status).toBe(201);
+    const serviceTasks = await handleApiRequest(new Request(`http://local/v1/intel/evaluation/benchmarks/${serviceBenchmark.benchmark.id}/tasks`, { headers: { "x-hanasand-service-token": "evaluation-service-token", "x-tenant-id": "tenant_benchmark" } }), serviceOptions);
+    expect(serviceTasks.status).toBe(403);
   });
 });
