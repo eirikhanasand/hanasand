@@ -115,6 +115,8 @@ assert(sanitizedApt29Result?.actorIntelligence?.structuredProvenance?.some(row =
     && row.parserStatus === undefined
     && row.provenance === 'https://www.microsoft.com/en-us/security/blog/'
 ), 'Public /ti result sanitizer should preserve structured actor provenance for first render.')
+assert(sanitizedApt29Result?.actorIntelligence?.businessModel?.publicationStrategies[0]?.value === 'public victim listing', 'Public /ti result sanitizer should preserve observed business-model mechanisms.')
+assert(sanitizedApt29Result?.actorIntelligence?.businessModel?.missingEvidence.includes('payments or conversion'), 'Public /ti result sanitizer should preserve explicit business-analysis evidence gaps.')
 assert(sanitizedApt29Result.actionability?.sourceProvenance?.some(row =>
     row.sourceId === 'src_microsoft_midnight_blizzard'
     && row.captureId === 'capture_microsoft_apt29_2024'
@@ -326,6 +328,20 @@ function apt29Result(): TiSearchResponse {
             confidence: 0.86,
             confidenceReasoning: ['Microsoft vendor reporting and government advisories support this actor profile.'],
             sourceProvenance: ['https://www.microsoft.com/en-us/security/blog/'],
+            businessModel: {
+                schemaVersion: 'ti.actor.business_model.v1',
+                evidenceState: 'observed_mechanisms',
+                publicationStrategies: [{ value: 'public victim listing', assertionKind: 'observed', confidence: 0.9, sourceIds: ['src_microsoft_midnight_blizzard'], captureIds: ['capture_microsoft_apt29_2024'], reviewState: 'unreviewed', reviewReasons: [] }],
+                publicityTactics: [],
+                pressureTactics: [],
+                communicationChannels: [],
+                buyerSellerCommunications: [],
+                intermediaryCommunications: [],
+                monetizationPaths: [],
+                profitabilitySignals: [],
+                missingEvidence: ['payments or conversion'],
+                evidenceBoundary: 'Observed publication mechanisms do not establish payments or profit.',
+            },
             structuredProvenance: [{
                 sourceId: 'src_microsoft_midnight_blizzard',
                 sourceName: 'Microsoft Threat Intelligence',

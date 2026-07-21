@@ -71,10 +71,9 @@ describe("canary feed item extraction", () => {
     const result = processCollectedItem(items[0]);
     expect(result.entities).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "ransomware_family", value: "Example Group", aliases: ["Example Alias"], assertionKind: "observed" }),
-      expect.objectContaining({ type: "buyer_seller_communication", value: "public metadata lists an actor chat endpoint", assertionKind: "observed" }),
-      expect.objectContaining({ type: "monetization_path", value: "ransom negotiation channel", assertionKind: "inferred" }),
-      expect.objectContaining({ type: "profitability_signal", value: "public dataset reports 12 victim listings", reviewReasons: ["listing volume does not establish payments, revenue, or profit"] })
+      expect.objectContaining({ type: "communication_channel", value: "listed actor chat endpoint", assertionKind: "observed" })
     ]));
+    expect(result.entities.some((entity: any) => ["buyer_seller_communication", "monetization_path", "profitability_signal"].includes(entity.type))).toBe(false);
   });
 });
 

@@ -432,6 +432,7 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
       leakSite: {
         actorName: claim.actor,
         victimName: claim.company,
+        summary: claim.summary,
         claimedDataCategory: claim.claimedData || "Not disclosed by TA",
         claimedDataType: claim.claimedData || "Not disclosed by TA",
         claimedDataSize: claim.claimedDataSize || "Not disclosed by TA",
@@ -465,6 +466,7 @@ async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<
     claimedData: boundedText(clean(parsed.claimedData || item.claimedData || "Not disclosed by TA"), 240) ?? "Not disclosed by TA",
     claimedDataSize: boundedText(clean(parsed.claimedDataSize || item.claimedDataSize || dataSizeFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"), 80) ?? "Not disclosed by TA",
     country: boundedText(clean(parsed.country || parsed.claimedCountry || item.country || item.claimedCountry || countryFromText([item.title, item.text].filter(Boolean).join(" ")) || countryFromCompanyDomain(company) || "Not disclosed by TA"), 80) ?? "Not disclosed by TA",
+    summary: boundedText(parsed.summary, 500),
     claimTime: validTimestamp(item.publishedAt) ?? validTimestamp(parsed.claimTime || item.capturedAt) ?? at,
     capturedAt: item.capturedAt || at,
     confidence,

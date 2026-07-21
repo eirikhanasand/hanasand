@@ -143,6 +143,19 @@ function sanitizeActorIntelligence(actorIntelligence?: TiActorIntelligenceContra
         confidenceReasoning: actorIntelligence.confidenceReasoning?.map(publicTiText),
         sourceProvenance: actorIntelligence.sourceProvenance?.map(publicTiText),
         missingFields: actorIntelligence.missingFields?.map(publicTiText),
+        businessModel: actorIntelligence.businessModel ? {
+            ...actorIntelligence.businessModel,
+            publicationStrategies: sanitizeBusinessObservations(actorIntelligence.businessModel.publicationStrategies),
+            publicityTactics: sanitizeBusinessObservations(actorIntelligence.businessModel.publicityTactics),
+            pressureTactics: sanitizeBusinessObservations(actorIntelligence.businessModel.pressureTactics),
+            communicationChannels: sanitizeBusinessObservations(actorIntelligence.businessModel.communicationChannels),
+            buyerSellerCommunications: sanitizeBusinessObservations(actorIntelligence.businessModel.buyerSellerCommunications),
+            intermediaryCommunications: sanitizeBusinessObservations(actorIntelligence.businessModel.intermediaryCommunications),
+            monetizationPaths: sanitizeBusinessObservations(actorIntelligence.businessModel.monetizationPaths),
+            profitabilitySignals: sanitizeBusinessObservations(actorIntelligence.businessModel.profitabilitySignals),
+            missingEvidence: actorIntelligence.businessModel.missingEvidence.map(publicTiText),
+            evidenceBoundary: publicTiText(actorIntelligence.businessModel.evidenceBoundary),
+        } : undefined,
         attributionEvidence: actorIntelligence.attributionEvidence ? {
             sourceId: actorIntelligence.attributionEvidence.sourceId,
             sourceName: publicTiText(actorIntelligence.attributionEvidence.sourceName),
@@ -164,6 +177,14 @@ function sanitizeActorIntelligence(actorIntelligence?: TiActorIntelligenceContra
             shownBecause: publicTiText(row.shownBecause)
         }))
     }
+}
+
+function sanitizeBusinessObservations(rows: NonNullable<TiActorIntelligenceContract['businessModel']>['publicationStrategies']) {
+    return rows.map(row => ({
+        ...row,
+        value: publicTiText(row.value),
+        reviewReasons: row.reviewReasons.map(publicTiText),
+    }))
 }
 
 function sanitizeActionability(actionability?: TiActionabilityContract): TiActionabilityContract | undefined {

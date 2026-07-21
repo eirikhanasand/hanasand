@@ -101,6 +101,7 @@ export interface TiActorIntelligenceContract {
     confidenceReasoning?: string[]
     sourceProvenance?: string[]
     missingFields?: string[]
+    businessModel?: TiBusinessModelAssessment
     attributionEvidence?: {
         sourceId?: string
         sourceName: string
@@ -121,6 +122,31 @@ export interface TiActorIntelligenceContract {
         confidence?: number
         shownBecause: string
     }>
+}
+
+export interface TiBusinessModelObservation {
+    value: string
+    assertionKind: string
+    confidence: number
+    sourceIds: string[]
+    captureIds: string[]
+    reviewState: string
+    reviewReasons: string[]
+}
+
+export interface TiBusinessModelAssessment {
+    schemaVersion: 'ti.actor.business_model.v1'
+    evidenceState: 'observed_mechanisms' | 'not_observed'
+    publicationStrategies: TiBusinessModelObservation[]
+    publicityTactics: TiBusinessModelObservation[]
+    pressureTactics: TiBusinessModelObservation[]
+    communicationChannels: TiBusinessModelObservation[]
+    buyerSellerCommunications: TiBusinessModelObservation[]
+    intermediaryCommunications: TiBusinessModelObservation[]
+    monetizationPaths: TiBusinessModelObservation[]
+    profitabilitySignals: TiBusinessModelObservation[]
+    missingEvidence: string[]
+    evidenceBoundary: string
 }
 
 export interface TiClaimAssessment {

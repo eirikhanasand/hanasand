@@ -393,7 +393,7 @@ function containsForbiddenMaterial(value: unknown): boolean {
 
 function validEvaluationLabelType(value: unknown): boolean {
   if (typeof value !== "string") return false;
-  return /^(?:actor|victim|date|source|ttp|impact|dataset|leak_type|indicator|incident|cve|vendor|product|malware|ransomware_family|country|sector|publication_strategy|publicity_tactic|channel_type|victim_pressure_tactic|extortion_type|monetization_path|buyer_seller_communication|intermediary_communication|profitability_signal)(?:_extraction)?$/.test(value.trim());
+  return /^(?:actor|victim|date|source|ttp|impact|dataset|leak_type|indicator|incident|cve|vendor|product|malware|ransomware_family|country|sector|publication_strategy|publicity_tactic|channel_type|victim_pressure_tactic|communication_channel|extortion_type|monetization_path|buyer_seller_communication|intermediary_communication|profitability_signal)(?:_extraction)?$/.test(value.trim());
 }
 function safeEvaluationValue(value: unknown): boolean {
   if (value === undefined) return true;

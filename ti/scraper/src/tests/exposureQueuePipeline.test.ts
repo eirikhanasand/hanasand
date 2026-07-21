@@ -151,7 +151,7 @@ describe("DWM exposure queue pipeline", () => {
       sourceId: "src_public_news",
       source: { name: "Ransomware.live Victim Feed", url: "https://www.ransomware.live/rss.xml" },
       title: "Ransomware.live Victim Feed",
-      rawText: "Ransomware.live Victim Feed\nFabrikam Manufacturing\n44 GB data leak listed with sample records.",
+      rawText: "Akira has just published a new victim: Fabrikam Manufacturing\nPENDING. Publishes after: 2d remaining. Download: release reference. If you are listed by mistake, contact us.",
       url: "https://www.ransomware.live/id/RmFicmlrYW0gTWFudWZhY3R1cmluZ0Bha2lyYQ==",
       collectedAt,
       publishedAt,
@@ -180,8 +180,25 @@ describe("DWM exposure queue pipeline", () => {
     expect(store.listExtractedEntities()).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "extortion_type", extractionMethod: "source_specific" }),
       expect.objectContaining({ type: "publication_strategy", value: "public victim listing" }),
+      expect.objectContaining({ type: "publication_strategy", value: "staged publication status", provenance: [expect.objectContaining({ evidenceText: expect.stringContaining("PENDING") })] }),
+      expect.objectContaining({ type: "publication_strategy", value: "public data release link", provenance: [expect.objectContaining({ evidenceText: expect.stringContaining("Download:") })] }),
+      expect.objectContaining({ type: "victim_pressure_tactic", value: "countdown to publication", provenance: [expect.objectContaining({ evidenceText: expect.stringContaining("Publishes after") })] }),
       expect.objectContaining({ type: "channel_type", value: "public victim-claim feed" })
     ]));
+    expect(store.listCaptures()[0].metadata?.leakSite?.summary).toContain("Publishes after");
+    expect(store.listExtractedEntities().some((entity: any) => ["communication_channel", "buyer_seller_communication", "intermediary_communication", "profitability_signal"].includes(entity.type))).toBe(false);
+    const search = await handleApiRequest(new Request("http://local/v1/intel/search?tenantId=default&q=Akira&entityType=actor"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
+    const businessModel = (await search.json() as any).actorIntelligence.businessModel;
+    expect(businessModel).toMatchObject({
+      evidenceState: "observed_mechanisms",
+      publicationStrategies: expect.arrayContaining([expect.objectContaining({ value: "staged publication status", sourceIds: ["src_public_news"], captureIds: [store.listCaptures()[0].id] })]),
+      pressureTactics: [expect.objectContaining({ value: "countdown to publication" })],
+      buyerSellerCommunications: [],
+      intermediaryCommunications: [],
+      monetizationPaths: [],
+      profitabilitySignals: []
+    });
+    expect(businessModel.missingEvidence).toEqual(expect.arrayContaining(["pricing or ransom demands", "payments or conversion", "realized revenue or profit"]));
   });
 
   test("does not turn a victim-feed label into an actor profile", async () => {

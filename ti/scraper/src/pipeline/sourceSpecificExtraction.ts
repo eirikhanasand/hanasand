@@ -2,7 +2,7 @@ import type { CollectedItem, ExtractedEntity, ExtractionProvenance } from "../ty
 import { normalizeWhitespace } from "../utils.ts";
 import type { ExtractionContext } from "./extractors.ts";
 
-export const SOURCE_SPECIFIC_EXTRACTOR_VERSION = "ti-source-specific-extractor-v1";
+export const SOURCE_SPECIFIC_EXTRACTOR_VERSION = "ti-source-specific-extractor-v2";
 
 export function extractSourceSpecificEntities(item: CollectedItem, context: ExtractionContext): ExtractedEntity[] {
   const profile = item.metadata?.extractionProfile;
@@ -18,22 +18,21 @@ function ransomwareGroupEntities(item: CollectedItem, context: ExtractionContext
   const actor = fieldEntity("ransomware_family", fields.actorName, 0.88, "actorName", item, context, "observed", []);
   if (actor) (actor as any).aliases = Array.isArray(fields.aliases) ? fields.aliases.map(meaningful).filter(Boolean) : [];
   const has = (type: string) => channels.some((channel: string) => channel.toLowerCase() === type.toLowerCase());
-  const victimCount = Number(fields.victimCount);
   return compact([
     actor,
     ...channels.map((channel: string) => fieldEntity("channel_type", channel, 0.9, "channelTypes", item, context, "observed", [])),
     fieldEntity("publication_strategy", has("DLS") ? "dedicated leak-site publication" : undefined, 0.9, "channelTypes", item, context, "observed", []),
     fieldEntity("publicity_tactic", has("DLS") ? "public victim listing infrastructure" : undefined, 0.86, "channelTypes", item, context, "observed", []),
-    fieldEntity("buyer_seller_communication", has("Chat") ? "public metadata lists an actor chat endpoint" : undefined, 0.72, "channelTypes", item, context, "observed", ["endpoint purpose and counterparties require analyst verification"]),
-    fieldEntity("monetization_path", has("Chat") ? "ransom negotiation channel" : undefined, 0.58, "channelTypes", item, context, "inferred", ["inferred from ransomware-group chat classification; payment outcome is unknown"]),
-    fieldEntity("extortion_type", has("DLS") ? "leak-site extortion infrastructure" : undefined, 0.62, "channelTypes", item, context, "inferred", ["infrastructure does not prove a specific extortion event"]),
-    fieldEntity("profitability_signal", Number.isFinite(victimCount) ? `public dataset reports ${victimCount} victim listings` : undefined, 0.56, "victimCount", item, context, "inferred", ["listing volume does not establish payments, revenue, or profit"])
+    fieldEntity("communication_channel", has("Chat") ? "listed actor chat endpoint" : undefined, 0.82, "channelTypes", item, context, "observed", ["counterparties, purpose, and conversation content are not stated"]),
+    fieldEntity("extortion_type", has("DLS") ? "leak-site extortion infrastructure" : undefined, 0.62, "channelTypes", item, context, "inferred", ["infrastructure does not prove a specific extortion event"])
   ]);
 }
 
 function victimBlogEntities(item: CollectedItem, context: ExtractionContext): ExtractedEntity[] {
   const fields = item.metadata?.leakSite ?? {};
   const actor = meaningful(fields.actorName), victims = [...new Set([fields.victimName, ...(Array.isArray(fields.victimNames) ? fields.victimNames : [])].map(meaningful).filter(Boolean))], dataType = meaningful(fields.claimedDataType);
+  const summary = meaningful(fields.summary) ?? "";
+  const countdown = signalEntity("victim_pressure_tactic", "countdown to publication", 0.9, "summary", summary, /\b(?:publishes? after|\d+[dhms]\s+remaining|countdown)\b/i, item, context);
   return compact([
     fieldEntity("ransomware_family", actor, 0.86, "actorName", item, context, "source_claim", []),
     ...victims.map((victim) => fieldEntity("victim", victim, 0.78, "victimName", item, context, "source_claim", ["unverified threat-actor claim"])),
@@ -44,8 +43,11 @@ function victimBlogEntities(item: CollectedItem, context: ExtractionContext): Ex
     fieldEntity("monetization_path", fields.monetizationPath, 0.72, "monetizationPath", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("publicity_tactic", fields.publicityTactic ?? "public victim naming", fields.publicityTactic ? 0.8 : 0.7, "publicityTactic", item, context, fields.publicityTactic ? "source_claim" : "observed", fields.publicityTactic ? ["unverified threat-actor claim"] : []),
     fieldEntity("publication_strategy", fields.publicationStrategy ?? "public victim listing", fields.publicationStrategy ? 0.8 : 0.95, "publicationStrategy", item, context, fields.publicationStrategy ? "source_claim" : "observed", fields.publicationStrategy ? ["unverified threat-actor claim"] : []),
+    signalEntity("publication_strategy", "staged publication status", 0.86, "summary", summary, /\b(?:PENDING|RELEASED|Publishes? after)\b/, item, context),
+    signalEntity("publication_strategy", "public data release link", 0.9, "summary", summary, /\bDownload\s*:/i, item, context),
     fieldEntity("channel_type", fields.channelType ?? "metadata-only victim source", 0.95, "channel", item, context, "observed", []),
-    fieldEntity("victim_pressure_tactic", fields.victimPressureTactic ?? "public naming", fields.victimPressureTactic ? 0.75 : 0.65, "victimPressureTactic", item, context, fields.victimPressureTactic ? "source_claim" : "inferred", fields.victimPressureTactic ? ["unverified threat-actor claim"] : ["inferred from publication channel"]),
+    fieldEntity("victim_pressure_tactic", fields.victimPressureTactic, 0.75, "victimPressureTactic", item, context, "source_claim", ["unverified threat-actor claim"]),
+    countdown,
     fieldEntity("buyer_seller_communication", fields.buyerSellerCommunication, 0.7, "buyerSellerCommunication", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("intermediary_communication", fields.intermediaryCommunication, 0.7, "intermediaryCommunication", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("profitability_signal", fields.profitabilitySignal, 0.65, "profitabilitySignal", item, context, "source_claim", ["signal does not establish realized profit"])
@@ -85,7 +87,14 @@ function fieldEntity(type: string, value: unknown, confidence: number, field: st
   return entity(type, normalized, confidence, field, item, context, assertionKind, reviewReasons, item.rawText.toLowerCase().indexOf(normalized.toLowerCase()));
 }
 
-function entity(type: string, value: string, confidence: number, field: string, item: CollectedItem, context: ExtractionContext, assertionKind: string, reviewReasons: string[], offset: number): ExtractedEntity {
+function signalEntity(type: string, value: string, confidence: number, field: string, text: string, pattern: RegExp, item: CollectedItem, context: ExtractionContext, reviewReasons: string[] = []): ExtractedEntity | undefined {
+  const match = pattern.exec(text);
+  if (!match) return undefined;
+  const start = Math.max(0, match.index - 48), evidence = normalizeWhitespace(text.slice(start, match.index + match[0].length + 96)).slice(0, 240);
+  return entity(type, value, confidence, field, item, context, "observed", reviewReasons, Math.max(0, item.rawText.indexOf(match[0])), evidence);
+}
+
+function entity(type: string, value: string, confidence: number, field: string, item: CollectedItem, context: ExtractionContext, assertionKind: string, reviewReasons: string[], offset: number, evidenceText = `${field}: ${value}`): ExtractedEntity {
   const startOffset = Math.max(0, offset);
   return {
     type,
@@ -99,7 +108,7 @@ function entity(type: string, value: string, confidence: number, field: string, 
     sourceField: field,
     assertionKind,
     reviewReasons,
-    provenance: [provenance(context, startOffset, startOffset + value.length, `${field}: ${value}`)]
+    provenance: [provenance(context, startOffset, startOffset + value.length, evidenceText)]
   } as ExtractedEntity;
 }
 

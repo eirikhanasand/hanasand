@@ -118,6 +118,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     confidence: Math.min(assessment.confidence, 0.69)
   }));
   const missing = missingFields({ actor, victims, sectors, countries, ttps, records, rows });
+  const businessModel = businessModelAssessment(records.businessEntities);
   const attributionEvidence = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
   const attribution = attributionEvidence?.statement;
   const actorIntelligence = {
@@ -136,6 +137,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     confidenceReasoning: assessment.reasons,
     sourceProvenance: sources.map((source) => source.provenance),
     structuredProvenance,
+    businessModel,
     attributionEvidence: attributionEvidence ? {
       sourceId: attributionEvidence.row.sourceId,
       sourceName: attributionEvidence.row.sourceName,
@@ -293,7 +295,9 @@ function searchRecords(store: any, tenantId: string | undefined, captureIds: Set
   const restrictedCaptureIds = new Set(scoped("listCaptures").filter(isMetadataOnlyCapture).map((record: any) => record.id));
   const safeCapture = (id: string) => captureIds.has(id) && !restrictedCaptureIds.has(id);
   const safeAggregate = (ids: string[] = []) => ids.some(safeCapture) && !ids.some((id) => restrictedCaptureIds.has(id));
-  const entities = scoped("listExtractedEntities").filter((record: any) => safeCapture(record.captureId));
+  const allEntities = scoped("listExtractedEntities");
+  const entities = allEntities.filter((record: any) => safeCapture(record.captureId));
+  const businessEntities = allEntities.filter((record: any) => captureIds.has(record.captureId) && isSafeBusinessMechanism(record));
   const indicators = scoped("listIndicators").filter((record: any) => safeCapture(record.captureId));
   const incidents = scoped("listIncidents").filter((record: any) => safeCapture(record.captureId));
   const claims = scoped("listIntelligenceClaims").filter((record: any) => safeAggregate(record.captureIds)).map((record: any) => {
@@ -304,7 +308,61 @@ function searchRecords(store: any, tenantId: string | undefined, captureIds: Set
   const profileIds = new Set(profiles.map((profile: any) => profile.id));
   const aliases = scoped("listActorAliases").filter((record: any) => profileIds.has(record.actorProfileId));
   const validations = scoped("listValidationRecords").filter((record: any) => captureIds.has(record.captureId) || incidents.some((incident: any) => incident.id === record.incidentId));
-  return { entities, indicators, incidents, claims, profiles, aliases, validations, sourceCount: sourceIds.size };
+  return { entities, businessEntities, indicators, incidents, claims, profiles, aliases, validations, sourceCount: sourceIds.size };
+}
+
+const SAFE_BUSINESS_MECHANISMS: Record<string, Set<string>> = {
+  publication_strategy: new Set(["dedicated leak-site publication", "public victim listing", "staged publication status", "public data release link"]),
+  publicity_tactic: new Set(["public victim listing infrastructure", "public victim naming"]),
+  victim_pressure_tactic: new Set(["countdown to publication"]),
+  communication_channel: new Set(["listed actor chat endpoint"]),
+};
+
+function isSafeBusinessMechanism(entity: any) {
+  const values = SAFE_BUSINESS_MECHANISMS[entity.type];
+  return Boolean(values?.has(String(entity.normalizedValue ?? entity.value ?? "").trim().toLowerCase()));
+}
+
+function businessModelAssessment(entities: any[]) {
+  const observations = entities.reduce((items: any[], entity) => {
+    const value = safeText(entity.value, 160);
+    const existing = items.find((item) => item.type === entity.type && item.value.toLowerCase() === value.toLowerCase());
+    if (existing) {
+      existing.sourceIds = unique([...existing.sourceIds, entity.sourceId]);
+      existing.captureIds = unique([...existing.captureIds, entity.captureId]);
+      existing.confidence = Math.max(existing.confidence, confidence(entity.confidence));
+      existing.reviewReasons = unique([...existing.reviewReasons, ...(entity.reviewReasons ?? [])]);
+      existing.reviewState = existing.reviewReasons.length ? "needs_review" : "unreviewed";
+      return items;
+    }
+    items.push({ type: entity.type, value, assertionKind: entity.assertionKind ?? "observed", confidence: confidence(entity.confidence), sourceIds: unique([entity.sourceId]), captureIds: unique([entity.captureId]), reviewState: entity.reviewReasons?.length ? "needs_review" : "unreviewed", reviewReasons: unique(entity.reviewReasons ?? []) });
+    return items;
+  }, []);
+  const byType = (type: string) => observations.filter((item) => item.type === type).map(({ type: _type, ...item }) => item);
+  const publicationStrategies = byType("publication_strategy");
+  const publicityTactics = byType("publicity_tactic");
+  const pressureTactics = byType("victim_pressure_tactic");
+  const communicationChannels = byType("communication_channel");
+  return {
+    schemaVersion: "ti.actor.business_model.v1",
+    evidenceState: observations.length ? "observed_mechanisms" : "not_observed",
+    publicationStrategies,
+    publicityTactics,
+    pressureTactics,
+    communicationChannels,
+    buyerSellerCommunications: [],
+    intermediaryCommunications: [],
+    monetizationPaths: [],
+    profitabilitySignals: [],
+    missingEvidence: [
+      "buyer and seller conversations",
+      "intermediary conversations",
+      "pricing or ransom demands",
+      "payments or conversion",
+      "realized revenue or profit",
+    ],
+    evidenceBoundary: "Observed publication, pressure, and channel mechanisms do not establish counterparties, negotiations, prices, payments, conversion, revenue, or profit.",
+  };
 }
 
 function assess(rows: any[], records: ReturnType<typeof searchRecords>) {
@@ -553,6 +611,7 @@ function safeIndicators(indicators: any[]) {
 
 function hasParsedRecord(captureId: string, records: ReturnType<typeof searchRecords>) {
   return records.entities.some((record: any) => record.captureId === captureId)
+    || records.businessEntities.some((record: any) => record.captureId === captureId)
     || records.indicators.some((record: any) => record.captureId === captureId)
     || records.incidents.some((record: any) => record.captureId === captureId)
     || records.claims.some((record: any) => record.captureIds?.includes(captureId));

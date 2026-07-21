@@ -94,7 +94,8 @@ describe("public collection boundary", () => {
     store.saveSource(groups);
     const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, maxItemsPerTask: 1, now: () => "2026-07-20T00:00:00.000Z", fetch: async () => new Response(payload, { headers: { "content-type": "application/json" } }) });
     expect(cycle).toMatchObject({ insertedCaptureCount: 1, incidentCount: 0, skippedLowValueCount: 0 });
-    expect(store.listExtractedEntities()).toContainEqual(expect.objectContaining({ type: "buyer_seller_communication", value: "public metadata lists an actor chat endpoint" }));
+    expect(store.listExtractedEntities()).toContainEqual(expect.objectContaining({ type: "communication_channel", value: "listed actor chat endpoint" }));
+    expect(store.listExtractedEntities().some((entity: any) => ["buyer_seller_communication", "monetization_path", "profitability_signal"].includes(entity.type))).toBe(false);
     expect(cycle.health.promotionYield).toBe(0);
   });
 });

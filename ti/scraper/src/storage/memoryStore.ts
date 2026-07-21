@@ -257,7 +257,7 @@ function uniqueActorAliases(values: unknown[]): string[] {
 const CHARACTERIZATION_FIELDS: Record<string, string> = {
   victim: "victims", sector: "sectors", country: "countries", ttp: "ttps", malware: "malwareTools", impact: "impacts", dataset: "datasets",
   extortion_type: "extortionTypes", monetization_path: "monetizationPaths", publicity_tactic: "publicityTactics", publication_strategy: "publicationStrategies",
-  channel_type: "channelTypes", victim_pressure_tactic: "pressureTactics", buyer_seller_communication: "communications", intermediary_communication: "communications",
+  channel_type: "channelTypes", victim_pressure_tactic: "pressureTactics", communication_channel: "communications", buyer_seller_communication: "communications", intermediary_communication: "communications",
   profitability_signal: "profitabilitySignals"
 };
 function mergeCharacterization(previous: any = {}, entities: any[], capture: any, observedAt: string): any {

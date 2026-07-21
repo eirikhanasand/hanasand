@@ -34,7 +34,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "014_link_delivered_alert_timeliness", path: fileURLToPath(new URL("../../migrations/014_link_delivered_alert_timeliness.sql", import.meta.url)) },
   { version: "015_repair_reprocessing_collection_time", path: fileURLToPath(new URL("../../migrations/015_repair_reprocessing_collection_time.sql", import.meta.url)) },
   { version: "016_merge_duplicate_actor_profiles", path: fileURLToPath(new URL("../../migrations/016_merge_duplicate_actor_profiles.sql", import.meta.url)) },
-  { version: "017_evidence_linked_timeliness", path: fileURLToPath(new URL("../../migrations/017_evidence_linked_timeliness.sql", import.meta.url)) }
+  { version: "017_evidence_linked_timeliness", path: fileURLToPath(new URL("../../migrations/017_evidence_linked_timeliness.sql", import.meta.url)) },
+  { version: "018_remove_unsupported_business_claims", path: fileURLToPath(new URL("../../migrations/018_remove_unsupported_business_claims.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
