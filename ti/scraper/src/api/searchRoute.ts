@@ -460,6 +460,11 @@ function actorCaptureMatches(capture: any, entities: any[], normalizedTerms: Set
   const assertedNames = entities.filter((entity) => entity.assertionKind !== "mention").map((entity) => entity.value);
   if ([...metadataNames, ...assertedNames].some((name) => normalizedTerms.has(normalizeActorName(name)))) return true;
   const title = normalizeActorName(capture.title ?? capture.metadata?.title);
+  if (capture.searchTitleSource === "legacy_incident") {
+    if (normalizedTerms.has(title)) return false;
+    const inferredActor = String(capture.title).split(/\s+\/\s+/, 1)[0];
+    if (inferredActor !== capture.title && normalizedTerms.has(normalizeActorName(inferredActor))) return false;
+  }
   return [...normalizedTerms].some((term) => termRegex(term).test(title));
 }
 

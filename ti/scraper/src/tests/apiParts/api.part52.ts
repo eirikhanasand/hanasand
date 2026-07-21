@@ -136,6 +136,33 @@ describe("api v1", () => {
     expect(response.actorIntelligence.attribution).toBe("Midnight Blizzard is linked to Russia's SVR in this public threat-actor espionage report.");
   });
 
+  test("uses persisted incident headlines for legacy captures without trusting inferred actor titles", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_legacy_actor", tenantId: "tenant_api", name: "Legacy public feed", metadata: { queryClass: "threat-intel" } }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_legacy_headline",
+      sourceId: "src_legacy_actor",
+      title: undefined,
+      body: "APT29 is linked to Russia's SVR in this historical public report.",
+      publishedAt: "2026-02-12T08:00:00.000Z"
+    }));
+    store.saveIncident({ id: "inc_legacy_headline", sourceId: "src_legacy_actor", captureId: "cap_legacy_headline", title: "What is APT29?", summary: "Historical public report.", firstSeenAt: "2026-07-21T00:00:00.000Z", confidence: 0.8, extractorVersion: "legacy", reviewReasons: [] });
+    store.saveCapture(fixtureCapture({
+      id: "cap_inferred_actor_title",
+      sourceId: "src_legacy_actor",
+      url: "https://example.test/inferred",
+      title: undefined,
+      body: "A page that only mentions APT29 in passing.",
+      publishedAt: "2026-02-13T08:00:00.000Z"
+    }));
+    store.saveIncident({ id: "inc_inferred_actor_title", sourceId: "src_legacy_actor", captureId: "cap_inferred_actor_title", title: "APT29", summary: "Extractor-inferred title.", firstSeenAt: "2026-07-21T00:00:00.000Z", confidence: 0.4, extractorVersion: "legacy", reviewReasons: ["low_context"] });
+
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+
+    expect(response.rows).toEqual([expect.objectContaining({ id: "cap_legacy_headline", title: "What is APT29?" })]);
+    expect(response.lastSeen).toBe("2026-02-12T08:00:00.000Z");
+  });
+
   test("keeps collection time separate from actor activity dates", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_apt29_dates", tenantId: "tenant_api", name: "APT29 source", metadata: { queryClass: "threat-intel", queryTerm: "APT29" } }));

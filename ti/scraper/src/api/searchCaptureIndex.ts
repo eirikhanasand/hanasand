@@ -32,15 +32,24 @@ export function findActorSearchCaptures(store: any, identities: string[], limit:
 }
 function docsForStore(store: any): SearchDoc[] {
   const captures = store.listCaptures();
+  const incidents = store.listIncidents?.() ?? [];
   const sources = new Map((store.listSources?.() ?? []).map((source: any) => [source.id, source]));
-  const signature = `${captures.length}:${captures.at(-1)?.id ?? ""}:${captures.at(-1)?.contentHash ?? ""}:${sources.size}`;
+  const incidentTitles = new Map(incidents.map((incident: any) => [incident.captureId, incident.title]));
+  const signature = `${captures.length}:${captures.at(-1)?.id ?? ""}:${captures.at(-1)?.contentHash ?? ""}:${incidents.length}:${incidents.at(-1)?.id ?? ""}:${sources.size}`;
   const previous = cache.get(store);
   if (previous?.signature === signature) return previous.docs;
   const docs = captures.filter((capture: any) => sellableCapture(capture, sources.get(capture.sourceId)))
-    .map((capture: any) => docFor(capture, sources.get(capture.sourceId)))
+    .map((capture: any) => docFor(withLegacyIncidentTitle(capture, incidentTitles.get(capture.id)), sources.get(capture.sourceId)))
     .sort((a, b) => b.collectedAt.localeCompare(a.collectedAt));
   cache.set(store, { signature, docs });
   return docs;
+}
+
+function withLegacyIncidentTitle(capture: any, incidentTitle: unknown) {
+  if (capture.title || capture.metadata?.title || typeof incidentTitle !== "string") return capture;
+  const title = incidentTitle.trim();
+  if (!title || /^https?:\/\//i.test(title) || title === capture.url) return capture;
+  return { ...capture, title, searchTitleSource: "legacy_incident" };
 }
 function docFor(capture: any, source: any): SearchDoc {
   const text = searchableText(capture);
