@@ -24,6 +24,17 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
   const timeliness = scoped("listTimelinessRecords");
   const health = scoped("listSourceHealthObservations");
   const validations = scoped("listValidationRecords");
+  const benchmarks = scoped("listEvaluationBenchmarks").filter((benchmark: any) => !input.datasetSplit || benchmark.datasetSplit === input.datasetSplit);
+  const benchmarkIds = new Set(benchmarks.map((benchmark: any) => benchmark.id));
+  const annotations = scoped("listEvaluationAnnotations").filter((annotation: any) => benchmarkIds.has(annotation.benchmarkId));
+  const adjudications = scoped("listEvaluationAdjudications").filter((adjudication: any) => benchmarkIds.has(adjudication.benchmarkId));
+  const completedBenchmarks = benchmarks.filter((benchmark: any) => benchmark.status === "complete" && new Set(adjudications.filter((row: any) => row.benchmarkId === benchmark.id).map((row: any) => row.taskId)).size === Number(benchmark.taskCount));
+  const completedBenchmarkIds = new Set(completedBenchmarks.map((benchmark: any) => benchmark.id));
+  const completedAnnotations = annotations.filter((annotation: any) => completedBenchmarkIds.has(annotation.benchmarkId));
+  const completedAdjudications = adjudications.filter((adjudication: any) => completedBenchmarkIds.has(adjudication.benchmarkId));
+  const benchmarkReviewerCount = new Set(completedAnnotations.map((annotation: any) => annotation.reviewerId)).size;
+  const benchmarkTaskCount = new Set(completedAdjudications.map((adjudication: any) => `${adjudication.benchmarkId}:${adjudication.taskId}`)).size;
+  const benchmarkCaptureCount = new Set(completedBenchmarks.flatMap((benchmark: any) => benchmark.captureIds ?? [])).size;
 
   return {
     schemaVersion: "ti.evaluation_metrics.v1",
@@ -42,6 +53,16 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
       byParser: groupedScores(rows, (row) => row.parserVersion),
       bySourceFamily: groupedScores(rows, (row) => row.sourceFamily),
       byDatasetSplit: groupedScores(rows, (row) => row.datasetSplit),
+      benchmarkEvidence: {
+        benchmarkCount: benchmarks.length,
+        completedBenchmarkCount: completedBenchmarks.length,
+        completedTaskCount: benchmarkTaskCount,
+        completedCaptureCount: benchmarkCaptureCount,
+        annotationCount: annotations.length,
+        adjudicationCount: adjudications.length,
+        reviewerCount: benchmarkReviewerCount,
+        validationStatus: completedBenchmarks.length > 0 && benchmarkCaptureCount >= 50 && benchmarkReviewerCount >= 2 ? "validated" : benchmarks.length ? "pilot_only" : "not_started"
+      },
       diagnostics: {
         overall: score(diagnosticRows),
         byLabelingMethod: groupedScores(diagnosticRows, (row) => row.labelingMethod)
@@ -66,7 +87,8 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
     limitations: [
       !labels.length && "no evaluation labels in scope",
       labels.length > 0 && !independentLabels.length && "no independently reviewed evaluation labels in scope; automated checks are diagnostic only",
-      !rows.some((row: any) => row.bucket === "false_negative") && "recall is unmeasured until false-negative labels exist",
+      !rows.some((row: any) => row.exhaustiveExpectedValues) && "recall is unmeasured until an exhaustive prediction-hidden benchmark is adjudicated",
+      completedBenchmarks.length === 0 && "no independently reviewed benchmark is complete",
       !timeliness.some((record: any) => record.reportedAt) && "first-report latency is unmeasured until an actor or victim report is independently timestamped",
       !timeliness.some((record: any) => record.alertedAt) && "alert-delivery latency is unmeasured"
     ].filter(Boolean)
@@ -83,8 +105,9 @@ function labelRow(label: any, subjects: Map<string, any>, captures: Map<string, 
     datasetSplit: label.datasetSplit ?? "unassigned",
     bucket: outcomeBucket(label.outcome),
     labelingMethod: evaluationLabelMethod(label),
-    parserVersion: subject?.extractorVersion ?? capture?.metadata?.extractorVersion ?? capture?.provenance?.extractorVersion ?? "unknown",
-    sourceFamily: sourceFamily(source)
+    parserVersion: label.parserVersion ?? subject?.extractorVersion ?? capture?.metadata?.extractorVersion ?? capture?.provenance?.extractorVersion ?? "unknown",
+    sourceFamily: label.sourceFamily ?? sourceFamily(source),
+    exhaustiveExpectedValues: label.exhaustiveExpectedValues === true && label.blinded === true && label.adjudicationStatus === "adjudicated"
   };
 }
 
@@ -97,14 +120,15 @@ export function evaluationLabelMethod(label: any): string {
 }
 
 export function isIndependentEvaluationLabel(label: any): boolean {
-  return evaluationLabelMethod(label) === "manual_source_review" && label?.independentFromExtractor !== false;
+  if (evaluationLabelMethod(label) !== "manual_source_review" || label?.independentFromExtractor === false) return false;
+  return !label?.benchmarkId || label.blinded === true && label.adjudicationStatus === "adjudicated";
 }
 
 function latestLabels(labels: any[]): any[] {
   const latest = new Map<string, any>();
   for (const label of labels) {
     const subjectId = label.captureId ?? label.entityId ?? label.indicatorId ?? label.incidentId ?? label.claimId ?? "unknown";
-    const key = `${subjectId}:${label.labelType ?? "unknown"}:${label.datasetSplit ?? "unassigned"}`;
+    const key = label.evaluationUnitId ?? `${subjectId}:${label.labelType ?? "unknown"}:${label.datasetSplit ?? "unassigned"}`;
     const previous = latest.get(key);
     if (!previous || String(label.labeledAt ?? label.id).localeCompare(String(previous.labeledAt ?? previous.id)) > 0) latest.set(key, label);
   }
@@ -121,8 +145,14 @@ function score(rows: any[]) {
     else counts.needsReview++;
   }
   const precision = ratio(counts.truePositive, counts.truePositive + counts.falsePositive);
-  const recall = counts.falseNegative > 0 ? ratio(counts.truePositive, counts.truePositive + counts.falseNegative) : null;
-  return { ...counts, precision, recall, f1: precision === null || recall === null || precision + recall === 0 ? null : round((2 * precision * recall) / (precision + recall)) };
+  const exhaustive = rows.filter((row: any) => row.exhaustiveExpectedValues);
+  const exhaustiveTruePositive = exhaustive.filter((row: any) => row.bucket === "true_positive").length;
+  const exhaustiveFalseNegative = exhaustive.filter((row: any) => row.bucket === "false_negative").length;
+  const exhaustiveTrueNegative = exhaustive.filter((row: any) => row.bucket === "true_negative").length;
+  const exhaustiveFalsePositive = exhaustive.filter((row: any) => row.bucket === "false_positive").length;
+  const recall = ratio(exhaustiveTruePositive, exhaustiveTruePositive + exhaustiveFalseNegative);
+  const specificity = ratio(exhaustiveTrueNegative, exhaustiveTrueNegative + exhaustiveFalsePositive);
+  return { ...counts, precision, recall, specificity, recallSampleSize: exhaustiveTruePositive + exhaustiveFalseNegative, f1: precision === null || recall === null || precision + recall === 0 ? null : round((2 * precision * recall) / (precision + recall)) };
 }
 
 function groupedScores(rows: any[], key: (row: any) => string) {

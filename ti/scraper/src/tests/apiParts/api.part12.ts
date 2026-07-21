@@ -25,6 +25,9 @@ describe("api v1", () => {
         }
       });
       store.saveCapture(capture);
+      store.saveEvaluationBenchmark({ id: "benchmark_persisted", status: "annotating" });
+      store.saveEvaluationAnnotation({ id: "annotation_persisted", benchmarkId: "benchmark_persisted" });
+      store.saveEvaluationAdjudication({ id: "adjudication_persisted", benchmarkId: "benchmark_persisted" });
 
       const reloaded = new FileBackedScraperStore({ snapshotPath });
       expect(reloaded.getSource("src_persisted")?.status).toBe("active");
@@ -35,6 +38,9 @@ describe("api v1", () => {
           bodyExternalized: true
         }
       });
+      expect(reloaded.getEvaluationBenchmark("benchmark_persisted")?.status).toBe("annotating");
+      expect(reloaded.getEvaluationAnnotation("annotation_persisted")?.benchmarkId).toBe("benchmark_persisted");
+      expect(reloaded.getEvaluationAdjudication("adjudication_persisted")?.benchmarkId).toBe("benchmark_persisted");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

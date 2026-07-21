@@ -8,6 +8,7 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
 import { authenticateRequest } from "./requestAuthentication.ts";
+import { handleEvaluationBenchmarkRequest } from "./evaluationBenchmarkRoutes.ts";
 
 const listRoutes = {
   "/v1/intel/sources": ["sources", "listSources"],
@@ -31,6 +32,8 @@ const listRoutes = {
 
 export async function handleStructuredIntelRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
   const url = new URL(request.url);
+  const evaluationBenchmarkResponse = await handleEvaluationBenchmarkRequest(request, options);
+  if (evaluationBenchmarkResponse) return evaluationBenchmarkResponse;
   if (url.pathname === "/v1/intel/source-operations" && request.method === "GET") {
     const scope = resolveTenantScope(request, url);
     return scope.error ?? json(buildSourceOperationsSnapshot(options.store, { tenantId: scope.tenantId }));

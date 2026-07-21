@@ -300,6 +300,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     this.enqueue(`evaluation-label:${stored.id}`, () => this.persistEvaluationLabel(stored));
     return stored;
   }
+  override saveEvaluationBenchmark(record: any): any { return this.saveWorkflow("evaluation_benchmark", record, () => super.saveEvaluationBenchmark(record)); }
+  override saveEvaluationAnnotation(record: any): any { return this.saveWorkflow("evaluation_annotation", record, () => super.saveEvaluationAnnotation(record)); }
+  override saveEvaluationAdjudication(record: any): any { return this.saveWorkflow("evaluation_adjudication", record, () => super.saveEvaluationAdjudication(record)); }
 
   override saveSource(source: SourceRecord): SourceRecord {
     const stored = super.saveSource(source);
@@ -469,6 +472,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       case "analyst_victim_notification_packet": super.saveAnalystVictimNotificationPacket(record); break;
       case "analyst_claim_ledger_entry": super.saveAnalystClaimLedgerEntry(record); break;
       case "analyst_loop_snapshot": super.saveAnalystLoopSnapshot(record); break;
+      case "evaluation_benchmark": super.saveEvaluationBenchmark(record); break;
+      case "evaluation_annotation": super.saveEvaluationAnnotation(record); break;
+      case "evaluation_adjudication": super.saveEvaluationAdjudication(record); break;
       case "organization": super.saveOrganization(record); break;
       case "organization_member": super.saveOrganizationMember(record); break;
       case "organization_invite": super.saveOrganizationInvite(record); break;
@@ -1000,6 +1006,9 @@ const legacyWorkflowLoaders: Array<[
   ["analystVictimNotificationPackets", "analyst_victim_notification_packet", (store, record) => store.saveAnalystVictimNotificationPacket(record), (store) => store.listAnalystVictimNotificationPackets()],
   ["analystClaimLedgerEntries", "analyst_claim_ledger_entry", (store, record) => store.saveAnalystClaimLedgerEntry(record), (store) => store.listAnalystClaimLedgerEntries()],
   ["analystLoopSnapshots", "analyst_loop_snapshot", (store, record) => store.saveAnalystLoopSnapshot(record), (store) => store.listAnalystLoopSnapshots()],
+  ["evaluationBenchmarks", "evaluation_benchmark", (store, record) => store.saveEvaluationBenchmark(record), (store) => store.listEvaluationBenchmarks()],
+  ["evaluationAnnotations", "evaluation_annotation", (store, record) => store.saveEvaluationAnnotation(record), (store) => store.listEvaluationAnnotations()],
+  ["evaluationAdjudications", "evaluation_adjudication", (store, record) => store.saveEvaluationAdjudication(record), (store) => store.listEvaluationAdjudications()],
   ["organizations", "organization", (store, record) => store.saveOrganization(record), (store) => store.listOrganizations()],
   ["organizationMembers", "organization_member", (store, record) => store.saveOrganizationMember(record), (store) => store.listOrganizationMembers()],
   ["organizationInvites", "organization_invite", (store, record) => store.saveOrganizationInvite(record), (store) => store.listOrganizationInvites()],

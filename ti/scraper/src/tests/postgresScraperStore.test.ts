@@ -231,6 +231,9 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     first.savePlan({ id: "plan_postgres", tenantId: "tenant_postgres", createdAt: collectedAt, requestId: "request_postgres" });
     first.saveRun({ id: "run_postgres", tenantId: "tenant_postgres", planId: "plan_postgres", requestId: "request_postgres", status: "completed", startedAt: collectedAt, completedAt: collectedAt, updatedAt: collectedAt, taskCount: 1, sourceCount: 1, captureCount: 1, incidentCount: 1, failedTaskCount: 0 });
     first.saveSourceHealthObservation({ id: "health_postgres", tenantId: "tenant_postgres", sourceId: "src_postgres", collectionRunId: "run_postgres", checkedAt: collectedAt, status: "healthy", success: true, useful: true, latencyMs: 120, itemCount: 1, captureCount: 1, incidentCount: 1, duplicateCount: 0, parserWarningCount: 0, observedActorCount: 1, legalMode: "public_content" });
+    first.saveEvaluationBenchmark({ id: "benchmark_postgres", tenantId: "tenant_postgres", status: "annotating", captureIds: [result.capture.id], labelTypes: ["actor"], taskCount: 1, requiredReviewers: 2, createdAt: collectedAt, updatedAt: collectedAt });
+    first.saveEvaluationAnnotation({ id: "annotation_postgres", tenantId: "tenant_postgres", benchmarkId: "benchmark_postgres", taskId: "task_postgres", captureId: result.capture.id, labelType: "actor", reviewerId: "analyst_test", expectedValues: ["APT29"], annotatedAt: collectedAt, createdAt: collectedAt, updatedAt: collectedAt });
+    first.saveEvaluationAdjudication({ id: "adjudication_postgres", tenantId: "tenant_postgres", benchmarkId: "benchmark_postgres", taskId: "task_postgres", captureId: result.capture.id, labelType: "actor", expectedValues: ["APT29"], adjudicatedBy: "analyst_second", adjudicatedAt: collectedAt, createdAt: collectedAt, updatedAt: collectedAt });
     await first.flush();
     const actorResponse = await handleApiRequest(api("/v1/intel/actor-profiles?tenantId=tenant_postgres&q=apt29&limit=1"), { store: first, frontier: new FocusedFrontier() });
     expect(await actorResponse.json()).toMatchObject({ total: 1, actorProfiles: [{ canonicalName: "APT29" }] });
@@ -254,6 +257,9 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(second.listClaimReviews()).toEqual([expect.objectContaining({ id: "claim_review_postgres", nextState: "confirmed" })]);
     expect(second.listValidationRecords()).toHaveLength(1);
     expect(second.listEvaluationLabels()).toHaveLength(1);
+    expect(second.listEvaluationBenchmarks()).toEqual([expect.objectContaining({ id: "benchmark_postgres" })]);
+    expect(second.listEvaluationAnnotations()).toEqual([expect.objectContaining({ id: "annotation_postgres" })]);
+    expect(second.listEvaluationAdjudications()).toEqual([expect.objectContaining({ id: "adjudication_postgres" })]);
     expect(second.listDwmAlerts()).toHaveLength(1);
     expect(second.listPlans()).toHaveLength(1);
     expect(second.listRuns()).toEqual([expect.objectContaining({ id: "run_postgres", status: "completed" })]);
