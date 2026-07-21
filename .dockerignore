@@ -7,6 +7,9 @@
 !ti
 !ti/scraper
 !ti/scraper/**
+!ops
+!ops/threat-intel-backup
+!ops/threat-intel-backup/run-threat-intel-backup.sh
 !docker-compose.yml
 !.dockerignore
 
