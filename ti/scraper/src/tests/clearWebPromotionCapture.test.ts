@@ -29,10 +29,11 @@ describe("clear-web promotion captures", () => {
     expect(proofs.every((proof) => proof.status === "captured")).toBe(true);
     expect(proofs.map((proof) => proof.query)).toEqual(["APT29", "APT42", "Turla", "Volt Typhoon", "Scattered Spider", "Akira ransomware", "Random Actor", "Made Up Actor", "CVE-2026-12345"]);
     expect(proofs.every((proof) => proof.captureId?.startsWith("cap_"))).toBe(true);
-    expect(proofs.every((proof) => proof.incidentId?.startsWith("inc_"))).toBe(true);
+    expect(proofs.filter((proof) => proof.query !== "Made Up Actor").every((proof) => proof.incidentId?.startsWith("inc_"))).toBe(true);
+    expect(proofs.find((proof) => proof.query === "Made Up Actor")?.incidentId).toBeUndefined();
     expect(store.listDiscoveryEvidence().every((item) => item.promotedToCaptureId && item.promotedToTaskId)).toBe(true);
     expect(store.listCaptures()).toHaveLength(9);
-    expect(store.listIncidents()).toHaveLength(9);
+    expect(store.listIncidents()).toHaveLength(8);
     expect(proofs.find((proof) => proof.query === "APT42")?.publicChannelMatchState).toBe("matched");
     expect(proofs.find((proof) => proof.query === "Made Up Actor")?.apiPromotionMetadata.agent07.answerState).toBe("answerable");
     expect(JSON.stringify({ proofs, captures: store.listCaptures() })).not.toContain("object/key");

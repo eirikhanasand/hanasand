@@ -81,7 +81,7 @@ describe("public collection boundary", () => {
     expect(cycle).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
   });
 
-  test("promotes bounded structured ransomware group rows without the text heuristic", async () => {
+  test("captures structured ransomware group profiles without manufacturing incidents", async () => {
     const groups = source({
       id: "src_seed_ransomwarelive_groups", type: "api", url: "https://data.ransomware.live/groups.json",
       catalog: { canonicalId: "community:ransomwarelive:groups" }, metadata: { extractionProfile: "ransomware_group_metadata", canaryPortfolio: true }
@@ -93,8 +93,8 @@ describe("public collection boundary", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(groups);
     const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, maxItemsPerTask: 1, now: () => "2026-07-20T00:00:00.000Z", fetch: async () => new Response(payload, { headers: { "content-type": "application/json" } }) });
-    expect(cycle).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
+    expect(cycle).toMatchObject({ insertedCaptureCount: 1, incidentCount: 0, skippedLowValueCount: 0 });
     expect(store.listExtractedEntities()).toContainEqual(expect.objectContaining({ type: "buyer_seller_communication", value: "public metadata lists an actor chat endpoint" }));
-    expect(cycle.health.promotionYield).toBe(1);
+    expect(cycle.health.promotionYield).toBe(0);
   });
 });

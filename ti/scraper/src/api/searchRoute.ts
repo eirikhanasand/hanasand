@@ -10,6 +10,7 @@ import { buildPublicChannelStatusRouteResponse } from "./publicChannelRoutes.ts"
 import { searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { ACTOR_ALIAS_RECORDS } from "../pipeline/actorAliases.ts";
 import { termRegex } from "./searchTerm.ts";
+import { hasIncidentEvidence } from "../pipeline/incidentCandidate.ts";
 
 type SearchEntityType = "actor" | "domain" | "cve" | "indicator" | "organization" | "free_text";
 
@@ -44,7 +45,8 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const sourceIds = new Set(rows.map((row) => row.sourceId));
   const records = searchRecords(options.store, scope.tenantId, captureIds, sourceIds);
   const assessment = assess(rows, records);
-  const activityRows = entityType === "actor" ? rows.filter(isActorActivityRow) : rows;
+  const eventRows = rows.filter(isIncidentRow);
+  const activityRows = entityType === "actor" ? eventRows : rows;
   const lastSeen = latest(activityRows.map((row) => row.publishedAt));
   const profile = actorProfileForQuery(records, identity);
   const aliases = actorAliases(records, rows, profile, identity);
@@ -89,7 +91,9 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const actor = profile?.canonicalName
     ?? records.entities.find((entity) => ["actor", "ransomware_family"].includes(entity.type) && identity.normalizedTerms.has(normalizeActorName(entity.value)))?.value
     ?? rows.find((row) => row.actor && identity.normalizedTerms.has(normalizeActorName(row.actor)))?.actor;
-  const campaigns = unique(records.incidents.map((incident) => safeText(incident.title ?? incident.summary, 180)));
+  const eventCaptureIds = new Set(eventRows.map((row) => row.id));
+  const publicIncidents = records.incidents.filter((incident) => eventCaptureIds.has(incident.captureId));
+  const campaigns = unique(publicIncidents.map((incident) => safeText(incident.title ?? incident.summary, 180)));
   const malwareTools = entityValues(records.entities, "malware");
   const indicators = safeIndicators(records.indicators);
   const infrastructure = safeIndicators(records.indicators.filter((indicator) => ["domain", "hostname", "ipv4", "ipv6", "url"].includes(indicator.type)));
@@ -158,7 +162,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     lastSeenAt: claim.lastSeenAt,
     uncertaintyReasons: claim.uncertaintyReasons ?? []
   }));
-  const incidents = records.incidents.map((incident) => ({
+  const incidents = publicIncidents.map((incident) => ({
     id: incident.id,
     title: safeText(incident.title, 180),
     summary: safeText(incident.summary, 500),
@@ -361,12 +365,13 @@ function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackC
   };
 }
 
-function isActorActivityRow(row: any) {
-  if (row.victimName) return true;
-  const title = String(row.title ?? "");
-  if (row.actor && normalizeActorName(title) === normalizeActorName(row.actor)) return false;
-  if (/^\s*(?:what|who)\s+is\b|\b(?:actor|group)\s+(?:profile|overview)\b|\b(?:reference|explainer|guide)\b/i.test(title)) return false;
-  return /\b(?:attack(?:ed|s|ing)?|breach(?:ed|es)?|campaign|compromis(?:e|ed|es|ing)|disrupt(?:ed|s|ion)|espionage operation|exfiltrat(?:e|ed|es|ing|ion)|exploit(?:ed|s|ing|ation)|intrusion|leak(?:ed|s|ing)?|malware operation|phishing operation|shut(?:s|ting)? down|stole|stolen|target(?:ed|s|ing)|victim|watering hole)\b/i.test(`${title} ${row.summary ?? ""}`);
+function isIncidentRow(row: any) {
+  return hasIncidentEvidence({
+    title: row.title,
+    text: row.summary,
+    actorNames: [row.actor],
+    victimNames: [row.victimName],
+  });
 }
 
 function supportsActivityCorroboration(claim: any) {

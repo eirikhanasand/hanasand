@@ -257,6 +257,12 @@ describe("api v1", () => {
       metadata: { actorName: "APT29" },
       publishedAt: "2025-09-02T07:00:00.000Z"
     }));
+    for (const [captureId, title] of [
+      ["cap_apt29_profile", "MITRE ATT&CK APT29 Group"],
+      ["cap_apt29_group_dataset", "APT29"],
+      ["cap_apt29_explainer", "What is APT29?"],
+      ["cap_apt29_attack", "Amazon shuts down watering hole attack attributed to APT29"],
+    ]) store.saveIncident({ id: `inc_${captureId}`, tenantId: "tenant_api", sourceId: "src_apt29_activity", captureId, title, summary: title, firstSeenAt: "2026-07-21T00:00:00.000Z", confidence: 0.7, extractorVersion: "legacy" });
 
     const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
 
@@ -264,6 +270,8 @@ describe("api v1", () => {
     expect(response.recentActivity.map((item: any) => item.title)).toEqual(["Amazon shuts down watering hole attack attributed to APT29"]);
     expect(response.lastSeen).toBe("2025-09-02T07:00:00.000Z");
     expect(response.actorIntelligence.firstSeen).toBe("2025-09-02T07:00:00.000Z");
+    expect(response.incidents.map((incident: any) => incident.captureId)).toEqual(["cap_apt29_attack"]);
+    expect(response.actorIntelligence.campaigns).toEqual(["Amazon shuts down watering hole attack attributed to APT29"]);
   });
 
   test("classifies domain and CVE queries without forcing actor semantics", async () => {
