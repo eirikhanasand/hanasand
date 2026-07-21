@@ -58,3 +58,26 @@ test("duplicate processing preserves the incident's first processing timestamp",
     timestampAnomalies: []
   });
 });
+
+test("aggregate alert delivery updates every linked evidence incident", () => {
+  const store = new InMemoryScraperStore();
+  const first = fixtureCapture({ id: "cap_alert_first", contentHash: "hash_alert_first", publishedAt: "2026-05-24T09:59:59.000Z", firstVisibleAt: "2026-05-24T10:00:02.000Z" });
+  const second = fixtureCapture({ id: "cap_alert_second", sourceId: "src_fixture_second", url: "https://example.test/second-report", contentHash: "hash_alert_second", collectedAt: "2026-05-24T10:00:01.000Z", publishedAt: "2026-05-24T09:59:59.000Z", firstVisibleAt: "2026-05-24T10:00:03.000Z" });
+  for (const capture of [first, second]) store.savePipelineResult({
+    capture,
+    incident: { id: `incident_${capture.id}`, sourceId: capture.sourceId, captureId: capture.id, title: "Incident", summary: "Summary", firstSeenAt: capture.collectedAt, confidence: 0.5, extractorVersion: "test", reviewState: "unreviewed" },
+    entities: [],
+    indicators: []
+  });
+
+  store.saveDwmAlert({
+    id: "alert_aggregate",
+    deliveryState: "delivered",
+    deliveredAt: "2026-05-24T10:01:00.000Z",
+    provenance: { captureIds: [first.id] },
+    evidence: [{ provenance: { captureId: second.id } }]
+  });
+
+  expect(store.getTimelinessRecord(`incident_${first.id}`)).toMatchObject({ alertedAt: "2026-05-24T10:01:00.000Z", latencies: { visibilityToAlertSeconds: 58, publicationToAlertSeconds: 61, reportToAlertSeconds: undefined } });
+  expect(store.getTimelinessRecord(`incident_${second.id}`)).toMatchObject({ alertedAt: "2026-05-24T10:01:00.000Z", latencies: { visibilityToAlertSeconds: 57, publicationToAlertSeconds: 61, reportToAlertSeconds: undefined } });
+});

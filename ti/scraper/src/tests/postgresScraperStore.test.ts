@@ -224,7 +224,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       firstSeenAt: collectedAt,
       lastSeenAt: collectedAt,
       updatedAt: collectedAt,
-      incidentId: result.incident.id,
+      provenance: { captureIds: [result.capture.id] },
       alertedAt,
       company: "Northwind Health"
     });

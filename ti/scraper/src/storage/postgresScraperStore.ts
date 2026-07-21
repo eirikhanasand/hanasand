@@ -20,7 +20,7 @@ import type {
   SourceRecord
 } from "../types.ts";
 import { stableId } from "../utils.ts";
-import { InMemoryScraperStore } from "./memoryStore.ts";
+import { InMemoryScraperStore, linkedAlertCaptureIds } from "./memoryStore.ts";
 
 const DEFAULT_MIGRATIONS = [
   { version: "006_threat_intelligence_store", path: fileURLToPath(new URL("../../migrations/006_threat_intelligence_store.sql", import.meta.url)) },
@@ -30,7 +30,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "010_sync_capture_retention_class", path: fileURLToPath(new URL("../../migrations/010_sync_capture_retention_class.sql", import.meta.url)) },
   { version: "011_remove_misclassified_feed_actors", path: fileURLToPath(new URL("../../migrations/011_remove_misclassified_feed_actors.sql", import.meta.url)) },
   { version: "012_classify_evaluation_labels", path: fileURLToPath(new URL("../../migrations/012_classify_evaluation_labels.sql", import.meta.url)) },
-  { version: "013_repair_reprocessing_timeliness", path: fileURLToPath(new URL("../../migrations/013_repair_reprocessing_timeliness.sql", import.meta.url)) }
+  { version: "013_repair_reprocessing_timeliness", path: fileURLToPath(new URL("../../migrations/013_repair_reprocessing_timeliness.sql", import.meta.url)) },
+  { version: "014_link_delivered_alert_timeliness", path: fileURLToPath(new URL("../../migrations/014_link_delivered_alert_timeliness.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -344,8 +345,16 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   override saveCase(record: any): any { return this.saveWorkflow("case", record, () => super.saveCase(record)); }
   override saveDwmWatchlist(record: any): any { return this.saveWorkflow("dwm_watchlist", record, () => super.saveDwmWatchlist(record)); }
   override saveDwmAlert(alert: any): any {
+    const captureIds = new Set(linkedAlertCaptureIds(alert));
+    const linkedIncidentIds = new Set(this.listTimelinessRecords()
+      .filter((record: any) => record.incidentId === alert.incidentId || captureIds.has(record.captureId))
+      .map((record: any) => record.incidentId));
     const stored = super.saveDwmAlert(alert);
     this.enqueue(`alert:${stored.id}`, () => this.persistAlert(stored));
+    for (const incidentId of linkedIncidentIds) {
+      const timeliness = this.getTimelinessRecord(incidentId);
+      if (timeliness?.alertedAt) this.enqueue(`timeliness:${timeliness.id}`, () => this.persistTimeliness(timeliness));
+    }
     return stored;
   }
   override saveDwmWebhookDelivery(record: any): any { return this.saveWorkflow("dwm_webhook_delivery", record, () => super.saveDwmWebhookDelivery(record)); }

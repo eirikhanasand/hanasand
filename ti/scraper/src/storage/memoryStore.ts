@@ -186,8 +186,12 @@ export class InMemoryScraperStore implements ScraperStore {
   saveDwmAlert(alert: any) {
     const stored = put(this.dwmAlerts, alert);
     const alertedAt = alert.alertedAt ?? alert.deliveredAt ?? (alert.deliveryState === "delivered" ? alert.updatedAt : undefined);
-    const timeliness = alert.incidentId ? this.getTimelinessRecord(alert.incidentId) : undefined;
-    if (timeliness && alertedAt) this.saveTimelinessRecord(withAlertedAt(timeliness, alertedAt));
+    if (alertedAt) {
+      const captureIds = new Set(linkedAlertCaptureIds(alert));
+      for (const timeliness of this.listTimelinessRecords()) {
+        if (timeliness.incidentId === alert.incidentId || captureIds.has(timeliness.captureId)) this.saveTimelinessRecord(withAlertedAt(timeliness, alertedAt));
+      }
+    }
     return stored;
   }
   getDwmAlert(id: string) { return this.dwmAlerts.get(id); } listDwmAlerts() { return mapValues(this.dwmAlerts); }
@@ -407,6 +411,15 @@ function stripForbiddenClaimMaterial(value: any): any {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !forbidden.has(key.toLowerCase())).map(([key, nested]) => [key, stripForbiddenClaimMaterial(nested)]));
 }
 function reportedAt(metadata: any): string | undefined { return validIso(metadata?.reportedAt) ?? validIso(metadata?.incidentDate); }
+export function linkedAlertCaptureIds(alert: any): string[] {
+  return unique([
+    alert.captureId,
+    ...(alert.captureIds ?? []),
+    ...(alert.provenance?.captureIds ?? []),
+    ...(alert.workflowContext?.captureIds ?? []),
+    ...(alert.evidence ?? []).map((item: any) => item.captureId ?? item.provenance?.captureId)
+  ]);
+}
 function timelinessRecord(capture: any, incident: any, previous?: any): any {
   const record = {
     id: incident.id,
@@ -435,8 +448,9 @@ function latencyFields(record: any) {
     collectionToProcessingSeconds: elapsed(record.collectedAt, record.processedAt),
     processingToVisibilitySeconds: elapsed(record.processedAt, record.firstVisibleAt),
     visibilityToAlertSeconds: elapsed(record.firstVisibleAt, record.alertedAt),
-    reportToVisibilitySeconds: elapsed(record.reportedAt ?? record.publishedAt, record.firstVisibleAt),
-    reportToAlertSeconds: elapsed(record.reportedAt ?? record.publishedAt, record.alertedAt)
+    publicationToAlertSeconds: elapsed(record.publishedAt, record.alertedAt),
+    reportToVisibilitySeconds: elapsed(record.reportedAt, record.firstVisibleAt),
+    reportToAlertSeconds: elapsed(record.reportedAt, record.alertedAt)
   };
 }
 function timestampAnomalies(record: any): string[] {

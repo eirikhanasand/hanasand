@@ -4,6 +4,7 @@ const LATENCIES = [
   "collectionToProcessingSeconds",
   "processingToVisibilitySeconds",
   "visibilityToAlertSeconds",
+  "publicationToAlertSeconds",
   "reportToVisibilitySeconds",
   "reportToAlertSeconds"
 ] as const;
@@ -49,6 +50,9 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
     timeliness: {
       status: timeliness.length ? "measured" : "unmeasured",
       recordCount: timeliness.length,
+      reportedRecordCount: timeliness.filter((record: any) => record.reportedAt).length,
+      alertedRecordCount: timeliness.filter((record: any) => record.alertedAt).length,
+      reportToAlertRecordCount: timeliness.filter((record: any) => record.reportedAt && record.alertedAt).length,
       anomalyCount: timeliness.filter((record: any) => record.timestampAnomalies?.length).length,
       overall: latencySummary(timeliness),
       bySourceFamily: groupedLatencies(timeliness, (record) => sourceFamily(sourceById.get(record.sourceId)))
@@ -63,6 +67,7 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
       !labels.length && "no evaluation labels in scope",
       labels.length > 0 && !independentLabels.length && "no independently reviewed evaluation labels in scope; automated checks are diagnostic only",
       !rows.some((row: any) => row.bucket === "false_negative") && "recall is unmeasured until false-negative labels exist",
+      !timeliness.some((record: any) => record.reportedAt) && "first-report latency is unmeasured until an actor or victim report is independently timestamped",
       !timeliness.some((record: any) => record.alertedAt) && "alert-delivery latency is unmeasured"
     ].filter(Boolean)
   };
