@@ -262,7 +262,10 @@ function searchRecords(store: any, tenantId: string | undefined, captureIds: Set
   const entities = scoped("listExtractedEntities").filter((record: any) => safeCapture(record.captureId));
   const indicators = scoped("listIndicators").filter((record: any) => safeCapture(record.captureId));
   const incidents = scoped("listIncidents").filter((record: any) => safeCapture(record.captureId));
-  const claims = scoped("listIntelligenceClaims").filter((record: any) => safeAggregate(record.captureIds));
+  const claims = scoped("listIntelligenceClaims").filter((record: any) => safeAggregate(record.captureIds)).map((record: any) => {
+    const visibleSourceIds = unique([...(record.sourceIds ?? []), record.sourceId].filter((sourceId) => sourceIds.has(sourceId)));
+    return { ...record, sourceIds: visibleSourceIds, sourceCount: visibleSourceIds.length, corroborationState: record.corroborationState === "corroborated" && visibleSourceIds.length < 2 ? "single_source" : record.corroborationState };
+  });
   const profiles = scoped("listActorProfiles").filter((record: any) => safeAggregate(record.captureIds));
   const profileIds = new Set(profiles.map((profile: any) => profile.id));
   const aliases = scoped("listActorAliases").filter((record: any) => profileIds.has(record.actorProfileId));
