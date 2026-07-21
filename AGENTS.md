@@ -20,6 +20,8 @@ The product should feel like Microsoft Defender for Endpoint: compact queues, ac
 
 Sellable surfaces are the priority: `/ti`, `/ti/<query>`, DWM/exposure monitoring, actor intelligence, source coverage, alerts/cases, webhooks, and organization/watchlist/settings. Each pass should make one of those surfaces visibly more useful to a buyer or analyst.
 
+The canonical browser product route is `/browser` (with reports under `/browser/report`). `/solutions/browser` was retired; its 404 is expected and must never be reported as a missing product surface or used for browser verification.
+
 Testing overhead is not the work. Run only the smallest fast check needed to avoid shipping obviously broken code, then return to product code. If a check will consume meaningful time or tokens without directly protecting the shipped surface, skip it and state that it was intentionally skipped for ship speed.
 
 ## One-Prompt Product Shipping Bar

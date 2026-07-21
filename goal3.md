@@ -14,6 +14,8 @@ Baseline reviewed:
 
 `goal2.md` remains useful as the previous audit baseline. Where it conflicts with this file, this file controls because it is based on the newer production state and stricter buyer-grade acceptance criteria.
 
+Route authority: the browser investigation product is `/browser`, with reports under `/browser/report`. `/solutions/browser` was retired before this audit and a 404 there is not a product gap; all implementation, evaluation, and live verification must use `/browser`.
+
 Do not declare this goal complete because code exists, a test passes, a metric can be produced, a screenshot looks convincing, or an error is hidden. Completion requires correct production behavior, representative real data, independent validation, and reproducible buyer-facing evidence.
 
 ## Non-Negotiable Completion Standard
