@@ -13,7 +13,7 @@ export function createCollectionPlan(input, sources, frontier = new FocusedFront
   const queryTerms = expandQueryTerms(request.query, request.entityType);
   const tasks: any[] = [], reviewRequired: any[] = [], rejected: any[] = [], explanations: any[] = [], seen = new Set();
   for (const source of rankedSources(sources, queryTerms, createdAt)) {
-    const scoped = sourceMatchesScope(source, request), allowed = allowedSource(source);
+    const scoped = sourceMatchesScope(source, request, queryTerms), allowed = allowedSource(source);
     if (!scoped || !allowed.ok) { handleBlocked(source, request, tasks, reviewRequired, rejected, explanations, queryTerms, createdAt, deadlineAt, budget, scoped, allowed); continue; }
     const sourceDelayUntil = sourceAvailableAt(source, createdAt);
     if (tasks.length + reviewRequired.length >= request.maxTasks) { explanations.push(decision(source, sourceDelayUntil ? "waiting-for-backoff" : "skipped", sourceDelayUntil ? "source cadence or backoff remains active beyond the task budget" : "request task budget exhausted", undefined, budget.class, queryTerms, sourceDelayUntil)); continue; }

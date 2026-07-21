@@ -29,6 +29,14 @@ describe("planner backpressure and continuous scheduling", () => {
     expect(dto.backpressureState).toBe("accepted");
   });
 
+  test("does not schedule a fixed-query source for another actor", () => {
+    const { plan } = createLiveSearchPlan({ request: { query: "APT29", entityType: "actor", tenantId: "tenant_live", createdAt: "2026-05-24T00:00:00.000Z" }, sources: [
+      source({ id: "gdelt_8base", type: "api", trustScore: 1, metadata: { queryTerm: "8Base" } }),
+      source({ id: "gdelt_apt29", type: "api", trustScore: 0.5, metadata: { queryTerm: "APT29" } }),
+    ] });
+    expect(plan.tasks.map((task) => task.sourceId)).toEqual(["gdelt_apt29"]);
+  });
+
   test("builds continuous actor and CVE scheduling fixtures with cost envelopes", () => {
     const now = "2026-05-24T04:00:00.000Z";
     const sources = [

@@ -16,7 +16,7 @@ export function createLiveSearchPlan(input): any {
 }
 
 export function liveSearchReuseKey(request, sources, queryTerms) {
-  const scoped = sources.filter((s) => sourceMatchesScope(s, { includeClearWeb: request.includeClearWeb ?? true, includeTelegram: request.includeTelegram ?? true, includeDarknetMetadata: request.includeDarknetMetadata ?? false }));
+  const scoped = sources.filter((s) => sourceMatchesScope(s, { includeClearWeb: request.includeClearWeb ?? true, includeTelegram: request.includeTelegram ?? true, includeDarknetMetadata: request.includeDarknetMetadata ?? false }, queryTerms));
   return stableId("live-reuse", JSON.stringify({ tenantId: request.tenantId ?? "global", entityType: request.entityType, terms: reuseTerms(request.query, request.entityType, queryTerms), sourceScope: uniq(scoped.map((s) => s.type)), riskScope: uniq(scoped.map((s) => s.risk)), freshnessWindow: hour(request.createdAt ?? nowIso()) }));
 }
 

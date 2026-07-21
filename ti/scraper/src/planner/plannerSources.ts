@@ -16,7 +16,9 @@ export function sourceAvailableAt(source, at) {
   return [source.crawlState?.backoffUntil, source.crawlState?.nextEligibleAt].filter((value) => value && Date.parse(value) > Date.parse(at)).sort().at(-1);
 }
 
-export function sourceMatchesScope(source, request) {
+export function sourceMatchesScope(source, request, terms = []) {
+  const queryTerm = source.metadata?.queryTerm;
+  if (queryTerm && terms.length && !terms.some((term) => normalized(term) === normalized(queryTerm))) return false;
   return source.type === "telegram_public" ? request.includeTelegram : source.type?.endsWith("_metadata") ? request.includeDarknetMetadata : request.includeClearWeb;
 }
 
@@ -38,4 +40,8 @@ export function novelty(source) {
 function sourceScore(source, terms, at) {
   const text = `${source.name} ${source.url} ${(source.tags ?? []).join(" ")} ${JSON.stringify(source.metadata ?? {})}`.toLowerCase();
   return clampScore(source.trustScore * 0.45 + sourceFreshness(source, at) * 0.3 + novelty(source) * 0.15 + (terms.some((t) => text.includes(t.toLowerCase())) ? 0.2 : 0) + (source.type === "api" ? 0.08 : source.type === "rss" ? 0.06 : source.type === "telegram_public" ? 0.04 : 0));
+}
+
+function normalized(value) {
+  return String(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
