@@ -29,8 +29,7 @@ import { handleFrontierApplyPlanRoute } from "./frontierApplyPlanRoute.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 import { buildSchedulerDiagnostics, SCHEDULER_CUTOVER_DESIGN } from "../frontier/schedulerProduction.ts";
-import { buildResourceSnapshot, estimateCapacity, sizeWorkerPools } from "../ops/resourceControls.ts";
-import { DEFAULT_RESOURCE_BUDGET } from "../ops/config.ts";
+import { buildResourceSnapshot } from "../ops/resourceControls.ts";
 import { authenticateOperatorRequest } from "./requestAuthentication.ts";
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 export function startApiServer(options: ApiServerOptions): ApiServerHandle {
@@ -303,7 +302,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       const scope = resolveTenantScope(request, url);
       return scope.error ?? json(qualityPayload(url.searchParams.get("q") ?? "", options.store, scope.tenantId));
     }
-    if (url.pathname === "/v1/ops/product-slo") return json({ route: "/v1/ops/product-slo", ...productSlo(options, url) });
+    if (url.pathname === "/v1/ops/product-slo") return json({ route: "/v1/ops/product-slo", ...productSlo(options) });
     if (url.pathname === "/v1/sources/canary-activation" && request.method === "POST") return canaryActivation(request, options);
     if (url.pathname === "/v1/sources/canary-pause" && request.method === "POST") return canaryPause(request, options);
     if (url.pathname === "/v1/ops/canary/run" && request.method === "POST") return canaryRun(request, options);
@@ -312,8 +311,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/ops/canary/soak" && request.method === "GET") return canarySoak(url, options);
     if (url.pathname === "/v1/ops/canary/console" && request.method === "GET") return canaryConsole(url, options);
     if (url.pathname === "/v1/ops/resource-snapshot") {
-      const budget = DEFAULT_RESOURCE_BUDGET;
-      return json({ service: "ti-scraper", queue: { queued: options.frontier.size() }, resources: buildResourceSnapshot({ budget, queueItems: options.frontier.size() }), capacity: estimateCapacity(budget), workerPools: sizeWorkerPools(budget), workers: options.supervisor?.snapshot() ?? [] });
+      const resources = buildResourceSnapshot({ config: options.config, queueItems: options.frontier.size() });
+      return json({ service: "ti-scraper", generatedAt: nowIso(), memory: resources.memory, queue: { queued: options.frontier.size() }, resources, workerPools: resources.concurrency, workers: options.supervisor?.snapshot() ?? [] });
     }
     if (url.pathname === "/v1/frontier") {
       const queue = options.frontier.snapshot?.() ?? [];

@@ -25,9 +25,10 @@ describe("api v1", () => {
 
     expect(snapshot.service).toBe("ti-scraper");
     expect((snapshot.queue as { queued: number }).queued).toBeGreaterThanOrEqual(0);
-    expect((snapshot.resources as { disk: { reservedGb: number } }).disk.reservedGb).toBe(500);
-    expect((snapshot.capacity as { ceilingMb: number }).ceilingMb).toBe(160 * 1024);
-    expect((snapshot.workerPools as { telegram: number }).telegram).toBeGreaterThan(0);
+    expect((snapshot.memory as { targetMb: number }).targetMb).toBe(8 * 1024);
+    expect((snapshot.memory as { ceilingMb: number }).ceilingMb).toBe(14 * 1024);
+    expect((snapshot.resources as { configurationSource: string }).configurationSource).toBe("runtime_config");
+    expect((snapshot.workerPools as { telegram: number }).telegram).toBe(8);
     expect((snapshot.workers as Array<{ id: string; state: string }>)[0]).toMatchObject({ id: "telegram-1", state: "running" });
   });
 });

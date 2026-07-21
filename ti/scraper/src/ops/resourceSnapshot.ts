@@ -1,33 +1,31 @@
 import type { ResourceSnapshotInput, RuntimeResourceSnapshot } from "./resourceTypes.ts";
-import { bytesToMb, statusForRatio } from "./resourceUtils.ts";
+import { bytesToMb } from "./resourceUtils.ts";
 
 export function buildResourceSnapshot(input: ResourceSnapshotInput): RuntimeResourceSnapshot {
   const memory = input.memoryUsage ?? process.memoryUsage();
+  const limits = input.config?.limits;
   const rssMb = bytesToMb(memory.rss);
-  const heapUsedMb = bytesToMb(memory.heapUsed);
-  const maxRamMb = input.budget.maxRamGb * 1024;
-  const queueItems = input.queueItems ?? 0;
+  const clearWeb = limits?.maxConcurrentClearWebTasks ?? null;
+  const telegram = limits?.maxConcurrentTelegramTasks ?? null;
+  const darknetMetadata = limits?.maxConcurrentDarknetMetadataTasks ?? null;
 
   return {
+    configurationSource: limits ? "runtime_config" : "unavailable",
     memory: {
       rssMb,
-      heapUsedMb,
-      maxRamGb: input.budget.maxRamGb,
-      normalCeilingGb: input.budget.normalCeilingGb,
-      status: statusForRatio(rssMb / maxRamMb)
+      heapUsedMb: bytesToMb(memory.heapUsed),
+      targetMb: limits?.maxMemoryMbTarget ?? null,
+      ceilingMb: limits?.maxMemoryMbCeiling ?? null,
+      status: limits
+        ? rssMb >= limits.maxMemoryMbCeiling ? "critical" : rssMb >= limits.maxMemoryMbTarget ? "warn" : "ok"
+        : "unavailable"
     },
-    workers: {
-      collection: input.budget.maxCollectionWorkers,
-      processing: input.budget.maxProcessingWorkers,
-      telegram: input.budget.maxTelegramWorkers,
-      browser: input.budget.maxBrowserWorkers,
-      darknetMetadata: input.budget.maxDarknetMetadataWorkers
+    concurrency: {
+      clearWeb,
+      telegram,
+      darknetMetadata,
+      total: clearWeb === null || telegram === null || darknetMetadata === null ? null : clearWeb + telegram + darknetMetadata
     },
-    queue: {
-      maxItems: input.budget.maxQueueItems,
-      currentItems: queueItems,
-      status: statusForRatio(queueItems / input.budget.maxQueueItems)
-    },
-    disk: { reservedGb: input.budget.reservedDiskGb }
+    queue: { currentItems: Math.max(0, input.queueItems ?? 0) }
   };
 }

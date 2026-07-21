@@ -3,15 +3,13 @@ import {
   readLiveProductDailySnapshots,
   type LiveProductDailySnapshot
 } from "../src/ops/productSlo.ts";
-import { buildEndpoint, proofModeFromEnv } from "./product-slo-snapshot/endpoint.ts";
+import { buildEndpoint } from "./product-slo-snapshot/endpoint.ts";
 import { parseDashboard } from "./product-slo-snapshot/parse.ts";
 import { requestText } from "./product-slo-snapshot/request.ts";
 
-const proofMode = proofModeFromEnv(process.env.TI_PRODUCT_SLO_PROOF_MODE ?? process.env.PROOF_MODE ?? "local");
 const baseUrl = process.env.TI_PRODUCT_SLO_BASE_URL ?? "http://127.0.0.1:8097";
 const snapshotPath = process.env.TI_PRODUCT_SLO_SNAPSHOT_PATH ?? "var/ops/live-product-slo/daily.jsonl";
-const generatedAt = process.env.TI_PRODUCT_SLO_GENERATED_AT ?? new Date().toISOString();
-const endpoint = buildEndpoint(baseUrl, proofMode, generatedAt, snapshotPath);
+const endpoint = buildEndpoint(baseUrl);
 const started = performance.now();
 
 let response: { ok: boolean; status: number; bodyText: string };
@@ -49,14 +47,8 @@ console.log(JSON.stringify({
   snapshotDate: snapshot.snapshotDate,
   appendedSnapshotCount: snapshots.length,
   metrics: snapshot.metrics,
-  monetizationReadiness: snapshot.monetizationReadiness,
-  productLaunch: dashboard.productLaunch,
-  paidProductEconomics: dashboard.paidProductEconomics,
-  sourceMonetizationGate: dashboard.sourceMonetizationGate,
-  nonMonetizingWorkDetector: snapshot.nonMonetizingWorkDetector,
-  scaleStepGates: snapshot.scaleStepGates,
-  revenueBlockerBoard: dashboard.revenueBlockerBoard,
-  deploymentProof: dashboard.deploymentProof,
+  slos: snapshot.slos,
+  measurementBoundary: dashboard.measurementBoundary,
   resourceGuardrails: dashboard.resourceGuardrails
 }, null, 2));
 
