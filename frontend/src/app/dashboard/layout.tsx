@@ -28,6 +28,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     const isAdmin = hasRole('administrator') || hasRole('admin')
     const canManageSystem = isAdmin || hasRole('system_admin')
     const canManageContent = isAdmin || hasRole('content_admin')
+    const canReviewIntel = canManageSystem || hasRole('analyst') || hasRole('owner')
 
     if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
@@ -41,6 +42,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                     isAdmin={isAdmin}
                     canManageSystem={canManageSystem}
                     canManageContent={canManageContent}
+                    canReviewIntel={canReviewIntel}
                 />
                 <div className='min-w-0'>
                     {impersonatingId && <ImpersonationBanner id={impersonatingId} name={impersonatingName} />}

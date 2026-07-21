@@ -23,11 +23,13 @@ export default function DashboardSidebar({
     isAdmin,
     canManageSystem,
     canManageContent,
+    canReviewIntel = isAdmin,
 }: {
     id: string
     isAdmin: boolean
     canManageSystem: boolean
     canManageContent: boolean
+    canReviewIntel?: boolean
 }) {
     const pathname = usePathname()
     const mode = useSyncExternalStore(
@@ -67,6 +69,13 @@ export default function DashboardSidebar({
     const adminItems: Item[] = []
     const tiAdminItems: Item[] = []
 
+    if (canReviewIntel) {
+        tiAdminItems.push(
+            { href: '/dashboard/ti/review', label: 'Claim review', icon: <ClipboardCheck className='h-4 w-4' /> },
+            { href: '/dashboard/ti/evaluation', label: 'Evaluation', icon: <ListChecks className='h-4 w-4' /> },
+        )
+    }
+
     if (canManageSystem) {
         systemItems.push(
             { href: '/dashboard/vms', label: 'VMs', icon: <Server className='h-4 w-4' /> },
@@ -96,7 +105,6 @@ export default function DashboardSidebar({
             { href: '/dashboard/ti/sources', label: 'Sources', icon: <DatabaseZap className='h-4 w-4' /> },
             { href: '/dashboard/ti/domains', label: 'Watched entities', icon: <Globe2 className='h-4 w-4' /> },
             { href: '/dashboard/ti/runs', label: 'Collection runs', icon: <PlayCircle className='h-4 w-4' /> },
-            { href: '/dashboard/ti/evaluation', label: 'Evaluation', icon: <ClipboardCheck className='h-4 w-4' /> },
             { href: '/dashboard/ti/audit', label: 'Audit log', icon: <ClipboardList className='h-4 w-4' /> },
         )
 
