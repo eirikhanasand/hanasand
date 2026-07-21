@@ -22,12 +22,12 @@ test('organization workspace scopes alert workflow by selected tenant and role',
     assert.match(source, /url\.searchParams\.set\('memberId', subject\.id\)/)
     assert.match(source, /window\.history\.replaceState\(window\.history\.state, '', `\$\{url\.pathname\}\$\{url\.search\}\$\{url\.hash\}`\)/)
 
-    assert.match(source, /selectedOrganization\?\.role === 'owner' \|\| selectedOrganization\?\.role === 'admin'/)
+    assert.match(source, /selectedOrganizationRole === 'owner' \|\| selectedOrganizationRole === 'admin'/)
     assert.match(source, /disabled=\{!canManage \|\| !draft\.value\.trim\(\) \|\| draftDuplicate \|\| Boolean\(busy\)\}/)
     assert.match(source, /disabled=\{!canManage \|\| Boolean\(busy\)\}/)
     assert.match(source, /const canMutateMember = canManage && memberCanMutate\(member\)/)
     assert.match(source, /disabled=\{!canMutateMember \|\| Boolean\(busy\)\}/)
-    assert.match(source, /return member\.role !== 'owner' && status !== 'removed' && status !== 'revoked' && status !== 'inactive'/)
+    assert.match(source, /return member\.role\.toLowerCase\(\) !== 'owner' && status !== 'removed' && status !== 'revoked' && status !== 'inactive'/)
     assert.match(source, /members=\{bundle\.members\}/)
     assert.match(source, /function inviteEmailConflicts\(emails: string\[\], invites: OrganizationInvite\[\], members: OrganizationMember\[\]\)/)
     assert.match(source, /email\?: string/)
@@ -55,6 +55,6 @@ test('organization workspace scopes alert workflow by selected tenant and role',
         assert.ok(source.includes(scopedRoute), `Expected organization workspace to load ${scopedRoute}`)
     }
 
-    assert.match(deliveriesRoute, /if \(organizationId\) \{[\s\S]*proxyOrganizationApiRequest\(request, '\/dwm\/webhook-deliveries'/)
+    assert.match(deliveriesRoute, /if \(organizationId\) \{[\s\S]*searchParams\.set\('orgId', organizationId\)[\s\S]*proxyOrganizationApiRequest\(new NextRequest\(scopedUrl/)
     assert.match(deliveriesRoute, /proxyTiRequest\(request, '\/v1\/dwm\/webhooks\/deliveries'/)
 })
