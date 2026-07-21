@@ -47,7 +47,7 @@ describe("api v1", () => {
     expect(response.evidenceAssessment.corroboratedClaimCount).toBe(0);
     expect(response.claims).toEqual([expect.objectContaining({ id: "claim_identity", corroborationState: "corroborated", sourceCount: 2 })]);
     expect(response.rows[0].title).toBe("MITRE APT29");
-    expect(response.rows[0].summary).toBe("MITRE APT29 APT29 actor reference ® evidence.");
+    expect(response.rows[0].summary).toBe("APT29 actor reference ® evidence.");
     expect(response.targets).toEqual([]);
     expect(response.actorIntelligence.targetSectors).toEqual([]);
     expect(response.actorIntelligence.geographies).toEqual([]);
