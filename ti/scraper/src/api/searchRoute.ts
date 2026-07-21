@@ -298,10 +298,11 @@ function assess(rows: any[], records: ReturnType<typeof searchRecords>) {
 
 function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackConfidence: number) {
   const rowClaims = records.claims.filter((claim: any) => claim.captureIds?.includes(row.id));
-  const corroboratingSourceIds = unique(rowClaims
+  const activityClaims = rowClaims.filter((claim: any) => claim.claimType !== "actor");
+  const corroboratingSourceIds = unique(activityClaims
     .flatMap((claim: any) => claim.sourceIds ?? [])
     .filter((sourceId) => sourceId !== row.sourceId));
-  const contradictingSourceIds = unique(rowClaims.flatMap((claim: any) => claim.contradictingSourceIds ?? []));
+  const contradictingSourceIds = unique(activityClaims.flatMap((claim: any) => claim.contradictingSourceIds ?? []));
   return {
     date: row.publishedAt ?? row.collectedAt,
     title: row.title,
@@ -321,9 +322,9 @@ function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackC
     contradictingSourceIds,
     assertionKind: "source_claim",
     reviewState: reviewStateFor(row.id, records),
-    corroborationState: rowClaims.some((claim: any) => claim.corroborationState === "contradicted")
+    corroborationState: activityClaims.some((claim: any) => claim.corroborationState === "contradicted")
       ? "contradicted"
-      : rowClaims.some((claim: any) => claim.corroborationState === "corroborated")
+      : activityClaims.some((claim: any) => claim.corroborationState === "corroborated")
         ? "corroborated"
         : "single_source",
     observationSummary: `A captured source record matched the query. This confirms the source mention, not the underlying activity.`

@@ -28,4 +28,19 @@ describe("api v1", () => {
     expect(response.evidenceAssessment.corroboratedClaimCount).toBe(0);
     expect(response.claims).toEqual([expect.objectContaining({ id: "claim_single", corroborationState: "single_source", sourceCount: 1 })]);
   });
+
+  test("does not present corroborated actor identity as corroborated activity", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_identity_a", tenantId: "tenant_api", name: "MITRE APT29" }));
+    store.saveSource(source({ id: "src_identity_b", tenantId: "tenant_api", name: "Vendor APT29" }));
+    store.saveCapture(fixtureCapture({ id: "cap_identity_a", sourceId: "src_identity_a", title: "MITRE APT29.display: none; window.dataLayer = window.dataLayer || []", body: "APT29 actor reference.", publishedAt: "2026-07-20T00:00:00.000Z" }));
+    store.saveCapture(fixtureCapture({ id: "cap_identity_b", sourceId: "src_identity_b", url: "https://example.test/vendor", title: "Vendor APT29 reference", body: "APT29 actor reference.", publishedAt: "2026-07-19T00:00:00.000Z" }));
+    store.saveIntelligenceClaim({ id: "claim_identity", tenantId: "tenant_api", sourceIds: ["src_identity_a", "src_identity_b"], captureIds: ["cap_identity_a", "cap_identity_b"], claimType: "actor", value: { actor: "APT29" }, summary: "actor: APT29", confidence: 0.84, reviewState: "unreviewed", corroborationState: "corroborated" });
+
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+    expect(response.rows[0].title).toBe("MITRE APT29");
+    expect(response.recentActivity).toEqual(expect.arrayContaining([
+      expect.objectContaining({ publisherCount: 1, corroboratingSourceIds: [], corroborationState: "single_source" })
+    ]));
+  });
 });

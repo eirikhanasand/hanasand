@@ -37,7 +37,9 @@ function victimClaim(title: string) {
 function cleanTitle(title: unknown, summary: string, sourceName?: string) {
   const lines = summary.split("\n").map((line) => line.trim()).filter(Boolean);
   const fallback = lines[0] === sourceName ? lines[1] : lines[0];
-  return cleanSummary(title || fallback || "Public intelligence row").slice(0, 160);
+  const cleaned = cleanSummary(title || fallback || "Public intelligence row");
+  if (/window\.dataLayer|display:\s*none|function\s+\w+\s*\(/i.test(cleaned)) return sourceName || cleaned.split(/window\.dataLayer|display:\s*none|function\s+\w+\s*\(/i)[0].replace(/[.;\s]+$/, "");
+  return cleaned.slice(0, 160);
 }
 
 function safeMetadataText(metadata: any) {
