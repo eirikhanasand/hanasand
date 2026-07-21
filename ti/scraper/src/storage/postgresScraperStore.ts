@@ -33,7 +33,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "013_repair_reprocessing_timeliness", path: fileURLToPath(new URL("../../migrations/013_repair_reprocessing_timeliness.sql", import.meta.url)) },
   { version: "014_link_delivered_alert_timeliness", path: fileURLToPath(new URL("../../migrations/014_link_delivered_alert_timeliness.sql", import.meta.url)) },
   { version: "015_repair_reprocessing_collection_time", path: fileURLToPath(new URL("../../migrations/015_repair_reprocessing_collection_time.sql", import.meta.url)) },
-  { version: "016_merge_duplicate_actor_profiles", path: fileURLToPath(new URL("../../migrations/016_merge_duplicate_actor_profiles.sql", import.meta.url)) }
+  { version: "016_merge_duplicate_actor_profiles", path: fileURLToPath(new URL("../../migrations/016_merge_duplicate_actor_profiles.sql", import.meta.url)) },
+  { version: "017_evidence_linked_timeliness", path: fileURLToPath(new URL("../../migrations/017_evidence_linked_timeliness.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -174,7 +175,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       for (const observation of snapshot.sourceHealthObservations ?? []) this.saveSourceHealthObservation(observation);
       for (const record of snapshot.timelinessRecords ?? []) this.saveTimelinessRecord(record);
       for (const [snapshotKey, recordType, save] of legacyWorkflowLoaders) {
-        for (const record of snapshot[snapshotKey] ?? []) save(this, record);
+        for (const record of snapshot[snapshotKey] ?? []) {
+          if (recordType === "dwm_webhook_delivery") this.saveWorkflow(recordType, record, () => this.hydrateDwmWebhookDeliverySnapshot(record));
+          else save(this, record);
+        }
       }
     });
     return {
@@ -358,7 +362,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     this.enqueue(`alert:${stored.id}`, () => this.persistAlert(stored));
     for (const incidentId of linkedIncidentIds) {
       const timeliness = this.getTimelinessRecord(incidentId);
-      if (timeliness?.alertedAt) this.enqueue(`timeliness:${timeliness.id}`, () => this.persistTimeliness(timeliness));
+      if (timeliness?.alertCreatedAt) this.enqueue(`timeliness:${timeliness.id}`, () => this.persistTimeliness(timeliness));
     }
     return stored;
   }
@@ -482,7 +486,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       case "webhook_destination": super.saveWebhookDestination(record); break;
       case "case": super.saveCase(record); break;
       case "dwm_watchlist": super.saveDwmWatchlist(record); break;
-      case "dwm_webhook_delivery": super.saveDwmWebhookDelivery(record); break;
+      case "dwm_webhook_delivery": this.hydrateDwmWebhookDeliverySnapshot(record); break;
       case "actor_org_relevance_review": super.saveActorOrgRelevanceReview(record); break;
     }
   }
@@ -766,16 +770,38 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   private async persistTimeliness(record: any, sql: any = this.sql): Promise<void> {
     await sql`
       INSERT INTO threat_intel.timeliness_records (
-        id, tenant_id, source_id, capture_id, incident_id, reported_at, published_at,
-        collected_at, processed_at, first_visible_at, alerted_at, updated_at, record
+        id, tenant_id, source_id, capture_id, incident_id, reported_at, actor_reported_at,
+        victim_reported_at, publisher_reported_at, first_reported_at, first_reported_kind,
+        first_reported_provenance, published_at, collected_at, processed_at, first_visible_at,
+        alerted_at, alert_created_at, delivery_attempted_at, delivered_at, updated_at, record
       ) VALUES (
         ${record.id}, ${nullable(record.tenantId)}, ${record.sourceId}, ${record.captureId},
-        ${record.incidentId}, ${nullable(record.reportedAt)}, ${nullable(record.publishedAt)},
-        ${record.collectedAt}, ${record.processedAt}, ${record.firstVisibleAt},
-        ${nullable(record.alertedAt)}, ${record.updatedAt ?? record.firstVisibleAt}, ${toJson(record)}::text::jsonb
+        ${record.incidentId}, ${nullable(record.firstReportedAt ?? record.reportedAt)}, ${nullable(record.actorReportedAt)},
+        ${nullable(record.victimReportedAt)}, ${nullable(record.publisherReportedAt)}, ${nullable(record.firstReportedAt ?? record.reportedAt)},
+        ${nullable(record.firstReportedKind)}, ${record.firstReportedProvenance ? toJson(record.firstReportedProvenance) : null}::text::jsonb,
+        ${nullable(record.publishedAt)}, ${record.collectedAt}, ${record.processedAt}, ${record.firstVisibleAt},
+        ${nullable(record.alertCreatedAt ?? record.alertedAt)}, ${nullable(record.alertCreatedAt ?? record.alertedAt)},
+        ${nullable(record.deliveryAttemptedAt)}, ${nullable(record.deliveredAt)},
+        ${record.updatedAt ?? record.firstVisibleAt}, ${toJson(record)}::text::jsonb
       )
       ON CONFLICT (incident_id) DO UPDATE SET
-        reported_at = COALESCE(EXCLUDED.reported_at, threat_intel.timeliness_records.reported_at),
+        reported_at = COALESCE(LEAST(threat_intel.timeliness_records.reported_at, EXCLUDED.reported_at), threat_intel.timeliness_records.reported_at, EXCLUDED.reported_at),
+        actor_reported_at = COALESCE(LEAST(threat_intel.timeliness_records.actor_reported_at, EXCLUDED.actor_reported_at), threat_intel.timeliness_records.actor_reported_at, EXCLUDED.actor_reported_at),
+        victim_reported_at = COALESCE(LEAST(threat_intel.timeliness_records.victim_reported_at, EXCLUDED.victim_reported_at), threat_intel.timeliness_records.victim_reported_at, EXCLUDED.victim_reported_at),
+        publisher_reported_at = COALESCE(LEAST(threat_intel.timeliness_records.publisher_reported_at, EXCLUDED.publisher_reported_at), threat_intel.timeliness_records.publisher_reported_at, EXCLUDED.publisher_reported_at),
+        first_reported_kind = CASE
+          WHEN threat_intel.timeliness_records.first_reported_at IS NULL THEN EXCLUDED.first_reported_kind
+          WHEN EXCLUDED.first_reported_at IS NULL THEN threat_intel.timeliness_records.first_reported_kind
+          WHEN EXCLUDED.first_reported_at < threat_intel.timeliness_records.first_reported_at THEN EXCLUDED.first_reported_kind
+          ELSE threat_intel.timeliness_records.first_reported_kind
+        END,
+        first_reported_provenance = CASE
+          WHEN threat_intel.timeliness_records.first_reported_at IS NULL THEN EXCLUDED.first_reported_provenance
+          WHEN EXCLUDED.first_reported_at IS NULL THEN threat_intel.timeliness_records.first_reported_provenance
+          WHEN EXCLUDED.first_reported_at < threat_intel.timeliness_records.first_reported_at THEN EXCLUDED.first_reported_provenance
+          ELSE threat_intel.timeliness_records.first_reported_provenance
+        END,
+        first_reported_at = COALESCE(LEAST(threat_intel.timeliness_records.first_reported_at, EXCLUDED.first_reported_at), threat_intel.timeliness_records.first_reported_at, EXCLUDED.first_reported_at),
         published_at = COALESCE(EXCLUDED.published_at, threat_intel.timeliness_records.published_at),
         collected_at = LEAST(threat_intel.timeliness_records.collected_at, EXCLUDED.collected_at),
         processed_at = LEAST(threat_intel.timeliness_records.processed_at, EXCLUDED.processed_at),
@@ -785,6 +811,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
           WHEN EXCLUDED.alerted_at IS NULL THEN threat_intel.timeliness_records.alerted_at
           ELSE LEAST(threat_intel.timeliness_records.alerted_at, EXCLUDED.alerted_at)
         END,
+        alert_created_at = COALESCE(LEAST(threat_intel.timeliness_records.alert_created_at, EXCLUDED.alert_created_at), threat_intel.timeliness_records.alert_created_at, EXCLUDED.alert_created_at),
+        delivery_attempted_at = COALESCE(LEAST(threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at), threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at),
+        delivered_at = COALESCE(LEAST(threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at), threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at),
         updated_at = EXCLUDED.updated_at,
         record = EXCLUDED.record
     `;

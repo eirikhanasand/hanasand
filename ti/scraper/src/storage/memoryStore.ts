@@ -44,13 +44,14 @@ export class InMemoryScraperStore implements ScraperStore {
     const firstVisibleAt = result.capture.firstVisibleAt ?? nowIso();
     const capture = this.saveCapture({ ...result.capture, processedAt: result.capture.processedAt ?? firstVisibleAt, firstVisibleAt });
     const previousIncident = result.incident ? this.getIncident(result.incident.id) : undefined;
+    const reporting = mergeReportTimeline(previousIncident, reportTimeline(capture, this.getSource(capture.sourceId)));
     const incident = result.incident ? this.saveIncident({
       ...result.incident,
       tenantId: capture.tenantId,
       sourceId: capture.sourceId,
       captureId: capture.id,
       firstSeenAt: previousIncident?.firstSeenAt ?? validIso(result.incident.firstSeenAt) ?? capture.publishedAt ?? capture.collectedAt,
-      reportedAt: previousIncident?.reportedAt ?? validIso(result.incident.reportedAt) ?? reportedAt(result.capture.metadata),
+      ...reporting,
       publishedAt: previousIncident?.publishedAt ?? validIso(result.incident.publishedAt) ?? capture.publishedAt,
       collectedAt: previousIncident?.collectedAt ?? capture.collectedAt,
       processedAt: previousIncident?.processedAt ?? result.incident.processedAt ?? capture.processedAt,
@@ -186,17 +187,35 @@ export class InMemoryScraperStore implements ScraperStore {
   saveDwmWatchlist(watchlist: any) { return put(this.dwmWatchlists, watchlist); } getDwmWatchlist(id: string) { return this.dwmWatchlists.get(id); } listDwmWatchlists() { return mapValues(this.dwmWatchlists); }
   saveDwmAlert(alert: any) {
     const stored = put(this.dwmAlerts, alert);
-    const alertedAt = alert.alertedAt ?? alert.deliveredAt ?? (alert.deliveryState === "delivered" ? alert.updatedAt : undefined);
-    if (alertedAt) {
+    const alertCreated = [["alertCreatedAt", alert.alertCreatedAt], ["createdAt", alert.createdAt], ["savedAt", alert.savedAt]]
+      .map(([field, value]) => ({ field, timestamp: validIso(value) }))
+      .find((candidate) => candidate.timestamp);
+    if (alertCreated?.timestamp) {
       const captureIds = new Set(linkedAlertCaptureIds(alert));
       for (const timeliness of this.listTimelinessRecords()) {
-        if (timeliness.incidentId === alert.incidentId || captureIds.has(timeliness.captureId)) this.saveTimelinessRecord(withAlertedAt(timeliness, alertedAt));
+        if (timeliness.incidentId === alert.incidentId || captureIds.has(timeliness.captureId)) this.saveTimelinessRecord(withAlertCreated(timeliness, alertCreated.timestamp, alert.id, `alert.${alertCreated.field}`));
       }
     }
     return stored;
   }
   getDwmAlert(id: string) { return this.dwmAlerts.get(id); } listDwmAlerts() { return mapValues(this.dwmAlerts); }
-  saveDwmWebhookDelivery(delivery: any) { return put(this.dwmWebhookDeliveries, delivery); } getDwmWebhookDelivery(id: string) { return this.dwmWebhookDeliveries.get(id); } listDwmWebhookDeliveries() { return mapValues(this.dwmWebhookDeliveries); }
+  saveDwmWebhookDelivery(delivery: any) {
+    const deliveredAt = delivery.status === "delivered" ? validIso(delivery.deliveredAt) ?? nowIso() : undefined;
+    const stored = put(this.dwmWebhookDeliveries, { ...delivery, deliveredAt, completedAt: delivery.completedAt ?? deliveredAt, updatedAt: delivery.updatedAt ?? deliveredAt ?? delivery.attemptedAt });
+    if (!["dry_run", "skipped"].includes(stored.status)) {
+      const alert = this.getDwmAlert(stored.alertId);
+      if (alert) {
+        const captureIds = new Set(linkedAlertCaptureIds(alert));
+        for (const timeliness of this.listTimelinessRecords()) {
+          if (timeliness.incidentId !== alert.incidentId && !captureIds.has(timeliness.captureId)) continue;
+          this.saveTimelinessRecord(withDelivery(timeliness, stored));
+        }
+      }
+    }
+    return stored;
+  }
+  protected hydrateDwmWebhookDeliverySnapshot(delivery: any) { return put(this.dwmWebhookDeliveries, delivery); }
+  getDwmWebhookDelivery(id: string) { return this.dwmWebhookDeliveries.get(id); } listDwmWebhookDeliveries() { return mapValues(this.dwmWebhookDeliveries); }
   saveActorOrgRelevanceReview(review: any) { return put(this.actorOrgRelevanceReviews, review); } getActorOrgRelevanceReview(id: string) { return this.actorOrgRelevanceReviews.get(id); } listActorOrgRelevanceReviews() { return mapValues(this.actorOrgRelevanceReviews); }
 }
 installMemoryStoreReplayMethods(InMemoryScraperStore); installMemoryStoreDiscoveryMethods(InMemoryScraperStore);
@@ -420,7 +439,6 @@ function stripForbiddenClaimMaterial(value: any): any {
   const forbidden = new Set(["rawbody", "rawpayload", "leakedrows", "credentialvalues", "downloadeddataset", "password", "cookie", "authorization"]);
   return Object.fromEntries(Object.entries(value).filter(([key]) => !forbidden.has(key.toLowerCase())).map(([key, nested]) => [key, stripForbiddenClaimMaterial(nested)]));
 }
-function reportedAt(metadata: any): string | undefined { return validIso(metadata?.reportedAt) ?? validIso(metadata?.incidentDate); }
 export function linkedAlertCaptureIds(alert: any): string[] {
   return unique([
     alert.captureId,
@@ -430,53 +448,159 @@ export function linkedAlertCaptureIds(alert: any): string[] {
     ...(alert.evidence ?? []).map((item: any) => item.captureId ?? item.provenance?.captureId)
   ]);
 }
+function reportTimeline(capture: any, source?: any): any {
+  const reportTimestamps = (Array.isArray(capture.metadata?.reportTimestamps) ? capture.metadata.reportTimestamps : [])
+    .map((evidence: any) => {
+      const role = verifiedReportRole(evidence?.role, source);
+      const timestamp = validIso(evidence?.timestamp);
+      if (!role || !timestamp || evidence?.extractionMethod !== "source_field") return undefined;
+      return {
+        role,
+        timestamp,
+        sourceId: capture.sourceId,
+        sourceName: source?.name ?? evidence.sourceName,
+        captureId: capture.id,
+        evidencePath: String(evidence.evidencePath ?? "source.publishedAt"),
+        extractionMethod: "source_field",
+        parserVersion: evidence.parserVersion
+      };
+    })
+    .filter(Boolean);
+  return timelineFromReportEvidence(reportTimestamps);
+}
+function verifiedReportRole(value: unknown, source?: any): string | undefined {
+  const role = String(value ?? "");
+  if (role === "publisher") return role;
+  const configured = String(source?.metadata?.reporterRole ?? source?.governance?.reporterRole ?? "");
+  return ["actor", "victim"].includes(role) && configured === role && source?.metadata?.reporterRoleVerified === true ? role : ["actor", "victim"].includes(role) ? "publisher" : undefined;
+}
+function mergeReportTimeline(previous: any, incoming: any): any {
+  const evidence = uniqueObjects([...(previous?.reportTimestamps ?? []), ...(incoming?.reportTimestamps ?? [])], (item: any) => `${item.role}:${item.timestamp}:${item.sourceId}:${item.captureId}:${item.evidencePath}`);
+  return timelineFromReportEvidence(evidence);
+}
+function timelineFromReportEvidence(reportTimestamps: any[]): any {
+  const sorted = [...reportTimestamps].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp) || reportRoleRank(a.role) - reportRoleRank(b.role));
+  const actor = sorted.find((item) => item.role === "actor");
+  const victim = sorted.find((item) => item.role === "victim");
+  const publisher = sorted.find((item) => item.role === "publisher");
+  const first = sorted[0];
+  return {
+    actorReportedAt: actor?.timestamp,
+    victimReportedAt: victim?.timestamp,
+    publisherReportedAt: publisher?.timestamp,
+    firstReportedAt: first?.timestamp,
+    reportedAt: first?.timestamp,
+    firstReportedKind: first?.role,
+    firstReportedProvenance: first,
+    reportTimestamps: sorted
+  };
+}
+function reportRoleRank(role: string): number { return role === "actor" ? 0 : role === "victim" ? 1 : 2; }
 function timelinessRecord(capture: any, incident: any, previous?: any): any {
+  const reporting = mergeReportTimeline(previous, incident);
   const record = {
     id: incident.id,
     tenantId: incident.tenantId ?? capture.tenantId,
     sourceId: incident.sourceId ?? capture.sourceId,
     captureId: capture.id,
     incidentId: incident.id,
-    reportedAt: incident.reportedAt,
+    ...reporting,
     publishedAt: incident.publishedAt ?? capture.publishedAt,
     collectedAt: incident.collectedAt ?? capture.collectedAt,
     processedAt: incident.processedAt ?? capture.processedAt,
     firstVisibleAt: previous?.firstVisibleAt ?? incident.firstVisibleAt ?? capture.firstVisibleAt,
-    alertedAt: previous?.alertedAt,
+    alertCreatedAt: previous?.alertCreatedAt,
+    alertCreatedProvenance: previous?.alertCreatedProvenance,
+    alertedAt: previous?.alertCreatedAt ?? previous?.alertedAt,
+    deliveryAttemptedAt: previous?.deliveryAttemptedAt,
+    deliveryAttemptProvenance: previous?.deliveryAttemptProvenance,
+    deliveredAt: previous?.deliveredAt,
+    deliveredProvenance: previous?.deliveredProvenance,
     updatedAt: incident.updatedAt ?? capture.firstVisibleAt ?? nowIso()
   };
-  return { ...record, latencies: latencyFields(record), timestampAnomalies: timestampAnomalies(record) };
+  return enrichTimeliness(record);
 }
-function withAlertedAt(record: any, alertedAt: string): any {
-  const next = { ...record, alertedAt: earlier(record.alertedAt, alertedAt), updatedAt: alertedAt };
-  return { ...next, latencies: latencyFields(next), timestampAnomalies: timestampAnomalies(next) };
+function withAlertCreated(record: any, alertCreatedAt: string, alertId: string, evidencePath: string): any {
+  const keepPrevious = record.alertCreatedAt && Date.parse(record.alertCreatedAt) <= Date.parse(alertCreatedAt);
+  const nextAlertCreatedAt = keepPrevious ? record.alertCreatedAt : alertCreatedAt;
+  return enrichTimeliness({
+    ...record,
+    alertCreatedAt: nextAlertCreatedAt,
+    alertedAt: nextAlertCreatedAt,
+    alertCreatedProvenance: keepPrevious ? record.alertCreatedProvenance : { event: "alert_created", alertId, timestamp: alertCreatedAt, evidencePath },
+    updatedAt: later(record.updatedAt, alertCreatedAt)
+  });
+}
+function withDelivery(record: any, delivery: any): any {
+  const attemptedAt = validIso(delivery.attemptedAt);
+  const deliveredAt = delivery.status === "delivered" ? validIso(delivery.deliveredAt) : undefined;
+  const keepAttempt = record.deliveryAttemptedAt && (!attemptedAt || Date.parse(record.deliveryAttemptedAt) <= Date.parse(attemptedAt));
+  const keepDelivered = record.deliveredAt && (!deliveredAt || Date.parse(record.deliveredAt) <= Date.parse(deliveredAt));
+  const next = {
+    ...record,
+    deliveryAttemptedAt: keepAttempt ? record.deliveryAttemptedAt : attemptedAt ?? record.deliveryAttemptedAt,
+    deliveryAttemptProvenance: keepAttempt ? record.deliveryAttemptProvenance : attemptedAt ? { event: "delivery_attempt", alertId: delivery.alertId, deliveryId: delivery.id, timestamp: attemptedAt, evidencePath: "delivery.attemptedAt", status: delivery.status } : record.deliveryAttemptProvenance,
+    deliveredAt: keepDelivered ? record.deliveredAt : deliveredAt ?? record.deliveredAt,
+    deliveredProvenance: keepDelivered ? record.deliveredProvenance : deliveredAt ? { event: "delivery_confirmed", alertId: delivery.alertId, deliveryId: delivery.id, timestamp: deliveredAt, evidencePath: "delivery.responseCompletedAt", httpStatus: delivery.httpStatus } : record.deliveredProvenance,
+    updatedAt: later(record.updatedAt, deliveredAt ?? attemptedAt ?? record.updatedAt)
+  };
+  return enrichTimeliness(next);
+}
+function enrichTimeliness(record: any) {
+  const latencies = latencyFields(record);
+  return { ...record, latencies, zeroSecondEvidence: zeroSecondEvidence(record, latencies), timestampAnomalies: timestampAnomalies(record, latencies) };
 }
 function latencyFields(record: any) {
   return {
-    reportToPublicationSeconds: elapsed(record.reportedAt, record.publishedAt),
+    reportToPublicationSeconds: elapsed(record.firstReportedAt ?? record.reportedAt, record.publishedAt),
+    firstReportToCollectionSeconds: elapsed(record.firstReportedAt ?? record.reportedAt, record.collectedAt),
     publicationToCollectionSeconds: elapsed(record.publishedAt, record.collectedAt),
     collectionToProcessingSeconds: elapsed(record.collectedAt, record.processedAt),
     processingToVisibilitySeconds: elapsed(record.processedAt, record.firstVisibleAt),
-    visibilityToAlertSeconds: elapsed(record.firstVisibleAt, record.alertedAt),
-    publicationToAlertSeconds: elapsed(record.publishedAt, record.alertedAt),
-    reportToVisibilitySeconds: elapsed(record.reportedAt, record.firstVisibleAt),
-    reportToAlertSeconds: elapsed(record.reportedAt, record.alertedAt)
+    visibilityToAlertSeconds: elapsed(record.firstVisibleAt, record.alertCreatedAt ?? record.alertedAt),
+    alertToDeliveryAttemptSeconds: elapsed(record.alertCreatedAt ?? record.alertedAt, record.deliveryAttemptedAt),
+    deliveryAttemptToDeliveredSeconds: elapsed(record.deliveryAttemptedAt, record.deliveredAt),
+    publicationToAlertSeconds: elapsed(record.publishedAt, record.alertCreatedAt ?? record.alertedAt),
+    reportToVisibilitySeconds: elapsed(record.firstReportedAt ?? record.reportedAt, record.firstVisibleAt),
+    reportToAlertSeconds: elapsed(record.firstReportedAt ?? record.reportedAt, record.alertCreatedAt ?? record.alertedAt),
+    reportToDeliveredSeconds: elapsed(record.firstReportedAt ?? record.reportedAt, record.deliveredAt)
   };
 }
-function timestampAnomalies(record: any): string[] {
-  return [
-    negative("reported_after_publication", record.reportedAt, record.publishedAt),
+function zeroSecondEvidence(record: any, latencies: any) {
+  const fields: Record<string, [unknown, unknown, unknown, unknown]> = {
+    reportToPublicationSeconds: [record.firstReportedAt ?? record.reportedAt, record.publishedAt, record.firstReportedProvenance, publisherProvenance(record)],
+    publicationToCollectionSeconds: [record.publishedAt, record.collectedAt, publisherProvenance(record), { event: "collection", captureId: record.captureId, evidencePath: "capture.collectedAt" }],
+    collectionToProcessingSeconds: [record.collectedAt, record.processedAt, { event: "collection", captureId: record.captureId }, { event: "processing", captureId: record.captureId }],
+    processingToVisibilitySeconds: [record.processedAt, record.firstVisibleAt, { event: "processing", captureId: record.captureId }, { event: "first_visible", incidentId: record.incidentId }],
+    visibilityToAlertSeconds: [record.firstVisibleAt, record.alertCreatedAt ?? record.alertedAt, { event: "first_visible", incidentId: record.incidentId }, record.alertCreatedProvenance],
+    alertToDeliveryAttemptSeconds: [record.alertCreatedAt ?? record.alertedAt, record.deliveryAttemptedAt, record.alertCreatedProvenance, record.deliveryAttemptProvenance],
+    deliveryAttemptToDeliveredSeconds: [record.deliveryAttemptedAt, record.deliveredAt, record.deliveryAttemptProvenance, record.deliveredProvenance],
+    reportToDeliveredSeconds: [record.firstReportedAt ?? record.reportedAt, record.deliveredAt, record.firstReportedProvenance, record.deliveredProvenance]
+  };
+  return Object.fromEntries(Object.entries(fields).flatMap(([field, [from, to, fromEvidence, toEvidence]]) => latencies[field] === 0 ? [[field, { verified: Boolean(fromEvidence && toEvidence), from, to, fromEvidence, toEvidence }]] : []));
+}
+function timestampAnomalies(record: any, latencies: any): string[] {
+  return unique([
+    negative("first_report_after_publication", record.firstReportedAt ?? record.reportedAt, record.publishedAt),
+    negative("first_report_after_collection", record.firstReportedAt ?? record.reportedAt, record.collectedAt),
     negative("published_after_collection", record.publishedAt, record.collectedAt),
     negative("collected_after_processing", record.collectedAt, record.processedAt),
     negative("processed_after_visibility", record.processedAt, record.firstVisibleAt),
-    negative("visible_after_alert", record.firstVisibleAt, record.alertedAt)
-  ].filter(Boolean) as string[];
+    negative("visible_after_alert", record.firstVisibleAt, record.alertCreatedAt ?? record.alertedAt),
+    negative("delivery_attempt_before_alert", record.alertCreatedAt ?? record.alertedAt, record.deliveryAttemptedAt),
+    negative("delivered_before_attempt", record.deliveryAttemptedAt, record.deliveredAt),
+    (record.firstReportedAt ?? record.reportedAt) && !record.firstReportedProvenance ? "first_report_provenance_missing" : undefined,
+    record.firstReportedKind && record.firstReportedProvenance?.role !== record.firstReportedKind ? "first_report_role_mismatch" : undefined,
+    ...Object.entries(zeroSecondEvidence(record, latencies)).flatMap(([field, evidence]: any) => evidence.verified ? [] : [`unverified_zero:${field}`])
+  ]);
 }
+function publisherProvenance(record: any) { return record.reportTimestamps?.find((item: any) => item.role === "publisher" && item.timestamp === record.publisherReportedAt); }
 function elapsed(from: unknown, to: unknown): number | undefined { const start = Date.parse(String(from ?? "")), end = Date.parse(String(to ?? "")); return Number.isFinite(start) && Number.isFinite(end) ? Math.round((end - start) / 1000) : undefined; }
 function negative(code: string, from: unknown, to: unknown): string | undefined { const value = elapsed(from, to); return value !== undefined && value < 0 ? code : undefined; }
 function validIso(value: unknown): string | undefined { const time = Date.parse(String(value ?? "")); return Number.isFinite(time) ? new Date(time).toISOString() : undefined; }
 function canonicalJson(value: any): string { return JSON.stringify(canonicalValue(value)); }
 function canonicalValue(value: any): any { if (Array.isArray(value)) return value.map(canonicalValue); if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().filter((key) => value[key] !== undefined).map((key) => [key, canonicalValue(value[key])])); return value; }
 function unique(values: any[]): string[] { return [...new Set(values.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim()))]; }
+function uniqueObjects(values: any[], key: (value: any) => string): any[] { const seen = new Set<string>(); return values.filter((value) => value && !seen.has(key(value)) && Boolean(seen.add(key(value)))); }
 function earlier(a: string | undefined, b: string): string { return !a || Date.parse(b) < Date.parse(a) ? b : a; }
-function later(a: string | undefined, b: string): string { return !a || Date.parse(b) > Date.parse(a) ? b : a; }
+function later(a: string | undefined, b: string | undefined): string | undefined { return !b ? a : !a || Date.parse(b) > Date.parse(a) ? b : a; }

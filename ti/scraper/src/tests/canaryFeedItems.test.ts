@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { feedItems } from "../ops/canaryFeedItems.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 
-const source = { id: "src_feed", name: "Feed", url: "https://feed.test/rss.xml" };
+const source = { id: "src_feed", name: "Feed", type: "rss", url: "https://feed.test/rss.xml" };
 const task = { id: "task_feed", targetUrl: source.url };
 const metadata = { canaryPortfolio: true, fetchMode: "native_live_http" };
 
@@ -16,10 +16,19 @@ describe("canary feed item extraction", () => {
       title: "APT29 phishing campaign",
       url: "https://feed.test/apt29",
       publishedAt: "Sun, 21 Jun 2026 09:00:00 GMT",
+      metadata: { reportTimestamps: [{ role: "publisher", timestamp: "Sun, 21 Jun 2026 09:00:00 GMT", sourceId: "src_feed", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] },
       sensitive: false
     });
     expect(items[0].rawText).toContain("phishing infrastructure");
     expect(items[1].contentHash).not.toEqual(items[0].contentHash);
+  });
+
+  test("uses actor or victim report roles only for verified source ownership", () => {
+    const verified = feedItems({ ...source, metadata: { reporterRole: "actor", reporterRoleVerified: true } }, task, rss(), "2026-06-21T10:00:00.000Z", metadata);
+    const unverified = feedItems({ ...source, metadata: { reporterRole: "actor" } }, task, rss(), "2026-06-21T10:00:00.000Z", metadata);
+
+    expect(verified[0].metadata.reportTimestamps[0].role).toBe("actor");
+    expect(unverified[0].metadata.reportTimestamps[0].role).toBe("publisher");
   });
 
   test("parses legacy API sources into structured CISA KEV items", () => {

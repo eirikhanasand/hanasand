@@ -139,12 +139,33 @@ function fallback(source: any, task: any, fetched: string, at: string, metadata:
 
 function row(source: any, task: any, url: string, title: string, rawText: string, at: string, publishedAt: string | undefined, metadata: any, index: number, feedItem: boolean) {
   const key = `${source.id}:${url}:${title}:${hashContent(rawText)}`;
+  const reportTimestamps = publishedAt ? [...(metadata.reportTimestamps ?? []), {
+    role: reporterRole(source),
+    timestamp: publishedAt,
+    sourceId: source.id,
+    sourceName: source.name,
+    evidencePath: timestampEvidencePath(metadata),
+    extractionMethod: "source_field",
+    parserVersion: metadata.parserVersion
+  }] : metadata.reportTimestamps;
   return {
     tenantId: source.tenantId, sourceId: source.id, taskId: task.id, url, title, rawText, body: rawText,
     collectedAt: at, publishedAt, contentHash: hashContent(key), links: [url].filter(Boolean),
-    metadata: { ...metadata, feedItem, itemIndex: index, sourceName: source.name, extractionProfile: extractionProfile(source) },
+    metadata: { ...metadata, reportTimestamps, feedItem, itemIndex: index, sourceName: source.name, extractionProfile: extractionProfile(source) },
     sensitive: false
   };
+}
+
+function reporterRole(source: any) {
+  const configured = String(source.metadata?.reporterRole ?? source.governance?.reporterRole ?? "publisher");
+  return ["actor", "victim"].includes(configured) && source.metadata?.reporterRoleVerified === true ? configured : "publisher";
+}
+
+function timestampEvidencePath(metadata: any) {
+  if (metadata.adapter === "rss") return "feed.entry.publishedAt";
+  if (metadata.adapter === "telegram_public") return "html.time.datetime";
+  if (metadata.jsonApi) return "json.record.publicationField";
+  return "source.publishedAt";
 }
 
 function extractionProfile(source: any) {

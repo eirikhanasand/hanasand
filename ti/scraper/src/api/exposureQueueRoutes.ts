@@ -28,6 +28,7 @@ type ExposureClaimItem = {
   sourceFamily?: string;
   tenantId?: string;
   organizationId?: string;
+  reportTimestamps?: Array<Record<string, unknown>>;
 };
 
 type ParsedExposureClaim = ExposureClaimItem & {
@@ -213,6 +214,7 @@ export async function saveExposureClaimFromCollectedItem(store: any, item: any, 
     text: item.rawText || item.body,
     capturedAt: item.collectedAt || at,
     publishedAt: item.publishedAt,
+    reportTimestamps: item.metadata?.reportTimestamps,
     sourceFamily: item.metadata?.adapter === "public_advisory" ? "public_advisory" : item.metadata?.adapter === "telegram_public" ? "telegram_public" : undefined
   }, at);
   if (!claim.actor || !claim.company) return undefined;
@@ -401,7 +403,8 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
     });
   }
 
-  const claimTime = claim.claimTime || claim.publishedAt || claim.capturedAt || at;
+  const sourcePublishedAt = validTimestamp(claim.publishedAt);
+  const claimTime = claim.claimTime || sourcePublishedAt || claim.capturedAt || at;
   const title = `${claim.actor} has just published a new victim: ${claim.company}`;
   const safeExcerpt = [title, claim.claimedData ? `Claimed data category: ${claim.claimedData}.` : undefined, claim.claimedDataSize ? `Claimed size: ${claim.claimedDataSize}.` : undefined, claim.country ? `Claimed country: ${claim.country}.` : undefined].filter(Boolean).join(" ");
   const pipeline = processCollectedItem({
@@ -410,7 +413,7 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
     url: claim.url || `metadata://exposure/${encodeURIComponent(claim.actor)}/${encodeURIComponent(claim.company)}`,
     title,
     collectedAt: claim.capturedAt || at,
-    publishedAt: claimTime,
+    publishedAt: sourcePublishedAt,
     contentHash: claim.evidenceContentHash,
     rawText: safeExcerpt,
     links: [],
@@ -424,6 +427,7 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
       sourceFamily: claim.sourceFamily || "darkweb_metadata",
       parserMode: claim.parserMode,
       parserQuality: claim.parserQuality,
+      reportTimestamps: claim.reportTimestamps,
       extractionProfile: "ransomware_victim_blog",
       leakSite: {
         actorName: claim.actor,
@@ -461,7 +465,7 @@ async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<
     claimedData: boundedText(clean(parsed.claimedData || item.claimedData || "Not disclosed by TA"), 240) ?? "Not disclosed by TA",
     claimedDataSize: boundedText(clean(parsed.claimedDataSize || item.claimedDataSize || dataSizeFromText([item.title, item.text].filter(Boolean).join(" ")) || "Not disclosed by TA"), 80) ?? "Not disclosed by TA",
     country: boundedText(clean(parsed.country || parsed.claimedCountry || item.country || item.claimedCountry || countryFromText([item.title, item.text].filter(Boolean).join(" ")) || countryFromCompanyDomain(company) || "Not disclosed by TA"), 80) ?? "Not disclosed by TA",
-    claimTime: validTimestamp(parsed.claimTime || item.publishedAt || item.capturedAt) ?? at,
+    claimTime: validTimestamp(item.publishedAt) ?? validTimestamp(parsed.claimTime || item.capturedAt) ?? at,
     capturedAt: item.capturedAt || at,
     confidence,
     parserMode: ai ? "hanasand-ai" : "local_fallback",

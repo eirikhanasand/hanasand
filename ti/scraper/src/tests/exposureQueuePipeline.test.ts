@@ -145,15 +145,17 @@ describe("DWM exposure queue pipeline", () => {
 
   test("promotes collected scraper findings into the exposure queue automatically", async () => {
     const store = new InMemoryScraperStore();
+    const publishedAt = "2026-07-20T09:00:00.000Z";
+    const collectedAt = "2026-07-20T09:04:00.000Z";
     const collected = {
       sourceId: "src_public_news",
       source: { name: "Ransomware.live Victim Feed", url: "https://www.ransomware.live/rss.xml" },
       title: "Ransomware.live Victim Feed",
       rawText: "Ransomware.live Victim Feed\nFabrikam Manufacturing\n44 GB data leak listed with sample records.",
       url: "https://www.ransomware.live/id/RmFicmlrYW0gTWFudWZhY3R1cmluZ0Bha2lyYQ==",
-      collectedAt: new Date().toISOString(),
-      publishedAt: new Date().toISOString(),
-      metadata: { adapter: "public_advisory" }
+      collectedAt,
+      publishedAt,
+      metadata: { adapter: "public_advisory", reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId: "src_public_news", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] }
     };
     await saveExposureClaimFromCollectedItem(store, collected);
     await saveExposureClaimFromCollectedItem(store, collected);
@@ -163,6 +165,15 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items[0].actor).toBe("Akira");
     expect(queueBody.items[0].company).toBe("Fabrikam Manufacturing");
     expect(store.listCaptures()).toHaveLength(1);
+    expect(store.listCaptures()[0]).toMatchObject({ publishedAt, collectedAt });
+    expect(store.listTimelinessRecords()[0]).toMatchObject({
+      publisherReportedAt: publishedAt,
+      firstReportedAt: publishedAt,
+      reportedAt: publishedAt,
+      firstReportedKind: "publisher",
+      firstReportedProvenance: { sourceId: "src_public_news", captureId: store.listCaptures()[0].id, evidencePath: "feed.entry.publishedAt" },
+      latencies: { publicationToCollectionSeconds: 240 }
+    });
     expect(store.listExtractedEntities().filter((entity: any) => entity.type === "victim")).toEqual([
       expect.objectContaining({ value: "Fabrikam Manufacturing", extractionMethod: "source_specific" })
     ]);

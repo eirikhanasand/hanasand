@@ -259,11 +259,12 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       deliveryState: "pending_review",
       firstSeenAt: collectedAt,
       lastSeenAt: collectedAt,
+      savedAt: alertedAt,
       updatedAt: collectedAt,
       provenance: { captureIds: [result.capture.id] },
-      alertedAt,
       company: "Northwind Health"
     });
+    first.saveDwmWebhookDelivery({ id: "delivery_postgres", tenantId: "tenant_postgres", alertId: "alert_postgres", attemptedAt: new Date(Date.parse(alertedAt) + 1_000).toISOString(), deliveredAt: new Date(Date.parse(alertedAt) + 2_000).toISOString(), status: "delivered", httpStatus: 204 });
     first.savePlan({ id: "plan_postgres", tenantId: "tenant_postgres", createdAt: collectedAt, requestId: "request_postgres" });
     first.saveRun({ id: "run_postgres", tenantId: "tenant_postgres", planId: "plan_postgres", requestId: "request_postgres", status: "completed", startedAt: collectedAt, completedAt: collectedAt, updatedAt: collectedAt, taskCount: 1, sourceCount: 1, captureCount: 1, incidentCount: 1, failedTaskCount: 0 });
     first.saveSourceHealthObservation({ id: "health_postgres", tenantId: "tenant_postgres", sourceId: "src_postgres", collectionRunId: "run_postgres", checkedAt: collectedAt, status: "healthy", success: true, useful: true, latencyMs: 120, itemCount: 1, captureCount: 1, incidentCount: 1, duplicateCount: 0, parserWarningCount: 0, observedActorCount: 1, legalMode: "public_content" });
@@ -300,7 +301,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(second.listPlans()).toHaveLength(1);
     expect(second.listRuns()).toEqual([expect.objectContaining({ id: "run_postgres", status: "completed" })]);
     expect(second.listSourceHealthObservations()).toEqual([expect.objectContaining({ id: "health_postgres", useful: true })]);
-    expect(second.listTimelinessRecords()).toEqual([expect.objectContaining({ incidentId: result.incident.id, alertedAt })]);
+    expect(second.listTimelinessRecords()).toEqual([expect.objectContaining({ incidentId: result.incident.id, firstReportedKind: "publisher", publisherReportedAt: "2026-05-24T09:58:00.000Z", firstReportedProvenance: expect.objectContaining({ sourceId: "src_postgres", evidencePath: "feed.entry.publishedAt" }), alertCreatedAt: alertedAt, alertedAt, deliveryAttemptedAt: new Date(Date.parse(alertedAt) + 1_000).toISOString(), deliveredAt: new Date(Date.parse(alertedAt) + 2_000).toISOString() })]);
 
     const [counts] = await admin<{ sources: number; captures: number; entities: number; profiles: number; aliases: number; incidents: number; links: number; claims: number; claim_evidence: number; claim_reviews: number; validations: number; alerts: number; labels: number; runs: number; health: number; timeliness: number; legacy_runs: number; legacy_claims: number; public_core_tables: number }[]>`
       SELECT
@@ -337,6 +338,21 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       SELECT retention_class, record->>'retentionClass' AS record_class FROM threat_intel.captures WHERE id = ${result.capture.id}
     `;
     expect(captureRetention).toEqual({ retention_class: "public_report", record_class: "public_report" });
+    const [timelinessRow] = await admin<any[]>`
+      SELECT publisher_reported_at, first_reported_at, first_reported_kind,
+             first_reported_provenance, alert_created_at, delivery_attempted_at, delivered_at
+      FROM threat_intel.timeliness_records
+      WHERE incident_id = ${result.incident.id}
+    `;
+    expect(timelinessRow).toMatchObject({
+      first_reported_kind: "publisher",
+      first_reported_provenance: { sourceId: "src_postgres", evidencePath: "feed.entry.publishedAt" }
+    });
+    expect(new Date(timelinessRow.publisher_reported_at).toISOString()).toBe("2026-05-24T09:58:00.000Z");
+    expect(new Date(timelinessRow.first_reported_at).toISOString()).toBe("2026-05-24T09:58:00.000Z");
+    expect(new Date(timelinessRow.alert_created_at).toISOString()).toBe(alertedAt);
+    expect(new Date(timelinessRow.delivery_attempted_at).toISOString()).toBe(new Date(Date.parse(alertedAt) + 1_000).toISOString());
+    expect(new Date(timelinessRow.delivered_at).toISOString()).toBe(new Date(Date.parse(alertedAt) + 2_000).toISOString());
     await second.close();
   });
 
@@ -380,14 +396,16 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
 
 function pipeline(sourceId: string, tenantId?: string, suffix = "") {
   const rawText = `APT29 used phishing against Northwind Health with CVE-2026-1234.${suffix}`;
+  const publishedAt = "2026-05-24T09:58:00.000Z";
   const result = processCollectedItem({
     sourceId,
     url: `https://example.test/${sourceId}/report`,
     collectedAt,
+    publishedAt,
     rawText,
     contentHash: hashContent(rawText),
     links: [],
-    metadata: {},
+    metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId, evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] },
     sensitive: false
   });
   if (tenantId) {

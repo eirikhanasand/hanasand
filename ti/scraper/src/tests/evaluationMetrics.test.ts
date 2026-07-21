@@ -51,6 +51,30 @@ describe("durable evaluation metrics", () => {
     expect(metrics.limitations).toContain("no independently reviewed evaluation labels in scope; automated checks are diagnostic only");
   });
 
+  test("reports complete source-backed latency by source family, actor, and pipeline stage", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource({ id: "src_timing", name: "Publisher feed", type: "rss", url: "https://publisher.example/feed", accessMethod: "public_http", status: "active", risk: "low", trustScore: 0.8, crawlFrequencySeconds: 300, legalNotes: "Public source.", metadata: { sourceFamily: "public_news" }, createdAt: "2026-07-20T09:00:00.000Z", updatedAt: "2026-07-20T09:00:00.000Z" });
+    store.saveExtractedEntity({ id: "entity_timing_actor", sourceId: "src_timing", captureId: "capture_timing", type: "actor", value: "APT29" });
+    store.saveTimelinessRecord({
+      id: "incident_timing", sourceId: "src_timing", captureId: "capture_timing", incidentId: "incident_timing",
+      publisherReportedAt: "2026-07-20T09:58:00.000Z", firstReportedAt: "2026-07-20T09:58:00.000Z", reportedAt: "2026-07-20T09:58:00.000Z", firstReportedKind: "publisher",
+      firstReportedProvenance: { role: "publisher", sourceId: "src_timing", captureId: "capture_timing", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" },
+      publishedAt: "2026-07-20T09:58:00.000Z", collectedAt: "2026-07-20T10:00:00.000Z", processedAt: "2026-07-20T10:00:02.000Z", firstVisibleAt: "2026-07-20T10:00:03.000Z",
+      alertCreatedAt: "2026-07-20T10:01:00.000Z", alertedAt: "2026-07-20T10:01:00.000Z", deliveryAttemptedAt: "2026-07-20T10:01:02.000Z", deliveredAt: "2026-07-20T10:01:03.000Z",
+      alertCreatedProvenance: { event: "alert_created", alertId: "alert_timing", evidencePath: "alert.savedAt" },
+      deliveryAttemptProvenance: { event: "delivery_attempt", deliveryId: "delivery_timing", evidencePath: "delivery.attemptedAt" },
+      deliveredProvenance: { event: "delivery_confirmed", deliveryId: "delivery_timing", evidencePath: "delivery.responseCompletedAt" },
+      latencies: { reportToPublicationSeconds: 0, firstReportToCollectionSeconds: 120, publicationToCollectionSeconds: 120, collectionToProcessingSeconds: 2, processingToVisibilitySeconds: 1, visibilityToAlertSeconds: 57, alertToDeliveryAttemptSeconds: 2, deliveryAttemptToDeliveredSeconds: 1, reportToVisibilitySeconds: 123, reportToAlertSeconds: 180, reportToDeliveredSeconds: 183 },
+      zeroSecondEvidence: { reportToPublicationSeconds: { verified: true } }, timestampAnomalies: []
+    });
+
+    const metrics = buildEvaluationMetrics(store);
+    expect(metrics.timeliness).toMatchObject({ status: "measured", recordCount: 1, publisherReportedRecordCount: 1, reportedRecordCount: 1, firstReportedProvenanceCount: 1, alertCreatedRecordCount: 1, deliveryAttemptedRecordCount: 1, deliveredRecordCount: 1, reportToDeliveredRecordCount: 1, completeTimelineRecordCount: 1, firstReportedByKind: { publisher: 1 }, verifiedZeroSecondCount: 1, unverifiedZeroSecondCount: 0 });
+    expect(metrics.timeliness.bySourceFamily[0]).toMatchObject({ name: "public_news", metrics: { reportToDeliveredSeconds: { sampleSize: 1, medianSeconds: 183, p95Seconds: 183 } } });
+    expect(metrics.timeliness.byActor[0]).toMatchObject({ name: "APT29", metrics: { reportToDeliveredSeconds: { sampleSize: 1, medianSeconds: 183, p95Seconds: 183 } } });
+    expect(metrics.timeliness.byPipelineStage).toContainEqual({ name: "reportToDeliveredSeconds", sampleSize: 1, medianSeconds: 183, p95Seconds: 183 });
+  });
+
   test("requires a complete stratified held-out benchmark before reporting validation", () => {
     const store = new InMemoryScraperStore();
     const labelTypes = ["actor", "ransomware", "victim", "cve", "malware", "ttp", "country", "sector", "impact", "dataset"];

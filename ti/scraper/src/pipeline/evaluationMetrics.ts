@@ -1,12 +1,16 @@
 const LATENCIES = [
   "reportToPublicationSeconds",
+  "firstReportToCollectionSeconds",
   "publicationToCollectionSeconds",
   "collectionToProcessingSeconds",
   "processingToVisibilitySeconds",
   "visibilityToAlertSeconds",
+  "alertToDeliveryAttemptSeconds",
+  "deliveryAttemptToDeliveredSeconds",
   "publicationToAlertSeconds",
   "reportToVisibilitySeconds",
-  "reportToAlertSeconds"
+  "reportToAlertSeconds",
+  "reportToDeliveredSeconds"
 ] as const;
 const REQUIRED_BENCHMARK_LABEL_TYPES = ["actor", "ransomware", "victim", "cve", "malware", "ttp", "country", "sector", "impact", "dataset"];
 
@@ -19,6 +23,8 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
   const labelEvents = scoped("listEvaluationLabels").filter((label: any) => !input.datasetSplit || label.datasetSplit === input.datasetSplit);
   const labels = latestLabels(labelEvents);
   const timeliness = scoped("listTimelinessRecords");
+  const actorByCapture = actorNamesByCapture(entities);
+  const actorTimeliness = timeliness.flatMap((record: any) => (actorByCapture.get(record.captureId) ?? ["unattributed"]).map((actorName) => ({ ...record, actorName })));
   const health = scoped("listSourceHealthObservations");
   const validations = scoped("listValidationRecords");
   const benchmarks = scoped("listEvaluationBenchmarks").filter((benchmark: any) => !input.datasetSplit || benchmark.datasetSplit === input.datasetSplit);
@@ -94,14 +100,28 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
       }
     },
     timeliness: {
-      status: timeliness.length ? "measured" : "unmeasured",
+      status: timeliness.some(completeTimeline) ? "measured" : timeliness.length ? "partial" : "unmeasured",
       recordCount: timeliness.length,
-      reportedRecordCount: timeliness.filter((record: any) => record.reportedAt).length,
-      alertedRecordCount: timeliness.filter((record: any) => record.alertedAt).length,
-      reportToAlertRecordCount: timeliness.filter((record: any) => record.reportedAt && record.alertedAt).length,
+      actorReportedRecordCount: timeliness.filter((record: any) => record.actorReportedAt).length,
+      victimReportedRecordCount: timeliness.filter((record: any) => record.victimReportedAt).length,
+      publisherReportedRecordCount: timeliness.filter((record: any) => record.publisherReportedAt).length,
+      reportedRecordCount: timeliness.filter((record: any) => record.firstReportedAt ?? record.reportedAt).length,
+      firstReportedProvenanceCount: timeliness.filter((record: any) => record.firstReportedProvenance).length,
+      alertCreatedRecordCount: timeliness.filter((record: any) => record.alertCreatedAt ?? record.alertedAt).length,
+      alertedRecordCount: timeliness.filter((record: any) => record.alertCreatedAt ?? record.alertedAt).length,
+      deliveryAttemptedRecordCount: timeliness.filter((record: any) => record.deliveryAttemptedAt).length,
+      deliveredRecordCount: timeliness.filter((record: any) => record.deliveredAt).length,
+      reportToAlertRecordCount: timeliness.filter((record: any) => (record.firstReportedAt ?? record.reportedAt) && (record.alertCreatedAt ?? record.alertedAt)).length,
+      reportToDeliveredRecordCount: timeliness.filter((record: any) => (record.firstReportedAt ?? record.reportedAt) && record.deliveredAt).length,
+      completeTimelineRecordCount: timeliness.filter(completeTimeline).length,
+      firstReportedByKind: countBy(timeliness.filter((record: any) => record.firstReportedKind), (record) => record.firstReportedKind),
+      verifiedZeroSecondCount: timeliness.reduce((total: number, record: any) => total + Object.values(record.zeroSecondEvidence ?? {}).filter((evidence: any) => evidence.verified === true).length, 0),
+      unverifiedZeroSecondCount: timeliness.reduce((total: number, record: any) => total + Object.values(record.zeroSecondEvidence ?? {}).filter((evidence: any) => evidence.verified !== true).length, 0),
       anomalyCount: timeliness.filter((record: any) => record.timestampAnomalies?.length).length,
       overall: latencySummary(timeliness),
-      bySourceFamily: groupedLatencies(timeliness, (record) => sourceFamily(sourceById.get(record.sourceId)))
+      byPipelineStage: pipelineStageLatencies(timeliness),
+      bySourceFamily: groupedLatencies(timeliness, (record) => sourceFamily(sourceById.get(record.sourceId))),
+      byActor: groupedLatencies(actorTimeliness, (record) => record.actorName)
     },
     coverage: coverage(sources, captures, entities, health, claims, rows),
     validation: {
@@ -114,8 +134,9 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
       labels.length > 0 && !independentLabels.length && "no independently reviewed evaluation labels in scope; automated checks are diagnostic only",
       !rows.some((row: any) => row.exhaustiveExpectedValues) && "recall is unmeasured until an exhaustive prediction-hidden benchmark is adjudicated",
       completedBenchmarks.length === 0 && "no independently reviewed benchmark is complete",
-      !timeliness.some((record: any) => record.reportedAt) && "first-report latency is unmeasured until an actor or victim report is independently timestamped",
-      !timeliness.some((record: any) => record.alertedAt) && "alert-delivery latency is unmeasured"
+      !timeliness.some((record: any) => record.firstReportedAt ?? record.reportedAt) && "first-report latency is unmeasured until an actor, victim, or publisher timestamp has source-field provenance",
+      !timeliness.some((record: any) => record.alertCreatedAt ?? record.alertedAt) && "alert-creation latency is unmeasured",
+      !timeliness.some((record: any) => record.deliveredAt) && "confirmed alert-delivery latency is unmeasured"
     ].filter(Boolean)
   };
 }
@@ -217,6 +238,27 @@ function latencySummary(records: any[]) {
 
 function groupedLatencies(records: any[], key: (record: any) => string) {
   return group(records, key).map(([name, values]) => ({ name, recordCount: values.length, metrics: latencySummary(values) }));
+}
+
+function pipelineStageLatencies(records: any[]) {
+  const summary = latencySummary(records);
+  return LATENCIES.map((name) => ({ name, ...summary[name] }));
+}
+
+function actorNamesByCapture(entities: any[]) {
+  const names = new Map<string, Set<string>>();
+  for (const entity of entities.filter((row) => row.type === "actor" || row.type === "ransomware_family")) {
+    const name = String(entity.value ?? entity.normalizedValue ?? "").trim();
+    if (!name || !entity.captureId) continue;
+    const values = names.get(entity.captureId) ?? new Set<string>();
+    values.add(name);
+    names.set(entity.captureId, values);
+  }
+  return new Map([...names].map(([captureId, values]) => [captureId, [...values].sort()]));
+}
+
+function completeTimeline(record: any) {
+  return Boolean((record.firstReportedAt ?? record.reportedAt) && record.publishedAt && record.collectedAt && record.processedAt && record.firstVisibleAt && (record.alertCreatedAt ?? record.alertedAt) && record.deliveryAttemptedAt && record.deliveredAt && record.firstReportedProvenance && record.alertCreatedProvenance && record.deliveryAttemptProvenance && record.deliveredProvenance && !record.timestampAnomalies?.length);
 }
 
 function coverage(sources: any[], captures: any[], entities: any[], health: any[], claims: any[], labels: any[]) {
