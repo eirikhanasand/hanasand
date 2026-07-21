@@ -25,6 +25,7 @@ describe("planner backpressure and continuous scheduling", () => {
     const available = source({ id: "available", type: "rss", trustScore: 0.5, tags: ["apt29"] });
     const { plan, dto } = createLiveSearchPlan({ request: { query: "APT29", entityType: "actor", tenantId: "tenant_live", createdAt: now }, sources: [...delayed, available] });
     expect(plan.tasks.some((task) => task.sourceId === "available" && !task.availableAt)).toBe(true);
+    expect(plan.tasks.every((task) => task.maxRetries === 0)).toBe(true);
     expect(dto.backpressureState).toBe("accepted");
   });
 

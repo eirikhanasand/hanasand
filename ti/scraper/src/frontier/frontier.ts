@@ -38,7 +38,7 @@ export class FocusedFrontier {
     }
   }
   complete(task: any) { return this.ack(task, "completed", "completed"); }
-  cancel(task: any, reason = "cancelled by scheduler") { return this.ack(task, "cancelled", reason); }
+  cancel(task: any, reason = "cancelled by scheduler") { this.queue.delete(task.id); return this.ack(task, "cancelled", reason); }
   fail(task: any, now = this.o.now(), reason?: string): any {
     this.release(task); this.counters.failed++;
     if ((task.retryCount ?? 0) >= (task.maxRetries ?? this.o.defaultRetryBudget)) { const ack = { status: "retry_exhausted", taskId: task.id, task, reason: reason ?? "failed" }; this.dead.push(ack); this.counters.retryExhausted++; return ack; }

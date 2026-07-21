@@ -86,6 +86,7 @@ describe("scheduled API collection runs", () => {
     const frontier = new FocusedFrontier();
     store.savePlan({ id: "plan_expired", tenantId: "tenant_live", budget: { deadlineAt: "2020-01-01T00:00:00.000Z" }, tasks: [{ id: "task_expired", sourceId: "src_expired" }] });
     store.saveRun({ id: "run_expired", tenantId: "tenant_live", planId: "plan_expired", requestId: "request_expired", status: "queued", createdAt: "2020-01-01T00:00:00.000Z", taskCount: 1 });
+    frontier.enqueueTask({ id: "task_expired_retry", sourceId: "src_expired", runId: "run_expired", availableAt: "2099-01-01T00:00:00.000Z" });
 
     const run = await executeScheduledCollectionRun({ store, frontier }, "run_expired");
 

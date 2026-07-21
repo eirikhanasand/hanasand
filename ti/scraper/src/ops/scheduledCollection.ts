@@ -14,7 +14,13 @@ export async function executeScheduledCollectionRun(options: any, runId: string)
   try {
     const generatedAt = nowIso();
     const deadlineAt = Date.parse(plan.budget?.deadlineAt ?? plan.tasks?.[0]?.deadlineAt ?? "");
-    if (Number.isFinite(deadlineAt) && deadlineAt < Date.parse(generatedAt)) return failRun(options.store, run, "collection plan deadline expired", generatedAt);
+    if (Number.isFinite(deadlineAt) && deadlineAt < Date.parse(generatedAt)) {
+      for (const item of options.frontier.snapshot()) {
+        const task = item.task ?? item;
+        if (task.runId === runId) options.frontier.cancel(task, "collection plan deadline expired");
+      }
+      return failRun(options.store, run, "collection plan deadline expired", generatedAt);
+    }
     const tasks = (plan.tasks ?? []).map((task: any) => ({ ...task, runId, planId: plan.id, crawlBudgetKey: undefined }));
     const queuedOrLeased = new Set([
       ...options.frontier.snapshot().map((item: any) => (item.task ?? item).id),
