@@ -14,6 +14,19 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     expect(compose.match(/TI_SOURCE_SEED_PATHS:.*high_value_exposure_source_candidates/)).toBeNull();
   });
 
+  test("bootstraps the canonical MITRE APT29 source with fixed-query metadata", () => {
+    const store = new InMemoryScraperStore();
+    const seedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/public_cti_starter_pack.json");
+
+    bootstrapRuntimeSources(store, { seedPaths: [seedPath], sourceTarget: 0 });
+
+    expect(store.listSources().find((source) => source.id === "src_seed_mitre_attack_apt29")).toMatchObject({
+      url: "https://attack.mitre.org/groups/G0016/",
+      status: "active",
+      metadata: { queryTerm: "APT29", queryClass: "threat-intel", productionCollection: true }
+    });
+  });
+
   test("imports configured source bundles and reports the exact source target shortfall", () => {
     const store = new InMemoryScraperStore();
     const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-"));
