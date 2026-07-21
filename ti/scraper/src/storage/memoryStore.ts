@@ -8,12 +8,13 @@ import { InMemoryObjectEvidenceStore } from "./memoryObjectEvidenceStore.ts";
 import { installMemoryStoreReplayMethods } from "./memoryStoreReplayMethods.ts";
 import { canonicalizeUrl, captureDedupeKey, dedupeIndexKeys, enforceSensitiveMetadataOnly, prepareCapture } from "./memoryStoreHelpers.ts";
 import { nowIso, stableId } from "../utils.ts";
+import type { MitreActorCatalogSnapshot, MitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
 export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
 const mapValues = <T>(map: Map<string, T>) => [...map.values()];
 const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set(item.id, item), item);
 export class InMemoryScraperStore implements ScraperStore {
   private captures = new Map<string, RawCapture>(); private dedupe = new Map<string, string>(); private incidents = new Map<string, IncidentCandidate>(); private sources = new Map<string, SourceRecord>(); private plans = new Map<string, any>(); private runs = new Map<string, any>();
-  private extractedEntities = new Map<string, any>(); private indicators = new Map<string, any>(); private actorProfiles = new Map<string, any>(); private actorAliases = new Map<string, any>(); private evidenceLinks = new Map<string, any>(); private validationRecords = new Map<string, any>(); private evaluationLabels = new Map<string, any>();
+  private extractedEntities = new Map<string, any>(); private indicators = new Map<string, any>(); private actorProfiles = new Map<string, any>(); private actorAliases = new Map<string, any>(); private actorIdentityCatalogs = new Map<string, any>(); private actorIdentities = new Map<string, any>(); private evidenceLinks = new Map<string, any>(); private validationRecords = new Map<string, any>(); private evaluationLabels = new Map<string, any>();
   private sourceHealthObservations = new Map<string, any>(); private timelinessRecords = new Map<string, any>();
   private evaluationBenchmarks = new Map<string, any>(); private evaluationAnnotations = new Map<string, any>(); private evaluationAdjudications = new Map<string, any>();
   private intelligenceClaims = new Map<string, any>(); private claimEvidence = new Map<string, any>(); private claimReviews = new Map<string, any>();
@@ -133,6 +134,31 @@ export class InMemoryScraperStore implements ScraperStore {
   }
   getActorProfile(id: string) { return this.actorProfiles.get(id); } listActorProfiles() { return mapValues(this.actorProfiles); }
   getActorAlias(id: string) { return this.actorAliases.get(id); } listActorAliases() { return mapValues(this.actorAliases); }
+  replaceActorIdentityCatalog(snapshot: MitreActorCatalogSnapshot, provenance: { sourceId: string; captureId: string; importedAt?: string }) {
+    const incomingIds = new Set(snapshot.identities.map((identity) => identity.id));
+    if (incomingIds.size !== snapshot.identities.length || snapshot.counts.totalIdentityCount !== snapshot.identities.length) throw new Error("Actor identity catalog count mismatch.");
+    const importedAt = provenance.importedAt ?? snapshot.retrievedAt;
+    const previous = this.actorIdentityCatalogs.get(snapshot.catalogId);
+    const retired = this.listActorIdentities().filter((identity: any) => identity.catalogId === snapshot.catalogId && !incomingIds.has(identity.id)).map((identity: any) => ({ ...identity, status: "retired", retiredAt: importedAt, updatedAt: importedAt }));
+    const identities = snapshot.identities.map((identity: MitreActorIdentity) => ({ ...identity, sourceId: provenance.sourceId, captureId: provenance.captureId, importedAt, updatedAt: importedAt }));
+    const { identities: _omitted, ...catalog } = snapshot;
+    put(this.actorIdentityCatalogs, {
+      ...catalog,
+      id: snapshot.catalogId,
+      sourceId: provenance.sourceId,
+      captureId: provenance.captureId,
+      importedAt,
+      updatedAt: importedAt,
+      previousBundleSha256: previous?.bundleSha256,
+      identityIds: identities.map((identity) => identity.id)
+    });
+    for (const identity of [...identities, ...retired]) put(this.actorIdentities, identity);
+    return { catalogId: snapshot.catalogId, currentIdentityCount: snapshot.counts.currentIdentityCount, retainedHistoricalIdentityCount: retired.length, bundleSha256: snapshot.bundleSha256 };
+  }
+  protected hydrateActorIdentityCatalogSnapshot(catalog: any) { return put(this.actorIdentityCatalogs, catalog); }
+  protected hydrateActorIdentitySnapshot(identity: any) { return put(this.actorIdentities, identity); }
+  getActorIdentityCatalog(id: string) { return this.actorIdentityCatalogs.get(id); } listActorIdentityCatalogs() { return mapValues(this.actorIdentityCatalogs); }
+  getActorIdentity(id: string) { return this.actorIdentities.get(id); } listActorIdentities() { return mapValues(this.actorIdentities); }
   saveEvidenceLink(linkRecord: any) { return put(this.evidenceLinks, linkRecord); } getEvidenceLink(id: string) { return this.evidenceLinks.get(id); } listEvidenceLinks() { return mapValues(this.evidenceLinks); }
   saveValidationRecord(record: any) { return put(this.validationRecords, record); } getValidationRecord(id: string) { return this.validationRecords.get(id); } listValidationRecords() { return mapValues(this.validationRecords); }
   saveEvaluationLabel(label: any) { const previous = this.evaluationLabels.get(label.id); if (previous && canonicalJson(previous) !== canonicalJson(label)) throw new Error(`Evaluation label is immutable: ${label.id}`); return previous ?? put(this.evaluationLabels, label); } getEvaluationLabel(id: string) { return this.evaluationLabels.get(id); } listEvaluationLabels() { return mapValues(this.evaluationLabels); }

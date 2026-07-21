@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 export const MITRE_ENTERPRISE_ACTOR_CATALOG_URL = "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack.json";
 
-export type MitreActorIdentityStatus = "current" | "deprecated" | "revoked";
+export type MitreActorIdentityStatus = "current" | "deprecated" | "revoked" | "retired";
 
 export type MitreActorIdentity = {
   id: string;

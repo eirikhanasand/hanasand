@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseMitreActorCatalog, resolveMitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
+import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 
 // Exact identity fields from MITRE Enterprise ATT&CK v19.1, not product seed data.
 const officialV191Excerpt = JSON.stringify({
@@ -28,6 +29,17 @@ describe("MITRE actor identity catalog", () => {
     expect(resolveMitreActorIdentity("Thrip", catalog.identities)).toMatchObject({ ambiguous: true });
     expect(ids(resolveMitreActorIdentity("Thrip", catalog.identities))).toEqual(["G0030", "G0076"]);
     expect(resolveMitreActorIdentity("not a registered group", catalog.identities).candidates).toEqual([]);
+  });
+
+  test("registers catalog identities without fabricating activity profiles", () => {
+    const catalog = parseMitreActorCatalog(officialV191Excerpt, { retrievedAt: "2026-07-21T00:00:00.000Z", minimumCurrentIdentities: 6 });
+    const store = new InMemoryScraperStore();
+    const report = store.replaceActorIdentityCatalog(catalog, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
+
+    expect(report).toMatchObject({ currentIdentityCount: 6, retainedHistoricalIdentityCount: 0 });
+    expect(store.listActorIdentities()).toHaveLength(6);
+    expect(store.listActorProfiles()).toHaveLength(0);
+    expect(store.listActorIdentityCatalogs()[0]).not.toHaveProperty("identities");
   });
 });
 
