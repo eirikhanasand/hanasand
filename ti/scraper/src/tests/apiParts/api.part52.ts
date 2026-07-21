@@ -38,6 +38,9 @@ describe("api v1", () => {
     store.saveIntelligenceClaim({ id: "claim_identity", tenantId: "tenant_api", sourceIds: ["src_identity_a", "src_identity_b"], captureIds: ["cap_identity_a", "cap_identity_b"], claimType: "actor", value: { actor: "APT29" }, summary: "actor: APT29", confidence: 0.84, reviewState: "unreviewed", corroborationState: "corroborated" });
 
     const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+    expect(response.status).toBe("partial");
+    expect(response.evidenceAssessment.corroboratedClaimCount).toBe(0);
+    expect(response.claims).toEqual([expect.objectContaining({ id: "claim_identity", corroborationState: "corroborated", sourceCount: 2 })]);
     expect(response.rows[0].title).toBe("MITRE APT29");
     expect(response.recentActivity).toEqual(expect.arrayContaining([
       expect.objectContaining({ publisherCount: 1, corroboratingSourceIds: [], corroborationState: "single_source" })

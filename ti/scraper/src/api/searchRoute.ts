@@ -276,7 +276,7 @@ function searchRecords(store: any, tenantId: string | undefined, captureIds: Set
 function assess(rows: any[], records: ReturnType<typeof searchRecords>) {
   const contradicted = records.claims.filter((claim: any) => claim.reviewState === "contradicted" || claim.corroborationState === "contradicted").length;
   const confirmed = records.claims.filter((claim: any) => claim.reviewState === "confirmed").length;
-  const corroborated = records.claims.filter((claim: any) => claim.corroborationState === "corroborated").length;
+  const corroborated = records.claims.filter((claim: any) => claim.corroborationState === "corroborated" && supportsActivityCorroboration(claim)).length;
   const validated = records.validations.filter((record: any) => ["supported", "confirmed", "validated"].includes(record.status)).length;
   const signals = [...records.claims, ...records.entities, ...records.indicators].map((record: any) => confidence(record.confidence)).filter((value) => value > 0);
   let score = signals.length ? signals.reduce((sum, value) => sum + value, 0) / signals.length : rows.length ? 0.35 : 0;
@@ -289,7 +289,7 @@ function assess(rows: any[], records: ReturnType<typeof searchRecords>) {
     records.sourceCount < 2 ? "Single-source evidence is capped below high confidence." : `${records.sourceCount} independent sources are represented.`,
     !rows.length ? "No matching public capture is available for review." : rows.every((row) => row.metadataOnly) ? "All matching captures are metadata-only and require review." : "At least one matching public capture has reviewable content.",
     confirmed ? `${confirmed} claim(s) are analyst-confirmed.` : "No claim is analyst-confirmed.",
-    corroborated ? `${corroborated} claim(s) are corroborated across sources.` : "No claim is cross-source corroborated.",
+    corroborated ? `${corroborated} activity or victim claim(s) are corroborated across sources.` : "No activity or victim claim is cross-source corroborated.",
     validated ? `${validated} independent validation record(s) support the evidence.` : "No supporting validation record is attached.",
     contradicted ? `${contradicted} contradicted claim(s) prevent promotion.` : "No stored contradiction is attached."
   ]);
@@ -298,7 +298,7 @@ function assess(rows: any[], records: ReturnType<typeof searchRecords>) {
 
 function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackConfidence: number) {
   const rowClaims = records.claims.filter((claim: any) => claim.captureIds?.includes(row.id));
-  const activityClaims = rowClaims.filter((claim: any) => claim.claimType !== "actor");
+  const activityClaims = rowClaims.filter(supportsActivityCorroboration);
   const corroboratingSourceIds = unique(activityClaims
     .flatMap((claim: any) => claim.sourceIds ?? [])
     .filter((sourceId) => sourceId !== row.sourceId));
@@ -329,6 +329,10 @@ function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackC
         : "single_source",
     observationSummary: `A captured source record matched the query. This confirms the source mention, not the underlying activity.`
   };
+}
+
+function supportsActivityCorroboration(claim: any) {
+  return claim.claimType === "incident" || claim.claimType === "victim";
 }
 
 function qualityPayload(query: string, rows: any[], records: ReturnType<typeof searchRecords>, assessment: ReturnType<typeof assess>) {
