@@ -75,6 +75,27 @@ describe("durable evaluation metrics", () => {
     expect(metrics.timeliness.byPipelineStage).toContainEqual({ name: "reportToDeliveredSeconds", sampleSize: 1, medianSeconds: 183, p95Seconds: 183 });
   });
 
+  test("excludes unverified zero-second values from latency statistics", () => {
+    const store = new InMemoryScraperStore();
+    store.saveTimelinessRecord({
+      id: "incident_unverified_zero",
+      latencies: { publicationToCollectionSeconds: 0 },
+      zeroSecondEvidence: { publicationToCollectionSeconds: { verified: false } },
+      timestampAnomalies: ["unverified_zero:publicationToCollectionSeconds"]
+    });
+    store.saveTimelinessRecord({
+      id: "incident_verified_zero",
+      latencies: { publicationToCollectionSeconds: 0 },
+      zeroSecondEvidence: { publicationToCollectionSeconds: { verified: true } },
+      timestampAnomalies: []
+    });
+
+    const metrics = buildEvaluationMetrics(store);
+
+    expect(metrics.timeliness.overall.publicationToCollectionSeconds).toEqual({ sampleSize: 1, medianSeconds: 0, p95Seconds: 0 });
+    expect(metrics.timeliness).toMatchObject({ verifiedZeroSecondCount: 1, unverifiedZeroSecondCount: 1, anomalyCount: 1 });
+  });
+
   test("requires a complete stratified held-out benchmark before reporting validation", () => {
     const store = new InMemoryScraperStore();
     const labelTypes = ["actor", "ransomware", "victim", "cve", "malware", "ttp", "country", "sector", "impact", "dataset"];

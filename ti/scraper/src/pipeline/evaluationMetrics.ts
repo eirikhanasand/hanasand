@@ -231,7 +231,12 @@ function calibration(rows: any[]) {
 
 function latencySummary(records: any[]) {
   return Object.fromEntries(LATENCIES.map((field) => {
-    const values = records.map((record) => Number(record.latencies?.[field])).filter((value) => Number.isFinite(value) && value >= 0);
+    const values = records.flatMap((record) => {
+      const value = Number(record.latencies?.[field]);
+      if (!Number.isFinite(value) || value < 0) return [];
+      if (value === 0 && record.zeroSecondEvidence?.[field]?.verified !== true) return [];
+      return [value];
+    });
     return [field, { sampleSize: values.length, medianSeconds: percentile(values, 0.5), p95Seconds: percentile(values, 0.95) }];
   }));
 }
