@@ -181,6 +181,42 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await admin?.close({ timeout: 2 });
   });
 
+  test("merges legacy actor-type duplicates without losing profile evidence", async () => {
+    await admin.unsafe(`
+      DROP INDEX threat_intel.threat_intel_actor_profiles_name_uq;
+      DELETE FROM threat_intel.schema_migrations WHERE version = '016_merge_duplicate_actor_profiles';
+      INSERT INTO threat_intel.actor_profiles (
+        id, canonical_name, normalized_name, actor_type, confidence,
+        first_seen_at, last_seen_at, evidence_count, updated_at, record
+      ) VALUES
+      (
+        'actor_ransomware', 'Akira', 'akira', 'ransomware', 0.76,
+        '2026-07-19', '2026-07-19', 1, '2026-07-20',
+        '{"id":"actor_ransomware","canonicalName":"Akira","normalizedName":"akira","actorType":"ransomware","confidence":0.76,"firstSeenAt":"2026-07-19T00:00:00.000Z","lastSeenAt":"2026-07-19T00:00:00.000Z","updatedAt":"2026-07-20T00:00:00.000Z","evidenceCount":1,"aliases":["Akira"],"sourceIds":["src_one"],"captureIds":["cap_one"],"characterization":{"ttps":[{"value":"intrusion","normalizedValue":"intrusion","entityType":"ttp","confidence":0.7,"entityIds":["entity_one"],"sourceIds":["src_one"],"captureIds":["cap_one"],"reviewReasons":[]}]}}'
+      ),
+      (
+        'actor_generic', 'AKIRA', 'akira', 'threat_actor', 0.8,
+        '2026-07-18', '2026-07-20', 2, '2026-07-21',
+        '{"id":"actor_generic","canonicalName":"AKIRA","normalizedName":"akira","actorType":"threat_actor","confidence":0.8,"firstSeenAt":"2026-07-18T00:00:00.000Z","lastSeenAt":"2026-07-20T00:00:00.000Z","updatedAt":"2026-07-21T00:00:00.000Z","evidenceCount":2,"aliases":["akira","Alias K"],"sourceIds":["src_two"],"captureIds":["cap_one","cap_two"],"characterization":{"ttps":[{"value":"Intrusion","normalizedValue":"intrusion","entityType":"ttp","confidence":0.8,"entityIds":["entity_two"],"sourceIds":["src_two"],"captureIds":["cap_one","cap_two"],"reviewReasons":["review"]}]}}'
+      );
+    `);
+
+    const store = await PostgresScraperStore.create({ databaseUrl });
+    expect(store.listActorProfiles()).toEqual([
+      expect.objectContaining({
+        id: "actor_ransomware",
+        canonicalName: "Akira",
+        actorType: "ransomware",
+        confidence: 0.8,
+        aliases: ["Akira", "Alias K"],
+        sourceIds: ["src_one", "src_two"],
+        captureIds: ["cap_one", "cap_two"],
+        characterization: { ttps: [expect.objectContaining({ normalizedValue: "intrusion", entityIds: ["entity_one", "entity_two"] })] }
+      })
+    ]);
+    await store.close();
+  });
+
   test("persists and rehydrates the complete monitoring record across restart", async () => {
     const first = await PostgresScraperStore.create({ databaseUrl });
     first.saveSource(source({ id: "src_postgres", tenantId: "tenant_postgres" }));

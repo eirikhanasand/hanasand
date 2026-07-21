@@ -95,6 +95,18 @@ describe("compact pipeline value path", () => {
     expect(item("The Play ransomware group claimed a new victim.").entities).toContainEqual(expect.objectContaining({ type: "ransomware_family", value: "Play" }));
   });
 
+  test("keeps one canonical profile when actor classification strengthens", () => {
+    const item = (rawText: string, id: string) => processCollectedItem({ sourceId: `src_${id}`, url: `https://example.test/${id}`, collectedAt: "2026-07-20T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false });
+    const store = new InMemoryScraperStore();
+
+    store.savePipelineResult(item("The Akira ransomware group claimed a new victim.", "ransomware"));
+    store.savePipelineResult(item("Akira was referenced in a later public report.", "generic"));
+
+    expect(store.listActorProfiles()).toEqual([
+      expect.objectContaining({ canonicalName: "Akira", normalizedName: "akira", actorType: "ransomware", aliases: ["Akira"], evidenceCount: 2 })
+    ]);
+  });
+
   test("builds compact analyst feedback and learning queues", () => {
     const feedback = buildAnalystFeedbackLoopDto({ items: [{ id: "row_1", mark: "needs_review" }] });
     const review = buildAnalystQualityReviewQueueDto({ rows: [{ id: "row_1", state: "queued" }] });

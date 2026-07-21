@@ -67,14 +67,11 @@ export class InMemoryScraperStore implements ScraperStore {
     }
     const actorEntities = entities.filter((entity: any) => entity.type === "actor" || entity.type === "ransomware_family");
     const characterize = new Set(actorEntities.map(normalized)).size === 1;
-    const profiled = new Set<string>();
     for (const entity of entities) {
       this.saveEvidenceLink(link(capture, "entity", entity.id, "mentions", entity.confidence, extractorVersion));
       if (entity.type === "actor" || entity.type === "ransomware_family") {
         const profileId = actorProfileId(capture, entity);
-        if (profiled.has(profileId)) continue;
-        profiled.add(profileId);
-        const previous = this.getActorProfile(profileId);
+        const previous = this.getActorProfile(profileId) ?? this.listActorProfiles().find((profile: any) => profile.tenantId === capture.tenantId && profile.normalizedName === normalized(entity));
         const profile = mergeActorProfile(previous, capture, entity, characterize ? entities : []);
         this.saveActorProfile(profile);
         this.saveEvidenceLink(link(capture, "actor_profile", profile.id, "characterizes", entity.confidence, extractorVersion));
@@ -206,19 +203,22 @@ installMemoryStoreReplayMethods(InMemoryScraperStore); installMemoryStoreDiscove
 export { canonicalizeUrl, captureDedupeKey, InMemoryObjectEvidenceStore };
 
 function normalized(record: any): string { return String(record.normalizedValue ?? record.value ?? "").trim().toLowerCase(); }
-function actorProfileId(capture: any, entity: any): string { return stableId("actor", `${capture.tenantId ?? "global"}:${actorType(entity)}:${normalized(entity)}`); }
+function actorProfileId(capture: any, entity: any): string { return stableId("actor", `${capture.tenantId ?? "global"}:${normalized(entity)}`); }
 function actorType(entity: any): string { return entity.type === "ransomware_family" ? "ransomware" : /^apt\d+$/i.test(String(entity.value)) ? "apt" : "threat_actor"; }
 function mergeActorProfile(previous: any, capture: any, entity: any, entities: any[]): any {
   const observedAt = capture.publishedAt ?? capture.collectedAt;
   const captureIds = unique([...(previous?.captureIds ?? []), capture.id]);
+  const incomingType = actorType(entity);
+  const keepPreviousIdentity = actorTypeRank(previous?.actorType) >= actorTypeRank(incomingType);
+  const canonicalName = keepPreviousIdentity ? previous.canonicalName : entity.value;
   return {
     ...(previous ?? {}),
-    id: actorProfileId(capture, entity),
+    id: previous?.id ?? actorProfileId(capture, entity),
     tenantId: capture.tenantId,
-    canonicalName: entity.value,
+    canonicalName,
     normalizedName: normalized(entity),
-    actorType: actorType(entity),
-    aliases: unique([...(previous?.aliases ?? []), ...(entity.aliases ?? []), entity.rawValue, entity.value]),
+    actorType: keepPreviousIdentity ? previous.actorType : incomingType,
+    aliases: uniqueActorAliases([canonicalName, ...(previous?.aliases ?? []), ...(entity.aliases ?? []), entity.rawValue, entity.value]),
     confidence: Math.max(previous?.confidence ?? 0, entity.confidence ?? 0),
     firstSeenAt: earlier(previous?.firstSeenAt, observedAt),
     lastSeenAt: later(previous?.lastSeenAt, observedAt),
@@ -228,6 +228,12 @@ function mergeActorProfile(previous: any, capture: any, entity: any, entities: a
     characterization: mergeCharacterization(previous?.characterization, entities, capture, observedAt),
     updatedAt: capture.collectedAt
   };
+}
+function actorTypeRank(value: unknown): number { return value === "apt" ? 3 : value === "ransomware" ? 2 : value === "threat_actor" ? 1 : 0; }
+function uniqueActorAliases(values: unknown[]): string[] {
+  const aliases = new Map<string, string>();
+  for (const value of values) if (typeof value === "string" && value.trim() && !aliases.has(value.trim().toLowerCase())) aliases.set(value.trim().toLowerCase(), value.trim());
+  return [...aliases.values()];
 }
 const CHARACTERIZATION_FIELDS: Record<string, string> = {
   victim: "victims", sector: "sectors", country: "countries", ttp: "ttps", malware: "malwareTools", impact: "impacts", dataset: "datasets",
