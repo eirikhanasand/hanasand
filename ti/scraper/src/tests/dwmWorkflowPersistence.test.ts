@@ -349,9 +349,10 @@ describe("dwm workflow persistence", () => {
 
     const triageResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
       method: "PATCH",
-      headers: { "x-user-email": "owner@workflow.example" },
+      headers: { authorization: "Bearer valid-test-session", id: "owner@workflow.example", "x-user-email": "owner@workflow.example" },
       body: JSON.stringify({
         organizationId,
+        actor: "spoofed-body",
         status: "triaged",
         assignedOwner: "owner-workflow",
         severityOverride: "critical",
@@ -363,6 +364,7 @@ describe("dwm workflow persistence", () => {
     }), options);
     const triage = await triageResponse.json() as any;
     expect(triageResponse.status).toBe(200);
+    expect(triage.alert.workflowEvents[0].actor).toBe("owner@workflow.example");
     expect(triage.alert.workflowSummary).toMatchObject({ status: "triaged", assignedOwner: "owner-workflow", severityOverride: "critical", caseId: "case_workflow_live", eventCount: 1 });
     expect(triage.alert.workflowSummary.createdEvent).toMatchObject({
       schemaVersion: "dwm.alert_created_event.v1",

@@ -296,7 +296,7 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
   const event = {
     id: stableId("dwm_alert_event", `${alertId}:${generatedAt}:${existing.workflowEvents?.length ?? 0}:${workflowTransition.workflowStatus}:${assignedOwner ?? ""}:${severityOverride ?? ""}:${note ?? ""}:${rationale ?? ""}`),
     at: generatedAt,
-    actor: String(body.actor ?? request.headers.get("x-actor-id") ?? "dashboard"),
+    actor: dwmAuditActor(request, body),
     eventType: workflowTransition.workflowStatus === existing.workflowStatus && note ? "workflow.note" : "workflow.transition",
     fromWorkflowStatus: existing.workflowStatus ?? "new",
     toWorkflowStatus: workflowTransition.workflowStatus,
@@ -406,7 +406,7 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
   const event = {
     id: stableId("dwm_alert_event", `${alertId}:${generatedAt}:replay:${existing.workflowEvents?.length ?? 0}`),
     at: generatedAt,
-    actor: String(body.actor ?? request.headers.get("x-actor-id") ?? "dashboard"),
+    actor: dwmAuditActor(request, body),
     fromReviewState: existing.reviewState,
     toReviewState: existing.reviewState,
     fromDeliveryState: existing.deliveryState,
@@ -1131,6 +1131,12 @@ function requestIdentity(request: Request | undefined, body?: any, url?: URL): s
   ].map(normalizeIdentity).filter(Boolean) as string[];
 }
 
+function dwmAuditActor(request: Request, body: any): string {
+  const sessionId = request.headers.get("id")?.trim();
+  if (sessionId && request.headers.get("authorization")?.startsWith("Bearer ")) return sessionId;
+  return String(body.actor ?? request.headers.get("x-actor-id") ?? "dashboard");
+}
+
 function identityMatchesMember(identity: string[], member: OrganizationMember): boolean {
   const candidates = [member.id, member.email, member.userId].map(normalizeIdentity).filter(Boolean);
   return candidates.some((candidate) => identity.includes(candidate as string));
@@ -1776,6 +1782,8 @@ function entitlementRequestId(request: Request, body: any): string | undefined {
 }
 
 function entitlementActor(request: Request, body: any, access: DwmWorkflowAccessResult): string | undefined {
+  const sessionId = request.headers.get("id")?.trim();
+  if (sessionId && request.headers.get("authorization")?.startsWith("Bearer ")) return sessionId;
   return String(body.actor ?? body.actorEmail ?? body.userEmail ?? body.userId ?? request.headers.get("x-user-email") ?? request.headers.get("x-user-id") ?? request.headers.get("x-actor-id") ?? access.member?.email ?? access.member?.userId ?? access.member?.id ?? "").trim() || undefined;
 }
 

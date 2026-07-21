@@ -158,7 +158,7 @@ async function createCaseFromBody(
   const access = authorizeCaseAccess({ options, scope, request, body, mode: "mutate" });
   if (access.error) return access.error;
   const generatedAt = nowIso();
-  const actor = String(body.actor ?? request.headers.get("x-actor-id") ?? "case-api");
+  const actor = caseAuditActor(request, body);
   const alertId = String(body.alertId ?? body.sourceId ?? "").trim();
   if (!alertId) return json({ error: { code: "missing_alert_id", message: "A DWM alert ID is required to open a case." } }, 400);
 
@@ -338,7 +338,7 @@ export async function recordCaseCustomerNotification(request: Request, options: 
   const alert = findDwmAlert(options, existing.alertId);
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === existing.alertId);
   const generatedAt = nowIso();
-  const actor = String(body.actor ?? request.headers.get("x-actor-id") ?? request.headers.get("x-user-email") ?? "case-api");
+  const actor = caseAuditActor(request, body);
   const rationale = normalizeNote(body.rationale ?? body.note);
   if (!rationale) return json({ error: { code: "missing_rationale", message: "Recording customer notification requires analyst rationale." } }, 400);
 
@@ -461,7 +461,7 @@ export async function recordCaseHandoffAction(request: Request, options: ApiServ
   }
 
   const generatedAt = nowIso();
-  const actor = String(body.actor ?? request.headers.get("x-actor-id") ?? request.headers.get("x-user-email") ?? "case-api");
+  const actor = caseAuditActor(request, body);
   const idempotencyKey = normalizeNote(body.idempotencyKey ?? request.headers.get("idempotency-key") ?? request.headers.get("x-idempotency-key"))
     ?? action.idempotencyKey
     ?? stableId("case_handoff_action_idempotency", `${existing.tenantId}:${existing.organizationId ?? ""}:${existing.id}:${actionId}:${action.route ?? ""}`);
@@ -558,7 +558,7 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   if (existing.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(existing, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
 
   const generatedAt = nowIso();
-  const actor = String(body.actor ?? request.headers.get("x-actor-id") ?? "case-api");
+  const actor = caseAuditActor(request, body);
   const action = normalizeAction(body.action, body.status);
   const unsupportedAction = unsupportedCaseAction(action);
   if (unsupportedAction) return unsupportedAction;
@@ -1493,6 +1493,12 @@ function requestIdentity(request: Request | undefined, body?: any, url?: URL): s
     url?.searchParams.get("userId"),
     url?.searchParams.get("actor")
   ].map(normalizeIdentity).filter(Boolean) as string[];
+}
+
+function caseAuditActor(request: Request, body: any): string {
+  const sessionId = request.headers.get("id")?.trim();
+  if (sessionId && request.headers.get("authorization")?.startsWith("Bearer ")) return sessionId;
+  return String(body.actor ?? request.headers.get("x-actor-id") ?? request.headers.get("x-user-email") ?? "case-api");
 }
 
 function identityMatchesMember(identity: string[], member: OrganizationMember): boolean {

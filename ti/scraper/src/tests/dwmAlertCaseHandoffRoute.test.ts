@@ -816,6 +816,7 @@ describe("DWM alert case handoff route", () => {
     const note = await patchCase(options, "case_alert_acme", "owner@acme.com", {
       organizationId: "org_acme",
       action: "note",
+      actor: "spoofed-body",
       note: "Validated source evidence and waiting for customer delivery.",
       idempotencyKey: "case-note-001"
     });
@@ -1051,7 +1052,7 @@ describe("DWM alert case handoff route", () => {
         rows: [expect.objectContaining({
           rowType: "workflow_transition",
           action: "note",
-          actor: "case-api",
+          actor: "owner@acme.com",
           rationale: "Validated source evidence and waiting for customer delivery.",
           workflow: expect.objectContaining({
             fromStatus: "open",
@@ -1283,7 +1284,7 @@ describe("DWM alert case handoff route", () => {
     const ownerTransitionHistoryPayload = await ownerTransitionHistory.json() as any;
     const viewerTransitionHistory = await getWorkflowTransitions(options, "case_alert_acme", "viewer@acme.com", "organizationId=org_acme&action=false_positive");
     const viewerTransitionHistoryPayload = await viewerTransitionHistory.json() as any;
-    const actorTransitionHistory = await getWorkflowTransitions(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&actor=case-api&idempotencyKey=case-reopen-false-positive-001");
+    const actorTransitionHistory = await getWorkflowTransitions(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&actor=owner%40acme.com&idempotencyKey=case-reopen-false-positive-001");
     const actorTransitionHistoryPayload = await actorTransitionHistory.json() as any;
     const wrongOrgTransitionHistory = await getWorkflowTransitions(options, "case_alert_acme", "owner@acme.com", "organizationId=org_other");
     const wrongOrgTransitionHistoryPayload = await wrongOrgTransitionHistory.json() as any;
@@ -1421,7 +1422,7 @@ describe("DWM alert case handoff route", () => {
         transitionCount: 3,
         decisionTransitionCount: 2,
         actions: ["open", "false_positive", "reopen"],
-        actors: ["case-api"],
+        actors: ["owner@acme.com"],
         latestTransition: expect.objectContaining({
           action: "reopen",
           note: "New source evidence requires review.",
@@ -1464,7 +1465,7 @@ describe("DWM alert case handoff route", () => {
         transitionCount: 3,
         totalTransitionCount: 3,
         actionIds: ["open", "false_positive", "reopen"],
-        actorIds: ["case-api"],
+        actorIds: ["owner@acme.com"],
         enabledActionIds: expect.arrayContaining(["note", "review", "assign", "escalate", "close", "suppress", "false_positive"]),
         blockedActionIds: ["reopen"],
         readOnly: false
@@ -1523,7 +1524,7 @@ describe("DWM alert case handoff route", () => {
     expect(actorTransitionHistoryPayload).toMatchObject({
       filters: {
         idempotencyKey: "case-reopen-false-positive-001",
-        actor: "case-api"
+        actor: "owner@acme.com"
       },
       summary: {
         transitionCount: 1,
@@ -2030,7 +2031,7 @@ describe("DWM alert case handoff route", () => {
       expect.objectContaining({
         rowType: "workflow_transition",
         action: "open",
-        actor: "case-api",
+        actor: "owner@acme.com",
         rationale: "Open case for action receipt testing.",
         workflow: expect.objectContaining({
           toStatus: "open",
@@ -2415,7 +2416,7 @@ async function postCustomerNotification(options: ReturnType<typeof fixtureRuntim
 async function patchCase(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, body: Record<string, unknown>) {
   return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}`, {
     method: "PATCH",
-    headers: { "x-user-email": email },
+    headers: { authorization: "Bearer valid-test-session", id: email, "x-user-email": email },
     body: JSON.stringify(body)
   }), options);
 }
