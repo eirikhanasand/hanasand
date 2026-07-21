@@ -144,6 +144,25 @@ describe("api v1", () => {
     expect(response.actorIntelligence.attributionEvidence).toMatchObject({ sourceId: "src_actor_identity", reportDate: "2026-07-20T00:00:00.000Z", captureId: "cap_midnight_blizzard" });
   });
 
+  test("keeps headline-only attribution after repeated feed wrappers are removed", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_google_attribution", tenantId: "tenant_api", name: "Google News threat RSS: APT29", metadata: { queryClass: "threat-intel", queryTerm: "APT29" } }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_google_attribution",
+      sourceId: "src_google_attribution",
+      title: "Amazon stops attack attributed to Russia's APT29 - Recorded Future News",
+      body: "Google News threat RSS: APT29 Amazon stops attack attributed to Russia's APT29 - Recorded Future News Amazon stops attack attributed to Russia's APT29 Recorded Future News",
+      publishedAt: "2025-09-02T07:00:00.000Z"
+    }));
+    store.saveExtractedEntity({ id: "actor_google_attribution", tenantId: "tenant_api", captureId: "cap_google_attribution", sourceId: "src_google_attribution", type: "actor", value: "APT29", normalizedValue: "apt29", confidence: 0.9 });
+
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+
+    expect(response.rows[0].summary).toBe("Captured source record from Google News threat RSS: APT29.");
+    expect(response.actorIntelligence.attribution).toBe("Amazon stops attack attributed to Russia's APT29 - Recorded Future News");
+    expect(response.actorIntelligence.attributionEvidence).toMatchObject({ sourceId: "src_google_attribution", reportDate: "2025-09-02T07:00:00.000Z", captureId: "cap_google_attribution" });
+  });
+
   test("uses persisted incident headlines for legacy captures without trusting inferred actor titles", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_legacy_actor", tenantId: "tenant_api", name: "Legacy public feed", metadata: { queryClass: "threat-intel" } }));

@@ -486,7 +486,7 @@ function actorAttribution(rows: any[], names: string[]) {
   const direct = /\b(?:attribut(?:ed|ion)|linked|associated|operated|sponsored|connected)\b/i;
   const origin = /\b(?:russia(?:n)?|svr|china|chinese|iran(?:ian)?|north korea(?:n)?|dprk|united states|u\.s\.|american)\b/i;
   for (const row of rows) {
-    for (const sentence of String(row.summary ?? "").split(/(?<=[.!?])\s+|\n+/)) {
+    for (const sentence of unique([row.title, row.summary]).flatMap((value) => String(value).split(/(?<=[.!?])\s+|\n+/))) {
       if (namePattern.test(sentence) && direct.test(sentence) && origin.test(sentence)) {
         return { statement: safeText(sentence, 320), row };
       }
