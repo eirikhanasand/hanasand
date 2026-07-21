@@ -10,7 +10,7 @@ The product must operate automatically end to end. Ambiguous or low-quality inpu
 
 Fake, look-real, sample, fixture, synthetic, demo, proof-only, and hardcoded production data are prohibited. Focused test fixtures remain allowed only inside tests and never count as production evidence.
 
-Route authority: the browser product is `/browser`, with reports at `/browser/report`. `/solutions/browser` was intentionally retired by commit `763a959c`; its 404 is expected and must not be treated as a missing surface or reintroduced as an alias.
+Route authority: the browser product is `/browser`, with reports at `/browser/report`. `/solutions/browser` is intentionally retired; its 404 is expected and must not be treated as a missing surface or reintroduced as an alias. Commit `9896f5fc` records this authority in the agent and goal documentation.
 
 ## Global Evidence Rules
 
