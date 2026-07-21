@@ -23,3 +23,38 @@ test("pipeline storage drops malformed incident timestamps", () => {
   });
   expect(stored.incident).toMatchObject({ firstSeenAt: capture.collectedAt, reportedAt: undefined, publishedAt: undefined });
 });
+
+test("duplicate processing preserves the incident's first processing timestamp", () => {
+  const store = new InMemoryScraperStore();
+  const capture = fixtureCapture({
+    processedAt: "2026-05-24T10:00:01.000Z",
+    firstVisibleAt: "2026-05-24T10:00:02.000Z"
+  });
+  const incident = {
+    id: "incident_reprocessed",
+    sourceId: capture.sourceId,
+    captureId: capture.id,
+    title: "Incident",
+    summary: "Summary",
+    firstSeenAt: capture.collectedAt,
+    processedAt: capture.processedAt,
+    confidence: 0.5,
+    extractorVersion: "test",
+    reviewState: "unreviewed"
+  };
+
+  store.savePipelineResult({ capture, incident, entities: [], indicators: [] });
+  store.savePipelineResult({
+    capture: { ...capture, processedAt: "2026-05-24T11:00:00.000Z" },
+    incident: { ...incident, processedAt: "2026-05-24T11:00:00.000Z" },
+    entities: [],
+    indicators: []
+  });
+
+  expect(store.getTimelinessRecord(incident.id)).toMatchObject({
+    processedAt: "2026-05-24T10:00:01.000Z",
+    firstVisibleAt: "2026-05-24T10:00:02.000Z",
+    latencies: { processingToVisibilitySeconds: 1 },
+    timestampAnomalies: []
+  });
+});

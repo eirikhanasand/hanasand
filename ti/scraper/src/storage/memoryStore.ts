@@ -52,7 +52,7 @@ export class InMemoryScraperStore implements ScraperStore {
       reportedAt: validIso(result.incident.reportedAt) ?? reportedAt(result.capture.metadata),
       publishedAt: validIso(result.incident.publishedAt) ?? capture.publishedAt,
       collectedAt: result.incident.collectedAt ?? capture.collectedAt,
-      processedAt: result.incident.processedAt ?? capture.processedAt,
+      processedAt: previousIncident?.processedAt ?? result.incident.processedAt ?? capture.processedAt,
       firstVisibleAt: previousIncident?.firstVisibleAt ?? capture.firstVisibleAt ?? firstVisibleAt
     }) : undefined;
     const extractorVersion = incident?.extractorVersion ?? capture.provenance?.extractorVersion ?? "unknown";
