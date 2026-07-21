@@ -261,7 +261,7 @@ function Results({ result }: { result: TiSearchResponse }) {
             href: row.href || linkFromText(row.provenance),
             meta: row.reportDate ? formatDate(row.reportDate) : sourceBasisLabel(row.confidence),
         })) ?? []),
-    ], row => row.id).slice(0, 12)
+    ], row => (row.href || row.detail || row.id).trim().toLowerCase()).slice(0, 12)
     useEffect(() => {
         if (!recentItems.length) return
         if (!recentItems.some(item => item.id === selectedId)) setSelectedId(recentItems[0]?.id ?? '')

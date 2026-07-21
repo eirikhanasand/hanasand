@@ -44,10 +44,11 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const sourceIds = new Set(rows.map((row) => row.sourceId));
   const records = searchRecords(options.store, scope.tenantId, captureIds, sourceIds);
   const assessment = assess(rows, records);
-  const lastSeen = latest(rows.map((row) => row.publishedAt));
+  const activityRows = entityType === "actor" ? rows.filter(isActorActivityRow) : rows;
+  const lastSeen = latest(activityRows.map((row) => row.publishedAt));
   const profile = actorProfileForQuery(records, identity);
   const aliases = actorAliases(records, rows, profile, identity);
-  const recentActivity = rows.map((row) => activity(row, records, assessment.confidence));
+  const recentActivity = activityRows.map((row) => activity(row, records, assessment.confidence));
   const victimActivity = recentActivity.filter((item) => item.victimName);
   const victimTargetSectors = unique(victimActivity.flatMap((item) => item.affectedSectors));
   const victimGeographies = unique(victimActivity.flatMap((item) => item.countries));
@@ -118,7 +119,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const actorIntelligence = {
     actorClass: profile?.actorType ?? (actor ? "observed_threat_actor" : "unclassified_query"),
     attribution,
-    firstSeen: earliest(rows.map((row) => row.publishedAt)),
+    firstSeen: earliest(activityRows.map((row) => row.publishedAt)),
     lastSeen,
     motivation: entityValues(records.entities, "motivation"),
     malwareTools,
@@ -358,6 +359,13 @@ function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackC
         : "single_source",
     observationSummary: `A captured source record matched the query. This confirms the source mention, not the underlying activity.`
   };
+}
+
+function isActorActivityRow(row: any) {
+  if (row.victimName) return true;
+  const title = String(row.title ?? "");
+  if (/^\s*(?:what|who)\s+is\b|\b(?:actor|group)\s+(?:profile|overview)\b|\b(?:reference|explainer|guide)\b/i.test(title)) return false;
+  return /\b(?:attack(?:ed|s|ing)?|breach(?:ed|es)?|campaign|compromis(?:e|ed|es|ing)|disrupt(?:ed|s|ion)|espionage operation|exfiltrat(?:e|ed|es|ing|ion)|exploit(?:ed|s|ing|ation)|intrusion|leak(?:ed|s|ing)?|malware operation|phishing operation|shut(?:s|ting)? down|stole|stolen|target(?:ed|s|ing)|victim|watering hole)\b/i.test(`${title} ${row.summary ?? ""}`);
 }
 
 function supportsActivityCorroboration(claim: any) {

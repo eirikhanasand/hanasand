@@ -53,9 +53,7 @@ describe("api v1", () => {
     expect(response.actorIntelligence.geographies).toEqual([]);
     expect(JSON.stringify(response)).not.toContain("window.dataLayer");
     expect(JSON.stringify(response)).not.toContain("osano-cm-widget");
-    expect(response.recentActivity).toEqual(expect.arrayContaining([
-      expect.objectContaining({ publisherCount: 1, corroboratingSourceIds: [], corroborationState: "single_source" })
-    ]));
+    expect(response.recentActivity).toEqual([]);
   });
 
   test("keeps structured ransomware identity ahead of incidental actor mentions", async () => {
@@ -170,10 +168,10 @@ describe("api v1", () => {
       id: "cap_legacy_headline",
       sourceId: "src_legacy_actor",
       title: undefined,
-      body: "APT29 is linked to Russia's SVR in this historical public report.",
+      body: "APT29 campaign activity was disrupted in this historical public report.",
       publishedAt: "2026-02-12T08:00:00.000Z"
     }));
-    store.saveIncident({ id: "inc_legacy_headline", sourceId: "src_legacy_actor", captureId: "cap_legacy_headline", title: "What is APT29?", summary: "Historical public report.", firstSeenAt: "2026-07-21T00:00:00.000Z", confidence: 0.8, extractorVersion: "legacy", reviewReasons: [] });
+    store.saveIncident({ id: "inc_legacy_headline", sourceId: "src_legacy_actor", captureId: "cap_legacy_headline", title: "APT29 campaign disrupted", summary: "Historical public report.", firstSeenAt: "2026-07-21T00:00:00.000Z", confidence: 0.8, extractorVersion: "legacy", reviewReasons: [] });
     store.saveCapture(fixtureCapture({
       id: "cap_inferred_actor_title",
       sourceId: "src_legacy_actor",
@@ -186,7 +184,7 @@ describe("api v1", () => {
 
     const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
 
-    expect(response.rows).toEqual([expect.objectContaining({ id: "cap_legacy_headline", title: "What is APT29?" })]);
+    expect(response.rows).toEqual([expect.objectContaining({ id: "cap_legacy_headline", title: "APT29 campaign disrupted" })]);
     expect(response.lastSeen).toBe("2026-02-12T08:00:00.000Z");
   });
 
@@ -217,8 +215,46 @@ describe("api v1", () => {
 
     expect(response.lastSeen).toBe("2026-06-01T00:00:00.000Z");
     expect(response.actorIntelligence.firstSeen).toBe("2026-06-01T00:00:00.000Z");
-    expect(response.recentActivity.find((item: any) => item.title.includes("reference profile")).date).toBeUndefined();
+    expect(response.recentActivity.map((item: any) => item.title)).toEqual(["APT29 public report"]);
     expect(response.actorProfile.provenance.find((item: any) => item.captureId === "cap_apt29_undated").reportDate).toBeUndefined();
+  });
+
+  test("derives actor activity dates only from event-bearing evidence", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_apt29_activity", tenantId: "tenant_api", name: "APT29 source", metadata: { queryClass: "threat-intel", queryTerm: "APT29" } }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_apt29_profile",
+      sourceId: "src_apt29_activity",
+      title: "MITRE ATT&CK APT29 Group",
+      body: "APT29 aliases and reference material.",
+      metadata: { actorName: "APT29" },
+      publishedAt: undefined
+    }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_apt29_explainer",
+      sourceId: "src_apt29_activity",
+      url: "https://example.test/apt29-explainer",
+      title: "What is APT29?",
+      body: "An explainer about APT29.",
+      metadata: { actorName: "APT29" },
+      publishedAt: "2026-02-12T08:00:00.000Z"
+    }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_apt29_attack",
+      sourceId: "src_apt29_activity",
+      url: "https://example.test/apt29-attack",
+      title: "Amazon shuts down watering hole attack attributed to APT29",
+      body: "Amazon disrupted the APT29 watering hole attack.",
+      metadata: { actorName: "APT29" },
+      publishedAt: "2025-09-02T07:00:00.000Z"
+    }));
+
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+
+    expect(response.rows).toHaveLength(3);
+    expect(response.recentActivity.map((item: any) => item.title)).toEqual(["Amazon shuts down watering hole attack attributed to APT29"]);
+    expect(response.lastSeen).toBe("2025-09-02T07:00:00.000Z");
+    expect(response.actorIntelligence.firstSeen).toBe("2025-09-02T07:00:00.000Z");
   });
 
   test("classifies domain and CVE queries without forcing actor semantics", async () => {
