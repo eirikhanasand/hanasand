@@ -133,7 +133,7 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
     if (scraperBase) {
         const scraperResult = await fetchCanonicalScraperSearch(scraperBase, query)
         if (scraperResult) {
-            const result = { ...scraperResult, queryKind, mode: 'scraper' as const }
+            const result = { ...scraperResult, queryKind: scraperResult.queryKind ?? queryKind, mode: 'scraper' as const }
             writeCache(key, result)
             return result
         }
@@ -158,7 +158,8 @@ async function fetchCanonicalScraperSearch(scraperBase: string, query: string): 
     try {
         const target = new URL('/v1/intel/search', `${scraperBase}/`)
         target.searchParams.set('q', query)
-        target.searchParams.set('entityType', scraperEntityType(query))
+        const entityType = scraperEntityType(query)
+        if (entityType) target.searchParams.set('entityType', entityType)
         target.searchParams.set('limit', '50')
         const response = await fetch(target, { signal: AbortSignal.timeout(12_000) })
         if (!response.ok) return null
@@ -200,7 +201,7 @@ function unavailableResult(query: string, queryKind: NonNullable<TiSearchRespons
 
 function scraperEntityType(query: string) {
     const kind = classifyTiQuery(query)
-    return kind === 'organization' ? 'free_text' : kind
+    return ['actor', 'domain', 'cve', 'indicator'].includes(kind) ? kind : undefined
 }
 
 function writeCache(key: string, result: TiSearchResponse) {
