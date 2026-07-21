@@ -37,11 +37,21 @@ describe("logical incident identity", () => {
   });
 
   test("separates entries when a feed parser can only return the feed URL", () => {
-    const metadata = { feedItem: true, requestedUrl: "https://news.example.test/feed.xml", finalUrl: "https://news.example.test/feed.xml" };
+    const metadata = { feedItem: true, sourceUrl: "https://news.example.test/feed.xml" };
     const first = logicalIncidentIdentity(item({ url: "https://news.example.test/feed.xml", title: "Incident one", metadata }));
     const other = logicalIncidentIdentity(item({ url: "https://news.example.test/feed.xml", title: "Incident two", metadata }));
     expect(first.strategy).toBe("feed_entry_fallback");
     expect(other.keyHash).not.toBe(first.keyHash);
+  });
+
+  test("uses an immutable feed entry URL for both collection and exposure projections", () => {
+    const collected = logicalIncidentIdentity(item({
+      title: "Ransomware feed title",
+      metadata: { feedItem: true, sourceUrl: "https://reports.example.test/feed.xml" }
+    }));
+    const projection = logicalIncidentIdentity(item({ title: "Normalized exposure title", metadata: { exposureClaim: true } }));
+    expect(collected.strategy).toBe("canonical_url");
+    expect(projection).toEqual(collected);
   });
 
   test("isolates tenants and never stores the raw identity key", () => {

@@ -151,7 +151,7 @@ function row(source: any, task: any, url: string, title: string, rawText: string
   return {
     tenantId: source.tenantId, sourceId: source.id, taskId: task.id, url, title, rawText, body: rawText,
     collectedAt: at, publishedAt, contentHash: hashContent(key), links: [url].filter(Boolean),
-    metadata: { ...metadata, reportTimestamps, feedItem, itemIndex: index, sourceName: source.name, extractionProfile: extractionProfile(source) },
+    metadata: { ...metadata, reportTimestamps, feedItem, itemIndex: index, sourceName: source.name, sourceUrl: task.targetUrl, extractionProfile: extractionProfile(source) },
     sensitive: false
   };
 }

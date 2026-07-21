@@ -75,9 +75,11 @@ export function logicalIncidentIdentity(item: CollectedItem) {
   const messageId = meaningful(metadata.messageId) || typeof metadata.messageId === "number" ? String(metadata.messageId) : undefined;
   const channel = meaningful(metadata.channel) ? normalizeIdentity(metadata.channel) : undefined;
   const canonicalUrl = canonicalizeUrl(item.url);
+  const sourceUrl = meaningful(metadata.sourceUrl) ? canonicalizeUrl(metadata.sourceUrl) : undefined;
   const publishedAt = normalizedTimestamp(item.publishedAt);
   const title = normalizeIdentity(item.title);
-  const strategy = cve ? "cve" : messageId && channel ? "public_message" : metadata.feedItem === true ? "feed_entry_fallback" : "canonical_url";
+  const sharedFeedUrl = metadata.feedItem === true && (!sourceUrl || canonicalUrl === sourceUrl);
+  const strategy = cve ? "cve" : messageId && channel ? "public_message" : sharedFeedUrl ? "feed_entry_fallback" : "canonical_url";
   const subject = cve ?? (messageId && channel ? `${channel}:${messageId}` : strategy === "feed_entry_fallback" ? `${canonicalUrl}:${publishedAt ?? "unknown"}:${title}` : canonicalUrl);
   const keyHash = createHash("sha256").update(`${tenant}:${source}:${strategy}:${subject}`).digest("hex");
   return { version: "incident-identity-v1", strategy, keyHash, sourceScoped: true };
