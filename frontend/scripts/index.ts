@@ -72,6 +72,11 @@ const tasks: TestTask[] = [
         command: [bun, 'scripts/check-ti-actor-intelligence.ts'],
     },
     {
+        id: 'ti-varnish-freshness',
+        title: 'TI public cache freshness',
+        command: [bun, 'scripts/check-ti-varnish-freshness.mjs'],
+    },
+    {
         id: 'dwm-public-evidence-boundary',
         title: 'DWM public evidence boundary',
         command: [bun, 'scripts/check-dwm-public-evidence-boundary.mjs'],

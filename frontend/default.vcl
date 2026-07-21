@@ -14,6 +14,10 @@ sub vcl_recv {
         return (pass);
     }
 
+    if (req.url ~ "^/(ti|dwm)(?:[/?#]|$)") {
+        return (pass);
+    }
+
     if (req.url ~ "^/s(?:[/?#]|$)") {
         return (pass);
     }
