@@ -34,6 +34,7 @@ export function buildIncidentCandidate(
   indicators: Indicator[],
   entities: ExtractedEntity[]
 ): IncidentCandidate | undefined {
+  if (isCollectionFallback(item.metadata)) return undefined;
   if (!hasIncidentEvidence({
     title: item.title,
     text: item.rawText,
@@ -98,6 +99,11 @@ function normalizeCve(value: unknown): string | undefined {
 function normalizedTimestamp(value: unknown): string | undefined {
   const timestamp = Date.parse(String(value ?? ""));
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
+}
+
+function isCollectionFallback(metadata: Record<string, any> | undefined): boolean {
+  if (metadata?.feedItem !== false || !Array.isArray(metadata.parserWarnings)) return false;
+  return metadata.parserWarnings.some((warning: unknown) => typeof warning === "string" && /contained no (?:messages|rss|atom|supported records)|preview contained no messages/i.test(warning));
 }
 
 function safeIncidentSummary(item: CollectedItem): string {

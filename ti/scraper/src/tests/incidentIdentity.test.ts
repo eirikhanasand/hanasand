@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { logicalIncidentIdentity } from "../pipeline/incidentCandidate.ts";
+import { buildIncidentCandidate, logicalIncidentIdentity } from "../pipeline/incidentCandidate.ts";
 
 function item(overrides: Record<string, unknown> = {}): any {
   return {
@@ -49,5 +49,15 @@ describe("logical incident identity", () => {
     const otherTenant = logicalIncidentIdentity(item({ tenantId: "tenant-b" }));
     expect(otherTenant.keyHash).not.toBe(first.keyHash);
     expect(JSON.stringify(first)).not.toContain("reports.example.test");
+  });
+
+  test("does not turn failed feed parsing into an incident", () => {
+    const fallback = item({
+      url: "https://news.example.test/feed.xml",
+      title: "Threat research feed",
+      rawText: "The fallback page mentions a ransomware attack against Example Industries.",
+      metadata: { adapter: "rss", feedItem: false, parserWarnings: ["feed contained no RSS or Atom entries"] }
+    });
+    expect(buildIncidentCandidate(fallback, "cap-fallback", [], [{ type: "victim", value: "Example Industries", confidence: 0.9 }] as any)).toBeUndefined();
   });
 });
