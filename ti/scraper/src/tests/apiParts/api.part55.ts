@@ -4,7 +4,8 @@ describe("api v1", () => {
   test("returns a safe no-result answer while live collection is pending", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_no_result", type: "rss" }));
-    const response = await body(await handleApiRequest(api("/v1/intel/search?q=Unseen%20Quartz%20Actor&entityType=actor"), { store, frontier: new FocusedFrontier() })) as Record<string, any>;
+    const executed: string[] = [];
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=Unseen%20Quartz%20Actor&entityType=actor"), { store, frontier: new FocusedFrontier(), runExecutor: (runId: string) => executed.push(runId) })) as Record<string, any>;
     expect(response.publicTiAnswer).toMatchObject({
       status: "searching",
       noResult: true,
@@ -20,5 +21,7 @@ describe("api v1", () => {
     expect(response).not.toHaveProperty("collectionStrategy");
     expect(response.planner).not.toHaveProperty("decisions");
     expect(response.publicChannel).not.toHaveProperty("operatorStates");
+    expect(executed).toEqual([response.planner.activeRunId]);
+    expect(store.getRun(response.planner.activeRunId)).toMatchObject({ status: "queued", requestHash: response.planner.reuseKey });
   });
 });

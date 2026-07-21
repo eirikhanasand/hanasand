@@ -27,6 +27,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     activePlans: options.store.listPlans?.() ?? [],
     queuePressureLimit: Number(options.liveSearchQueuePressureLimit ?? 50),
   });
+  scheduleLiveSearch(liveSearch, options, generatedAt);
   const publicChannelResult = buildPublicChannelStatusRouteResponse(
     { query, entityType, tenantId: scope.tenantId },
     { store: options.store, publicTelegramSourcePacks: options.publicTelegramSourcePacks as any, generatedAt },
@@ -213,6 +214,19 @@ export async function searchResponse(request: Request, options: ApiServerOptions
       : { status: restricted.count ? "partial_metadata" : "searching", queuedTasks: 0 },
   };
   return json(sanitizeDwmApiPayload(response));
+}
+
+function scheduleLiveSearch(liveSearch: any, options: ApiServerOptions, generatedAt: string) {
+  if (!options.runExecutor || liveSearch.dto.activeRunId) return;
+  const tasks = liveSearch.plan.tasks.filter((task: any) => !task.availableAt || !task.deadlineAt || Date.parse(task.availableAt) <= Date.parse(task.deadlineAt));
+  if (!tasks.length) return;
+  const plan = { ...liveSearch.plan, tasks };
+  const runId = stableId("run", plan.id);
+  options.store.savePlan?.(plan);
+  options.store.saveRun?.({ id: runId, tenantId: plan.tenantId, planId: plan.id, requestId: plan.request.id, requestHash: liveSearch.dto.reuseKey, status: "queued", createdAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: plan.reviewRequired.length, rejectedSourceCount: plan.rejected.length, captureCount: 0, incidentCount: 0 });
+  liveSearch.dto.activeRunId = runId;
+  liveSearch.dto.queuedTaskCount = tasks.length;
+  options.runExecutor(runId);
 }
 
 function compactPublicChannel(status: any, packs: any[] = [], query: string) {

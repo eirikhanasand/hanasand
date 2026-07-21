@@ -9,7 +9,11 @@ export function allowedSource(source) {
 }
 
 export function rankedSources(sources, terms, at) {
-  return [...sources].sort((a, b) => sourceScore(b, terms, at) - sourceScore(a, terms, at) || a.id.localeCompare(b.id));
+  return [...sources].sort((a, b) => Number(Boolean(sourceAvailableAt(a, at))) - Number(Boolean(sourceAvailableAt(b, at))) || sourceScore(b, terms, at) - sourceScore(a, terms, at) || a.id.localeCompare(b.id));
+}
+
+export function sourceAvailableAt(source, at) {
+  return [source.crawlState?.backoffUntil, source.crawlState?.nextEligibleAt].filter((value) => value && Date.parse(value) > Date.parse(at)).sort().at(-1);
 }
 
 export function sourceMatchesScope(source, request) {

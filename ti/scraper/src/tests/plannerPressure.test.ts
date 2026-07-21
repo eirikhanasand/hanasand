@@ -19,6 +19,15 @@ describe("planner backpressure and continuous scheduling", () => {
     expect(budget.dto.backpressureState).toBe("deferred_by_budget");
   });
 
+  test("does not let delayed sources exhaust the live task budget", () => {
+    const now = "2026-05-24T00:00:00.000Z";
+    const delayed = Array.from({ length: 10 }, (_, index) => source({ id: `delayed_${index}`, type: "api", trustScore: 1, tags: ["apt29"], crawlState: { nextEligibleAt: "2026-05-24T01:00:00.000Z", retryCount: 0 } }));
+    const available = source({ id: "available", type: "rss", trustScore: 0.5, tags: ["apt29"] });
+    const { plan, dto } = createLiveSearchPlan({ request: { query: "APT29", entityType: "actor", tenantId: "tenant_live", createdAt: now }, sources: [...delayed, available] });
+    expect(plan.tasks.some((task) => task.sourceId === "available" && !task.availableAt)).toBe(true);
+    expect(dto.backpressureState).toBe("accepted");
+  });
+
   test("builds continuous actor and CVE scheduling fixtures with cost envelopes", () => {
     const now = "2026-05-24T04:00:00.000Z";
     const sources = [
