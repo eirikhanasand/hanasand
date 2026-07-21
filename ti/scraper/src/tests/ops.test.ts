@@ -40,7 +40,7 @@ describe("ops utilities", () => {
       generatedAt: "2026-06-21T00:00:00.000Z",
       proofMode: "local",
       runs: [{ status: "completed" }, { status: "failed" }],
-      sources: [{ id: "source_1", status: "active" }],
+      sources: [{ id: "source_1", status: "active", type: "rss", url: "https://feed.example.test/rss" }],
       captures: [{ sourceId: "source_1", collectedAt: "2026-06-20T23:30:00.000Z", sensitive: false }],
       incidents: [{ id: "incident_1" }],
       frontier: { queued: 2, leased: 1 },
@@ -49,7 +49,7 @@ describe("ops utilities", () => {
     expect(dashboard.schemaVersion).toBe("ti.product_operational_slo.v1");
     expect(dashboard.dashboard.state).toBe("pass");
     expect(dashboard.metrics).toMatchObject({
-      sources: { total: 1, active: 1, observed: 1, collectingLast24Hours: 1 },
+      sources: { total: 1, active: 1, observed: 1, collectingLast24Hours: 1, collectingHostsLast24Hours: 1, collectingTypesLast24Hours: 1 },
       captures: { total: 1, collectedLast24Hours: 1 },
       incidents: { total: 1 },
       runs: { completed: 1, failed: 1 },
