@@ -445,6 +445,9 @@ export function linkedAlertCaptureIds(alert: any): string[] {
     ...(alert.captureIds ?? []),
     ...(alert.provenance?.captureIds ?? []),
     ...(alert.workflowContext?.captureIds ?? []),
+    ...(alert.workflowContext?.generationEvidenceWindow?.captureIds ?? []),
+    ...(alert.sourceProvenanceSummary?.generationEvidenceWindow?.captureIds ?? []),
+    ...(alert.deliveryReadinessContext?.generationEvidenceWindow?.captureIds ?? []),
     ...(alert.evidence ?? []).map((item: any) => item.captureId ?? item.provenance?.captureId)
   ]);
 }

@@ -233,6 +233,49 @@ describe("dwm webhook delivery", () => {
     expect(seen).toHaveLength(1);
   });
 
+  test("preserves a failed live attempt when the retry succeeds", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source);
+    store.saveCapture(capture);
+    const statuses = [503, 204];
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      webhookFetch: async () => new Response(null, { status: statuses.shift() ?? 500 })
+    };
+
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_attempt_history", terms: ["acme.com"], webhookUrl: "https://hooks.example.com/history" })
+    }), options);
+    const alertId = (store as any).listDwmAlerts()[0].id;
+    const deliver = async () => {
+      const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+        method: "POST",
+        body: JSON.stringify({ tenantId: "tenant_attempt_history", alertId })
+      }), options);
+      expect(response.status).toBe(200);
+      return await response.json() as any;
+    };
+
+    const failed = await deliver();
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    const succeeded = await deliver();
+
+    expect(failed.deliveredAt).toBeUndefined();
+    expect(failed.completedAt).toBe(failed.deliveries[0].updatedAt);
+    expect(succeeded.deliveredAt).toBe(succeeded.deliveries[0].deliveredAt);
+    expect(succeeded.completedAt).toBe(succeeded.deliveries[0].updatedAt);
+    expect(failed.deliveries[0]).toMatchObject({ status: "failed", httpStatus: 503, attemptCount: 1 });
+    expect(succeeded.deliveries[0]).toMatchObject({ status: "delivered", httpStatus: 204, attemptCount: 2 });
+    expect(succeeded.deliveries[0].id).not.toBe(failed.deliveries[0].id);
+    expect(succeeded.deliveries[0].dedupeKey).toBe(failed.deliveries[0].dedupeKey);
+    expect((store as any).listDwmWebhookDeliveries()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: failed.deliveries[0].id, status: "failed", httpStatus: 503 }),
+      expect.objectContaining({ id: succeeded.deliveries[0].id, status: "delivered", httpStatus: 204 })
+    ]));
+  });
+
   test("delivers alert updated event context after a matching follow-up capture rebuild", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source);

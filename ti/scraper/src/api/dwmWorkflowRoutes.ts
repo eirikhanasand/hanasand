@@ -591,6 +591,7 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
   const alerts = ((options.store as any).listDwmAlerts?.() ?? []).filter((alert: any) => alert.tenantId === tenantId && (body.alertId ? alert.id === body.alertId : alert.deliveryState !== "delivered"));
   const generatedAt = nowIso();
   const deliveries: any[] = [];
+  const newDeliveryId = (...parts: string[]) => stableId("dwm_delivery", `${tenantId}:${parts.join(":")}:${generatedAt}:${crypto.randomUUID()}`);
 
   for (const alert of alerts.slice(0, Math.max(1, Math.min(Number(body.limit ?? 25), 100)))) {
     const alertWatchlistIds = new Set((alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? []).map(String));
@@ -617,7 +618,7 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
       "no_active_source_match"
     ].includes(code));
     if (hardSelectionBlocker) {
-      const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${hardSelectionBlocker}:${generatedAt}`);
+      const deliveryId = newDeliveryId(alert.id, hardSelectionBlocker);
       const delivery = (options.store as any).saveDwmWebhookDelivery({
         id: deliveryId,
         organizationId: deliveryOrgId,
@@ -643,7 +644,7 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     const destination = selectWebhookDestination(options, deliveryOrgDestinations, watchlist, requestedDestinationId);
     const disabledDestination = findDisabledWebhookDestination(options, requestedDestinationId ?? watchlist?.webhookDestinationId);
     if (!watchlist || disabledDestination) {
-      const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${disabledDestination ? "disabled-destination" : "retired-watchlist"}:${generatedAt}`);
+      const deliveryId = newDeliveryId(alert.id, disabledDestination ? "disabled-destination" : "retired-watchlist");
       const delivery = (options.store as any).saveDwmWebhookDelivery({
         id: deliveryId,
         organizationId: deliveryOrgId,
@@ -670,7 +671,7 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     const webhookUrl = explicitWebhookUrl ?? (requestedDestinationId ? destinationUrl : watchlistWebhookUrl ?? destinationUrl);
     const deliveryKind = webhookUrl ? inferWebhookKind(webhookUrl) : destination?.kind ?? "generic";
     if (!webhookUrl) {
-      const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:missing-webhook:${generatedAt}`);
+      const deliveryId = newDeliveryId(alert.id, "missing-webhook");
       const delivery = (options.store as any).saveDwmWebhookDelivery({
         id: deliveryId,
         organizationId: deliveryOrgId,
@@ -697,7 +698,9 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     }
     const payload = buildWebhookPayload(alert, watchlist, generatedAt, destination, downstreamHandoff);
     const requestBody = buildWebhookRequestBody(deliveryKind, payload);
-    const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${destination?.id ?? watchlist.id}:${alert.webhookDelivery?.dedupeKey ?? ""}`);
+    const deliveryDedupeKey = alert.webhookDelivery?.dedupeKey ?? stableId("dwm_delivery_dedupe", `${tenantId}:${alert.id}:${destination?.id ?? watchlist.id}`);
+    const deliveryId = newDeliveryId(alert.id, destination?.id ?? watchlist.id, deliveryDedupeKey);
+    const attemptCount = existingDeliveries.filter((delivery: any) => delivery.dedupeKey === deliveryDedupeKey && !["dry_run", "skipped"].includes(delivery.status)).length + 1;
     const deliveryCaseId = requestedCaseId ?? alert.caseId ?? alert.workflowContext?.caseId;
     const deliveryCasePath = requestedCasePath ?? alert.casePath ?? alert.workflowContext?.casePath;
     const baseDelivery = {
@@ -710,7 +713,8 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
       watchlistId: watchlist.id,
       webhookDestinationId: destination?.id,
       endpointHash: stableId("endpoint", webhookUrl),
-      dedupeKey: alert.webhookDelivery?.dedupeKey ?? deliveryId,
+      dedupeKey: deliveryDedupeKey,
+      attemptCount,
       attemptedAt: generatedAt,
       dryRun,
       payloadHash: stableId("payload", JSON.stringify(requestBody)),
@@ -735,8 +739,8 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
       const ok = response.status >= 200 && response.status < 300;
       const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status });
       deliveries.push(delivery);
-      const nextAlert = ok ? { ...alert, deliveryState: "delivered", deliveredAt: generatedAt } : alert;
-      refreshAlertDeliveryReadiness(options, nextAlert, { ...scope, organizationId: deliveryOrgId }, [delivery], generatedAt);
+      const nextAlert = ok ? { ...alert, deliveryState: "delivered", deliveredAt: delivery.deliveredAt } : alert;
+      refreshAlertDeliveryReadiness(options, nextAlert, { ...scope, organizationId: deliveryOrgId }, [delivery], delivery.updatedAt ?? generatedAt);
     } catch (error) {
       const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "failed", httpStatus: 0, error: error instanceof Error ? error.message : String(error) });
       deliveries.push(delivery);
@@ -744,10 +748,16 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     }
   }
 
+  const deliveredAt = deliveries.findLast((delivery) => delivery.status === "delivered")?.deliveredAt;
+  const completedAt = deliveries.reduce((latest, delivery) => {
+    const candidate = delivery.updatedAt ?? delivery.completedAt ?? delivery.attemptedAt;
+    return Date.parse(candidate) > Date.parse(latest) ? candidate : latest;
+  }, generatedAt);
   return json({
     organization: scope.organization,
     visibilityDecision: access.visibilityDecision,
-    deliveredAt: generatedAt,
+    completedAt,
+    deliveredAt,
     attemptedCount: deliveries.length,
     deliveries: deliveries.map((delivery) => withDwmWebhookOperatorDeliveryTrace(delivery))
   });

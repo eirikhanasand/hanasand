@@ -261,7 +261,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       lastSeenAt: collectedAt,
       savedAt: alertedAt,
       updatedAt: collectedAt,
-      provenance: { captureIds: [result.capture.id] },
+      provenance: { captureIds: [] },
+      workflowContext: { generationEvidenceWindow: { captureIds: [result.capture.id] } },
       company: "Northwind Health"
     });
     first.saveDwmWebhookDelivery({ id: "delivery_postgres", tenantId: "tenant_postgres", alertId: "alert_postgres", attemptedAt: new Date(Date.parse(alertedAt) + 1_000).toISOString(), deliveredAt: new Date(Date.parse(alertedAt) + 2_000).toISOString(), status: "delivered", httpStatus: 204 });

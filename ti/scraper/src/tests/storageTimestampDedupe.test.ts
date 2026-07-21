@@ -65,7 +65,8 @@ test("aggregate alert and delivery events update every linked evidence incident 
   const publishedAt = "2026-05-24T09:59:59.000Z";
   const first = fixtureCapture({ id: "cap_alert_first", contentHash: "hash_alert_first", publishedAt, firstVisibleAt: "2026-05-24T10:00:02.000Z", metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId: "src_fixture", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } });
   const second = fixtureCapture({ id: "cap_alert_second", sourceId: "src_fixture_second", url: "https://example.test/second-report", contentHash: "hash_alert_second", collectedAt: "2026-05-24T10:00:01.000Z", publishedAt, firstVisibleAt: "2026-05-24T10:00:03.000Z", metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId: "src_fixture_second", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } });
-  for (const capture of [first, second]) store.savePipelineResult({
+  const windowOnly = fixtureCapture({ id: "cap_alert_window", sourceId: "src_fixture_window", url: "https://example.test/window-report", contentHash: "hash_alert_window", collectedAt: "2026-05-24T10:00:02.000Z", publishedAt, firstVisibleAt: "2026-05-24T10:00:03.000Z", metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId: "src_fixture_window", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] } });
+  for (const capture of [first, second, windowOnly]) store.savePipelineResult({
     capture,
     incident: { id: `incident_${capture.id}`, sourceId: capture.sourceId, captureId: capture.id, title: "Incident", summary: "Summary", firstSeenAt: capture.collectedAt, confidence: 0.5, extractorVersion: "test", reviewState: "unreviewed" },
     entities: [],
@@ -77,7 +78,8 @@ test("aggregate alert and delivery events update every linked evidence incident 
     savedAt: "2026-05-24T10:00:04.000Z",
     deliveryState: "pending_review",
     provenance: { captureIds: [first.id] },
-    evidence: [{ provenance: { captureId: second.id } }]
+    evidence: [{ provenance: { captureId: second.id } }],
+    workflowContext: { generationEvidenceWindow: { captureIds: [windowOnly.id] } }
   });
   store.saveDwmWebhookDelivery({
     id: "delivery_aggregate",
@@ -90,6 +92,7 @@ test("aggregate alert and delivery events update every linked evidence incident 
 
   expect(store.getTimelinessRecord(`incident_${first.id}`)).toMatchObject({ alertCreatedAt: "2026-05-24T10:00:04.000Z", alertedAt: "2026-05-24T10:00:04.000Z", alertCreatedProvenance: { evidencePath: "alert.savedAt" }, deliveryAttemptedAt: "2026-05-24T10:01:00.000Z", deliveredAt: "2026-05-24T10:01:02.000Z", latencies: { visibilityToAlertSeconds: 2, reportToAlertSeconds: 5, alertToDeliveryAttemptSeconds: 56, deliveryAttemptToDeliveredSeconds: 2, reportToDeliveredSeconds: 63 } });
   expect(store.getTimelinessRecord(`incident_${second.id}`)).toMatchObject({ alertCreatedAt: "2026-05-24T10:00:04.000Z", deliveryAttemptedAt: "2026-05-24T10:01:00.000Z", deliveredAt: "2026-05-24T10:01:02.000Z", latencies: { visibilityToAlertSeconds: 1, reportToDeliveredSeconds: 63 } });
+  expect(store.getTimelinessRecord(`incident_${windowOnly.id}`)).toMatchObject({ alertCreatedAt: "2026-05-24T10:00:04.000Z", deliveryAttemptedAt: "2026-05-24T10:01:00.000Z", deliveredAt: "2026-05-24T10:01:02.000Z", latencies: { visibilityToAlertSeconds: 1, reportToDeliveredSeconds: 63 } });
 });
 
 test("unknown report times stay unknown and impossible event order is flagged", () => {
