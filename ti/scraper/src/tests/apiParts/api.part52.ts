@@ -231,6 +231,15 @@ describe("api v1", () => {
       publishedAt: undefined
     }));
     store.saveCapture(fixtureCapture({
+      id: "cap_apt29_group_dataset",
+      sourceId: "src_apt29_activity",
+      url: "https://example.test/apt29-group",
+      title: "APT29",
+      body: "Lineage profile. Public channel classes: DLS, Chat. Public victim listing count: 1387.",
+      metadata: { actorName: "APT29" },
+      publishedAt: undefined
+    }));
+    store.saveCapture(fixtureCapture({
       id: "cap_apt29_explainer",
       sourceId: "src_apt29_activity",
       url: "https://example.test/apt29-explainer",
@@ -251,7 +260,7 @@ describe("api v1", () => {
 
     const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
 
-    expect(response.rows).toHaveLength(3);
+    expect(response.rows).toHaveLength(4);
     expect(response.recentActivity.map((item: any) => item.title)).toEqual(["Amazon shuts down watering hole attack attributed to APT29"]);
     expect(response.lastSeen).toBe("2025-09-02T07:00:00.000Z");
     expect(response.actorIntelligence.firstSeen).toBe("2025-09-02T07:00:00.000Z");

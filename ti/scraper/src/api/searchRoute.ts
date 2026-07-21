@@ -364,6 +364,7 @@ function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackC
 function isActorActivityRow(row: any) {
   if (row.victimName) return true;
   const title = String(row.title ?? "");
+  if (row.actor && normalizeActorName(title) === normalizeActorName(row.actor)) return false;
   if (/^\s*(?:what|who)\s+is\b|\b(?:actor|group)\s+(?:profile|overview)\b|\b(?:reference|explainer|guide)\b/i.test(title)) return false;
   return /\b(?:attack(?:ed|s|ing)?|breach(?:ed|es)?|campaign|compromis(?:e|ed|es|ing)|disrupt(?:ed|s|ion)|espionage operation|exfiltrat(?:e|ed|es|ing|ion)|exploit(?:ed|s|ing|ation)|intrusion|leak(?:ed|s|ing)?|malware operation|phishing operation|shut(?:s|ting)? down|stole|stolen|target(?:ed|s|ing)|victim|watering hole)\b/i.test(`${title} ${row.summary ?? ""}`);
 }
