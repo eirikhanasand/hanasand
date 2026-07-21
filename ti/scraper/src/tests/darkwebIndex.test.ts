@@ -52,6 +52,29 @@ describe("compact darkweb metadata index", () => {
     expect(unrelated).toMatchObject({ count: 0, rows: [] });
   });
 
+  test("resolves a known actor without inventing restricted-network evidence", () => {
+    const result = searchDarkwebIndex({
+      actorProfiles: [
+        { id: "actor-akira-a", canonicalName: "Akira", aliases: ["akira"] },
+        { id: "actor-akira-b", canonicalName: "Akira", aliases: ["Akira ransomware"] },
+      ],
+      q: "akira",
+      records: [],
+    });
+
+    expect(result).toMatchObject({
+      count: 0,
+      rows: [],
+      canonicalIdentity: {
+        type: "actor",
+        canonicalName: "Akira",
+        canonicalPath: "/ti/Akira",
+        restrictedEvidenceState: "no_approved_restricted_evidence",
+        restrictedRecordCount: 0,
+      },
+    });
+  });
+
   test("documents the public API contract without unsafe output", () => {
     const contract = darkwebIndexContract();
     expect(contract.routes).toContain("/v1/darkweb/search");

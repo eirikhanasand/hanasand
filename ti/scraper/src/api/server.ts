@@ -157,6 +157,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       reviewState: url.searchParams.get("reviewState") ?? undefined,
       sources: options.store.listSources(),
       captures: options.store.listCaptures(),
+      actorProfiles: options.store.listActorProfiles?.() ?? [],
       limit: numberQuery(url.searchParams.get("limit")) ?? 50,
       cursor: url.searchParams.get("cursor") ?? undefined,
     }));

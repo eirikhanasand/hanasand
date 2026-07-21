@@ -1,5 +1,6 @@
 import { BellRing, Building2, Database, Filter, Globe2, Radar, Search, ShieldCheck } from 'lucide-react'
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { buildRouteMetadata } from '../../../seo'
 
 export const dynamic = 'force-dynamic'
@@ -42,6 +43,14 @@ interface DarkwebSearchResponse {
     count?: number
     nextCursor?: string
     rows?: DarkwebRecord[]
+    canonicalIdentity?: {
+        type: 'actor'
+        canonicalName: string
+        aliases: string[]
+        canonicalPath: string
+        restrictedEvidenceState: 'available' | 'no_approved_restricted_evidence'
+        restrictedRecordCount: number
+    }
     noLeakSerialization?: {
         passed?: boolean
     }
@@ -155,12 +164,23 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                         <div className='grid min-h-[28vh] place-items-center rounded-lg border border-ui-border bg-ui-panel px-5 py-10 text-center shadow-sm'>
                             <div className='grid max-w-xl gap-3'>
                                 <Search className='mx-auto h-7 w-7 text-ui-primary' />
-                                <h2 className='text-xl font-semibold text-ui-text'>{query ? 'No matching activity in the current index' : 'Search company and actor activity'}</h2>
+                                <h2 className='text-xl font-semibold text-ui-text'>
+                                    {search?.canonicalIdentity
+                                        ? `${search.canonicalIdentity.canonicalName} is known, but has no approved restricted-network records`
+                                        : query ? 'No matching activity in the current index' : 'Search company and actor activity'}
+                                </h2>
                                 <p className='text-sm leading-6 text-ui-muted'>
-                                    {query
-                                        ? 'Try a broader company, group, sector, or domain. Alerts are useful when a watched term appears; empty searches stay quiet.'
-                                        : 'Enter a company, group, domain, supplier, or sector to review monitored exposure records.'}
+                                    {search?.canonicalIdentity
+                                        ? `The query resolves to ${search.canonicalIdentity.canonicalName} in threat intelligence. This index contains zero approved metadata-only restricted-network captures for the current filters.`
+                                        : query
+                                            ? 'Try a broader company, group, sector, or domain. Alerts are useful when a watched term appears; empty searches stay quiet.'
+                                            : 'Enter a company, group, domain, supplier, or sector to review monitored exposure records.'}
                                 </p>
+                                {search?.canonicalIdentity ? (
+                                    <Link className='mx-auto text-sm font-semibold text-ui-primary underline-offset-4 hover:underline' href={search.canonicalIdentity.canonicalPath}>
+                                        Open {search.canonicalIdentity.canonicalName} intelligence
+                                    </Link>
+                                ) : null}
                             </div>
                         </div>
                     )}

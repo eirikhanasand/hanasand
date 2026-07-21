@@ -75,6 +75,14 @@ export interface DarkwebIndexSearchDto {
   filters: { network?: string; category?: string; legalTriage?: string; reviewState?: string };
   count: number;
   rows: DarkwebIndexBuyerRow[];
+  canonicalIdentity?: {
+    type: "actor";
+    canonicalName: string;
+    aliases: string[];
+    canonicalPath: string;
+    restrictedEvidenceState: "available" | "no_approved_restricted_evidence";
+    restrictedRecordCount: number;
+  };
   nextCursor?: string;
   noLeakSerialization: DarkwebIndexNoLeakSerialization;
 }
