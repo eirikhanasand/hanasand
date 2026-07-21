@@ -2,7 +2,7 @@
   "version": 1,
   "name": "verified-long-lived-public-sources",
   "description": "Public sources verified against publisher-owned pages for sustained thesis collection.",
-  "generatedAt": "2026-07-20T00:00:00.000Z",
+  "generatedAt": "2026-07-21T00:00:00.000Z",
   "sources": [
     {
       "id": "src_ssscip_cert_ua_telegram",
@@ -126,6 +126,207 @@
           "countries": ["Spain"],
           "languages": ["es"],
           "queryPatterns": ["APT", "ciberataque", "vulnerabilidad", "malware"]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": ["telegram_public"],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_thehackernews_telegram_verified",
+      "tenantId": "default",
+      "name": "The Hacker News public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/thehackernews",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.9,
+      "language": "en",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public text posts from The Hacker News channel, whose public profile identifies it as the publisher's official channel. Collect the unauthenticated web preview only; do not join, authenticate, message, or download media and files.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-21T00:00:00.000Z",
+        "approvedBy": "source-review:publisher-identified-public-profile",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "publisherReference": "https://t.me/thehackernews",
+        "topics": ["APT", "ransomware", "malware", "vulnerability", "cyberattack"],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "news:thehackernews:telegram",
+        "publisher": {
+          "name": "The Hacker News",
+          "country": "US",
+          "homepage": "https://thehackernews.com",
+          "trustBasis": "publisher-identified public channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.9,
+        "intelligenceValue": 0.82,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": ["APT", "ransomware", "malware", "vulnerability", "cyberattack"],
+          "actors": [],
+          "aliases": [],
+          "industries": ["technology", "government", "critical infrastructure"],
+          "regions": ["Global"],
+          "countries": [],
+          "languages": ["en"],
+          "queryPatterns": ["APT", "ransomware", "malware", "CVE"]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": ["telegram_public"],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_bleepingcomputer_telegram_verified",
+      "tenantId": "default",
+      "name": "BleepingComputer public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/bleepingcomputer",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.9,
+      "language": "en",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public text posts from the BleepingComputer publisher channel. Collect the unauthenticated web preview only; do not join, authenticate, message, or download media and files.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-21T00:00:00.000Z",
+        "approvedBy": "source-review:publisher-identified-public-profile",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "publisherReference": "https://t.me/bleepingcomputer",
+        "topics": ["ransomware", "APT", "breach", "malware", "vulnerability"],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "news:bleepingcomputer:telegram",
+        "publisher": {
+          "name": "BleepingComputer",
+          "country": "US",
+          "homepage": "https://www.bleepingcomputer.com",
+          "trustBasis": "publisher-identified public channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.9,
+        "intelligenceValue": 0.8,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": ["ransomware", "APT", "breach", "malware", "vulnerability"],
+          "actors": [],
+          "aliases": [],
+          "industries": ["technology", "government", "critical infrastructure"],
+          "regions": ["Global"],
+          "countries": [],
+          "languages": ["en"],
+          "queryPatterns": ["APT", "ransomware", "breach", "CVE"]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": ["telegram_public"],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_anyrun_telegram_verified",
+      "tenantId": "default",
+      "name": "ANY.RUN public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/anyrun_app",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.88,
+      "language": "en",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public text posts from the ANY.RUN channel, whose public profile links to the publisher's official website. Collect the unauthenticated web preview only; do not join, authenticate, message, or download media, files, or samples.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-21T00:00:00.000Z",
+        "approvedBy": "source-review:publisher-identified-public-profile",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "publisherReference": "https://t.me/anyrun_app",
+        "topics": ["malware", "ransomware", "phishing", "IOC", "threat intelligence"],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "vendor:anyrun:telegram",
+        "publisher": {
+          "name": "ANY.RUN",
+          "country": "US",
+          "homepage": "https://any.run",
+          "trustBasis": "publisher-identified public channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public vendor communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public vendor channel used for defensive security research.",
+        "reliability": 0.88,
+        "intelligenceValue": 0.84,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": ["malware", "ransomware", "phishing", "IOC", "threat intelligence"],
+          "actors": [],
+          "aliases": [],
+          "industries": ["technology", "finance", "government"],
+          "regions": ["Global"],
+          "countries": [],
+          "languages": ["en"],
+          "queryPatterns": ["malware", "ransomware", "phishing", "IOC"]
         },
         "collection": {
           "freshnessTargetSeconds": 1800,

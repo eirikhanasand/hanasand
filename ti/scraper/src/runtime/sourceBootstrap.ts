@@ -11,6 +11,7 @@ export type RuntimeSourceBootstrapResult = {
   sourceTarget: number;
   seedPaths: string[];
   importedSourceCount: number;
+  updatedSourceCount: number;
   skippedSourceCount: number;
   activeSourceCount: number;
   totalSourceCount: number;
@@ -54,9 +55,10 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
       store.saveSource(holdGeneratedGdeltSource(source, generatedAt));
     }
   }
-  const existingByKey = new Set(store.listSources().map(seedDuplicateKey));
+  const existingByKey = new Map(store.listSources().map((source) => [seedDuplicateKey(source), source]));
   const errors: RuntimeSourceBootstrapResult["errors"] = [];
   let importedSourceCount = 0;
+  let updatedSourceCount = 0;
   let skippedSourceCount = 0;
 
   for (const path of seedPaths) {
@@ -84,12 +86,21 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
         continue;
       }
       const duplicateKey = seedDuplicateKey(source);
-      if (existingByKey.has(duplicateKey)) {
-        skippedSourceCount++;
+      const existing = existingByKey.get(duplicateKey);
+      const prepared = prepareRuntimeSource(source, path, generatedAt, restricted);
+      if (existing) {
+        const reconciled = reconcileVerifiedSource(existing, prepared, generatedAt);
+        if (reconciled) {
+          const saved = store.saveSource(reconciled);
+          existingByKey.set(duplicateKey, saved);
+          updatedSourceCount++;
+        } else {
+          skippedSourceCount++;
+        }
         continue;
       }
-      existingByKey.add(duplicateKey);
-      store.saveSource(prepareRuntimeSource(source, path, generatedAt, restricted));
+      const saved = store.saveSource(prepared);
+      existingByKey.set(duplicateKey, saved);
       importedSourceCount++;
     }
 
@@ -106,12 +117,41 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
     sourceTarget,
     seedPaths,
     importedSourceCount,
+    updatedSourceCount,
     skippedSourceCount,
     activeSourceCount,
     totalSourceCount: sources.length,
     shortfall,
     blocker: shortfall > 0 ? `source_registry_shortfall:${sources.length}/${sourceTarget}` : undefined,
     errors
+  };
+}
+
+function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord, generatedAt: string): SourceRecord | undefined {
+  const approvedPreview = verified.type === "telegram_public"
+    && verified.status === "active"
+    && verified.accessMethod === "public_http"
+    && verified.governance?.approvalState === "approved"
+    && verified.metadata?.collectionMode === "public_web_preview"
+    && verified.metadata?.productionCollection === true;
+  const existingApproved = existing.status === "active"
+    && existing.governance?.approvalState === "approved"
+    && existing.metadata?.collectionMode === "public_web_preview"
+    && existing.metadata?.productionCollection === true;
+  if (!approvedPreview || existingApproved) return undefined;
+  return {
+    ...existing,
+    ...verified,
+    id: existing.id,
+    tenantId: existing.tenantId ?? verified.tenantId,
+    createdAt: existing.createdAt ?? verified.createdAt,
+    updatedAt: generatedAt,
+    metadata: {
+      ...(existing.metadata ?? {}),
+      ...(verified.metadata ?? {}),
+      verifiedSourceId: verified.id
+    },
+    crawlState: existing.crawlState
   };
 }
 

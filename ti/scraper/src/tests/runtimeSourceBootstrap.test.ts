@@ -106,6 +106,62 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
+  test("upgrades a matching tenant Telegram candidate after independent source approval", () => {
+    const store = new InMemoryScraperStore();
+    const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-verified-"));
+    const seedPath = join(dir, "verified.json");
+    store.saveSource({
+      id: "src_catalog_candidate",
+      tenantId: "default",
+      name: "Catalog candidate",
+      type: "telegram_public",
+      url: "https://t.me/example_verified",
+      accessMethod: "public_http",
+      status: "canary",
+      risk: "medium",
+      trustScore: 0.6,
+      crawlFrequencySeconds: 1800,
+      legalNotes: "Pending source review.",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      metadata: { canaryPortfolio: true }
+    } as any);
+    writeFileSync(seedPath, JSON.stringify({
+      version: 1,
+      name: "verified source",
+      sources: [{
+        id: "src_verified_reference",
+        tenantId: "default",
+        name: "Verified public channel",
+        type: "telegram_public",
+        url: "https://t.me/example_verified",
+        accessMethod: "public_http",
+        status: "active",
+        risk: "low",
+        trustScore: 0.9,
+        crawlFrequencySeconds: 900,
+        legalNotes: "Reviewed public preview; no authentication or media retrieval.",
+        governance: { approvalRequired: true, approvalState: "approved", approvalScope: "official_public_web_preview", metadataOnly: false },
+        metadata: { collectionMode: "public_web_preview", productionCollection: true, mediaPolicy: "metadata_only_no_download" }
+      }]
+    }));
+
+    try {
+      const result = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-21T00:00:00.000Z", sourceTarget: 0 });
+      expect(result).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 1, skippedSourceCount: 0, activeSourceCount: 1, totalSourceCount: 1 });
+      expect(store.listSources()[0]).toMatchObject({
+        id: "src_catalog_candidate",
+        name: "Verified public channel",
+        status: "active",
+        risk: "low",
+        governance: { approvalState: "approved" },
+        metadata: { collectionMode: "public_web_preview", productionCollection: true, verifiedSourceId: "src_verified_reference" }
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("rejects invalid generic seeds and keeps valid Tor metadata seeds inactive", () => {
     const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
     Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
