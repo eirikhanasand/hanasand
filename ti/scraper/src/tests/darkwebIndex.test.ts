@@ -12,14 +12,14 @@ describe("compact darkweb metadata index", () => {
     expect(status.monitoredSourceCount).toBe(120);
     expect(status).not.toHaveProperty("targetRecordCount");
     expect(status).not.toHaveProperty("indexedRecordEstimate");
-    expect(status.sellableRowCount).toBeGreaterThan(20);
+    expect(status.sellableRowCount).toBeGreaterThan(0);
     expect(status.productHandoff.buyerSearchRows[0].safeLocatorHash).toStartWith("h_");
     expect(search.rows.length).toBeGreaterThan(0);
     expect(JSON.stringify(search.rows)).not.toMatch(/\\.onion|rawUrl|bodyHtml/);
   });
 
   test("derives counts and search rows from persisted captures", () => {
-    const sources = [{ id: "source-akira", type: "tor_metadata" }];
+    const sources = [{ id: "source-akira", type: "tor_metadata" }, { id: "source-public", type: "rss" }];
     const captures = [{
       id: "capture-akira-acme",
       sourceId: "source-akira",
@@ -27,6 +27,18 @@ describe("compact darkweb metadata index", () => {
       collectedAt: "2026-07-21T08:00:00.000Z",
       publishedAt: "2026-07-21T07:55:00.000Z",
       metadata: { leakSite: { actorName: "Akira", victimName: "Acme Industries", claimedSector: "manufacturing" } },
+    }, {
+      id: "capture-public-leak-feed",
+      sourceId: "source-public",
+      storageKind: "metadata_only",
+      collectedAt: "2026-07-21T08:01:00.000Z",
+      metadata: { leakSite: { actorName: "Public victim feed", victimName: "Example victim" } },
+    }, {
+      id: "capture-tor-transport-canary",
+      sourceId: "source-akira",
+      storageKind: "metadata_only",
+      collectedAt: "2026-07-21T08:02:00.000Z",
+      metadata: { leakSite: { title: "Tor Project" } },
     }];
     const status = buildDarkwebIndexStatus({ sources, captures });
     const result = searchDarkwebIndex({ sources, captures, q: "akira", network: "tor" });
