@@ -24,6 +24,7 @@ export function buildRawCapture(item: CollectedItem): RawCapture {
     body: item.sensitive ? undefined : item.html ?? item.rawText,
     metadata: {
       ...item.metadata,
+      ...(item.title ? { title: item.title } : {}),
       extractorVersion: EXTRACTOR_VERSION,
       languageHooks: detectLanguageHooks(item.rawText, item.language),
       retentionPolicy: { class: retentionClass, version: "default-retention:v1", assignedFrom: sourceType || "default" }

@@ -9,7 +9,7 @@ describe("api v1", () => {
       tenantId: undefined,
       url: "https://mounted-quality.example.test/apt29-ready",
       body: "Mandiant linked APT29 to phishing and credential dumping against Northwind Health in healthcare. First seen 2026-05-22.",
-      metadata: { title: "APT29 mounted ready", evidenceStage: "reviewed_promoted", graphReviewState: "accepted", exposureClaim: true }
+      metadata: { title: "APT29 mounted ready", actorName: "APT29", evidenceStage: "reviewed_promoted", graphReviewState: "accepted", exposureClaim: true }
     }));
     store.saveCapture(fixtureCapture({
       id: "cap_mounted_alias",

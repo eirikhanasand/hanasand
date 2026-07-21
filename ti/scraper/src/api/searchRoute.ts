@@ -9,6 +9,7 @@ import { createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
 import { buildPublicChannelStatusRouteResponse } from "./publicChannelRoutes.ts";
 import { searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { ACTOR_ALIAS_RECORDS } from "../pipeline/actorAliases.ts";
+import { termRegex } from "./searchTerm.ts";
 
 type SearchEntityType = "actor" | "domain" | "cve" | "indicator" | "organization" | "free_text";
 
@@ -43,7 +44,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const sourceIds = new Set(rows.map((row) => row.sourceId));
   const records = searchRecords(options.store, scope.tenantId, captureIds, sourceIds);
   const assessment = assess(rows, records);
-  const lastSeen = latest(rows.map((row) => row.publishedAt ?? row.collectedAt));
+  const lastSeen = latest(rows.map((row) => row.publishedAt));
   const profile = actorProfileForQuery(records, identity);
   const aliases = actorAliases(records, rows, profile, identity);
   const recentActivity = rows.map((row) => activity(row, records, assessment.confidence));
@@ -73,7 +74,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     sourceId: row.sourceId,
     sourceName: row.sourceName,
     provenance: row.url ?? row.sourceName,
-    reportDate: row.publishedAt ?? row.collectedAt,
+    reportDate: row.publishedAt,
     captureId: row.id,
     sourceFamily: row.sourceFamily ?? "source_capture",
     parserStatus: hasParsedRecord(row.id, records) ? "parsed" : "partial",
@@ -116,7 +117,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const actorIntelligence = {
     actorClass: profile?.actorType ?? (actor ? "observed_threat_actor" : "unclassified_query"),
     attribution,
-    firstSeen: profile?.firstSeenAt ?? earliest(rows.map((row) => row.publishedAt ?? row.collectedAt)),
+    firstSeen: earliest(rows.map((row) => row.publishedAt)),
     lastSeen,
     motivation: entityValues(records.entities, "motivation"),
     malwareTools,
@@ -324,7 +325,7 @@ function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackC
     .filter((sourceId) => sourceId !== row.sourceId));
   const contradictingSourceIds = unique(activityClaims.flatMap((claim: any) => claim.contradictingSourceIds ?? []));
   return {
-    date: row.publishedAt ?? row.collectedAt,
+    date: row.publishedAt,
     title: row.title,
     detail: row.summary,
     confidence: rowConfidence(row.id, records, fallbackConfidence),
@@ -336,7 +337,7 @@ function activity(row: any, records: ReturnType<typeof searchRecords>, fallbackC
     countries: entityValues(records.entities.filter((entity: any) => entity.captureId === row.id), "country"),
     impact: entityValues(records.entities.filter((entity: any) => entity.captureId === row.id), "impact").join(", ") || undefined,
     firstReportedAt: row.publishedAt,
-    lastReportedAt: row.collectedAt,
+    lastReportedAt: row.publishedAt,
     publisherCount: 1 + corroboratingSourceIds.length,
     corroboratingSourceIds,
     contradictingSourceIds,
@@ -456,8 +457,10 @@ function actorCaptureMatches(capture: any, entities: any[], normalizedTerms: Set
     capture.metadata?.actorName,
     capture.metadata?.actor
   ]);
-  const names = metadataNames.length ? metadataNames : entities.map((entity) => entity.value);
-  return !names.length || names.some((name) => normalizedTerms.has(normalizeActorName(name)));
+  const assertedNames = entities.filter((entity) => entity.assertionKind !== "mention").map((entity) => entity.value);
+  if ([...metadataNames, ...assertedNames].some((name) => normalizedTerms.has(normalizeActorName(name)))) return true;
+  const title = normalizeActorName(capture.title ?? capture.metadata?.title);
+  return [...normalizedTerms].some((term) => termRegex(term).test(title));
 }
 
 function actorProfileForQuery(records: ReturnType<typeof searchRecords>, identity: ReturnType<typeof actorIdentity>) {

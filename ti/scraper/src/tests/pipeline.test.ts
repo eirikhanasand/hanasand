@@ -9,10 +9,11 @@ import { hashContent } from "../utils.ts";
 describe("compact pipeline value path", () => {
   test("extracts actor, victim, CVE and provenance from public text", () => {
     const rawText = "APT29 used phishing against Northwind Health with CVE-2026-1234.";
-    const result = processCollectedItem({ sourceId: "src_public", url: "https://example.test/report", collectedAt: "2026-06-21T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false });
+    const result = processCollectedItem({ sourceId: "src_public", url: "https://example.test/report", title: "APT29 report", collectedAt: "2026-06-21T00:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false });
     expect(result.entities.some((entity: any) => entity.type === "actor")).toBe(true);
     expect(result.entities.some((entity: any) => entity.type === "victim")).toBe(true);
     expect(result.indicators.some((indicator: any) => indicator.type === "cve")).toBe(true);
+    expect(result.capture.metadata.title).toBe("APT29 report");
     expect(result.incident?.captureId).toBe(result.capture.id);
   });
 
