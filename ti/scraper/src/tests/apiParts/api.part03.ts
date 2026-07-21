@@ -3,7 +3,7 @@ import { describe, expect, test, body, handleApiRequest, api, fixtureCapture, so
 describe("api v1", () => {
   test("exposes measured product operational SLO dashboard", async () => {
     const store = new InMemoryScraperStore();
-    store.saveSource(source());
+    store.saveSource(source({ id: "src_api" }));
     store.saveCapture(fixtureCapture());
     const response = await body(await handleApiRequest(api("/v1/ops/product-slo?actorSellableRows=999999"), {
       store,

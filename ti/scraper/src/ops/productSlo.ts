@@ -20,7 +20,7 @@ export interface BuildLiveProductSloDashboardInput {
 }
 
 export interface LiveProductOperationalMetrics {
-  sources: { total: number; active: number };
+  sources: { total: number; active: number; observed: number; collectingLast24Hours: number };
   captures: {
     total: number;
     public: number;
@@ -37,7 +37,7 @@ export interface LiveProductOperationalMetrics {
 }
 
 export interface LiveProductSloObjective {
-  id: "active_sources" | "collection_freshness" | "capture_timestamp_quality";
+  id: "collecting_sources" | "collection_freshness" | "capture_timestamp_quality";
   state: LiveProductSloState;
   value: number | null;
   target: number;
@@ -63,6 +63,7 @@ export interface LiveProductSloDashboard {
   dashboard: {
     state: LiveProductSloState;
     activeSources: number;
+    collectingSourcesLast24Hours: number;
     totalCaptures: number;
     capturesLast24Hours: number;
     latestCollectedAt: string | null;
@@ -92,10 +93,19 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const latestCaptureMs = validCaptureTimes.length > 0 ? Math.max(...validCaptureTimes) : null;
   const latestCaptureAgeSeconds = latestCaptureMs === null ? null : Math.max(0, Math.floor((generatedAtMs - latestCaptureMs) / 1000));
   const runStatuses = countRunStatuses(input.runs);
-  const activeSources = input.sources.filter((source) => source.status === "active").length;
+  const activeSourceIds = new Set(input.sources.filter((source) => source.status === "active").map((source) => String(source.id ?? "")).filter(Boolean));
+  const observedSourceIds = new Set(input.captures.map((capture) => String(capture.sourceId ?? "")).filter(Boolean));
+  const collectingSourceIds = new Set(input.captures.flatMap((capture, index) => {
+    const sourceId = String(capture.sourceId ?? "");
+    const collectedAt = captureTimes[index];
+    return sourceId && activeSourceIds.has(sourceId) && collectedAt !== null && collectedAt <= generatedAtMs && generatedAtMs - collectedAt <= FRESHNESS_TARGET_SECONDS * 1000
+      ? [sourceId]
+      : [];
+  }));
+  const activeSources = activeSourceIds.size;
   const futureCollectedAt = validCaptureTimes.filter((value) => value > generatedAtMs).length;
   const metrics: LiveProductOperationalMetrics = {
-    sources: { total: input.sources.length, active: activeSources },
+    sources: { total: input.sources.length, active: activeSources, observed: observedSourceIds.size, collectingLast24Hours: collectingSourceIds.size },
     captures: {
       total: input.captures.length,
       public: input.captures.filter((capture) => !capture.sensitive).length,
@@ -114,7 +124,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     }
   };
   const slos: LiveProductSloObjective[] = [
-    { id: "active_sources", state: activeSources > 0 ? "pass" : "alert", value: activeSources, target: 1, unit: "count" },
+    { id: "collecting_sources", state: collectingSourceIds.size > 0 ? "pass" : "alert", value: collectingSourceIds.size, target: 1, unit: "count" },
     {
       id: "collection_freshness",
       state: latestCaptureAgeSeconds === null ? "unavailable" : latestCaptureAgeSeconds <= FRESHNESS_TARGET_SECONDS ? "pass" : "alert",
@@ -151,6 +161,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     dashboard: {
       state,
       activeSources,
+      collectingSourcesLast24Hours: collectingSourceIds.size,
       totalCaptures: input.captures.length,
       capturesLast24Hours: metrics.captures.collectedLast24Hours,
       latestCollectedAt: metrics.captures.latestCollectedAt,
