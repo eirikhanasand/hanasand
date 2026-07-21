@@ -192,8 +192,10 @@ describe("dwm webhook delivery", () => {
         endpointExposed: false
       },
       createdAt: delivered.deliveries[0].attemptedAt,
-      updatedAt: delivered.deliveries[0].attemptedAt
+      completedAt: delivered.deliveries[0].deliveredAt,
+      updatedAt: delivered.deliveries[0].deliveredAt
     });
+    expect(Date.parse(delivered.deliveries[0].deliveredAt)).toBeGreaterThanOrEqual(Date.parse(delivered.deliveries[0].attemptedAt));
     expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
 
     const historyResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliveries?tenantId=tenant_acme"), options);
