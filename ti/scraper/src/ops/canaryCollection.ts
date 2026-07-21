@@ -144,7 +144,7 @@ function itemLimit(source: any, options: any) {
 }
 function isProductionCollectionSource(source: any, generatedAt: string) {
   if (!["active", "canary"].includes(source.status)) return false;
-  if (["tor_metadata", "i2p_metadata", "freenet_metadata"].includes(source.type) || source.governance?.metadataOnly || ["high", "restricted"].includes(source.risk)) return false;
+  if (String(source.type).endsWith("_metadata") || source.governance?.metadataOnly && source.accessMethod !== "public_http" || ["high", "restricted"].includes(source.risk)) return false;
   if (source.type === "telegram_public" && (source.accessMethod !== "public_http" || source.metadata?.collectionMode !== "public_web_preview")) return false;
   if (!/^https?:\/\//.test(source.url)) return false;
   if (source.metadata?.productionCollection === false) return false;

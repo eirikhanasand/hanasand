@@ -17,6 +17,25 @@ describe("public collection boundary", () => {
     await expect(fetchItems(source({ url: "http://127.0.0.1/admin" }), { targetUrl: "http://127.0.0.1/admin" }, fetch, "native_live_http", new Date().toISOString(), 1_024)).rejects.toThrow("public fetch policy blocked target");
   });
 
+  test("collects low-risk public HTTP sources that retain only metadata and safe excerpts", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ governance: { approvalRequired: false, approvalState: "approved", metadataOnly: true }, metadata: { productionCollection: true, contentPolicy: "metadata_and_safe_excerpt_only" } }));
+    let fetchCount = 0;
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      maxSources: 1,
+      maxTasks: 1,
+      fetch: async () => {
+        fetchCount++;
+        return new Response("<rss><channel></channel></rss>", { headers: { "content-type": "application/rss+xml" } });
+      }
+    });
+
+    expect(cycle).toMatchObject({ activeSourceCount: 1, completedTaskCount: 1, failedTaskCount: 0 });
+    expect(fetchCount).toBe(1);
+  });
+
   test("runs only explicitly selected due sources", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "first", tenantId: "default", url: "https://example.test/first.xml", status: "active" }));
