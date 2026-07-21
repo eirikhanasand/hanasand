@@ -9034,9 +9034,13 @@ function normalizeEvidence(value: unknown) {
         .map(item => typeof item === 'object' && item
             ? {
                 label: clean((item as Record<string, unknown>).label) || clean((item as Record<string, unknown>).title) || 'Evidence',
-                detail: truncate(clean((item as Record<string, unknown>).detail) || clean((item as Record<string, unknown>).summary), 500),
+                detail: truncate(clean((item as Record<string, unknown>).detail) || clean((item as Record<string, unknown>).summary) || clean((item as Record<string, unknown>).excerpt), 500),
                 source: clean((item as Record<string, unknown>).source) || clean((item as Record<string, unknown>).sourceName),
-                capturedAt: clean((item as Record<string, unknown>).capturedAt) || clean((item as Record<string, unknown>).at),
+                capturedAt: clean((item as Record<string, unknown>).capturedAt)
+                    || clean((item as Record<string, unknown>).observedAt)
+                    || clean((item as Record<string, unknown>).firstSeenAt)
+                    || clean((item as Record<string, unknown>).publishedAt)
+                    || clean((item as Record<string, unknown>).at),
             }
             : { label: 'Evidence', detail: truncate(clean(item), 500), source: '', capturedAt: '' })
 }

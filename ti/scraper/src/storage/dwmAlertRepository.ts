@@ -1,4 +1,4 @@
-import { buildDwmProductSnapshot, classifySourceFamily, type DwmAlert, type DwmWatchTerm } from "../product/dwmProduct.ts";
+import { buildDwmProductSnapshot, classifySourceFamily, matchableCaptureText, type DwmAlert, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { stableId, uniqueStrings } from "../utils.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 import type { TiSourceProvenancePublicTiSourceOpsProjection } from "../product/sourceProvenanceTiPageContract.ts";
@@ -4909,7 +4909,7 @@ function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, so
 
 function evidenceFromGenerationCaptureRef(ref: DwmAlertGenerationCaptureRef, capture: RawCapture | undefined, source: SourceRecord | undefined, input: RebuildDwmRuntimeAlertsInput): DwmAlert["evidence"][number] | undefined {
   const sourceFamily = sourceFamilyFor(source, capture ?? ({ id: ref.captureId, sourceId: ref.sourceId, metadata: {} } as RawCapture)) as DwmAlert["sourceFamily"];
-  const text = capture ? captureText(capture) : "";
+  const text = capture ? matchableCaptureText(capture) : "";
   const captureId = String(ref.captureId);
   const sourceId = String(ref.sourceId ?? (capture as any)?.sourceId ?? (source as any)?.id ?? "unknown");
   const observedAt = ref.observedAt || String((capture as any)?.collectedAt ?? nowFromEvidence(input));
@@ -5024,7 +5024,7 @@ function captureRefsForTermWithSuppression(input: { term: DwmWatchTerm; sources:
   suppressedDuplicateCaptureRefs: DwmAlertGenerationSuppressedCaptureRef[];
 } {
   const refs = input.captures
-    .filter((capture) => termMatchesText(captureText(capture), input.term.value))
+    .filter((capture) => termMatchesText(matchableCaptureText(capture), input.term.value))
     .map((capture) => {
       const source = input.sources.find((row) => row.id === capture.sourceId);
       return {
@@ -5178,14 +5178,6 @@ function sourceFamilyGapDetail(sourceFamily: string, state: DwmAlertGenerationRe
   if (state === "active_no_match") return `${sourceFamily} has an active source, but no recent capture matched the active watchlist terms.`;
   if (state === "stale_source") return `${sourceFamily} has matching capture evidence, but the source is stale and must be refreshed before customer alert generation.`;
   return `${sourceFamily} has no active source row for this rebuild; alert generation must not invent evidence for this family.`;
-}
-
-function captureText(capture: RawCapture): string {
-  return [
-    (capture as any).body,
-    (capture as any).text,
-    JSON.stringify((capture as any).metadata ?? {})
-  ].map((value) => String(value ?? "").toLowerCase()).join("\n");
 }
 
 function termMatchesText(text: string, term: string): boolean {

@@ -269,6 +269,64 @@ const orgBActorCapture: RawCapture = {
 } as RawCapture;
 
 describe("dwm alert repository", () => {
+  test("matches source evidence but never scheduler query metadata", () => {
+    const source = {
+      ...clearWebSource,
+      id: "src_repo_apt29_feed",
+      name: "Repository actor reporting"
+    } as SourceRecord;
+    const captures = [
+      {
+        ...clearWebCapture,
+        id: "cap_repo_apt29_query_only",
+        sourceId: source.id,
+        url: "https://research.example/reports/unrelated-cve",
+        body: undefined,
+        contentHash: "hash-repo-apt29-query-only",
+        metadata: {
+          adapter: "rss",
+          queryTerms: ["APT29", "Cozy Bear"],
+          sourceName: "NVD Recent CVE API",
+          safeExcerpt: "Recent vulnerability feed item with no threat-actor attribution."
+        }
+      },
+      {
+        ...clearWebCapture,
+        id: "cap_repo_apt29_evidence",
+        sourceId: source.id,
+        url: "https://research.example/reports/apt29-intrusion",
+        body: undefined,
+        contentHash: "hash-repo-apt29-evidence",
+        metadata: {
+          adapter: "rss",
+          queryTerms: ["APT29", "Cozy Bear"],
+          sourceName: "Repository actor reporting",
+          safeExcerpt: "Public reporting attributes the intrusion to APT29."
+        }
+      }
+    ] as RawCapture[];
+
+    const plan = buildDwmAlertGenerationPlan({
+      watchlists: [{
+        id: "watch_repo_apt29",
+        tenantId: "tenant_repo_apt29",
+        organizationId: "org_repo_apt29",
+        name: "APT29 watch",
+        terms: [{ value: "APT29", kind: "unknown" }],
+        webhookDestinationId: "webhook_repo_apt29",
+        status: "active",
+        createdAt: "2026-07-21T00:00:00.000Z",
+        updatedAt: "2026-07-21T00:00:00.000Z"
+      }] as any,
+      tenantId: "tenant_repo_apt29",
+      organizationId: "org_repo_apt29",
+      sources: [source],
+      captures
+    });
+
+    expect(plan.candidates[0].captureRefs.map((ref) => ref.captureId)).toEqual(["cap_repo_apt29_evidence"]);
+  });
+
   test("rebuilds tenant/org alerts from watchlist and fixture Telegram/darkweb captures with SQL-shaped persistence", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(telegramSource);

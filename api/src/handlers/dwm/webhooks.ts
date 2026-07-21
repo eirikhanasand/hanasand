@@ -1001,7 +1001,8 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
         return res.status(permissionError.status).send({ error: permissionError.message })
     }
 
-    const deliveries = await triggerDwmAlertWebhookNotification(userId, { ...input.alert, ...input, orgId }, input)
+    const orgName = orgId === userId ? undefined : await loadOrganizationName(orgId)
+    const deliveries = await triggerDwmAlertWebhookNotification(userId, { ...input.alert, ...input, orgId, orgName }, input)
     const destinations = await listDwmWebhookDestinations(userId, orgId)
     const ledgerDeliveries = await listDwmWebhookDeliveries(userId, orgId)
     const auditEvents = await listDwmWebhookAuditEvents(userId, orgId)
@@ -1312,6 +1313,11 @@ async function loadOrganizationMembership(orgId: string, userId: string): Promis
     `, [orgId, userId])
 
     return result.rows[0] as Membership | undefined || null
+}
+
+async function loadOrganizationName(orgId: string): Promise<string | undefined> {
+    const result = await run('SELECT name FROM organizations WHERE id = $1 LIMIT 1', [orgId])
+    return clean((result.rows[0] as { name?: string } | undefined)?.name) || undefined
 }
 
 async function loadOrganizationVisibilityMembership(orgId: string, userId: string): Promise<Membership | null> {

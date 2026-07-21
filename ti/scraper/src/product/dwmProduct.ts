@@ -254,7 +254,7 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
   const matches: DwmAlert[] = [];
 
   for (const capture of input.captures) {
-    const text = captureText(capture);
+    const text = matchableCaptureText(capture);
     const matchedTerm = input.watchlist.find((term) => includesTerm(text, term.value));
     if (!matchedTerm) continue;
 
@@ -303,7 +303,7 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
 }
 
 function buildEvidenceRef(capture: RawCapture, source: SourceRecord | undefined, sourceFamily: DwmSourceFamily): DwmEvidenceRef {
-  const text = captureText(capture);
+  const text = matchableCaptureText(capture);
   const captureMode = sourceFamily === "telegram_public" ? "public_message" : sourceFamily === "darkweb_metadata" ? "metadata_only" : sourceFamily === "public_advisory" ? "public_report" : "unknown";
   const collectedAt = String((capture as any).collectedAt ?? nowIso());
   return {
@@ -417,7 +417,7 @@ function buildActorOverviews(input: { sources: SourceRecord[]; captures: RawCapt
 
   for (const capture of input.captures) {
     const source = sourceById.get(String((capture as any).sourceId));
-    const text = captureText(capture);
+    const text = matchableCaptureText(capture);
     const family = classifySourceFamily(source, capture);
     const artifactType = inferArtifactType(text, family);
     touch(inferActor(capture, text) ?? inferActorFromSource(source), {
@@ -662,16 +662,7 @@ function normalizeMatchValue(value: string): string {
 
 function matchedFieldHints(capture: RawCapture, term: string): string[] {
   const normalized = term.toLowerCase();
-  const metadata = (capture.metadata ?? {}) as any;
-  const fields: Array<[string, unknown]> = [
-    ["body", (capture as any).body],
-    ["rawText", (capture as any).rawText],
-    ["url", (capture as any).url],
-    ["metadata.title", metadata.title],
-    ["metadata.description", metadata.description],
-    ["metadata.leakSite", metadata.leakSite ? JSON.stringify(metadata.leakSite) : undefined]
-  ];
-  return fields
+  return matchableCaptureFields(capture)
     .filter(([, value]) => includesTerm(String(value ?? ""), normalized))
     .map(([field]) => field);
 }
@@ -739,13 +730,33 @@ function coverageDetail(family: DwmSourceFamily, sourceCount: number, activeCoun
   return `${activeCount}/${sourceCount} ${sourceFamilyLabels[family].toLowerCase()} source(s) are active and available for matching.`;
 }
 
-function captureText(capture: RawCapture): string {
-  const body = String((capture as any).body ?? "");
-  const rawText = String((capture as any).rawText ?? "");
-  const title = String((capture.metadata as any)?.title ?? "");
-  const description = String((capture.metadata as any)?.description ?? "");
-  const leakSite = (capture.metadata as any)?.leakSite ? JSON.stringify((capture.metadata as any).leakSite) : "";
-  return [body, rawText, title, description, leakSite, capture.url].filter(Boolean).join(" ");
+function matchableCaptureFields(capture: RawCapture): Array<[string, unknown]> {
+  const metadata = (capture.metadata ?? {}) as Record<string, unknown>;
+  return [
+    ["body", (capture as any).body],
+    ["text", (capture as any).text],
+    ["rawText", (capture as any).rawText],
+    ["url", capture.url],
+    ["metadata.safeExcerpt", metadata.safeExcerpt],
+    ["metadata.title", metadata.title],
+    ["metadata.description", metadata.description],
+    ["metadata.summary", metadata.summary],
+    ["metadata.excerpt", metadata.excerpt],
+    ["metadata.messageText", metadata.messageText],
+    ["metadata.postText", metadata.postText],
+    ["metadata.company", metadata.company],
+    ["metadata.domain", metadata.domain],
+    ["metadata.victim", metadata.victim],
+    ["metadata.victimName", metadata.victimName],
+    ["metadata.actor", metadata.actor],
+    ["metadata.actorName", metadata.actorName],
+    ["metadata.datasetName", metadata.datasetName],
+    ["metadata.leakSite", metadata.leakSite ? JSON.stringify(metadata.leakSite) : undefined]
+  ];
+}
+
+export function matchableCaptureText(capture: RawCapture): string {
+  return matchableCaptureFields(capture).map(([, value]) => String(value ?? "")).filter(Boolean).join(" ");
 }
 
 function includesTerm(text: string, term: string): boolean {
