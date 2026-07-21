@@ -125,7 +125,7 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
     const key = query.toLowerCase()
     const cached = cache.get(key)
     if (cached && cached.expiresAt > Date.now()) {
-        return { ...cached.result, queryKind, generatedAt: new Date().toISOString() }
+        return { ...cached.result, queryKind: cached.result.queryKind ?? queryKind, generatedAt: new Date().toISOString() }
     }
     if (cached) cache.delete(key)
 

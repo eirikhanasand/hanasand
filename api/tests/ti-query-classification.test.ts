@@ -112,9 +112,11 @@ test('preserves database-backed actor classification for named aliases', async (
 
     try {
         const result = await searchThreatIntel({ query: 'LockBit' })
+        const cachedResult = await searchThreatIntel({ query: 'lockbit' })
         const requested = new URL(requestedUrl)
         expect(requested.searchParams.has('entityType')).toBe(false)
         expect(result.queryKind).toBe('actor')
+        expect(cachedResult.queryKind).toBe('actor')
         expect(result.recentActivity.map((item) => item.title)).toEqual(['LockBit report'])
     } finally {
         globalThis.fetch = originalFetch
