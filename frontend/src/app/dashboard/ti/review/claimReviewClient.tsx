@@ -148,7 +148,7 @@ export default function ClaimReviewClient() {
                                     <div className='flex flex-wrap items-start justify-between gap-2'>
                                         <div className='min-w-0'>
                                             <p className='text-[10px] font-semibold uppercase text-ui-primary'>{selected.claimType || 'claim'}</p>
-                                            <h2 className='mt-1 break-words text-base font-semibold text-ui-text'>{selected.summary || 'Extracted intelligence claim'}</h2>
+                                            <h2 className='mt-1 wrap-break-word text-base font-semibold text-ui-text'>{selected.summary || 'Extracted intelligence claim'}</h2>
                                         </div>
                                         <StateBadge state={selected.reviewState || 'unreviewed'} />
                                     </div>
@@ -165,7 +165,7 @@ export default function ClaimReviewClient() {
                                     </dl>
                                     <div>
                                         <h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Structured value</h3>
-                                        <pre className='mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md border border-ui-border bg-ui-canvas p-3 text-xs leading-5 text-ui-text'>{formatValue(selected.value)}</pre>
+                                        <pre className='mt-2 max-h-72 overflow-auto whitespace-pre-wrap wrap-break-word rounded-md border border-ui-border bg-ui-canvas p-3 text-xs leading-5 text-ui-text'>{formatValue(selected.value)}</pre>
                                     </div>
                                 </div>
                             </section>
