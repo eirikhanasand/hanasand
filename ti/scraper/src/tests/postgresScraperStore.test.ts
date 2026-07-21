@@ -357,6 +357,38 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await second.close();
   });
 
+  test("does not rewrite a legacy incident linked to a duplicate capture", async () => {
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    first.saveSource(source({ id: "src_duplicate_incident", tenantId: "tenant_duplicate_incident" }));
+    const result = first.savePipelineResult(pipeline("src_duplicate_incident", "tenant_duplicate_incident"));
+    await first.flush();
+    first.saveIncident({ ...result.incident, id: "inc_legacy_content_hash", logicalIdentity: undefined, updatedAt: undefined });
+    await first.flush();
+    first.saveExtractedEntity({
+      id: "entity_legacy_incident_link",
+      tenantId: "tenant_duplicate_incident",
+      sourceId: result.capture.sourceId,
+      captureId: result.capture.id,
+      incidentId: "inc_legacy_content_hash",
+      type: "legacy_marker",
+      value: "legacy",
+      normalizedValue: "legacy",
+      confidence: 0.5,
+      extractorVersion: "legacy",
+      provenance: []
+    });
+    await first.close();
+
+    const sentinel = "2000-01-01T00:00:00.000Z";
+    await admin`UPDATE threat_intel.incidents SET updated_at = ${sentinel} WHERE id = 'inc_legacy_content_hash'`;
+    const second = await PostgresScraperStore.create({ databaseUrl });
+    second.savePipelineResult(pipeline("src_duplicate_incident", "tenant_duplicate_incident"));
+    await second.flush();
+    const [legacy] = await admin<{ updated_at: Date }[]>`SELECT updated_at FROM threat_intel.incidents WHERE id = 'inc_legacy_content_hash'`;
+    expect(legacy.updated_at.toISOString()).toBe(sentinel);
+    await second.close();
+  });
+
   test("imports the legacy JSON snapshot once and then uses PostgreSQL", async () => {
     const directory = mkdtempSync(join(tmpdir(), "ti-legacy-cutover-"));
     const snapshotPath = join(directory, "scraper-store.json");
