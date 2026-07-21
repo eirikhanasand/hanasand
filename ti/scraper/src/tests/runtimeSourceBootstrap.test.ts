@@ -168,7 +168,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
-  test("generated public source pack clears the 1k production source target from an empty registry", () => {
+  test("generated public source pack registers the 1k source target without activating provider-limited GDELT queries", () => {
     const seedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/public_threat_intel_generated_sources.json");
     const bundle = JSON.parse(readFileSync(seedPath, "utf8"));
     const store = new InMemoryScraperStore();
@@ -183,10 +183,34 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     expect(bundle.sources.some((source: any) => !source.legalNotes || source.risk !== "low")).toBe(false);
     expect(result.importedSourceCount).toBeGreaterThanOrEqual(1000);
     expect(result.totalSourceCount).toBeGreaterThanOrEqual(1000);
-    expect(result.activeSourceCount).toBeGreaterThanOrEqual(1000);
+    const sources = store.listSources();
+    const gdelt = sources.filter((source) => source.url.includes("api.gdeltproject.org"));
+    const active = sources.filter((source) => source.status === "active");
+    expect(gdelt.length).toBeGreaterThan(0);
+    expect(gdelt.every((source) => source.status === "candidate" && source.metadata?.productionCollection === false)).toBe(true);
+    expect(active.length).toBeGreaterThan(0);
+    expect(active.every((source) => source.url.includes("news.google.com"))).toBe(true);
+    expect(result.activeSourceCount).toBe(active.length);
     expect(result.shortfall).toBe(0);
     expect(result.blocker).toBeUndefined();
     expect(result.errors.filter((error) => error.path === seedPath)).toEqual([]);
+  });
+
+  test("puts existing generated GDELT sources on the same provider hold", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource({
+      ...source("src_gdelt_existing", "https://api.gdeltproject.org/api/v2/doc/doc?query=APT29"),
+      status: "active",
+      metadata: { generatedPublicSourcePack: true, productionCollection: true }
+    });
+
+    const result = bootstrapRuntimeSources(store, { seedPaths: [], generatedAt: "2026-07-21T08:30:00.000Z", sourceTarget: 0 });
+
+    expect(result.activeSourceCount).toBe(0);
+    expect(store.getSource("src_gdelt_existing")).toMatchObject({
+      status: "candidate",
+      metadata: { productionCollection: false, collectionHold: "provider_rate_limit_requires_bounded_collection_plan" }
+    });
   });
 
   test("collection scheduler status exposes source coverage, durable run state, parser state, and per-source freshness", async () => {

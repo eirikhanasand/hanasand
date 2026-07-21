@@ -49,6 +49,11 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
   const generatedAt = input.generatedAt ?? nowIso();
   const sourceTarget = input.sourceTarget ?? Number(Bun.env.TI_SOURCE_TARGET_COUNT ?? "1000");
   const seedPaths = input.seedPaths ?? configuredSeedPaths();
+  for (const source of store.listSources()) {
+    if (generatedGdeltHold(source) && (source.status !== "candidate" || source.metadata?.productionCollection !== false)) {
+      store.saveSource(holdGeneratedGdeltSource(source, generatedAt));
+    }
+  }
   const existingByKey = new Set(store.listSources().map(seedDuplicateKey));
   const errors: RuntimeSourceBootstrapResult["errors"] = [];
   let importedSourceCount = 0;
@@ -122,6 +127,7 @@ function shouldImportSource(source: SourceRecord) {
 }
 
 function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedAt: string, restricted = false): SourceRecord {
+  if (generatedGdeltHold(source)) return holdGeneratedGdeltSource(source, generatedAt, seedPath);
   const activate = !restricted && Bun.env.TI_SOURCE_SEED_ACTIVATE !== "false" && source.risk !== "medium" && source.risk !== "high" && source.risk !== "restricted";
   const transportCanary = restricted && source.metadata?.transportCanary === true;
   return {
@@ -140,6 +146,30 @@ function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedA
     crawlState: {
       ...(source.crawlState ?? {}),
       retryCount: source.crawlState?.retryCount ?? 0
+    }
+  };
+}
+
+function generatedGdeltHold(source: SourceRecord) {
+  try {
+    return source.metadata?.generatedPublicSourcePack === true && new URL(source.url).hostname === "api.gdeltproject.org";
+  } catch {
+    return false;
+  }
+}
+
+function holdGeneratedGdeltSource(source: SourceRecord, generatedAt: string, seedPath?: string): SourceRecord {
+  return {
+    ...source,
+    status: "candidate",
+    updatedAt: generatedAt,
+    metadata: {
+      ...(source.metadata ?? {}),
+      productionCollection: false,
+      collectionHold: "provider_rate_limit_requires_bounded_collection_plan",
+      collectionHoldAt: generatedAt,
+      sourceSeedPath: seedPath ?? source.metadata?.sourceSeedPath,
+      sourceImportedAt: seedPath ? generatedAt : source.metadata?.sourceImportedAt
     }
   };
 }
