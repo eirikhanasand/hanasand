@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import { lookup } from 'node:dns/promises'
 import { request as httpsRequest } from 'node:https'
-import { isIP } from 'node:net'
+import { isIP, type LookupFunction } from 'node:net'
 import run from '#db'
 import { organizationVisibilityDecision, type OrganizationRole, type OrganizationVisibilityDecisionInput } from '#utils/organizations.ts'
 
@@ -8763,11 +8763,7 @@ async function postPublicWebhook(endpoint: string, body: string) {
                 'content-length': Buffer.byteLength(body),
                 'user-agent': 'hanasand-dwm-webhooks/1.0',
             },
-            lookup: ((_hostname: string, options: { family?: number } | number, callback: (error: Error | null, address?: string, family?: number) => void) => {
-                const family = typeof options === 'number' ? options : options?.family
-                const selected = addresses.find(item => !family || item.family === family) ?? addresses[0]
-                callback(null, selected.address, selected.family)
-            }) as never,
+            lookup: pinnedWebhookLookup(addresses),
         }, response => {
             response.setEncoding('utf8')
             let responseBody = ''
@@ -8780,6 +8776,23 @@ async function postPublicWebhook(endpoint: string, body: string) {
         request.on('error', reject)
         request.end(body)
     })
+}
+
+export function pinnedWebhookLookup(addresses: Array<{ address: string, family: number }>): LookupFunction {
+    return (_hostname, options, callback) => {
+        const requestedFamily = options.family === 'IPv4' ? 4 : options.family === 'IPv6' ? 6 : Number(options.family || 0)
+        const matching = requestedFamily ? addresses.filter(item => item.family === requestedFamily) : addresses
+        if (!matching.length) {
+            const error = Object.assign(new Error('No validated webhook address matches the requested family.'), { code: 'ENOTFOUND' })
+            callback(error, options.all ? [] : '', requestedFamily)
+            return
+        }
+        if (options.all) {
+            callback(null, matching)
+            return
+        }
+        callback(null, matching[0].address, matching[0].family)
+    }
 }
 
 function privateWebhookTarget(value: string): boolean {
