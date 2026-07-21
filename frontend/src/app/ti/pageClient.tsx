@@ -351,6 +351,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 </button>
                             )
                         })}
+                        {!workItems.length ? <p className='rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-muted dark:border-ui-border dark:text-ui-muted'>No reviewable activity is ready for this query.</p> : null}
                     </div>
                     {selected ? (
                         <section data-ti-selected-summary='true' className='rounded-lg border border-ui-border bg-ui-raised p-4 dark:border-ui-border dark:bg-ui-raised'>
@@ -3203,26 +3204,8 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         nextActions: item.allowedActions.map(action => formatLabel(action)),
     })) ?? []
 
-    const items = [...reviewItems, ...activityItems, ...victimItems, ...tradecraftItems]
-    if (items.length) return items.sort((a, b) => (b.priority?.score ?? 0) - (a.priority?.score ?? 0) || severityWeight(b.severity) - severityWeight(a.severity) || b.confidence - a.confidence)
-
-    return [{
-        id: 'collection-searching',
-        kind: 'collection',
-        severity: result.status === 'searching' || result.status === 'queued' ? 'medium' : 'low',
-        status: humanResultStatus(result.status),
-        title: result.status === 'searching' ? 'Checking sources' : 'No results ready for review',
-        subtitle: result.analystLoop?.headline || result.summary,
-        detail: result.analystLoop?.runStatusClarity.summary || 'No reviewable results are ready for this query yet.',
-        timestamp: result.generatedAt,
-        source: 'TI search service',
-        provenance: result.mode,
-        confidence: result.confidence,
-        assertionKind: 'observed',
-        evidence: result.notes.length ? result.notes : ['Keep polling or search a related alias for source evidence.'],
-        nextActions: ['Leave this query open while polling continues.', 'Search an alias, domain, company name, CVE, or supplier term.', 'Open the customer console to save the work.'],
-        priority: priorityByRow.get('collection-searching'),
-    }]
+    return [...reviewItems, ...activityItems, ...victimItems, ...tradecraftItems]
+        .sort((a, b) => (b.priority?.score ?? 0) - (a.priority?.score ?? 0) || severityWeight(b.severity) - severityWeight(a.severity) || b.confidence - a.confidence)
 }
 
 function CustomerAlertFit({ selected, watchlist, alertPacket }: { selected: AnalystWorkItem; watchlist: WatchlistRelevance; alertPacket: AlertPacket | null }) {

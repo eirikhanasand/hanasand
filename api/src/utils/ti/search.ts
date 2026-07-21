@@ -163,7 +163,7 @@ async function fetchCanonicalScraperSearch(scraperBase: string, query: string): 
         const response = await fetch(target, { signal: AbortSignal.timeout(12_000) })
         if (!response.ok) return null
         const result = await response.json() as TiSearchResponse
-        if (result.query !== query || !Array.isArray(result.sources) || !Array.isArray(result.recentActivity)) return null
+        if (result.query.trim().toLowerCase() !== query.toLowerCase() || !Array.isArray(result.sources) || !Array.isArray(result.recentActivity)) return null
         return result
     } catch {
         return null

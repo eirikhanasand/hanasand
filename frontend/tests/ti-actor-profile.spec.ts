@@ -100,5 +100,7 @@ test.describe('public threat actor profile', () => {
         expect(source).toContain('summary: \'Checking sources\'')
         expect(source).not.toContain('The TI service did not return results.')
         expect(source).not.toContain('summary: \'Searching\'')
+        expect(source).toContain('No reviewable activity is ready for this query.')
+        expect(source).not.toContain("source: 'TI search service'")
     })
 })

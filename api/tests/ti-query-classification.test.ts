@@ -49,3 +49,37 @@ test('does not synthesize an actor profile when canonical evidence is unavailabl
         else process.env.TI_SCRAPER_API_BASE = previousScraperBase
     }
 })
+
+test('accepts the scraper canonicalizing actor query casing', async () => {
+    const previousScraperBase = process.env.TI_SCRAPER_API_BASE
+    const originalFetch = globalThis.fetch
+    process.env.TI_SCRAPER_API_BASE = 'http://scraper.test'
+    globalThis.fetch = async () => new Response(JSON.stringify({
+        query: 'APT7654321',
+        generatedAt: '2026-07-21T08:00:00.000Z',
+        mode: 'scraper',
+        status: 'partial',
+        summary: 'One captured record matches APT7654321.',
+        confidence: 0.7,
+        lastSeen: '2026-07-21T07:00:00.000Z',
+        aliases: [],
+        recentActivity: [{ date: '2026-07-21T07:00:00.000Z', title: 'Captured record', detail: 'Observed source text.', confidence: 0.7, sourceIds: ['source_test'] }],
+        targets: [],
+        ttps: [],
+        datasets: [],
+        sources: [{ id: 'source_test', name: 'Test source', type: 'public_http', provenance: 'https://example.test/report' }],
+        notes: [],
+    }), { headers: { 'content-type': 'application/json' } })
+
+    try {
+        const result = await searchThreatIntel({ query: 'apt7654321' })
+        expect(result.query).toBe('APT7654321')
+        expect(result.status).toBe('partial')
+        expect(result.recentActivity).toHaveLength(1)
+        expect(result.sources).toHaveLength(1)
+    } finally {
+        globalThis.fetch = originalFetch
+        if (previousScraperBase === undefined) delete process.env.TI_SCRAPER_API_BASE
+        else process.env.TI_SCRAPER_API_BASE = previousScraperBase
+    }
+})
