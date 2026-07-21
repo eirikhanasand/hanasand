@@ -31,7 +31,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "011_remove_misclassified_feed_actors", path: fileURLToPath(new URL("../../migrations/011_remove_misclassified_feed_actors.sql", import.meta.url)) },
   { version: "012_classify_evaluation_labels", path: fileURLToPath(new URL("../../migrations/012_classify_evaluation_labels.sql", import.meta.url)) },
   { version: "013_repair_reprocessing_timeliness", path: fileURLToPath(new URL("../../migrations/013_repair_reprocessing_timeliness.sql", import.meta.url)) },
-  { version: "014_link_delivered_alert_timeliness", path: fileURLToPath(new URL("../../migrations/014_link_delivered_alert_timeliness.sql", import.meta.url)) }
+  { version: "014_link_delivered_alert_timeliness", path: fileURLToPath(new URL("../../migrations/014_link_delivered_alert_timeliness.sql", import.meta.url)) },
+  { version: "015_repair_reprocessing_collection_time", path: fileURLToPath(new URL("../../migrations/015_repair_reprocessing_collection_time.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -769,7 +770,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
       ON CONFLICT (incident_id) DO UPDATE SET
         reported_at = COALESCE(EXCLUDED.reported_at, threat_intel.timeliness_records.reported_at),
         published_at = COALESCE(EXCLUDED.published_at, threat_intel.timeliness_records.published_at),
-        collected_at = EXCLUDED.collected_at,
+        collected_at = LEAST(threat_intel.timeliness_records.collected_at, EXCLUDED.collected_at),
         processed_at = LEAST(threat_intel.timeliness_records.processed_at, EXCLUDED.processed_at),
         first_visible_at = LEAST(threat_intel.timeliness_records.first_visible_at, EXCLUDED.first_visible_at),
         alerted_at = CASE

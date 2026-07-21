@@ -48,10 +48,10 @@ export class InMemoryScraperStore implements ScraperStore {
       tenantId: capture.tenantId,
       sourceId: capture.sourceId,
       captureId: capture.id,
-      firstSeenAt: validIso(result.incident.firstSeenAt) ?? capture.publishedAt ?? capture.collectedAt,
-      reportedAt: validIso(result.incident.reportedAt) ?? reportedAt(result.capture.metadata),
-      publishedAt: validIso(result.incident.publishedAt) ?? capture.publishedAt,
-      collectedAt: result.incident.collectedAt ?? capture.collectedAt,
+      firstSeenAt: previousIncident?.firstSeenAt ?? validIso(result.incident.firstSeenAt) ?? capture.publishedAt ?? capture.collectedAt,
+      reportedAt: previousIncident?.reportedAt ?? validIso(result.incident.reportedAt) ?? reportedAt(result.capture.metadata),
+      publishedAt: previousIncident?.publishedAt ?? validIso(result.incident.publishedAt) ?? capture.publishedAt,
+      collectedAt: previousIncident?.collectedAt ?? capture.collectedAt,
       processedAt: previousIncident?.processedAt ?? result.incident.processedAt ?? capture.processedAt,
       firstVisibleAt: previousIncident?.firstVisibleAt ?? capture.firstVisibleAt ?? firstVisibleAt
     }) : undefined;
