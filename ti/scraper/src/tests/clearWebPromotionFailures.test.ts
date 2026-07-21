@@ -44,5 +44,14 @@ describe("clear-web promotion failures", () => {
     expect(proofs.filter((proof) => proof.status === "blocked").every((proof) => proof.apiPromotionMetadata.agent09.publicTiImpact === "blocked")).toBe(true);
     expect(store.listDiscoveryEvidence().every((item) => item.promotedToTaskId)).toBe(true);
     expect(store.listCaptures()).toHaveLength(2);
+
+    const legacyStore = new InMemoryScraperStore();
+    legacyStore.saveSource(clearWebSource);
+    const duplicateCapture = store.getCapture(firstProof.captureId);
+    const canonicalIncident = store.getIncident(firstProof.incidentId);
+    legacyStore.saveCapture(duplicateCapture);
+    legacyStore.saveIncident({ ...canonicalIncident, id: "inc_legacy_content_hash" });
+    const repeatedProof = await promoteSearchResultToCanonicalCapture(legacyStore, clearWebSource, duplicateFirst, { fetcher });
+    expect(repeatedProof).toMatchObject({ status: "duplicate", incidentId: firstProof.incidentId });
   });
 });
