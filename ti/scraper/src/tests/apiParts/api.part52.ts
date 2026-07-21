@@ -103,6 +103,38 @@ describe("api v1", () => {
     expect(response.actorIntelligence.geographies).toEqual([]);
   });
 
+  test("requires complete actor alias phrases instead of matching common alias words", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "src_actor_noise", tenantId: "tenant_api", name: "Public threat feed" }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_space_bears",
+      sourceId: "src_actor_noise",
+      title: "Space Bears surge in ransomware attacks",
+      body: "The report covers manufacturing attacks by unrelated ransomware groups.",
+      publishedAt: "2026-07-18T00:00:00.000Z"
+    }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_the_gentlemen",
+      sourceId: "src_actor_noise",
+      title: "Inside The Gentlemen leak",
+      body: "The report describes a new ransomware service.",
+      publishedAt: "2026-07-19T00:00:00.000Z"
+    }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_midnight_blizzard",
+      sourceId: "src_actor_noise",
+      title: "Midnight Blizzard attribution",
+      body: "Midnight Blizzard is linked to Russia's SVR in this public threat-actor espionage report.",
+      publishedAt: "2026-07-20T00:00:00.000Z"
+    }));
+    store.saveExtractedEntity({ id: "actor_midnight_blizzard", tenantId: "tenant_api", captureId: "cap_midnight_blizzard", sourceId: "src_actor_noise", type: "actor", value: "APT29", normalizedValue: "apt29", confidence: 0.9 });
+
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=APT29&entityType=actor&tenantId=tenant_api"), { store, frontier: new FocusedFrontier() })) as any;
+
+    expect(response.rows.map((row: any) => row.id)).toEqual(["cap_midnight_blizzard"]);
+    expect(response.actorIntelligence.attribution).toBe("Midnight Blizzard is linked to Russia's SVR in this public threat-actor espionage report.");
+  });
+
   test("classifies domain and CVE queries without forcing actor semantics", async () => {
     const store = new InMemoryScraperStore();
     const domain = await body(await handleApiRequest(api("/v1/intel/search?q=example.com"), { store, frontier: new FocusedFrontier() })) as any;

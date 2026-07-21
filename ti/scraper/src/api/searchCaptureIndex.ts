@@ -18,6 +18,18 @@ export function findSearchCaptures(store: any, query: string, limit: number, ten
     .slice(0, limit)
     .map((hit) => hit.doc.capture);
 }
+
+export function findActorSearchCaptures(store: any, identities: string[], limit: number, tenantId?: string) {
+  const docs = docsForStore(store).filter((doc) => (doc.capture?.tenantId || undefined) === tenantId);
+  const terms = unique(identities.map(normalizeIdentity).filter(Boolean));
+  if (!terms.length) return [];
+  return docs
+    .map((doc) => ({ doc, score: scoreIdentityDoc(doc, terms) }))
+    .filter((hit) => hit.score > 0)
+    .sort((a, b) => b.score - a.score || b.doc.collectedAt.localeCompare(a.doc.collectedAt))
+    .slice(0, limit)
+    .map((hit) => hit.doc.capture);
+}
 function docsForStore(store: any): SearchDoc[] {
   const captures = store.listCaptures();
   const sources = new Map((store.listSources?.() ?? []).map((source: any) => [source.id, source]));
@@ -56,4 +68,17 @@ function scoreDoc(doc: SearchDoc, terms: string[]) {
     if (doc.capture.sourceId?.toLowerCase().includes(term)) score += 1;
   }
   return score;
+}
+
+function scoreIdentityDoc(doc: SearchDoc, terms: string[]) {
+  const title = normalizeIdentity(doc.title);
+  const text = normalizeIdentity(doc.text);
+  return terms.reduce((score, term) => {
+    const re = termRegex(term);
+    return score + (re.test(title) ? 6 : 0) + (re.test(text) ? 2 : 0);
+  }, 0);
+}
+
+function normalizeIdentity(value: unknown) {
+  return norm(value).replace(/[^a-z0-9]+/g, " ").trim();
 }

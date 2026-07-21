@@ -1,7 +1,7 @@
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { error, json, numberQuery, readJson } from "./http.ts";
 import { nowIso, stableId } from "../utils.ts";
-import { findSearchCaptures } from "./searchCaptureIndex.ts";
+import { findActorSearchCaptures, findSearchCaptures } from "./searchCaptureIndex.ts";
 import { cleanSearchText, isMetadataOnlyCapture, rowFromCapture } from "./searchRows.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { sanitizeDwmApiPayload } from "../product/dwmCustomerDisplay.ts";
@@ -112,7 +112,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     confidence: Math.min(assessment.confidence, 0.69)
   }));
   const missing = missingFields({ actor, victims, sectors, countries, ttps, records, rows });
-  const attribution = actor ? actorAttribution(rows, [actor, ...aliases]) : undefined;
+  const attribution = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
   const actorIntelligence = {
     actorClass: profile?.actorType ?? (actor ? "observed_threat_actor" : "unclassified_query"),
     attribution,
@@ -417,7 +417,7 @@ function searchEntityType(query: string, requested: unknown, store: any, tenantI
 
 function searchCaptures(store: any, query: string, entityType: SearchEntityType, identity: ReturnType<typeof actorIdentity>, limit: number, tenantId?: string) {
   if (entityType !== "actor") return findSearchCaptures(store, query, limit, tenantId);
-  const candidates = uniqueBy(identity.terms.flatMap((term) => findSearchCaptures(store, term, limit, tenantId)), (capture: any) => capture.id)
+  const candidates = findActorSearchCaptures(store, identity.terms, limit, tenantId)
     .sort((a: any, b: any) => String(b.collectedAt ?? "").localeCompare(String(a.collectedAt ?? "")));
   const entitiesByCapture = new Map<string, any[]>();
   for (const entity of store.listExtractedEntities?.() ?? []) {
