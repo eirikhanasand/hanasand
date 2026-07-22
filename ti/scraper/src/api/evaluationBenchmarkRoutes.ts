@@ -849,7 +849,7 @@ function validateAutomaticReview(value: any, request: any) {
   const expectedValues = modelValues(value?.expectedValues);
   const decision = String(value?.decision ?? "");
   const confidence = normalizedConfidence(value?.confidence);
-  const rationale = safeModelText(value?.rationale, 2_000);
+  const rationale = safeModelRationale(value?.rationale);
   const evidenceIds = annotationValues(value?.evidenceIds);
   const allowedEvidenceIds = new Set(request.evidence.references.map((reference: any) => reference.id));
   const inconsistentDecision = (decision === "present" && !expectedValues?.length) || (decision === "absent" && Boolean(expectedValues?.length));
@@ -940,6 +940,7 @@ function persistedObjectLineageMatches(path: string, capture: any) {
 }
 function annotationValues(value: unknown): string[] | undefined { if (!Array.isArray(value) || value.length > 50) return undefined; const values = unique(value.map((item) => cleanText(item, 200)).filter(Boolean) as string[]); return values; }
 function modelValues(value: unknown): string[] | undefined { if (!Array.isArray(value) || value.length > 50) return undefined; const values = value.map((item) => safeModelText(item, 200)); return values.some((item) => item === undefined) ? undefined : unique(values as string[]); }
+function safeModelRationale(value: unknown) { const text = cleanText(value, 2_000); return text ? cleanEvidence(text) : undefined; }
 function safeModelText(value: unknown, max: number) { const text = cleanText(value, max); return text && cleanEvidence(text) === text ? text : undefined; }
 function forbiddenBoundaryMaterial(value: string) { return /(?:\.onion\b|\.i2p\b|metadata:\/\/|freenet:|(?:https?:\/\/)?(?:t\.me|telegram\.me|telegram\.dog)\/|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|(?<![A-Za-z0-9.-])(?!\d{4}-\d{2}-\d{2}\b)(?!\d{1,3}(?:\.\d{1,3}){3}\b)\+?\d[\d\s().-]{7,}\d|\b\d{8,10}:[A-Z0-9_-]{30,}\b|\b(?:api[_ -]?key|access[_ -]?token|password|passwd|session[_ -]?string)\s*[:=])/i.test(value); }
 function canonicalValues(values: string[]) { return values.map(normalize).sort().join("\n"); }
