@@ -773,7 +773,7 @@ async function inspectArchive(file: string) {
 }
 
 async function queryIntegrity(database: string): Promise<IntegritySummary> {
-    const sql = 'SELECT json_build_object(\'schemas\', COUNT(DISTINCT schemaname), \'tables\', COUNT(*), \'estimatedRows\', COALESCE(SUM(n_live_tup), 0))::text FROM pg_stat_user_tables'
+    const sql = 'SELECT json_build_object(\'schemas\', COUNT(DISTINCT n.nspname), \'tables\', COUNT(*), \'estimatedRows\', COALESCE(SUM(GREATEST(c.reltuples, 0)), 0))::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind IN (\'r\', \'p\') AND n.nspname NOT LIKE \'pg_%\' AND n.nspname <> \'information_schema\''
     const output = await runBackupCommand('psql', [
         ...connectionArgs(),
         '--dbname', database,
