@@ -101,9 +101,31 @@ describe("durable evaluation metrics", () => {
     expect(metrics.timeliness).toMatchObject({ verifiedZeroSecondCount: 1, unverifiedZeroSecondCount: 2, anomalyCount: 2 });
   });
 
+  test("compares drift only with the preceding benchmark from the same split", () => {
+    const store = new InMemoryScraperStore();
+    const benchmarks = [
+      { id: "validation_old", datasetSplit: "validation", completedAt: "2026-07-18T00:00:00.000Z", outcome: "true_positive" },
+      { id: "test_middle", datasetSplit: "test", completedAt: "2026-07-19T00:00:00.000Z", outcome: "false_positive" },
+      { id: "validation_new", datasetSplit: "validation", completedAt: "2026-07-20T00:00:00.000Z", outcome: "false_positive" }
+    ];
+    for (const benchmark of benchmarks) {
+      const taskId = `task_${benchmark.id}`;
+      store.saveEvaluationBenchmark({ ...benchmark, status: "complete", taskCount: 1, captureIds: [`capture_${benchmark.id}`] });
+      store.saveEvaluationAdjudication({ id: `adjudication_${benchmark.id}`, benchmarkId: benchmark.id, taskId });
+      store.saveEvaluationLabel({
+        id: `label_${benchmark.id}`, benchmarkId: benchmark.id, taskId, evaluationUnitId: benchmark.id, captureId: `capture_${benchmark.id}`,
+        labelType: "actor_extraction", outcome: benchmark.outcome, datasetSplit: benchmark.datasetSplit, labeledBy: "consensus", labelingMethod: "manual_source_review",
+        independentFromExtractor: true, exhaustiveExpectedValues: true, blinded: true, adjudicationStatus: "adjudicated", labeledAt: benchmark.completedAt
+      });
+    }
+
+    const drift = buildEvaluationMetrics(store).quality.drift;
+    expect(drift).toMatchObject({ status: "measured", latestDelta: { precision: -1 }, series: [{ benchmarkId: "validation_old" }, { benchmarkId: "test_middle" }, { benchmarkId: "validation_new" }] });
+  });
+
   test("requires a complete stratified held-out benchmark before reporting validation", () => {
     const store = new InMemoryScraperStore();
-    const labelTypes = ["actor", "ransomware", "victim", "cve", "malware", "ttp", "country", "sector", "impact", "dataset"];
+    const labelTypes = ["actor", "ransomware", "victim", "incident", "cve", "malware", "ttp", "country", "sector", "indicator", "impact", "dataset", "business_mechanism"];
     const captureIds = Array.from({ length: 50 }, (_, index) => `capture_${index}`);
     const taskIds = labelTypes.flatMap((labelType) => Array.from({ length: 10 }, (_, index) => `${labelType}_${index}`));
     store.saveEvaluationBenchmark({ id: "benchmark_stratified", status: "complete", datasetSplit: "test", taskCount: taskIds.length, captureIds, protocol: { testSplitLocked: true, datasetUsage: "locked_final_evaluation" } });

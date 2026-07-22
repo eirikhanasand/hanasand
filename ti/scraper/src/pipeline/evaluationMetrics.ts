@@ -12,7 +12,7 @@ const LATENCIES = [
   "reportToAlertSeconds",
   "reportToDeliveredSeconds"
 ] as const;
-const REQUIRED_BENCHMARK_LABEL_TYPES = ["actor", "ransomware", "victim", "cve", "malware", "ttp", "country", "sector", "impact", "dataset"];
+const REQUIRED_BENCHMARK_LABEL_TYPES = ["actor", "ransomware", "victim", "incident", "cve", "malware", "ttp", "country", "sector", "indicator", "impact", "dataset", "business_mechanism"];
 
 export function buildEvaluationMetrics(store: any, input: { tenantId?: string; datasetSplit?: string; generatedAt?: string } = {}) {
   const scoped = (method: string) => records(store, method).filter((record) => sameTenant(record.tenantId, input.tenantId));
@@ -56,7 +56,7 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
   const heldOutBenchmarkCount = heldOutBenchmarks.length;
 
   return {
-    schemaVersion: "ti.evaluation_metrics.v2",
+    schemaVersion: "ti.evaluation_metrics.v3",
     generatedAt: input.generatedAt ?? new Date().toISOString(),
     scope: { tenantId: input.tenantId ?? null, datasetSplit: input.datasetSplit ?? "all" },
     quality: {
@@ -71,12 +71,17 @@ export function buildEvaluationMetrics(store: any, input: { tenantId?: string; d
       byLabelType: groupedScores(rows, (row) => row.labelType),
       byParser: groupedScores(rows, (row) => row.parserVersion),
       bySourceFamily: groupedScores(rows, (row) => row.sourceFamily),
+      byReviewerModelVersion: groupedScores(rows, (row) => row.reviewerModelVersion),
+      byPromptVersion: groupedScores(rows, (row) => row.reviewPromptVersion),
+      bySchemaVersion: groupedScores(rows, (row) => row.reviewSchemaVersion),
       byDatasetSplit: groupedScores(rows, (row) => row.datasetSplit),
+      drift: evaluationDrift(rows, completedBenchmarks),
       errorBreakdown: {
         byOutcome: countBy(rows, (row) => row.bucket),
         byLabelType: groupedErrors(rows, (row) => row.labelType),
         byParser: groupedErrors(rows, (row) => row.parserVersion),
         bySourceFamily: groupedErrors(rows, (row) => row.sourceFamily),
+        byReviewerModelVersion: groupedErrors(rows, (row) => row.reviewerModelVersion),
         byDatasetSplit: groupedErrors(rows, (row) => row.datasetSplit)
       },
       benchmarkEvidence: {
@@ -154,6 +159,10 @@ function labelRow(label: any, subjects: Map<string, any>, captures: Map<string, 
     labelingMethod: evaluationLabelMethod(label),
     parserVersion: label.parserVersion ?? subject?.extractorVersion ?? capture?.metadata?.extractorVersion ?? capture?.provenance?.extractorVersion ?? "unknown",
     sourceFamily: label.sourceFamily ?? sourceFamily(source),
+    reviewerModelVersion: label.reviewerModelVersion ?? label.modelVersion ?? "unknown",
+    reviewPromptVersion: label.reviewPromptVersion ?? "unknown",
+    reviewSchemaVersion: label.reviewSchemaVersion ?? "unknown",
+    labeledAt: label.labeledAt,
     predictionConfidence: normalizedConfidence(label.predictionConfidence),
     exhaustiveExpectedValues: label.exhaustiveExpectedValues === true && label.blinded === true && label.adjudicationStatus === "adjudicated"
   };
@@ -168,7 +177,9 @@ export function evaluationLabelMethod(label: any): string {
 }
 
 export function isIndependentEvaluationLabel(label: any): boolean {
-  return evaluationLabelMethod(label) === "manual_source_review"
+  const method = evaluationLabelMethod(label);
+  return ["manual_source_review", "automatic_model_review"].includes(method)
+    && (method !== "automatic_model_review" || label?.independenceContext?.governedEvidenceComplete === true)
     && label?.independentFromExtractor === true
     && Boolean(label?.benchmarkId)
     && label?.blinded === true
@@ -204,7 +215,24 @@ function score(rows: any[]) {
   const exhaustiveFalsePositive = exhaustive.filter((row: any) => row.bucket === "false_positive").length;
   const recall = ratio(exhaustiveTruePositive, exhaustiveTruePositive + exhaustiveFalseNegative);
   const specificity = ratio(exhaustiveTrueNegative, exhaustiveTrueNegative + exhaustiveFalsePositive);
-  return { ...counts, precision, recall, specificity, recallSampleSize: exhaustiveTruePositive + exhaustiveFalseNegative, f1: precision === null || recall === null ? null : precision + recall === 0 ? 0 : round((2 * precision * recall) / (precision + recall)), calibration: calibration(rows) };
+  const positiveCount = exhaustiveTruePositive + exhaustiveFalseNegative, negativeCount = exhaustiveTrueNegative + exhaustiveFalsePositive;
+  return {
+    ...counts,
+    precision,
+    recall,
+    specificity,
+    recallSampleSize: positiveCount,
+    f1: precision === null || recall === null ? null : precision + recall === 0 ? 0 : round((2 * precision * recall) / (precision + recall)),
+    classBalance: { positiveCount, negativeCount, positiveRate: ratio(positiveCount, positiveCount + negativeCount) },
+    confidenceIntervals: {
+      level: 0.95,
+      method: "wilson",
+      precision: wilson(counts.truePositive, counts.truePositive + counts.falsePositive),
+      recall: wilson(exhaustiveTruePositive, positiveCount),
+      specificity: wilson(exhaustiveTrueNegative, negativeCount)
+    },
+    calibration: calibration(rows)
+  };
 }
 
 function groupedScores(rows: any[], key: (row: any) => string) {
@@ -213,6 +241,40 @@ function groupedScores(rows: any[], key: (row: any) => string) {
 
 function groupedErrors(rows: any[], key: (row: any) => string) {
   return group(rows.filter((row) => row.bucket === "false_positive" || row.bucket === "false_negative"), key).map(([name, values]) => ({ name, falsePositive: values.filter((row) => row.bucket === "false_positive").length, falseNegative: values.filter((row) => row.bucket === "false_negative").length }));
+}
+
+function evaluationDrift(rows: any[], benchmarks: any[]) {
+  const series = benchmarks
+    .map((benchmark) => {
+      const values = rows.filter((row) => row.benchmarkId === benchmark.id);
+      const result = score(values);
+      return {
+        benchmarkId: benchmark.id,
+        completedAt: benchmark.completedAt ?? benchmark.updatedAt,
+        datasetSplit: benchmark.datasetSplit,
+        sampleSize: values.length,
+        precision: result.precision,
+        recall: result.recall,
+        specificity: result.specificity,
+        f1: result.f1,
+        reviewerModelVersions: [...new Set(values.map((row) => row.reviewerModelVersion))].sort(),
+        parserVersions: [...new Set(values.map((row) => row.parserVersion))].sort()
+      };
+    })
+    .filter((row) => row.sampleSize > 0)
+    .sort((left, right) => String(left.completedAt).localeCompare(String(right.completedAt)));
+  const latest = series.at(-1);
+  const previous = latest ? series.slice(0, -1).reverse().find((row) => row.datasetSplit === latest.datasetSplit) : undefined;
+  return {
+    status: latest && previous ? "measured" : "insufficient_history",
+    series,
+    latestDelta: latest && previous ? {
+      precision: metricDelta(latest.precision, previous.precision),
+      recall: metricDelta(latest.recall, previous.recall),
+      specificity: metricDelta(latest.specificity, previous.specificity),
+      f1: metricDelta(latest.f1, previous.f1)
+    } : null
+  };
 }
 
 function calibration(rows: any[]) {
@@ -336,6 +398,14 @@ function sameTenant(recordTenant: unknown, scopeTenant: string | undefined): boo
 function group<T>(values: T[], key: (value: T) => string): Array<[string, T[]]> { const groups = new Map<string, T[]>(); for (const value of values) { const name = key(value) || "unknown"; groups.set(name, [...(groups.get(name) ?? []), value]); } return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)); }
 function countBy(values: any[], key: (value: any) => string): Record<string, number> { return Object.fromEntries(group(values, key).map(([name, rows]) => [name, rows.length])); }
 function ratio(numerator: number, denominator: number): number | null { return denominator > 0 ? round(numerator / denominator) : null; }
+function wilson(successes: number, total: number) {
+  if (total <= 0) return { lower: null, upper: null, sampleSize: 0 };
+  const z = 1.959963984540054, p = successes / total, denominator = 1 + (z * z) / total;
+  const center = (p + (z * z) / (2 * total)) / denominator;
+  const margin = (z * Math.sqrt((p * (1 - p) + (z * z) / (4 * total)) / total)) / denominator;
+  return { lower: round(Math.max(0, center - margin)), upper: round(Math.min(1, center + margin)), sampleSize: total };
+}
+function metricDelta(current: number | null, previous: number | null): number | null { return current === null || previous === null ? null : round(current - previous); }
 function percentile(values: number[], percentileValue: number): number | null { if (!values.length) return null; const sorted = [...values].sort((a, b) => a - b); return sorted[Math.max(0, Math.ceil(sorted.length * percentileValue) - 1)] ?? null; }
 function round(value: number): number { return Number(value.toFixed(3)); }
 function normalizedConfidence(value: unknown): number | undefined { if (value === null || value === undefined || value === "") return undefined; const number = Number(value); return Number.isFinite(number) && number >= 0 && number <= 1 ? number : undefined; }

@@ -10,7 +10,7 @@ describe("independent evaluation benchmark", () => {
     const store = new InMemoryScraperStore();
     const at = "2026-07-21T08:00:00.000Z";
     store.saveSource({ id: "src_benchmark", tenantId: "tenant_benchmark", name: "Public report", type: "rss", url: "https://example.test/feed", accessMethod: "public_http", status: "active", risk: "low", trustScore: 0.8, crawlFrequencySeconds: 3600, legalNotes: "Public evaluation source.", metadata: { sourceFamily: "vendor" }, createdAt: at, updatedAt: at });
-    store.saveCapture({ id: "cap_benchmark", tenantId: "tenant_benchmark", sourceId: "src_benchmark", url: "https://example.test/report", collectedAt: at, publishedAt: at, contentHash: hashContent("APT29 targeted Northwind Health."), mediaType: "text/plain", storageKind: "inline_text", body: "APT29 targeted Northwind Health.", metadata: {}, sensitive: false });
+    store.saveCapture({ id: "cap_benchmark", tenantId: "tenant_benchmark", sourceId: "src_benchmark", url: "https://example.test/report", collectedAt: at, publishedAt: at, contentHash: hashContent("APT29 targeted Northwind Health."), mediaType: "text/plain", storageKind: "metadata_only", metadata: { safeExcerpt: "APT29 targeted Northwind Health." }, sensitive: true });
     store.saveExtractedEntity({ id: "entity_actor", tenantId: "tenant_benchmark", sourceId: "src_benchmark", captureId: "cap_benchmark", type: "actor", value: "APT29", normalizedValue: "apt29", confidence: 0.9 });
     store.saveExtractedEntity({ id: "entity_false_ttp", tenantId: "tenant_benchmark", sourceId: "src_benchmark", captureId: "cap_benchmark", type: "ttp", value: "ransomware activity", normalizedValue: "ransomware activity", confidence: 0.5 });
     const options = {
@@ -86,7 +86,7 @@ describe("independent evaluation benchmark", () => {
     const comprehensiveResponse = await call("/v1/intel/evaluation/benchmarks", "reviewer_one", { tenantId: "tenant_benchmark", name: "Comprehensive test", sampleSize: 1, requiredReviewers: 2 });
     const comprehensive = await comprehensiveResponse.json() as any;
     expect(comprehensiveResponse.status).toBe(201);
-    expect(comprehensive.benchmark).toMatchObject({ taskCount: 10, labelTypes: ["actor", "ransomware", "victim", "cve", "malware", "ttp", "country", "sector", "impact", "dataset"], protocol: { version: "ti.independent_extraction_benchmark.v2", datasetUsage: "locked_final_evaluation", reviewerIndependenceAttestationRequired: true } });
+    expect(comprehensive.benchmark).toMatchObject({ taskCount: 13, labelTypes: ["actor", "ransomware", "victim", "incident", "cve", "malware", "ttp", "country", "sector", "indicator", "impact", "dataset", "business_mechanism"], protocol: { version: "ti.independent_extraction_benchmark.v3", datasetUsage: "locked_final_evaluation", reviewerIndependenceAttestationRequired: true } });
     const manifest = store.getEvaluationBenchmark(comprehensive.benchmark.id).manifest;
     for (const labelType of comprehensive.benchmark.labelTypes) expect(manifest.find((task: any) => task.labelType === labelType)).toBeDefined();
     const comprehensiveTasks = await (await call(`/v1/intel/evaluation/benchmarks/${comprehensive.benchmark.id}/tasks`, "reviewer_one")).text();

@@ -68,6 +68,8 @@ export function contractIndex() {
     route("GET", "/v1/intel/evaluation/benchmarks/:benchmarkId/tasks"),
     route("POST", "/v1/intel/evaluation/benchmarks/:benchmarkId/annotations"),
     route("POST", "/v1/intel/evaluation/benchmarks/:benchmarkId/tasks/:taskId/adjudicate"),
+    route("POST", "/v1/intel/evaluation/benchmarks/:benchmarkId/tasks/:taskId/retry"),
+    route("POST", "/v1/intel/evaluation/benchmarks/:benchmarkId/run"),
     route("POST", "/v1/intel/runs"),
     route("GET", "/v1/darkweb/status"),
     route("GET", "/v1/darkweb/search"),

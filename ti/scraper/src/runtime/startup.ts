@@ -12,6 +12,7 @@ import { bootstrapRuntimeSources } from "./sourceBootstrap.ts";
 import { buildRuntimeStores } from "./startupStores.ts";
 import { executeScheduledCollectionRun, recoverCollectionRuns } from "../ops/scheduledCollection.ts";
 import { startAutomaticReviewWorker } from "../api/automaticReviewRoutes.ts";
+import { startAutomaticEvaluationLoop } from "../api/evaluationBenchmarkRoutes.ts";
 
 export async function startScraperRuntime() {
   const config = loadRuntimeConfig();
@@ -73,8 +74,18 @@ export async function startScraperRuntime() {
     }).catch((error) => logger.warn("scheduled collection run failed", { event: "scheduled_run.error", runId, error: error instanceof Error ? error.message : String(error) }));
   };
   const recoveredRuns = recoverCollectionRuns({ store, execute: executeRun });
-  const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, restrictedMetadataLoop: restrictedMetadata, sourceBootstrap, runExecutor: executeRun });
+  const evaluation = startAutomaticEvaluationLoop({
+    store,
+    enabled: Bun.env.TI_AUTOMATIC_EVALUATION_ENABLED !== "false",
+    intervalSeconds: Number(Bun.env.TI_AUTOMATIC_EVALUATION_INTERVAL_SECONDS ?? "60"),
+    maxTasks: Number(Bun.env.TI_AUTOMATIC_EVALUATION_MAX_TASKS_PER_CYCLE ?? "2"),
+    sampleSize: Number(Bun.env.TI_AUTOMATIC_EVALUATION_SAMPLE_SIZE ?? "50"),
+    timeoutMs: Number(Bun.env.HANASAND_AI_EVALUATION_TIMEOUT_MS ?? "30000"),
+    onCycle: (result: any) => logger.info("automatic evaluation cycle", { event: "automatic_evaluation.cycle", ...result }),
+    onError: (error: unknown) => logger.warn("automatic evaluation cycle failed", { event: "automatic_evaluation.error", error: error instanceof Error ? error.message : String(error) })
+  });
+  const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
   const automaticReview = startAutomaticReviewWorker({ store, frontier, config } as any);
-  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", recoveredRuns, sourceBootstrap, ...paths });
-  return { stop: async () => { for (const timer of runTimers.values()) clearTimeout(timer); canary.stop(); restrictedMetadata.stop(); await automaticReview.stop(); await server.stop(); await store.close(); } };
+  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", automaticEvaluationEnabled: Bun.env.TI_AUTOMATIC_EVALUATION_ENABLED !== "false", recoveredRuns, sourceBootstrap, ...paths });
+  return { stop: async () => { for (const timer of runTimers.values()) clearTimeout(timer); canary.stop(); restrictedMetadata.stop(); evaluation.stop(); await automaticReview.stop(); await server.stop(); await store.close(); } };
 }

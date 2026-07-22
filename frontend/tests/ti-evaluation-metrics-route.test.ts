@@ -10,8 +10,13 @@ const [route, client] = await Promise.all([
 assert.match(route, /requireApiSession\(request, \['system_admin', 'admin', 'administrator', 'analyst'\]\)/)
 assert.match(route, /new URL\('\/v1\/intel\/evaluation', base\)/)
 assert.match(route, /datasetSplit !== 'validation' && datasetSplit !== 'test'/)
-assert.match(client, /independenceAttested/)
+assert.match(client, /automatic: true/)
+assert.match(client, /\/run\?scope=/)
+assert.match(client, /\/retry\?scope=/)
 assert.match(client, /Brier/)
-for (const label of ['actor', 'ransomware', 'victim', 'cve', 'malware', 'ttp', 'country', 'sector', 'impact', 'dataset']) {
+assert.match(client, /Specificity/)
+assert.match(client, /confidenceIntervals/)
+assert.match(client, /Drift history/)
+for (const label of ['actor', 'ransomware', 'victim', 'incident', 'cve', 'malware', 'ttp', 'country', 'sector', 'indicator', 'impact', 'dataset', 'business_mechanism']) {
     assert.match(client, new RegExp(`['"]${label}['"]`))
 }
