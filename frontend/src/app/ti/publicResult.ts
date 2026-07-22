@@ -69,6 +69,24 @@ export function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): 
             lastCollectedAt: source.lastCollectedAt
         })),
         notes: result.notes,
+        actorIdentity: result.actorIdentity ? {
+            catalogMatched: result.actorIdentity.catalogMatched,
+            ambiguous: result.actorIdentity.ambiguous,
+            activityEvidenceAvailable: result.actorIdentity.activityEvidenceAvailable,
+            candidates: result.actorIdentity.candidates.map(candidate => ({
+                catalogId: candidate.catalogId,
+                externalId: candidate.externalId,
+                canonicalName: publicTiText(candidate.canonicalName),
+                associatedNames: candidate.associatedNames.map(publicTiText),
+                matchKinds: candidate.matchKinds,
+                status: candidate.status,
+                aptNumberDesignationPresent: candidate.aptNumberDesignationPresent,
+                sourceUrl: candidate.sourceUrl,
+                catalogVersion: candidate.catalogVersion,
+                catalogModifiedAt: candidate.catalogModifiedAt,
+                captureId: candidate.captureId,
+            }))
+        } : undefined,
         actorIntelligence: sanitizeActorIntelligence(result.actorIntelligence),
         actionability: sanitizeActionability(result.actionability),
         analystLoop: result.analystLoop ? {

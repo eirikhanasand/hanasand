@@ -82,7 +82,29 @@ export interface TiSearchResponse {
     analystLoop?: TiAnalystLoop
     collectionStrategy?: TiCollectionStrategy
     actorIntelligence?: TiActorIntelligenceContract
+    actorIdentity?: TiActorIdentityMatch
     actionability?: TiActionabilityContract
+}
+
+export interface TiActorIdentityMatch {
+    catalogMatched: boolean
+    ambiguous: boolean
+    activityEvidenceAvailable: boolean
+    candidates: TiActorIdentityCandidate[]
+}
+
+export interface TiActorIdentityCandidate {
+    catalogId: string
+    externalId: string
+    canonicalName: string
+    associatedNames: string[]
+    matchKinds: Array<'canonical' | 'associated'>
+    status: 'current' | 'deprecated' | 'revoked' | 'retired'
+    aptNumberDesignationPresent: boolean
+    sourceUrl: string
+    catalogVersion: string
+    catalogModifiedAt: string
+    captureId?: string
 }
 
 export interface TiActorIntelligenceContract {

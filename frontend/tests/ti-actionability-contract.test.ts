@@ -94,6 +94,25 @@ apt29WithHostedCopyResidue.evidenceAssessment = {
     reasons: ['Two independent sources are represented.'],
     missingFields: [],
 }
+apt29WithHostedCopyResidue.actorIdentity = {
+    catalogMatched: true,
+    ambiguous: false,
+    activityEvidenceAvailable: true,
+    candidates: [{
+        catalogId: 'mitre-attack-enterprise',
+        externalId: 'G0016',
+        canonicalName: 'APT29',
+        associatedNames: ['Midnight Blizzard'],
+        matchKinds: ['canonical'],
+        status: 'current',
+        aptNumberDesignationPresent: true,
+        sourceUrl: 'https://attack.mitre.org/groups/G0016/',
+        catalogVersion: '18.0',
+        catalogModifiedAt: '2026-04-28T00:00:00.000Z',
+        captureId: 'capture_mitre_catalog_18',
+        description: 'Must not cross the public allow list.',
+    } as NonNullable<TiSearchResponse['actorIdentity']>['candidates'][number]],
+}
 apt29WithHostedCopyResidue.ttps[0]!.detail = 'Tradecraft aligns with returned ATT&CK techniques for credential and cloud activity.'
 apt29WithHostedCopyResidue.actionability!.watchlistCandidates![0]!.reason = 'Public reporting and returned actor profile include Microsoft email intrusion context.'
 apt29WithHostedCopyResidue.actionability!.handoffs!.watchlist!.payloads[0]!.notes = 'apt29: Actor target sector from returned profile: Technology and cloud services.'
@@ -117,6 +136,8 @@ assert(sanitizedApt29Result?.actorIntelligence?.structuredProvenance?.some(row =
 ), 'Public /ti result sanitizer should preserve structured actor provenance for first render.')
 assert(sanitizedApt29Result?.actorIntelligence?.businessModel?.publicationStrategies[0]?.value === 'public victim listing', 'Public /ti result sanitizer should preserve observed business-model mechanisms.')
 assert(sanitizedApt29Result?.actorIntelligence?.businessModel?.missingEvidence.includes('payments or conversion'), 'Public /ti result sanitizer should preserve explicit business-analysis evidence gaps.')
+assert(sanitizedApt29Result?.actorIdentity?.candidates[0]?.externalId === 'G0016', 'Public /ti result sanitizer should preserve safe actor catalog identity fields.')
+assert(!('description' in (sanitizedApt29Result?.actorIdentity?.candidates[0] ?? {})), 'Public /ti result sanitizer must drop actor catalog fields outside the allow list.')
 assert(sanitizedApt29Result.actionability?.sourceProvenance?.some(row =>
     row.sourceId === 'src_microsoft_midnight_blizzard'
     && row.captureId === 'capture_microsoft_apt29_2024'

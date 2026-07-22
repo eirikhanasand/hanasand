@@ -184,6 +184,14 @@ function Results({ result }: { result: TiSearchResponse }) {
     const sourceUrlById = useMemo(() => new Map(result.sources.map(source => [source.id, source.url || linkFromText(source.provenance)])), [result.sources])
     const sources = result.sources
     const actorQuery = result.queryKind === 'actor'
+    const catalogIdentity = result.actorIdentity
+    const catalogOnly = Boolean(catalogIdentity?.catalogMatched && !catalogIdentity.activityEvidenceAvailable)
+    const catalogCandidate = !catalogIdentity?.ambiguous && catalogIdentity?.candidates.length === 1 ? catalogIdentity.candidates[0] : undefined
+    const exactCatalogIdentity = Boolean(catalogCandidate?.matchKinds.includes('canonical'))
+    const actorNamesLabel = catalogOnly ? exactCatalogIdentity ? 'Associated names' : 'Query label' : 'Aliases'
+    const actorNamesValue = catalogOnly
+        ? exactCatalogIdentity ? catalogCandidate?.associatedNames.slice(0, 3).join(', ') || 'None listed' : humanizeSlug(result.query)
+        : result.aliases.slice(0, 3).join(', ') || humanizeSlug(result.query)
     const victimObservations = useMemo(() => victimObservationsFor(result), [result])
     const actorIntel = useMemo(() => buildActorIntelligence(result, victimObservations), [result, victimObservations])
     const actionability = useMemo(() => buildTiActionability(result, actorIntel, victimObservations), [result, actorIntel, victimObservations])
@@ -308,16 +316,23 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{actorProfileSummary}</p>
                         </div>
                         <div className='grid gap-3 sm:grid-cols-2'>
-                            <EvidenceMetric label={actorQuery ? 'Attribution' : 'Query type'} value={actorQuery ? actorIntel.attribution || 'Public reporting' : formatLabel(result.queryKind || 'free_text')} />
-                            <EvidenceMetric label={actorQuery ? 'Motivation' : 'Observed records'} value={actorQuery ? actorIntel.motivation.slice(0, 2).join('; ') || 'Reported activity' : `${result.recentActivity.length}`} />
-                            <EvidenceMetric label={actorQuery ? 'Aliases' : 'Sources'} value={actorQuery ? result.aliases.slice(0, 3).join(', ') || humanizeSlug(result.query) : `${result.sources.length}`} />
+                            <EvidenceMetric label={actorQuery ? 'Attribution' : 'Query type'} value={actorQuery ? catalogOnly ? 'No activity attribution' : actorIntel.attribution || 'Public reporting' : formatLabel(result.queryKind || 'free_text')} />
+                            <EvidenceMetric label={actorQuery ? 'Motivation' : 'Observed records'} value={actorQuery ? catalogOnly ? 'No activity evidence' : actorIntel.motivation.slice(0, 2).join('; ') || 'Reported activity' : `${result.recentActivity.length}`} />
+                            <EvidenceMetric
+                                label={actorQuery ? actorNamesLabel : 'Sources'}
+                                value={actorQuery ? actorNamesValue : `${result.sources.length}`}
+                            />
                             <EvidenceMetric label='Last seen' value={result.lastSeen ? formatDate(result.lastSeen) : 'Observation date unavailable'} />
                         </div>
                     </section>
                     {actorQuery ? <section data-ti-map='true' className='min-w-0'>
-                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
+                        {catalogOnly && catalogIdentity
+                            ? <ActorIdentityPanel identity={catalogIdentity} />
+                            : <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />}
                     </section> : null}
                 </div>
+
+                {catalogIdentity?.catalogMatched && !catalogOnly ? <ActorIdentityPanel identity={catalogIdentity} /> : null}
 
                 <EvidenceBoundaryStrip result={result} />
 
@@ -391,6 +406,46 @@ function Results({ result }: { result: TiSearchResponse }) {
         </div>
     )
 
+}
+
+function ActorIdentityPanel({ identity }: { identity: NonNullable<TiSearchResponse['actorIdentity']> }) {
+    const exact = !identity.ambiguous && identity.candidates.length === 1 && identity.candidates[0]?.matchKinds.includes('canonical')
+    return (
+        <section data-ti-actor-identity='true' className='min-w-0 border-y border-ui-border py-3 dark:border-ui-border'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>{exact ? 'Catalog identity' : 'Catalog candidates'}</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
+                        {identity.activityEvidenceAvailable
+                            ? 'Catalog identity is shown separately from captured activity.'
+                            : exact ? 'Cataloged threat group; no captured activity is linked to this query.' : 'No activity attribution was merged from these catalog matches.'}
+                    </p>
+                </div>
+                {identity.ambiguous ? <span className={sourceHealthChipClass('review')}>ambiguous label</span> : null}
+            </div>
+            <ul className='mt-3 grid min-w-0 gap-2'>
+                {identity.candidates.map(candidate => (
+                    <li key={`${candidate.catalogId}:${candidate.externalId}`} className='min-w-0 border-t border-ui-border pt-2 dark:border-ui-border'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='wrap-break-word text-sm font-semibold text-ui-text dark:text-ui-text'>{candidate.canonicalName} · {candidate.externalId}</p>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted dark:text-ui-muted'>
+                                    {candidate.matchKinds.map(kind => kind === 'canonical' ? 'Canonical name' : 'Associated name').join(' · ')}
+                                    {candidate.associatedNames.length ? ` · Also known as ${candidate.associatedNames.slice(0, 5).join(', ')}` : ''}
+                                </p>
+                            </div>
+                            <div className='flex shrink-0 items-center gap-2'>
+                                <span className={sourceHealthChipClass(candidate.status === 'current' ? 'ready' : 'review')}>{formatLabel(candidate.status)}</span>
+                                <a href={candidate.sourceUrl} target='_blank' rel='noopener noreferrer' aria-label={`Open catalog record for ${candidate.canonicalName}`} title='Open catalog record' className='inline-flex h-8 w-8 items-center justify-center rounded-md border border-ui-border text-ui-muted transition hover:bg-ui-raised hover:text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/35 dark:border-ui-border dark:text-ui-muted dark:hover:bg-ui-raised dark:hover:text-ui-text'>
+                                    <ExternalLink className='h-3.5 w-3.5' />
+                                </a>
+                            </div>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+        </section>
+    )
 }
 
 function EvidenceBoundaryStrip({ result }: { result: TiSearchResponse }) {
