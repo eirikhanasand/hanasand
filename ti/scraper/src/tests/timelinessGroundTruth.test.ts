@@ -92,6 +92,20 @@ describe("timeliness ground truth", () => {
     expect(snapshot.summary.reportToDeliveredCoverage).toBe(0);
   });
 
+  test("does not hide timestamp anomalies behind an unresolved first report", () => {
+    const snapshot = buildTimelinessWorkbench([retainedRecord({
+      processedAt: "2026-07-22T10:07:08.000Z",
+      firstVisibleAt: "2026-07-22T10:07:06.000Z",
+    })], { generatedAt });
+
+    expect(snapshot.items[0]).toMatchObject({
+      status: "anomaly",
+      missingStages: expect.arrayContaining(["first_report"]),
+      timestampAnomalies: expect.arrayContaining(["negative:processingToVisibilitySeconds"]),
+    });
+    expect(snapshot.summary).toMatchObject({ anomalyCount: 1, unresolvedReferenceCount: 1, excludedMetricRecordCount: 1 });
+  });
+
   test("uses retained observation and validation evidence while excluding source corruption", () => {
     const record = retainedRecord({
       publishedAt: "2026-07-22T10:07:00.000Z",
