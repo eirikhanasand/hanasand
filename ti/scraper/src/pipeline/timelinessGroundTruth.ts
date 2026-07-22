@@ -185,8 +185,8 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
     generatedAt,
     summary: {
       recordCount: items.length,
-      unresolvedReferenceCount: count(items, "unresolved_reference"),
-      anomalyCount: count(items, "anomaly"),
+      unresolvedReferenceCount: items.filter((item) => !item.stages.first_report).length,
+      anomalyCount: items.filter((item) => item.timestampAnomalies.length).length,
       awaitingAlertCount: count(items, "awaiting_alert"),
       awaitingDeliveryCount: count(items, "awaiting_delivery"),
       completeCount: count(items, "complete"),
@@ -263,8 +263,8 @@ function toView(
 }
 
 function statusFor(stages: Record<string, string | undefined>, anomalies: string[]): TimelinessQueueStatus {
-  if (!stages.first_report) return "unresolved_reference";
   if (anomalies.length) return "anomaly";
+  if (!stages.first_report) return "unresolved_reference";
   if (!stages.alert_created) return "awaiting_alert";
   if (!stages.delivery_attempt || !stages.delivered) return "awaiting_delivery";
   return "complete";
