@@ -198,11 +198,11 @@ export function DwmAnalystPortal({
     const latestCaptures = operations?.latestCaptures ?? []
     const activeSourceCount = operations?.counts.activeSourceCount ?? 0
     const sourceCount = operations?.counts.sourceCount ?? 0
-    const alertCaptureCount = uniqueStrings(alerts.flatMap(alertCaptureIds)).length
-    const captureCount = operations?.counts.captureCount || latestCaptures.length || alertCaptureCount
+    const sharedCaptureCount = operations?.counts.captureCount ?? latestCaptures.length
+    const tenantRunCaptureCount = operations?.latestRun?.captureCount ?? 0
     const watchlistMatchCount = operations?.counts.watchlistMatchCount || latestCaptureWatchlistMatchCount(latestCaptures) || alertWatchlistMatchCount(alerts)
     const caseCount = alerts.filter(hasAlertCaseLink).length
-    const latestRunLabel = captureRunLabel(operations?.latestRun?.captureCount, captureCount, activeSourceCount)
+    const latestRunLabel = captureRunLabel(operations?.latestRun?.captureCount)
     const watchTermCount = snapshot.watchlist.length
     const webhookState = deliverySummaryLabel(localDeliveries)
     const apiProblemCount = [dataHealth.snapshot, dataHealth.operations, dataHealth.alerts, dataHealth.deliveries]
@@ -210,7 +210,7 @@ export function DwmAnalystPortal({
     const workflowTelemetry = {
         activeSourceCount,
         sourceCount,
-        captureCount,
+        captureCount: tenantRunCaptureCount,
         watchlistMatchCount,
         latestRunStatus: operations?.latestRun?.status,
         latestRunCaptureCount: operations?.latestRun?.captureCount,
@@ -425,7 +425,7 @@ export function DwmAnalystPortal({
 
     if (view === 'sources') {
         return (
-            <DwmPanelPage title='Sources' meta={`${activeSourceCount}/${sourceCount} active sources · ${captureCount} captures`}>
+            <DwmPanelPage title='Sources' meta={`${activeSourceCount}/${sourceCount} shared active sources · ${sharedCaptureCount} shared captures`}>
                 <SourcePosture snapshot={snapshot} operations={operations} />
             </DwmPanelPage>
         )
@@ -479,7 +479,7 @@ export function DwmAnalystPortal({
                     watchTermCount={watchTermCount}
                     activeSourceCount={activeSourceCount}
                     sourceCount={sourceCount}
-                    captureCount={captureCount}
+                    captureCount={tenantRunCaptureCount}
                     watchlistMatchCount={watchlistMatchCount}
                     alertCount={alerts.length}
                     caseCount={caseCount}
@@ -970,10 +970,8 @@ function alertWatchlistMatchCount(alerts: PortalAlert[]) {
     return uniqueStrings(alerts.map(alert => alert.matchedTerm.value)).length
 }
 
-function captureRunLabel(runCaptureCount = 0, captureCount = 0, activeSourceCount = 0) {
-    if (runCaptureCount > 0) return `${runCaptureCount} captures`
-    if (captureCount > 0) return `${captureCount} captures`
-    return activeSourceCount ? 'collecting' : 'source'
+function captureRunLabel(runCaptureCount?: number) {
+    return runCaptureCount === undefined ? 'not run' : `${runCaptureCount} captures`
 }
 
 function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAction, actionMessage, onUpdate, onOpenCase, onReplay, onTest, onSend }: {

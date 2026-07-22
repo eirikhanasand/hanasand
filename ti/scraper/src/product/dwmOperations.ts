@@ -71,7 +71,7 @@ export function buildDwmOperationsSnapshot(input: {
   const captures = (input.captures ?? []).filter((capture) => inTenant(capture, scope) && sourceIds.has(capture.sourceId));
   const sourceById = new Map(sources.map((source: any) => [String(source.id), source]));
   const latestRun = (input.runs ?? [])
-    .filter((run: any) => inTenant(run, scope))
+    .filter((run: any) => inRunTenant(run, scope))
     .filter((run: any) => run.requestId === "req_public_canary" || run.id)
     .sort((a: any, b: any) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? "")))[0];
   const latestCaptures = captures
@@ -127,6 +127,11 @@ export function buildDwmOperationsSnapshot(input: {
 function inTenant(record: { tenantId?: string }, tenantId?: string): boolean {
   const recordTenantId = record.tenantId || undefined;
   return recordTenantId === undefined || recordTenantId === tenantId;
+}
+
+function inRunTenant(record: { tenantId?: string }, tenantId?: string): boolean {
+  const recordTenantId = record.tenantId?.trim() || undefined;
+  return tenantId ? recordTenantId === tenantId : recordTenantId === undefined || recordTenantId === "global";
 }
 
 function captureDto(capture: any, source: any, terms: string[]): DwmOperationsSnapshot["latestCaptures"][number] {

@@ -58,6 +58,55 @@ describe("public collection boundary", () => {
     expect(fetched).toEqual(["https://example.test/selected.xml"]);
   });
 
+  test("runs shared and exact-tenant sources while preserving tenant run scope", async () => {
+    const generatedAt = "2026-07-22T12:00:00.000Z";
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({ id: "shared", tenantId: undefined, url: "https://example.test/shared.xml" }));
+    store.saveSource(source({ id: "tenant-a", tenantId: "tenant_a", url: "https://example.test/tenant-a.xml" }));
+    store.saveSource(source({ id: "tenant-b", tenantId: "tenant_b", url: "https://example.test/tenant-b.xml" }));
+    const fetched: string[] = [];
+    const feed = (url: string) => `<rss><channel><item><title>APT29 public campaign report</title><link>${url}/report</link><description>APT29 targeted government victims with credential theft malware and command infrastructure.</description><pubDate>${generatedAt}</pubDate></item></channel></rss>`;
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      tenantId: "tenant_a",
+      maxSources: 3,
+      maxTasks: 3,
+      now: () => generatedAt,
+      fetch: async (url: string) => {
+        fetched.push(url);
+        return new Response(feed(url), { headers: { "content-type": "application/rss+xml" } });
+      }
+    });
+
+    expect(fetched.sort()).toEqual(["https://example.test/shared.xml", "https://example.test/tenant-a.xml"]);
+    expect(cycle).toMatchObject({ tenantId: "tenant_a", activeSourceCount: 2, queuedTaskCount: 2, insertedCaptureCount: 2 });
+    expect(store.getPlan(cycle.planId)).toMatchObject({ tenantId: "tenant_a" });
+    expect(store.getRun(cycle.runId)).toMatchObject({ tenantId: "tenant_a", sourceCount: 2, captureCount: 2 });
+    expect(store.listCaptures().map((capture: any) => [capture.sourceId, capture.tenantId]).sort()).toEqual([
+      ["shared", undefined],
+      ["tenant-a", "tenant_a"]
+    ]);
+
+    const globalStore = new InMemoryScraperStore();
+    globalStore.saveSource(source({ id: "shared", tenantId: undefined, url: "https://example.test/shared.xml" }));
+    globalStore.saveSource(source({ id: "tenant-a", tenantId: "tenant_a", url: "https://example.test/tenant-a.xml" }));
+    const globalFetched: string[] = [];
+    const globalCycle = await runCanaryCollectionCycle({
+      store: globalStore,
+      frontier: new FocusedFrontier(),
+      maxSources: 2,
+      maxTasks: 2,
+      now: () => generatedAt,
+      fetch: async (url: string) => {
+        globalFetched.push(url);
+        return new Response(feed(url), { headers: { "content-type": "application/rss+xml" } });
+      }
+    });
+    expect(globalFetched).toEqual(["https://example.test/shared.xml"]);
+    expect(globalStore.getRun(globalCycle.runId)).toMatchObject({ tenantId: undefined, sourceCount: 1 });
+  });
+
   test("keeps the official CISA catalog bounded without truncating its JSON envelope", async () => {
     const cisa = source({
       id: "src_seed_cisa_known_exploited_vulns",

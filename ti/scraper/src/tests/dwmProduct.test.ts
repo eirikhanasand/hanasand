@@ -297,6 +297,9 @@ describe("dwm product snapshot", () => {
     store.saveCapture({ ...telegramCapture, id: "cap_global", sourceId: globalSource.id, tenantId: undefined });
     store.saveCapture({ ...darkwebCapture, id: "cap_tenant_a", sourceId: tenantASource.id, tenantId: "tenant_a" });
     store.saveCapture({ ...darkwebCapture, id: "cap_tenant_b", sourceId: tenantBSource.id, tenantId: "tenant_b" });
+    store.saveRun({ id: "run_global", requestId: "req_public_canary", status: "completed", tenantId: undefined, captureCount: 9, taskCount: 9, updatedAt: "2026-07-22T12:03:00.000Z" });
+    store.saveRun({ id: "run_tenant_a", requestId: "req_public_canary", status: "completed", tenantId: "tenant_a", captureCount: 2, taskCount: 2, updatedAt: "2026-07-22T12:01:00.000Z" });
+    store.saveRun({ id: "run_tenant_b", requestId: "req_public_canary", status: "completed", tenantId: "tenant_b", captureCount: 1, taskCount: 1, updatedAt: "2026-07-22T12:02:00.000Z" });
 
     const options = { store, frontier: new FocusedFrontier() };
     const tenantA = await (await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/operations?tenantId=tenant_a"), options)).json() as any;
@@ -308,10 +311,13 @@ describe("dwm product snapshot", () => {
     })).json() as any;
 
     expect(tenantA.counts).toMatchObject({ sourceCount: 2, activeSourceCount: 2, captureCount: 2 });
+    expect(tenantA.latestRun).toMatchObject({ id: "run_tenant_a", captureCount: 2 });
+    expect(tenantB.latestRun).toMatchObject({ id: "run_tenant_b", captureCount: 1 });
     expect(tenantA.sourceHealth.map((row: any) => row.sourceId).sort()).toEqual(["src_global", "src_tenant_a"]);
     expect(tenantB.sourceHealth.map((row: any) => row.sourceId).sort()).toEqual(["src_global", "src_tenant_b"]);
     expect(productA.sourceInventory.counts.registeredTotal).toBe(tenantA.counts.sourceCount);
     expect(empty.counts).toMatchObject({ sourceCount: 0, activeSourceCount: 0, captureCount: 0 });
+    expect(empty.latestRun).toBeUndefined();
   });
 
   test("keeps product evidence in the exact tenant scope", async () => {

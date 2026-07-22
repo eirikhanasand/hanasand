@@ -19,11 +19,11 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const maxSources = Math.max(1, options.maxSources ?? 10), maxTasks = Math.max(1, options.maxTasks ?? 5), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
   const selectedSourceIds = new Set(options.sourceIds ?? []);
   const due = options.store.listSources()
-    .filter((s: any) => (!options.tenantId || s.tenantId === options.tenantId) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt))
+    .filter((s: any) => inCollectionScope(s, options.tenantId) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt))
     .slice(0, maxSources);
-  const planId = stableId("canary-plan", generatedAt), runId = stableId("canary-run", planId), tasks = due.flatMap((s: any) => tasksForSource(s, generatedAt, runId, maxBytes));
-  options.store.savePlan?.({ id: planId, requestId: "req_public_canary", createdAt: generatedAt, tasks, request: { query: canaryQueries }, reviewRequired: [], rejected: activation.rejected, audit: [] });
-  options.store.saveRun?.({ id: runId, planId, requestId: "req_public_canary", status: "running", createdAt: generatedAt, startedAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: 0, rejectedSourceCount: activation.rejected.length, captureCount: 0, incidentCount: 0 });
+  const planId = stableId("canary-plan", `${options.tenantId ?? "global"}:${generatedAt}`), runId = stableId("canary-run", planId), tasks = due.flatMap((s: any) => tasksForSource(s, generatedAt, runId, maxBytes));
+  options.store.savePlan?.({ id: planId, tenantId: options.tenantId, requestId: "req_public_canary", createdAt: generatedAt, tasks, request: { query: canaryQueries }, reviewRequired: [], rejected: activation.rejected, audit: [] });
+  options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: "running", createdAt: generatedAt, startedAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: 0, rejectedSourceCount: activation.rejected.length, captureCount: 0, incidentCount: 0 });
   for (const task of tasks) options.frontier.enqueueTask(task);
   const counters: any = { leasedTaskCount: 0, completedTaskCount: 0, failedTaskCount: 0, insertedCaptureCount: 0, duplicateCaptureCount: 0, incidentCount: 0, exposureClaimCount: 0, skippedLowValueCount: 0, retryScheduledCount: 0, retryExhaustedCount: 0 };
   const latestCaptureIds: string[] = [], errors: any[] = [];
@@ -31,8 +31,8 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   for (let done = 0; done < maxTasks; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, maxTasks - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors)));
   const runStatus = counters.failedTaskCount && counters.completedTaskCount ? "degraded" : counters.failedTaskCount ? "failed" : "completed";
   const completedAt = options.now?.() ?? nowIso();
-  options.store.saveRun?.({ id: runId, planId, requestId: "req_public_canary", status: runStatus, createdAt: generatedAt, startedAt: generatedAt, completedAt, updatedAt: completedAt, taskCount: tasks.length, sourceCount: due.length, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
-  return { generatedAt, mode: "production_canary", runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, activeSourceCount: due.length, queuedTaskCount: tasks.length, ...counters, remainingQueuedTaskCount: options.frontier.snapshot().filter((i: any) => i.task.runId === runId).length, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
+  options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: generatedAt, startedAt: generatedAt, completedAt, updatedAt: completedAt, taskCount: tasks.length, sourceCount: due.length, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
+  return { generatedAt, tenantId: options.tenantId, mode: "production_canary", runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, activeSourceCount: due.length, queuedTaskCount: tasks.length, ...counters, remainingQueuedTaskCount: options.frontier.snapshot().filter((i: any) => i.task.runId === runId).length, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
 }
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
   const state = detachedState(options.now?.() ?? nowIso(), options.queueLimit ?? 500), intervalMs = Math.max(5, options.intervalSeconds ?? 300) * 1000; let timer: Timer | undefined, startupTimer: Timer | undefined;
@@ -156,4 +156,9 @@ function isProductionCollectionSource(source: any, generatedAt: string) {
   if (sourceCollectionLane(source) !== "public") return false;
   const nextEligibleAt = source.crawlState?.nextEligibleAt;
   return !nextEligibleAt || Date.parse(nextEligibleAt) <= Date.parse(generatedAt);
+}
+function inCollectionScope(source: any, tenantId?: string) {
+  const sourceTenantId = String(source.tenantId ?? "").trim() || undefined;
+  const shared = sourceTenantId === undefined || sourceTenantId === "global";
+  return tenantId ? shared || sourceTenantId === tenantId : shared;
 }
