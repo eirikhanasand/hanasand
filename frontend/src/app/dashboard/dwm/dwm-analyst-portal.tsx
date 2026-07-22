@@ -413,7 +413,7 @@ export function DwmAnalystPortal({
                             <p className='text-[10px] font-semibold uppercase text-ui-primary'>Dark web monitoring</p>
                             <h1 className='mt-1 text-lg font-semibold text-ui-text'>Watchlists</h1>
                         </div>
-                        <p className='text-xs font-medium text-ui-muted'>{watchTermCount} terms · {activeSourceCount}/{sourceCount} sources active</p>
+                        <p className='text-xs font-medium text-ui-muted'>{watchTermCount} terms · {activeSourceCount}/{sourceCount} shared sources active</p>
                     </div>
                     <div className='p-3'>
                         {workflowActions}
@@ -470,7 +470,7 @@ export function DwmAnalystPortal({
                         </div>
                         <div className='min-w-0 text-left sm:shrink-0 sm:text-right'>
                             <p className='text-[10px] font-semibold uppercase text-ui-primary'>Monitoring state</p>
-                            <p className='mt-1 text-sm font-semibold text-ui-text'>{activeSourceCount}/{sourceCount} sources active</p>
+                            <p className='mt-1 text-sm font-semibold text-ui-text'>{activeSourceCount}/{sourceCount} shared sources active</p>
                         </div>
                     </div>
                 </div>
@@ -778,7 +778,7 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
 }) {
     const cells = [
         { label: 'Watchlist', value: `${watchTermCount}`, detail: watchTermCount ? 'terms scoped' : 'add terms', tone: watchTermCount ? 'ready' : 'blocked' },
-        { label: 'Sources', value: `${activeSourceCount}/${sourceCount}`, detail: sourceCount ? 'active coverage' : 'load source pack', tone: activeSourceCount ? 'ready' : 'blocked' },
+        { label: 'Sources', value: `${activeSourceCount}/${sourceCount}`, detail: sourceCount ? 'shared active coverage' : 'load source pack', tone: activeSourceCount ? 'ready' : 'blocked' },
         { label: 'Captures', value: `${captureCount}`, detail: latestRunLabel, tone: captureCount ? 'ready' : 'waiting' },
         { label: 'Matches', value: `${watchlistMatchCount}`, detail: alertCount ? `${alertCount} alerts` : 'watching', tone: alertCount ? 'ready' : 'waiting' },
         { label: 'Cases', value: `${caseCount}`, detail: caseCount ? 'linked' : 'open from alert', tone: caseCount ? 'ready' : alertCount ? 'waiting' : 'blocked' },
@@ -2094,9 +2094,9 @@ function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, data
         },
         {
             stage: 'Collection',
-            state: hasError ? 'Live data unavailable' : latestCaptures.length ? `${latestCaptures.length} accepted capture${latestCaptures.length === 1 ? '' : 's'}` : allLive ? 'No retained match yet' : 'Loading retained evidence',
+            state: hasError ? 'Live data unavailable' : latestCaptures.length ? `${latestCaptures.length} shared capture${latestCaptures.length === 1 ? '' : 's'}` : allLive ? 'No retained match yet' : 'Loading retained evidence',
             action: 'Run collection',
-            detail: newestCapture ? `${newestCapture.sourceName} ${relativeTimeLabel(newestCapture.collectedAt)}` : hasError ? healthRows.filter(item => item.state === 'error').map(item => item.detail).join(' ') : 'Approved source records appear after duplicate and safety checks.',
+            detail: newestCapture ? `Shared source: ${newestCapture.sourceName} ${relativeTimeLabel(newestCapture.collectedAt)}` : hasError ? healthRows.filter(item => item.state === 'error').map(item => item.detail).join(' ') : 'Approved shared-source records appear after duplicate and safety checks.',
         },
         {
             stage: 'Case link',
@@ -2153,8 +2153,8 @@ function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, data
             </section>
             <div className='rounded-lg border border-ui-border bg-ui-panel'>
                 <div className='border-b border-ui-border px-4 py-3'>
-                    <h3 className='text-sm font-semibold text-ui-text'>Recent capture review</h3>
-                    <p className='mt-0.5 text-xs text-ui-muted'>Useful for tuning watchlist terms without exposing full source rows.</p>
+                    <h3 className='text-sm font-semibold text-ui-text'>Recent shared capture review</h3>
+                    <p className='mt-0.5 text-xs text-ui-muted'>Shared-source evidence for tuning watchlist terms without exposing full source rows.</p>
                 </div>
                 <div className='grid gap-2 p-4'>
                     {latestCaptures.slice(0, DWM_RECOVERY_PREVIEW_ROWS).map(capture => (
@@ -2167,7 +2167,7 @@ function NoCaseWorkspace({ latestCaptures, workflowActions, watchTermCount, data
                             <p className='mt-2 line-clamp-2 text-sm leading-6 text-ui-muted'>{capture.safeExcerpt}</p>
                         </div>
                     ))}
-                    {!latestCaptures.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Collectors are checking sources. Accepted captures appear here after duplicate and safety checks.</p>}
+                    {!latestCaptures.length && <p className='rounded-lg border border-dashed border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>Collectors are checking sources. Shared captures appear here after duplicate and safety checks.</p>}
                 </div>
             </div>
         </div>
