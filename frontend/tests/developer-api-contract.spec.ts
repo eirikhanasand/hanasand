@@ -20,4 +20,6 @@ test('developer reference is rendered from the canonical versioned contract', as
     expect(openApiProxy).toContain('\'cache-control\': \'no-store, max-age=0\'')
     expect(openApiProxy).toContain('openapi_unavailable')
     expect(copyButton).toContain('navigator.clipboard.writeText(value)')
+    expect(copyButton).toContain('document.execCommand(\'copy\')')
+    expect(copyButton).toContain('setCopied(true)')
 })

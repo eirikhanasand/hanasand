@@ -6,7 +6,19 @@ import { useState } from 'react'
 export default function CopyCodeButton({ value, label = 'Copy' }: { value: string, label?: string }) {
     const [copied, setCopied] = useState(false)
     async function copy() {
-        await navigator.clipboard.writeText(value)
+        try {
+            await navigator.clipboard.writeText(value)
+        } catch {
+            const input = document.createElement('textarea')
+            input.value = value
+            input.style.position = 'fixed'
+            input.style.opacity = '0'
+            document.body.appendChild(input)
+            input.select()
+            const copied = document.execCommand('copy')
+            input.remove()
+            if (!copied) return
+        }
         setCopied(true)
         window.setTimeout(() => setCopied(false), 1800)
     }
