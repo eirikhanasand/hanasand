@@ -675,7 +675,7 @@ describe("dwm source requests", () => {
       collectionTrigger: { queued: false, unsafeJobQueued: false }
     });
 
-    const inventory = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?full=true&watchlist=APT29"), options);
+    const inventory = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?full=true&watchlist=APT29&tenantId=tenant_action"), options);
     const inventoryBody = await inventory.json() as any;
     expect(inventory.status).toBe(200);
     expect(inventoryBody.sourcePackWorker.sourceHealth).toMatchObject({
@@ -5111,7 +5111,7 @@ describe("dwm source requests", () => {
     });
   });
 
-  test("applies dark-web seed packs only when metadata-only approval is explicit", async () => {
+  test("rejects obsolete generated source-pack activation", async () => {
     const store = new InMemoryScraperStore();
     const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
@@ -5125,13 +5125,8 @@ describe("dwm source requests", () => {
     }), { store, frontier: new FocusedFrontier() });
     const body = await response.json() as any;
 
-    expect(response.status).toBe(201);
-    expect(body.summary.darkwebMetadataCreated).toBe(4);
-    expect(body.createdCandidates).toHaveLength(4);
-    expect(body.createdCandidates.every((candidate: any) => candidate.family === "darkweb_metadata")).toBe(true);
-    expect(body.createdCandidates.every((candidate: any) => candidate.policyBoundary.metadataOnly === true)).toBe(true);
-    expect(store.listSources()).toHaveLength(4);
-    expect(store.listSources().every((source) => source.status === "active")).toBe(true);
-    expect(store.listSources().every((source) => source.governance?.metadataOnly === true)).toBe(true);
+    expect(response.status).toBe(400);
+    expect(body.error.code).toBe("generated_source_packs_removed");
+    expect(store.listSources()).toHaveLength(0);
   });
 });

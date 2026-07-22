@@ -10,11 +10,21 @@ const telegramSource: SourceRecord = {
   name: "Lumma broker public channel",
   type: "telegram_public",
   url: "https://t.me/lumma_broker_room",
-  accessMethod: "official_api",
+  accessMethod: "public_http",
   status: "active",
   risk: "medium",
   trustScore: 0.82,
   legalNotes: "Public Telegram messages only.",
+  approvedAt: "2026-06-26T00:00:00.000Z",
+  approvedBy: "source-reviewer",
+  governance: {
+    approvalRequired: true,
+    approvalState: "approved",
+    metadataOnly: false,
+    approvedAt: "2026-06-26T00:00:00.000Z",
+    approvedBy: "source-reviewer"
+  },
+  metadata: { productionCollection: true, collectionMode: "public_web_preview" },
   tenantId: "tenant_acme",
   createdAt: "2026-06-27T00:00:00.000Z",
   updatedAt: "2026-06-27T00:00:00.000Z"
@@ -30,6 +40,15 @@ const darkwebSource: SourceRecord = {
   risk: "high",
   trustScore: 0.76,
   legalNotes: "Metadata-only collection; payload paths blocked.",
+  approvedAt: "2026-06-26T00:00:00.000Z",
+  approvedBy: "source-reviewer",
+  governance: {
+    approvalRequired: true,
+    approvalState: "approved",
+    metadataOnly: true,
+    approvedAt: "2026-06-26T00:00:00.000Z",
+    approvedBy: "source-reviewer"
+  },
   tenantId: "tenant_acme",
   createdAt: "2026-06-27T00:00:00.000Z",
   updatedAt: "2026-06-27T00:00:00.000Z"
@@ -165,7 +184,7 @@ describe("dwm product snapshot", () => {
     expect(snapshot.alerts[0].provenance.matchBasis).toBe("watchlist_capture_text");
     expect(snapshot.alerts[0].recommendedRoute).toBe("identity_response");
     expect(snapshot.alerts[0].webhookDelivery.recommendedRoute).toBe("identity_response");
-    expect(snapshot.sourceInventory.counts.catalogTelegramPublic).toBeGreaterThanOrEqual(100);
+    expect(snapshot.sourceInventory.counts).toMatchObject({ registeredTelegramPublic: 1, registeredDarkwebMetadata: 1, registeredActiveOrCanary: 2 });
     expect(snapshot.sourceInventory.reportingHooks.sourceInventoryRoute).toBe("/v1/dwm/source-inventory");
     expect(snapshot.alerts.some((alert) => alert.sourceFamily === "darkweb_metadata")).toBe(true);
     const darkwebAlert = snapshot.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata");

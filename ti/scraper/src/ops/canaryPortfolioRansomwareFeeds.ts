@@ -1,6 +1,5 @@
 // @ts-nocheck
 export const RANSOMWARE_CANARY_FEEDS = [
-  src("src_canary_ransomwarelive", "Ransomware.live Victim Feed", "rss", "https://www.ransomware.live/rss.xml", ["ransomware", "extortion", "victim", "leak"], "public_metadata"),
   src("src_canary_ransomwarelive_victims_json", "ransomware.live Victims JSON", "json_api", "https://data.ransomware.live/victims.json", ["ransomware", "extortion", "victim", "leak"], "public_metadata"),
   src("src_canary_ransomwarelive_groups_json", "ransomware.live Groups JSON", "json_api", "https://data.ransomware.live/groups.json", ["ransomware", "extortion", "actor", "leak site"], "public_metadata"),
   src("src_canary_ransomlook_recent", "RansomLook Recent", "json_api", "https://www.ransomlook.io/api/recent", ["ransomware", "extortion", "victim", "leak"], "public_metadata"),

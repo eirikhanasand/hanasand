@@ -4,9 +4,9 @@ import { saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.t
 import { nowIso, stableId } from "../utils.ts";
 import { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts";
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
-import { detachedState, externalize, fetchItems, health, maxItemsFor, taskFor } from "./canaryHelpers.ts";
+import { detachedState, externalize, fetchItems, health, maxItemsFor, tasksForSource } from "./canaryHelpers.ts";
 import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
-import { evaluateSourceForCollection } from "../policy/collectionPolicy.ts";
+import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { buildRawCapture } from "../pipeline/pipelineCapture.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
@@ -21,7 +21,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const due = options.store.listSources()
     .filter((s: any) => (!options.tenantId || s.tenantId === options.tenantId) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt))
     .slice(0, maxSources);
-  const planId = stableId("canary-plan", generatedAt), runId = stableId("canary-run", planId), tasks = due.map((s: any) => taskFor(s, generatedAt, runId, maxBytes));
+  const planId = stableId("canary-plan", generatedAt), runId = stableId("canary-run", planId), tasks = due.flatMap((s: any) => tasksForSource(s, generatedAt, runId, maxBytes));
   options.store.savePlan?.({ id: planId, requestId: "req_public_canary", createdAt: generatedAt, tasks, request: { query: canaryQueries }, reviewRequired: [], rejected: activation.rejected, audit: [] });
   options.store.saveRun?.({ id: runId, planId, requestId: "req_public_canary", status: "running", createdAt: generatedAt, startedAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: 0, rejectedSourceCount: activation.rejected.length, captureCount: 0, incidentCount: 0 });
   for (const task of tasks) options.frontier.enqueueTask(task);
@@ -63,14 +63,14 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
   const taskMetrics: any = { itemCount: 0, captureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, actorIds: new Set<string>(), publishedAt: [] };
   try {
     if (!source) throw new Error("source missing");
-    const collectedItems = await fetchItems(source, task, fetcher, mode, generatedAt, maxBytes, options.timeoutMs ?? 12_000, itemLimit(source, options));
+    const collectedItems = await fetchItems(source, task, fetcher, mode, generatedAt, maxBytes, options.timeoutMs ?? 12_000, itemLimit(source, options, task));
     taskMetrics.itemCount = collectedItems.length;
     taskMetrics.httpStatus = collectedItems[0]?.metadata?.fetchProvenance?.httpStatus;
     taskMetrics.parserWarningCount = collectedItems.reduce((total: number, item: any) => total + (Array.isArray(item.metadata?.parserWarnings) ? item.metadata.parserWarnings.length : 0), 0);
     taskMetrics.publishedAt = collectedItems.map((item: any) => item.publishedAt).filter(Boolean);
     const sellableItems = collectedItems.filter((collected: any) => ["cisa_kev", "ransomware_group_metadata", "mitre_actor_catalog", "ransomware_operation_catalog", "ransomware_operation_activity_evidence"].includes(collected.metadata?.extractionProfile) || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: source.metadata?.queryClass === "threat-intel" ? 365 : 30 }));
     counters.skippedLowValueCount += collectedItems.length - sellableItems.length;
-    for (const collected of sellableItems.slice(0, itemLimit(source, options))) {
+    for (const collected of sellableItems.slice(0, itemLimit(source, options, task))) {
       collected.tenantId = source.tenantId;
       collected.metadata = { ...collected.metadata, runId, queryTerms: task.planning?.queryTerms ?? [], sellableCandidate: true, sellableReason: sellableReason(collected.rawText) };
       const actorIdentityCatalogSnapshot = collected.metadata?.actorIdentityCatalogSnapshot ?? collected.metadata?.ransomwareOperationCatalogSnapshot;
@@ -95,7 +95,7 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     counters.completedTaskCount++; options.frontier.complete(task);
     const checkedAt = options.now?.() ?? nowIso(), useful = taskMetrics.captureCount > 0 || taskMetrics.incidentCount > 0;
     options.store.saveSourceHealthObservation?.(sourceHealthObservation(source, task, runId, checkedAt, Date.now() - startedMs, taskMetrics, { success: true, useful }));
-    options.store.saveSource({ ...source, health: { ...(source.health ?? {}), status: taskMetrics.parserWarningCount ? "degraded" : "healthy", checkedAt, lastSuccessAt: checkedAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: taskMetrics.parserWarningCount ? "warnings" : "healthy", lastError: undefined }, crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + (source.crawlFrequencySeconds ?? 3600) * 1000).toISOString(), backoffUntil: undefined, lastError: undefined }, metadata: { ...(source.metadata ?? {}), lastCanaryFetchMode: mode }, updatedAt: checkedAt });
+    options.store.saveSource({ ...source, lastSeenAt: checkedAt, health: { ...(source.health ?? {}), status: taskMetrics.parserWarningCount ? "degraded" : "healthy", checkedAt, lastSuccessAt: checkedAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: taskMetrics.parserWarningCount ? "warnings" : "healthy", lastError: undefined }, crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + (source.crawlFrequencySeconds ?? 3600) * 1000).toISOString(), backoffUntil: undefined, lastError: undefined }, metadata: { ...(source.metadata ?? {}), lastCanaryFetchMode: mode }, updatedAt: checkedAt });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error); taskMetrics.httpStatus = Number.isInteger((error as any)?.httpStatus) ? (error as any).httpStatus : taskMetrics.httpStatus; counters.failedTaskCount++; errors.push({ taskId: task.id, sourceId: task.sourceId, message });
     const ack = options.frontier.fail(task, new Date(generatedAt), message); if (ack?.status === "retry_scheduled") counters.retryScheduledCount++; if (ack?.status === "retry_exhausted") counters.retryExhaustedCount++;
@@ -149,16 +149,11 @@ function sourceHealthObservation(source: any, task: any, runId: string, checkedA
   };
 }
 function failureCategory(message?: string) { return !message ? undefined : /timeout|abort/i.test(message) ? "timeout" : /policy|blocked|robots/i.test(message) ? "policy_blocked" : /unsupported media/i.test(message) ? "unsupported_media" : /HTTP 429|rate.?limit/i.test(message) ? "rate_limited" : /HTTP 5\d\d/i.test(message) ? "upstream_failure" : /HTTP 4\d\d/i.test(message) ? "source_rejected" : /parse|xml|json|html/i.test(message) ? "parser_failure" : /fetch|network|dns|connect/i.test(message) ? "network_failure" : "collection_failure"; }
-function itemLimit(source: any, options: any) {
-  return maxItemsFor(source) ?? Math.max(1, Math.min(Number(options.maxItemsPerTask ?? 40), Number(source.metadata?.maxItemsPerProcess ?? Infinity)));
+function itemLimit(source: any, options: any, task?: any) {
+  return maxItemsFor(source, task) ?? Math.max(1, Math.min(Number(options.maxItemsPerTask ?? 40), Number(source.metadata?.maxItemsPerProcess ?? Infinity)));
 }
 function isProductionCollectionSource(source: any, generatedAt: string) {
-  if (!["active", "canary"].includes(source.status)) return false;
-  if (String(source.type).endsWith("_metadata") || source.governance?.metadataOnly && source.accessMethod !== "public_http" || ["high", "restricted"].includes(source.risk)) return false;
-  if (source.type === "telegram_public" && (source.accessMethod !== "public_http" || source.metadata?.collectionMode !== "public_web_preview")) return false;
-  if (!/^https?:\/\//.test(source.url)) return false;
-  if (source.metadata?.productionCollection === false) return false;
-  if (!evaluateSourceForCollection(source).allowed) return false;
+  if (sourceCollectionLane(source) !== "public") return false;
   const nextEligibleAt = source.crawlState?.nextEligibleAt;
   return !nextEligibleAt || Date.parse(nextEligibleAt) <= Date.parse(generatedAt);
 }

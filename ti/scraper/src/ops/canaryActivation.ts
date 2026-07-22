@@ -8,6 +8,9 @@ export function activatePublicCanarySources(input: any): CanaryActivationResult 
   const activated: any[] = [], alreadyActive: string[] = [], rejected: any[] = [];
   for (const source of input.portfolio ?? PUBLIC_CANARY_SOURCE_PORTFOLIO) {
     const existing = input.store.getSource?.(source.id);
+    const canonical = input.store.listSources().find((record: any) => record.id !== source.id && record.type === source.type && normalizedUrl(record.url) === normalizedUrl(source.url));
+    if (canonical) { alreadyActive.push(canonical.id); continue; }
+    if (["retired", "rejected", "disabled"].includes(existing?.status)) { rejected.push({ sourceId: source.id, reason: `source is ${existing.status}` }); continue; }
     const next = { ...(existing ?? source), tenantId: input.tenantId ?? source.tenantId, status: "active", approvedAt: existing?.approvedAt ?? generatedAt, approvedBy: existing?.approvedBy ?? operatorId, updatedAt: generatedAt, metadata: { ...(existing?.metadata ?? source.metadata), canaryPortfolio: true } };
     if (!/^https?:\/\//.test(next.url)) { rejected.push({ sourceId: next.id, reason: "public http(s) only" }); continue; }
     if (existing?.status === "active") { alreadyActive.push(next.id); continue; }
@@ -15,6 +18,16 @@ export function activatePublicCanarySources(input: any): CanaryActivationResult 
     activated.push({ sourceId: next.id, sourceName: next.name, from: existing?.status ?? source.status, to: "active" });
   }
   return { generatedAt, operatorId, activated, alreadyActive, rejected };
+}
+
+function normalizedUrl(value: string) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    return url.toString().replace(/\/+$/, "").toLowerCase();
+  } catch {
+    return String(value ?? "").trim().replace(/\/+$/, "").toLowerCase();
+  }
 }
 
 export function pausePublicCanarySources(input: any): CanaryDeactivationResult {

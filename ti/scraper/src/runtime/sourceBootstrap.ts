@@ -6,18 +6,17 @@ import { importSeedBundle, seedDuplicateKey } from "../registry/sourceSeeds.ts";
 import { importRestrictedMetadataSeedBundle, isRestrictedMetadataSeedBundle } from "../registry/restrictedSourceSeeds.ts";
 import type { SourceRecord } from "../types.ts";
 import { nowIso } from "../utils.ts";
+import { isExecutableSource } from "../policy/collectionPolicy.ts";
 
 export type RuntimeSourceBootstrapResult = {
   generatedAt: string;
-  sourceTarget: number;
   seedPaths: string[];
   importedSourceCount: number;
   updatedSourceCount: number;
   skippedSourceCount: number;
   activeSourceCount: number;
+  retainedSourceCount: number;
   totalSourceCount: number;
-  shortfall: number;
-  blocker?: string;
   errors: Array<{ path: string; message: string }>;
 };
 
@@ -30,16 +29,15 @@ type SourceStore = {
 type RuntimeSourceBootstrapInput = {
   seedPaths?: string[];
   generatedAt?: string;
-  sourceTarget?: number;
   batched?: boolean;
 };
 
 const defaultSeedPaths = [
   "public_cti_sources.json",
   "verified_long_lived_sources.json",
+  "verified_query_providers.json",
   "public_cti_starter_pack.json",
   "public_telegram_channel_packs.json",
-  "public_threat_intel_generated_sources.json",
   "restricted_metadata_source_packs.json"
 ].map((name) => join(dirname(fileURLToPath(import.meta.url)), "..", "..", "seeds", name));
 
@@ -49,13 +47,7 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
   }
 
   const generatedAt = input.generatedAt ?? nowIso();
-  const sourceTarget = input.sourceTarget ?? Number(Bun.env.TI_SOURCE_TARGET_COUNT ?? "1000");
   const seedPaths = input.seedPaths ?? configuredSeedPaths();
-  for (const source of store.listSources()) {
-    if (generatedGdeltHold(source) && (source.status !== "candidate" || source.metadata?.productionCollection !== false)) {
-      store.saveSource(holdGeneratedGdeltSource(source, generatedAt));
-    }
-  }
   const existingByKey = new Map(store.listSources().map((source) => [seedDuplicateKey(source), source]));
   const errors: RuntimeSourceBootstrapResult["errors"] = [];
   let importedSourceCount = 0;
@@ -117,19 +109,17 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
   }
 
   const sources = store.listSources();
-  const activeSourceCount = sources.filter((source) => source.status === "active" || source.status === "canary").length;
-  const shortfall = Math.max(0, sourceTarget - sources.length);
+  const activeSourceCount = sources.filter(isExecutableSource).length;
+  const retainedSourceCount = activeSourceCount;
   return {
     generatedAt,
-    sourceTarget,
     seedPaths,
     importedSourceCount,
     updatedSourceCount,
     skippedSourceCount,
     activeSourceCount,
+    retainedSourceCount,
     totalSourceCount: sources.length,
-    shortfall,
-    blocker: shortfall > 0 ? `source_registry_shortfall:${sources.length}/${sourceTarget}` : undefined,
     errors
   };
 }
@@ -219,13 +209,13 @@ function configuredSeedPaths() {
 }
 
 function shouldImportSource(source: SourceRecord) {
+  if (source.id === "src_seed_ransomwarelive_groups") return false;
   if (source.risk === "high" || source.risk === "restricted") return Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES === "true";
   if (source.accessMethod === "api_key" || source.accessMethod === "api_key_paid_plan") return Bun.env.TI_IMPORT_CREDENTIAL_REQUIRED_SOURCES === "true";
   return true;
 }
 
 function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedAt: string, restricted = false): SourceRecord {
-  if (generatedGdeltHold(source)) return holdGeneratedGdeltSource(source, generatedAt, seedPath);
   const activate = !restricted && Bun.env.TI_SOURCE_SEED_ACTIVATE !== "false" && source.risk !== "medium" && source.risk !== "high" && source.risk !== "restricted";
   const transportCanary = restricted && source.metadata?.transportCanary === true;
   return {
@@ -237,37 +227,13 @@ function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedA
       ...(source.metadata ?? {}),
       productionCollection: !restricted || transportCanary,
       canaryPortfolio: !restricted,
-      restrictedMetadataCandidate: restricted || undefined,
+      ...(restricted ? { restrictedMetadataCandidate: true } : {}),
       sourceSeedPath: seedPath,
       sourceImportedAt: generatedAt
     },
     crawlState: {
       ...(source.crawlState ?? {}),
       retryCount: source.crawlState?.retryCount ?? 0
-    }
-  };
-}
-
-function generatedGdeltHold(source: SourceRecord) {
-  try {
-    return source.metadata?.generatedPublicSourcePack === true && new URL(source.url).hostname === "api.gdeltproject.org";
-  } catch {
-    return false;
-  }
-}
-
-function holdGeneratedGdeltSource(source: SourceRecord, generatedAt: string, seedPath?: string): SourceRecord {
-  return {
-    ...source,
-    status: "candidate",
-    updatedAt: generatedAt,
-    metadata: {
-      ...(source.metadata ?? {}),
-      productionCollection: false,
-      collectionHold: "provider_rate_limit_requires_bounded_collection_plan",
-      collectionHoldAt: generatedAt,
-      sourceSeedPath: seedPath ?? source.metadata?.sourceSeedPath,
-      sourceImportedAt: seedPath ? generatedAt : source.metadata?.sourceImportedAt
     }
   };
 }

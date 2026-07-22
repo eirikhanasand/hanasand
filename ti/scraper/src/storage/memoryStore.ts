@@ -43,11 +43,16 @@ export class InMemoryScraperStore implements ScraperStore {
   listCaptures() { return mapValues(this.captures); }
   savePipelineResult(result: PipelineResult): PipelineResult {
     const firstVisibleAt = result.capture.firstVisibleAt ?? nowIso();
-    const capture = this.saveCapture({ ...result.capture, processedAt: result.capture.processedAt ?? firstVisibleAt, firstVisibleAt });
-    const previousIncident = result.incident ? this.getIncident(result.incident.id) : undefined;
+    const capture = this.saveCaptureWithDedupe({ ...result.capture, processedAt: result.capture.processedAt ?? firstVisibleAt, firstVisibleAt }).capture;
+    const linkedIncident = this.listEvidenceLinks()
+      .filter((record: any) => record.captureId === capture.id && record.subjectType === "incident" && record.relationship === "supports")
+      .map((record: any) => this.getIncident(record.subjectId))
+      .find(Boolean);
+    const incidentInput = result.incident && linkedIncident ? { ...result.incident, id: linkedIncident.id } : result.incident;
+    const previousIncident = incidentInput ? this.getIncident(incidentInput.id) : undefined;
     const reporting = mergeReportTimeline(previousIncident, reportTimeline(capture, this.getSource(capture.sourceId)));
-    const incident = result.incident ? this.saveIncident({
-      ...result.incident,
+    const incident = incidentInput ? this.saveIncident({
+      ...incidentInput,
       tenantId: capture.tenantId,
       sourceId: capture.sourceId,
       captureId: capture.id,
@@ -64,8 +69,9 @@ export class InMemoryScraperStore implements ScraperStore {
     for (const entity of entities) this.saveExtractedEntity(entity);
     for (const indicator of indicators) this.saveIndicator(indicator);
     if (incident) {
+      const relationshipExists = this.listEvidenceLinks().some((record: any) => record.captureId === capture.id && record.subjectType === "incident" && record.subjectId === incident.id && record.relationship === "supports");
       this.saveEvidenceLink(link(capture, "incident", incident.id, "supports", incident.confidence, extractorVersion));
-      this.recordExtractionDelta("added", capture, incident.id);
+      if (!relationshipExists) this.recordExtractionDelta("added", capture, incident.id);
     }
     const actorEntities = entities.filter((entity: any) => entity.type === "actor" || entity.type === "ransomware_family");
     const characterize = new Set(actorEntities.map(normalized)).size === 1;

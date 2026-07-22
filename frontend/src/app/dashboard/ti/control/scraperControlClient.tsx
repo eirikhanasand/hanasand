@@ -458,7 +458,7 @@ export default function TiScraperControlClient() {
                     <section className='grid gap-2 sm:grid-cols-2 xl:grid-cols-5'>
                         <Metric title='Scraper' value={snapshot?.health ? 'Reachable' : loading ? 'Loading' : 'Connecting'} detail={`${healthyEndpoints}/${Math.max(endpointRows.length, 1)} checks healthy`} icon={<Gauge className='h-4 w-4' />} tone={snapshot?.health ? 'ok' : 'bad'} />
                         <Metric title='Queue' value={String(queueCount)} detail='frontier tasks visible to workers' icon={<Workflow className='h-4 w-4' />} tone={queueCount > 200 ? 'warn' : 'ok'} />
-                        <Metric title='Daily coverage' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} detail={`${scheduler.dailyAttempted} attempted, ${scheduler.shortfall} source shortfall`} icon={<UserRound className='h-4 w-4' />} tone={scheduler.dailySources && scheduler.dailyCovered < scheduler.dailySources ? 'warn' : 'ok'} />
+                        <Metric title='Daily coverage' value={`${scheduler.dailyCovered}/${scheduler.dailySources}`} detail={`${scheduler.dailyAttempted} attempted across retained executable sources`} icon={<UserRound className='h-4 w-4' />} tone={scheduler.dailySources && scheduler.dailyCovered < scheduler.dailySources ? 'warn' : 'ok'} />
                         <Metric title='AI parser' value={scheduler.aiStatus} detail={scheduler.aiDetail} icon={<DatabaseZap className='h-4 w-4' />} tone={scheduler.aiReady ? 'ok' : 'warn'} />
                         <Metric title='Alerts' value={String(sourceGrowth.alertsGenerated)} detail={`${sourceGrowth.watchlistMatches} matches, ${sourceGrowth.webhookDeliveries} deliveries`} icon={<Clock3 className='h-4 w-4' />} tone={sourceGrowth.alertsGenerated ? 'ok' : 'hold'} />
                     </section>
@@ -793,7 +793,6 @@ function schedulerKpis(snapshot: ControlSnapshot | null) {
     const reviewExposureCount = numberFrom(parser.reviewExposureCount) ?? 0
     return {
         totalSources: numberFrom(coverage.totalSourceCount) ?? 0,
-        shortfall: numberFrom(coverage.sourceShortfall) ?? 0,
         dailySources: numberFrom(coverage.dailySourceCount) ?? 0,
         dailyAttempted: numberFrom(coverage.dailyAttemptedCount) ?? 0,
         dailyCovered: numberFrom(coverage.dailyCoveredCount) ?? 0,

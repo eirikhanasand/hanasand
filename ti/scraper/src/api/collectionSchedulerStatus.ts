@@ -3,19 +3,30 @@ import { json, readJson } from "./http.ts";
 import { exposureClaimsFromStore } from "./exposureQueueRoutes.ts";
 import { nowIso } from "../utils.ts";
 import { authenticateOperatorRequest } from "./requestAuthentication.ts";
+import { isExecutableSource } from "../policy/collectionPolicy.ts";
+import { resolveTenantScope } from "./tenantScope.ts";
 
-export function collectionSchedulerStatus(options: ApiServerOptions, lastControlAction?: Record<string, unknown>) {
+export function collectionSchedulerStatus(options: ApiServerOptions, lastControlAction?: Record<string, unknown>, tenantId?: string) {
   const generatedAt = nowIso();
-  const sources = options.store.listSources();
-  const runs = options.store.listRuns?.() ?? [];
+  const inScope = (record: any) => tenantId === undefined || record.tenantId === undefined || record.tenantId === tenantId;
+  const sources = options.store.listSources().filter(inScope);
+  const sourceIds = new Set(sources.map((source: any) => source.id));
+  const observations = (options.store.listSourceHealthObservations?.() ?? []).filter((record: any) => sourceIds.has(record.sourceId));
+  const captures = (options.store.listCaptures?.() ?? []).filter((record: any) => sourceIds.has(record.sourceId));
+  const runs = (options.store.listRuns?.() ?? []).filter(inScope);
   const latestRun = [...runs].filter((run: any) => run.requestId === "req_public_canary").sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
   const successfulRuns = runs.filter((run: any) => run.requestId === "req_public_canary" && ["completed", "degraded"].includes(run.status));
   const lastSuccessfulRun = [...successfulRuns].sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
-  const activeSources = sources.filter((source: any) => source.status === "active" || source.status === "canary");
+  const retainedSources = sources.filter(isExecutableSource);
+  const activeSources = retainedSources;
   const dailySources = activeSources.filter((source: any) => Number(source.crawlFrequencySeconds ?? 86400) <= 86400);
-  const dailyCovered = dailySources.filter((source: any) => withinDailyWindow(source.crawlState?.lastCollectedAt, generatedAt));
-  const dailyAttempted = dailySources.filter((source: any) => withinDailyWindow(source.crawlState?.lastCollectedAt, generatedAt) || withinDailyWindow(source.crawlState?.lastErrorAt, generatedAt));
-  const exposureItems = exposureClaimsFromStore(options.store, "");
+  const observationsBySource = groupBySource(observations);
+  const capturesBySource = groupBySource(captures);
+  const dailyAttempted = dailySources.filter((source: any) => observationsBySource.get(source.id)?.some((row: any) => withinDailyWindow(row.checkedAt, generatedAt)));
+  const dailyCovered = dailySources.filter((source: any) => observationsBySource.get(source.id)?.some((row: any) => row.success === true && withinDailyWindow(row.checkedAt, generatedAt)));
+  const exposureItems = tenantId === undefined
+    ? exposureClaimsFromStore(options.store, "")
+    : exposureClaimsFromStore(options.store, "", { tenantId });
   const canaryState = readCanaryState(options.canaryLoop);
   const schedulerEnabled = canaryState?.enabled ?? Bun.env.TI_CANARY_ENABLED !== "false";
   const intervalSeconds = canaryState?.intervalSeconds ?? Number(Bun.env.TI_CANARY_INTERVAL_SECONDS ?? "300");
@@ -26,14 +37,11 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
     canaryNextCycleAt: canaryState?.nextCycleAt,
     nextEligibleAt: nextEligibleSourceAt(activeSources)
   });
-  const sourceTarget = Number((options.sourceBootstrap as any)?.sourceTarget ?? Bun.env.TI_SOURCE_TARGET_COUNT ?? "1000");
   const totalSourceCount = sources.length;
-  const sourceShortfall = Math.max(0, sourceTarget - totalSourceCount);
   const deadLetters = options.frontier.deadLetterSnapshot?.() ?? [];
-  const sourceRows = activeSources.slice(0, 250).map((source: any) => describeSource(source, generatedAt));
+  const sourceRows = activeSources.map((source: any) => describeSource(source, generatedAt, observationsBySource.get(source.id) ?? [], capturesBySource.get(source.id) ?? []));
   const control = schedulerControls({ schedulerEnabled, canaryLoop: options.canaryLoop, activeSourceCount: activeSources.length });
   const operationalBlockers = schedulerBlockers({
-    sourceShortfall,
     activeSourceCount: activeSources.length,
     lastSuccessfulRun,
     dailySourceCount: dailySources.length,
@@ -46,15 +54,24 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
   return json({
     schemaVersion: "ti.collection_scheduler_status.v1",
     generatedAt,
+    tenantId: tenantId ?? "all",
     decision: operationalBlockers.some((blocker) => blocker.severity === "blocker") ? "not_operational" : operationalBlockers.length ? "degraded" : "operational",
     operationalBlockers,
     lastControlAction,
     sourceBootstrap: options.sourceBootstrap,
     sourceCoverage: {
-      sourceTarget,
       totalSourceCount,
-      sourceShortfall,
+      retainedSourceCount: retainedSources.length,
+      inactiveSourceCount: totalSourceCount - retainedSources.length,
+      retiredSourceCount: sources.filter((source: any) => ["retired", "rejected", "disabled"].includes(source.status)).length,
       activeSourceCount: activeSources.length,
+      checkedSourceCount: activeSources.filter((source: any) => (observationsBySource.get(source.id)?.length ?? 0) > 0).length,
+      successfulSourceCount: activeSources.filter((source: any) => observationsBySource.get(source.id)?.some((row: any) => row.success === true)).length,
+      usefulSourceCount: activeSources.filter((source: any) => observationsBySource.get(source.id)?.some((row: any) => row.useful === true)).length,
+      captureProducingSourceCount: activeSources.filter((source: any) => (capturesBySource.get(source.id)?.length ?? 0) > 0).length,
+      recentlySeenSourceCount: activeSources.filter((source: any) => withinDailyWindow(source.lastSeenAt, generatedAt)).length,
+      backoffSourceCount: activeSources.filter((source: any) => Date.parse(String(source.crawlState?.backoffUntil ?? "")) > Date.parse(generatedAt)).length,
+      neverObservedSourceCount: activeSources.filter((source: any) => (observationsBySource.get(source.id)?.length ?? 0) === 0).length,
       dailySourceCount: dailySources.length,
       dailyAttemptedCount: dailyAttempted.length,
       dailyAttemptCoverageRatio: dailySources.length ? dailyAttempted.length / dailySources.length : 0,
@@ -107,6 +124,8 @@ export async function updateCollectionSchedulerControl(request: Request, options
   const body = await readJson(request);
   const authentication = await authenticateOperatorRequest(request, options);
   if (authentication.error) return authentication.error;
+  const scope = resolveTenantScope(request, new URL(request.url), body.tenantId);
+  if (scope.error) return scope.error;
   const action = body.action === "resume" || body.enabled === true
     ? "resume"
     : body.action === "pause" || body.enabled === false
@@ -141,7 +160,7 @@ export async function updateCollectionSchedulerControl(request: Request, options
     approvedBy: authentication.identity?.id ?? (typeof body.approvedBy === "string" ? body.approvedBy : undefined),
     requestedAt: nowIso(),
     applied: true
-  });
+  }, scope.tenantId);
 }
 
 function readCanaryState(canaryLoop: unknown) {
@@ -166,10 +185,12 @@ function nextSchedulerRunAt(input: { generatedAt: string; enabled: boolean; inte
   return new Date(Date.parse(input.generatedAt) + intervalMs).toISOString();
 }
 
-function describeSource(source: any, generatedAt: string) {
-  const lastCollectedAt = source.crawlState?.lastCollectedAt;
-  const lastFailureAt = source.crawlState?.lastErrorAt ?? source.health?.lastFailureAt;
-  const lastFailureReason = source.crawlState?.lastError ?? source.health?.lastFailureReason ?? source.health?.message;
+function describeSource(source: any, generatedAt: string, observations: any[], captures: any[]) {
+  const latest = [...observations].sort((a, b) => String(b.checkedAt).localeCompare(String(a.checkedAt)))[0];
+  const lastCollectedAt = [...observations].filter((row) => row.success === true).map((row) => row.checkedAt).sort().at(-1) ?? source.crawlState?.lastCollectedAt;
+  const lastFailure = [...observations].filter((row) => row.success === false).sort((a, b) => String(b.checkedAt).localeCompare(String(a.checkedAt)))[0];
+  const lastFailureAt = lastFailure?.checkedAt ?? source.crawlState?.lastErrorAt ?? source.health?.lastFailureAt;
+  const lastFailureReason = lastFailure?.failureReason ?? source.crawlState?.lastError ?? source.health?.lastFailureReason ?? source.health?.message;
   const retryCount = Number(source.crawlState?.retryCount ?? 0);
   const backoffUntil = source.crawlState?.backoffUntil;
   const dailyCovered = withinDailyWindow(lastCollectedAt, generatedAt);
@@ -193,6 +214,11 @@ function describeSource(source: any, generatedAt: string) {
     healthState,
     crawlFrequencySeconds: source.crawlFrequencySeconds,
     parserStatus: source.health?.parserStatus ?? source.metadata?.parserStatus ?? "unknown",
+    lastCheckedAt: latest?.checkedAt,
+    lastSuccessAt: lastCollectedAt,
+    lastUsefulAt: [...observations].filter((row) => row.useful === true).map((row) => row.checkedAt).sort().at(-1),
+    lastSeenAt: source.lastSeenAt,
+    captureCount: captures.length,
     lastCollectedAt,
     lastFailureAt,
     lastFailureReason,
@@ -233,17 +259,22 @@ function disabledReasons(...reasons: Array<string | false>): string[] {
   return reasons.filter(Boolean) as string[];
 }
 
-function schedulerBlockers(input: { sourceShortfall: number; activeSourceCount: number; lastSuccessfulRun?: unknown; dailySourceCount: number; dailyCoverageRatio: number; deadLetterCount: number; aiEndpointConfigured: boolean; canaryLoop: unknown }): Array<{ code: string; severity: "blocker" | "warning"; nextAction: string }> {
+function schedulerBlockers(input: { activeSourceCount: number; lastSuccessfulRun?: unknown; dailySourceCount: number; dailyCoverageRatio: number; deadLetterCount: number; aiEndpointConfigured: boolean; canaryLoop: unknown }): Array<{ code: string; severity: "blocker" | "warning"; nextAction: string }> {
   const blockers = [
     input.activeSourceCount === 0 && blocker("no_active_sources", "blocker", "Add or activate at least one source before collection can run."),
     !input.lastSuccessfulRun && blocker("no_recent_successful_collection_run", "blocker", "Run the scheduler or repair the latest failed run before relying on freshness."),
-    input.sourceShortfall > 0 && blocker("source_target_shortfall", "warning", `${input.sourceShortfall} more source(s) needed to reach configured coverage target.`),
     input.dailySourceCount > 0 && input.dailyCoverageRatio < 0.8 && blocker("daily_coverage_below_target", "warning", "Fewer than 80% of daily sources have a recent successful collection."),
     input.deadLetterCount > 0 && blocker("dead_letter_tasks", "warning", "Dead-lettered collection tasks need inspection or replay."),
     !input.aiEndpointConfigured && blocker("parser_endpoint_missing", "warning", "AI exposure parser endpoint is not configured; extraction will use local deterministic parsing only."),
     !input.canaryLoop && blocker("scheduler_loop_unattached", "warning", "Collection loop is not attached, so pause/resume/run-now controls are unavailable.")
   ];
   return blockers.filter((item): item is { code: string; severity: "blocker" | "warning"; nextAction: string } => Boolean(item));
+}
+
+function groupBySource(records: any[]) {
+  const grouped = new Map<string, any[]>();
+  for (const record of records) grouped.set(record.sourceId, [...(grouped.get(record.sourceId) ?? []), record]);
+  return grouped;
 }
 
 function blocker(code: string, severity: "blocker" | "warning", nextAction: string) {

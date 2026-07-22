@@ -1,8 +1,9 @@
 import { nowIso } from "../utils.ts";
+import { isExecutableSource } from "../policy/collectionPolicy.ts";
 
 export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
-  const inTenant = (record: any) => (record?.tenantId ?? undefined) === input.tenantId;
+  const inTenant = (record: any) => input.tenantId === undefined || record?.tenantId === undefined || record.tenantId === input.tenantId;
   const sources = records(store, "listSources").filter(inTenant);
   const observations = records(store, "listSourceHealthObservations").filter(inTenant);
   const captures = records(store, "listCaptures").filter(inTenant);
@@ -49,6 +50,7 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
       type: source.type,
       family: sourceFamily(source),
       lifecycleStatus: source.status,
+      executable: isExecutableSource(source),
       operatingMode: {
         accessMethod: source.accessMethod,
         legalMode: source.governance?.metadataOnly || source.metadata?.captureMode === "metadata_only" ? "metadata_only" : "public_content",
@@ -100,8 +102,16 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
     tenantId: input.tenantId ?? "global",
     summary: {
       sourceCount: rows.length,
-      activeSourceCount: rows.filter((row: any) => ["active", "approved", "canary"].includes(row.lifecycleStatus)).length,
+      retainedSourceCount: rows.filter((row: any) => row.executable).length,
+      activeSourceCount: rows.filter((row: any) => row.executable).length,
       observedSourceCount: rows.filter((row: any) => row.health.observationCount > 0).length,
+      checkedWithin24hSourceCount: rows.filter((row: any) => row.executable && recent(row.health.lastAttemptAt, generatedAt)).length,
+      successfulWithin24hSourceCount: rows.filter((row: any) => row.executable && recent(row.health.lastSuccessAt, generatedAt)).length,
+      usefulWithin24hSourceCount: rows.filter((row: any) => row.executable && recent(row.health.lastUsefulItemAt, generatedAt)).length,
+      captureProducingSourceCount: rows.filter((row: any) => row.executable && row.coverage.captureCount > 0).length,
+      recentlySeenSourceCount: sources.filter((source: any) => isExecutableSource(source) && recent(source.lastSeenAt, generatedAt)).length,
+      backoffSourceCount: sources.filter((source: any) => isExecutableSource(source) && Date.parse(String(source.crawlState?.backoffUntil ?? "")) > Date.parse(generatedAt)).length,
+      neverObservedSourceCount: rows.filter((row: any) => row.executable && row.health.observationCount === 0).length,
       healthySourceCount: rows.filter((row: any) => row.health.state === "healthy").length,
       degradedSourceCount: rows.filter((row: any) => ["degraded", "stale"].includes(row.health.state)).length,
       failedSourceCount: rows.filter((row: any) => row.health.state === "failed").length,
@@ -113,11 +123,16 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
   };
 }
 
+function recent(value: unknown, generatedAt: string) {
+  const at = Date.parse(String(value ?? ""));
+  return Number.isFinite(at) && Date.parse(generatedAt) - at <= 86_400_000;
+}
+
 function labelSourceIndex(store: any, captures: any[], tenantId?: string) {
   const captureById = new Map(captures.map((record: any) => [record.id, record]));
   const indexes = ["listExtractedEntities", "listIndicators", "listIncidents", "listIntelligenceClaims"]
     .flatMap((method) => records(store, method))
-    .filter((record: any) => (record?.tenantId ?? undefined) === tenantId);
+    .filter((record: any) => tenantId === undefined || record?.tenantId === undefined || record.tenantId === tenantId);
   const subjectById = new Map(indexes.map((record: any) => [record.id, record]));
   return (label: any): string[] => {
     const subjectId = label.captureId ?? label.entityId ?? label.indicatorId ?? label.incidentId ?? label.claimId;

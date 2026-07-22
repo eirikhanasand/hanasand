@@ -8,7 +8,7 @@ import type { PolicyDecision } from "./collectionPolicyTypes.ts";
 
 export function evaluateSourceForCollection(source: SourceRecord): PolicyDecision {
   if (isMetadataSource(source)) return evaluateMetadataOnlySource(source);
-  if (source.status !== "active" && source.status !== "probation" && source.status !== "degraded") {
+  if (!["active", "canary", "probation", "degraded"].includes(source.status)) {
     return { allowed: false, metadataOnly: false, reason: `source status is ${source.status}` };
   }
   if (source.accessMethod === "disabled") return { allowed: false, metadataOnly: false, reason: "source access method is disabled" };
@@ -20,6 +20,19 @@ export function evaluateSourceForCollection(source: SourceRecord): PolicyDecisio
   if (!source.legalNotes.trim()) return { allowed: false, metadataOnly: false, reason: "source has no legal notes" };
   return { allowed: true, metadataOnly: false, reason: "source is collectable" };
 }
+
+export function sourceCollectionLane(source: SourceRecord): "public" | "restricted_metadata" | undefined {
+  try {
+    if (source.metadata?.productionCollection === false || !evaluateSourceForCollection(source).allowed) return undefined;
+    if (source.type === "tor_metadata") return "restricted_metadata";
+    if (source.type.endsWith("_metadata") || source.accessMethod !== "public_http" || ["high", "restricted"].includes(source.risk)) return undefined;
+    return ["http:", "https:"].includes(new URL(source.url).protocol) ? "public" : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export const isExecutableSource = (source: SourceRecord) => sourceCollectionLane(source) !== undefined;
 
 export function evaluateTaskForCollection(source: SourceRecord, task: CollectionTask): PolicyDecision {
   const sourceDecision = evaluateSourceForCollection(source);

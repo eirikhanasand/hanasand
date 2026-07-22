@@ -68,17 +68,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         })
     }
 
-    function enablePublicAdvisorySources(nextTerms: string, limit = 24) {
-        return postJson('/api/dwm/source-requests', {
-            ...scope,
-            seedPackIds: ['public-advisory-exposure-watch'],
-            activate: true,
-            approvedBy: 'dashboard',
-            limit,
-            scope: nextTerms,
-        })
-    }
-
     async function saveAndRebuildWatchlist() {
         setBusyAction('watchlist')
         setResult(null)
@@ -248,130 +237,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
     }
 
-    async function runSourcePackToCase() {
-        setBusyAction('source-case')
-        setResult(null)
-        const nextTerms = workflowTerms(terms)
-
-        try {
-            const watchlist = await saveWatchlistTerms(nextTerms)
-            if (!watchlist.ok) throw new Error(watchlist.message)
-
-            const telegram = await postJson('/api/dwm/source-requests', {
-                ...scope,
-                seedPackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'telegram-regional-language-watch'],
-                activate: true,
-                limit: 60,
-                scope: nextTerms,
-            })
-            if (!telegram.ok) throw new Error(telegram.message)
-
-            const darkweb = await postJson('/api/dwm/darkweb/approve-metadata', {
-                ...scope,
-                seedPackIds: ['darkweb-actor-metadata-core', 'darkweb-market-metadata-watch'],
-                activate: true,
-                approveMetadataOnly: true,
-                approvedBy: 'dashboard',
-                limit: 68,
-                scope: nextTerms,
-            })
-            if (!darkweb.ok) throw new Error(darkweb.message)
-
-            const advisory = await enablePublicAdvisorySources(nextTerms, 24)
-            if (!advisory.ok) throw new Error(advisory.message)
-
-            const run = await postJson('/api/dwm/canary/run', {
-                ...scope,
-                operatorApproval: true,
-                approvedBy: 'dashboard',
-                maxSources: 48,
-                maxTasks: 96,
-            })
-            if (!run.ok) throw new Error(run.message)
-
-            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
-            if (!rebuild.ok) throw new Error(rebuild.message)
-            const alert = selectRebuiltAlert(rebuild, '', nextTerms)
-            const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
-            const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
-            const telegramCount = readSummaryNumber(telegram, 'telegramPublicCreated')
-            const darkwebCount = readSummaryNumber(darkweb, 'darkwebMetadataCreated')
-            const advisorySummary = advisory.summary && typeof advisory.summary === 'object' ? advisory.summary as Record<string, unknown> : {}
-            const advisoryCount = typeof advisorySummary.publicAdvisoryCreated === 'number' ? advisorySummary.publicAdvisoryCreated : 0
-            if (!alert?.id) {
-                setTerms(nextTerms)
-                setLastRoute({
-                    label: 'Source pack run',
-                    watchTerms: countTerms(nextTerms),
-                    sourceCount: telegramCount + darkwebCount + advisoryCount,
-                    captureCount,
-                    alertCount: savedAlertCount,
-                })
-                setResult({ ok: true, message: `Sources updated. Collected ${captureCount} capture(s) and rebuilt ${savedAlertCount} alert(s). No watchlist match opened a case.` })
-                refreshWorkspace()
-                return
-            }
-
-            const casePayload = await postJson(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
-                ...scope,
-                actor: 'dashboard',
-                note: 'Case opened from source-pack collection.',
-                idempotencyKey: `dashboard-source-pack-case:${alert.id}`,
-            })
-            if (!casePayload.ok) throw new Error(casePayload.message)
-            const caseId = readNestedString(casePayload, ['case', 'id']) || readNestedString(casePayload, ['alertCaseHandoff', 'caseId'])
-
-            let deliveryText = ''
-            let deliveryAttempts: number | undefined
-            let deliveryReady = false
-            if (webhookConfigured) {
-                const delivery = await postJson('/api/dwm/webhooks/deliver', {
-                    ...scope,
-                    alertId: alert.id,
-                    caseId: caseId || undefined,
-                    limit: 1,
-                    dryRun: true,
-                    webhookUrl: webhookUrl.trim(),
-                    attachToWatchlist: true,
-                })
-                if (!delivery.ok) throw new Error(delivery.message)
-                const attemptedCount = typeof delivery.attemptedCount === 'number' ? delivery.attemptedCount : 0
-                deliveryAttempts = attemptedCount
-                deliveryReady = attemptedCount > 0
-                deliveryText = deliveryReady ? ' Dry-run delivery recorded.' : ' Delivery needs setup.'
-            }
-
-            setTerms(nextTerms)
-            setLastRoute({
-                label: 'Full route',
-                watchTerms: countTerms(nextTerms),
-                sourceCount: telegramCount + darkwebCount + advisoryCount,
-                captureCount,
-                alertCount: savedAlertCount,
-                alertId: alert.id,
-                caseId: caseId || undefined,
-                caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId, 'source_pack') : undefined,
-                deliveryAttempts,
-                deliveryState: deliveryText ? (deliveryReady ? deliveryText.trim() : 'Delivery needs setup. Configure or test a destination before sending customer notification.') : undefined,
-            })
-            setResult({
-                ok: true,
-                message: `Added ${advisoryCount} public advisory source(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s), opened ${caseId || 'a case'}.${deliveryReady ? deliveryText : deliveryText ? ' Configure or test a destination before sending customer notification.' : ''}`,
-                actionHref: deliveryText && !deliveryReady ? deliverySetupHref(organizationId, alert.id, caseId || undefined) : undefined,
-                actionLabel: deliveryText && !deliveryReady ? 'Configure delivery' : undefined,
-            })
-            if (caseId) {
-                router.push(caseDetailPath(caseId, alert.id, organizationId, 'source_pack'))
-            } else {
-                refreshWorkspace()
-            }
-        } catch (error) {
-            setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
-        } finally {
-            setBusyAction(null)
-        }
-    }
-
     async function submitSource(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         setBusyAction('source')
@@ -426,96 +291,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 watchTerms: countTerms(workflowTerms(terms)),
                 captureCount,
                 alertCount: savedAlertCount,
-            })
-            refreshWorkspace()
-        } catch (error) {
-            setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
-        } finally {
-            setBusyAction(null)
-        }
-    }
-
-    async function expandTelegramCoverage() {
-        setBusyAction('telegram-pack')
-        setResult(null)
-        const nextTerms = workflowTerms(terms)
-
-        try {
-            const watchlist = await saveWatchlistTerms(nextTerms)
-            if (!watchlist.ok) throw new Error(watchlist.message)
-
-            const applied = await postJson('/api/dwm/source-requests', {
-                ...scope,
-                seedPackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'telegram-regional-language-watch'],
-                activate: true,
-                limit: 60,
-                scope: nextTerms,
-            })
-            if (!applied.ok) throw new Error(applied.message)
-
-            const run = await postJson('/api/dwm/canary/run', {
-                ...scope,
-                operatorApproval: true,
-                approvedBy: 'dashboard',
-                maxSources: 48,
-                maxTasks: 96,
-            })
-            if (!run.ok) throw new Error(run.message)
-
-            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
-            const summary = applied.summary && typeof applied.summary === 'object' ? applied.summary as Record<string, unknown> : {}
-            const createdCount = typeof summary.telegramPublicCreated === 'number' ? summary.telegramPublicCreated : 0
-            const duplicateCount = typeof summary.duplicateCount === 'number' ? summary.duplicateCount : 0
-            const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
-            const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
-            setTerms(nextTerms)
-            setResult({ ok: true, message: `Added ${createdCount} Telegram canary source(s), skipped ${duplicateCount} duplicate(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s).` })
-            setLastRoute({
-                label: 'Telegram expansion',
-                watchTerms: countTerms(nextTerms),
-                sourceCount: createdCount,
-                captureCount,
-                alertCount: savedAlertCount,
-            })
-            refreshWorkspace()
-        } catch (error) {
-            setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
-        } finally {
-            setBusyAction(null)
-        }
-    }
-
-    async function approveDarkwebMetadata() {
-        setBusyAction('darkweb')
-        setResult(null)
-        const nextTerms = workflowTerms(terms)
-
-        try {
-            const watchlist = await saveWatchlistTerms(nextTerms)
-            if (!watchlist.ok) throw new Error(watchlist.message)
-
-            const approved = await postJson('/api/dwm/darkweb/approve-metadata', {
-                ...scope,
-                seedPackIds: ['darkweb-actor-metadata-core', 'darkweb-market-metadata-watch'],
-                activate: true,
-                approveMetadataOnly: true,
-                approvedBy: 'dashboard',
-                limit: 68,
-                scope: nextTerms,
-            })
-            if (!approved.ok) throw new Error(approved.message)
-            const advisory = await enablePublicAdvisorySources(nextTerms, 24)
-            if (!advisory.ok) throw new Error(advisory.message)
-            const summary = approved.summary && typeof approved.summary === 'object' ? approved.summary as Record<string, unknown> : {}
-            const count = typeof summary.darkwebMetadataCreated === 'number' ? summary.darkwebMetadataCreated : 0
-            const advisorySummary = advisory.summary && typeof advisory.summary === 'object' ? advisory.summary as Record<string, unknown> : {}
-            const advisoryCount = typeof advisorySummary.publicAdvisoryCreated === 'number' ? advisorySummary.publicAdvisoryCreated : 0
-            setTerms(nextTerms)
-            setResult({ ok: true, message: `Approved ${count} dark-web metadata source(s) and ${advisoryCount} public advisory source(s). No payload downloads enabled.` })
-            setLastRoute({
-                label: 'Metadata sources',
-                watchTerms: countTerms(nextTerms),
-                sourceCount: count + advisoryCount,
             })
             refreshWorkspace()
         } catch (error) {
@@ -616,18 +391,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const webhookSendDisabledReason = webhookConfigured || organizationId ? '' : 'Enter an HTTPS webhook URL or open an organization with a saved delivery destination before sending queued alerts.'
     const routeQueue = [
         {
-            id: 'full_route',
-            label: 'Run full workflow',
-            state: !termCount ? 'watchlist needed' : alertCount ? `${alertCount} alerts ready` : captureCount ? `${captureCount} captures ready` : 'source pack ready',
-            detail: 'Enable sources, collect captures, rebuild alerts, open a case, and dry-run delivery when a webhook is staged.',
-            tone: alertCount ? 'ok' : captureCount ? 'warn' : 'neutral',
-            command: 'Run to case',
-            busy: busyAction === 'source-case',
-            disabled: busy || Boolean(watchlistDisabledReason),
-            disabledReason: watchlistDisabledReason,
-            onClick: runSourcePackToCase,
-        },
-        {
             id: 'watchlist',
             label: 'Watchlist match',
             state: termCount ? `${termCount} terms` : 'terms needed',
@@ -670,7 +433,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <h2 className='mt-1 text-lg font-semibold tracking-normal text-ui-text'>Watchlist to case</h2>
                     <div className='mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5'>
                         <RouteStateCard label='Terms' value={String(effectiveTermCount)} detail={termCount ? 'ready' : 'needed'} tone={termCount ? 'ok' : 'warn'} />
-                        <RouteStateCard label='Sources' value={`${activeSourceCount}/${sourceCount}`} detail={sourceCount ? 'active' : 'load pack'} tone={activeSourceCount ? 'ok' : 'warn'} />
+                        <RouteStateCard label='Sources' value={`${activeSourceCount}/${sourceCount}`} detail={sourceCount ? 'executable' : 'none configured'} tone={activeSourceCount ? 'ok' : 'warn'} />
                         <RouteStateCard label='Captures' value={String(captureCount)} detail={latestRunStatus ? `${latestRunStatus}${latestRunCaptureCount ? ` · ${latestRunCaptureCount}` : ''}` : 'idle'} tone={captureCount ? 'ok' : 'neutral'} />
                         <RouteStateCard label='Alerts' value={String(alertCount)} detail={`${telemetry?.watchlistMatchCount ?? 0} matches`} tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
                         <RouteStateCard label='Webhook' value={deliveryCount ? `${deliveryCount}` : webhookConfigured ? 'staged' : 'route needed'} detail={deliveryCount ? 'attempts' : webhookConfigured ? 'test' : 'add URL'} tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
@@ -757,9 +520,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                             Save and rebuild alerts
                         </button>
                         <WorkflowButton busy={busyAction === 'collection'} disabled={busy} icon={<RefreshCw className='h-4 w-4' />} onClick={runCollection}>Run Telegram collection</WorkflowButton>
-                        <WorkflowButton busy={busyAction === 'telegram-pack'} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={expandTelegramCoverage}>Expand Telegram</WorkflowButton>
-                        <WorkflowButton busy={busyAction === 'darkweb'} disabled={busy} icon={<ShieldCheck className='h-4 w-4' />} onClick={approveDarkwebMetadata}>Approve metadata</WorkflowButton>
-                        <WorkflowButton busy={busyAction === 'source-case'} disabled={busy || Boolean(watchlistDisabledReason)} disabledReason={watchlistDisabledReason || undefined} icon={<ShieldCheck className='h-4 w-4' />} onClick={runSourcePackToCase}>Run full workflow</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'delivery'} disabled={busy || Boolean(webhookSendDisabledReason)} disabledReason={webhookSendDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
                     </div>

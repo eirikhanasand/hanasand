@@ -1,6 +1,7 @@
 import { hashContent, nowIso, stableId, uniqueStrings } from "../utils.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 import { buildDwmSourceInventory, sourceInventoryDigest, type DwmSourceInventorySnapshot } from "./dwmSourceInventory.ts";
+import { isExecutableSource } from "../policy/collectionPolicy.ts";
 
 export type DwmSourceFamily = "telegram_public" | "darkweb_metadata" | "actor_page" | "public_advisory" | "clear_web" | "unknown";
 export type DwmSeverity = "critical" | "high" | "medium" | "low";
@@ -223,13 +224,9 @@ export function buildDwmProductSnapshot(input: BuildDwmProductSnapshotInput = {}
 }
 
 function nextWorkItemFor(sourceInventory: DwmSourceInventorySnapshot): string {
-  if (sourceInventory.counts.registeredDarkwebMetadata < sourceInventory.counts.catalogDarkwebMetadata) {
-    return "Approve the remaining dark-web metadata sources, then run metadata-only actor and market refreshes.";
-  }
-  if (sourceInventory.counts.netNewCandidates > 0) {
-    return "Review remaining source candidates and promote useful ones without enabling payload downloads or private access.";
-  }
-  return "Add self-serve webhook subscriptions and testable customer watchlist onboarding so new buyers can get alerts without manual setup.";
+  return sourceInventory.counts.registeredActiveOrCanary > 0
+    ? "Continue bounded collection from verified sources and process real watchlist matches."
+    : "Register and verify a real public or metadata-only source before collection.";
 }
 
 export function normalizeWatchlist(values: Array<string | Partial<DwmWatchTerm>>): DwmWatchTerm[] {
@@ -335,7 +332,7 @@ function buildSourceCoverage(sources: SourceRecord[]): DwmSourceCoverage[] {
   const families: DwmSourceFamily[] = ["telegram_public", "darkweb_metadata", "actor_page", "public_advisory", "clear_web"];
   return families.map((family) => {
     const familySources = sourceCoverageMembers(sources, family);
-    const activeCount = familySources.filter((source) => ["active", "canary", "approved"].includes(String((source as any).status ?? "").toLowerCase())).length;
+    const activeCount = familySources.filter(isExecutableSource).length;
     const sourceCount = familySources.length;
     return {
       family,
@@ -495,7 +492,7 @@ function inTenant(record: { tenantId?: string }, tenantId?: string): boolean {
 
 function readinessBlockers(watchlist: DwmWatchTerm[], sources: SourceRecord[]): string[] {
   const blockers: string[] = [];
-  const isLiveSource = (source: SourceRecord) => ["active", "canary", "approved"].includes(String((source as any).status ?? "").toLowerCase());
+  const isLiveSource = isExecutableSource;
   if (watchlist.length === 0) blockers.push("Add at least one company, domain, vendor, brand, or product watch term.");
   if (!sources.some((source) => classifySourceFamily(source) === "telegram_public" && isLiveSource(source))) blockers.push("No live public Telegram source is registered for this tenant.");
   if (!sources.some((source) => classifySourceFamily(source) === "darkweb_metadata" && isLiveSource(source))) blockers.push("No approved metadata-only dark web source is active for this tenant.");

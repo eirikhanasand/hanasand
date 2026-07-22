@@ -2084,20 +2084,6 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
         case 'end_to_end_workflow':
             actions.push({ id: 'inspect_source_inventory', label: 'Inspect inventory', method: 'GET', href: sourceInventoryHref(context.scope) })
             actions.push({
-                id: 'request_source_coverage',
-                label: 'Request sources',
-                method: 'POST',
-                href: '/api/dwm/source-requests',
-                body: {
-                    ...actionScope(context.scope),
-                    seedPackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'darkweb-actor-metadata-core'],
-                    activate: true,
-                    approveMetadataOnly: true,
-                    approvedBy: 'dashboard',
-                    limit: 24,
-                },
-            })
-            actions.push({
                 id: 'run_canary_collection',
                 label: 'Run canary',
                 method: 'POST',
@@ -3238,20 +3224,6 @@ export function buildReadinessCases(input: {
                     label: 'Inspect source inventory',
                     method: 'GET',
                     href: sourceInventoryHref(input.scope),
-                },
-                {
-                    id: 'request_source_coverage',
-                    label: 'Request sources',
-                    method: 'POST',
-                    href: '/api/dwm/source-requests',
-                    body: {
-                        ...actionScope(input.scope),
-                        seedPackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'darkweb-actor-metadata-core'],
-                        activate: true,
-                        approveMetadataOnly: true,
-                        approvedBy: 'dashboard',
-                        limit: 24,
-                    },
                 },
                 {
                     id: 'run_canary_collection',

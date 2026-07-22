@@ -718,6 +718,68 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  test("retires obsolete source rows without losing evidence or inventing last-seen timestamps", async () => {
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    first.saveSource(source({ id: "src_gen_google_0001", url: "https://news.google.com/rss/search?q=gate2" }));
+    const captured = first.savePipelineResult(pipeline("src_gen_google_0001"));
+    first.saveSourceHealthObservation({
+      id: "health_google_success",
+      sourceId: "src_gen_google_0001",
+      checkedAt: "2026-07-21T12:00:00.000Z",
+      status: "healthy",
+      success: true,
+      useful: true,
+      latencyMs: 10,
+      itemCount: 1,
+      captureCount: 1,
+      incidentCount: 1,
+      duplicateCount: 0,
+      parserWarningCount: 0,
+      observedActorCount: 1,
+      legalMode: "public_content"
+    });
+    first.saveSource(source({ id: "src_gen_gdelt_0001", url: "https://api.gdeltproject.org/api/v2/doc/doc?query=gate2", status: "candidate" }));
+    first.saveSourceHealthObservation({
+      id: "health_gdelt_failure",
+      sourceId: "src_gen_gdelt_0001",
+      checkedAt: "2026-07-21T13:00:00.000Z",
+      status: "failed",
+      success: false,
+      useful: false,
+      latencyMs: 10,
+      itemCount: 0,
+      captureCount: 0,
+      incidentCount: 0,
+      duplicateCount: 0,
+      parserWarningCount: 0,
+      observedActorCount: 0,
+      legalMode: "public_content"
+    });
+    await first.close();
+
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '022_reconcile_source_fleet'`;
+    const migrated = await PostgresScraperStore.create({ databaseUrl });
+    await migrated.close();
+
+    expect((await admin<{ status: string; last_seen_at: Date | null; record: any }[]>`
+      SELECT status, last_seen_at, record FROM threat_intel.sources WHERE id = 'src_gen_google_0001'
+    `)[0]).toMatchObject({
+      status: "retired",
+      last_seen_at: new Date("2026-07-21T12:00:00.000Z"),
+      record: { status: "retired", metadata: { productionCollection: false, retiredReason: "query_variant_replaced_by_canonical_provider_jobs" } }
+    });
+    expect((await admin<{ status: string; last_seen_at: Date | null }[]>`
+      SELECT status, last_seen_at FROM threat_intel.sources WHERE id = 'src_gen_gdelt_0001'
+    `)[0]).toEqual({ status: "retired", last_seen_at: null });
+    expect(await admin`SELECT id FROM threat_intel.captures WHERE id = ${captured.capture.id} AND source_id = 'src_gen_google_0001'`).toHaveLength(1);
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '022_reconcile_source_fleet'`).toHaveLength(1);
+
+    const snapshot = await admin`SELECT status, last_seen_at, updated_at, record FROM threat_intel.sources ORDER BY id`;
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    await restarted.close();
+    expect(await admin`SELECT status, last_seen_at, updated_at, record FROM threat_intel.sources ORDER BY id`).toEqual(snapshot);
+  });
 });
 
 function pipeline(sourceId: string, tenantId?: string, suffix = "") {

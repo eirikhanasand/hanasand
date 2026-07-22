@@ -4,7 +4,7 @@ import { buildDwmSourcePackWorkerReadinessSnapshot, createDwmSourceRequest } fro
 import { authorizeDwmWorkflowAccess, createDwmWatchlist, deliverDwmWebhooks, disableDwmWatchlist, getDwmAlertDetail, getDwmAlertGenerationReadiness, getDwmWatchlistDetail, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, replayDwmAlert, storedWatchlistTerms, testDwmWebhook, updateDwmAlert, updateDwmWatchlist } from "./dwmWorkflowRoutes.ts";
 import { buildDwmProductSnapshot, normalizeWatchlist } from "../product/dwmProduct.ts";
 import { buildDwmOperationsSnapshot } from "../product/dwmOperations.ts";
-import { buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
+import { buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
 import { nowIso } from "../utils.ts";
 import { cancelActorOrgRelevanceReviewPreparedHandoff, createActorOrgRelevanceReviewAlertGenerationRequest, createActorOrgRelevanceReviewCaseHandoffRequest, createActorOrgRelevanceReviewCustomerNotification, createActorOrgRelevanceReviewSourceCollectionRequest, createActorOrgRelevanceReviewWebhookTriggerRequest, getActorOrgRelevanceReview, listActorOrgRelevanceHandoffQueue, listActorOrgRelevanceReviews, listActorOrgRelevanceSourceCollectionQueue, materializeActorOrgRelevanceReviewWatchlist, submitActorOrgRelevanceReview, updateActorOrgRelevanceReview, updateActorOrgRelevanceReviewEvidence } from "./actorOrgRelevanceRoutes.ts";
 import { canaryActivation, canaryConsole, canaryOperator, canaryPause, canaryReadiness, canaryRun, canarySoak } from "./canaryRoutes.ts";
@@ -93,7 +93,10 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     }
     if (url.pathname === "/v1/contracts") return json(contractIndex());
     if (url.pathname === "/v1/metrics") return json(metrics(options));
-    if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "GET") return collectionSchedulerStatus(options);
+    if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "GET") {
+      const scope = resolveTenantScope(request, url);
+      return scope.error ?? collectionSchedulerStatus(options, undefined, scope.tenantId);
+    }
     if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "POST") return updateCollectionSchedulerControl(request, options);
     if (url.pathname === "/v1/organizations" && request.method === "GET") return listOrganizations(request, options);
     if (url.pathname === "/v1/organizations" && request.method === "POST") return createOrganization(request, options);
@@ -231,19 +234,15 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     }
     if ((url.pathname === "/v1/dwm/source-packs" || url.pathname === "/api/dwm/source-packs") && request.method === "GET") {
       const generatedAt = url.searchParams.get("generatedAt") ?? nowIso();
-      const catalog = buildDwmSeedCatalog({ watchlist: parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? ""), generatedAt });
-      const sourcePackWorker = buildDwmSourcePackWorkerReadinessSnapshot(options, { generatedAt });
+      const scope = resolveTenantScope(request, url);
+      if (scope.error) return scope.error;
+      const sourcePackWorker = buildDwmSourcePackWorkerReadinessSnapshot(options, { generatedAt, tenantId: scope.tenantId });
       return json({
         schemaVersion: "dwm.source_packs.v1",
         generatedAt,
-        packs: catalog.packs,
-        counts: {
-          packCount: catalog.packs.length,
-          candidateCount: catalog.candidates.length,
-          telegramPublic: catalog.candidates.filter((candidate) => candidate.family === "telegram_public").length,
-          darkwebMetadata: catalog.candidates.filter((candidate) => candidate.family === "darkweb_metadata").length,
-          publicAdvisory: catalog.candidates.filter((candidate) => candidate.family === "public_advisory").length
-        },
+        tenantId: scope.tenantId ?? "all",
+        packs: sourcePackWorker.redactedSourcePackIds,
+        counts: { packCount: sourcePackWorker.redactedSourcePackIds.length, candidateCount: sourcePackWorker.counters.totalCandidates },
         workerReadiness: sourcePackWorker.workerReadiness,
         sourceHealth: sourcePackWorker.sourceHealth,
         sourceOperationsReadiness: sourcePackWorker.sourceOperationsReadiness,

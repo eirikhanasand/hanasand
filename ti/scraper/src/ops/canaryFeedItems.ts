@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { hashContent } from "../utils.ts";
 import { parseRssItems } from "../adapters/rssXml.ts";
+import { minimizeTelegramPii } from "../adapters/telegramPublicHelpers.ts";
 
 const ITEM_RE = /<item\b[\s\S]*?<\/item>/gi;
 const ENTRY_RE = /<entry\b[\s\S]*?<\/entry>/gi;
@@ -44,7 +45,7 @@ function jsonItems(source: any, task: any, fetched: string, at: string, metadata
 }
 
 function jsonItem(source: any, task: any, entry: any, at: string, metadata: any, index: number) {
-  const ransomwareGroup = extractionProfile(source) === "ransomware_group_metadata" ? ransomwareGroupMetadata(entry) : undefined;
+  const ransomwareGroup = extractionProfile(source, task) === "ransomware_group_metadata" ? ransomwareGroupMetadata(entry) : undefined;
   const title = stringField(entry, ["post_title", "title", "cveID", "id", "name", "group_name", "vendorProject"]) || source.name;
   const publishedAt = stringField(entry, ["discovered", "dateAdded", "published", "publishedDate", "lastModified", "lastModifiedDate", "updated"]);
   const url = stringField(entry, ["post_url", "link", "url", "source", "reference"]) || task.targetUrl;
@@ -116,7 +117,7 @@ function telegramItem(source: any, task: any, block: string, at: string, metadat
   const title = [source.name, messageId ? `message ${messageId}` : ""].filter(Boolean).join(" ");
   const publishedAt = attr(block, "time", "datetime") || undefined;
   const messageUrl = dataPost ? `https://t.me/${dataPost}` : task.targetUrl;
-  const rawText = [source.name, author, messageText].filter(Boolean).join("\n").slice(0, 24_000);
+  const rawText = minimizeTelegramPii([source.name, author, messageText].filter(Boolean).join("\n")).slice(0, 24_000);
   return {
     ...row(source, task, messageUrl, title, rawText, at, publishedAt, { ...metadata, adapter: "telegram_public", parserVersion: "telegram-public-preview:v1", channel, messageId: messageId ? Number(messageId) : undefined, messageState: "available", mediaPolicy: "metadata_only_no_download" }, index, false),
     links: [messageUrl, ...links(block)].slice(0, 12),
@@ -151,7 +152,7 @@ function row(source: any, task: any, url: string, title: string, rawText: string
   return {
     tenantId: source.tenantId, sourceId: source.id, taskId: task.id, url, title, rawText, body: rawText,
     collectedAt: at, publishedAt, contentHash: hashContent(key), links: [url].filter(Boolean),
-    metadata: { ...metadata, reportTimestamps, feedItem, itemIndex: index, sourceName: source.name, sourceUrl: task.targetUrl, extractionProfile: extractionProfile(source) },
+    metadata: { ...metadata, reportTimestamps, feedItem, itemIndex: index, sourceName: source.name, sourceUrl: task.targetUrl, extractionProfile: extractionProfile(source, task) },
     sensitive: false
   };
 }
@@ -168,7 +169,8 @@ function timestampEvidencePath(metadata: any) {
   return "source.publishedAt";
 }
 
-function extractionProfile(source: any) {
+function extractionProfile(source: any, task?: any) {
+  if (task?.planning?.extractionProfile) return task.planning.extractionProfile;
   if (source.metadata?.extractionProfile) return source.metadata.extractionProfile;
   if (source.id === "src_seed_ransomwarelive_groups" || source.id === "src_canary_ransomwarelive_groups_json" || source.catalog?.canonicalId === "community:ransomwarelive:groups") return "ransomware_group_metadata";
   if (source.catalog?.canonicalId === "gov:us:cisa:known-exploited-vulnerabilities") return "cisa_kev";

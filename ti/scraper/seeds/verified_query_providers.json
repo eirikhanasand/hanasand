@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "name": "verified-public-query-providers",
+  "description": "Canonical public search providers. Queries are collection jobs, not source identities.",
+  "generatedAt": "2026-07-22T00:00:00.000Z",
+  "sources": [
+    {
+      "id": "src_google_news_threat_search",
+      "name": "Google News public security search",
+      "type": "rss",
+      "url": "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.68,
+      "language": "en",
+      "crawlFrequencySeconds": 86400,
+      "legalNotes": "Public unauthenticated Google News RSS search used for bounded defensive discovery; preserve publisher attribution and promote claims only from captured publisher evidence.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-22T00:00:00.000Z",
+        "approvedBy": "source-review:google-news-public-rss",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "public_news_search",
+        "productionCollection": true,
+        "healthQuery": "cybersecurity threat intelligence",
+        "maxItemsPerFetch": 4,
+        "contentPolicy": "metadata_and_safe_excerpt_only"
+      },
+      "catalog": {
+        "canonicalId": "search:google-news:public-rss",
+        "publisher": {
+          "name": "Google News",
+          "country": "US",
+          "homepage": "https://news.google.com",
+          "trustBasis": "public search provider"
+        },
+        "tier": "discovery",
+        "approvalScope": "safe_public_cti_discovery",
+        "license": "Public RSS discovery endpoint; underlying publishers retain content rights.",
+        "legalBasis": "Public unauthenticated search metadata for defensive discovery.",
+        "reliability": 0.68,
+        "intelligenceValue": 0.6,
+        "retentionClass": "discovery_snippet",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": ["threat reporting", "ransomware", "vulnerability", "actor reporting"],
+          "actors": [],
+          "aliases": [],
+          "industries": ["all"],
+          "regions": ["global"],
+          "countries": [],
+          "languages": ["en"],
+          "queryPatterns": ["{query}"]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 86400,
+          "collectionSlaSeconds": 86400,
+          "budgetClass": "low",
+          "crawlCadenceSeconds": 86400
+        },
+        "adapterCompatibility": ["rss"],
+        "rollback": {}
+      }
+    }
+  ]
+}

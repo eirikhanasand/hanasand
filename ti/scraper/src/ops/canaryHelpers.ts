@@ -5,18 +5,29 @@ import { feedItems } from "./canaryFeedItems.ts";
 import { parseMitreActorCatalog } from "../pipeline/mitreActorCatalog.ts";
 import { parseCurrentRansomwareOperations } from "../pipeline/ransomwareOperationCatalog.ts";
 
-export function taskFor(source: any, at: string, runId: string, maxBytes: number) {
-  if (source.metadata?.extractionProfile === "mitre_actor_catalog") maxBytes = Math.max(maxBytes, 64 * 1024 * 1024);
-  if (source.metadata?.extractionProfile === "ransomware_operation_catalog") maxBytes = Math.max(maxBytes, 32 * 1024 * 1024);
-  return { id: stableId("task", `${source.id}:${at}`), tenantId: source.tenantId, sourceId: source.id, targetUrl: source.url, sourceType: source.type, queuedAt: at, priority: source.trustScore ?? 0.5, reason: "public_canary", retryCount: 0, maxBytes, runId };
+export function taskFor(source: any, at: string, runId: string, maxBytes: number, job?: any) {
+  const extractionProfile = job?.extractionProfile ?? source.metadata?.extractionProfile;
+  if (extractionProfile === "mitre_actor_catalog") maxBytes = Math.max(maxBytes, 64 * 1024 * 1024);
+  if (extractionProfile === "ransomware_operation_catalog") maxBytes = Math.max(maxBytes, 32 * 1024 * 1024);
+  const query = String(source.metadata?.healthQuery ?? "").trim();
+  const configuredUrl = String(job?.url ?? source.url);
+  const targetUrl = query && configuredUrl.includes("{query}") ? configuredUrl.replaceAll("{query}", encodeURIComponent(query)) : configuredUrl;
+  const jobId = String(job?.id ?? "default");
+  return { id: stableId("task", `${source.id}:${jobId}:${targetUrl}:${at}`), tenantId: source.tenantId, sourceId: source.id, targetUrl, sourceType: source.type, queuedAt: at, priority: source.trustScore ?? 0.5, reason: "public_canary", retryCount: 0, maxBytes, runId, planning: { ...(query ? { queryTerms: [query] } : {}), ...(job ? { sourceJobId: jobId, extractionProfile, activityUrl: job.activityUrl, maxItemsPerFetch: job.maxItemsPerFetch } : {}) } };
+}
+
+export function tasksForSource(source: any, at: string, runId: string, maxBytes: number) {
+  const jobs = Array.isArray(source.metadata?.collectionJobs) ? source.metadata.collectionJobs.filter((job: any) => job?.id && job?.url) : [];
+  return jobs.length ? jobs.map((job: any) => taskFor(source, at, runId, maxBytes, job)) : [taskFor(source, at, runId, maxBytes)];
 }
 
 export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, mode: string, at: string, maxBytes: number, timeoutMs = 12_000, maxItems?: number) {
   const started = Date.now(), requestedUrl = publicFetchUrl(source, task.targetUrl);
+  const extractionProfile = task.planning?.extractionProfile ?? source.metadata?.extractionProfile;
   if (source.catalog?.canonicalId === "gov:us:cisa:known-exploited-vulnerabilities") maxBytes = Math.max(maxBytes, 4_000_000);
   if (source.catalog?.canonicalId === "community:ransomwarelive:groups") maxBytes = Math.max(maxBytes, 2_000_000);
-  if (source.metadata?.extractionProfile === "mitre_actor_catalog") maxBytes = Math.max(maxBytes, 64 * 1024 * 1024);
-  if (source.metadata?.extractionProfile === "ransomware_operation_catalog") maxBytes = Math.max(maxBytes, 32 * 1024 * 1024);
+  if (extractionProfile === "mitre_actor_catalog") maxBytes = Math.max(maxBytes, 64 * 1024 * 1024);
+  if (extractionProfile === "ransomware_operation_catalog") maxBytes = Math.max(maxBytes, 32 * 1024 * 1024);
   const { response: res, finalUrl, redirectCount } = await fetchPublicResponse(fetcher, requestedUrl, timeoutMs);
   if (!res.ok) throw httpError(res.status);
   const contentType = res.headers.get("content-type") ?? undefined;
@@ -24,7 +35,7 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
   const body = await boundedText(res, maxBytes);
   const fetched = body.text;
   const metadata = { canaryPortfolio: true, fetchMode: mode, finalUrlHash: hashContent(finalUrl), responseBytes: body.bytesReceived, fetchProvenance: { mode, adapterVersion: "public_canary_fetcher:v2", requestedUrlHash: hashContent(requestedUrl), sourceUrlHash: hashContent(task.targetUrl), finalUrlHash: hashContent(finalUrl), httpStatus: res.status, ok: res.ok, contentType, fetchedAt: at, durationMs: Date.now() - started, bytesReceived: body.bytesReceived, maxBytes, truncated: body.truncated, bounded: true, redirectCount, userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" } };
-  if (source.metadata?.extractionProfile === "mitre_actor_catalog") {
+  if (extractionProfile === "mitre_actor_catalog") {
     if (body.truncated) throw new Error("MITRE actor catalog exceeded the bounded response size.");
     const actorIdentityCatalogSnapshot = parseMitreActorCatalog(fetched, { retrievedAt: at, sourceUrl: task.targetUrl });
     return [{
@@ -42,9 +53,9 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
       sensitive: false
     }];
   }
-  if (source.metadata?.extractionProfile === "ransomware_operation_catalog") {
+  if (extractionProfile === "ransomware_operation_catalog") {
     if (body.truncated) throw new Error("Ransomware operation group catalog exceeded the bounded response size.");
-    const activityUrl = String(source.metadata?.activityUrl ?? "");
+    const activityUrl = String(task.planning?.activityUrl ?? source.metadata?.activityUrl ?? "");
     const activityStarted = Date.now();
     const activityFetch = await fetchPublicResponse(fetcher, activityUrl, timeoutMs);
     if (!activityFetch.response.ok) throw httpError(activityFetch.response.status);
@@ -107,7 +118,7 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
       sensitive: true
     }];
   }
-  return feedItems(source, task, fetched, at, metadata, maxItemsFor(source) ?? maxItems);
+  return feedItems(source, task, fetched, at, metadata, maxItemsFor(source, task) ?? maxItems);
 }
 
 export const fetchItem = async (...args: any[]) => (await fetchItems(...args))[0];
@@ -138,7 +149,8 @@ export function storageStats(captures: any[]) {
   return { metadataStore: "file_backed_or_repository", productionEvidenceMode: nativeLiveHttpCaptureCount && !injectedProofFetchCaptureCount ? "native_live_http" : injectedProofFetchCaptureCount && !nativeLiveHttpCaptureCount ? "injected_proof_only" : nativeLiveHttpCaptureCount ? "mixed" : "none", externalObjectCaptureCount, inlineCaptureCount: captures.length - externalObjectCaptureCount, missingObjectReferenceCount: captures.filter((c) => ["external_object", "object_ref"].includes(c.storageKind) && !c.objectRef).length, nativeLiveHttpCaptureCount, injectedProofFetchCaptureCount, unknownFetchModeCaptureCount: captures.filter((c) => !c.metadata?.fetchMode).length };
 }
 
-export function maxItemsFor(source: any) {
+export function maxItemsFor(source: any, task?: any) {
+  if (Number.isFinite(Number(task?.planning?.maxItemsPerFetch))) return Number(task.planning.maxItemsPerFetch);
   if (source.id === "src_canary_ransomwarelive" || source.id === "src_seed_ransomwarelive_groups" || source.catalog?.canonicalId === "community:ransomwarelive:groups") return Number(Bun.env.TI_RANSOMWARELIVE_MAX_ITEMS ?? "24");
   return source.metadata?.maxItemsPerFetch;
 }

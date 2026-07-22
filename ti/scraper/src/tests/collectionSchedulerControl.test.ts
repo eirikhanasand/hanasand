@@ -102,7 +102,12 @@ function source(input: { id: string; status: string; lastCollectedAt?: string; l
     id: input.id,
     name: input.id,
     type: "rss",
+    url: `https://example.test/${input.id}.xml`,
+    accessMethod: "public_http",
     status: input.status,
+    risk: "low",
+    trustScore: 0.8,
+    legalNotes: "Public RSS feed used by the scheduler regression.",
     crawlFrequencySeconds: 3600,
     crawlState: {
       lastCollectedAt: input.lastCollectedAt,

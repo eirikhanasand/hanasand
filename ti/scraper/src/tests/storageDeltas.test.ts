@@ -31,6 +31,21 @@ describe("storage evidence deltas", () => {
     expect(JSON.stringify(deltas)).not.toContain(second.capture.url);
   });
 
+  test("reuses a duplicate capture's canonical incident after identity migration", () => {
+    const store = new InMemoryScraperStore();
+    const rawText = "APT29 used phishing against Example Energy.";
+    const legacy = processCollectedItem({ sourceId: "src_live", url: "https://example.test/report", collectedAt: "2026-05-24T10:00:00.000Z", rawText, contentHash: hashContent(rawText), links: [], metadata: {}, sensitive: false });
+    expect(legacy.incident).toBeDefined();
+    store.savePipelineResult({ ...legacy, incident: { ...legacy.incident!, id: "inc_canonical" } });
+    const extractionCount = store.listEvidenceDeltas().filter((row: any) => row.subjectType === "extraction").length;
+
+    const duplicate = store.savePipelineResult(legacy);
+
+    expect(duplicate.incident?.id).toBe("inc_canonical");
+    expect(store.getIncident(legacy.incident!.id)).toBeUndefined();
+    expect(store.listEvidenceDeltas().filter((row: any) => row.subjectType === "extraction")).toHaveLength(extractionCount);
+  });
+
   test("stores cursor deltas across discovery capture extraction relationship and export stages", () => {
     const store = new InMemoryScraperStore();
     const discovery = store.saveDiscoveryEvidence(fixtureDiscovery({ id: "disc_cursor", query: "APT29", normalizedQuery: "apt29", resultId: "result_cursor", observedAt: "2026-05-24T16:00:00.000Z", snippet: "Search provider observed APT29 targeting Example Energy." }));

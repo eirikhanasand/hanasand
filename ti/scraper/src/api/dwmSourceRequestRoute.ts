@@ -2,7 +2,7 @@ import { parseTelegramTarget, validateTelegramPublicSourceCompliance } from "../
 import { evaluateTelegramPublicCompliance } from "../policy/telegramCollectionPolicy.ts";
 import { evaluateMetadataOnlySource } from "../policy/metadataCollectionPolicy.ts";
 import { buildDwmProductSnapshot } from "../product/dwmProduct.ts";
-import { applyDwmSeedCatalog, sourceDedupeKey } from "../product/dwmSourceInventory.ts";
+import { sourceDedupeKey } from "../product/dwmSourceInventory.ts";
 import {
   InMemoryDwmSourcePackActiveSourceAdapter,
   InMemoryDwmSourcePackCollectionReceiptAdapter,
@@ -123,35 +123,12 @@ export async function createDwmSourceRequest(request: Request, options: ApiServe
   if (scope.error) return scope.error;
   if (scope.tenantId || !body.action) body.tenantId = scope.tenantId ?? "default";
   if (body.action) return handleSourceLifecycleAction(body, options);
+  if (body.seedPackIds?.length) {
+    return json({ error: { code: "generated_source_packs_removed", message: "Register a verified source target; generated source packs are not production sources." } }, 400);
+  }
 
   if (Array.isArray(body.candidates) && body.candidates.length > 0) {
     return json(createSourceCandidatePack(body, options), 201);
-  }
-
-  if (Array.isArray(body.seedPackIds) && body.seedPackIds.length > 0) {
-    const result = applyDwmSeedCatalog({
-      store: options.store,
-      tenantId: body.tenantId,
-      watchlist: body.scope ? body.scope.split(/[,\n]/).map((term) => term.trim()).filter(Boolean) : undefined,
-      seedPackIds: body.seedPackIds,
-      activate: body.activate,
-      approveMetadataOnly: body.approveMetadataOnly,
-      approvedBy: body.approvedBy,
-      dryRun: body.dryRun,
-      limit: body.limit
-    });
-    return json({
-      request: {
-        id: stableId("dwm_source_pack_request", `${result.summary.requestedPackIds.join(",")}:${result.generatedAt}`),
-        type: "seed_catalog",
-        approvalState: body.dryRun ? "dry_run" : "queued",
-        nextAction: body.activate
-          ? "Canary-ready public sources were queued; restricted metadata candidates still require analyst approval."
-          : "Review generated source candidates, then activate selected public channels into canary polling."
-      },
-      createdCandidates: result.createdSources.map((source) => sourceCandidate(source)),
-      ...result
-    }, body.dryRun ? 200 : 201);
   }
 
   if (Array.isArray(body.targets) && body.targets.length > 0) {
@@ -244,7 +221,8 @@ export function buildDwmSourcePackWorkerReadinessSnapshot(
 ) {
   const generatedAt = input.generatedAt ?? nowIso();
   const staleAfterMinutes = Math.max(1, input.staleAfterMinutes ?? 120);
-  const packs = sourcePackStore(options).list({ limit: 500 }).items;
+  const packs = sourcePackStore(options).list({ limit: 500 }).items
+    .filter((pack) => input.tenantId === undefined || pack.tenantId === undefined || pack.tenantId === input.tenantId);
   const workerState = sourcePackWorkerStateForPacks(packs, options);
   const growth = sourcePackGrowthCounters(packs, options);
   const lastRun = workerState.lastRun;

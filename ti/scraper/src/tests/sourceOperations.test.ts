@@ -35,6 +35,9 @@ describe("source operations", () => {
     expect(JSON.stringify(payload)).not.toContain("secretexample.onion");
     expect(JSON.stringify(payload)).not.toContain("token=unsafe");
 
+    const allTenants = await handleApiRequest(api("/v1/intel/source-operations"), { store, frontier: new FocusedFrontier() });
+    expect((await allTenants.json() as any).summary.sourceCount).toBe(2);
+
     const mismatch = await handleApiRequest(api("/v1/intel/source-operations?tenantId=tenant_b", { headers: { "x-tenant-id": "tenant_a" } }), { store, frontier: new FocusedFrontier() });
     expect(mismatch.status).toBe(403);
   });

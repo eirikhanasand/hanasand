@@ -1,6 +1,5 @@
 // @ts-nocheck
 export const INCIDENT_CANARY_FEEDS = [
-  src("src_canary_dfirreport", "The DFIR Report", "rss", "https://thedfirreport.com/feed/", ["intrusion", "ransomware", "malware"], "community"),
   src("src_canary_volexity", "Volexity Blog", "rss", "https://www.volexity.com/blog/feed/", ["APT", "intrusion", "malware"], "vendor"),
   src("src_canary_netskope", "Netskope Threat Labs", "rss", "https://www.netskope.com/blog/category/netskope-threat-labs/feed", ["cloud", "malware", "phishing"], "vendor"),
   src("src_canary_censys", "Censys Blog", "rss", "https://censys.com/feed/", ["infrastructure", "CVE", "exposed"], "vendor"),

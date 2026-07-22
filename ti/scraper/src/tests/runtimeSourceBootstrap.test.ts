@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 describe("runtime source bootstrap and scheduler monitoring", () => {
   test("keeps dry-run source-atlas candidates out of automatic production bootstrap", () => {
-    const result = bootstrapRuntimeSources(new InMemoryScraperStore(), { sourceTarget: 0 });
+    const result = bootstrapRuntimeSources(new InMemoryScraperStore());
     const compose = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../../../docker-compose.yml"), "utf8");
     expect(result.seedPaths.some((path) => path.endsWith("high_value_exposure_source_candidates.json"))).toBe(false);
     expect(result.errors.some((error) => error.path.endsWith("high_value_exposure_source_candidates.json"))).toBe(false);
@@ -18,7 +18,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     const store = new InMemoryScraperStore();
     const seedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/public_cti_starter_pack.json");
 
-    bootstrapRuntimeSources(store, { seedPaths: [seedPath], sourceTarget: 0 });
+    bootstrapRuntimeSources(store, { seedPaths: [seedPath] });
 
     expect(store.listSources().find((source) => source.id === "src_seed_mitre_attack_apt29")).toMatchObject({
       url: "https://attack.mitre.org/groups/G0016/",
@@ -27,7 +27,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     });
   });
 
-  test("imports configured source bundles and reports the exact source target shortfall", () => {
+  test("imports configured executable sources without rewarding raw registry size", () => {
     const store = new InMemoryScraperStore();
     const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-"));
     const seedPath = join(dir, "sources.json");
@@ -44,15 +44,13 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     try {
       const result = bootstrapRuntimeSources(store, {
         seedPaths: [seedPath],
-        generatedAt: "2026-07-02T00:00:00.000Z",
-        sourceTarget: 1000
+        generatedAt: "2026-07-02T00:00:00.000Z"
       });
 
       expect(result.importedSourceCount).toBe(2);
       expect(result.totalSourceCount).toBe(2);
       expect(result.activeSourceCount).toBe(2);
-      expect(result.shortfall).toBe(998);
-      expect(result.blocker).toBe("source_registry_shortfall:2/1000");
+      expect(result.retainedSourceCount).toBe(2);
       expect(store.listSources().every((item: any) => item.metadata.productionCollection === true)).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -85,14 +83,12 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     try {
       const result = bootstrapRuntimeSources(store, {
         seedPaths: [seedPath],
-        generatedAt: "2026-07-02T00:00:00.000Z",
-        sourceTarget: 1000
+        generatedAt: "2026-07-02T00:00:00.000Z"
       });
       const [sourceRecord] = store.listSources() as any[];
 
       expect(result.importedSourceCount).toBe(1);
       expect(result.activeSourceCount).toBe(0);
-      expect(result.shortfall).toBe(999);
       expect(sourceRecord).toMatchObject({
         id: "tg_candidate_runtime",
         type: "telegram_public",
@@ -141,13 +137,13 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         trustScore: 0.9,
         crawlFrequencySeconds: 900,
         legalNotes: "Reviewed public preview; no authentication or media retrieval.",
-        governance: { approvalRequired: true, approvalState: "approved", approvalScope: "official_public_web_preview", metadataOnly: false },
+        governance: { approvalRequired: true, approvalState: "approved", approvalScope: "official_public_web_preview", metadataOnly: false, approvedAt: "2026-07-20T00:00:00.000Z", approvedBy: "source-review:test", policyVersion: "collection-policy:v1" },
         metadata: { collectionMode: "public_web_preview", productionCollection: true, mediaPolicy: "metadata_only_no_download" }
       }]
     }));
 
     try {
-      const result = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-21T00:00:00.000Z", sourceTarget: 0 });
+      const result = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-21T00:00:00.000Z" });
       expect(result).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 1, skippedSourceCount: 0, activeSourceCount: 1, totalSourceCount: 1 });
       expect(store.listSources()[0]).toMatchObject({
         id: "src_catalog_candidate",
@@ -210,7 +206,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     } as any));
 
     try {
-      const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-21T12:00:00.000Z", sourceTarget: 0 });
+      const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-21T12:00:00.000Z" });
       expect(first).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 2, skippedSourceCount: 0, activeSourceCount: 2, totalSourceCount: 2 });
       expect(store.getSource(history[0].id)).toMatchObject({
         id: history[0].id,
@@ -239,7 +235,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       expect(store.listSources().some((source) => verifiedSources.some((verified: any) => verified.id === source.id))).toBe(false);
 
       const afterFirstBootstrap = structuredClone(store.listSources());
-      const second = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-22T12:00:00.000Z", sourceTarget: 0 });
+      const second = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-22T12:00:00.000Z" });
       expect(second).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 2, totalSourceCount: 2 });
       expect(store.listSources()).toEqual(afterFirstBootstrap);
 
@@ -253,7 +249,8 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         now: () => "2026-07-22T12:00:00.000Z",
         fetch: async () => { throw new Error("scheduler eligibility probe"); }
       } as any);
-      expect(cycle).toMatchObject({ activeSourceCount: 2, queuedTaskCount: 2, leasedTaskCount: 2, failedTaskCount: 2 });
+      expect(cycle).toMatchObject({ activeSourceCount: 2, queuedTaskCount: 3, leasedTaskCount: 2, failedTaskCount: 2 });
+      expect(store.listRuns().find((run: any) => run.id === cycle.runId)?.taskCount).toBe(3);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -309,7 +306,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     const before = structuredClone(store.listSources());
 
     try {
-      const result = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-21T12:00:00.000Z", sourceTarget: 0 });
+      const result = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-21T12:00:00.000Z" });
       expect(result).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: unsafeVariants.length, totalSourceCount: unsafeVariants.length });
       expect(store.listSources()).toEqual(before);
     } finally {
@@ -363,7 +360,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }));
 
     try {
-      const result = bootstrapRuntimeSources(store, { seedPaths: [invalidPath, restrictedPath], generatedAt: "2026-07-20T00:00:00.000Z", sourceTarget: 1 });
+      const result = bootstrapRuntimeSources(store, { seedPaths: [invalidPath, restrictedPath], generatedAt: "2026-07-20T00:00:00.000Z" });
       expect(result).toMatchObject({ importedSourceCount: 1, skippedSourceCount: 1, activeSourceCount: 0, totalSourceCount: 1 });
       expect(result.errors.some((error) => error.message.includes("src_invalid: legal notes are required"))).toBe(true);
       expect(store.listSources()[0]).toMatchObject({
@@ -379,49 +376,25 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
-  test("generated public source pack registers the 1k source target without activating provider-limited GDELT queries", () => {
-    const seedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/public_threat_intel_generated_sources.json");
-    const bundle = JSON.parse(readFileSync(seedPath, "utf8"));
+  test("uses one canonical Google News provider for query jobs", async () => {
+    const seedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/verified_query_providers.json");
     const store = new InMemoryScraperStore();
+    const result = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-22T00:00:00.000Z" });
+    expect(result).toMatchObject({ importedSourceCount: 1, totalSourceCount: 1, activeSourceCount: 1, retainedSourceCount: 1 });
+    expect(store.listSources()[0]).toMatchObject({ id: "src_google_news_threat_search", metadata: { healthQuery: "cybersecurity threat intelligence" } });
 
-    const result = bootstrapRuntimeSources(store, {
-      seedPaths: [seedPath],
-      generatedAt: "2026-07-02T00:00:00.000Z",
-      sourceTarget: 1000
-    });
-
-    expect(bundle.sources.length).toBeGreaterThanOrEqual(1000);
-    expect(bundle.sources.some((source: any) => !source.legalNotes || source.risk !== "low")).toBe(false);
-    expect(result.importedSourceCount).toBeGreaterThanOrEqual(1000);
-    expect(result.totalSourceCount).toBeGreaterThanOrEqual(1000);
-    const sources = store.listSources();
-    const gdelt = sources.filter((source) => source.url.includes("api.gdeltproject.org"));
-    const active = sources.filter((source) => source.status === "active");
-    expect(gdelt.length).toBeGreaterThan(0);
-    expect(gdelt.every((source) => source.status === "candidate" && source.metadata?.productionCollection === false)).toBe(true);
-    expect(active.length).toBeGreaterThan(0);
-    expect(active.every((source) => source.url.includes("news.google.com"))).toBe(true);
-    expect(result.activeSourceCount).toBe(active.length);
-    expect(result.shortfall).toBe(0);
-    expect(result.blocker).toBeUndefined();
-    expect(result.errors.filter((error) => error.path === seedPath)).toEqual([]);
-  });
-
-  test("puts existing generated GDELT sources on the same provider hold", () => {
-    const store = new InMemoryScraperStore();
-    store.saveSource({
-      ...source("src_gdelt_existing", "https://api.gdeltproject.org/api/v2/doc/doc?query=APT29"),
-      status: "active",
-      metadata: { generatedPublicSourcePack: true, productionCollection: true }
-    });
-
-    const result = bootstrapRuntimeSources(store, { seedPaths: [], generatedAt: "2026-07-21T08:30:00.000Z", sourceTarget: 0 });
-
-    expect(result.activeSourceCount).toBe(0);
-    expect(store.getSource("src_gdelt_existing")).toMatchObject({
-      status: "candidate",
-      metadata: { productionCollection: false, collectionHold: "provider_rate_limit_requires_bounded_collection_plan" }
-    });
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier(),
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => "2026-07-22T00:00:00.000Z",
+      fetch: async (url: string) => new Response("<rss><channel></channel></rss>", { status: 200, headers: { "content-type": "application/rss+xml" } })
+    } as any);
+    expect(cycle.queuedTaskCount).toBe(1);
+    const task = store.listRuns().find((run: any) => run.id === cycle.runId);
+    expect(task?.failedTaskCount).toBe(0);
+    expect(store.getSource("src_google_news_threat_search")?.lastSeenAt).toBe("2026-07-22T00:00:00.000Z");
   });
 
   test("collection scheduler status exposes source coverage, durable run state, parser state, and per-source freshness", async () => {
@@ -439,6 +412,8 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       status: "active",
       crawlState: { retryCount: 2, lastErrorAt: generatedAt, lastError: "HTTP 429", nextEligibleAt: generatedAt }
     } as any);
+    store.saveSourceHealthObservation({ id: "health_recent", tenantId: "default", sourceId: "src_recent", checkedAt: generatedAt, status: "healthy", success: true, useful: true, itemCount: 1, captureCount: 1, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0 });
+    store.saveSourceHealthObservation({ id: "health_due", tenantId: "default", sourceId: "src_due", checkedAt: generatedAt, status: "failed", success: false, useful: false, itemCount: 0, captureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, failureReason: "HTTP 429" });
     store.saveRun({
       id: "run_recent",
       requestId: "req_public_canary",
@@ -456,13 +431,13 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         frontier: new FocusedFrontier(),
         sourceBootstrap: {
           generatedAt,
-          sourceTarget: 2,
           seedPaths: [],
           importedSourceCount: 2,
+          updatedSourceCount: 0,
           skippedSourceCount: 0,
           activeSourceCount: 2,
+          retainedSourceCount: 2,
           totalSourceCount: 2,
-          shortfall: 0,
           errors: []
         }
       } as any);
@@ -476,9 +451,8 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         "scheduler_loop_unattached"
       ]));
       expect(body.sourceCoverage).toMatchObject({
-        sourceTarget: 2,
         totalSourceCount: 2,
-        sourceShortfall: 0,
+        retainedSourceCount: 2,
         activeSourceCount: 2,
         dailySourceCount: 2,
         dailyAttemptedCount: 2,
@@ -492,6 +466,18 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       if (originalAiBase === undefined) delete Bun.env.HANASAND_AI_API_BASE;
       else Bun.env.HANASAND_AI_API_BASE = originalAiBase;
     }
+  });
+
+  test("returns the complete executable fleet instead of truncating health rows", async () => {
+    const store = new InMemoryScraperStore();
+    for (let index = 0; index < 260; index++) store.saveSource({ ...source(`src_full_${index}`, `https://security.example.test/${index}.xml`), status: "active" } as any);
+
+    const response = await handleApiRequest(new Request("http://local/v1/ops/collection-scheduler"), { store, frontier: new FocusedFrontier() } as any);
+    const body = await response.json() as any;
+
+    expect(body.sourceCoverage).toMatchObject({ totalSourceCount: 260, retainedSourceCount: 260, activeSourceCount: 260, neverObservedSourceCount: 260 });
+    expect(body.sources).toHaveLength(260);
+    expect(Object.values(body.sourceHealth).reduce((total: number, count: any) => total + count, 0)).toBe(260);
   });
 });
 

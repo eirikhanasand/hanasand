@@ -1,5 +1,5 @@
 import { DarknetMetadataAdapter } from "../adapters/darknetMetadataAdapter.ts";
-import { evaluateSourceForCollection } from "../policy/collectionPolicy.ts";
+import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { nowIso, stableId } from "../utils.ts";
 
@@ -28,7 +28,7 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
       counters.completedSourceCount++;
       const checkedAt = options.now?.() ?? nowIso();
       options.store.saveSourceHealthObservation?.(observation(source, runId, task.id, checkedAt, Date.now() - started, true, useful, result.items.length));
-      options.store.saveSource({ ...source, health: { ...(source.health ?? {}), status: "healthy", checkedAt, lastSuccessAt: checkedAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, lastError: undefined }, crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + cadence(source) * 1_000).toISOString(), lastError: undefined, backoffUntil: undefined }, updatedAt: checkedAt });
+      options.store.saveSource({ ...source, lastSeenAt: checkedAt, health: { ...(source.health ?? {}), status: "healthy", checkedAt, lastSuccessAt: checkedAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, lastError: undefined }, crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + cadence(source) * 1_000).toISOString(), lastError: undefined, backoffUntil: undefined }, updatedAt: checkedAt });
     } catch (caught) {
       counters.failedSourceCount++;
       const checkedAt = options.now?.() ?? nowIso(), message = safeError(caught), retryCount = (source.crawlState?.retryCount ?? 0) + 1;
@@ -66,7 +66,7 @@ export function startRestrictedMetadataCollectionLoop(options: any) {
 }
 
 function due(source: any, generatedAt: string) {
-  if (!["tor_metadata"].includes(source.type) || !evaluateSourceForCollection(source).allowed) return false;
+  if (sourceCollectionLane(source) !== "restricted_metadata") return false;
   const eligible = source.crawlState?.backoffUntil ?? source.crawlState?.nextEligibleAt;
   return !eligible || Date.parse(eligible) <= Date.parse(generatedAt);
 }
