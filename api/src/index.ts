@@ -14,6 +14,8 @@ import recordTraffic from '#utils/traffic/recordTraffic.ts'
 import { recordHttpErrorResponse } from '#utils/logs/httpErrors.ts'
 import { provisionExistingMailAccounts } from '#utils/mail/accounts.ts'
 import { isAllowedApiOrigin, TRUSTED_API_PROXIES } from '#utils/http/publicBoundary.ts'
+import publicTiApi from './handlers/ti/publicApi.ts'
+import { randomUUID } from 'node:crypto'
 
 process.on('uncaughtException', error => {
     if (isBunWebSocketErrorEvent(error)) {
@@ -31,6 +33,7 @@ process.on('uncaughtException', error => {
 const fastify = Fastify({
     logger: true,
     trustProxy: TRUSTED_API_PROXIES,
+    genReqId: () => randomUUID(),
 })
 const port = Number(process.env.PORT) || 8081
 const browserWorkerOnly = process.env.BROWSER_SANDBOX_WORKER_ONLY === '1'
@@ -68,6 +71,7 @@ if (!browserWorkerOnly) {
     fastify.addHook('onResponse', async (req, res) => {
         recordTraffic(req, res)
     })
+    fastify.register(publicTiApi, { prefix: '/api/v1' })
     fastify.register(apiRoutes, { prefix: '/api' })
 }
 if (browserWorkerOnly) {

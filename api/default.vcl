@@ -9,8 +9,6 @@ backend default {
 }
 
 sub vcl_recv {
-    set req.http.X-Forwarded-For = client.ip;
-
     if (req.http.Upgrade ~ "(?i)websocket") {
         return (pipe);
     }
@@ -23,11 +21,7 @@ sub vcl_recv {
         return (pass);
     }
 
-    if (req.url ~ "^/api/(app|thought/random|test/visits|certificates|auth|vm|vms|metrics|docker|status|tools|logs)(/.*)?$") {
-        return (pass);
-    }
-
-    if (req.url ~ "^/api/ai/(models|runtime)(/.*)?$") {
+    if (req.url ~ "^/api/") {
         return (pass);
     }
 
@@ -35,14 +29,10 @@ sub vcl_recv {
 }
 
 sub vcl_backend_response {
-    if (bereq.url ~ "^/api/ti(/|$)") {
+    if (bereq.url ~ "^/api/" || beresp.status >= 400 || beresp.http.Set-Cookie || beresp.http.Cache-Control ~ "(?i)(private|no-store|no-cache|max-age=0)") {
+        set beresp.uncacheable = true;
         set beresp.ttl = 0s;
         set beresp.http.Cache-Control = "no-store, max-age=0";
-        return (deliver);
-    }
-
-    if (beresp.http.Cache-Control ~ "no-store") {
-        set beresp.ttl = 0s;
         return (deliver);
     }
 

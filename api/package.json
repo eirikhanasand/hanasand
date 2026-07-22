@@ -45,7 +45,10 @@
     "smoke:onion-session-proxy": "bun scripts/smoke-onion-session-proxy.ts",
     "smoke:onion-session-ui": "bun scripts/smoke-onion-session-ui.ts",
     "smoke:browser-sandbox-capacity": "bun scripts/smoke-browser-sandbox-capacity.ts",
-    "test:lxd-lifecycle": "bun scripts/test-lxd-lifecycle.ts"
+    "test:lxd-lifecycle": "bun scripts/test-lxd-lifecycle.ts",
+    "openapi:generate": "bun scripts/write-public-openapi.ts && openapi-typescript public/openapi.json -o generated/publicTiApi.d.ts",
+    "openapi:check": "bun run openapi:generate && git diff --exit-code -- public/openapi.json generated/publicTiApi.d.ts",
+    "smoke:public-api-contract": "bun scripts/validate-public-api-contract.ts"
   },
   "author": "",
   "license": "ISC",
@@ -61,6 +64,7 @@
     "gray-matter": "^4.0.3",
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.5",
+    "openapi-fetch": "^0.17.0",
     "pg": "^8.20.0",
     "ws": "^8.20.0"
   },
@@ -72,7 +76,9 @@
     "@types/pg": "^8.20.0",
     "@types/ws": "^8.18.1",
     "@typescript-eslint/parser": "8.58.2",
+    "ajv": "^8.20.0",
     "eslint": "10.2.1",
+    "openapi-typescript": "^7.13.0",
     "playwright": "^1.60.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3",

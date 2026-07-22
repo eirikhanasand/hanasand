@@ -15,6 +15,7 @@ type RateLimitActor = {
     identifier: string
     apiKey?: Awaited<ReturnType<typeof validateApiKey>>
     invalidApiKey?: boolean
+    invalidSession?: boolean
 }
 
 const buckets = new Map<string, Bucket>()
@@ -58,18 +59,17 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
 
         const actor = await resolveRateLimitActor(req)
         if (actor.invalidApiKey) {
-            return res.status(401).send({ error: 'invalid_api_key', message: 'The presented API key is invalid, disabled, or expired.' })
+            return sendBoundaryError(req, res, 401, 'invalid_api_key', 'The presented API key is invalid, disabled, or expired.')
+        }
+        if (actor.invalidSession) {
+            return sendBoundaryError(req, res, 401, 'invalid_session', 'The presented session is invalid or expired.')
         }
         let apiKeyScope: ReturnType<typeof matchApiKeyScope> = null
         if (actor.apiKey) {
             ;(req as FastifyRequest & { apiKeyAuth?: typeof actor.apiKey }).apiKeyAuth = actor.apiKey
             apiKeyScope = matchApiKeyScope(actor.apiKey.apiKey.scopes, req.method, path)
             if (!apiKeyScope) {
-                return res.status(403).send({
-                    error: 'API key is not allowed to access this endpoint.',
-                    route: path,
-                    method: req.method,
-                })
+                return sendBoundaryError(req, res, 403, 'scope_forbidden', 'API key is not allowed to access this endpoint.')
             }
 
         }
@@ -90,14 +90,8 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
             applyApiKeyLimitHeaders(res, periodChecks)
             const rejected = periodChecks.find((check) => !check.allowed)
             if (rejected) {
-                return res.status(429).send({
-                    error: 'API key rate limit exceeded.',
-                    route: path,
-                    method: req.method,
-                    period: rejected.period,
-                    retryAfterMs: rejected.retryAfterMs,
-                    resetAt: new Date(rejected.resetAt).toISOString(),
-                })
+                res.header('retry-after', String(Math.max(Math.ceil(rejected.retryAfterMs / 1000), 1)))
+                return sendBoundaryError(req, res, 429, 'rate_limit_exceeded', 'API key rate limit exceeded.')
             }
         }
 
@@ -112,7 +106,7 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
         applyRateLimitHeaders(res, globalCheck, scopeRule, actor.scope, 'global')
 
         if (!globalCheck.allowed) {
-            return sendRateLimitExceeded(res, globalCheck, actor.scope, 'global')
+            return sendRateLimitExceeded(req, res, globalCheck, actor.scope, 'global')
         }
 
         const routeCheck = consumeBucket({
@@ -123,7 +117,7 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
         applyRateLimitHeaders(res, routeCheck, routeRule, actor.scope, path)
 
         if (!routeCheck.allowed) {
-            return sendRateLimitExceeded(res, routeCheck, actor.scope, path)
+            return sendRateLimitExceeded(req, res, routeCheck, actor.scope, path)
         }
     })
 })
@@ -160,7 +154,11 @@ function resolveRouteRule(settings: RateLimitSettings, method: string, route: st
     return settings.defaults[scope]
 }
 
-export async function resolveRateLimitActor(req: FastifyRequest, validate: typeof validateApiKey = validateApiKey): Promise<RateLimitActor> {
+export async function resolveRateLimitActor(
+    req: FastifyRequest,
+    validate: typeof validateApiKey = validateApiKey,
+    validateUserSession: typeof validateSession = validateSession,
+): Promise<RateLimitActor> {
     const ip = getClientIp(req)
 
     const apiKeySecret = extractPresentedApiKey(req)
@@ -168,7 +166,7 @@ export async function resolveRateLimitActor(req: FastifyRequest, validate: typeo
         const apiKey = await validate(apiKeySecret).catch(() => null)
         if (apiKey) {
             return {
-                scope: apiKey.roles.some((role) => isInternalRole(role.id, role.name)) ? 'internal' : 'authenticated',
+                scope: apiKey.apiKey.tier === 'internal' && apiKey.roles.some((role) => isInternalRole(role.id, role.name)) ? 'internal' : 'authenticated',
                 identifier: `api_key:${apiKey.apiKey.id}`,
                 apiKey,
             }
@@ -180,7 +178,7 @@ export async function resolveRateLimitActor(req: FastifyRequest, validate: typeo
     if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
         const token = authHeader.split(' ')[1]
         const headerId = Array.isArray(req.headers.id) ? req.headers.id[0] : req.headers.id
-        const session = await validateSession({
+        const session = await validateUserSession({
             id: typeof headerId === 'string' ? headerId : undefined,
             token,
         }).catch(() => null)
@@ -194,10 +192,7 @@ export async function resolveRateLimitActor(req: FastifyRequest, validate: typeo
             }
         }
 
-        return {
-            scope: 'anonymous',
-            identifier: `ip:${ip}`,
-        }
+        return { scope: 'anonymous', identifier: `ip:${ip}`, invalidSession: true }
     }
 
     return {
@@ -209,9 +204,8 @@ export async function resolveRateLimitActor(req: FastifyRequest, validate: typeo
 function isInternalRole(roleId: string, roleName: string) {
     const normalizedId = roleId.toLowerCase()
     const normalizedName = roleName.toLowerCase()
-    return normalizedId.includes('admin')
-        || normalizedName.includes('admin')
-        || normalizedId === 'administrator'
+    return ['admin', 'administrator', 'system_admin'].includes(normalizedId)
+        || ['admin', 'administrator', 'system administrator'].includes(normalizedName)
 }
 
 export function getClientIp(req: Pick<FastifyRequest, 'ip'>) {
@@ -229,7 +223,7 @@ function normalizeRequestPath(req: FastifyRequest) {
 
 function extractPresentedApiKey(req: FastifyRequest) {
     const xApiKey = req.headers['x-api-key']
-    if (typeof xApiKey === 'string' && xApiKey.startsWith('hsk_')) {
+    if (typeof xApiKey === 'string' && xApiKey.length) {
         return xApiKey
     }
 
@@ -344,12 +338,14 @@ function applyRateLimitHeaders(
 }
 
 function sendRateLimitExceeded(
+    req: FastifyRequest,
     res: FastifyReply,
     state: { retryAfterMs: number, resetAt: number },
     scope: RateLimitScope,
     target: string,
 ) {
     res.header('retry-after', String(Math.max(Math.ceil(state.retryAfterMs / 1000), 1)))
+    if (normalizeRequestPath(req).startsWith('/api/v1')) return sendBoundaryError(req, res, 429, 'rate_limit_exceeded', 'Rate limit exceeded.')
     return res.status(429).send({
         error: 'Rate limit exceeded.',
         scope,
@@ -357,6 +353,15 @@ function sendRateLimitExceeded(
         retryAfterMs: state.retryAfterMs,
         resetAt: new Date(state.resetAt).toISOString(),
     })
+}
+
+function sendBoundaryError(req: FastifyRequest, res: FastifyReply, status: number, code: string, message: string) {
+    if (normalizeRequestPath(req).startsWith('/api/v1')) {
+        res.header('cache-control', 'no-store, max-age=0')
+        res.header('x-request-id', req.id)
+        return res.status(status).send({ error: { code, message, requestId: req.id } })
+    }
+    return res.status(status).send({ error: code, message })
 }
 
 function applyApiKeyLimitHeaders(

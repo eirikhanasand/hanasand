@@ -1,13 +1,28 @@
 import { describe, expect, test } from 'bun:test'
+import Fastify from 'fastify'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { isAllowedApiOrigin } from '#utils/http/publicBoundary.ts'
 import { getClientIp, resolveRateLimitActor } from '#plugins/rateLimit.ts'
 import postTiSearch, { normalizeBatchQueries, postTiSearchBatch, TI_BATCH_MAX_QUERIES } from '../src/handlers/ti/search.ts'
+import { TRUSTED_API_PROXIES } from '../src/utils/http/publicBoundary.ts'
+import { readFile } from 'node:fs/promises'
 
 describe('public TI API boundary', () => {
     test('uses Fastify verified client IP instead of a caller-supplied forwarding header', () => {
         const request = { ip: '203.0.113.10', headers: { 'x-forwarded-for': '127.0.0.1' } } as unknown as FastifyRequest
         expect(getClientIp(request)).toBe('203.0.113.10')
+    })
+
+    test('trusts forwarding only from explicitly configured proxy hops', async () => {
+        const app = Fastify({ trustProxy: TRUSTED_API_PROXIES })
+        app.get('/client-ip', request => ({ ip: request.ip }))
+
+        const spoofed = await app.inject({ method: 'GET', url: '/client-ip', remoteAddress: '203.0.113.10', headers: { 'x-forwarded-for': '127.0.0.1' } })
+        expect(spoofed.json()).toEqual({ ip: '203.0.113.10' })
+
+        const proxied = await app.inject({ method: 'GET', url: '/client-ip', remoteAddress: '127.0.0.1', headers: { 'x-forwarded-for': '127.0.0.1, 198.51.100.7' } })
+        expect(proxied.json()).toEqual({ ip: '198.51.100.7' })
+        await app.close()
     })
 
     test('does not grant internal limits to unauthenticated private proxy addresses', async () => {
@@ -20,11 +35,39 @@ describe('public TI API boundary', () => {
         expect(await resolveRateLimitActor(request, async () => null)).toEqual({ scope: 'anonymous', identifier: 'ip:203.0.113.10', invalidApiKey: true })
     })
 
+    test('rejects malformed keys and expired sessions instead of downgrading them to anonymous', async () => {
+        const malformedKey = { ip: '203.0.113.10', headers: { 'x-api-key': 'not-a-hanasand-key' } } as unknown as FastifyRequest
+        expect(await resolveRateLimitActor(malformedKey, async () => null)).toMatchObject({ invalidApiKey: true })
+
+        const expiredSession = { ip: '203.0.113.10', headers: { authorization: 'Bearer expired', id: 'session-id' } } as unknown as FastifyRequest
+        expect(await resolveRateLimitActor(expiredSession, async () => null, async () => null)).toEqual({ scope: 'anonymous', identifier: 'ip:203.0.113.10', invalidSession: true })
+    })
+
+    test('requires both the internal tier and an exact administrator role for internal limits', async () => {
+        const request = { ip: '203.0.113.10', headers: { 'x-api-key': 'hsk_test' } } as unknown as FastifyRequest
+        const externalAdmin = await resolveRateLimitActor(request, async () => ({ apiKey: { id: 'key', tier: 'business' }, roles: [{ id: 'admin', name: 'Admin' }] }) as any)
+        expect(externalAdmin.scope).toBe('authenticated')
+
+        const misleadingRole = await resolveRateLimitActor(request, async () => ({ apiKey: { id: 'key', tier: 'internal' }, roles: [{ id: 'admin_assistant', name: 'Admin assistant' }] }) as any)
+        expect(misleadingRole.scope).toBe('authenticated')
+
+        const internalAdmin = await resolveRateLimitActor(request, async () => ({ apiKey: { id: 'key', tier: 'internal' }, roles: [{ id: 'admin', name: 'Admin' }] }) as any)
+        expect(internalAdmin.scope).toBe('internal')
+    })
+
     test('allows only configured browser origins', () => {
         expect(isAllowedApiOrigin(undefined)).toBe(true)
         expect(isAllowedApiOrigin('https://hanasand.com')).toBe(true)
         expect(isAllowedApiOrigin('https://customer.example', 'https://customer.example')).toBe(true)
         expect(isAllowedApiOrigin('https://attacker.example')).toBe(false)
+    })
+
+    test('never shared-caches API responses or upstream failures in Varnish', async () => {
+        const vcl = await readFile(new URL('../default.vcl', import.meta.url), 'utf8')
+        expect(vcl).toContain('if (req.url ~ "^/api/")')
+        expect(vcl).toContain('bereq.url ~ "^/api/" || beresp.status >= 400')
+        expect(vcl).toContain('set beresp.http.Cache-Control = "no-store, max-age=0"')
+        expect(vcl).not.toContain('set req.http.X-Forwarded-For')
     })
 
     test('normalizes unique bounded queries', () => {
