@@ -10,7 +10,6 @@ const enterpriseFacingSources = [
     'src/app/pricing/page.tsx',
     'src/app/developers/page.tsx',
     'src/app/solutions/page.tsx',
-    'src/app/solutions/dwm/pageClient.tsx',
 ] as const
 
 const bannedVisibleTone = [

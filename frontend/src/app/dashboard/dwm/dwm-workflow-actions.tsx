@@ -27,7 +27,6 @@ type WorkflowTelemetry = {
 
 type WorkflowRouteSummary = {
     label: string
-    at: string
     watchTerms: number
     sourceCount?: number
     captureCount?: number
@@ -39,11 +38,10 @@ type WorkflowRouteSummary = {
     deliveryState?: string
 }
 
-const STARTER_WATCH_TERMS = ['your-company.com', 'Primary supplier', 'Customer brand'] as const
-
 export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry }: { tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry }) {
     const router = useRouter()
     const webhookInputRef = useRef<HTMLInputElement>(null)
+    const watchlistInputRef = useRef<HTMLTextAreaElement>(null)
     const [terms, setTerms] = useState(initialTerms.join('\n'))
     const [webhookUrl, setWebhookUrl] = useState('')
     const [sourceTarget, setSourceTarget] = useState('')
@@ -94,7 +92,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             })
             setLastRoute({
                 label: 'Watchlist match',
-                at: new Date().toISOString(),
                 watchTerms: countTerms(nextTerms),
                 alertCount: savedAlertCount,
             })
@@ -118,9 +115,15 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
 
         const actor = claimActor.trim()
         const company = claimCompany.trim()
-        const claimedData = claimData.trim() || 'new exposure report'
+        const claimedData = claimData.trim()
         const url = claimUrl.trim()
         const nextTerms = ensureTerm(terms, company)
+
+        if (!actor || !company || !claimedData || !validEvidenceUrl(url)) {
+            setResult({ ok: false, message: 'Actor, affected company, exposure details, and an HTTPS source URL are required.' })
+            setBusyAction(null)
+            return
+        }
 
         try {
             const ingest = await ingestClaim({ actor, company, claimedData, url }, scope)
@@ -139,7 +142,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setResult({ ok: rebuild.ok, message: rebuild.ok ? `Ingested ${accepted} exposure report${accepted === 1 ? '' : 's'}. Matched ${savedAlertCount} alert${savedAlertCount === 1 ? '' : 's'}.` : rebuild.message })
             setLastRoute({
                 label: 'Metadata intake',
-                at: new Date().toISOString(),
                 watchTerms: countTerms(nextTerms),
                 captureCount: accepted,
                 alertCount: savedAlertCount,
@@ -158,9 +160,15 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
 
         const actor = claimActor.trim()
         const company = claimCompany.trim()
-        const claimedData = claimData.trim() || 'new exposure report'
+        const claimedData = claimData.trim()
         const url = claimUrl.trim()
         const nextTerms = ensureTerm(terms, company)
+
+        if (!actor || !company || !claimedData || !validEvidenceUrl(url)) {
+            setResult({ ok: false, message: 'Actor, affected company, exposure details, and an HTTPS source URL are required.' })
+            setBusyAction(null)
+            return
+        }
 
         try {
             const ingest = await ingestClaim({ actor, company, claimedData, url }, scope)
@@ -208,7 +216,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setClaimUrl('')
             setLastRoute({
                 label: 'Metadata case',
-                at: new Date().toISOString(),
                 watchTerms: countTerms(nextTerms),
                 captureCount: accepted,
                 alertCount: 1,
@@ -290,7 +297,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 setTerms(nextTerms)
                 setLastRoute({
                     label: 'Source pack run',
-                    at: new Date().toISOString(),
                     watchTerms: countTerms(nextTerms),
                     sourceCount: telegramCount + darkwebCount + advisoryCount,
                     captureCount,
@@ -333,7 +339,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setTerms(nextTerms)
             setLastRoute({
                 label: 'Full route',
-                at: new Date().toISOString(),
                 watchTerms: countTerms(nextTerms),
                 sourceCount: telegramCount + darkwebCount + advisoryCount,
                 captureCount,
@@ -381,7 +386,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setResult({ ok: true, message: duplicateOf ? `Already registered as ${duplicateOf}.` : 'Telegram source submitted for bounded public polling.' })
             setLastRoute({
                 label: 'Source request',
-                at: new Date().toISOString(),
                 watchTerms: countTerms(terms),
                 sourceCount: duplicateOf ? 0 : 1,
             })
@@ -414,7 +418,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setResult({ ok: true, message: `Collected ${captureCount} Telegram captures. Rebuilt ${savedAlertCount} alerts.` })
             setLastRoute({
                 label: 'Collection run',
-                at: new Date().toISOString(),
                 watchTerms: countTerms(workflowTerms(terms)),
                 captureCount,
                 alertCount: savedAlertCount,
@@ -464,7 +467,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setResult({ ok: true, message: `Added ${createdCount} Telegram canary source(s), skipped ${duplicateCount} duplicate(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s).` })
             setLastRoute({
                 label: 'Telegram expansion',
-                at: new Date().toISOString(),
                 watchTerms: countTerms(nextTerms),
                 sourceCount: createdCount,
                 captureCount,
@@ -507,7 +509,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setResult({ ok: true, message: `Approved ${count} dark-web metadata source(s) and ${advisoryCount} public advisory source(s). No payload downloads enabled.` })
             setLastRoute({
                 label: 'Metadata sources',
-                at: new Date().toISOString(),
                 watchTerms: countTerms(nextTerms),
                 sourceCount: count + advisoryCount,
             })
@@ -540,7 +541,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setResult({ ok: true, message: `Webhook delivery attempted for ${attemptedCount} alert(s).` })
             setLastRoute({
                 label: 'Webhook delivery',
-                at: new Date().toISOString(),
                 watchTerms: effectiveTermCount,
                 deliveryAttempts: attemptedCount,
                 deliveryState: attemptedCount ? 'attempted' : 'nothing queued',
@@ -566,7 +566,6 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setResult({ ok: true, message: 'Webhook test delivered. Future alerts can use this destination.' })
             setLastRoute({
                 label: 'Webhook test',
-                at: new Date().toISOString(),
                 watchTerms: effectiveTermCount,
                 deliveryAttempts: 1,
                 deliveryState: 'test delivered',
@@ -587,17 +586,16 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
     }
 
-    function seedStarterWatchlist() {
-        if (countTerms(terms)) return
-        setTerms(starterWatchTerms())
-        setResult({ ok: true, message: 'Starter watchlist prepared. Replace each line with real customer terms before saving or running to case.' })
+    function focusWatchlistInput() {
+        watchlistInputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        watchlistInputRef.current?.focus()
     }
 
     const termCount = countTerms(terms)
     const effectiveTermCount = countTerms(workflowTerms(terms))
     const webhookConfigured = /^https?:\/\//i.test(webhookUrl.trim())
     const sourceReady = sourceTarget.trim().length > 0
-    const claimReady = claimActor.trim().length > 0 && claimCompany.trim().length > 0
+    const claimReady = claimActor.trim().length > 0 && claimCompany.trim().length > 0 && claimData.trim().length > 0 && validEvidenceUrl(claimUrl)
     const busy = busyAction !== null
     const sourceCount = telemetry?.sourceCount ?? 0
     const activeSourceCount = telemetry?.activeSourceCount ?? 0
@@ -606,10 +604,9 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const deliveryCount = telemetry?.deliveryCount ?? 0
     const latestRunStatus = telemetry?.latestRunStatus || ''
     const latestRunCaptureCount = telemetry?.latestRunCaptureCount ?? 0
-    const starterTermsActive = termCount === 0
-    const watchlistDisabledReason = termCount ? '' : 'Add watchlist terms or prepare the starter list first.'
+    const watchlistDisabledReason = termCount ? '' : 'Add at least one customer-owned watchlist term.'
     const sourceDisabledReason = sourceReady ? '' : 'Add a public Telegram handle or t.me URL first.'
-    const claimDisabledReason = claimReady ? '' : 'Add the actor name and affected company before ingesting evidence.'
+    const claimDisabledReason = claimReady ? '' : 'Add the actor, affected company, exposure details, and an HTTPS source URL.'
     const webhookTestDisabledReason = webhookConfigured ? '' : 'Enter an HTTPS webhook URL before testing delivery.'
     const webhookSendDisabledReason = webhookConfigured || organizationId ? '' : 'Enter an HTTPS webhook URL or open an organization with a saved delivery destination before sending queued alerts.'
     const routeQueue = [
@@ -629,12 +626,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             id: 'watchlist',
             label: 'Watchlist match',
             state: termCount ? `${termCount} terms` : 'terms needed',
-            detail: termCount ? 'Save the customer terms and rebuild matching alerts from collected evidence.' : 'Prepare an editable starter list, then replace each line with customer-owned terms.',
+            detail: termCount ? 'Save the customer terms and rebuild matching alerts from collected evidence.' : 'Enter customer-owned company, domain, supplier, brand, or product terms.',
             tone: effectiveTermCount ? 'ok' : 'warn',
-            command: termCount ? 'Save and rebuild' : 'Prepare starter list',
+            command: termCount ? 'Save and rebuild' : 'Add terms',
             busy: busyAction === 'watchlist',
             disabled: busy,
-            onClick: termCount ? saveAndRebuildWatchlist : seedStarterWatchlist,
+            onClick: termCount ? saveAndRebuildWatchlist : focusWatchlistInput,
         },
         {
             id: 'capture',
@@ -743,9 +740,10 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         <BellRing className='h-5 w-5 text-ui-primary' />
                     </div>
                     <textarea
+                        ref={watchlistInputRef}
                         value={terms}
                         onChange={event => setTerms(event.target.value)}
-                        placeholder={'your-company.com\nPrimary supplier\nCustomer brand'}
+                        placeholder='One customer-owned company, domain, supplier, brand, or product per line'
                         className='mt-3 min-h-28 w-full resize-y rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                     <div className='mt-3 flex flex-wrap gap-2'>
@@ -759,9 +757,8 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         <WorkflowButton busy={busyAction === 'source-case'} disabled={busy || Boolean(watchlistDisabledReason)} disabledReason={watchlistDisabledReason || undefined} icon={<ShieldCheck className='h-4 w-4' />} onClick={runSourcePackToCase}>Run full workflow</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'delivery'} disabled={busy || Boolean(webhookSendDisabledReason)} disabledReason={webhookSendDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
-                        {starterTermsActive ? <WorkflowButton busy={false} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={seedStarterWatchlist}>Prepare starter list</WorkflowButton> : null}
                     </div>
-                    {starterTermsActive ? <p className='mt-2 text-xs leading-5 text-ui-warning'>No saved terms yet. Prepare a starter list or paste customer-owned company, domain, supplier, brand, or product terms.</p> : null}
+                    {!termCount ? <p className='mt-2 text-xs leading-5 text-ui-warning'>No persisted watchlist terms. Add terms owned by this tenant before collecting or rebuilding alerts.</p> : null}
                     {webhookTestDisabledReason ? <p className='mt-1 text-xs leading-5 text-ui-subtle'>{webhookTestDisabledReason}</p> : null}
                 </form>
 
@@ -796,7 +793,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <input
                         value={claimUrl}
                         onChange={event => setClaimUrl(event.target.value)}
-                        placeholder='Source URL, optional'
+                        placeholder='HTTPS source URL'
                         className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                     <div className='mt-3 flex flex-wrap gap-2'>
@@ -847,7 +844,6 @@ async function ingestClaim(input: { actor: string, company: string, claimedData:
             sourceFamily: 'darkweb_metadata',
             title: `${input.actor} has just published a new victim: ${input.company}`,
             text: `${input.actor} victim: ${input.company}. ${input.claimedData}.`,
-            publishedAt: new Date().toISOString(),
             url: input.url || undefined,
         }],
     })
@@ -973,7 +969,7 @@ function RouteRunSummary({ route, organizationId }: { route: WorkflowRouteSummar
             <div className='flex flex-wrap items-center justify-between gap-3'>
                 <div className='min-w-0'>
                     <p className='text-[10px] font-semibold uppercase text-ui-primary'>Last route run</p>
-                    <h4 className='mt-1 text-sm font-semibold text-ui-text'>{route.label} · {relativeTime(route.at)}</h4>
+                    <h4 className='mt-1 text-sm font-semibold text-ui-text'>{route.label}</h4>
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     {route.caseHref ? (
@@ -1054,12 +1050,16 @@ function ensureTerm(value: string, term: string) {
     return (exists ? terms : [...terms, cleanTerm]).join('\n')
 }
 
-function starterWatchTerms() {
-    return STARTER_WATCH_TERMS.join('\n')
-}
-
 function workflowTerms(value: string) {
     return value.split(/[\n,]/).map(term => term.trim()).filter(Boolean).join('\n')
+}
+
+function validEvidenceUrl(value: string) {
+    try {
+        return new URL(value.trim()).protocol === 'https:'
+    } catch {
+        return false
+    }
 }
 
 async function postJson(path: string, body: Record<string, unknown>): Promise<Record<string, unknown> & { ok: boolean, message: string }> {
@@ -1100,18 +1100,4 @@ function readSummaryNumber(value: Record<string, unknown>, key: string) {
     if (!summary || typeof summary !== 'object') return 0
     const candidate = (summary as Record<string, unknown>)[key]
     return typeof candidate === 'number' ? candidate : 0
-}
-
-function relativeTime(value: string) {
-    const then = new Date(value).getTime()
-    if (!Number.isFinite(then)) return 'just now'
-    const delta = Date.now() - then
-    const abs = Math.abs(delta)
-    const minute = 60_000
-    const hour = 60 * minute
-    const day = 24 * hour
-    if (abs < minute) return 'just now'
-    if (abs < hour) return `${Math.max(1, Math.round(abs / minute))}m ago`
-    if (abs < day) return `${Math.round(abs / hour)}h ago`
-    return `${Math.round(abs / day)}d ago`
 }

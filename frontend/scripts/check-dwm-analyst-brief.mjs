@@ -110,7 +110,8 @@ assert.ok(source.includes('workflowContext.hasWebhookRoute ? \'test available\' 
 assert.ok(!source.includes('workflowContext.hasWebhookRoute ? \'test available\' : \'not configured\''), 'DWM selected alert webhook state should not render setup as not configured.')
 assert.ok(source.includes('return \'no retry scheduled\''), 'DWM retry state should use delivery workflow language.')
 assert.ok(!source.includes('return \'none\''), 'DWM retry state should not render dead none labels.')
-assert.ok(pageSource.includes('alerts={savedAlerts}'), 'DWM case queue should use the persisted alert ledger.')
+assert.ok(pageSource.includes('alerts={[]}'), 'DWM case queue should start empty before the authenticated alert proxy responds.')
+assert.ok(source.includes('fetch(`/api/dwm/alerts?${params.toString()}`'), 'DWM case queue should hydrate from the authenticated alert proxy.')
 assert.ok(!pageSource.includes('mergeDwmAlerts'), 'DWM case queue should not merge derived product matches into persisted alerts.')
 assert.ok(source.includes('const alertCaptureCount = uniqueStrings(alerts.flatMap(alertCaptureIds)).length'), 'DWM workflow counters should use alert capture IDs when operations are unavailable.')
 assert.ok(source.includes('alertWatchlistMatchCount(alerts)'), 'DWM workflow counters should derive visible matches from alerts when operations are unavailable.')
@@ -129,10 +130,11 @@ for (const token of [
     'RouteStateCard label=\'Terms\'',
     'Save and rebuild alerts',
     'Run full workflow',
-    'STARTER_WATCH_TERMS',
     'workflowTerms(terms)',
-    'Prepare starter list',
-    'No saved terms yet. Prepare a starter list or paste customer-owned company, domain, supplier, brand, or product terms.',
+    'Add at least one customer-owned watchlist term.',
+    'No persisted watchlist terms. Add terms owned by this tenant before collecting or rebuilding alerts.',
+    'validEvidenceUrl',
+    'an HTTPS source URL are required',
     'Add an HTTPS Discord or webhook endpoint before testing customer delivery.',
     'No destination yet. Add or test an HTTPS Discord/webhook endpoint before sending.',
     'Test saves a delivery attempt without sending externally.',

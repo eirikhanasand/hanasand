@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { buildRouteMetadata } from '../seo'
-import DarkWebMonitoringPageClient from './pageClient'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Dark Web Monitoring and Telegram Threat Alerts',
@@ -17,5 +16,5 @@ export default async function DarkWebMonitoringPage() {
         redirect('/dashboard/dwm')
     }
 
-    return <DarkWebMonitoringPageClient />
+    redirect('/login?path=%2Fdashboard%2Fdwm')
 }

@@ -43,11 +43,12 @@ test('DWM case detail exposes webhook delivery traceability', () => {
     assert.doesNotMatch(source, /What returned/)
 })
 
-test('DWM case detail server-loads the backed case workbench', () => {
-    assert.match(pageSource, /loadCaseDetail/)
-    assert.match(pageSource, /loadCaseExport/)
-    assert.match(pageSource, /initialDetail=\{initialDetail\}/)
-    assert.match(pageSource, /initialExportPayload=\{initialExportPayload\}/)
+test('DWM case detail loads through the authenticated tenant proxy', () => {
+    assert.doesNotMatch(pageSource, /loadCaseDetail/)
+    assert.doesNotMatch(pageSource, /loadCaseExport/)
+    assert.match(pageSource, /cookieStore\.get\('id'\)/)
+    assert.match(pageSource, /cookieStore\.get\('access_token'\)/)
+    assert.match(source, /fetch\(`\/api\/cases\/\$\{encodeURIComponent\(caseId\)\}\$\{query\}`/)
     assert.match(source, /initialDetail\?: CaseDetail/)
     assert.match(source, /loading: !initialDetail/)
     assert.match(source, /detail: initialDetail/)

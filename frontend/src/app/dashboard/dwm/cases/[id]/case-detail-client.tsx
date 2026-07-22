@@ -208,7 +208,7 @@ const primaryActions = ['review', 'assign', 'escalate', 'suppress', 'false_posit
 
 export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId, routeRun, initialDetail, initialExportPayload }: {
     caseId: string
-    tenantId?: string
+    tenantId: string
     organizationId?: string
     alertId?: string
     routeRun?: string
@@ -281,7 +281,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                     action: actionId,
                     note: rationale,
                     assignedOwner: owner.trim() || undefined,
-                    idempotencyKey: `dashboard-case:${caseId}:${actionId}:${Date.now()}`,
+                    idempotencyKey: `dashboard-case:${caseId}:${actionId}:${caseRecord?.updatedAt || caseRecord?.createdAt || 'initial'}`,
                 }),
             })
             const payload = await response.json().catch(() => ({}))
@@ -297,6 +297,10 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
     async function notifyCustomer() {
         if (busy) return
+        if (!note.trim()) {
+            setMessage({ ok: false, text: 'Add a customer-safe note before recording a notification dry run.' })
+            return
+        }
         setBusy('notify')
         setMessage(null)
         try {
@@ -307,8 +311,8 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                     tenantId: resolvedTenantId(caseRecord, tenantId),
                     organizationId: resolvedOrganizationId(caseRecord, organizationId),
                     deliveryMode: 'dry_run',
-                    note: note.trim() || 'Customer notification dry run.',
-                    idempotencyKey: `dashboard-case-notify:${caseId}:${Date.now()}`,
+                    note: note.trim(),
+                    idempotencyKey: `dashboard-case-notify:${caseId}:${caseRecord?.updatedAt || caseRecord?.createdAt || 'initial'}`,
                 }),
             })
             const payload = await response.json().catch(() => ({}))
@@ -949,8 +953,8 @@ function matchedTerms(detail: CaseDetail) {
     return uniqueStrings([matched, ...terms])
 }
 
-function resolvedTenantId(caseRecord: CaseDetail['case'] | undefined, fallback?: string) {
-    return caseRecord?.tenantId || fallback || 'default'
+function resolvedTenantId(caseRecord: CaseDetail['case'] | undefined, fallback: string) {
+    return caseRecord?.tenantId || fallback
 }
 
 function resolvedOrganizationId(caseRecord: CaseDetail['case'] | undefined, fallback?: string) {
