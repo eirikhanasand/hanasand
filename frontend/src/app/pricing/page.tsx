@@ -172,8 +172,8 @@ export default function PricingPage() {
                         <p className='text-sm leading-6 text-ui-muted'>
                             The positioning is intentionally narrower than the largest dark-web platforms. Hanasand fits teams that need a fast watchlist, clear source context, and delivery into an existing workflow.
                         </p>
-                        <Link href='/dwm#sample-alert' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
-                            Inspect alert shape
+                        <Link href='/dwm' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
+                            Open monitoring
                             <ArrowRight className='h-4 w-4' />
                         </Link>
                     </div>

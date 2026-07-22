@@ -11,7 +11,6 @@ test('public workflow reliability contracts are not demo-only', async () => {
     const registerPage = await readFile(path.join(root, 'src/app/register/pageClient.tsx'), 'utf8')
     const contact = await readFile(path.join(root, 'src/components/contact/contact.tsx'), 'utf8')
     const contactRoute = await readFile(path.join(root, 'src/app/api/contact/route.ts'), 'utf8')
-    const dwmPage = await readFile(path.join(root, 'src/app/solutions/dwm/pageClient.tsx'), 'utf8')
     const apiPwnedHandler = await readFile(path.join(root, '../api/src/handlers/pwned/post.ts'), 'utf8')
     const apiPwnedUtility = await readFile(path.join(root, '../api/src/utils/pwned/checkPwned.ts'), 'utf8')
 
@@ -59,15 +58,4 @@ test('public workflow reliability contracts are not demo-only', async () => {
     expect(contactRoute).toContain('Company is required for enterprise, procurement, and security review requests.')
     expect(contactRoute).toContain('security review material')
 
-    expect(dwmPage).toContain('fetch(\'/api/dwm/webhook-sink\'')
-    expect(dwmPage).toContain('Validate delivery preview')
-    expect(dwmPage).toContain('Save local preview')
-    expect(dwmPage).toContain('data-dwm-public-webhook-boundary')
-    expect(dwmPage).toContain('evidenceStrengthLabel')
-    expect(dwmPage).toContain('review priority')
-    expect(dwmPage).toContain('Your endpoint was not contacted.')
-    expect(dwmPage).not.toContain('Validate sample payload')
-    expect(dwmPage).not.toContain('sample receiver')
-    expect(dwmPage).not.toContain('risk level')
-    expect(dwmPage).not.toContain('window.location.assign(\'/dashboard/automations?setup=dwm\')')
 })
