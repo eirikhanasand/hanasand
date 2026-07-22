@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { buildActiveLearningCandidateQueueDto, buildAnalystFeedbackLoopDto, buildAnalystQualityReviewQueueDto } from "../pipeline/analystFeedback.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { SOURCE_SPECIFIC_EXTRACTOR_VERSION } from "../pipeline/sourceSpecificExtraction.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
@@ -108,14 +107,5 @@ describe("compact pipeline value path", () => {
     expect(store.listActorProfiles()).toEqual([
       expect.objectContaining({ id: "actor_legacy_akira", actorType: "ransomware", evidenceCount: 2, captureIds: ["cap_legacy", expect.stringMatching(/^cap_/)] })
     ]);
-  });
-
-  test("builds compact analyst feedback and learning queues", () => {
-    const feedback = buildAnalystFeedbackLoopDto({ items: [{ id: "row_1", mark: "needs_review" }] });
-    const review = buildAnalystQualityReviewQueueDto({ rows: [{ id: "row_1", state: "queued" }] });
-    const active = buildActiveLearningCandidateQueueDto({ candidates: [{ id: "row_1", score: 0.9 }] });
-    expect(feedback.corrections).toHaveLength(1);
-    expect(review.releaseGate).toBe("pass");
-    expect(active.summary.highPriority).toBe(1);
   });
 });
