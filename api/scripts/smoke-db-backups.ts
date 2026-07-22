@@ -168,7 +168,7 @@ printf 'verified custom archive bytes' > "$output"
         pg_restore: `#!/bin/sh
 if [ "$DB_BACKUP_TEST_FAIL" = "pg_restore" ]; then echo "pg_restore failed" >&2; exit 1; fi
 if [ "$1" = "--list" ]; then
-  printf '; archive\n1; 0 0 SCHEMA - public owner\n2; 1259 1 TABLE public users owner\n3; 1259 2 TABLE public audit_events owner\n4; 0 0 COMMENT - TABLE public users owner\n'
+  printf '; archive\n1; 0 0 SCHEMA - public owner\n2; 1259 1 TABLE public users owner\n3; 1259 2 TABLE public audit_events owner\n4; 0 0 COMMENT - TABLE public users owner\n5; 0 1 TABLE DATA public users owner\n6; 0 2 TABLE DATA public audit_events owner\n'
 fi
 `,
         psql: `#!/bin/sh

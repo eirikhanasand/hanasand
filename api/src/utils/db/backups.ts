@@ -761,7 +761,10 @@ async function inspectArchive(file: string) {
     const lines = output.split('\n')
     const entries = lines.filter(line => line.trim() && !line.trim().startsWith(';')).length
     if (!entries) throw new BackupOperationError('Backup archive contains no restorable entries.', 500)
-    const tableLines = lines.filter(line => line.trim().split(/\s+/)[3] === 'TABLE')
+    const tableLines = lines.filter(line => {
+        const fields = line.trim().split(/\s+/)
+        return fields[3] === 'TABLE' && fields[4] !== 'DATA' && fields[4] !== 'ATTACH'
+    })
     const schemas = new Set(tableLines.map(line => {
         const fields = line.trim().split(/\s+/)
         return fields[fields.indexOf('TABLE') + 1]
