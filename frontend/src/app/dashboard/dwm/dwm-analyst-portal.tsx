@@ -1163,7 +1163,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
             <InvestigationTabs active={investigationTab} onChange={setInvestigationTab} />
 
             {investigationTab === 'evidence' && (
-                <section className='grid gap-4'>
+                <section className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4'>
                     <EvidenceDispositionQueue
                         alert={alert}
                         visibleEvidence={visibleEvidence}
