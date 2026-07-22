@@ -463,12 +463,22 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       INSERT INTO threat_intel.intelligence_claims (
         id, claim_type, subject_type, subject_id, claim_value, summary, confidence,
         evidence_stage, extraction_method, extractor_version, review_state,
-        corroboration_state, source_count, evidence_count, first_seen_at, last_seen_at, record
+        legal_hold, corroboration_state, source_count, evidence_count, first_seen_at, last_seen_at, record
       ) VALUES (
         'claim_legacy_lineage', 'incident_summary', 'incident', ${legacyId}, ${JSON.stringify({ value: "legacy" })}::text::jsonb,
         'Legacy incident claim', 0.7, 'extracted', 'test', 'legacy', 'unreviewed',
-        'single_source', 1, 1, ${collectedAt}, ${collectedAt},
+        false, 'single_source', 1, 1, ${collectedAt}, ${collectedAt},
         ${JSON.stringify({ id: "claim_legacy_lineage", subjectType: "incident", subjectId: legacyId })}::text::jsonb
+      ), (
+        'claim_invalid_needs_review', 'incident', 'incident', ${invalidId}, ${JSON.stringify({ value: "parser fallback" })}::text::jsonb,
+        'Generated low-confidence parser fallback', 0.2, 'captured_page', 'deterministic_fallback', 'legacy', 'needs_review',
+        false, 'single_source', 1, 1, ${collectedAt}, ${collectedAt},
+        ${JSON.stringify({ id: "claim_invalid_needs_review", subjectType: "incident", subjectId: invalidId, reviewState: "needs_review" })}::text::jsonb
+      ), (
+        'claim_invalid_protected', 'incident', 'incident', ${invalidId}, ${JSON.stringify({ value: "analyst confirmed" })}::text::jsonb,
+        'Analyst-confirmed claim', 0.9, 'validated', 'analyst_review', 'legacy', 'confirmed',
+        true, 'single_source', 1, 1, ${collectedAt}, ${collectedAt},
+        ${JSON.stringify({ id: "claim_invalid_protected", subjectType: "incident", subjectId: invalidId, reviewState: "confirmed", legalHold: true, summary: "Analyst-confirmed claim" })}::text::jsonb
       )
     `;
     await admin`
@@ -479,16 +489,79 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         'claim-evidence_legacy_lineage', 'claim_legacy_lineage', ${current.capture.id}, ${current.capture.sourceId},
         'incident', ${legacyId}, 'supports', 'extracted', 0.7, 'legacy', '{}'::jsonb,
         ${JSON.stringify({ id: "claim-evidence_legacy_lineage", claimId: "claim_legacy_lineage", captureId: current.capture.id, subjectType: "incident", subjectId: legacyId, relationship: "supports" })}::text::jsonb
+      ), (
+        'claim-evidence_invalid_cross_subject', 'claim_invalid_needs_review', ${current.capture.id}, ${current.capture.sourceId},
+        'entity', 'entity_invalid_lineage', 'supports', 'captured_page', 0.2, 'legacy', '{}'::jsonb,
+        ${JSON.stringify({ id: "claim-evidence_invalid_cross_subject", claimId: "claim_invalid_needs_review", captureId: current.capture.id, subjectType: "entity", subjectId: "entity_invalid_lineage", relationship: "supports" })}::text::jsonb
+      ), (
+        'claim-evidence_invalid_protected', 'claim_invalid_protected', ${current.capture.id}, ${current.capture.sourceId},
+        'incident', ${invalidId}, 'supports', 'validated', 0.9, 'legacy', '{}'::jsonb,
+        ${JSON.stringify({ id: "claim-evidence_invalid_protected", claimId: "claim_invalid_protected", captureId: current.capture.id, subjectType: "incident", subjectId: invalidId, relationship: "supports" })}::text::jsonb
+      )
+    `;
+    await admin`
+      INSERT INTO threat_intel.claim_reviews (
+        id, claim_id, action, previous_state, next_state, reviewer_id, reason, reviewed_at, record
+      ) VALUES (
+        'claim-review_invalid_protected', 'claim_invalid_protected', 'confirm', 'needs_review', 'confirmed',
+        'analyst_test', 'Confirmed from independent source evidence.', ${collectedAt},
+        ${JSON.stringify({ id: "claim-review_invalid_protected", claimId: "claim_invalid_protected", action: "confirm", reviewerId: "analyst_test" })}::text::jsonb
+      )
+    `;
+    await admin`
+      INSERT INTO threat_intel.validation_records (
+        id, claim_id, validation_type, status, reference_url, matched_at, reviewer_id, record
+      ) VALUES (
+        'validation_invalid_protected', 'claim_invalid_protected', 'independent_source', 'supported',
+        'https://example.test/independent-evidence', ${collectedAt}, 'analyst_test',
+        ${JSON.stringify({ id: "validation_invalid_protected", claimId: "claim_invalid_protected", status: "supported" })}::text::jsonb
+      )
+    `;
+    await admin`
+      INSERT INTO threat_intel.evaluation_labels (
+        id, claim_id, label_type, expected_value, observed_value, outcome,
+        dataset_split, labeled_by, labeled_at, record
+      ) VALUES (
+        'label_invalid_protected', 'claim_invalid_protected', 'incident', '"confirmed"'::jsonb, '"confirmed"'::jsonb,
+        'correct', 'test', 'analyst_test', ${collectedAt},
+        ${JSON.stringify({ id: "label_invalid_protected", claimId: "claim_invalid_protected", outcome: "correct" })}::text::jsonb
       )
     `;
     await admin`
       INSERT INTO threat_intel.workflow_records (record_type, id, created_at, updated_at, record)
       VALUES ('live_search_snapshot', 'snapshot_incident_lineage', ${collectedAt}, ${collectedAt},
-        ${JSON.stringify({ id: "snapshot_incident_lineage", incidentIds: [current.incident.id, legacyId, invalidId] })}::text::jsonb)
+        ${JSON.stringify({ id: "snapshot_incident_lineage", incidentIds: [current.incident.id, legacyId, invalidId], subjectType: "incident", subjectId: invalidId })}::text::jsonb)
     `;
     await admin`DELETE FROM threat_intel.incident_revisions`;
     await admin`DELETE FROM threat_intel.incident_identity_history`;
     await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '019_incident_logical_identity'`;
+
+    const protectedGraph = async () => (await admin<{ snapshot: any }[]>`
+      SELECT jsonb_build_object(
+        'incidents', (SELECT jsonb_agg(to_jsonb(row) ORDER BY id) FROM threat_intel.incidents AS row WHERE id IN (${current.incident.id}, ${legacyId}, ${invalidId})),
+        'entities', (SELECT jsonb_agg(to_jsonb(row) ORDER BY id) FROM threat_intel.entities AS row WHERE id IN ('entity_legacy_lineage', 'entity_invalid_lineage')),
+        'evidenceLinks', (SELECT jsonb_agg(to_jsonb(row) ORDER BY id) FROM threat_intel.evidence_links AS row WHERE id = 'evidence-link_legacy_lineage'),
+        'claims', (SELECT jsonb_agg(to_jsonb(row) ORDER BY id) FROM threat_intel.intelligence_claims AS row WHERE id LIKE 'claim%lineage' OR id LIKE 'claim_invalid_%'),
+        'claimEvidence', (SELECT jsonb_agg(to_jsonb(row) ORDER BY id) FROM threat_intel.claim_evidence AS row WHERE id LIKE 'claim-evidence_%lineage' OR id LIKE 'claim-evidence_invalid_%'),
+        'claimReviews', (SELECT jsonb_agg(to_jsonb(row) ORDER BY id) FROM threat_intel.claim_reviews AS row WHERE claim_id = 'claim_invalid_protected'),
+        'validations', (SELECT jsonb_agg(to_jsonb(row) ORDER BY id) FROM threat_intel.validation_records AS row WHERE claim_id = 'claim_invalid_protected'),
+        'labels', (SELECT jsonb_agg(to_jsonb(row) ORDER BY id) FROM threat_intel.evaluation_labels AS row WHERE claim_id = 'claim_invalid_protected'),
+        'timeliness', (SELECT jsonb_agg(to_jsonb(row) ORDER BY id) FROM threat_intel.timeliness_records AS row WHERE id IN (${current.incident.id}, ${legacyId})),
+        'workflows', (SELECT jsonb_agg(to_jsonb(row) ORDER BY record_type, id) FROM threat_intel.workflow_records AS row WHERE id = 'snapshot_incident_lineage')
+      ) AS snapshot
+    `)[0].snapshot;
+    const graphBeforeProtectedAbort = await protectedGraph();
+    const protectedClaimBefore = await admin`SELECT to_jsonb(row) AS record FROM threat_intel.intelligence_claims AS row WHERE id = 'claim_invalid_protected'`;
+
+    await expect(PostgresScraperStore.create({ databaseUrl })).rejects.toThrow("pseudo-incident contains reviewed or protected analyst data");
+    expect(await protectedGraph()).toEqual(graphBeforeProtectedAbort);
+    expect(await admin`SELECT to_jsonb(row) AS record FROM threat_intel.intelligence_claims AS row WHERE id = 'claim_invalid_protected'`).toEqual(protectedClaimBefore);
+    expect(await admin`SELECT old_incident_id FROM threat_intel.incident_identity_history`).toHaveLength(0);
+
+    await admin`DELETE FROM threat_intel.evaluation_labels WHERE claim_id = 'claim_invalid_protected'`;
+    await admin`DELETE FROM threat_intel.validation_records WHERE claim_id = 'claim_invalid_protected'`;
+    await admin`DELETE FROM threat_intel.claim_reviews WHERE claim_id = 'claim_invalid_protected'`;
+    await admin`DELETE FROM threat_intel.intelligence_claims WHERE id = 'claim_invalid_protected'`;
 
     const migrated = await PostgresScraperStore.create({ databaseUrl });
     await migrated.close();
@@ -514,7 +587,25 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(await admin`SELECT id FROM threat_intel.timeliness_records WHERE incident_id = ${current.incident.id}`).toHaveLength(1);
     expect((await admin<{ incident_id?: string }[]>`SELECT incident_id FROM threat_intel.entities WHERE id = 'entity_legacy_lineage'`)[0].incident_id).toBe(current.incident.id);
     expect((await admin<{ incident_id?: string }[]>`SELECT incident_id FROM threat_intel.entities WHERE id = 'entity_invalid_lineage'`)[0].incident_id).toBeNull();
-    expect((await admin<{ ids: string[] }[]>`SELECT ARRAY(SELECT jsonb_array_elements_text(record->'incidentIds')) AS ids FROM threat_intel.workflow_records WHERE id = 'snapshot_incident_lineage'`)[0].ids).toEqual([current.incident.id]);
+    expect(await admin`SELECT id FROM threat_intel.intelligence_claims WHERE id = 'claim_invalid_needs_review'`).toHaveLength(0);
+    const [invalidHistory] = await admin<{ reference_snapshot: any }[]>`SELECT reference_snapshot FROM threat_intel.incident_identity_history WHERE old_incident_id = ${invalidId}`;
+    expect(invalidHistory.reference_snapshot.claims.map((claim: any) => claim.id)).toContain('claim_invalid_needs_review');
+    expect(invalidHistory.reference_snapshot.claimEvidence.map((evidence: any) => evidence.id)).toContain('claim-evidence_invalid_cross_subject');
+    const [workflow] = await admin<{ record: any }[]>`SELECT record FROM threat_intel.workflow_records WHERE id = 'snapshot_incident_lineage'`;
+    expect(workflow.record.incidentIds).toEqual([current.incident.id]);
+    expect(workflow.record).not.toHaveProperty('subjectId');
+    const [dangling] = await admin<{ count: number }[]>`
+      SELECT (
+        (SELECT count(*) FROM threat_intel.entities WHERE incident_id = ${invalidId})
+        + (SELECT count(*) FROM threat_intel.indicators WHERE incident_id = ${invalidId})
+        + (SELECT count(*) FROM threat_intel.evidence_links WHERE subject_type = 'incident' AND subject_id = ${invalidId})
+        + (SELECT count(*) FROM threat_intel.intelligence_claims WHERE subject_type = 'incident' AND subject_id = ${invalidId})
+        + (SELECT count(*) FROM threat_intel.claim_evidence WHERE subject_type = 'incident' AND subject_id = ${invalidId})
+        + (SELECT count(*) FROM threat_intel.timeliness_records WHERE incident_id = ${invalidId})
+        + (SELECT count(*) FROM threat_intel.workflow_records WHERE record->>'incidentId' = ${invalidId} OR record->>'promotedToIncidentId' = ${invalidId} OR (record->>'subjectType' = 'incident' AND record->>'subjectId' = ${invalidId}) OR (jsonb_typeof(record->'incidentIds') = 'array' AND (record->'incidentIds') ? ${invalidId}))
+      )::int AS count
+    `;
+    expect(dangling.count).toBe(0);
 
     const [reversal] = await admin<{ result: any }[]>`
       SELECT threat_intel.reverse_incident_identity_merge(${legacyId}, 'analyst_test', 'Incorrect historical merge confirmed by source review') AS result

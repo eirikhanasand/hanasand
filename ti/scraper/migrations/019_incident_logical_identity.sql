@@ -116,14 +116,20 @@ BEGIN
     JOIN threat_intel.incidents AS incident ON incident.id = mapping.old_id
     WHERE mapping.invalid_reason IS NOT NULL
       AND (
-        incident.review_state <> 'unreviewed'
+        incident.review_state NOT IN ('unreviewed', 'needs_review')
         OR EXISTS (SELECT 1 FROM threat_intel.validation_records WHERE incident_id = incident.id)
         OR EXISTS (SELECT 1 FROM threat_intel.alerts WHERE incident_id = incident.id)
         OR EXISTS (SELECT 1 FROM threat_intel.evaluation_labels WHERE incident_id = incident.id)
         OR EXISTS (
-          SELECT 1 FROM threat_intel.intelligence_claims
-          WHERE subject_type = 'incident' AND subject_id = incident.id
-            AND (review_state <> 'unreviewed' OR legal_hold)
+          SELECT 1 FROM threat_intel.intelligence_claims AS claim
+          WHERE claim.subject_type = 'incident' AND claim.subject_id = incident.id
+            AND (
+              claim.review_state NOT IN ('unreviewed', 'needs_review')
+              OR claim.legal_hold
+              OR EXISTS (SELECT 1 FROM threat_intel.claim_reviews AS review WHERE review.claim_id = claim.id)
+              OR EXISTS (SELECT 1 FROM threat_intel.validation_records AS validation WHERE validation.claim_id = claim.id)
+              OR EXISTS (SELECT 1 FROM threat_intel.evaluation_labels AS label WHERE label.claim_id = claim.id)
+            )
         )
       )
   ) THEN
@@ -158,13 +164,22 @@ SELECT
     'alerts', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.alerts AS row WHERE row.incident_id = mapping.old_id), '[]'::jsonb),
     'evaluationLabels', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.evaluation_labels AS row WHERE row.incident_id = mapping.old_id), '[]'::jsonb),
     'claims', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.intelligence_claims AS row WHERE row.subject_type = 'incident' AND row.subject_id = mapping.old_id), '[]'::jsonb),
-    'claimEvidence', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.claim_evidence AS row WHERE row.subject_type = 'incident' AND row.subject_id = mapping.old_id), '[]'::jsonb),
+    'claimEvidence', COALESCE((
+      SELECT jsonb_agg(to_jsonb(row))
+      FROM threat_intel.claim_evidence AS row
+      WHERE (row.subject_type = 'incident' AND row.subject_id = mapping.old_id)
+        OR row.claim_id IN (
+          SELECT claim.id FROM threat_intel.intelligence_claims AS claim
+          WHERE claim.subject_type = 'incident' AND claim.subject_id = mapping.old_id
+        )
+    ), '[]'::jsonb),
     'timeliness', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.timeliness_records AS row WHERE row.incident_id = mapping.old_id), '[]'::jsonb),
     'workflowRecords', COALESCE((
       SELECT jsonb_agg(to_jsonb(row))
       FROM threat_intel.workflow_records AS row
       WHERE row.record->>'incidentId' = mapping.old_id
         OR row.record->>'promotedToIncidentId' = mapping.old_id
+        OR (row.record->>'subjectType' = 'incident' AND row.record->>'subjectId' = mapping.old_id)
         OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(row.record->'incidentIds') = 'array' THEN row.record->'incidentIds' ELSE '[]'::jsonb END) AS value WHERE value = mapping.old_id)
     ), '[]'::jsonb)
   ),
@@ -444,6 +459,13 @@ FROM _incident_identity_map AS mapping
 WHERE mapping.invalid_reason IS NOT NULL
   AND (workflow.record->>'incidentId' = mapping.old_id OR workflow.record->>'promotedToIncidentId' = mapping.old_id);
 
+UPDATE threat_intel.workflow_records AS workflow
+SET record = workflow.record - 'subjectType' - 'subjectId'
+FROM _incident_identity_map AS mapping
+WHERE mapping.invalid_reason IS NOT NULL
+  AND workflow.record->>'subjectType' = 'incident'
+  AND workflow.record->>'subjectId' = mapping.old_id;
+
 DELETE FROM threat_intel.evidence_links AS row
 USING _incident_identity_map AS mapping
 WHERE row.subject_type = 'incident' AND row.subject_id = mapping.old_id AND mapping.invalid_reason IS NOT NULL;
@@ -614,8 +636,9 @@ BEGIN
   ON CONFLICT (id) DO NOTHING;
 
   UPDATE threat_intel.claim_evidence AS row
-  SET subject_id = target_old_incident_id,
-    record = jsonb_set(snapshot.value->'record', '{subjectId}', to_jsonb(target_old_incident_id), true)
+  SET subject_type = snapshot.value->>'subject_type',
+    subject_id = snapshot.value->>'subject_id',
+    record = snapshot.value->'record'
   FROM jsonb_array_elements(history.reference_snapshot->'claimEvidence') AS snapshot(value)
   WHERE row.id = snapshot.value->>'id';
   INSERT INTO threat_intel.claim_evidence
