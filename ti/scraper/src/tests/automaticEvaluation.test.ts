@@ -122,6 +122,7 @@ describe("automatic independent evaluation", () => {
       { name: "outage", expectedCode: "endpoint_unavailable", fetch: async () => Response.json({ error: { message: "offline" } }, { status: 503 }) },
       { name: "timeout", expectedCode: "model_timeout", fetch: async () => { throw new DOMException("The operation was aborted", "AbortError"); } },
       { name: "malformed", expectedCode: "malformed_model_response", fetch: async () => Response.json({ status: "completed", model: "hanasand", message: "not-json", conversationId: "bad-response" }) },
+      { name: "invalid evidence ids", expectedCode: "malformed_model_response", expectedMessage: "(evidence_ids)", fetch: async () => Response.json({ status: "completed", model: "hanasand", message: JSON.stringify({ expectedValues: [], decision: "absent", confidence: 0.9, rationale: "No actor is supported.", evidenceIds: ["not-governed"] }), conversationId: "invalid-evidence-response" }) },
       { name: "versionless", expectedCode: "model_version_missing", fetch: async (_url: RequestInfo | URL, init?: RequestInit) => {
         const prompt = JSON.parse(String(init?.body)).prompt as string;
         const evidenceId = prompt.match(/governedEvidence: \[\{"id":"([^"]+)"/)?.[1];
@@ -139,6 +140,7 @@ describe("automatic independent evaluation", () => {
       await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 1, now: () => createdAt, aiUrl: "http://api.test/api/tools/ai", fetch: failure.fetch });
       const failed = store.getEvaluationBenchmark(benchmark.id);
       expect(failed.manifest[0].automation).toMatchObject({ status: "dead_letter", attemptCount: 1, lastFailure: { code: failure.expectedCode, retryable: true } });
+      if (failure.expectedMessage) expect(failed.manifest[0].automation.lastFailure.message).toContain(failure.expectedMessage);
       failedBenchmarks.push(failed);
     }
 

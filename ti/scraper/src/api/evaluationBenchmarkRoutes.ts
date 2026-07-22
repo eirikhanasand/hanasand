@@ -852,11 +852,11 @@ function validateAutomaticReview(value: any, request: any) {
   const rationale = safeModelRationale(value?.rationale);
   const evidenceIds = annotationValues(value?.evidenceIds);
   const allowedEvidenceIds = new Set(request.evidence.references.map((reference: any) => reference.id));
-  const inconsistentDecision = (decision === "present" && !expectedValues?.length) || (decision === "absent" && Boolean(expectedValues?.length));
+  if (!expectedValues) throw evaluationFailure("malformed_model_response", "Hanasand AI returned an invalid exhaustive evaluation response (expected_values)", true);
+  const inconsistentDecision = (decision === "present" && !expectedValues.length) || (decision === "absent" && Boolean(expectedValues.length));
   if (request.role === "adjudicator" && decision === "ambiguous") throw evaluationFailure("ambiguous_adjudication", "The independent adjudicator did not resolve the evaluation decision", false);
-  if (!expectedValues || !["present", "absent", "ambiguous"].includes(decision) || inconsistentDecision || confidence === undefined || !rationale || !evidenceIds?.length || evidenceIds.some((id) => !allowedEvidenceIds.has(id))) {
-    throw evaluationFailure("malformed_model_response", "Hanasand AI returned an invalid exhaustive evaluation response", true);
-  }
+  const invalid = !["present", "absent", "ambiguous"].includes(decision) ? "decision" : inconsistentDecision ? "decision_consistency" : confidence === undefined ? "confidence" : !rationale ? "rationale" : !evidenceIds?.length || evidenceIds.some((id) => !allowedEvidenceIds.has(id)) ? "evidence_ids" : undefined;
+  if (invalid) throw evaluationFailure("malformed_model_response", `Hanasand AI returned an invalid exhaustive evaluation response (${invalid})`, true);
   const reviewerModel = safeModelText(value.reviewerModel ?? value.model, 200);
   const reviewerModelVersion = safeModelText(value.reviewerModelVersion ?? value.modelVersion, 200);
   if (!reviewerModel || !reviewerModelVersion) throw evaluationFailure("model_version_missing", "Evaluation response omitted the reviewer model/version", true);
