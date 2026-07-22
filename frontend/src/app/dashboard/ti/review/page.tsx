@@ -1,5 +1,5 @@
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
-import ClaimReviewClient from './claimReviewClient'
+import ReviewWorkspace from './reviewWorkspace'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,10 +8,10 @@ export default function TiClaimReviewPage() {
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Threat intelligence'
-                title='Claim review'
-                description='Resolve extracted intelligence claims before they become trusted facts or customer-facing exports.'
+                title='Intelligence review'
+                description='Supervise persisted Hanasand AI decisions and resolve claims that still require an analyst.'
             />
-            <ClaimReviewClient />
+            <ReviewWorkspace />
         </DashboardPage>
     )
 }
