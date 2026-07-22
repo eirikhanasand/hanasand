@@ -22,6 +22,7 @@ assert.ok(byId.has('ti-exposure-parser'), 'Exposure parser should be registered.
 assert.ok(byId.has('ti-dwm-alert-generation'), 'DWM alert generation should be registered.')
 assert.ok(byId.has('api-agent-automations'), 'Agent automation dispatcher should be registered.')
 assert.ok(byId.has('api-vulnerability-scanner'), 'Vulnerability image scanner should be registered.')
+assert.ok(byId.has('api-database-backup'), 'Primary database backup scheduler should be registered.')
 
 assert.equal(byId.get('ti-public-canary-collection')?.category, 'TI / Exposure')
 assert.equal(byId.get('ti-exposure-queue-collection')?.controlMode, 'observable_only')
@@ -48,6 +49,9 @@ assert.equal(byId.get('api-vulnerability-scanner')?.controlMode, 'safe_control')
 assert.ok(byId.get('api-vulnerability-scanner')?.controls.includes('run_now'), 'Vulnerability scanner should expose manual run control.')
 assert.equal(byId.get('api-vulnerability-scanner')?.status, 'blocked', 'A never-run vulnerability scanner should be visible as blocked/stale.')
 assert.match(byId.get('api-vulnerability-scanner')?.lastError || '', /No vulnerability scan has completed|Docker|Scout|socket|Previous vulnerability scan/, 'Vulnerability scanner should expose the stale reason or exact scanner blocker.')
+assert.equal(byId.get('api-database-backup')?.category, 'Backup/Database')
+assert.equal(byId.get('api-database-backup')?.schedule, '23 2 * * * UTC')
+assert.ok(byId.get('api-database-backup')?.controls.includes('resume'), 'Disabled backup schedule should expose a persisted resume control.')
 
 for (const job of jobs) {
     assert.ok(job.resourceUsage, `${job.id} should include resource telemetry.`)

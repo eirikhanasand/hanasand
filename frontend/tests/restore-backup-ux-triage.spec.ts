@@ -4,26 +4,17 @@ import path from 'node:path'
 
 const root = process.cwd()
 
-test('restore backup keeps restore actions while collapsing secondary filters', async () => {
+test('restore page requires an explicit isolated target and confirmation', async() => {
     const page = await readFile(path.join(root, 'src/app/dashboard/db/restore/restoreClient.tsx'), 'utf8')
 
-    expect(page).toContain('data-restore-primary-flow')
-    expect(page).toContain('Recommended next')
-    expect(page).toContain('const primaryTitle')
-    expect(page).toContain('const primaryHref')
-    expect(page).toContain('href={primaryHref}')
+    expect(page).toContain('data-restore-operator-console')
     expect(page).toContain('data-restore-primary-action')
-
-    expect(page).toContain('data-restore-filters-disclosure')
-    expect(page).toContain('id=\'restore-filters\'')
-    expect(page).toContain('open={activeFilterCount > 0}')
-    expect(page).toContain('data-restore-service-filter')
-    expect(page).toContain('data-restore-date-filter')
-    expect(page).toContain('data-restore-clear-filters')
-    expect(page).toContain('router.push(query ? `${pathname}?${query}` : pathname)')
-    expect(page).toContain('router.push(pathname)')
-
-    expect(page).toContain('data-restore-points')
-    expect(page).toContain('restoreBackupAction(backup.service, backup.file)')
-    expect(page).toContain('backup.locations.join')
+    expect(page).toContain('Isolated target database')
+    expect(page).toContain('confirmation === requiredConfirmation')
+    expect(page).toContain('restoreBackupAction(file, target, confirmation)')
+    expect(page).toContain('This workflow never restores over the live database')
+    expect(page).toContain('creating_isolated_database')
+    expect(page).toContain('checking_integrity')
+    expect(page).toContain('removing_isolated_database')
+    expect(page).toContain('Restore-drill audit history')
 })

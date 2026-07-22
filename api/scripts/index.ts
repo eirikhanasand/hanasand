@@ -30,9 +30,16 @@ const coreTasks: TestTask[] = [
     scriptTask('mail-overview-timeout', 'Mail overview timeout contract', 'smoke-mail-overview-timeout.ts'),
     scriptTask('pwned-check', 'Pwned password dataset contract', 'smoke-pwned-check.ts'),
     scriptTask('db-overview', 'Database overview contract', 'smoke-db-overview.ts'),
+    scriptTask('db-backups', 'Database backup and isolated restore contract', 'smoke-db-backups.ts'),
     scriptTask('traffic-live', 'Traffic live stream contract', 'smoke-traffic-live.ts'),
     scriptTask('scheduled-job-registry', 'Scheduled job registry guardrail', 'check-scheduled-job-registry.ts'),
-    scriptTask('scheduled-job-registry-smoke', 'Scheduled job registry smoke', 'smoke-scheduled-job-registry.ts'),
+    {
+        ...scriptTask('scheduled-job-registry-smoke', 'Scheduled job registry smoke', 'smoke-scheduled-job-registry.ts'),
+        env: {
+            DB_BACKUP_DIR: path.join(process.env.TMPDIR || '/tmp', `hanasand-backup-registry-${process.pid}`),
+            DB_BACKUP_ENABLED: 'false',
+        },
+    },
     scriptTask('vulnerability-scanner', 'Vulnerability scanner registry contract', 'smoke-vulnerability-scanner.ts'),
     scriptTask('git-import-parser', 'Git import parser contract', 'smoke-git-import-parser.ts'),
     scriptTask('ai-runtime-contract', 'AI runtime contract', 'validate-ai-runtime-contract.ts'),

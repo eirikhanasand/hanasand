@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 import { getBackgroundJobRuntime, type BackgroundJobRuntime } from './backgroundJobRuntime.ts'
 import { canRunApiCronJobNow, isApiCronJobPaused, runApiCronJobNow, setApiCronJobPaused } from './cron.ts'
 import { getVulnerabilityReport, isVulnerabilityScanActive, setVulnerabilityScannerPaused, startTrackedVulnerabilityScan, VULNERABILITY_SCAN_CADENCE_SECONDS, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
+import { collectDatabaseBackupServices, createDatabaseBackup, DATABASE_BACKUP_JOB_ID, setDatabaseBackupSchedulePaused } from './db/backups.ts'
 
 const execFileAsync = promisify(execFile)
 const BEGIN = '# BEGIN HANASAND MANAGED CRON'
@@ -265,6 +266,16 @@ const apiBackgroundJobDefinitions: Array<{
         controls: ['pause', 'resume', 'run_now'],
     },
     {
+        id: DATABASE_BACKUP_JOB_ID,
+        name: 'Primary database backup',
+        description: 'Creates a verified PostgreSQL archive on its persisted UTC schedule, applies retention, and records every attempt durably.',
+        category: 'Backup/Database',
+        schedule: 'Persisted daily UTC schedule (checked every minute)',
+        cadenceSeconds: null,
+        source: 'api/src/utils/db/backups.ts',
+        controls: ['pause', 'resume', 'run_now'],
+    },
+    {
         id: 'api-agent-automations',
         name: 'Agent automation dispatcher',
         description: 'Claims due user/system automations and runs alert, mail, and system actions.',
@@ -343,6 +354,15 @@ export async function updateManagedCronJob(id: string, input: ManagedCronUpdate)
         await runTiJob('/v1/dwm/source-requests', { action: 'pack_worker_run', sourcePackLabel: 'default', requestedBy: 'dashboard/system/cron', reason: 'Run now requested from Cron Jobs dashboard.' })
         return (await listUnifiedScheduledJobs()).find(job => job.id === id)!
     }
+    if (id === DATABASE_BACKUP_JOB_ID) {
+        if (input.action === 'run_now') {
+            void createDatabaseBackup({ actorId: 'cron_dashboard', trigger: 'manual' }).catch(error => {
+                console.error('Failed to run database backup from Cron Jobs dashboard', error)
+            })
+        }
+        if (input.enabled !== undefined) await setDatabaseBackupSchedulePaused(!input.enabled)
+        return (await listUnifiedScheduledJobs()).find(job => job.id === id)!
+    }
     if (canRunApiCronJobNow(id)) {
         if (input.action === 'run_now') {
             void runApiCronJobNow(id).catch(error => {
@@ -418,6 +438,7 @@ function managedHostCronJob(job: ManagedCronJob): UnifiedScheduledJob {
 }
 
 async function apiBackgroundJob(definition: typeof apiBackgroundJobDefinitions[number]): Promise<UnifiedScheduledJob> {
+    if (definition.id === DATABASE_BACKUP_JOB_ID) return databaseBackupScheduledJob(definition)
     const telemetry = getBackgroundJobRuntime(definition.id)
     const hasRunner = canRunApiCronJobNow(definition.id)
     const enabled = hasRunner ? !await isApiCronJobPaused(definition.id) : true
@@ -458,6 +479,50 @@ async function apiBackgroundJob(definition: typeof apiBackgroundJobDefinitions[n
             'The API minute cron runs subjobs in one process, so CPU/RAM and power are service-level estimates.',
             hasRunner ? 'Pause/resume is persisted in scheduled_job_controls; run now uses the same tracked job function as the minute cron.' : 'No standalone safe runner is exposed for this API job.',
         ],
+    }
+}
+
+async function databaseBackupScheduledJob(definition: typeof apiBackgroundJobDefinitions[number]): Promise<UnifiedScheduledJob> {
+    const service = (await collectDatabaseBackupServices())[0]
+    const enabled = Boolean(service.scheduleEnabled)
+    const operations = service.operations || []
+    const durations = operations.map(operation => operation.durationMs).filter((value): value is number => value !== null)
+    const last = operations[0] || null
+    const lastSuccess = operations.find(operation => operation.kind === 'backup' && operation.status === 'succeeded') || null
+    const failures = operations.filter(operation => operation.status === 'failed' || operation.status === 'interrupted')
+    return {
+        id: definition.id,
+        name: definition.name,
+        description: definition.description,
+        category: definition.category,
+        source: definition.source,
+        service: 'hanasand-api',
+        schedule: `${service.schedule || 'Unavailable'} UTC`,
+        cadenceSeconds: null,
+        enabled,
+        running: Boolean(service.currentOperation),
+        status: service.currentOperation ? 'running' : !enabled ? 'paused' : last?.status === 'failed' || last?.status === 'interrupted' ? 'failed' : 'enabled',
+        lastRunAt: last?.startedAt || null,
+        lastSuccessAt: lastSuccess?.finishedAt || null,
+        lastFinishedAt: last?.finishedAt || null,
+        nextRunAt: enabled ? service.nextBackup || null : null,
+        currentRunDurationMs: service.currentOperation ? Math.max(0, Date.now() - Date.parse(service.currentOperation.startedAt)) : null,
+        averageRuntimeMs: durations.length ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length) : null,
+        failureCount: failures.length,
+        lastError: service.lastError || service.error || null,
+        logExcerpt: last ? `${last.kind} ${last.status}: ${last.stage}` : 'No backup attempt has been recorded yet.',
+        controls: [enabled ? 'pause' : 'resume', 'run_now'],
+        controlMode: 'safe_control',
+        resourceUsage: {
+            scope: 'service',
+            cpuPercent: null,
+            memoryRssMb: mb(process.memoryUsage().rss),
+            memoryUsedMb: mb(process.memoryUsage().heapUsed),
+            queueDepth: service.currentOperation ? 1 : 0,
+            note: 'API process memory and durable backup-operation lock state.',
+        },
+        costEstimate: costEstimate(18, 'Uses the shared API process and PostgreSQL client during an active operation.'),
+        assumptions: ['Schedule, next run, attempt, success, failure, and retention evidence come from the persisted backup ledger.'],
     }
 }
 

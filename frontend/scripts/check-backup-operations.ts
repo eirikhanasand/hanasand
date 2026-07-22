@@ -1,112 +1,67 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { presentBackup, presentBackupLoadError, redactBackupDetails } from '../src/app/dashboard/db/backups/backupPresentation.ts'
 
-const backupPage = await readFile(new URL('../src/app/dashboard/db/backups/backupPage.tsx', import.meta.url), 'utf8')
-const restoreClient = await readFile(new URL('../src/app/dashboard/db/restore/restoreClient.tsx', import.meta.url), 'utf8')
-const restorePage = await readFile(new URL('../src/app/dashboard/db/restore/page.tsx', import.meta.url), 'utf8')
-const routePage = await readFile(new URL('../src/app/dashboard/db/backups/page.tsx', import.meta.url), 'utf8')
-const legacyRedirect = await readFile(new URL('../src/app/dashboard/backup/page.tsx', import.meta.url), 'utf8')
-const frontendApi = await readFile(new URL('../src/utils/db/internal.ts', import.meta.url), 'utf8')
-const apiRoutes = await readFile(new URL('../../api/src/routes.ts', import.meta.url), 'utf8')
+const backupPage = await source('../src/app/dashboard/db/backups/backupPage.tsx')
+const backupRoute = await source('../src/app/dashboard/db/backups/page.tsx')
+const restoreClient = await source('../src/app/dashboard/db/restore/restoreClient.tsx')
+const restoreRoute = await source('../src/app/dashboard/db/restore/page.tsx')
+const actions = await source('../src/app/dashboard/db/actions.ts')
+const frontendApi = await source('../src/utils/db/internal.ts')
+const apiRoutes = await source('../../api/src/routes.ts')
+const apiHandler = await source('../../api/src/handlers/database/backups.ts')
+const apiCore = await source('../../api/src/utils/db/backups.ts')
+const apiCron = await source('../../api/src/utils/cron.ts')
+const compose = await source('../../docker-compose.yml')
+const dockerfile = await source('../../api/Dockerfile')
 
-const healthy = presentBackup({
-    id: 'primary_database',
-    name: 'primary_database',
-    status: 'Healthy',
-    lastBackup: '2026-07-02T10:00:00.000Z',
-    nextBackup: '2026-07-03T10:00:00.000Z',
-    retention: '14 days',
-    storageTarget: 's3://backups/primary',
-    latestFile: 'primary-2026-07-02.dump',
-    latestSize: '42 MB',
-    latestDuration: '23s',
-    healthCheck: 'Verified',
-})
+assert.match(backupRoute, /Promise\.all\(\[getBackupServices\(\), getBackupFiles\(\)\]\)/, 'backup route must load status and measured files together')
+assert.match(backupPage, /Last attempt/)
+assert.match(backupPage, /Last success/)
+assert.match(backupPage, /Last failure/)
+assert.match(backupPage, /Next automatic run/)
+assert.match(backupPage, /Storage target/)
+assert.match(backupPage, /Latest checksum/)
+assert.match(backupPage, /Persistent operation history/)
+assert.match(backupPage, /verifyBackupAction\(file\)/, 'operators must be able to recompute archive verification')
+assert.match(backupPage, /service\.currentOperation/, 'UI must expose backend operation progress rather than a fake completed state')
+assert.doesNotMatch(backupPage, /s3:\/\/|DB_BACKUP_NEXT_AT|restore readiness/, 'operator evidence must not be guessed or sample-backed')
 
-assert.equal(healthy.healthLabel, 'Healthy', 'success state should report healthy')
-assert.equal(healthy.restoreReady, true, 'success state should allow restore browsing')
-assert.equal(healthy.restoreProof.schemaVersion, 'hanasand.backup.restore_readiness.v1', 'restore proof should publish a stable schema')
-assert.equal(healthy.restoreProof.state, 'ready', 'healthy backup with an indexed file should have ready restore proof')
-assert.equal(healthy.restoreProof.blockers.length, 0, 'healthy backup should not expose restore blockers')
-assert.equal(healthy.retention, '14 days', 'success state should preserve retention')
-assert.equal(healthy.storageTarget, 's3://backups/primary', 'success state should preserve storage target')
+assert.match(restoreRoute, /Promise\.all\(\[getBackupFiles\([\s\S]*getBackupServices\(\)\]\)/, 'restore route must load files and live operation progress')
+assert.match(restoreClient, /Isolated target database/)
+assert.match(restoreClient, /confirmation === requiredConfirmation/)
+assert.match(restoreClient, /restoreBackupAction\(file, target, confirmation\)/)
+assert.match(restoreClient, /This workflow never restores over the live database/)
+assert.match(restoreClient, /creating_isolated_database/)
+assert.match(restoreClient, /checking_integrity/)
+assert.match(restoreClient, /removing_isolated_database/)
+assert.match(restoreClient, /Restore-drill audit history/)
+assert.doesNotMatch(restoreClient, /DB_RESTORE_ENABLED|blocked/i, 'restore UI must drive the real isolated workflow, not a generic blocker')
 
-const unavailable = presentBackup({
-    id: 'primary_database',
-    name: 'primary_database',
-    status: 'Unavailable',
-    error: 'password authentication failed for user "hanasand"',
-    lastBackup: null,
-    nextBackup: null,
-})
+assert.match(actions, /verifyDatabaseBackup/)
+assert.match(actions, /restoreDatabaseBackup\(file, targetDatabase, confirmation\)/)
+assert.match(frontendApi, /requestService<BackupService\[\]>\('internal', 'backup'\)/)
+assert.match(frontendApi, /'backup\/verify'/)
+assert.match(frontendApi, /JSON\.stringify\(\{ file, targetDatabase, confirmation \}\)/)
+assert.match(apiRoutes, /fastify\.post\('\/backup\/verify', postDatabaseBackupVerify\)/)
+assert.match(apiRoutes, /fastify\.post\('\/backup\/restore', postDatabaseBackupRestore\)/)
+assert.match(apiHandler, /hasRole\(req, res, 'system_admin'\)/)
+assert.match(apiHandler, /targetDatabase: req\.body\.targetDatabase/)
+assert.match(apiCore, /open\(lock, 'wx'/, 'overlapping operations must use an exclusive persisted lock')
+assert.match(apiCore, /checksumSha256/)
+assert.match(apiCore, /pg_restore', \['--list'/, 'archives must be verified with PostgreSQL native tooling')
+assert.match(apiCore, /restore_drill_/)
+assert.match(apiCore, /'createdb'/)
+assert.match(apiCore, /'dropdb'/)
+assert.match(apiCore, /targetRemoved: true/)
+assert.doesNotMatch(apiCore, /--clean[\s\S]*databaseName\(\)/, 'the product must not expose a destructive live restore implementation')
+assert.match(apiCron, /runDueDatabaseBackup/)
+assert.match(compose, /api_state:\/var\/lib\/hanasand/)
+assert.match(compose, /DB_BACKUP_SCHEDULE: \$\{DB_BACKUP_SCHEDULE:-23 2 \* \* \*\}/)
+assert.match(compose, /DB_BACKUP_RETENTION_DAYS: \$\{DB_BACKUP_RETENTION_DAYS:-14\}/)
+assert.match(dockerfile, /postgresql-client/)
 
-assert.equal(unavailable.healthLabel, 'Unavailable', 'auth failure should report unavailable')
-assert.equal(unavailable.restoreReady, false, 'auth failure should require an action before restore')
-assert.equal(unavailable.restoreProof.state, 'needs_action', 'auth failure should mark restore proof as action-needed')
-assert.ok(unavailable.restoreProof.blockers.some(blocker => /cannot authenticate/i.test(blocker)), 'auth failure should appear as a restore proof blocker')
-assert.match(unavailable.safeError || '', /cannot authenticate to the database/i, 'auth failure should be summarized safely')
-assert.doesNotMatch(unavailable.safeError || '', /password authentication failed|hanasand/i, 'safe error should not dump raw postgres auth internals')
-assert.match(unavailable.restoreDisabledReason || '', /Fix backup status/i, 'auth failure should explain the next restore action')
+console.log('Backup operator workflow checks passed.')
 
-const empty = presentBackup({
-    id: 'primary_database',
-    name: 'primary_database',
-    status: 'Available',
-    lastBackup: null,
-    nextBackup: null,
-})
-
-assert.equal(empty.restoreReady, false, 'no-backups-yet state should require creating a backup first')
-assert.equal(empty.restoreProof.state, 'needs_action', 'no-backups-yet should mark restore proof as action-needed')
-assert.ok(empty.restoreProof.blockers.some(blocker => /No completed backup timestamp/i.test(blocker)), 'no-backups-yet should explain missing timestamp')
-assert.ok(empty.restoreProof.blockers.some(blocker => /No indexed backup file/i.test(blocker)), 'no-backups-yet should explain missing indexed file')
-assert.match(empty.restoreDisabledReason || '', /Run backup now/i, 'no-backups-yet should point to backup creation')
-assert.equal(empty.latestFile, 'Not reported', 'unsupported latest file should be honest observable-only state')
-
-const timestampOnly = presentBackup({
-    id: 'primary_database',
-    name: 'primary_database',
-    status: 'Available',
-    lastBackup: '2026-07-02T10:00:00.000Z',
-    nextBackup: null,
-})
-assert.equal(timestampOnly.restoreReady, false, 'restore should require an indexed backup file, not only a timestamp')
-assert.match(timestampOnly.restoreDisabledReason || '', /indexed backup file/i, 'timestamp-only backup should explain missing indexed file')
-
-const loadError = presentBackupLoadError('Error: password authentication failed for user "hanasand"')
-assert.match(loadError.safeError, /cannot authenticate to the database/i, 'route load error should become actionable')
-assert.equal(redactBackupDetails('password authentication failed for user "hanasand"'), 'password authentication failed for configured database user', 'technical details should redact postgres user')
-assert.match(presentBackupLoadError('Backup storage directory is not available. Set DB_BACKUP_DIR.').safeError, /Backup storage is not configured/i, 'storage blocker should be actionable')
-assert.match(presentBackupLoadError('pg_dump exited with code 1').safeError, /cannot run pg_dump/i, 'missing pg_dump should be actionable')
-assert.match(presentBackupLoadError('Restore is disabled until DB_RESTORE_ENABLED=true is set for the API service.').safeError, /Enable DB_RESTORE_ENABLED=true/i, 'restore API guard should be actionable')
-
-assert.match(routePage, /<DashboardHeader[\s\S]*title='Database Backups'/, 'route should own the single page header')
-assert.doesNotMatch(backupPage, /DashboardHeader/, 'client page should not render a duplicate page header')
-assert.match(routePage, /loadError=\{typeof backups === 'string' \? backups : ''\}/, 'route should preserve backup API errors')
-assert.match(frontendApi, /requestService<BackupService\[\]>\('internal', 'backup'\)/, 'frontend should call the internal /backup status route')
-assert.match(frontendApi, /requestService<BackupFile\[\]>\('internal', `backup\/files/, 'frontend should call the internal /backup/files route')
-assert.match(frontendApi, /requestService<\{ message: string \}>\('internal', 'backup'/, 'frontend should call the internal POST /backup action route')
-assert.match(frontendApi, /requestService<\{ message: string \}>\('internal', 'backup\/restore'/, 'frontend should call the internal /backup/restore route')
-assert.match(apiRoutes, /fastify\.get\('\/backup', getDatabaseBackups\)/, 'API should expose GET /backup')
-assert.match(apiRoutes, /fastify\.post\('\/backup', postDatabaseBackup\)/, 'API should expose POST /backup')
-assert.match(apiRoutes, /fastify\.get\('\/backup\/files', getDatabaseBackupFiles\)/, 'API should expose GET /backup/files')
-assert.match(apiRoutes, /fastify\.post\('\/backup\/restore', postDatabaseBackupRestore\)/, 'API should expose POST /backup/restore')
-assert.match(backupPage, /presentations\.map/, 'backup actions should render inside each backup target card')
-assert.match(backupPage, /data-backup-command-grid/, 'backup page should expose a command grid before target details')
-assert.match(backupPage, /Backup operator/, 'backup page should start from operator commands')
-assert.match(backupPage, /restoreDisabledReason/, 'restore action state should carry a visible reason')
-assert.match(backupPage, /data-backup-restore-proof/, 'backup page should surface restore check state per target')
-assert.match(backupPage, /Restore actions/, 'backup page should label the restore action section')
-assert.match(backupPage, /Technical details/, 'raw details should be behind progressive disclosure')
-assert.match(backupPage, /Open logs/, 'error state should link operators to logs')
-assert.match(backupPage, /return 'Never'/, 'missing last backup should render as never, not a loading promise')
-assert.match(backupPage, /return 'No schedule configured'/, 'missing next backup should render as a configured-state message')
-assert.doesNotMatch(backupPage, /password authentication failed for user/, 'main UI should not hard-code raw postgres auth errors')
-assert.match(legacyRedirect, /redirect\('\/dashboard\/db\/backups'\)/, '/dashboard/backup should land on the backup operations page')
-assert.match(restorePage, /loadError=\{typeof backups === 'string' \? backups : ''\}/, 'restore page should preserve backup file index errors')
-assert.match(restoreClient, /triggerBackupAction/, 'restore page should create a backup when the index is empty')
-assert.match(restoreClient, /router\.refresh\(\)/, 'restore page should refresh the restore index after backup creation')
-assert.match(restoreClient, /Run backup now/, 'restore empty state should expose the backup action directly')
-
-console.log('Backup operations checks passed.')
+async function source(relative: string) {
+    return readFile(new URL(relative, import.meta.url), 'utf8')
+}
