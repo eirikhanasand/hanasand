@@ -331,6 +331,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       approvalScope: "metadata_only",
       retentionClass: "restricted_metadata",
       forbiddenOperations: ["credential_bypass", "captcha_solving", "threat_actor_interaction", "stolen_file_download", "stealth_or_evasion", "unapproved_proxy", "non_metadata_capture"],
+      reviewedRejectedCandidates: [],
       sources: [{
         id: "src_restricted_candidate",
         name: "Reviewed victim listing candidate",
@@ -369,6 +370,94 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         accessMethod: "approved_proxy",
         metadata: { productionCollection: false, canaryPortfolio: false, restrictedMetadataCandidate: true }
       });
+    } finally {
+      if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+      else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("activates only recently parser-verified Tor metadata and preserves restart state", () => {
+    const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+    Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
+    const store = new InMemoryScraperStore();
+    const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-verified-tor-"));
+    const seedPath = join(dir, "restricted.json");
+    const onion = (letter: string) => `http://${letter.repeat(56)}.onion/`;
+    const restrictedSource = (id: string, url: string, verifiedAt: string) => ({
+      id,
+      name: id,
+      type: "tor_metadata",
+      url,
+      accessMethod: "approved_proxy",
+      status: "candidate",
+      risk: "restricted",
+      trustScore: 0.8,
+      crawlFrequencySeconds: 3600,
+      legalNotes: "Public victim-listing metadata only; never retrieve leaked files or interact with operators.",
+      governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvalScope: "metadata_only", approvedAt: verifiedAt, approvedBy: "source-review:test", policyVersion: "collection-policy:v1" },
+      metadata: {
+        sourceFamily: "dark_web_victim_feed",
+        actorName: id,
+        discoveryAuthorityUrl: "https://authority.example.test/",
+        discoveryAuthorityRecordUrl: `https://authority.example.test/${id}`,
+        discoveryCheckedAt: verifiedAt,
+        discoveryAvailability: "reported_available",
+        expectedPageRole: "victim_listing",
+        collectionScope: "metadata_only",
+        retainRawContent: false,
+        retentionDays: 30,
+        attribution: "Independent public authority record",
+        productionCollectionVerifiedAt: verifiedAt,
+        productionCollectionOutcome: "metadata_only_parser_verified",
+        parserProfile: "victim_card_title",
+        reportedVictimCount: 2,
+        lastReportedVictimAt: verifiedAt
+      }
+    });
+    const current = restrictedSource("src_verified_restricted", onion("b"), "2026-07-22T10:00:00.000Z");
+    const stale = restrictedSource("src_stale_restricted", onion("c"), "2026-06-01T10:00:00.000Z");
+    writeFileSync(seedPath, JSON.stringify({
+      version: 1,
+      name: "verified Tor metadata",
+      disabledByDefault: true,
+      network: "tor",
+      proxyBoundaryId: "tor-approved-metadata-proxy",
+      approvalScope: "metadata_only",
+      retentionClass: "restricted_metadata",
+      forbiddenOperations: ["credential_bypass", "captcha_solving", "threat_actor_interaction", "stolen_file_download", "stealth_or_evasion", "unapproved_proxy", "non_metadata_capture"],
+      reviewedRejectedCandidates: [],
+      sources: [current, stale]
+    }));
+    store.saveSource({
+      ...current,
+      id: "src_existing_candidate",
+      status: "candidate",
+      governance: { ...current.governance, approvalState: "pending" },
+      metadata: { sourceFamily: "dark_web_victim_feed", restrictedMetadataCandidate: true, productionCollection: false },
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      health: { status: "degraded", checkedAt: "2026-07-21T00:00:00.000Z", consecutiveFailures: 1 },
+      crawlState: { retryCount: 1, nextEligibleAt: "2026-07-22T12:00:00.000Z" }
+    } as any);
+
+    try {
+      const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-22T12:00:00.000Z" });
+      expect(first).toMatchObject({ importedSourceCount: 1, updatedSourceCount: 1, activeSourceCount: 1, totalSourceCount: 2 });
+      expect(store.getSource("src_existing_candidate")).toMatchObject({
+        id: "src_existing_candidate",
+        status: "active",
+        governance: { approvalState: "approved", metadataOnly: true },
+        metadata: { productionCollection: true, productionCollectionOutcome: "metadata_only_parser_verified", verifiedSourceId: "src_verified_restricted" },
+        health: { status: "degraded", consecutiveFailures: 1 },
+        crawlState: { retryCount: 1 }
+      });
+      expect(store.getSource("src_stale_restricted")).toMatchObject({ status: "candidate", metadata: { productionCollection: false, restrictedMetadataCandidate: true } });
+
+      const beforeRestart = structuredClone(store.listSources());
+      const second = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-22T13:00:00.000Z" });
+      expect(second).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 2, activeSourceCount: 1, totalSourceCount: 2 });
+      expect(store.listSources()).toEqual(beforeRestart);
     } finally {
       if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
       else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;

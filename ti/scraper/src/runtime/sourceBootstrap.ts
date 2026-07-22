@@ -125,7 +125,8 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
 }
 
 function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord, generatedAt: string): SourceRecord | undefined {
-  if (!isVerifiedProductionSource(verified) || !isSafeUpgradeTarget(existing)) return undefined;
+  const restricted = isVerifiedRestrictedProductionSource(verified, generatedAt);
+  if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) : isVerifiedProductionSource(verified) && isSafeUpgradeTarget(existing))) return undefined;
   const metadata = {
     ...(existing.metadata ?? {}),
     ...(verified.metadata ?? {}),
@@ -165,6 +166,36 @@ function isSafeUpgradeTarget(source: SourceRecord) {
     && (!source.governance?.approvalState || source.governance.approvalState === "approved")
     && source.metadata?.productionCollection !== false
     && !unsafeAutomaticUpgrade(source);
+}
+
+function isSafeRestrictedUpgradeTarget(source: SourceRecord) {
+  return ["active", "candidate", "degraded", "probation"].includes(source.status)
+    && ["high", "restricted"].includes(source.risk)
+    && source.type === "tor_metadata"
+    && source.accessMethod === "approved_proxy"
+    && source.governance?.metadataOnly !== false;
+}
+
+function isVerifiedRestrictedProductionSource(source: SourceRecord, generatedAt: string) {
+  const metadata = source.metadata ?? {};
+  const verifiedAt = Date.parse(String(metadata.productionCollectionVerifiedAt ?? ""));
+  const now = Date.parse(generatedAt);
+  return source.type === "tor_metadata"
+    && ["high", "restricted"].includes(source.risk)
+    && source.accessMethod === "approved_proxy"
+    && source.governance?.approvalState === "approved"
+    && source.governance?.metadataOnly === true
+    && metadata.collectionScope === "metadata_only"
+    && metadata.retainRawContent === false
+    && metadata.discoveryAvailability === "reported_available"
+    && metadata.productionCollectionOutcome === "metadata_only_parser_verified"
+    && typeof metadata.parserProfile === "string" && metadata.parserProfile.trim().length > 0
+    && typeof metadata.reportedVictimCount === "number" && metadata.reportedVictimCount > 0
+    && Number.isFinite(Date.parse(String(metadata.lastReportedVictimAt ?? "")))
+    && Number.isFinite(verifiedAt)
+    && Number.isFinite(now)
+    && verifiedAt <= now + 5 * 60_000
+    && now - verifiedAt <= 7 * 86_400_000;
 }
 
 function unsafeAutomaticUpgrade(source: SourceRecord) {
@@ -218,16 +249,18 @@ function shouldImportSource(source: SourceRecord) {
 function prepareRuntimeSource(source: SourceRecord, seedPath: string, generatedAt: string, restricted = false): SourceRecord {
   const activate = !restricted && Bun.env.TI_SOURCE_SEED_ACTIVATE !== "false" && source.risk !== "medium" && source.risk !== "high" && source.risk !== "restricted";
   const transportCanary = restricted && source.metadata?.transportCanary === true;
+  const verifiedRestricted = restricted && isVerifiedRestrictedProductionSource(source, generatedAt);
   return {
     ...source,
-    status: transportCanary ? "active" : restricted ? "candidate" : activate ? "active" : source.status ?? "candidate",
+    status: transportCanary || verifiedRestricted ? "active" : restricted ? "candidate" : activate ? "active" : source.status ?? "candidate",
     createdAt: source.createdAt ?? generatedAt,
     updatedAt: generatedAt,
     metadata: {
       ...(source.metadata ?? {}),
-      productionCollection: !restricted || transportCanary,
+      productionCollection: !restricted || transportCanary || verifiedRestricted,
       canaryPortfolio: !restricted,
-      ...(restricted ? { restrictedMetadataCandidate: true } : {}),
+      ...(restricted && !transportCanary && !verifiedRestricted ? { restrictedMetadataCandidate: true } : {}),
+      ...(verifiedRestricted ? { verifiedSourceId: source.metadata?.verifiedSourceId ?? source.id } : {}),
       sourceSeedPath: seedPath,
       sourceImportedAt: generatedAt
     },
