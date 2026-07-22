@@ -925,10 +925,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         ${linkRecord.subjectId}, ${linkRecord.relationship}, ${score(linkRecord.confidence)},
         ${nullable(linkRecord.extractorVersion)}, ${linkRecord.createdAt ?? new Date().toISOString()}, ${toJson(linkRecord)}::text::jsonb
       )
-      ON CONFLICT (id) DO UPDATE SET
-        confidence = EXCLUDED.confidence,
-        extractor_version = EXCLUDED.extractor_version,
-        record = EXCLUDED.record
+      ON CONFLICT (capture_id, subject_type, subject_id, relationship) DO UPDATE SET
+        confidence = GREATEST(threat_intel.evidence_links.confidence, EXCLUDED.confidence),
+        extractor_version = COALESCE(EXCLUDED.extractor_version, threat_intel.evidence_links.extractor_version),
+        record = EXCLUDED.record || jsonb_build_object('id', threat_intel.evidence_links.id)
     `;
   }
 

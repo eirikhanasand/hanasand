@@ -217,6 +217,36 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await store.close();
   });
 
+  test("persists semantic evidence-link duplicates idempotently", async () => {
+    const store = await PostgresScraperStore.create({ databaseUrl });
+    store.saveSource(source({ id: "src_evidence_link_idempotency" }));
+    const result = store.savePipelineResult(pipeline("src_evidence_link_idempotency"));
+    await store.flush();
+
+    const original = store.listEvidenceLinks().find((link: any) =>
+      link.captureId === result.capture.id && link.subjectType === "incident" && link.relationship === "supports"
+    );
+    store.saveEvidenceLink({ ...original, id: "evidence-link_semantic_duplicate", confidence: 0.99, extractorVersion: "idempotency-regression" });
+    await store.flush();
+
+    const rows = await admin`
+      SELECT id, confidence, extractor_version, record->>'id' AS record_id
+      FROM threat_intel.evidence_links
+      WHERE capture_id = ${result.capture.id}
+        AND subject_type = ${original.subjectType}
+        AND subject_id = ${original.subjectId}
+        AND relationship = ${original.relationship}
+    ` as any[];
+    expect(rows).toEqual([expect.objectContaining({
+      id: original.id,
+      confidence: 0.99,
+      extractor_version: "idempotency-regression",
+      record_id: original.id
+    })]);
+    expect(await store.databaseHealth()).toMatchObject({ ok: true, pendingWrites: 0 });
+    await store.close();
+  });
+
   test("persists and rehydrates the complete monitoring record across restart", async () => {
     const first = await PostgresScraperStore.create({ databaseUrl });
     first.saveSource(source({ id: "src_postgres", tenantId: "tenant_postgres" }));
