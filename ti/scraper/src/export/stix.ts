@@ -5,7 +5,6 @@ import { mapAttackTechniqueCandidates } from "./attack.ts";
 import { buildRelationshipGraph } from "./relationships.ts";
 import { attackObject, bundle, domainObject, evidenceObject, identityObject, indicatorObject, merge, observedObject, relationshipObject, reportObject, withCaptureProvenance } from "./stixObjects.ts";
 import { kindForEntity, stixId } from "./stixIds.ts";
-export { exportGraphSnapshotToStixBundle } from "./stixGraphSnapshot.ts";
 
 export interface EvidenceBackedStixBundleInput {
   captures: RawCapture[];
