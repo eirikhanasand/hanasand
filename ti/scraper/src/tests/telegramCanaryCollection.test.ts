@@ -4,6 +4,10 @@ import { fetchItems } from "../ops/canaryHelpers.ts";
 import { importSeedBundle } from "../registry/sourceSeeds.ts";
 import { evaluateSourceForCollection } from "../policy/collectionPolicy.ts";
 import { isSellableIntelText } from "../value/sellableIntel.ts";
+import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
+import { InMemoryScraperStore } from "../storage/memoryStore.ts";
+import { FocusedFrontier } from "../frontier/frontier.ts";
+import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
 
 const source = {
   id: "src_public_telegram_test",
@@ -69,5 +73,55 @@ describe("public Telegram canary collection", () => {
     expect(verifiedSources.find((source: any) => source.id === "src_ccn_cert_telegram")).toMatchObject({ id: "src_ccn_cert_telegram", language: "es", metadata: { collectionMode: "public_web_preview" } });
     expect(isSellableIntelText({ sourceId: verified.id, text: "CERT-UA зафіксувала кібератаку угруповання UAC-0010 проти державної установи з використанням шкідливого програмного забезпечення.", publishedAt: "2026-07-20T00:00:00.000Z", now: "2026-07-20T01:00:00.000Z" })).toBe(true);
     expect(isSellableIntelText({ sourceId: verifiedSources[1].id, text: "CCN-CERT investiga un ciberataque y una campaña de phishing contra infraestructura crítica con credenciales comprometidas.", publishedAt: "2026-07-20T00:00:00.000Z", now: "2026-07-20T01:00:00.000Z" })).toBe(true);
+  });
+
+  test("imports the current production pack idempotently with the required coverage families", async () => {
+    const seedPath = new URL("../../seeds/public_telegram_channel_packs.json", import.meta.url);
+    const bundle = await Bun.file(seedPath).json();
+    const report = importSeedBundle(bundle, { importedAt: bundle.generatedAt });
+    const families = new Set(report.accepted.flatMap((item: any) => item.metadata.sourceFamilies));
+
+    expect(report).toMatchObject({ valid: true, errors: [], duplicates: [] });
+    expect(report.accepted).toHaveLength(3);
+    expect(report.accepted.every((item: any) => evaluateSourceForCollection(item).allowed)).toBe(true);
+    expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "ru"]));
+    expect([...families]).toEqual(expect.arrayContaining([
+      "apt_research",
+      "malware_research",
+      "actor_announcement_reporting",
+      "victim_publication_reporting",
+      "regional_language"
+    ]));
+    expect(report.accepted.every((item: any) => item.metadata.collectionMode === "public_web_preview" && item.metadata.mediaPolicy === "metadata_only_no_download")).toBe(true);
+
+    const store = new InMemoryScraperStore();
+    const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: bundle.generatedAt });
+    const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: bundle.generatedAt });
+
+    expect(first).toMatchObject({ importedSourceCount: 3, updatedSourceCount: 0, activeSourceCount: 3, errors: [] });
+    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 3, activeSourceCount: 3, totalSourceCount: 3, errors: [] });
+  });
+
+  test("backs off a public-preview source after a bounded upstream failure", async () => {
+    const bundle = await Bun.file(new URL("../../seeds/public_telegram_channel_packs.json", import.meta.url)).json();
+    const [publicSource] = importSeedBundle(bundle, { importedAt: bundle.generatedAt }).accepted;
+    const store = new InMemoryScraperStore();
+    store.saveSource(publicSource);
+
+    const cycle = await runCanaryCollectionCycle({
+      store,
+      frontier: new FocusedFrontier({ defaultRetryBudget: 3, baseBackoffMs: 30_000 }),
+      sourceIds: [publicSource.id],
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => "2026-07-22T12:50:00.000Z",
+      fetch: async () => new Response("rate limited", { status: 429, headers: { "content-type": "text/plain" } })
+    });
+
+    expect(cycle).toMatchObject({ failedTaskCount: 1, completedTaskCount: 0, retryScheduledCount: 1, retryExhaustedCount: 0 });
+    expect(store.getSource(publicSource.id)).toMatchObject({
+      health: { status: "degraded", checkedAt: "2026-07-22T12:50:00.000Z", lastError: "HTTP 429" },
+      crawlState: { retryCount: 1, backoffUntil: "2026-07-22T12:55:00.000Z", nextEligibleAt: "2026-07-22T12:55:00.000Z" }
+    });
   });
 });

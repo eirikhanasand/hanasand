@@ -1,1 +1,321 @@
-{"version":1,"id":"public-telegram-cti-candidates","name":"public-telegram-cti-candidates","description":"Dry-run-only public Telegram channel candidates for source activation review. Importing this pack must not start network collection.","disabledByDefault":true,"generatedAt":"2026-05-24T00:00:00.000Z","sources":[{"id":"tg_candidate_actor_identity","name":"Public Identity Abuse Channel Candidate","channelHandle":"public_identity_abuse","publicUrl":"https://t.me/public_identity_abuse","legalNotes":"Candidate public channel; collect public posts only after source review.","approvalState":"pending","retentionClass":"public_chat_text","topicTags":["cybercrime","identity abuse","actor"],"focus":{"actors":["Scattered Spider","Volt Typhoon"],"ransomware":[],"cves":[],"victims":[],"sectors":["telecommunications","hospitality"],"countries":["US","UK"]},"rateLimit":{"minIntervalSeconds":300,"pageSize":50,"expectedRequestsPerHour":12},"compliance":{"legalBasis":"Public channel review for defensive CTI monitoring.","license":"Public Telegram posts; confirm terms and takedown handling before activation.","approvalScope":"public_requires_review","takedownContact":"security@example.test","termsReviewedAt":"2026-05-24T00:00:00.000Z"},"language":"en","trustScore":0.58},{"id":"tg_candidate_ransomware_claims","name":"Public Ransomware Claims Channel Candidate","channelHandle":"public_ransomware_claims","publicUrl":"https://t.me/public_ransomware_claims","legalNotes":"Candidate public ransomware-monitoring channel; do not fetch files or media.","approvalState":"pending","retentionClass":"public_chat_text","topicTags":["ransomware","victim","leak claim"],"focus":{"actors":[],"ransomware":["Akira","LockBit"],"cves":[],"victims":["Fjord Energy AS"],"sectors":["energy","healthcare"],"countries":["NO","US"]},"rateLimit":{"minIntervalSeconds":600,"pageSize":25,"expectedRequestsPerHour":6},"compliance":{"legalBasis":"Public metadata and public post text only; no leak material download.","license":"Public Telegram posts; legal review required before activation.","approvalScope":"public_requires_review","takedownContact":"security@example.test"},"language":"en","trustScore":0.52},{"id":"tg_candidate_vuln_exploit","name":"Public Vulnerability Exploit Channel Candidate","channelHandle":"public_vuln_exploit","publicUrl":"https://t.me/public_vuln_exploit","legalNotes":"Candidate public vulnerability discussion channel for CVE monitoring.","approvalState":"pending","retentionClass":"public_chat_text","topicTags":["vulnerability","exploit","CVE"],"focus":{"actors":[],"ransomware":[],"cves":["CVE-2026-9999","CVE-2026-12345"],"victims":[],"sectors":["technology","critical infrastructure"],"countries":[]},"rateLimit":{"minIntervalSeconds":300,"pageSize":40,"expectedRequestsPerHour":12},"compliance":{"legalBasis":"Public CVE discussion monitoring for defensive intelligence.","license":"Public Telegram posts; respect takedown and source terms.","approvalScope":"public_requires_review"},"language":"en","trustScore":0.56},{"id":"tg_candidate_apt29_research","name":"Public APT29 Research Channel Candidate","channelHandle":"public_apt29_research","publicUrl":"https://t.me/public_apt29_research","legalNotes":"Candidate public actor-tracking channel for APT29/Nobelium public posts only.","approvalState":"pending","retentionClass":"public_chat_text","topicTags":["apt","state actor","country monitoring"],"focus":{"actors":["APT29","Cozy Bear","Nobelium"],"ransomware":[],"cves":[],"victims":[],"sectors":["government","technology"],"countries":["US","NO","UA"]},"rateLimit":{"minIntervalSeconds":900,"pageSize":30,"expectedRequestsPerHour":4},"compliance":{"legalBasis":"Public actor research monitoring for defensive CTI.","license":"Public Telegram posts; approval required before activation.","approvalScope":"public_requires_review","takedownContact":"security@example.test"},"language":"en","trustScore":0.57},{"id":"tg_candidate_sector_country_watch","name":"Public Country And Sector Watch Candidate","channelHandle":"public_sector_country_watch","publicUrl":"https://t.me/public_sector_country_watch","legalNotes":"Candidate public channel for country and sector monitoring; text metadata only.","approvalState":"pending","retentionClass":"public_chat_text","topicTags":["sector monitoring","country monitoring","critical infrastructure"],"focus":{"actors":[],"ransomware":[],"cves":[],"victims":[],"sectors":["energy","telecommunications","finance"],"countries":["NO","US","UK","UA"]},"rateLimit":{"minIntervalSeconds":600,"pageSize":35,"expectedRequestsPerHour":6},"compliance":{"legalBasis":"Public country/sector monitoring for defensive intelligence.","license":"Public Telegram posts; legal review required before activation.","approvalScope":"public_requires_review"},"language":"en","trustScore":0.54},{"id":"tg_candidate_bursty_duplicate_watch","name":"Public Bursty Duplicate URL Watch Candidate","channelHandle":"public_bursty_duplicate_watch","publicUrl":"https://t.me/public_bursty_duplicate_watch","legalNotes":"Candidate public channel fixture for bursty spam and duplicate URL pressure handling.","approvalState":"pending","retentionClass":"public_chat_text","topicTags":["bursty spam","duplicate url pressure","abuse control"],"focus":{"actors":["Scattered Spider"],"ransomware":[],"cves":[],"victims":[],"sectors":["retail","hospitality"],"countries":["US","UK"]},"rateLimit":{"minIntervalSeconds":1200,"pageSize":20,"expectedRequestsPerHour":3},"compliance":{"legalBasis":"Public burst handling fixture for defensive CTI source review.","license":"Public Telegram posts; suppress repeated URLs and keep media metadata-only.","approvalScope":"public_requires_review"},"language":"en","trustScore":0.48},{"id":"tg_candidate_edit_delete_window","name":"Public Edit Delete Window Candidate","channelHandle":"public_edit_delete_window","publicUrl":"https://t.me/public_edit_delete_window","legalNotes":"Candidate public channel fixture for edited, deleted, and unavailable post windows.","approvalState":"pending","retentionClass":"public_chat_text","topicTags":["edited posts","deleted posts","unavailable window"],"focus":{"actors":[],"ransomware":["Akira"],"cves":["CVE-2026-12345"],"victims":["Fjord Energy AS"],"sectors":["energy","healthcare"],"countries":["NO","US"]},"rateLimit":{"minIntervalSeconds":900,"pageSize":25,"expectedRequestsPerHour":4},"compliance":{"legalBasis":"Public edit/delete fixture for replayable metadata evidence handoff.","license":"Public Telegram posts; deleted/unavailable states remain metadata-only.","approvalScope":"public_requires_review"},"language":"en","trustScore":0.5}]}
+{
+  "version": 2,
+  "name": "public-telegram-cti-production",
+  "generatedAt": "2026-07-22T12:45:20.000Z",
+  "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
+  "disabledByDefault": false,
+  "sourceCount": 3,
+  "sources": [
+    {
+      "id": "src_group_ib_telegram",
+      "tenantId": "default",
+      "name": "Group-IB public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/Group_IB",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.89,
+      "language": "en",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public text posts from the Group-IB channel linked by Group-IB's official website. Collect the unauthenticated web preview only; do not join, authenticate, message, or download media, files, or samples.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-22T12:45:20.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "apt_research",
+          "malware_research",
+          "ransomware_research"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "verifiedSourceId": "src_group_ib_telegram",
+        "publisherReference": "https://www.group-ib.com/",
+        "ownershipVerifiedAt": "2026-07-22T12:45:20.000Z",
+        "activityVerifiedAt": "2026-07-22T12:45:20.000Z",
+        "topics": [
+          "APT",
+          "malware",
+          "ransomware",
+          "cybercrime",
+          "threat intelligence"
+        ],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "vendor:group-ib:telegram",
+        "publisher": {
+          "name": "Group-IB",
+          "country": "SG",
+          "homepage": "https://www.group-ib.com/",
+          "trustBasis": "publisher-owned website link"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.89,
+        "intelligenceValue": 0.88,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "APT",
+            "malware",
+            "ransomware",
+            "cybercrime"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "finance",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Global",
+            "Asia",
+            "Middle East"
+          ],
+          "countries": [],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "APT",
+            "malware",
+            "ransomware",
+            "cybercrime"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_kaspersky_ru_telegram",
+      "tenantId": "default",
+      "name": "Kaspersky Russian public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/kasperskylab_ru",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.9,
+      "language": "ru",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public text posts from Kaspersky's official Russian-language channel identified by kaspersky.ru. Collect the unauthenticated web preview only; do not join, authenticate, message, or download media, files, or samples.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-22T12:45:20.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "malware_research",
+          "apt_research",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "verifiedSourceId": "src_kaspersky_ru_telegram",
+        "publisherReference": "https://www.kaspersky.ru/lp/special-offers/gender-holidays",
+        "ownershipVerifiedAt": "2026-07-22T12:45:20.000Z",
+        "activityVerifiedAt": "2026-07-22T12:45:20.000Z",
+        "topics": [
+          "malware",
+          "APT",
+          "industrial security",
+          "vulnerability",
+          "threat research"
+        ],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "vendor:kaspersky:telegram:ru",
+        "publisher": {
+          "name": "Kaspersky",
+          "country": "RU",
+          "homepage": "https://www.kaspersky.ru/",
+          "trustBasis": "publisher-owned website names the official channel"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.9,
+        "intelligenceValue": 0.84,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "malware",
+            "APT",
+            "industrial security",
+            "vulnerability"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "industrial",
+            "technology",
+            "government"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Central Asia",
+            "Global"
+          ],
+          "countries": [],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "вредонос",
+            "уязвимост",
+            "кибератак",
+            "APT"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_hackmanac_telegram",
+      "tenantId": "default",
+      "name": "Hackmanac Cyber News public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/hackmanac_cybernews",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.82,
+      "language": "en",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public text posts from the Hackmanac Cyber News channel linked by hackmanac.com. Collect only public breach and actor-reporting summaries from the unauthenticated web preview; do not join, authenticate, message, follow private links, or download media, files, leaked data, or credentials.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-22T12:45:20.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "actor_announcement_reporting",
+          "victim_publication_reporting",
+          "breach_reporting"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "verifiedSourceId": "src_hackmanac_telegram",
+        "publisherReference": "https://hackmanac.com/",
+        "ownershipVerifiedAt": "2026-07-22T12:45:20.000Z",
+        "activityVerifiedAt": "2026-07-22T12:45:20.000Z",
+        "topics": [
+          "threat actors",
+          "ransomware",
+          "public breaches",
+          "victim reporting",
+          "cyberattacks"
+        ],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "publisher:hackmanac:telegram",
+        "publisher": {
+          "name": "Hackmanac",
+          "country": "IT",
+          "homepage": "https://hackmanac.com/",
+          "trustBasis": "publisher-owned website link"
+        },
+        "tier": "tier_3",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution and report verification state retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.82,
+        "intelligenceValue": 0.86,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "threat actors",
+            "ransomware",
+            "public breaches",
+            "victim reporting"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "healthcare",
+            "finance",
+            "manufacturing",
+            "technology"
+          ],
+          "regions": [
+            "Global",
+            "Europe"
+          ],
+          "countries": [],
+          "languages": [
+            "en"
+          ],
+          "queryPatterns": [
+            "ransomware",
+            "threat actor",
+            "breach",
+            "victim"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    }
+  ]
+}

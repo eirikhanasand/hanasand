@@ -1,5 +1,6 @@
 import type { SourceRecord } from "../types.ts";
 import { hashContent, nowIso } from "../utils.ts";
+import { evaluateTelegramPublicCompliance } from "../policy/telegramCollectionPolicy.ts";
 
 export const actions = ["activate_source_pack", "request_review", "delay_poll", "refresh_cursor", "reduce_window", "quarantine_channel", "suppress_repeated_urls"];
 export const safeOutput = { rawPrivateDataExposed: false, rawMediaPayloadsExposed: false, credentialsExposed: false, mediaRetention: "metadata_only", piiMinimized: true };
@@ -9,7 +10,11 @@ export const links = (text: string) => [...text.matchAll(/https?:\/\/[^\s)]+/gi)
 export const actorHints = (text: string) => ["APT29", "APT28", "LockBit", "Akira", "Clop", "Lazarus"].filter((actor) => text.toLowerCase().includes(actor.toLowerCase()));
 export const victimHints = (text: string) => [...text.matchAll(/\b(?:victim|target(?:ed)?|against)\s+([A-Z][A-Za-z0-9.-]+)/g)].map((m) => m[1]);
 export const ttpHints = (text: string) => ["phishing", "ransomware", "credential", "exploit", "malware"].filter((ttp) => text.toLowerCase().includes(ttp));
-export const minimizeTelegramPii = (value: string) => value.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]").replace(/\+?\d[\d\s().-]{7,}\d/g, "[phone]");
+export const minimizeTelegramPii = (value: string) => value
+  .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+  .replace(/\b\d{8,10}:[A-Z0-9_-]{30,}\b/gi, "[credential]")
+  .replace(/\b(?:api[_ -]?key|access[_ -]?token|password|passwd|session[_ -]?string)\s*[:=]\s*["']?[A-Z0-9_./+=-]{8,}["']?/gi, "[credential]")
+  .replace(/\+?\d[\d\s().-]{7,}\d/g, "[phone]");
 export const buildTelegramCrawlState = (config: any, input: any = {}) => ({ channel: config.channel, cursor: input.nextCursor ?? input.messages?.at?.(-1)?.id, lastSeenMessageDate: input.messages?.at?.(-1)?.date });
 
 export function parseTelegramTarget(value: string) {
@@ -17,12 +22,9 @@ export function parseTelegramTarget(value: string) {
   return { channel: match?.[1] };
 }
 
-export function validateTelegramPublicSourceCompliance(source: SourceRecord) {
-  const url = source.url ?? "";
+export function validateTelegramPublicSourceCompliance(source: SourceRecord): { allowed: boolean; reason?: string } {
   if (source.type !== "telegram_public") return { allowed: false, reason: "source_type_not_telegram_public" };
-  if (/\/\+|joinchat|private|invite/i.test(url)) return { allowed: false, reason: "private_or_invite_link_blocked" };
-  if (!parseTelegramTarget(url).channel) return { allowed: false, reason: "missing_public_channel" };
-  return { allowed: true };
+  return evaluateTelegramPublicCompliance(source);
 }
 
 export function summarizePlan(plan: any) {

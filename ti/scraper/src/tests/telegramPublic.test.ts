@@ -26,11 +26,16 @@ describe("compact Telegram public adapter", () => {
   test("allows public channels and blocks private access patterns", () => {
     expect(validateTelegramPublicSourceCompliance(source)).toEqual({ allowed: true });
     expect(validateTelegramPublicSourceCompliance({ ...source, url: "https://t.me/+invite" }).allowed).toBe(false);
+    expect(validateTelegramPublicSourceCompliance({ ...source, url: "http://t.me/securityalerts" }).allowed).toBe(false);
+    expect(validateTelegramPublicSourceCompliance({ ...source, url: "https://example.test/t.me/securityalerts" }).allowed).toBe(false);
+    expect(validateTelegramPublicSourceCompliance({ ...source, url: "https://t.me/securityalerts/42" }).allowed).toBe(false);
+    expect(validateTelegramPublicSourceCompliance({ ...source, metadata: { requiresAuthentication: true } }).allowed).toBe(false);
+    expect(validateTelegramPublicSourceCompliance({ ...source, metadata: { captchaRequired: true } }).allowed).toBe(false);
     expect(parseTelegramTarget("https://t.me/securityalerts").channel).toBe("securityalerts");
   });
 
   test("minimizes obvious PII and converts collected messages to evidence", () => {
-    const rawText = "APT29 update from analyst@example.com +47 999 99 999 https://example.test/report";
+    const rawText = "APT29 update from analyst@example.com +47 999 99 999 api_key=abcdef1234567890 bot=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcd1234 https://example.test/report";
     const item: CollectedItem = {
       sourceId: source.id,
       url: "https://t.me/securityalerts/42",
@@ -44,6 +49,9 @@ describe("compact Telegram public adapter", () => {
     const evidence = publicChannelEvidenceFromCollectedItem(item);
 
     expect(item.rawText).not.toContain("analyst@example.com");
+    expect(item.rawText).not.toContain("abcdef1234567890");
+    expect(item.rawText).not.toContain("ABCDEFGHIJKLMNOPQRSTUVWXYZabcd1234");
+    expect(item.rawText).toContain("[credential]");
     expect(evidence?.messageUrl).toBe("https://t.me/securityalerts/42");
     expect(evidence?.extractedUrls).toContain("https://example.test/report");
   });
