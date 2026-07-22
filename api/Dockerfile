@@ -10,7 +10,7 @@ RUN bun install
 FROM oven/bun:1.3.11-alpine AS app-runtime
 
 ARG TRIVY_VERSION=0.72.0
-RUN apk add --no-cache varnish git openssh-client docker-cli curl tar postgresql-client \
+RUN apk add --no-cache varnish git openssh-client docker-cli curl tar postgresql15-client \
     && curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
         | tar -xz -C /usr/local/bin trivy \
     && chmod +x /usr/local/bin/trivy
