@@ -32,14 +32,15 @@ describe('public TI API boundary', () => {
         expect(normalizeBatchQueries(['x', 'x'.repeat(201)])).toEqual([])
     })
 
-    test('requires authentication and rejects oversized batches before search work starts', async () => {
+    test('allows one anonymous read-only search while protecting batch search', async () => {
         const single = reply()
         const singleResult = await postTiSearch({ body: { query: 'APT29' } } as FastifyRequest<{ Body: { query: string } }>, single as unknown as FastifyReply) as any
-        expect(singleResult.statusCode).toBe(401)
-        expect(singleResult.payload.error).toBe('authentication_required')
+        expect(singleResult.statusCode).toBe(200)
+        expect(singleResult.payload.query).toBe('APT29')
+        expect(singleResult.headers['cache-control']).toBe('no-store, max-age=0')
 
         const unexpected = reply()
-        const unexpectedResult = await postTiSearch({ body: { query: 'APT29', tenantId: 'other' }, apiKeyAuth: {} } as any, unexpected as unknown as FastifyReply) as any
+        const unexpectedResult = await postTiSearch({ body: { query: 'APT29', tenantId: 'other' } } as any, unexpected as unknown as FastifyReply) as any
         expect(unexpectedResult.statusCode).toBe(400)
         expect(unexpectedResult.payload.error).toBe('invalid_request')
 

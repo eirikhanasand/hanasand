@@ -12,9 +12,6 @@ const TI_BATCH_CONCURRENCY = 3
 
 export default async function postTiSearch(req: FastifyRequest<{ Body: SearchBody }>, res: FastifyReply) {
     setNoStore(res)
-    if (!hasAuthenticatedPrincipal(req)) {
-        return res.status(401).send({ error: 'authentication_required', message: 'an API key or authenticated session is required for search' })
-    }
     if (hasUnexpectedFields(req.body, ['query'])) {
         return res.status(400).send({ error: 'invalid_request', message: 'search accepts only the query field' })
     }
