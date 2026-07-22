@@ -1026,7 +1026,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
         }
     }
     return (
-        <div className='grid max-w-full min-w-0 gap-5 overflow-hidden p-4 sm:p-5'>
+        <div className='grid max-w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-5 overflow-hidden p-4 sm:p-5'>
             <div className='flex flex-wrap items-start justify-between gap-4'>
                 <div className='min-w-0'>
                     <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center'>
