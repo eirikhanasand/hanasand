@@ -773,7 +773,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         sensitive, retention_class, extractor_version, record
       )
       SELECT
-        'capture_historical_publication_copy', tenant_id, source_id, task_id, url, canonical_url,
+        'capture_historical_publication_copy', tenant_id, source_id, task_id, url || '?historical=1', canonical_url || '?historical=1',
         collected_at + interval '20 minutes', collected_at + interval '20 minutes',
         processed_at + interval '20 minutes', first_visible_at + interval '20 minutes',
         content_hash, normalized_text_hash, media_type, storage_kind, body, object_ref,
