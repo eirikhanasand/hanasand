@@ -13,7 +13,6 @@
     "check:docker-contexts": "bun run scripts/check-docker-contexts.ts",
     "check:deploy-hygiene": "bun run scripts/check-deploy-hygiene.ts",
     "check:backup-script": "sh -n scripts/threat-intel-backup.sh",
-    "check:deployment-drift": "bun run scripts/check-deployment-drift.ts",
     "check:contract-index": "bun run scripts/check-contract-index.ts",
     "check:api-regression": "bun run scripts/check-api-regression.ts",
     "smoke:realtime-alert-discord": "bun run scripts/smoke-realtime-alert-discord.ts",
@@ -21,7 +20,6 @@
     "check:api-gateway": "bun run scripts/check-api-gateway.ts",
     "check:frontier-apply-plan": "bun run scripts/check-frontier-apply-plan.ts",
     "check:inspur-public-proof": "bun run scripts/check-inspur-public-proof.ts",
-    "check:live-search-deploy": "bun run scripts/check-live-search-deploy.ts",
     "check:restricted-metadata-apply-plan": "bun run scripts/check-restricted-metadata-apply-plan.ts",
     "check:restricted-metadata-status": "bun run scripts/check-restricted-metadata-status.ts",
     "check:route-inventory": "bun run scripts/check-route-inventory.ts",
@@ -32,10 +30,7 @@
     "check:public-ti-org-relevance": "bun run scripts/validatePublicTiOrgRelevance.ts",
     "check:ti-release-candidate": "bun run scripts/check-ti-release-candidate.ts",
     "snapshot:product-slo": "bun run scripts/collect-product-slo-snapshot.ts",
-    "bootstrap:evaluation-corpus": "bun run scripts/bootstrap-authoritative-evaluation.ts",
-    "rehearse:cutover": "bun run scripts/run-cutover-rehearsal.ts",
-    "soak:live-search": "bun run scripts/run-live-search-soak.ts",
-    "soak:production": "bun run scripts/run-production-soak-orchestrator.ts"
+    "bootstrap:evaluation-corpus": "bun run scripts/bootstrap-authoritative-evaluation.ts"
   },
   "dependencies": {},
   "devDependencies": {

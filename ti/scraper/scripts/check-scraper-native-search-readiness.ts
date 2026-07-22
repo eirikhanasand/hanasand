@@ -1,1 +1,75 @@
-import { assertScraperNativeSearchReadiness, verifyScraperNativeSearchReadiness } from "../src/ops/liveSearch.ts"; import { handleApiRequest, type ApiServerOptions } from "../src/api/server.ts"; import { loadRuntimeConfig } from "../src/config/runtimeConfig.ts"; import { FocusedFrontier } from "../src/frontier/frontier.ts"; import { InMemorySourceRegistry } from "../src/registry/sourceRegistry.ts"; import { InMemoryScraperStore } from "../src/storage/memoryStore.ts";  const queries = (process.env.TI_SEARCH_READINESS_QUERIES ?? process.env.TI_SEARCH_READINESS_QUERY ?? "Scattered Spider")   .split(",")   .map((item) => item.trim())   .filter(Boolean); const internalBase = process.env.TI_SCRAPER_INTERNAL_BASE ?? "http://ti-scraper:8097"; const publicApiUrl = process.env.PUBLIC_TI_API_SEARCH_URL ?? process.env.PUBLIC_TI_API_BASE_URL ?? "https://api.hanasand.com/api/ti/search"; const requireGetApiProof = process.env.TI_REQUIRE_GET_API_PROOF === "true"; const failures: string[] = [];  for (const query of queries) {   const readiness = await checkQuery(query);   for (const check of readiness.checks) {     console.log(JSON.stringify({       event: "scraper_native_search_readiness.check",       query,       name: check.name,       ok: check.ok,       message: check.message     }));   }   try {     assertScraperNativeSearchReadiness(readiness);   } catch (error) {     failures.push(`${query}: ${error instanceof Error ? error.message : String(error)}`);   } }  if (failures.length > 0) {   throw new Error(failures.join("\n")); }  async function checkQuery(query: string) {   const searchUrl = `${internalBase}/v1/intel/search?q=${encodeURIComponent(query)}&entityType=actor`;   const degradedUrl = `${internalBase}/v1/intel/search?q=${encodeURIComponent(query)}&entityType=actor&forceDegraded=1`;   const publicTiUrl = process.env.PUBLIC_TI_SEARCH_URL ?? `https://hanasand.com/ti?q=${encodeURIComponent(query)}`;   const search = await fetchJson(searchUrl);   const cursor = readCursor(search.json);   const cursorUrl = cursor     ? `${internalBase}/v1/intel/search?q=${encodeURIComponent(query)}&cursor=${encodeURIComponent(cursor)}`     : searchUrl;   const [scraperHealth, cursorPoll, degradedSearch, publicPage, publicApiPost, publicApiGet] = await Promise.all([     fetchJson(`${internalBase}/v1/health`),     fetchJson(cursorUrl),     fetchJson(degradedUrl),     fetchText(publicTiUrl),     fetchJson(publicApiUrl, {       method: "POST",       headers: { "content-type": "application/json" },       body: JSON.stringify({ query })     }),     fetchJson(`${publicApiUrl}?q=${encodeURIComponent(query)}`)   ]);    return verifyScraperNativeSearchReadiness({     scraperHealth,     search,     cursorPoll,     degradedSearch,     publicPage,     publicApiPost,     publicApiGet,     requireGetApiProof   }); }  async function fetchJson(url: string, init?: RequestInit): Promise<{ status: number; json?: unknown; body?: string }> {   const response = await fetchOrLocal(url, init);   const text = await response.text();   try {     return { status: response.status, json: JSON.parse(text), body: text };   } catch {     return { status: response.status, json: { body: text }, body: text };   } }  async function fetchText(url: string): Promise<{ url: string; status: number; body: string }> {   const response = await fetchOrLocal(url);   return { url, status: response.status, body: await response.text() }; }  async function fetchOrLocal(url: string, init?: RequestInit): Promise<Response> {   try {     return await fetch(url, init);   } catch (error) {     if (!canUseLocalFallback(url, init)) throw error;     return localFallbackResponse(url, init);   } }  function canUseLocalFallback(url: string, init?: RequestInit): boolean {   const parsed = new URL(url);   return ["127.0.0.1", "localhost", "ti-scraper"].includes(parsed.hostname)     && (       parsed.pathname.startsWith("/v1/")       || parsed.pathname === "/ti"       || parsed.pathname === "/api/ti/search"     ); }  async function localFallbackResponse(url: string, init?: RequestInit): Promise<Response> {   const parsed = new URL(url);   const method = init?.method ?? "GET";   if (parsed.pathname.startsWith("/v1/") && method === "GET") {     return handleApiRequest(new Request(localApiUrl(url), init), localOptions());   }   if (parsed.pathname === "/api/ti/search") {     const query = await publicApiQuery(parsed, init);     const searchUrl = `http://local-proof.test/v1/intel/search?q=${encodeURIComponent(query)}&entityType=actor`;     return handleApiRequest(new Request(searchUrl), localOptions());   }   if (parsed.pathname === "/ti") {     const query = parsed.searchParams.get("q") ?? parsed.searchParams.get("query") ?? "APT29";     const response = await handleApiRequest(       new Request(`http://local-proof.test/v1/intel/search?q=${encodeURIComponent(query)}&entityType=actor`),       localOptions()     );     const body = await response.text();     return new Response(`<!doctype html><html><body data-mode="live_search" data-query="${escapeHtml(query)}"><script id="initialResult" type="application/json">${escapeHtml(body)}</script><div>live_search partial queued run</div></body></html>`, {       status: response.status,       headers: { "content-type": "text/html; charset=utf-8" }     });   }   return new Response("local proof fallback not available", { status: 599 }); }  function localApiUrl(url: string): string {   const parsed = new URL(url);   return `http://local-proof.test${parsed.pathname}${parsed.search}`; }  async function publicApiQuery(parsed: URL, init?: RequestInit): Promise<string> {   if (typeof init?.body === "string") {     try {       const body = JSON.parse(init.body) as Record<string, unknown>;       if (typeof body.query === "string" && body.query.trim()) return body.query;       if (typeof body.q === "string" && body.q.trim()) return body.q;     } catch {     }   }   return parsed.searchParams.get("q") ?? parsed.searchParams.get("query") ?? "APT29"; }  function escapeHtml(value: string): string {   return value     .replaceAll("&", "&amp;")     .replaceAll("<", "&lt;")     .replaceAll(">", "&gt;")     .replaceAll('"', "&quot;"); }  var cachedLocalOptions: ApiServerOptions | undefined;  function localOptions(): ApiServerOptions {   if (cachedLocalOptions) return cachedLocalOptions;   const store = new InMemoryScraperStore();   const registry = new InMemorySourceRegistry();   const seed = registry.upsert({     name: "Readiness proof security RSS seed",     type: "rss",     url: "https://example.com/feed.xml",     accessMethod: "public_http",     status: "paused",     risk: "low",     trustScore: 0.5,     crawlFrequencySeconds: 3600,     legalNotes: "Readiness proof placeholder seed; collection remains disabled."   });   store.saveSource(seed);   cachedLocalOptions = {     store,     frontier: new FocusedFrontier(),     config: loadRuntimeConfig({})   };   return cachedLocalOptions; }  function readCursor(value: unknown): string | undefined {   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;   const record = value as Record<string, unknown>;   for (const key of ["cursor", "nextCursor", "pollCursor", "deltaCursor"]) {     if (typeof record[key] === "string") return record[key];   }   return undefined; }
+type Probe = { status: number; body: string; json?: Record<string, unknown> };
+
+const queries = (process.env.TI_SEARCH_READINESS_QUERIES ?? process.env.TI_SEARCH_READINESS_QUERY ?? "Scattered Spider")
+  .split(",")
+  .map((query) => query.trim())
+  .filter(Boolean);
+const scraperBase = base(process.env.TI_SCRAPER_INTERNAL_BASE ?? "http://ti-scraper:8097");
+const publicPageBase = process.env.PUBLIC_TI_SEARCH_URL;
+const publicApiUrl = process.env.PUBLIC_TI_API_SEARCH_URL ?? process.env.PUBLIC_TI_API_BASE_URL ?? "https://api.hanasand.com/api/ti/search";
+const requireGetApiProof = process.env.TI_REQUIRE_GET_API_PROOF === "true";
+const failures: string[] = [];
+
+for (const query of queries) {
+  const searchUrl = `${scraperBase}/v1/intel/search?q=${encodeURIComponent(query)}&entityType=actor`;
+  const [health, search, publicPage, publicApiPost, publicApiGet] = await Promise.all([
+    probe(`${scraperBase}/v1/health`),
+    probe(searchUrl),
+    probe(publicPageBase ?? `https://hanasand.com/ti?q=${encodeURIComponent(query)}`),
+    probe(publicApiUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query }) }),
+    requireGetApiProof ? probe(`${publicApiUrl}?q=${encodeURIComponent(query)}`) : undefined
+  ]);
+  const checks = [
+    check("scraper_health", health.status === 200 && health.json?.ok === true, health.status),
+    check("scraper_search", search.status === 200 && safe(search.body), search.status),
+    check("scraper_search_contract", validSearch(search.json, query), search.status),
+    check("public_ti_page", publicPage.status >= 200 && publicPage.status < 400 && safe(publicPage.body), publicPage.status),
+    check("public_api_post", publicApiPost.status >= 200 && publicApiPost.status < 400 && safe(publicApiPost.body), publicApiPost.status),
+    ...(publicApiGet ? [check("public_api_get", publicApiGet.status >= 200 && publicApiGet.status < 400 && safe(publicApiGet.body), publicApiGet.status)] : [])
+  ];
+  for (const result of checks) {
+    console.log(JSON.stringify({ event: "scraper_native_search_readiness.check", query, ...result }));
+    if (!result.ok) failures.push(`${query}: ${result.name} returned ${result.status}`);
+  }
+}
+
+console.log(JSON.stringify({ event: "scraper_native_search_readiness.summary", ok: failures.length === 0, queryCount: queries.length, failures }));
+if (failures.length) throw new Error(failures.join("\n"));
+
+async function probe(url: string, init?: RequestInit): Promise<Probe> {
+  try {
+    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(15_000) });
+    const body = await response.text();
+    let json: Record<string, unknown> | undefined;
+    try {
+      const value: unknown = JSON.parse(body);
+      if (value && typeof value === "object" && !Array.isArray(value)) json = value as Record<string, unknown>;
+    } catch {
+    }
+    return { status: response.status, body, json };
+  } catch (error) {
+    return { status: 599, body: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function safe(body: string): boolean {
+  return !/local-proof\.test|readiness proof placeholder|fixture_public_search|outer fallback/i.test(body);
+}
+
+function validSearch(record: Record<string, unknown> | undefined, query: string): boolean {
+  return record?.query === query
+    && record.mode === "scraper"
+    && typeof record.runId === "string"
+    && typeof record.generatedAt === "string"
+    && typeof record.refreshAfterSeconds === "number"
+    && record.publicTiAnswer !== null
+    && typeof record.publicTiAnswer === "object";
+}
+
+function check(name: string, ok: boolean, status: number) {
+  return { name, ok, status };
+}
+
+function base(value: string): string {
+  return value.replace(/\/$/, "");
+}
