@@ -349,7 +349,7 @@ async function replaceApiKeyScopes(apiKeyId: string, scopes: ApiKeyScopeRule[]) 
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
         `, [
-            scope.id || randomUUID(),
+            randomUUID(),
             apiKeyId,
             scope.method.toUpperCase(),
             scope.route,

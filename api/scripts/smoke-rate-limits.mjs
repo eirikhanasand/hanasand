@@ -29,7 +29,7 @@ const pool = new Pool({
 
 let token = ''
 let issuedSecret = ''
-let createdKeyId = ''
+const createdKeyIds = []
 
 function expect(condition, message, details) {
     if (!condition) {
@@ -89,9 +89,9 @@ async function pageRequest(path, cookieHeader) {
 }
 
 async function cleanup() {
-    if (createdKeyId) {
-        await pool.query('DELETE FROM api_key_scopes WHERE api_key_id = $1', [createdKeyId]).catch(() => {})
-        await pool.query('DELETE FROM api_keys WHERE id = $1', [createdKeyId]).catch(() => {})
+    for (const keyId of createdKeyIds) {
+        await pool.query('DELETE FROM api_key_scopes WHERE api_key_id = $1', [keyId]).catch(() => {})
+        await pool.query('DELETE FROM api_keys WHERE id = $1', [keyId]).catch(() => {})
     }
     await pool.query('DELETE FROM user_roles WHERE user_id = $1', [runId]).catch(() => {})
     await pool.query('DELETE FROM tokens WHERE id = $1', [runId]).catch(() => {})
@@ -211,7 +211,6 @@ async function main() {
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             enabled: true,
             scopes: [{
-                id: 'scope_status_smoke',
                 enabled: true,
                 method: 'GET',
                 route: '/api/status',
@@ -226,8 +225,33 @@ async function main() {
     })
     expect(key.response.status === 201, 'Failed to create scoped API key.', key.body)
     expect(typeof key.body?.secret === 'string' && key.body.secret.startsWith('hsk_'), 'Issued API key secret was missing.', key.body)
-    createdKeyId = key.body.apiKey.id
+    createdKeyIds.push(key.body.apiKey.id)
     issuedSecret = key.body.secret
+
+    const sameScopeKey = await request('/rate-limit/keys', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+            ownerId: runId,
+            name: 'Second smoke status key',
+            tier: 'starter',
+            description: 'Independent key using the same route scope',
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            enabled: true,
+            scopes: [{
+                enabled: true,
+                method: 'GET',
+                route: '/api/status',
+                limits: { perSecond: 1, perMinute: 5, perHour: 20, perDay: 100 },
+            }],
+        }),
+    })
+    expect(sameScopeKey.response.status === 201, 'Two API keys should independently scope the same route.', sameScopeKey.body)
+    createdKeyIds.push(sameScopeKey.body.apiKey.id)
+    expect(key.body.apiKey.scopes[0].id !== sameScopeKey.body.apiKey.scopes[0].id, 'API key scope IDs must be globally unique.', {
+        first: key.body.apiKey.scopes[0].id,
+        second: sameScopeKey.body.apiKey.scopes[0].id,
+    })
 
     const statusFirst = await request('/status', {
         headers: apiKeyHeaders(),
@@ -251,7 +275,7 @@ async function main() {
     console.log(JSON.stringify({
         insideDocker,
         routeCount: settings.body.routes.length,
-        issuedKeyId: createdKeyId,
+        issuedKeyId: createdKeyIds[0],
         burstStatuses,
         rateLimitHeaders: {
             second: statusFirst.response.headers.get('x-api-key-rate-limit-second'),
