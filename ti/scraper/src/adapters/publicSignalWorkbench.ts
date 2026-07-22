@@ -19,12 +19,6 @@ export function buildPublicSignalFusionWorkbench(input: PublicSignalFusionInput)
   return { query: input.query, generatedAt, status: publicSignalDeltas.length ? "ready" : selectedSources.length ? "partial" : "coverage_gap", selectedSources, familyCoverage: { familiesCovered: FAMILIES, missingFamilies: missingFamilies(selectedSources), diversityScore: FAMILIES.length }, publicSignalDeltas, sourceCoverageGaps: missingFamilies(selectedSources).map((family) => ({ family, reason: "no selected source" })), coverageStatus: actorSourceCoverageMatrix.status, actorSourceCoverageMatrix, publicSignalLiveCollectionLoop, publicSignalValueImpact: buildPublicSignalValueImpact({ publicSignalDeltas, selectedSources, generatedAt }), publicCoverageFreshnessValue: buildPublicCoverageFreshnessValue({ publicSignalDeltas, selectedSources, generatedAt }), advisoryCorrelation: buildPublicAdvisoryCorrelation({ deltas: publicSignalDeltas, generatedAt }), publicConflictContradictionResolver: buildPublicConflictContradictionResolver({ deltas: publicSignalDeltas, generatedAt }), analystSourceWorkbench: { rows: selectedSources, action: "collect_public_metadata" } };
 }
 
-export function buildPublicAdvisorySignalConnector(input: any): any {
-  const generatedAt = input.generatedAt ?? nowIso();
-  const signals = (input.signals ?? []).slice(0, input.maxSignals ?? 100).map((signal: any) => deltaFromAdvisory(signal, generatedAt));
-  return { query: input.query, generatedAt, status: signals.length ? "ready" : "partial", fastInitialSummary: { query: input.query, signalCount: signals.length, usefulSignalCount: signals.length, sourceCount: new Set(signals.map((signal: any) => signal.sourceId)).size, canAnswerImmediately: signals.length > 0 }, signals, rankedSignals: signals, sourceCount: new Set(signals.map((signal: any) => signal.sourceId)).size };
-}
-
 export function buildAnalystPublicSourceWorkbench(input: any): any {
   const workbench = buildPublicSignalFusionWorkbench(input);
   return { generatedAt: workbench.generatedAt, rows: workbench.selectedSources, decisions: workbench.selectedSources.map((source: any) => ({ sourceId: source.sourceId, action: "collect_public_metadata" })) };
