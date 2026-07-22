@@ -20,7 +20,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             }, { status: 503, headers: { 'cache-control': 'no-store' } })
         }
     }
-    return proxyOrganizationApiRequest(request, `/dwm/webhook-destinations?organizationId=${encodeURIComponent(id)}`, { method: 'GET' })
+    return proxyOrganizationApiRequest(request, `/dwm/webhook-destinations?orgId=${encodeURIComponent(id)}`, { method: 'GET' })
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
