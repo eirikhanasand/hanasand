@@ -1284,7 +1284,7 @@ function AnalystBriefPanel({ brief }: { brief: ReturnType<typeof buildAnalystBri
                     {brief.readyForCustomer ? 'Customer-ready after review' : 'Review before customer update'}
                 </span>
             </div>
-            <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+            <div className='grid gap-3 md:grid-cols-2 2xl:grid-cols-4'>
                 <BriefStep label='Observed fact' value={brief.observedFact} />
                 <BriefStep label='Source claim' value={brief.sourceClaim} />
                 <BriefStep label='Analyst inference' value={brief.analystInference} />
