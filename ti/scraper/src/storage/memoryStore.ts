@@ -58,9 +58,9 @@ export class InMemoryScraperStore implements ScraperStore {
       captureId: capture.id,
       firstSeenAt: previousIncident?.firstSeenAt ?? validIso(result.incident.firstSeenAt) ?? capture.publishedAt ?? capture.collectedAt,
       ...reporting,
-      publishedAt: previousIncident?.publishedAt ?? validIso(result.incident.publishedAt) ?? capture.publishedAt,
+      publishedAt: reporting.publisherReportedAt,
       collectedAt: previousIncident?.collectedAt ?? capture.collectedAt,
-      processedAt: previousIncident?.processedAt ?? result.incident.processedAt ?? capture.processedAt,
+      processedAt: capture.processedAt ?? result.incident.processedAt ?? previousIncident?.processedAt,
       firstVisibleAt: previousIncident?.firstVisibleAt ?? capture.firstVisibleAt ?? firstVisibleAt
     }) : undefined;
     const extractorVersion = incident?.extractorVersion ?? capture.provenance?.extractorVersion ?? "unknown";
@@ -541,9 +541,9 @@ function timelinessRecord(capture: any, incident: any, previous?: any): any {
     captureId: capture.id,
     incidentId: incident.id,
     ...reporting,
-    publishedAt: incident.publishedAt ?? capture.publishedAt,
+    publishedAt: reporting.publisherReportedAt,
     collectedAt: incident.collectedAt ?? capture.collectedAt,
-    processedAt: incident.processedAt ?? capture.processedAt,
+    processedAt: capture.processedAt ?? incident.processedAt,
     firstVisibleAt: previous?.firstVisibleAt ?? incident.firstVisibleAt ?? capture.firstVisibleAt,
     alertCreatedAt: previous?.alertCreatedAt,
     alertCreatedProvenance: previous?.alertCreatedProvenance,

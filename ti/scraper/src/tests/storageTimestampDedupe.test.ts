@@ -125,7 +125,7 @@ test("unverified actor report metadata is retained only as publisher provenance"
   expect(store.getTimelinessRecord("incident_unverified_actor")).toMatchObject({ actorReportedAt: undefined, publisherReportedAt: at, firstReportedKind: "publisher" });
 });
 
-test("zero-second publication latency is accepted only with source-field evidence", () => {
+test("publication latency exists only with source-field evidence", () => {
   const at = "2026-05-24T10:00:00.000Z";
   const save = (id: string, metadata: any) => {
     const store = new InMemoryScraperStore();
@@ -139,6 +139,7 @@ test("zero-second publication latency is accepted only with source-field evidenc
 
   expect(verified.zeroSecondEvidence.publicationToCollectionSeconds).toMatchObject({ verified: true, from: at, to: at });
   expect(verified.timestampAnomalies).not.toContain("unverified_zero:publicationToCollectionSeconds");
-  expect(unverified.zeroSecondEvidence.publicationToCollectionSeconds).toMatchObject({ verified: false, from: at, to: at });
-  expect(unverified.timestampAnomalies).toContain("unverified_zero:publicationToCollectionSeconds");
+  expect(unverified.publishedAt).toBeUndefined();
+  expect(unverified.zeroSecondEvidence.publicationToCollectionSeconds).toBeUndefined();
+  expect(unverified.timestampAnomalies).not.toContain("unverified_zero:publicationToCollectionSeconds");
 });

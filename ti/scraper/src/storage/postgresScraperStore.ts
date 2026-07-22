@@ -40,7 +40,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "019_incident_logical_identity", path: fileURLToPath(new URL("../../migrations/019_incident_logical_identity.sql", import.meta.url)) },
   { version: "020_actor_identity_catalog", path: fileURLToPath(new URL("../../migrations/020_actor_identity_catalog.sql", import.meta.url)) },
   { version: "021_remove_dangling_incident_evidence_links", path: fileURLToPath(new URL("../../migrations/021_remove_dangling_incident_evidence_links.sql", import.meta.url)) },
-  { version: "022_reconcile_source_fleet", path: fileURLToPath(new URL("../../migrations/022_reconcile_source_fleet.sql", import.meta.url)) }
+  { version: "022_reconcile_source_fleet", path: fileURLToPath(new URL("../../migrations/022_reconcile_source_fleet.sql", import.meta.url)) },
+  { version: "023_reconcile_delivery_and_event_times", path: fileURLToPath(new URL("../../migrations/023_reconcile_delivery_and_event_times.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -398,7 +399,19 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     }
     return stored;
   }
-  override saveDwmWebhookDelivery(record: any): any { return this.saveWorkflow("dwm_webhook_delivery", record, () => super.saveDwmWebhookDelivery(record)); }
+  override saveDwmWebhookDelivery(record: any): any {
+    const alert = this.getDwmAlert(record.alertId);
+    const captureIds = new Set(alert ? linkedAlertCaptureIds(alert) : []);
+    const linkedIncidentIds = new Set(this.listTimelinessRecords()
+      .filter((timeliness: any) => alert && (timeliness.incidentId === alert.incidentId || captureIds.has(timeliness.captureId)))
+      .map((timeliness: any) => timeliness.incidentId));
+    const stored = this.saveWorkflow("dwm_webhook_delivery", record, () => super.saveDwmWebhookDelivery(record));
+    for (const incidentId of linkedIncidentIds) {
+      const timeliness = this.getTimelinessRecord(incidentId);
+      if (timeliness) this.enqueue(`timeliness:${timeliness.id}`, () => this.persistTimeliness(timeliness));
+    }
+    return stored;
+  }
   override saveActorOrgRelevanceReview(record: any): any { return this.saveWorkflow("actor_org_relevance_review", record, () => super.saveActorOrgRelevanceReview(record)); }
 
   private async migrate(): Promise<void> {

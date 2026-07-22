@@ -682,6 +682,176 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect((await admin<{ ids: string[] }[]>`SELECT ARRAY(SELECT jsonb_array_elements_text(record->'incidentIds')) AS ids FROM threat_intel.workflow_records WHERE id = 'snapshot_incident_lineage'`)[0].ids).toEqual([current.incident.id, legacyId].sort());
   });
 
+  test("persists real delivery outcomes and repairs event times from capture provenance", async () => {
+    const store = await PostgresScraperStore.create({ databaseUrl });
+    store.saveSource(source({ id: "src_seed_ransomwarelive_victims" }));
+
+    const verified = processCollectedItem({
+      sourceId: "src_seed_ransomwarelive_victims",
+      url: "https://www.ransomware.live/id/verified",
+      title: "Akira has just published a new victim: Verified Industries",
+      collectedAt: "2026-07-21T11:38:57.330Z",
+      publishedAt: "2026-07-21T11:29:27.000Z",
+      rawText: "Akira claims victim Verified Industries in a public victim feed.",
+      contentHash: hashContent("verified-publication"),
+      links: [],
+      metadata: {
+        exposureClaim: true,
+        sourceFamily: "darkweb_metadata",
+        extractionProfile: "ransomware_victim_blog",
+        leakSite: { actorName: "Akira", victimName: "Verified Industries" },
+        reportTimestamps: [{ role: "publisher", timestamp: "2026-07-21T11:29:27.000Z", sourceId: "src_seed_ransomwarelive_victims", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }]
+      },
+      sensitive: true
+    });
+    const unknown = processCollectedItem({
+      sourceId: "src_seed_ransomwarelive_victims",
+      url: "https://www.ransomware.live/id/unknown",
+      title: "Akira has just published a new victim: Unknown Industries",
+      collectedAt: "2026-07-21T12:38:57.330Z",
+      rawText: "Akira claims victim Unknown Industries in a public victim feed.",
+      contentHash: hashContent("unknown-publication"),
+      links: [],
+      metadata: {
+        exposureClaim: true,
+        sourceFamily: "darkweb_metadata",
+        extractionProfile: "ransomware_victim_blog",
+        leakSite: { actorName: "Akira", victimName: "Unknown Industries" }
+      },
+      sensitive: true
+    });
+    const savedVerified = store.savePipelineResult(verified);
+    const savedUnknown = store.savePipelineResult(unknown);
+    const alertCreatedAt = "2026-07-22T12:42:56.741Z";
+    store.saveDwmAlert({
+      id: "dwm_alert_delivery_projection",
+      tenantId: "tenant_delivery",
+      savedAt: alertCreatedAt,
+      alertCreatedAt,
+      workflowContext: { captureIds: [savedVerified.capture.id] },
+      provenance: { captureIds: [savedVerified.capture.id] }
+    });
+    await store.flush();
+    await store.close();
+
+    const delivery = (id: string, status: string, attemptedAt: string | null, completedAt: string | null, deliveredAt: string | null, responseStatus: number | null) => ({
+      id,
+      owner_id: "owner_delivery",
+      org_id: "tenant_delivery",
+      destination_id: "destination_delivery",
+      alert_id: "dwm_alert_delivery_projection",
+      event_type: "dwm.alert.created",
+      status,
+      dry_run: false,
+      response_status: responseStatus,
+      attempt_count: id === "delivery_failed" ? 1 : 2,
+      idempotency_key: "delivery-idempotency",
+      attempted_at: attemptedAt,
+      completed_at: completedAt,
+      delivered_at: deliveredAt,
+      created_at: completedAt ?? "2026-07-22T12:46:29.529Z",
+      updated_at: completedAt ?? "2026-07-22T12:46:29.529Z"
+    });
+    const failed = delivery("delivery_failed", "failed", "2026-07-22T12:45:04.000Z", "2026-07-22T12:45:04.688Z", null, 404);
+    const delivered = delivery("delivery_delivered", "delivered", "2026-07-22T12:46:17.000Z", "2026-07-22T12:46:18.034Z", "2026-07-22T12:46:18.034Z", 202);
+    const skipped = delivery("delivery_skipped", "skipped", null, null, null, null);
+    for (const row of [failed, delivered, skipped, failed]) {
+      await admin`SELECT threat_intel.persist_public_dwm_delivery(${row}::jsonb)`;
+    }
+
+    const staleProcessedAt = "2026-07-23T13:59:35.445Z";
+    await admin`
+      UPDATE threat_intel.captures
+      SET published_at = collected_at,
+          record = record || jsonb_build_object('publishedAt', collected_at)
+      WHERE id IN (${savedVerified.capture.id}, ${savedUnknown.capture.id})
+    `;
+    await admin`
+      UPDATE threat_intel.incidents
+      SET published_at = collected_at,
+          processed_at = ${staleProcessedAt},
+          record = record || jsonb_build_object('publishedAt', collected_at, 'processedAt', ${staleProcessedAt}::timestamptz)
+      WHERE id IN (${savedVerified.incident!.id}, ${savedUnknown.incident!.id})
+    `;
+    await admin`
+      UPDATE threat_intel.timeliness_records
+      SET published_at = collected_at,
+          processed_at = ${staleProcessedAt},
+          record = record || jsonb_build_object(
+            'publishedAt', collected_at,
+            'processedAt', ${staleProcessedAt}::timestamptz,
+            'timestampAnomalies', '["processed_after_visibility"]'::jsonb
+          )
+      WHERE incident_id IN (${savedVerified.incident!.id}, ${savedUnknown.incident!.id})
+    `;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '023_reconcile_delivery_and_event_times'`;
+
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    await restarted.close();
+
+    expect(await admin<{ id: string; status: string }[]>`
+      SELECT id, record->>'status' AS status
+      FROM threat_intel.workflow_records
+      WHERE record_type = 'dwm_webhook_delivery'
+      ORDER BY id
+    `).toEqual([
+      { id: "delivery_delivered", status: "delivered" },
+      { id: "delivery_failed", status: "failed" },
+      { id: "delivery_skipped", status: "skipped" }
+    ]);
+    expect((await admin<{ delivery_attempted_at: Date; delivered_at: Date; record: any }[]>`
+      SELECT delivery_attempted_at, delivered_at, record
+      FROM threat_intel.timeliness_records
+      WHERE incident_id = ${savedVerified.incident!.id}
+    `)[0]).toMatchObject({
+      delivery_attempted_at: new Date("2026-07-22T12:45:04.000Z"),
+      delivered_at: new Date("2026-07-22T12:46:18.034Z"),
+      record: {
+        deliveryAttemptProvenance: { deliveryId: "delivery_failed", status: "failed" },
+        deliveredProvenance: { deliveryId: "delivery_delivered", httpStatus: 202 }
+      }
+    });
+    expect(await admin`
+      SELECT incident.id, incident.processed_at, capture.processed_at
+      FROM threat_intel.incidents AS incident
+      JOIN threat_intel.captures AS capture ON capture.id = incident.capture_id
+      WHERE incident.id IN (${savedVerified.incident!.id}, ${savedUnknown.incident!.id})
+        AND incident.processed_at <> capture.processed_at
+    `).toHaveLength(0);
+    expect(await admin`
+      SELECT timeliness.id
+      FROM threat_intel.timeliness_records AS timeliness
+      JOIN threat_intel.captures AS capture ON capture.id = timeliness.capture_id
+      WHERE timeliness.incident_id IN (${savedVerified.incident!.id}, ${savedUnknown.incident!.id})
+        AND (timeliness.processed_at <> capture.processed_at OR timeliness.record->'timestampAnomalies' ? 'processed_after_visibility')
+    `).toHaveLength(0);
+    expect((await admin<{ incident_id: string; capture_published_at: Date | null; incident_published_at: Date | null; timeliness_published_at: Date | null }[]>`
+      SELECT timeliness.incident_id,
+             capture.published_at AS capture_published_at,
+             incident.published_at AS incident_published_at,
+             timeliness.published_at AS timeliness_published_at
+      FROM threat_intel.timeliness_records AS timeliness
+      JOIN threat_intel.captures AS capture ON capture.id = timeliness.capture_id
+      JOIN threat_intel.incidents AS incident ON incident.id = timeliness.incident_id
+      WHERE timeliness.incident_id IN (${savedVerified.incident!.id}, ${savedUnknown.incident!.id})
+      ORDER BY timeliness.incident_id
+    `).sort((left, right) => left.incident_id === savedVerified.incident!.id ? -1 : right.incident_id === savedVerified.incident!.id ? 1 : left.incident_id.localeCompare(right.incident_id))).toEqual([
+      {
+        incident_id: savedVerified.incident!.id,
+        capture_published_at: null,
+        incident_published_at: new Date("2026-07-21T11:29:27.000Z"),
+        timeliness_published_at: new Date("2026-07-21T11:29:27.000Z")
+      },
+      {
+        incident_id: savedUnknown.incident!.id,
+        capture_published_at: null,
+        incident_published_at: null,
+        timeliness_published_at: null
+      }
+    ]);
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '023_reconcile_delivery_and_event_times'`).toHaveLength(1);
+  });
+
   test("imports the legacy JSON snapshot once and then uses PostgreSQL", async () => {
     const directory = mkdtempSync(join(tmpdir(), "ti-legacy-cutover-"));
     const snapshotPath = join(directory, "scraper-store.json");

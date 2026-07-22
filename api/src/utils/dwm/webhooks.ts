@@ -54,7 +54,9 @@ export type DwmWebhookDeliveryRow = {
     watchlist_name: string | null
     route: string | null
     case_path: string | null
-    attempted_at: string
+    attempted_at: string | null
+    completed_at: string | null
+    delivered_at: string | null
     created_at: string
     updated_at?: string
     audit_event_id?: string | null
@@ -304,6 +306,8 @@ export function toDwmWebhookDelivery(row: DwmWebhookDeliveryRow) {
         route: row.route,
         casePath: row.case_path,
         attemptedAt: row.attempted_at,
+        completedAt: row.completed_at,
+        deliveredAt: row.delivered_at,
         createdAt: row.created_at,
         auditEventId: row.audit_event_id ?? null,
         auditAction: row.audit_action ?? null,
@@ -8124,6 +8128,8 @@ async function deliverToDwmWebhookDestination({
     let responseStatus: number | null = null
     let responseBody: string | null = null
     let error: string | null = null
+    const attemptedAt = shouldSendLive ? new Date().toISOString() : null
+    let completedAt: string | null = null
     const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
     const attemptCount = await countDwmWebhookDeliveryAttempts(ownerId, destination.org_id, destination.id, idempotencyKey) + 1
 
@@ -8142,8 +8148,11 @@ async function deliverToDwmWebhookDestination({
         } catch (sendError) {
             status = 'failed'
             error = sanitizeDwmWebhookDeliveryDiagnostic(sendError instanceof Error ? sendError.message : String(sendError))
+        } finally {
+            completedAt = new Date().toISOString()
         }
     }
+    const deliveredAt = status === 'delivered' ? completedAt : null
 
     const result = await run(`
         INSERT INTO dwm_webhook_deliveries (
@@ -8170,9 +8179,11 @@ async function deliverToDwmWebhookDestination({
             watchlist_name,
             route,
             case_path,
-            attempted_at
+            attempted_at,
+            completed_at,
+            delivered_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::JSONB, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::JSONB, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
         RETURNING *
     `, [
         deliveryId,
@@ -8198,6 +8209,9 @@ async function deliverToDwmWebhookDestination({
         watchlist.name,
         normalizedAlert.route,
         normalizedAlert.casePath,
+        attemptedAt,
+        completedAt,
+        deliveredAt,
     ])
 
     if (status === 'delivered' || status === 'dry_run' || markTested) {
@@ -8207,10 +8221,10 @@ async function deliverToDwmWebhookDestination({
                    last_test_status = CASE WHEN $2 THEN $3 ELSE last_test_status END,
                    last_test_error = CASE WHEN $2 THEN $4 ELSE last_test_error END,
                    last_test_http_status = CASE WHEN $2 THEN $5 ELSE last_test_http_status END,
-                   last_delivery_at = CASE WHEN $6 THEN NOW() ELSE last_delivery_at END,
+                   last_delivery_at = CASE WHEN $6 THEN $7::timestamptz ELSE last_delivery_at END,
                    updated_at = NOW()
              WHERE id = $1
-        `, [destination.id, markTested, status, error, responseStatus, status === 'delivered'])
+        `, [destination.id, markTested, status, error, responseStatus, status === 'delivered', deliveredAt])
     }
 
     const delivery = result.rows[0] as DwmWebhookDeliveryRow
@@ -8305,7 +8319,7 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
             case_path,
             attempted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, 'skipped', FALSE, $7, $8, $9, $10::JSONB, NULL, NULL, $11, $12, $13, NULL, $14, $15, $16, $17, $18, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, 'skipped', FALSE, $7, $8, $9, $10::JSONB, NULL, NULL, $11, $12, $13, NULL, $14, $15, $16, $17, $18, NULL)
         RETURNING *
     `, [
         deliveryId,
@@ -8350,7 +8364,7 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
             nextRetryAt: delivery.next_retry_at,
             idempotencyKey: delivery.idempotency_key,
             priorDeliveryId: priorDelivery.id,
-            priorDeliveredAt: priorDelivery.attempted_at,
+            priorDeliveredAt: priorDelivery.delivered_at,
             reason: 'duplicate_delivered_idempotency_key',
             watchlistId: delivery.watchlist_id,
             route: delivery.route,
@@ -8415,7 +8429,7 @@ async function recordSkippedSelectionDwmWebhookDelivery({
             case_path,
             attempted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, 'skipped', $7, $8, $9, $10, $11::JSONB, NULL, NULL, $12, $13, $14, NULL, $15, $16, $17, $18, $19, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, 'skipped', $7, $8, $9, $10, $11::JSONB, NULL, NULL, $12, $13, $14, NULL, $15, $16, $17, $18, $19, NULL)
         RETURNING *
     `, [
         deliveryId,
@@ -8532,7 +8546,7 @@ async function recordMissingDestinationDwmWebhookDelivery({
             case_path,
             attempted_at
         )
-        VALUES ($1, NULL, $2, $3, $4, $5, 'skipped', $6, $7, $8, $9, $10::JSONB, NULL, NULL, $11, $12, $13, NULL, $14, $15, $16, $17, $18, NOW())
+        VALUES ($1, NULL, $2, $3, $4, $5, 'skipped', $6, $7, $8, $9, $10::JSONB, NULL, NULL, $11, $12, $13, NULL, $14, $15, $16, $17, $18, NULL)
         RETURNING *
     `, [
         deliveryId,

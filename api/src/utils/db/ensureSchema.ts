@@ -784,7 +784,9 @@ export default async function ensureSchema() {
             watchlist_name TEXT,
             route TEXT,
             case_path TEXT,
-            attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            attempted_at TIMESTAMPTZ,
+            completed_at TIMESTAMPTZ,
+            delivered_at TIMESTAMPTZ,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
@@ -799,6 +801,9 @@ export default async function ensureSchema() {
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS attempt_count INT NOT NULL DEFAULT 1')
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ')
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()')
+    await run('ALTER TABLE dwm_webhook_deliveries ALTER COLUMN attempted_at DROP NOT NULL')
+    await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ')
+    await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ')
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()')
     await run('ALTER TABLE dwm_webhook_deliveries DROP CONSTRAINT IF EXISTS dwm_webhook_deliveries_event_type_check')
     await run('ALTER TABLE dwm_webhook_deliveries ADD CONSTRAINT dwm_webhook_deliveries_event_type_check CHECK (event_type IN (\'dwm.alert.created\', \'dwm.alert.updated\', \'dwm.alert.replayed\', \'dwm.alert.test\'))')
@@ -809,6 +814,27 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_alert_attempted ON dwm_webhook_deliveries(alert_id, attempted_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_payload_hash ON dwm_webhook_deliveries(payload_hash)')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_next_retry ON dwm_webhook_deliveries(next_retry_at) WHERE next_retry_at IS NOT NULL')
+    await run(`
+        DO $$
+        BEGIN
+            IF to_regprocedure('threat_intel.persist_public_dwm_delivery_trigger()') IS NULL THEN
+                RETURN;
+            END IF;
+            DROP TRIGGER IF EXISTS dwm_webhook_delivery_intelligence ON public.dwm_webhook_deliveries;
+            CREATE TRIGGER dwm_webhook_delivery_intelligence
+            AFTER INSERT OR UPDATE ON public.dwm_webhook_deliveries
+            FOR EACH ROW EXECUTE FUNCTION threat_intel.persist_public_dwm_delivery_trigger();
+            UPDATE public.dwm_webhook_deliveries AS delivery
+               SET updated_at = delivery.updated_at
+             WHERE NOT EXISTS (
+                SELECT 1
+                FROM threat_intel.workflow_records AS workflow
+                WHERE workflow.record_type = 'dwm_webhook_delivery'
+                  AND workflow.id = delivery.id
+             );
+        END;
+        $$;
+    `)
     await run(`
         CREATE TABLE IF NOT EXISTS dwm_webhook_audit_events (
             id TEXT PRIMARY KEY,
