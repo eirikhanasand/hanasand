@@ -46,10 +46,6 @@ export const ORG_SHARED_WATCHLIST_ALERT_CONSUMERS_SCHEMA_VERSION = "organization
 export const ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION = "organization.shared_watchlist_readiness_proof.v1" as const;
 export const DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION = "dwm.org_alert_case_action_receipt.v1" as const;
 export const DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION = "dwm.org_alert_case_action_audit_event.v1" as const;
-export const DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION = "dwm.webhook_event_contract.v1" as const;
-export const DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION = "dwm.webhook_event_support_handoff.v1" as const;
-export const DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.webhook_support_action_request.v1" as const;
-export const DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION = "dwm.webhook_dispatch_retry_audit.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_gap_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_receipt.v1" as const;
@@ -87,10 +83,6 @@ export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   orgSharedWatchlistReadinessProof: ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION,
   orgAlertCaseActionReceipt: DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
   orgAlertCaseActionAuditEvent: DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION,
-  webhookEventContract: DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
-  webhookEventSupportHandoff: DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
-  webhookSupportActionRequest: DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
-  webhookDispatchRetryAudit: DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION,
   sourceProvenanceAlertRebuildReceipt: TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
   sourceProvenanceActorEnrichmentGapReceipt: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION,
   sourceProvenanceSourcePackIntakeReceipt: TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
@@ -2116,15 +2108,9 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       })];
     case "webhook_delivery":
       return [metadataContractReference({
-        contractId: "webhook_delivery_receipts",
+        contractId: "webhook_delivery",
         ownerLane: "webhook",
         schemaVersions: [DWM_WEBHOOK_DESTINATION_LIFECYCLE_SCHEMA_VERSION, DWM_WEBHOOK_AUDIT_EVENT_SCHEMA_VERSION],
-        receiptSchemaIds: [
-          DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
-          DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
-          DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
-          DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION
-        ],
         routes: ["POST /api/organizations/:id/webhooks", "POST /v1/dwm/webhooks/deliver"],
         blockerCodes: ["missing_webhook_destination", "webhook_not_verified", "unsupported_destination", "organization_visibility_denied"],
         scopeFields: ["tenantId", "organizationId", "destinationId", "webhookDestinationIds", "alertId", "casePath"],

@@ -102,23 +102,7 @@ describe("api regression sentinel", () => {
         crossOrgDataExposed: false
       }
     });
-    expect(receipts.get("webhook_delivery_receipts")).toMatchObject({
-      ownerLane: "webhook",
-      schemas: {
-        event: "dwm.webhook_event_contract.v1",
-        supportHandoff: "dwm.webhook_event_support_handoff.v1",
-        supportActionRequest: "dwm.webhook_support_action_request.v1",
-        retryAudit: "dwm.webhook_dispatch_retry_audit.v1"
-      },
-      routes: expect.arrayContaining(["/v1/dwm/webhooks/deliver", "/api/organizations/:id/webhooks"]),
-      scopeFields: expect.arrayContaining(["tenantId", "organizationId", "alertId", "caseId", "webhookDestinationId"]),
-      requiredFields: expect.arrayContaining(["delivery.endpointHash", "evidence.evidenceCount"]),
-      blockerCodes: expect.arrayContaining(["missing_webhook_destination", "unsupported_destination"]),
-      downstreamConsumers: expect.arrayContaining([
-        expect.objectContaining({ ownerLane: "case", route: "/v1/cases/:caseId" }),
-        expect.objectContaining({ ownerLane: "support", route: "/api/admin/support/readiness" })
-      ])
-    });
+    expect(receipts.has("webhook_delivery_receipts")).toBe(false);
     expect(receipts.get("source_provenance_receipts")).toMatchObject({
       ownerLane: "source",
       schemas: {
@@ -213,13 +197,7 @@ describe("api regression sentinel", () => {
         crossOrgDataExposed: false
       }
     });
-    expect(rows.get("dwm.webhook_event_contract.v1")).toMatchObject({
-      contractId: "webhook_delivery_receipts",
-      ownerLane: "webhook",
-      route: "/v1/dwm/webhooks/deliver",
-      scopeFields: expect.arrayContaining(["tenantId", "organizationId", "alertId", "caseId", "webhookDestinationId"]),
-      blockerCodes: expect.arrayContaining(["missing_webhook_destination", "unsupported_destination"])
-    });
+    expect(rows.has("dwm.webhook_event_contract.v1")).toBe(false);
     expect(rows.get("ti.source_provenance_alert_rebuild_receipt.v1")).toMatchObject({
       contractId: "source_provenance_receipts",
       ownerLane: "source",
@@ -362,11 +340,10 @@ describe("api regression sentinel", () => {
         "source_health",
         "public_ti_handoff"
       ],
-      requiredReceiptCapabilityIds: ["alert_case_workflow", "source_activation", "support_controls", "webhook_delivery"],
+      requiredReceiptCapabilityIds: ["alert_case_workflow", "source_activation", "support_controls"],
       requiredReceiptSchemaIdsByCapability: {
         source_activation: expect.arrayContaining(["ti.source_provenance_alert_rebuild_receipt.v1"]),
         alert_case_workflow: expect.arrayContaining(["dwm.org_alert_case_action_receipt.v1"]),
-        webhook_delivery: expect.arrayContaining(["dwm.webhook_event_contract.v1"]),
         support_controls: expect.arrayContaining(["support.action_execution_handoff.v1"])
       },
       missingCapabilityIds: [],
@@ -671,8 +648,8 @@ describe("api regression sentinel", () => {
     expect(rows.get("webhook_delivery")).toMatchObject({
       ownerLane: "webhook",
       customerWorkflowIds: ["webhook_delivery"],
-      contractIds: expect.arrayContaining(["webhook_delivery_receipts"]),
-      receiptSchemaIds: expect.arrayContaining(["dwm.webhook_event_contract.v1", "dwm.webhook_support_action_request.v1", "dwm.webhook_dispatch_retry_audit.v1"]),
+      contractIds: ["webhook_destination"],
+      receiptSchemaIds: [],
       downstreamOwners: expect.arrayContaining(["dashboard", "support"])
     });
     expect(rows.get("source_activation")).toMatchObject({

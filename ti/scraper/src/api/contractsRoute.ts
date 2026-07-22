@@ -5,12 +5,6 @@ import {
   DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION
 } from "../product/orgAlertWorkflowBridge.ts";
 import {
-  DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION,
-  DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
-  DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
-  DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION
-} from "../product/webhookEventContract.ts";
-import {
   ORG_SHARED_WATCHLIST_ALERT_CONSUMERS_SCHEMA_VERSION,
   ORG_SHARED_WATCHLIST_ALERT_EXPORT_SCHEMA_VERSION,
   ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION,
@@ -411,24 +405,6 @@ export function contractIndex() {
         ]
       }),
       receiptSchema({
-        id: "webhook_delivery_receipts",
-        ownerLane: "webhook",
-        schemas: {
-          event: DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
-          supportHandoff: DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
-          supportActionRequest: DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
-          retryAudit: DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION
-        },
-        routes: ["/v1/dwm/webhooks/deliver", "/api/organizations/:id/webhooks", "/api/admin/support/readiness"],
-        scopeFields: ["tenantId", "organizationId", "alertId", "caseId", "webhookDestinationId", "webhookDeliveryId"],
-        requiredFields: ["eventKind", "occurredAt", "delivery.status", "delivery.endpointHash", "evidence.evidenceCount"],
-        blockerCodes: ["missing_webhook_destination", "webhook_not_verified", "unsupported_destination", "organization_visibility_denied"],
-        downstreamConsumers: [
-          { ownerLane: "case", route: "/v1/cases/:caseId", requiredFields: ["webhookDeliveryId", "status", "caseId"] },
-          { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["organizationId", "webhookDestinationId", "auditEventId"] }
-        ]
-      }),
-      receiptSchema({
         id: "source_provenance_receipts",
         ownerLane: "source",
         schemas: {
@@ -540,18 +516,6 @@ export function contractIndex() {
           downstreamConsumers: [
             { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["receiptId", "action", "execution.status"] },
             { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["alertIds", "casePaths", "replayState"] }
-          ]
-        }),
-        schemaLookupRow({
-          schemaId: DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
-          contractId: "webhook_delivery_receipts",
-          ownerLane: "webhook",
-          route: "/v1/dwm/webhooks/deliver",
-          scopeFields: ["tenantId", "organizationId", "alertId", "caseId", "webhookDestinationId", "webhookDeliveryId"],
-          blockerCodes: ["missing_webhook_destination", "webhook_not_verified", "unsupported_destination", "organization_visibility_denied"],
-          downstreamConsumers: [
-            { ownerLane: "case", route: "/v1/cases/:caseId", requiredFields: ["webhookDeliveryId", "status", "caseId"] },
-            { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["organizationId", "webhookDestinationId", "auditEventId"] }
           ]
         }),
         schemaLookupRow({
@@ -668,14 +632,8 @@ export function contractIndex() {
           customerWorkflowIds: ["webhook_delivery"],
           ownerLane: "webhook",
           readinessRoute: "POST /api/organizations/:id/webhooks -> POST /v1/dwm/webhooks/deliver",
-          contractIds: ["webhook_destination", "webhook_delivery_receipts"],
+          contractIds: ["webhook_destination"],
           schemaIds: ["dwm.webhook.destination_lifecycle.v1", "dwm.webhook.audit_event.v1"],
-          receiptSchemaIds: [
-            DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
-            DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
-            DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
-            DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION
-          ],
           blockerCodes: ["missing_webhook_destination", "webhook_not_verified", "unsupported_destination", "organization_visibility_denied"],
           scopeFields: ["tenantId", "organizationId", "destinationId", "webhookDestinationIds", "alertId", "casePath"],
           downstreamConsumers: [
@@ -890,12 +848,6 @@ export function productReadinessReceiptMatrixCoverage(
     alert_case_workflow: [
       DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
       DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION
-    ],
-    webhook_delivery: [
-      DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
-      DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
-      DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
-      DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION
     ],
     support_controls: [
       SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION,

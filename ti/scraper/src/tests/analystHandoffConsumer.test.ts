@@ -783,14 +783,8 @@ describe("analyst handoff consumer validation", () => {
         proofRowId: "webhook_destination",
         expectedAdapter: "persistedAlertToWebhookTriggerContext",
         contractReferences: [expect.objectContaining({
-          contractId: "webhook_delivery_receipts",
+          contractId: "webhook_delivery",
           schemaVersions: expect.arrayContaining(["dwm.webhook.destination_lifecycle.v1", "dwm.webhook.audit_event.v1"]),
-          receiptSchemaIds: expect.arrayContaining([
-            "dwm.webhook_event_contract.v1",
-            "dwm.webhook_event_support_handoff.v1",
-            "dwm.webhook_support_action_request.v1",
-            "dwm.webhook_dispatch_retry_audit.v1"
-          ]),
           routes: expect.arrayContaining(["POST /api/organizations/:id/webhooks", "POST /v1/dwm/webhooks/deliver"]),
           blockerCodes: expect.arrayContaining(["missing_webhook_destination", "unsupported_destination"]),
           scopeFields: expect.arrayContaining(["organizationId", "destinationId", "alertId", "casePath"])
@@ -889,13 +883,8 @@ describe("analyst handoff consumer validation", () => {
       downstreamOwners: expect.arrayContaining(["case", "webhook", "dashboard"])
     });
     expect(matrix.rows.find((row) => row.id === "webhook_delivery")).toMatchObject({
-      contractIds: expect.arrayContaining(["webhook_destination", "webhook_delivery_receipts"]),
-      receiptSchemaIds: expect.arrayContaining([
-        "dwm.webhook_event_contract.v1",
-        "dwm.webhook_event_support_handoff.v1",
-        "dwm.webhook_support_action_request.v1",
-        "dwm.webhook_dispatch_retry_audit.v1"
-      ]),
+      contractIds: expect.arrayContaining(["webhook_destination"]),
+      receiptSchemaIds: [],
       downstreamOwners: expect.arrayContaining(["dashboard", "support"])
     });
 
