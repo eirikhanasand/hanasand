@@ -988,6 +988,192 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '027_reconcile_delivery_latencies'`).toHaveLength(1);
   });
 
+  test("removes generic business labels without deleting reviewed evidence", async () => {
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    first.saveSource(source({ id: "src_business_label_cleanup" }));
+    const result = first.savePipelineResult(pipeline("src_business_label_cleanup"));
+    const profile = first.listActorProfiles().find((record: any) => record.canonicalName === "APT29");
+    const entity = (id: string, type: string, value: string) => ({
+      id,
+      sourceId: result.capture.sourceId,
+      captureId: result.capture.id,
+      incidentId: result.incident.id,
+      type,
+      value,
+      normalizedValue: value.toLowerCase(),
+      confidence: 0.7,
+      extractorVersion: "business-cleanup-regression",
+      provenance: [{ sourceId: result.capture.sourceId, captureId: result.capture.id }]
+    });
+    const entities = [
+      entity("entity_generic_channel", "channel_type", "metadata-only victim source"),
+      entity("entity_generic_extortion", "extortion_type", "ransomware/extortion victim claim"),
+      entity("entity_protected_extortion", "extortion_type", "leak-site extortion infrastructure"),
+      entity("entity_literal_chat", "channel_type", "Chat")
+    ];
+    for (const record of entities) first.saveExtractedEntity(record);
+
+    const claim = (id: string, claimType: string, subjectId: string, value: string, protectedClaim = false) => ({
+      id,
+      claimType,
+      subjectType: "entity",
+      subjectId,
+      value: { value },
+      summary: `${claimType}: ${value}`,
+      confidence: 0.7,
+      evidenceStage: "metadata_only_claim",
+      extractionMethod: "source_field",
+      extractorVersion: "business-cleanup-regression",
+      reviewState: protectedClaim ? "confirmed" : "unreviewed",
+      corroborationState: "single_source",
+      sourceCount: 1,
+      evidenceCount: 1,
+      firstSeenAt: collectedAt,
+      lastSeenAt: collectedAt,
+      legalHold: protectedClaim,
+      retentionClass: protectedClaim ? "legal_hold" : "standard"
+    });
+    const claims = [
+      claim("claim_generic_channel", "channel_type", "entity_generic_channel", "metadata-only victim source"),
+      claim("claim_generic_extortion", "extortion_type", "entity_generic_extortion", "ransomware/extortion victim claim"),
+      claim("claim_protected_extortion", "extortion_type", "entity_protected_extortion", "leak-site extortion infrastructure", true),
+      claim("claim_literal_chat", "channel_type", "entity_literal_chat", "Chat")
+    ];
+    for (const record of claims) {
+      first.saveIntelligenceClaim(record);
+      first.saveClaimEvidence({
+        id: `claim-evidence_${record.id}`,
+        claimId: record.id,
+        captureId: result.capture.id,
+        sourceId: result.capture.sourceId,
+        subjectType: "entity",
+        subjectId: record.subjectId,
+        relationship: "supports",
+        evidenceStage: record.evidenceStage,
+        confidence: record.confidence,
+        extractorVersion: record.extractorVersion,
+        provenance: { sourceId: result.capture.sourceId, captureId: result.capture.id },
+        createdAt: collectedAt
+      });
+      first.saveEvidenceLink({
+        id: `evidence-link_${record.id}`,
+        captureId: result.capture.id,
+        subjectType: "claim",
+        subjectId: record.id,
+        relationship: "supports",
+        confidence: record.confidence,
+        extractorVersion: record.extractorVersion,
+        createdAt: collectedAt
+      });
+      first.saveEvidenceLink({
+        id: `evidence-link_${record.subjectId}`,
+        captureId: result.capture.id,
+        subjectType: "entity",
+        subjectId: record.subjectId,
+        relationship: "supports",
+        confidence: record.confidence,
+        extractorVersion: record.extractorVersion,
+        createdAt: collectedAt
+      });
+    }
+    first.saveEvaluationLabel({
+      id: "label_protected_extortion",
+      entityId: "entity_protected_extortion",
+      claimId: "claim_protected_extortion",
+      labelType: "business_signal_review",
+      expectedValue: "leak-site extortion infrastructure",
+      observedValue: "leak-site extortion infrastructure",
+      outcome: "correct",
+      datasetSplit: "test",
+      labeledBy: "analyst_test",
+      labeledAt: collectedAt
+    });
+    await first.flush();
+    await first.close();
+
+    const [profileRow] = await admin<{ record: any }[]>`SELECT record FROM threat_intel.actor_profiles WHERE id = ${profile.id}`;
+    profileRow.record.characterization = {
+      ...(profileRow.record.characterization ?? {}),
+      channelTypes: [
+        { value: "metadata-only victim source", entityIds: ["entity_generic_channel"] },
+        { value: "Chat", entityIds: ["entity_literal_chat"] }
+      ],
+      extortionTypes: [
+        { value: "ransomware/extortion victim claim", entityIds: ["entity_generic_extortion"] },
+        { value: "leak-site extortion infrastructure", entityIds: ["entity_protected_extortion"] },
+        { value: "double extortion", entityIds: [] }
+      ]
+    };
+    await admin`UPDATE threat_intel.actor_profiles SET record = ${JSON.stringify(profileRow.record)}::text::jsonb WHERE id = ${profile.id}`;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '028_remove_generic_business_labels'`;
+
+    const migrated = await PostgresScraperStore.create({ databaseUrl });
+    await migrated.close();
+
+    expect((await admin<{ id: string }[]>`
+      SELECT id FROM threat_intel.entities
+      WHERE id LIKE 'entity_generic_%' OR id IN ('entity_protected_extortion', 'entity_literal_chat')
+      ORDER BY id
+    `).map((row) => row.id)).toEqual(["entity_literal_chat", "entity_protected_extortion"]);
+    expect((await admin<{ id: string }[]>`
+      SELECT id FROM threat_intel.intelligence_claims
+      WHERE id LIKE 'claim_generic_%' OR id IN ('claim_protected_extortion', 'claim_literal_chat')
+      ORDER BY id
+    `).map((row) => row.id)).toEqual(["claim_literal_chat", "claim_protected_extortion"]);
+    expect((await admin<{ id: string }[]>`
+      SELECT id FROM threat_intel.claim_evidence WHERE id LIKE 'claim-evidence_claim_%' ORDER BY id
+    `).map((row) => row.id)).toEqual(["claim-evidence_claim_literal_chat", "claim-evidence_claim_protected_extortion"]);
+    expect((await admin<{ id: string }[]>`
+      SELECT id FROM threat_intel.evidence_links
+      WHERE id LIKE 'evidence-link_claim_%' OR id LIKE 'evidence-link_entity_generic_%'
+        OR id IN ('evidence-link_entity_protected_extortion', 'evidence-link_entity_literal_chat')
+      ORDER BY id
+    `).map((row) => row.id)).toEqual([
+      "evidence-link_claim_literal_chat",
+      "evidence-link_claim_protected_extortion",
+      "evidence-link_entity_literal_chat",
+      "evidence-link_entity_protected_extortion"
+    ]);
+    expect(await admin`SELECT id FROM threat_intel.evaluation_labels WHERE id = 'label_protected_extortion'`).toHaveLength(1);
+
+    const [migratedProfile] = await admin<{ record: any }[]>`SELECT record FROM threat_intel.actor_profiles WHERE id = ${profile.id}`;
+    expect(migratedProfile.record.characterization.channelTypes.map((entry: any) => entry.value)).toEqual(["Chat"]);
+    expect(migratedProfile.record.characterization.extortionTypes.map((entry: any) => entry.value)).toEqual(["leak-site extortion infrastructure", "double extortion"]);
+    const [dangling] = await admin<{ count: number }[]>`
+      SELECT (
+        (SELECT count(*) FROM threat_intel.evidence_links AS link LEFT JOIN threat_intel.entities AS entity ON entity.id = link.subject_id WHERE link.subject_type = 'entity' AND entity.id IS NULL)
+        + (SELECT count(*) FROM threat_intel.evidence_links AS link LEFT JOIN threat_intel.intelligence_claims AS claim ON claim.id = link.subject_id WHERE link.subject_type = 'claim' AND claim.id IS NULL)
+        + (SELECT count(*) FROM threat_intel.claim_evidence AS evidence LEFT JOIN threat_intel.entities AS entity ON entity.id = evidence.subject_id WHERE evidence.subject_type = 'entity' AND entity.id IS NULL)
+        + (SELECT count(*) FROM threat_intel.evaluation_labels AS label LEFT JOIN threat_intel.entities AS entity ON entity.id = label.entity_id WHERE label.entity_id IS NOT NULL AND entity.id IS NULL)
+      )::int AS count
+    `;
+    expect(dangling.count).toBe(0);
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '028_remove_generic_business_labels'`).toHaveLength(1);
+
+    const snapshot = await admin`
+      SELECT record FROM (
+        SELECT record FROM threat_intel.actor_profiles WHERE id = ${profile.id}
+        UNION ALL
+        SELECT record FROM threat_intel.entities WHERE id IN ('entity_protected_extortion', 'entity_literal_chat')
+        UNION ALL
+        SELECT record FROM threat_intel.intelligence_claims WHERE id IN ('claim_protected_extortion', 'claim_literal_chat')
+      ) AS retained
+      ORDER BY record->>'id'
+    `;
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    await restarted.close();
+    expect(await admin`
+      SELECT record FROM (
+        SELECT record FROM threat_intel.actor_profiles WHERE id = ${profile.id}
+        UNION ALL
+        SELECT record FROM threat_intel.entities WHERE id IN ('entity_protected_extortion', 'entity_literal_chat')
+        UNION ALL
+        SELECT record FROM threat_intel.intelligence_claims WHERE id IN ('claim_protected_extortion', 'claim_literal_chat')
+      ) AS retained
+      ORDER BY record->>'id'
+    `).toEqual(snapshot);
+  });
+
   test("imports the legacy JSON snapshot once and then uses PostgreSQL", async () => {
     const directory = mkdtempSync(join(tmpdir(), "ti-legacy-cutover-"));
     const snapshotPath = join(directory, "scraper-store.json");

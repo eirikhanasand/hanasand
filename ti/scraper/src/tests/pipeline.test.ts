@@ -25,7 +25,7 @@ describe("compact pipeline value path", () => {
       contentHash: hashContent("darknet"),
       links: [],
       sensitive: true,
-      metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Blackout", victimName: "Example Energy AS", claimedSector: "energy", claimedCountry: "Norway", claimedDataType: "customer records", summary: "PENDING Publishes after: 2d remaining. Download: metadata-only release reference. If you are listed by mistake, contact us.", extortionType: "double extortion", monetizationPath: "ransom demand", publicityTactic: "countdown announcement", buyerSellerCommunication: "auction contact channel", intermediaryCommunication: "broker listing", profitabilitySignal: "claimed paid victims" } }
+      metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Blackout", victimName: "Example Energy AS", claimedSector: "energy", claimedCountry: "Norway", claimedDataType: "customer records", summary: "PENDING Publishes after: 2d remaining. Download: metadata-only release reference. If you are listed by mistake, contact us." } }
     });
     const cisa = processCollectedItem({
       sourceId: "src_cisa_kev",
@@ -52,17 +52,12 @@ describe("compact pipeline value path", () => {
       expect.objectContaining({ type: "ransomware_family", value: "Blackout", extractionMethod: "source_specific" }),
       expect.objectContaining({ type: "victim", value: "Example Energy AS", assertionKind: "source_claim", extractorVersion: SOURCE_SPECIFIC_EXTRACTOR_VERSION }),
       expect.objectContaining({ type: "publication_strategy", value: "public victim listing", assertionKind: "observed" }),
-      expect.objectContaining({ type: "extortion_type", value: "double extortion", assertionKind: "source_claim" }),
-      expect.objectContaining({ type: "monetization_path", value: "ransom demand", assertionKind: "source_claim" }),
-      expect.objectContaining({ type: "publicity_tactic", value: "countdown announcement", assertionKind: "source_claim" }),
+      expect.objectContaining({ type: "publicity_tactic", value: "public victim naming", assertionKind: "observed" }),
       expect.objectContaining({ type: "victim_pressure_tactic", value: "countdown to publication", assertionKind: "observed" }),
       expect.objectContaining({ type: "publication_strategy", value: "staged publication status", assertionKind: "observed" }),
-      expect.objectContaining({ type: "publication_strategy", value: "public data release link", assertionKind: "observed" }),
-      expect.objectContaining({ type: "buyer_seller_communication", value: "auction contact channel", assertionKind: "source_claim" }),
-      expect.objectContaining({ type: "intermediary_communication", value: "broker listing", assertionKind: "source_claim" }),
-      expect.objectContaining({ type: "profitability_signal", value: "claimed paid victims", reviewReasons: ["signal does not establish realized profit"] })
+      expect.objectContaining({ type: "publication_strategy", value: "public data release link", assertionKind: "observed" })
     ]));
-    expect(darknet.entities.some((entity: any) => entity.type === "communication_channel")).toBe(false);
+    expect(darknet.entities.some((entity: any) => ["communication_channel", "buyer_seller_communication", "intermediary_communication", "monetization_path", "profitability_signal", "extortion_type", "channel_type"].includes(entity.type))).toBe(false);
     expect(darknet.entities.filter((entity: any) => entity.type === "victim")).toEqual([
       expect.objectContaining({ value: "Example Energy AS", extractionMethod: "source_specific" })
     ]);

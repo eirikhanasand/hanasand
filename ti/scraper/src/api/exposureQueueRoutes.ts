@@ -437,7 +437,7 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
         claimedDataType: claim.claimedData || "Not disclosed by TA",
         claimedDataSize: claim.claimedDataSize || "Not disclosed by TA",
         claimedCountry: claim.country || "Not disclosed by TA",
-        channelType: claim.sourceFamily === "public_advisory" ? "public victim-claim feed" : claim.sourceFamily === "telegram_public" ? "public Telegram" : "metadata-only victim source",
+        channelType: claim.sourceFamily === "public_advisory" ? "public victim-claim feed" : claim.sourceFamily === "telegram_public" ? "public Telegram" : undefined,
         firstSeenAt: claimTime,
         claimType: claim.claimType || "ransomware_victim_publication"
       },

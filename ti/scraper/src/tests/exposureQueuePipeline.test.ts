@@ -178,7 +178,6 @@ describe("DWM exposure queue pipeline", () => {
       expect.objectContaining({ value: "Fabrikam Manufacturing", extractionMethod: "source_specific" })
     ]);
     expect(store.listExtractedEntities()).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "extortion_type", extractionMethod: "source_specific" }),
       expect.objectContaining({ type: "publication_strategy", value: "public victim listing" }),
       expect.objectContaining({ type: "publication_strategy", value: "staged publication status", provenance: [expect.objectContaining({ evidenceText: expect.stringContaining("PENDING") })] }),
       expect.objectContaining({ type: "publication_strategy", value: "public data release link", provenance: [expect.objectContaining({ evidenceText: expect.stringContaining("Download:") })] }),
@@ -186,7 +185,7 @@ describe("DWM exposure queue pipeline", () => {
       expect.objectContaining({ type: "channel_type", value: "public victim-claim feed" })
     ]));
     expect(store.listCaptures()[0].metadata?.leakSite?.summary).toContain("Publishes after");
-    expect(store.listExtractedEntities().some((entity: any) => ["communication_channel", "buyer_seller_communication", "intermediary_communication", "profitability_signal"].includes(entity.type))).toBe(false);
+    expect(store.listExtractedEntities().some((entity: any) => ["communication_channel", "buyer_seller_communication", "intermediary_communication", "profitability_signal", "extortion_type"].includes(entity.type))).toBe(false);
     const search = await handleApiRequest(new Request("http://local/v1/intel/search?tenantId=default&q=Akira&entityType=actor"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
     const businessModel = (await search.json() as any).actorIntelligence.businessModel;
     expect(businessModel).toMatchObject({

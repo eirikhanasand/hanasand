@@ -39,8 +39,7 @@ function ransomwareGroupEntities(item: CollectedItem, context: ExtractionContext
     actor,
     ...channels.map((channel: string) => fieldEntity("channel_type", channel, 0.9, "channelTypes", item, context, "observed", [])),
     fieldEntity("publication_strategy", has("DLS") ? "dedicated leak-site publication" : undefined, 0.9, "channelTypes", item, context, "observed", []),
-    fieldEntity("publicity_tactic", has("DLS") ? "public victim listing infrastructure" : undefined, 0.86, "channelTypes", item, context, "observed", []),
-    fieldEntity("extortion_type", has("DLS") ? "leak-site extortion infrastructure" : undefined, 0.62, "channelTypes", item, context, "inferred", ["infrastructure does not prove a specific extortion event"])
+    fieldEntity("publicity_tactic", has("DLS") ? "public victim listing infrastructure" : undefined, 0.86, "channelTypes", item, context, "observed", [])
   ]);
 }
 
@@ -55,13 +54,13 @@ function victimBlogEntities(item: CollectedItem, context: ExtractionContext): Ex
     fieldEntity("sector", fields.claimedSector, 0.68, "claimedSector", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("country", fields.claimedCountry, 0.68, "claimedCountry", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("dataset", dataType, 0.64, "claimedDataType", item, context, "source_claim", ["advertised data type is unverified"]),
-    fieldEntity("extortion_type", fields.extortionType ?? (actor && victims.length ? "ransomware/extortion victim claim" : undefined), fields.extortionType ? 0.8 : 0.55, "extortionType", item, context, fields.extortionType ? "source_claim" : "inferred", fields.extortionType ? ["unverified threat-actor claim"] : ["inferred from publication in a governed victim-claim feed"]),
+    fieldEntity("extortion_type", fields.extortionType, 0.8, "extortionType", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("monetization_path", fields.monetizationPath, 0.72, "monetizationPath", item, context, "source_claim", ["unverified threat-actor claim"]),
     fieldEntity("publicity_tactic", fields.publicityTactic ?? "public victim naming", fields.publicityTactic ? 0.8 : 0.7, "publicityTactic", item, context, fields.publicityTactic ? "source_claim" : "observed", fields.publicityTactic ? ["unverified threat-actor claim"] : []),
     fieldEntity("publication_strategy", fields.publicationStrategy ?? "public victim listing", fields.publicationStrategy ? 0.8 : 0.95, "publicationStrategy", item, context, fields.publicationStrategy ? "source_claim" : "observed", fields.publicationStrategy ? ["unverified threat-actor claim"] : []),
     signalEntity("publication_strategy", "staged publication status", 0.86, "summary", summary, /\b(?:PENDING|RELEASED|Publishes? after)\b/, item, context),
     signalEntity("publication_strategy", "public data release link", 0.9, "summary", summary, /\bDownload\s*:/i, item, context),
-    fieldEntity("channel_type", fields.channelType ?? "metadata-only victim source", 0.95, "channel", item, context, "observed", []),
+    fieldEntity("channel_type", fields.channelType, 0.95, "channel", item, context, "observed", []),
     fieldEntity("victim_pressure_tactic", fields.victimPressureTactic, 0.75, "victimPressureTactic", item, context, "source_claim", ["unverified threat-actor claim"]),
     countdown,
     fieldEntity("buyer_seller_communication", fields.buyerSellerCommunication, 0.7, "buyerSellerCommunication", item, context, "source_claim", ["unverified threat-actor claim"]),

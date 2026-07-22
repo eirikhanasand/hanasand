@@ -73,7 +73,7 @@ describe("canary feed item extraction", () => {
       expect.objectContaining({ type: "ransomware_family", value: "Example Group", aliases: ["Example Alias"], assertionKind: "observed" }),
       expect.objectContaining({ type: "channel_type", value: "Chat", assertionKind: "observed" })
     ]));
-    expect(result.entities.some((entity: any) => ["communication_channel", "buyer_seller_communication", "monetization_path", "profitability_signal"].includes(entity.type))).toBe(false);
+    expect(result.entities.some((entity: any) => ["communication_channel", "buyer_seller_communication", "monetization_path", "profitability_signal", "extortion_type"].includes(entity.type))).toBe(false);
   });
 });
 
