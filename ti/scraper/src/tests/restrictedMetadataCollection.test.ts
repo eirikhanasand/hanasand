@@ -162,6 +162,9 @@ describe("restricted metadata collection", () => {
     expect(report.accepted.some((item) => ["restricted_akira_victim_blog", "restricted_blackout_victim_blog", "restricted_braincipher_victim_blog", "restricted_deadlock_victim_blog"].includes(item.id))).toBe(false);
     expect(bundle.reviewedRejectedCandidates.length).toBeGreaterThan(10);
     expect(bundle.reviewedRejectedCandidates.every((item: any) => item.disposition === "rejected" && item.countsAsCoverage === false && !JSON.stringify(item).includes(".onion"))).toBe(true);
+    expect(bundle.saturationReview).toMatchObject({ acceptedIntelligenceSourceCount: 5, rejectedCandidateCount: bundle.reviewedRejectedCandidates.length, unreviewedCandidateCount: 0, newlyQualifiedAfterRecheck: 0 });
+    expect(bundle.saturationReview.acceptedIntelligenceSourceCount).toBe(report.accepted.filter((item) => item.metadata?.transportCanary !== true).length);
+    expect(JSON.stringify(bundle.saturationReview)).not.toContain(".onion");
 
     delete bundle.sources[1].metadata.parserProfile;
     const invalid = importRestrictedMetadataSeedBundle(bundle, "2026-07-22T13:00:00.000Z");
