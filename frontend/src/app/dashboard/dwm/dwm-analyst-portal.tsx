@@ -500,8 +500,8 @@ export function DwmAnalystPortal({
                     />
                 ) : null}
 
-                <div className='grid min-h-[480px] min-w-0 xl:grid-cols-[300px_minmax(0,1fr)]'>
-                    <aside className='order-2 min-w-0 border-b border-ui-border bg-ui-raised xl:order-none xl:border-b-0 xl:border-r'>
+                <div className='grid min-h-[480px] min-w-0 2xl:grid-cols-[300px_minmax(0,1fr)]'>
+                    <aside className='order-2 min-w-0 border-b border-ui-border bg-ui-raised 2xl:order-none 2xl:border-b-0 2xl:border-r'>
                         <div className='border-b border-ui-border p-4'>
                             <div className='flex items-center justify-between gap-3'>
                                 <div>
@@ -575,7 +575,7 @@ export function DwmAnalystPortal({
                         </div>
                     </aside>
 
-                    <main className='order-1 min-w-0 bg-ui-panel xl:order-none'>
+                    <main className='order-1 min-w-0 bg-ui-panel 2xl:order-none'>
                         {selectedAlert ? (
                             <CaseWorkspace
                                 key={`${tenantId}:${selectedAlert.id}`}
@@ -1274,7 +1274,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
 
 function AnalystBriefPanel({ brief }: { brief: ReturnType<typeof buildAnalystBrief> }) {
     return (
-        <section data-dwm-analyst-brief className='grid w-full max-w-full min-w-0 gap-4 overflow-hidden rounded-lg border border-ui-border bg-ui-raised p-4'>
+        <section data-dwm-analyst-brief className='grid gap-4 rounded-lg border border-ui-border bg-ui-raised p-4'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-primary'>Analyst brief</p>
