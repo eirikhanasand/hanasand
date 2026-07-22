@@ -14,6 +14,7 @@ type TimelinessStore = {
   listIncidents(): JsonObject[];
   listSources(): JsonObject[];
   listTimelinessRecords(): JsonObject[];
+  listValidationRecords(): JsonObject[];
   saveTimelinessRecord(record: JsonObject): JsonObject;
 };
 
@@ -43,6 +44,7 @@ function workbench(request: Request, url: URL, options: ApiServerOptions): Respo
     incidents: store.listIncidents().filter((record) => inTenantScope(record, scope.tenantId)),
     captures: store.listCaptures().filter((record) => inTenantScope(record, scope.tenantId)),
     entities: store.listExtractedEntities().filter((record) => inTenantScope(record, scope.tenantId)),
+    validationRecords: store.listValidationRecords().filter((record) => inTenantScope(record, scope.tenantId)),
   };
   const snapshot = buildTimelinessWorkbench(records, context);
   const requestedStatus = url.searchParams.get("status") as TimelinessQueueStatus | null;
@@ -51,7 +53,7 @@ function workbench(request: Request, url: URL, options: ApiServerOptions): Respo
   const limit = Math.floor(Math.min(200, Math.max(1, numberQuery(url.searchParams.get("limit")) ?? 100)));
   const offset = Math.floor(Math.max(0, numberQuery(url.searchParams.get("cursor")) ?? 0));
   const filtered = snapshot.items.filter((item) => (!requestedStatus || item.status === requestedStatus)
-    && (!query || JSON.stringify([item.actorName, item.title, item.sourceName, item.incidentId, item.timestampAnomalies]).toLowerCase().includes(query)));
+    && (!query || JSON.stringify([item.actorName, item.title, item.sourceName, item.sourceId, item.incidentId, item.captureId, item.reportReferences, item.timestampAnomalies]).toLowerCase().includes(query)));
   return json({
     ...snapshot,
     items: filtered.slice(offset, offset + limit),
@@ -76,12 +78,12 @@ async function addReference(request: Request, url: URL, options: ApiServerOption
     return error("timeliness_evidence_missing", "The retained incident and capture are required before recording first-report evidence", 409);
   }
   const role = String(body.role ?? "") as ReportRole;
-  const timestamp = validIso(body.timestamp);
+  const timestamp = zonedIso(body.timestamp);
   const referenceUrl = publicReferenceUrl(body.referenceUrl);
   const evidencePath = safeEvidencePath(body.evidencePath);
   const referenceTitle = safeText(body.referenceTitle, 240);
   if (!["actor", "victim", "publisher"].includes(role) || !timestamp || !referenceUrl || !evidencePath) {
-    return error("invalid_timeliness_reference", "A role, exact timestamp, public reference URL, and source-field path are required", 400);
+    return error("invalid_timeliness_reference", "A role, exact timestamp with timezone, public reference URL, and source-field path are required", 400);
   }
   const merged = mergePublicReportReference(current, {
     role,
@@ -98,6 +100,7 @@ async function addReference(request: Request, url: URL, options: ApiServerOption
     incidents: store.listIncidents().filter((record) => inTenantScope(record, scope.tenantId)),
     captures: store.listCaptures().filter((record) => inTenantScope(record, scope.tenantId)),
     entities: store.listExtractedEntities().filter((record) => inTenantScope(record, scope.tenantId)),
+    validationRecords: store.listValidationRecords().filter((record) => inTenantScope(record, scope.tenantId)),
   });
   return json({ created: merged.created, reference: merged.reference, item: snapshot.items[0] }, merged.created ? 201 : 200);
 }
@@ -110,6 +113,11 @@ function cleanId(value: unknown): string | undefined {
 function validIso(value: unknown): string | undefined {
   const time = Date.parse(String(value ?? ""));
   return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
+}
+
+function zonedIso(value: unknown): string | undefined {
+  const raw = typeof value === "string" ? value.trim() : "";
+  return /(?:Z|[+-]\d{2}:\d{2})$/i.test(raw) ? validIso(raw) : undefined;
 }
 
 function safeEvidencePath(value: unknown): string | undefined {

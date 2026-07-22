@@ -19,8 +19,10 @@ async function forward(request: NextRequest, path: string, body?: string | NextR
     if ('response' in session) return session.response
     const base = process.env.TI_SCRAPER_API_BASE?.trim()
     if (!base) return failure(503, 'timeliness_unavailable', 'The timeliness service is unavailable.')
-    const scope = request.nextUrl.searchParams.get('scope') || 'default'
-    if (scope !== 'default' && scope !== 'global') return failure(400, 'invalid_timeliness_scope', 'Use the default or global timeliness scope.')
+    const scope = request.nextUrl.searchParams.get('scope') || 'global'
+    const tenantId = request.nextUrl.searchParams.get('tenantId')?.trim()
+    if (scope !== 'tenant' && scope !== 'global') return failure(400, 'invalid_timeliness_scope', 'Use a tenant or global timeliness scope.')
+    if (scope === 'tenant' && !/^[A-Za-z0-9_.:-]{1,200}$/.test(tenantId || '')) return failure(400, 'invalid_timeliness_tenant', 'Select a valid tenant before loading timeliness evidence.')
     const target = new URL(path, base)
     for (const key of ['q', 'status', 'limit', 'cursor']) {
         const value = request.nextUrl.searchParams.get(key)
@@ -34,7 +36,7 @@ async function forward(request: NextRequest, path: string, body?: string | NextR
                 id: session.identity.id,
                 'x-actor-id': session.identity.id,
                 'x-user-id': session.identity.id,
-                ...(scope === 'default' ? { 'x-tenant-id': 'default' } : {}),
+                ...(scope === 'tenant' ? { 'x-tenant-id': tenantId! } : {}),
                 ...(body ? { 'content-type': 'application/json' } : {}),
             },
             body: typeof body === 'string' ? body : undefined,

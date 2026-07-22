@@ -7,9 +7,10 @@ import { hashContent } from "../utils.ts";
 function runtime() {
   const store = new InMemoryScraperStore();
   store.saveSource({ id: "src_timeliness", tenantId: "tenant_timeliness", name: "Public actor report", type: "static_html", url: "https://actor.example/reports", accessMethod: "public_http", status: "active", risk: "low", trustScore: 0.9, crawlFrequencySeconds: 3600, legalNotes: "Public report", metadata: { sourceFamily: "actor_site" }, createdAt: "2026-07-22T10:00:00.000Z", updatedAt: "2026-07-22T10:00:00.000Z" });
-  store.saveCapture({ id: "capture_timeliness", tenantId: "tenant_timeliness", sourceId: "src_timeliness", url: "https://actor.example/reports/northwind", publishedAt: "2026-07-22T10:05:00.000Z", collectedAt: "2026-07-22T10:07:00.000Z", processedAt: "2026-07-22T10:07:02.000Z", firstVisibleAt: "2026-07-22T10:07:03.000Z", contentHash: hashContent("BlackCat listed Northwind."), mediaType: "text/html", storageKind: "inline_text", body: "BlackCat listed Northwind.", metadata: {}, sensitive: false });
+  store.saveCapture({ id: "capture_timeliness", tenantId: "tenant_timeliness", sourceId: "src_timeliness", url: "https://actor.example/reports/northwind", observedAt: "2026-07-22T10:04:00.000Z", publishedAt: "2026-07-22T10:05:00.000Z", collectedAt: "2026-07-22T10:07:00.000Z", processedAt: "2026-07-22T10:07:02.000Z", firstVisibleAt: "2026-07-22T10:07:03.000Z", contentHash: hashContent("BlackCat listed Northwind."), mediaType: "text/html", storageKind: "inline_text", body: "BlackCat listed Northwind.", metadata: {}, sensitive: false });
   store.saveIncident({ id: "incident_timeliness", tenantId: "tenant_timeliness", sourceId: "src_timeliness", captureId: "capture_timeliness", title: "Northwind incident", summary: "BlackCat listed Northwind.", firstSeenAt: "2026-07-22T10:05:00.000Z", confidence: 0.9, actorName: "BlackCat" } as never);
   store.saveTimelinessRecord({ id: "incident_timeliness", tenantId: "tenant_timeliness", sourceId: "src_timeliness", captureId: "capture_timeliness", incidentId: "incident_timeliness", publishedAt: "2026-07-22T10:05:00.000Z", collectedAt: "2026-07-22T10:07:00.000Z", processedAt: "2026-07-22T10:07:02.000Z", firstVisibleAt: "2026-07-22T10:07:03.000Z", reportTimestamps: [] });
+  store.saveValidationRecord({ id: "validation_timeliness", tenantId: "tenant_timeliness", captureId: "capture_timeliness", validationType: "source_match", status: "supported", referenceUrl: "https://news.example/northwind", matchedAt: "2026-07-22T10:09:00.000Z", reviewerId: "analyst_2" });
   const options = {
     store,
     frontier: new FocusedFrontier(),
@@ -33,10 +34,13 @@ describe("timeliness routes", () => {
   test("persists a public report reference and exposes the actionable queue", async () => {
     const { store, call } = runtime();
     const before = await (await call("/v1/intel/timeliness/workbench"))!.json() as Record<string, any>;
-    expect(before.summary).toMatchObject({ recordCount: 1, unresolvedReferenceCount: 1, reportToDeliveredCoverage: 0 });
+    expect(before.summary).toMatchObject({ recordCount: 1, unresolvedReferenceCount: 1, observedCoverage: 1, reviewedCoverage: 1, reportToDeliveredCoverage: 0 });
+    expect(before.items[0]).toMatchObject({ stages: { observed: "2026-07-22T10:04:00.000Z", reviewed: "2026-07-22T10:09:00.000Z" }, provenance: { reviewed: { validationId: "validation_timeliness", reviewerId: "analyst_2" } } });
 
     const rejected = await call("/v1/intel/timeliness/references", { method: "POST", body: JSON.stringify({ recordId: "incident_timeliness", role: "actor", timestamp: "2026-07-22T10:00:00.000Z", referenceUrl: "http://127.0.0.1/private", evidencePath: "article.time[datetime]" }) });
     expect(rejected?.status).toBe(400);
+    const unzoned = await call("/v1/intel/timeliness/references", { method: "POST", body: JSON.stringify({ recordId: "incident_timeliness", role: "actor", timestamp: "2026-07-22T10:00:00", referenceUrl: "https://actor.example/reports/northwind", evidencePath: "article.time[datetime]" }) });
+    expect(unzoned?.status).toBe(400);
 
     const payload = { recordId: "incident_timeliness", role: "actor", timestamp: "2026-07-22T10:00:00.000Z", referenceUrl: "https://actor.example/reports/northwind", referenceTitle: "Northwind notice", evidencePath: "article.time[datetime]" };
     const createdResponse = await call("/v1/intel/timeliness/references", { method: "POST", body: JSON.stringify(payload) });
@@ -53,5 +57,7 @@ describe("timeliness routes", () => {
     const filtered = await (await call("/v1/intel/timeliness/workbench?status=awaiting_alert&q=blackcat"))!.json() as Record<string, any>;
     expect(filtered.page).toMatchObject({ total: 1, nextCursor: null });
     expect(filtered.items[0]).toMatchObject({ actorName: "BlackCat", sourceFamily: "actor_site" });
+    const byCapture = await (await call("/v1/intel/timeliness/workbench?q=capture_timeliness"))!.json() as Record<string, any>;
+    expect(byCapture.page.total).toBe(1);
   });
 });
