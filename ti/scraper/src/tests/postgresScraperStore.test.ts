@@ -767,6 +767,26 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       WHERE id IN (${savedVerified.capture.id}, ${savedUnknown.capture.id})
     `;
     await admin`
+      INSERT INTO threat_intel.captures (
+        id, tenant_id, source_id, task_id, url, canonical_url, collected_at, published_at, processed_at, first_visible_at,
+        content_hash, normalized_text_hash, media_type, storage_kind, body, object_ref,
+        sensitive, retention_class, extractor_version, record
+      )
+      SELECT
+        'capture_historical_publication_copy', tenant_id, source_id, task_id, url, canonical_url,
+        collected_at + interval '20 minutes', collected_at + interval '20 minutes',
+        processed_at + interval '20 minutes', first_visible_at + interval '20 minutes',
+        content_hash, normalized_text_hash, media_type, storage_kind, body, object_ref,
+        sensitive, retention_class, extractor_version,
+        record || jsonb_build_object(
+          'id', 'capture_historical_publication_copy',
+          'collectedAt', collected_at + interval '20 minutes',
+          'publishedAt', collected_at + interval '20 minutes'
+        )
+      FROM threat_intel.captures
+      WHERE id = ${savedVerified.capture.id}
+    `;
+    await admin`
       UPDATE threat_intel.incidents
       SET published_at = collected_at,
           processed_at = ${staleProcessedAt},
@@ -867,6 +887,13 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         timeliness_published_at: null
       }
     ]);
+    expect(await admin`
+      SELECT id
+      FROM threat_intel.captures
+      WHERE id IN (${savedVerified.capture.id}, 'capture_historical_publication_copy')
+        AND published_at IS NULL
+      ORDER BY id
+    `).toHaveLength(2);
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '023_reconcile_delivery_and_event_times'`).toHaveLength(1);
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '024_finish_timestamp_backfill'`).toHaveLength(1);
   });

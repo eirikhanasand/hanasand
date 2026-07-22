@@ -14,6 +14,29 @@ WHERE COALESCE(timeliness.record->'timestampAnomalies', '[]'::jsonb) ? 'processe
     OR timeliness.first_visible_at IS NULL
     OR timeliness.processed_at <= timeliness.first_visible_at);
 
+DROP INDEX IF EXISTS threat_intel.threat_intel_captures_source_url_published_uq;
+DROP INDEX IF EXISTS threat_intel.threat_intel_captures_source_text_published_uq;
+DROP INDEX IF EXISTS threat_intel.threat_intel_captures_source_content_published_uq;
+CREATE UNIQUE INDEX threat_intel_captures_source_url_published_uq
+  ON threat_intel.captures (
+    source_id,
+    canonical_url,
+    COALESCE(published_at, collected_at)
+  );
+CREATE UNIQUE INDEX threat_intel_captures_source_text_published_uq
+  ON threat_intel.captures (
+    source_id,
+    normalized_text_hash,
+    COALESCE(published_at, collected_at)
+  )
+  WHERE normalized_text_hash IS NOT NULL;
+CREATE UNIQUE INDEX threat_intel_captures_source_content_published_uq
+  ON threat_intel.captures (
+    source_id,
+    content_hash,
+    COALESCE(published_at, collected_at)
+  );
+
 UPDATE threat_intel.captures AS capture
 SET published_at = NULL,
     record = capture.record - 'publishedAt'
