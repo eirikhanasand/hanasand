@@ -4,7 +4,6 @@ import { hashContent, nowIso, normalizeWhitespace } from "../utils.ts";
 import type { CollectionAdapter } from "./base.ts";
 import { canonicalizeUrl } from "./staticWeb.ts";
 import { adapterPromotionContract, citationSpansForText, parserProfileMetadata, selectParserProfile, type ParserFailureCategory } from "./parserProfiles.ts";
-import { productionEvidenceReplayRef } from "./productionAdapterRuntime.ts";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export type PdfExtractionInput = { url: string; bytes: Uint8Array; contentType?: string; maxBytes: number };
@@ -55,5 +54,6 @@ class PlainTextPdfExtractor implements PdfReportExtractor { async extract(input:
 function empty(source: SourceRecord, requestedUrl: string, profile: ReturnType<typeof selectParserProfile>, failureCategory: PdfReportFailureCategory, startedAt: number, warnings: string[], extra: Record<string, unknown> = {}): AdapterRunResult { const result: AdapterRunResult = { items: [], discovered: [], warnings, metadata: { adapter: "pdf", requestedUrl, failureCategory, parserProfile: profile.profile, fetchDurationMs: Date.now() - startedAt, ...extra } }; (result.metadata as any).adapterContract = adapterPromotionContract({ source, result, profile, adapter: "pdf", costClass: "medium" }); return result; }
 const pdfMedia = (value?: string) => !value || ["application/pdf", "text/plain"].includes(value.split(";")[0]?.trim().toLowerCase() ?? "");
 const retryAfterSeconds = (response: Response) => { const seconds = Number.parseInt(response.headers.get("retry-after") ?? "", 10); return Number.isFinite(seconds) ? seconds : undefined; };
+const productionEvidenceReplayRef = (input: { sourceId: string; canonicalUrlHash: string; contentHash: string; fetchedAt: string }) => `evidence_replay_ref:${hashContent(`${input.sourceId}:${input.canonicalUrlHash}:${input.contentHash}:${input.fetchedAt}`).slice(0, 16)}`;
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 const num = (value: unknown, key?: string): number | undefined => { const candidate = key && typeof value === "object" && value !== null ? (value as Record<string, unknown>)[key] : value; return typeof candidate === "number" && Number.isFinite(candidate) ? candidate : undefined; };
