@@ -108,6 +108,25 @@ FROM identified;
 CREATE UNIQUE INDEX ON _incident_identity_map (old_id);
 CREATE INDEX ON _incident_identity_map (canonical_id);
 
+CREATE INDEX IF NOT EXISTS threat_intel_evidence_links_subject_direct_idx
+  ON threat_intel.evidence_links (subject_type, subject_id);
+CREATE INDEX IF NOT EXISTS threat_intel_claim_evidence_subject_idx
+  ON threat_intel.claim_evidence (subject_type, subject_id);
+CREATE INDEX IF NOT EXISTS threat_intel_validation_incident_direct_idx
+  ON threat_intel.validation_records (incident_id) WHERE incident_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS threat_intel_alerts_incident_idx
+  ON threat_intel.alerts (incident_id) WHERE incident_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS threat_intel_evaluation_labels_incident_idx
+  ON threat_intel.evaluation_labels (incident_id) WHERE incident_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS threat_intel_workflow_incident_id_idx
+  ON threat_intel.workflow_records ((record->>'incidentId')) WHERE record ? 'incidentId';
+CREATE INDEX IF NOT EXISTS threat_intel_workflow_promoted_incident_id_idx
+  ON threat_intel.workflow_records ((record->>'promotedToIncidentId')) WHERE record ? 'promotedToIncidentId';
+CREATE INDEX IF NOT EXISTS threat_intel_workflow_subject_incident_id_idx
+  ON threat_intel.workflow_records ((record->>'subjectId')) WHERE record->>'subjectType' = 'incident';
+CREATE INDEX IF NOT EXISTS threat_intel_workflow_incident_ids_idx
+  ON threat_intel.workflow_records USING GIN ((record->'incidentIds')) WHERE jsonb_typeof(record->'incidentIds') = 'array';
+
 DO $$
 BEGIN
   IF EXISTS (
@@ -180,7 +199,7 @@ SELECT
       WHERE row.record->>'incidentId' = mapping.old_id
         OR row.record->>'promotedToIncidentId' = mapping.old_id
         OR (row.record->>'subjectType' = 'incident' AND row.record->>'subjectId' = mapping.old_id)
-        OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(row.record->'incidentIds') = 'array' THEN row.record->'incidentIds' ELSE '[]'::jsonb END) AS value WHERE value = mapping.old_id)
+        OR (jsonb_typeof(row.record->'incidentIds') = 'array' AND (row.record->'incidentIds') ? mapping.old_id)
     ), '[]'::jsonb)
   ),
   jsonb_strip_nulls(jsonb_build_object(
