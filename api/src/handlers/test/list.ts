@@ -1,6 +1,7 @@
 import run from '#db'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { createHash } from 'node:crypto'
+import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
 
 type QueryProps = {
     limit?: string
@@ -75,16 +76,11 @@ function anonymousQuotaIdentity(req: FastifyRequest) {
     if (!clientId) return null
     return `anon:${createHash('sha256').update([
         clientId,
-        clientIp(req),
+        verifiedClientIp(req),
         headerValue(req.headers['user-agent']),
     ].join('|')).digest('hex').slice(0, 32)}`
 }
 
 function headerValue(value: string | string[] | undefined) {
     return Array.isArray(value) ? value[0] || '' : value || ''
-}
-
-function clientIp(req: FastifyRequest) {
-    const forwarded = headerValue(req.headers['x-forwarded-for'])
-    return forwarded.split(',')[0]?.trim() || req.ip || 'unknown'
 }

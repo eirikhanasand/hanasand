@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
 
 test('register page sends managed onboarding requests through contact intake', async ({ page }) => {
-    await page.route('**/api/contact', async (route) => {
+    await page.route('**/api/commercial/contact-requests', async (route) => {
+        expect(route.request().headers()['idempotency-key']).toBeTruthy()
         const body = route.request().postDataJSON() as Record<string, unknown>
         expect(body).toMatchObject({
             name: 'Avery Chen',
@@ -10,7 +11,7 @@ test('register page sends managed onboarding requests through contact intake', a
             subject: 'Managed Hanasand onboarding request',
             intent: 'enterprise',
             plan: 'managed-onboarding',
-            deliveryPreference: 'email',
+            deliveryPreference: 'not-sure',
             replyWindow: 'this-week',
             securityReview: true,
         })

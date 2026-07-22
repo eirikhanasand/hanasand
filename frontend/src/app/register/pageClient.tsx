@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { ArrowRight, Building2, CheckCircle2, Mail, ShieldCheck } from 'lucide-react'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 import ErrorNotice from '@/components/error/errorNotice'
+import { submitContactRequest } from '@/utils/contact/submitContactRequest'
 
 type RegisterPageProps = {
     path: string | null
@@ -92,26 +93,19 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
 
         setSetupBusy(true)
         try {
-            const response = await fetch('/api/contact', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name,
-                    email,
-                    company,
-                    subject: 'Managed Hanasand onboarding request',
-                    message: `Managed setup request\n\nCompany: ${company}\nMonitoring context: ${context}`,
-                    intent: 'enterprise',
-                    plan: 'managed-onboarding',
-                    deliveryPreference: 'email',
-                    replyWindow: 'this-week',
-                    securityReview: true,
-                }),
+            const payload = await submitContactRequest({
+                name,
+                email,
+                company,
+                subject: 'Managed Hanasand onboarding request',
+                message: `Managed setup request\n\nCompany: ${company}\nMonitoring context: ${context}`,
+                intent: 'enterprise',
+                plan: 'managed-onboarding',
+                deliveryPreference: 'not-sure',
+                replyWindow: 'this-week',
+                securityReview: true,
+                source: window.location.href,
             })
-            const payload = await response.json().catch(() => ({})) as { error?: string, ticketId?: string, nextStep?: string }
-            if (!response.ok || payload.error) {
-                throw new Error(payload.error || 'Managed setup intake is temporarily unavailable.')
-            }
 
             setManagedSetupResult({
                 ticketId: payload.ticketId || 'received',

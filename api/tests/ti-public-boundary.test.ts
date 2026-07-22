@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import Fastify from 'fastify'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { isAllowedApiOrigin } from '#utils/http/publicBoundary.ts'
-import { getClientIp, resolveRateLimitActor } from '#plugins/rateLimit.ts'
+import { isAllowedApiOrigin, verifiedClientIp } from '#utils/http/publicBoundary.ts'
+import { resolveRateLimitActor } from '#plugins/rateLimit.ts'
 import postTiSearch, { normalizeBatchQueries, postTiSearchBatch, TI_BATCH_MAX_QUERIES } from '../src/handlers/ti/search.ts'
 import { TRUSTED_API_PROXIES } from '../src/utils/http/publicBoundary.ts'
 import { readFile } from 'node:fs/promises'
@@ -10,7 +10,7 @@ import { readFile } from 'node:fs/promises'
 describe('public TI API boundary', () => {
     test('uses Fastify verified client IP instead of a caller-supplied forwarding header', () => {
         const request = { ip: '203.0.113.10', headers: { 'x-forwarded-for': '127.0.0.1' } } as unknown as FastifyRequest
-        expect(getClientIp(request)).toBe('203.0.113.10')
+        expect(verifiedClientIp(request)).toBe('203.0.113.10')
     })
 
     test('trusts forwarding only from explicitly configured proxy hops', async () => {
@@ -23,6 +23,17 @@ describe('public TI API boundary', () => {
         const proxied = await app.inject({ method: 'GET', url: '/client-ip', remoteAddress: '127.0.0.1', headers: { 'x-forwarded-for': '127.0.0.1, 198.51.100.7' } })
         expect(proxied.json()).toEqual({ ip: '198.51.100.7' })
         await app.close()
+    })
+
+    test('uses the same verified client identity for load-test quota and history', async () => {
+        const [postHandler, listHandler] = await Promise.all([
+            readFile(new URL('../src/handlers/test/post.ts', import.meta.url), 'utf8'),
+            readFile(new URL('../src/handlers/test/list.ts', import.meta.url), 'utf8'),
+        ])
+        for (const handler of [postHandler, listHandler]) {
+            expect(handler).toContain('verifiedClientIp(req)')
+            expect(handler).not.toContain('req.headers[\'x-forwarded-for\']')
+        }
     })
 
     test('does not grant internal limits to unauthenticated private proxy addresses', async () => {

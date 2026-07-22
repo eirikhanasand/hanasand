@@ -4,15 +4,15 @@ import path from 'node:path'
 
 const root = process.cwd()
 
-test('subscription page makes access upgrade and enterprise review paths explicit', async () => {
+test('subscription page makes managed commercial access and enterprise review paths explicit', async () => {
     const page = await readFile(path.join(root, 'src/app/dashboard/subscription/page.tsx'), 'utf8')
 
-    expect(page).toContain('title=\'Enable product access\'')
+    expect(page).toContain('title=\'Evaluate first, then provision monitored coverage\'')
     expect(page).toContain('data-subscription-primary-flow')
     expect(page).toContain('Recommended next')
-    expect(page).toContain('Move from trial checks to routed response')
+    expect(page).toContain('Scope production monitoring')
     expect(page).toContain('data-subscription-primary-action')
-    expect(page).toContain('href=\'/contact?intent=subscribe-response\'')
+    expect(page).toContain('href=\'/contact?plan=monitoring\'')
     expect(page).toContain('href=\'/trust\'')
 
     expect(page).toContain('Workspace entitlements')
@@ -29,9 +29,11 @@ test('subscription page makes access upgrade and enterprise review paths explici
     expect(page).not.toContain('<PlanLine label=\'Checks\'')
     expect(page).not.toContain('<th className=\'px-3 py-2\'>Checks</th>')
     expect(page).not.toContain('You can test monitoring, delivery, API keys, and load checks now.')
+    expect(page).not.toContain('$49')
+    expect(page).not.toContain('Trial workspace')
 
     expect(page).toContain('data-subscription-enterprise-review')
-    expect(page).toContain('Enterprise review packet')
+    expect(page).toContain('Enterprise review')
     expect(page).toContain('data-subscription-enterprise-review-items')
     expect(page).toContain('label: \'Security review\', value: \'Trust artifacts\', href: \'/trust\'')
     expect(page).toContain('label: \'Commercial path\', value: \'Talk to sales\', href: \'/contact?intent=enterprise-procurement\'')

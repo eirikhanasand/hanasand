@@ -86,6 +86,33 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_owner_created ON browser_runs(owner_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_quota_created ON browser_runs(quota_identity, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_browser_runs_client_created ON browser_runs(client_id_hash, created_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS commercial_contact_requests (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            ticket_id TEXT NOT NULL UNIQUE,
+            idempotency_key TEXT NOT NULL UNIQUE,
+            payload_hash TEXT NOT NULL,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            company TEXT,
+            subject TEXT NOT NULL,
+            message TEXT NOT NULL,
+            intent TEXT,
+            plan TEXT,
+            delivery_preference TEXT,
+            reply_window TEXT,
+            security_review BOOLEAN NOT NULL DEFAULT FALSE,
+            source TEXT NOT NULL DEFAULT '/contact',
+            request_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'in_progress', 'closed')),
+            notification_status TEXT NOT NULL DEFAULT 'pending' CHECK (notification_status IN ('pending', 'notified', 'failed')),
+            notification_error TEXT,
+            notified_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_commercial_contact_requests_status_created ON commercial_contact_requests(status, created_at DESC)')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_by TEXT')

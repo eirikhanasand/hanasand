@@ -4,6 +4,7 @@ import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
 import { validateSession } from '#utils/auth/session.ts'
 import { getRateLimitSettings, registerRateLimitRoute } from '#utils/rateLimit/config.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
+import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
 
 type Bucket = {
     count: number
@@ -159,7 +160,7 @@ export async function resolveRateLimitActor(
     validate: typeof validateApiKey = validateApiKey,
     validateUserSession: typeof validateSession = validateSession,
 ): Promise<RateLimitActor> {
-    const ip = getClientIp(req)
+    const ip = verifiedClientIp(req)
 
     const apiKeySecret = extractPresentedApiKey(req)
     if (apiKeySecret) {
@@ -206,10 +207,6 @@ function isInternalRole(roleId: string, roleName: string) {
     const normalizedName = roleName.toLowerCase()
     return ['admin', 'administrator', 'system_admin'].includes(normalizedId)
         || ['admin', 'administrator', 'system administrator'].includes(normalizedName)
-}
-
-export function getClientIp(req: Pick<FastifyRequest, 'ip'>) {
-    return req.ip || 'unknown'
 }
 
 function normalizeRequestPath(req: FastifyRequest) {

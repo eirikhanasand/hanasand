@@ -6,6 +6,7 @@ import { useFormik } from 'formik'
 import * as Yup from 'yup'
 import ErrorNotice from '@/components/error/errorNotice'
 import { useState } from 'react'
+import { submitContactRequest } from '@/utils/contact/submitContactRequest'
 
 const fieldClassName = 'w-full rounded-lg border border-ui-border bg-ui-panel px-3 py-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/15'
 
@@ -23,8 +24,8 @@ type ContactResult = {
 }
 
 const deliveryOptions = [
-    ['email', 'Email'],
     ['webhook', 'Webhook'],
+    ['case', 'Case workflow'],
     ['api', 'API'],
     ['review-link', 'Review link'],
     ['not-sure', 'Not sure yet'],
@@ -39,13 +40,13 @@ const replyWindowOptions = [
 
 const intakeSteps = [
     ['Coverage fit', 'Confirm whether the names, domains, suppliers, or actors are sensible to monitor now.'],
-    ['Delivery path', 'Pick email, webhook, API, or shared review links for the first alerts.'],
+    ['Delivery path', 'Confirm whether first alerts should go to webhook destinations, case queues, or scoped API consumers.'],
     ['Security review', 'Package DPA, subprocessors, SLA notes, identity requirements, and current control gaps.'],
 ]
 
 const reviewRows = [
     ['Pilot scope', 'Watched names, domains, suppliers, alert owner, and first-month success criteria.'],
-    ['Delivery setup', 'Email, webhook, API, or shared review link path with the fields your team needs.'],
+    ['Delivery setup', 'Webhook, case, or scoped API path with the fields your team needs.'],
     ['Security review', 'DPA notes, subprocessors, SLA expectations, identity requirements, and current certification limits.'],
 ]
 
@@ -73,7 +74,7 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
             company: '',
             type: contactIntent.subject,
             message: contactIntent.message,
-            deliveryPreference: 'email',
+            deliveryPreference: 'not-sure',
             replyWindow: normalizedContactReplyWindow(intent),
             securityReview: normalizedSecurityIntent(intent),
         },
@@ -84,26 +85,19 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
             setSubmitError('')
             setResult(null)
             try {
-                const response = await fetch('/api/contact', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: values.name,
-                        email: values.email,
-                        company: values.company,
-                        subject: values.type,
-                        message: values.message,
-                        intent,
-                        plan,
-                        deliveryPreference: values.deliveryPreference,
-                        replyWindow: values.replyWindow,
-                        securityReview: values.securityReview,
-                    }),
+                const payload = await submitContactRequest({
+                    name: values.name,
+                    email: values.email,
+                    company: values.company,
+                    subject: values.type,
+                    message: values.message,
+                    intent,
+                    plan,
+                    deliveryPreference: values.deliveryPreference,
+                    replyWindow: values.replyWindow,
+                    securityReview: values.securityReview,
+                    source: window.location.href,
                 })
-                const payload = await response.json().catch(() => ({})) as { error?: string, ticketId?: string, nextStep?: string }
-                if (!response.ok || payload.error) {
-                    throw new Error(payload.error || 'Unable to send the request right now.')
-                }
                 setResult({
                     ticketId: payload.ticketId || 'received',
                     nextStep: payload.nextStep || 'We received the request and will reply by email.',
@@ -355,11 +349,11 @@ function normalizedContactReplyWindow(intent: string) {
 
 function normalizedSecurityIntent(intent: string) {
     const normalizedIntent = intent.trim().toLowerCase()
-    return normalizedIntent === 'procurement' || normalizedIntent === 'enterprise' || normalizedIntent === 'security'
+    return normalizedIntent === 'procurement' || normalizedIntent === 'enterprise' || normalizedIntent === 'enterprise-procurement' || normalizedIntent === 'security'
 }
 
 function deliveryLabel(value: string) {
-    return deliveryOptions.find(([option]) => option === value)?.[1] || 'Email'
+    return deliveryOptions.find(([option]) => option === value)?.[1] || 'Not sure yet'
 }
 
 function replyWindowLabel(value: string) {
@@ -373,7 +367,7 @@ function getContactIntent(plan: string, intent: string): ContactIntent {
     if (normalizedIntent === 'dwm') {
         return {
             subject: 'Start dark web monitoring',
-            message: 'I want to monitor company, vendor, and domain mentions across recent ransomware and extortion activity.\n\nWatchlist size:\nDelivery preference: webhook / email / API\nTeam or company context:',
+            message: 'I want to monitor company, vendor, and domain mentions across recent ransomware and extortion activity.\n\nWatchlist size:\nDelivery preference: webhook / case / API\nTeam or company context:',
             eyebrow: 'Dark web monitoring',
             heading: 'Start monitoring the names that matter.',
             detail: 'Send the companies, domains, suppliers, product names, or executive names you want watched. The reply can cover coverage, alert delivery, and the fastest path to a pilot.',
@@ -420,7 +414,7 @@ function getContactIntent(plan: string, intent: string): ContactIntent {
         }
     }
 
-    if (normalizedIntent === 'procurement' || normalizedIntent === 'enterprise' || normalizedIntent === 'security') {
+    if (normalizedIntent === 'procurement' || normalizedIntent === 'enterprise' || normalizedIntent === 'enterprise-procurement' || normalizedIntent === 'security') {
         return {
             subject: 'Enterprise security and procurement review',
             message: 'I need the Hanasand enterprise security review.\n\nOrganization:\nVendor portal or questionnaire link:\nJurisdiction / DPA requirements:\nSecurity controls required:\nSSO / SCIM requirements:\nSLA or support requirements:\nProcurement deadline:',
@@ -430,33 +424,33 @@ function getContactIntent(plan: string, intent: string): ContactIntent {
         }
     }
 
-    if (normalizedPlan === 'pilot') {
+    if (normalizedPlan === 'evaluation') {
         return {
-            subject: 'Start Pilot threat monitoring',
-            message: 'I want to start the Pilot plan for up to 25 watched names or domains.\n\nNames/domains to monitor:\nDelivery preference:\nTiming:',
-            eyebrow: 'Pilot plan',
-            heading: 'Start a focused monitoring pilot.',
-            detail: 'Send the first names or domains you want monitored. The reply can confirm coverage, delivery format, and what the first alerts will look like.',
+            subject: 'Hanasand evaluation request',
+            message: 'I want to evaluate Hanasand before scoping monitored coverage.\n\nProduct workflow to evaluate:\nNames/domains of interest:\nTimeline:',
+            eyebrow: 'Evaluation',
+            heading: 'Evaluate the product before monitored activation.',
+            detail: 'Create a console account for self-serve evaluation, or send the workflow you need to validate before a managed monitoring setup.',
         }
     }
 
-    if (normalizedPlan === 'company-monitor') {
+    if (normalizedPlan === 'monitoring') {
         return {
-            subject: 'Company Monitor sales request',
-            message: 'I want to discuss Company Monitor for brand, subsidiary, vendor, or executive-name monitoring.\n\nApproximate watchlist size:\nDelivery preference:\nMain risk concerns:',
-            eyebrow: 'Company Monitor',
-            heading: 'Talk through monitoring for your company and vendors.',
-            detail: 'Send the watchlist shape, delivery preference, and the kinds of exposure you care about. The reply can cover pricing, webhook setup, and review workflow.',
+            subject: 'Monitoring access request',
+            message: 'I want to scope monitored coverage for company, subsidiary, vendor, or executive-name exposure.\n\nApproximate watchlist size:\nWebhook or case workflow:\nRetention/support needs:\nMain risk concerns:',
+            eyebrow: 'Monitoring access',
+            heading: 'Scope monitoring for your company and vendors.',
+            detail: 'Send the watchlist shape, delivery workflow, retention, and support needs. The reply can put coverage, limits, and price into an order form.',
         }
     }
 
-    if (normalizedPlan === 'portfolio') {
+    if (normalizedPlan === 'integration') {
         return {
-            subject: 'Portfolio monitoring coverage',
-            message: 'I want to discuss portfolio or supplier-network monitoring.\n\nApproximate number of companies/domains:\nDelivery preference:\nCoverage needs:',
-            eyebrow: 'Portfolio monitoring',
-            heading: 'Monitor customers, suppliers, or portfolio companies.',
-            detail: 'Send the portfolio size, supplier list shape, or customer monitoring workflow you want covered. The reply can map the right plan and data delivery format.',
+            subject: 'Monitoring integration request',
+            message: 'I want to connect Hanasand monitoring and threat intelligence to an existing workflow.\n\nSystem to connect:\nAPI routes or webhook events needed:\nExpected request budget:\nSecurity/procurement needs:',
+            eyebrow: 'Integration access',
+            heading: 'Connect monitoring and threat intelligence to your workflow.',
+            detail: 'Send the routes, webhook events, request budget, and security requirements. The reply can scope API keys, delivery, limits, and procurement review.',
         }
     }
 

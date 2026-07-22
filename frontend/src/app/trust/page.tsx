@@ -83,9 +83,9 @@ const dataHandling = [
 const subprocessorRows = [
     ['Hosting and runtime', 'Application, API, worker, processing, and scheduled-job infrastructure used to deliver the service.', 'Provider details supplied in the DPA docs until the public register is finalized.'],
     ['Database and storage', 'PostgreSQL-backed application data, alert records, audit events, and operational state.', 'Customer-managed deployments can replace Hanasand-managed storage by agreement.'],
-    ['Mail and notification delivery', 'Account, support, alert, webhook, and operational email paths where configured.', 'Only the data required to deliver the message or alert is sent.'],
+    ['Account and support mail', 'Account recovery, commercial requests, support, and operational email paths where configured.', 'Only the data required to deliver the message is sent. Monitoring alerts use the product webhook, case, and API paths.'],
     ['Payment and billing', 'Subscription, invoice, and plan administration if a paid plan uses external billing rails.', 'Not used for customers handled by invoice/order form.'],
-    ['Customer-selected integrations', 'Webhook, email, ticketing, SIEM, SOAR, Slack/Teams-style destinations, or internal tools configured by the customer.', 'Customer controls which downstream systems receive alert payloads.'],
+    ['Customer-selected integrations', 'Webhook destinations, ticketing, SIEM, SOAR, or internal tools configured by the customer.', 'Customer controls which downstream systems receive alert payloads through its configured webhook or API consumer.'],
 ]
 
 const incidentSteps = [

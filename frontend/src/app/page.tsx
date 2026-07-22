@@ -78,7 +78,7 @@ const workflowShortcuts = [
     { label: 'Watch companies', href: '/organizations', detail: 'Companies, vendors, domains' },
     { label: 'Catch breaches', href: '/dashboard/dwm', detail: 'New exposure mentions' },
     { label: 'Review severity', href: '/dashboard/dwm', detail: 'Evidence, confidence, action' },
-    { label: 'Route alerts', href: '/dashboard/automations?setup=dwm', detail: 'Slack, webhooks, cases' },
+    { label: 'Route alerts', href: '/dashboard/automations?setup=dwm', detail: 'Webhooks, cases, API' },
 ]
 
 const operatorPaths = [
@@ -123,7 +123,7 @@ const customerSteps = [
     },
     {
         title: 'Route it to the right team',
-        detail: 'Send the alert through an email, webhook, Slack/Jira/SIEM flow, cases, or to the analyst console.',
+        detail: 'Send the alert through a webhook, case workflow, scoped API, or the analyst console.',
     },
 ]
 

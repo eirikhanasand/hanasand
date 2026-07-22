@@ -204,6 +204,7 @@ import {
 } from './handlers/dwm/webhooks.ts'
 import { getBrowserSandboxProfiles, putBrowserSandboxProfiles } from './handlers/browserSandboxProfiles.ts'
 import { getBrowserRunReport, getBrowserRuns, postBrowserRunReport } from './handlers/browserSandboxRuns.ts'
+import { getCommercialContactRequests, postCommercialContactRequest } from './handlers/commercialContactRequests.ts'
 
 /**
  * Defines the routes available in the API.
@@ -437,6 +438,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/backup/restore', postDatabaseBackupRestore)
     fastify.get('/status', getStatus)
     fastify.post('/status/ingest', ingestStatus)
+    fastify.get('/commercial/contact-requests', getCommercialContactRequests)
+    fastify.post('/commercial/contact-requests', postCommercialContactRequest)
 
     // Legacy CDN/Queenbee traffic read compatibility
     fastify.get('/traffic/summary', getLegacyTrafficSummary)

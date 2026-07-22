@@ -18,7 +18,7 @@ const primarySolutions = [
         href: '/dwm',
         icon: ShieldCheck,
         points: ['Mapped source coverage with active health checks', 'Company, vendor, group, and source-change signals', 'Alert with confidence, source context, and next action'],
-        price: 'From $49/mo',
+        price: 'Sales scoped',
     },
     {
         title: 'Browser',
@@ -27,7 +27,7 @@ const primarySolutions = [
         href: '/browser',
         icon: Globe2,
         points: ['Regular and Tor modes under one queue', 'Saved VirusTotal, urlquery, and WebCrack profiles', 'Screenshot timeline with analyst summary'],
-        price: 'Bundled with monitoring',
+        price: 'Self-serve allowance',
     },
     {
         title: 'Threat Intelligence Search',
@@ -56,8 +56,8 @@ const utilitySolutions = [
         detail: 'Run checks against URLs you control. This is a service-checking utility, separate from company exposure monitoring.',
         href: '/test',
         icon: Gauge,
-        points: ['5 checks before payment', 'Starter and team tiers', 'Shareable result links'],
-        price: 'Free trial',
+        points: ['5-check evaluation allowance', 'Manual checks against permitted targets', 'Shareable result links'],
+        price: 'Evaluation utility',
     },
 ]
 
@@ -65,7 +65,7 @@ const platformItems = [
     { title: 'Short-span access', detail: 'Session controls for short-lived onion review, with source safety boundaries built into the workspace.', icon: Network },
     { title: 'API delivery', detail: 'Structured fields for criminal group, company, source, date, exposure summary, and recommended action.', icon: Code2 },
     { title: 'Investigation pivots', detail: 'Jump between group, named company, sector, country, source, and CVE context without losing the alert.', icon: Waypoints },
-    { title: 'Notification pipeline', detail: 'Small alerts designed for Slack, incident queues, and vendor-risk workflows.', icon: BellRing },
+    { title: 'Notification pipeline', detail: 'Reviewable alerts delivered through webhooks, case workflows, and scoped APIs.', icon: BellRing },
     { title: 'Exposure index', detail: 'Searchable company and criminal-group records without exposing raw leaked material.', icon: Database },
 ]
 

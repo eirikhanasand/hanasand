@@ -1,3 +1,5 @@
+import type { FastifyRequest } from 'fastify'
+
 const DEFAULT_API_ORIGINS = [
     'https://hanasand.com',
     'https://www.hanasand.com',
@@ -5,6 +7,10 @@ const DEFAULT_API_ORIGINS = [
 ]
 
 export const TRUSTED_API_PROXIES = ['127.0.0.1', '::1']
+
+export function verifiedClientIp(request: Pick<FastifyRequest, 'ip'>) {
+    return request.ip || 'unknown'
+}
 
 export function isAllowedApiOrigin(origin?: string, configured = process.env.API_CORS_ALLOWED_ORIGINS) {
     if (!origin) return true

@@ -2,47 +2,14 @@ import Link from 'next/link'
 import { BellRing, CheckCircle2, CreditCard, FileCheck2, Gauge, Radio, ShieldCheck } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import type { ReactNode } from 'react'
+import { commercialAccessPlans } from '@/utils/commercialAccess'
 
 export const dynamic = 'force-dynamic'
 
-const plans = [
-    {
-        name: 'Monitor',
-        price: '$49',
-        href: '/contact?intent=subscribe-monitor',
-        bestFor: 'Small teams watching a focused list of companies or domains.',
-        watchTerms: '25 watch terms',
-        delivery: 'Webhook alerts',
-        review: 'Standard analyst review',
-        includes: ['Dark web monitoring', 'Alert delivery', 'Threat search access'],
-    },
-    {
-        name: 'Response',
-        price: '$149',
-        href: '/contact?intent=subscribe-response',
-        bestFor: 'Security teams that need cases, priority review, and more coverage.',
-        watchTerms: '100 watch terms',
-        delivery: 'Webhook + case routing',
-        review: 'Priority analyst review',
-        includes: ['Everything in Monitor', 'Case workflows', 'Webhook delivery history'],
-        highlighted: true,
-    },
-    {
-        name: 'Operator',
-        price: '$399',
-        href: '/contact?intent=subscribe-operator',
-        bestFor: 'Operational teams running broad monitoring and API-driven workflows.',
-        watchTerms: '500 watch terms',
-        delivery: 'API + webhook + cases',
-        review: 'Priority review with actor context',
-        includes: ['Everything in Response', 'Scoped API tokens', 'Actor context enrichment'],
-    },
-]
-
 const gates = [
-    { label: 'Monitoring delivery', value: 'Live', detail: 'Manage webhook and case delivery.', href: '/dashboard/automations', icon: <BellRing className='h-4 w-4' />, tone: 'ok' as const },
+    { label: 'Monitoring delivery', value: 'Open', detail: 'Review webhook and case delivery.', href: '/dashboard/automations', icon: <BellRing className='h-4 w-4' />, tone: 'ok' as const },
     { label: 'API keys', value: 'Scoped', detail: 'Create owner-linked tokens.', href: '/dashboard/system/rate-limits', icon: <Gauge className='h-4 w-4' />, tone: 'ok' as const },
-    { label: 'Billing', value: 'Trial', detail: 'Upgrade or talk to sales.', href: '/contact?intent=subscription', icon: <CreditCard className='h-4 w-4' />, tone: 'trial' as const },
+    { label: 'Commercial scope', value: 'Sales managed', detail: 'Record access and limits in an order form.', href: '/contact?intent=subscription', icon: <CreditCard className='h-4 w-4' />, tone: 'trial' as const },
 ]
 
 const utilityGates = [
@@ -60,9 +27,9 @@ export default function SubscriptionPage() {
     return (
         <DashboardPage>
             <DashboardHeader
-                eyebrow='Subscription'
-                title='Enable product access'
-                description='Review current workspace capabilities, choose the next coverage tier, and open the enterprise review path when procurement needs evidence.'
+                eyebrow='Commercial access'
+                title='Evaluate first, then provision monitored coverage'
+                description='Console evaluation is self-serve. Monitoring, delivery, API budgets, retention, support, and price are confirmed through managed setup and a written order form.'
             />
 
             <div className='grid gap-3'>
@@ -72,18 +39,18 @@ export default function SubscriptionPage() {
                             <div className='flex flex-wrap items-center gap-2'>
                                 <span className='inline-flex items-center gap-1.5 rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-primary'>
                                     <Radio className='h-3.5 w-3.5' />
-                                    Trial workspace
+                                    Self-serve evaluation
                                 </span>
-                                <span className='rounded-full border border-ui-success bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-success'>Monitoring routes enabled</span>
+                                <span className='rounded-full border border-ui-warning bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-warning'>Not a paid subscription</span>
                             </div>
-                            <h2 className='mt-2 text-lg font-semibold text-ui-text'>Current access</h2>
-                            <p className='mt-1 max-w-3xl text-sm leading-5 text-ui-muted'>You can test monitoring, delivery, and scoped API keys now. Upgrade when you need more watch terms, review priority, or API-driven delivery.</p>
+                            <h2 className='mt-2 text-lg font-semibold text-ui-text'>Evaluation access</h2>
+                            <p className='mt-1 max-w-3xl text-sm leading-5 text-ui-muted'>A console account lets you evaluate product surfaces. It does not imply a paid plan or fixed monitoring quota; production coverage is provisioned after scope is agreed.</p>
                         </div>
                         <div className='grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-130'>
-                            <AccessMetric label='Watch terms' value='Trial' />
-                            <AccessMetric label='Delivery' value='Live' />
-                            <AccessMetric label='API' value='Scoped' />
-                            <AccessMetric label='Review' value='Trial' />
+                            <AccessMetric label='Console' value='Evaluation' />
+                            <AccessMetric label='Monitoring' value='Setup' />
+                            <AccessMetric label='Limits' value='Order form' />
+                            <AccessMetric label='Billing' value='Sales managed' />
                         </div>
                     </div>
                 </DashboardPanel>
@@ -93,14 +60,14 @@ export default function SubscriptionPage() {
                         <div className='min-w-0'>
                             <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
                                 <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>Recommended next</span>
-                                <span className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-ui-primary'>Response</span>
+                                <span className='rounded-md border border-ui-primary/35 bg-ui-primary/10 px-2 py-1 text-ui-primary'>Monitoring</span>
                             </div>
-                            <h2 className='mt-3 text-lg font-semibold text-ui-text'>Move from trial checks to routed response</h2>
-                            <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>Response adds case routing, delivery history, and priority review before expanding into connected response operations. Use Operator when scoped tokens and threat context are part of the workflow.</p>
+                            <h2 className='mt-3 text-lg font-semibold text-ui-text'>Scope production monitoring</h2>
+                            <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>Confirm watched entities, source coverage, webhook destinations, API budgets, retention, support, and price before activation.</p>
                         </div>
                         <div className='flex flex-wrap gap-2'>
-                            <Link href='/contact?intent=subscribe-response' className='inline-flex h-10 items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90' data-subscription-primary-action>
-                                Choose Response
+                            <Link href='/contact?plan=monitoring' className='inline-flex h-10 items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90' data-subscription-primary-action>
+                                Scope monitoring
                             </Link>
                             <Link href='/trust' className='inline-flex h-10 items-center justify-center gap-2 rounded-md border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
                                 <ShieldCheck className='h-4 w-4' />
@@ -111,7 +78,7 @@ export default function SubscriptionPage() {
                 </DashboardPanel>
 
                 <section className='grid gap-3 xl:grid-cols-3'>
-                    {plans.map(plan => <PlanCard key={plan.name} plan={plan} />)}
+                    {commercialAccessPlans.map(plan => <PlanCard key={plan.name} plan={plan} />)}
                 </section>
 
                 <div className='grid gap-3 xl:grid-cols-[1.1fr_0.9fr]'>
@@ -119,7 +86,7 @@ export default function SubscriptionPage() {
                         <div className='flex items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-3 py-2.5'>
                             <div>
                                 <h2 className='text-sm font-semibold text-ui-text'>Plan comparison</h2>
-                                <p className='mt-0.5 text-xs text-ui-muted'>The main limits that change when you upgrade.</p>
+                                <p className='mt-0.5 text-xs text-ui-muted'>The access boundary for each commercial path.</p>
                             </div>
                         </div>
                         <div className='overflow-x-auto'>
@@ -127,20 +94,20 @@ export default function SubscriptionPage() {
                                 <thead className='bg-ui-raised text-left text-[11px] font-semibold uppercase text-ui-muted'>
                                     <tr>
                                         <th className='px-3 py-2'>Plan</th>
-                                        <th className='px-3 py-2'>Watchlist</th>
+                                        <th className='px-3 py-2'>Access</th>
                                         <th className='px-3 py-2'>Delivery</th>
                                         <th className='px-3 py-2'>Review</th>
                                         <th className='px-3 py-2 text-right'>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className='divide-y divide-ui-border bg-ui-panel'>
-                                    {plans.map(plan => (
+                                    {commercialAccessPlans.map(plan => (
                                         <tr key={plan.name} className='hover:bg-ui-raised'>
                                             <td className='px-3 py-2 font-semibold text-ui-text'>
                                                 {plan.name}
-                                                <span className='ml-2 text-xs font-medium text-ui-muted'>{plan.price}/mo</span>
+                                                <span className='ml-2 text-xs font-medium text-ui-muted'>{plan.priceLabel}</span>
                                             </td>
-                                            <td className='px-3 py-2 text-ui-muted'>{plan.watchTerms}</td>
+                                            <td className='px-3 py-2 text-ui-muted'>{plan.access}</td>
                                             <td className='px-3 py-2 text-ui-muted'>{plan.delivery}</td>
                                             <td className='px-3 py-2 text-ui-muted'>{plan.review}</td>
                                             <td className='px-3 py-2 text-right'>
@@ -199,30 +166,31 @@ export default function SubscriptionPage() {
     )
 }
 
-function PlanCard({ plan }: { plan: typeof plans[number] }) {
+function PlanCard({ plan }: { plan: typeof commercialAccessPlans[number] }) {
+    const highlighted = plan.id === 'monitoring'
     return (
-        <article className={`relative overflow-hidden rounded-md border bg-ui-panel p-4 shadow-sm ${plan.highlighted ? 'border-ui-primary ring-1 ring-ui-primary/30' : 'border-ui-border'}`}>
-            {plan.highlighted ? <span className='absolute right-3 top-3 rounded-full border border-ui-warning bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-warning'>Most useful</span> : null}
+        <article className={`relative overflow-hidden rounded-md border bg-ui-panel p-4 shadow-sm ${highlighted ? 'border-ui-primary ring-1 ring-ui-primary/30' : 'border-ui-border'}`}>
+            {highlighted ? <span className='absolute right-3 top-3 rounded-full border border-ui-warning bg-ui-raised px-2 py-1 text-[11px] font-semibold text-ui-warning'>Operational fit</span> : null}
             <div className='pr-24'>
                 <h2 className='text-lg font-semibold text-ui-text'>{plan.name}</h2>
                 <p className='mt-1 min-h-10 text-sm leading-5 text-ui-muted'>{plan.bestFor}</p>
             </div>
-            <div className='mt-3 flex items-end gap-1'>
-                <span className='text-3xl font-semibold tracking-normal text-ui-text'>{plan.price}</span>
-                <span className='pb-1 text-sm font-medium text-ui-muted'>/ month</span>
+            <div className='mt-3 grid gap-1'>
+                <span className='text-2xl font-semibold tracking-normal text-ui-text'>{plan.priceLabel}</span>
+                <span className='text-sm font-medium text-ui-muted'>{plan.access}</span>
             </div>
-            <Link href={plan.href} className={`mt-4 inline-flex h-10 w-full items-center justify-center rounded-md px-3 text-sm font-semibold transition ${plan.highlighted ? 'bg-ui-primary text-ui-canvas hover:opacity-90' : 'border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'}`}>
-                Choose {plan.name}
+            <Link href={plan.href} className={`mt-4 inline-flex h-10 w-full items-center justify-center rounded-md px-3 text-sm font-semibold transition ${highlighted ? 'bg-ui-primary text-ui-canvas hover:opacity-90' : 'border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'}`}>
+                {plan.cta}
             </Link>
             <div className='mt-4 grid gap-2 text-sm'>
-                <PlanLine label='Watchlist' value={plan.watchTerms} />
+                <PlanLine label='Access' value={plan.access} />
                 <PlanLine label='Delivery' value={plan.delivery} />
                 <PlanLine label='Review' value={plan.review} />
             </div>
             <div className='mt-4 border-t border-ui-border pt-3'>
                 <p className='text-[11px] font-semibold uppercase text-ui-muted'>Included</p>
                 <ul className='mt-2 grid gap-1.5 text-sm text-ui-text'>
-                    {plan.includes.map(item => (
+                    {plan.features.map(item => (
                         <li key={item} className='flex items-center gap-2'>
                             <CheckCircle2 className='h-4 w-4 shrink-0 text-ui-success' />
                             <span>{item}</span>

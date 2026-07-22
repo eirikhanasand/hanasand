@@ -194,6 +194,33 @@ CREATE INDEX IF NOT EXISTS idx_organization_invites_org_status ON organization_i
 CREATE INDEX IF NOT EXISTS idx_organization_watchlist_org_kind ON organization_watchlist_items(organization_id, kind, value) WHERE archived_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_watchlist_unique_active ON organization_watchlist_items(organization_id, kind, lower(value)) WHERE archived_at IS NULL;
 
+CREATE TABLE IF NOT EXISTS commercial_contact_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_id TEXT NOT NULL UNIQUE,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    payload_hash TEXT NOT NULL,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    company TEXT,
+    subject TEXT NOT NULL,
+    message TEXT NOT NULL,
+    intent TEXT,
+    plan TEXT,
+    delivery_preference TEXT,
+    reply_window TEXT,
+    security_review BOOLEAN NOT NULL DEFAULT FALSE,
+    source TEXT NOT NULL DEFAULT '/contact',
+    request_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'in_progress', 'closed')),
+    notification_status TEXT NOT NULL DEFAULT 'pending' CHECK (notification_status IN ('pending', 'notified', 'failed')),
+    notification_error TEXT,
+    notified_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_commercial_contact_requests_status_created ON commercial_contact_requests(status, created_at DESC);
+
 -- Root table
 CREATE TABLE IF NOT EXISTS root (
     id TEXT PRIMARY KEY,

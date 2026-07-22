@@ -142,7 +142,7 @@ export const trustArtifacts: TrustArtifact[] = [
             },
             {
                 title: 'Customer-selected destinations',
-                body: 'When a customer configures webhooks, email, SIEM, SOAR, ticketing, Slack/Teams-style destinations, or internal tools, those systems receive the alert payloads the customer chooses to route.',
+                body: 'When a customer configures a webhook or API consumer for SIEM, SOAR, ticketing, chat, or an internal tool, that customer-owned system receives the alert payloads the customer chooses to route.',
             },
         ],
         table: {
@@ -150,7 +150,7 @@ export const trustArtifacts: TrustArtifact[] = [
             rows: [
                 ['Hosting/runtime', 'Application, API, worker, processing, Tor/onion session, and scheduled-job infrastructure', 'Hanasand-managed infrastructure; named provider/region supplied in the order/DPA'],
                 ['Database/storage', 'Account, organization, watchlist, alert, audit, and operational state', 'PostgreSQL-backed storage in the deployment environment'],
-                ['Mail/notification', 'Account, support, operational, and alert email where configured', 'Hanasand mail stack or configured mail provider by deployment'],
+                ['Mail', 'Account recovery, commercial requests, support, and operational messages', 'Hanasand mail stack or configured mail provider by deployment; monitoring alerts use webhook, case, and API paths'],
                 ['Alert processing', 'Structure source records into safer alert fields when enabled', 'Hanasand-controlled model endpoint or explicitly approved provider'],
                 ['Billing/payment', 'Subscriptions, invoices, and plan administration', 'Only used when the customer is not handled by invoice/order form'],
                 ['Customer integrations', 'Webhook/API delivery to customer tools', 'Customer-selected destination receives customer-approved alert payloads'],
@@ -182,7 +182,7 @@ export const trustArtifacts: TrustArtifact[] = [
                 body: 'Start with a narrow watchlist and a clear reviewer. Verify source context, alert fields, delivery route, false-positive handling, and escalation before expanding to a larger supplier or portfolio program.',
                 items: [
                     'Week 0: security/procurement review, watchlist shape, delivery route, and reviewer named.',
-                    'Week 1: first watchlist added, alert reviewed, webhook/API/email delivery checked.',
+                    'Week 1: first watchlist added, alert reviewed, and webhook/API/case delivery checked.',
                     'Weeks 2-3: tune watched names, severity expectations, suppression, and escalation owners.',
                     'Week 4: decide whether coverage and workflow are strong enough for paid production use.',
                 ],
@@ -201,7 +201,7 @@ export const trustArtifacts: TrustArtifact[] = [
                 items: [
                     'Organization name, buyer owner, security-review owner, and vendor portal or questionnaire link.',
                     'Watched companies, domains, suppliers, portfolio size, and first-month success criteria.',
-                    'Delivery route: email, webhook, API, SIEM/SOAR, ticketing, review links, or manual reporting.',
+                    'Delivery route: webhook, API, case workflow, customer-owned downstream integration, review link, or manual reporting.',
                     'Required identity controls: SSO/SAML/OIDC, SCIM, MFA policy, role model, and offboarding expectations.',
                     'Procurement deadline, DPA jurisdiction, retention expectations, support/SLA targets, and escalation contacts.',
                 ],

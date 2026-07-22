@@ -2,47 +2,16 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowRight, BellRing, Building2, CheckCircle2, ClipboardCheck, FileText, Gauge, KeyRound, ShieldCheck } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
+import { commercialAccessPlans } from '@/utils/commercialAccess'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Pricing',
-    description: 'Pricing for Hanasand threat monitoring and company exposure alerts.',
+    description: 'Evaluation and sales-scoped access for Hanasand threat monitoring and company exposure alerts.',
     path: '/pricing',
     keywords: ['hanasand pricing', 'threat monitoring pricing', 'ransomware monitoring pricing'],
 })
 
-const plans = [
-    {
-        name: 'Pilot',
-        price: '$49',
-        cadence: '/ month',
-        detail: 'Create a workspace and evaluate a focused set of companies and domains before paid activation.',
-        cta: 'Start evaluation',
-        href: '/register?path=/organizations',
-        icon: BellRing,
-        features: ['5 evaluation watch terms', 'One webhook destination', '5 alert refreshes per day', 'Up to 10 open cases'],
-    },
-    {
-        name: 'Company Monitor',
-        price: '$149',
-        cadence: '/ month',
-        detail: 'For security teams watching their own brand, subsidiaries, vendors, and executive names.',
-        cta: 'Contact sales',
-        href: '/contact?plan=company-monitor',
-        icon: ShieldCheck,
-        featured: true,
-        features: ['250 watched names or domains', '5 webhook destinations', '100 alert refreshes per day', 'Up to 100 open cases'],
-    },
-    {
-        name: 'Portfolio',
-        price: '$499',
-        cadence: '/ month',
-        detail: 'For firms monitoring customers, portfolio companies, acquisition targets, or supplier networks.',
-        cta: 'Talk through coverage',
-        href: '/contact?plan=portfolio',
-        icon: Building2,
-        features: ['1,500 watched names or domains', '20 webhook destinations', '500 alert refreshes per day', 'Up to 500 open cases'],
-    },
-]
+const planIcons = { evaluation: BellRing, monitoring: ShieldCheck, integration: Building2 }
 
 const buyerScenarios = [
     {
@@ -65,7 +34,7 @@ const buyerScenarios = [
 const competitiveFitRows = [
     {
         label: 'Best Hanasand fit',
-        value: 'Focused company, supplier, executive, domain, and portfolio monitoring where the buyer wants a small alert, transparent pricing, and direct webhook/API delivery.',
+        value: 'Focused company, supplier, executive, domain, and portfolio monitoring where the buyer wants reviewable evidence and direct webhook/API delivery.',
     },
     {
         label: 'Best larger-platform fit',
@@ -79,9 +48,9 @@ const competitiveFitRows = [
 
 const pilotSteps = [
     ['1', 'Load the watchlist', 'Add companies, domains, suppliers, brands, executives, and acquisition targets.'],
-    ['2', 'Choose delivery', 'Use email for a pilot or connect webhook/API delivery to the SOC, vendor-risk, or case workflow.'],
+    ['2', 'Choose delivery', 'Connect webhook or scoped API delivery to the SOC, vendor-risk, or case workflow.'],
     ['3', 'Review first matches', 'Inspect source, timing, matched term, confidence, evidence summary, and recommended owner.'],
-    ['4', 'Decide scope', 'Expand coverage, request procurement material, or pause if the current source coverage is not enough.'],
+    ['4', 'Confirm commercial scope', 'Record watchlist size, destinations, API budgets, retention, support, and price in the order form before activation.'],
 ]
 
 const enterpriseReadiness = [
@@ -112,9 +81,9 @@ export default function PricingPage() {
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8 md:py-20'>
                     <div className='mx-auto grid max-w-3xl justify-items-center gap-4 text-center'>
                         <p className='text-sm font-semibold uppercase text-ui-primary'>Pricing</p>
-                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Threat monitoring priced around review-ready alerts.</h1>
+                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Evaluate the product, then scope monitored coverage.</h1>
                         <p className='text-lg leading-8 text-ui-muted'>
-                            Pick the watchlist size that matches how your team works. Every tier is built around recent company exposure alerts and review-ready alert data.
+                            Console evaluation is self-serve. Monitoring and integration are sales-provisioned so watchlist size, delivery, API budgets, retention, support, and price are written into the order form.
                         </p>
                         <div className='flex flex-wrap justify-center gap-3 pt-2'>
                             <Link href='#competitive-fit' className='inline-flex h-11 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary'>
@@ -127,25 +96,25 @@ export default function PricingPage() {
                     </div>
 
                     <div className='grid gap-4 lg:grid-cols-3'>
-                        {plans.map((plan) => {
-                            const Icon = plan.icon
+                        {commercialAccessPlans.map((plan) => {
+                            const Icon = planIcons[plan.id]
                             return (
-                                <article key={plan.name} className={`grid gap-5 rounded-lg border bg-ui-panel p-6 shadow-sm ${plan.featured ? 'border-ui-primary shadow-md' : 'border-ui-border'}`}>
+                                <article key={plan.name} className={`grid gap-5 rounded-lg border bg-ui-panel p-6 shadow-sm ${plan.id === 'monitoring' ? 'border-ui-primary shadow-md' : 'border-ui-border'}`}>
                                     <div className='flex items-start justify-between gap-4'>
                                         <span className='grid h-12 w-12 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
                                             <Icon className='h-5 w-5' />
                                         </span>
-                                        {plan.featured ? <span className='rounded-full border border-ui-primary bg-ui-primary/10 px-2.5 py-1 text-xs font-semibold text-ui-primary'>Best fit</span> : null}
+                                        {plan.id === 'monitoring' ? <span className='rounded-full border border-ui-primary bg-ui-primary/10 px-2.5 py-1 text-xs font-semibold text-ui-primary'>Operational fit</span> : null}
                                     </div>
                                     <div className='grid gap-2'>
                                         <h2 className='text-xl font-semibold'>{plan.name}</h2>
-                                        <p className='min-h-14 text-sm leading-6 text-ui-muted'>{plan.detail}</p>
+                                        <p className='min-h-14 text-sm leading-6 text-ui-muted'>{plan.bestFor}</p>
                                     </div>
-                                    <div className='flex items-end gap-1'>
-                                        <span className='text-4xl font-semibold'>{plan.price}</span>
-                                        <span className='pb-1 text-sm font-medium text-ui-muted'>{plan.cadence}</span>
+                                    <div className='grid gap-1'>
+                                        <span className='text-2xl font-semibold'>{plan.priceLabel}</span>
+                                        <span className='text-sm font-medium text-ui-muted'>{plan.access}</span>
                                     </div>
-                                    <Link href={plan.href} className={`inline-flex h-11 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition ${plan.featured ? 'bg-ui-primary text-ui-canvas hover:opacity-90' : 'border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'}`}>
+                                    <Link href={plan.href} className={`inline-flex h-11 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition ${plan.id === 'monitoring' ? 'bg-ui-primary text-ui-canvas hover:opacity-90' : 'border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary'}`}>
                                         {plan.cta}
                                         <ArrowRight className='h-4 w-4' />
                                     </Link>
@@ -229,7 +198,7 @@ export default function PricingPage() {
                         <p className='text-sm font-semibold uppercase text-ui-primary'>Enterprise review</p>
                         <h2 className='text-3xl font-semibold'>Need procurement, security, or SSO review before a pilot?</h2>
                         <p className='text-sm leading-6 text-ui-muted'>
-                            The low-friction plans are for fast evaluation. Larger teams should review security, data handling, contract terms, and identity requirements before purchase.
+                            Self-serve access is for product evaluation. Monitoring customers should review security, data handling, contract terms, and identity requirements before activation.
                         </p>
                         <div className='flex flex-wrap gap-3'>
                             <Link href='/trust' className='inline-flex h-11 items-center gap-2 rounded-lg bg-ui-text px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
@@ -265,7 +234,7 @@ export default function PricingPage() {
                 <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8'>
                     <div>
                         <p className='text-sm font-semibold uppercase text-ui-primary'>Common buying scenarios</p>
-                        <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>Choose a tier by the names you need watched and the team that owns the alert.</h2>
+                        <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>Scope access by what needs monitoring and who owns the alert.</h2>
                     </div>
                     <div className='grid gap-4 lg:grid-cols-3'>
                         {buyerScenarios.map((scenario) => (

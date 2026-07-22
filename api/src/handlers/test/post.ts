@@ -2,6 +2,7 @@ import run from '#db'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { createHash } from 'node:crypto'
 import { enqueueLoadTestRun } from './follow.ts'
+import { verifiedClientIp } from '#utils/http/publicBoundary.ts'
 
 const freeLoadTestLimit = 5
 const defaultStages: Stage[] = [{ duration: '30s', target: 1 }]
@@ -120,7 +121,7 @@ async function getLoadTestQuota(req: FastifyRequest, ownerId: string | undefined
         ? `user:${ownerId}`
         : `anon:${hashIdentity([
             headerValue(req.headers['x-load-test-client-id']),
-            clientIp(req),
+            verifiedClientIp(req),
             headerValue(req.headers['user-agent']),
         ].join('|'))}`
 
@@ -168,11 +169,6 @@ function limitForPlan(plan: string) {
 
 function headerValue(value: string | string[] | undefined) {
     return Array.isArray(value) ? value[0] || '' : value || ''
-}
-
-function clientIp(req: FastifyRequest) {
-    const forwarded = headerValue(req.headers['x-forwarded-for'])
-    return forwarded.split(',')[0]?.trim() || req.ip || 'unknown'
 }
 
 function hashIdentity(value: string) {
