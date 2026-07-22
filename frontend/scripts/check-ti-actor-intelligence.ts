@@ -759,6 +759,8 @@ assert(pageClientSource.includes('actionability.sourceEnrichmentIntake.items.fil
 assert(pageClientSource.includes('actionability.caseReviewIntake.summary.total'), 'Case action exports should summarize case review intake.')
 assert(pageClientSource.includes('actionability.sourceEnrichmentIntake.summary.total'), 'Source action exports should summarize source enrichment intake.')
 assert(pageClientSource.includes('data-ti-actor-summary-grid'), 'Actor overview should render a compact summary grid instead of a dense status table.')
+assert(pageClientSource.includes('data-ti-catalog-only=\'true\''), 'Catalog-only matches should render the catalog record without activity placeholders.')
+assert(!pageClientSource.includes('catalogOnly ? \'No activity'), 'Catalog-only matches should not disguise missing activity as attribution or motivation metrics.')
 assert(pageClientSource.includes('ActorSummaryFact'), 'Actor overview should use reusable summary facts for type, targets, methods, and source coverage.')
 assert(!pageClientSource.includes('sourceHealthChipClass(row.tone)'), 'Actor overview should not attach a status chip to every summary row.')
 assert(pageClientSource.includes('border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text'), 'Public TI search submit should use the quieter raised button.')

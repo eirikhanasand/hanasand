@@ -181,17 +181,35 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
 }
 
 function Results({ result }: { result: TiSearchResponse }) {
+    const catalogIdentity = result.actorIdentity
+    if (catalogIdentity?.catalogMatched && !catalogIdentity.activityEvidenceAvailable) {
+        return <CatalogOnlyActorResult result={result} identity={catalogIdentity} />
+    }
+    return <EvidenceResults result={result} />
+}
+
+function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse, identity: NonNullable<TiSearchResponse['actorIdentity']> }) {
+    const candidate = !identity.ambiguous && identity.candidates.length === 1 ? identity.candidates[0] : undefined
+    const title = candidate?.canonicalName ?? humanizeSlug(result.query)
+    const source = candidate?.catalogId === 'mitre-attack-enterprise' ? 'MITRE Enterprise ATT&CK' : candidate?.catalogId === 'ransomware-live-current-operations' ? 'Ransomware.live' : 'the actor catalog'
+    return (
+        <section data-ti-catalog-only='true' className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm dark:border-ui-border dark:bg-ui-panel'>
+            <div>
+                <h1 className='wrap-break-word text-3xl font-semibold tracking-normal text-ui-text dark:text-ui-text md:text-4xl'>{title}</h1>
+                <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>
+                    {identity.ambiguous ? 'This label maps to multiple current catalog identities.' : `Current catalog identity from ${source}${candidate?.catalogVersion ? ` ${candidate.catalogVersion}` : ''}.`}
+                </p>
+            </div>
+            <ActorIdentityPanel identity={identity} />
+        </section>
+    )
+}
+
+function EvidenceResults({ result }: { result: TiSearchResponse }) {
     const sourceUrlById = useMemo(() => new Map(result.sources.map(source => [source.id, source.url || linkFromText(source.provenance)])), [result.sources])
     const sources = result.sources
     const actorQuery = result.queryKind === 'actor'
     const catalogIdentity = result.actorIdentity
-    const catalogOnly = Boolean(catalogIdentity?.catalogMatched && !catalogIdentity.activityEvidenceAvailable)
-    const catalogCandidate = !catalogIdentity?.ambiguous && catalogIdentity?.candidates.length === 1 ? catalogIdentity.candidates[0] : undefined
-    const exactCatalogIdentity = Boolean(catalogCandidate?.matchKinds.includes('canonical'))
-    const actorNamesLabel = catalogOnly ? exactCatalogIdentity ? 'Associated names' : 'Query label' : 'Aliases'
-    const actorNamesValue = catalogOnly
-        ? exactCatalogIdentity ? catalogCandidate?.associatedNames.slice(0, 3).join(', ') || 'None listed' : humanizeSlug(result.query)
-        : result.aliases.slice(0, 3).join(', ') || humanizeSlug(result.query)
     const victimObservations = useMemo(() => victimObservationsFor(result), [result])
     const actorIntel = useMemo(() => buildActorIntelligence(result, victimObservations), [result, victimObservations])
     const actionability = useMemo(() => buildTiActionability(result, actorIntel, victimObservations), [result, actorIntel, victimObservations])
@@ -316,23 +334,21 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <p className='mt-3 max-w-3xl text-sm leading-6 text-ui-muted dark:text-ui-muted'>{actorProfileSummary}</p>
                         </div>
                         <div className='grid gap-3 sm:grid-cols-2'>
-                            <EvidenceMetric label={actorQuery ? 'Attribution' : 'Query type'} value={actorQuery ? catalogOnly ? 'No activity attribution' : actorIntel.attribution || 'Public reporting' : formatLabel(result.queryKind || 'free_text')} />
-                            <EvidenceMetric label={actorQuery ? 'Motivation' : 'Observed records'} value={actorQuery ? catalogOnly ? 'No activity evidence' : actorIntel.motivation.slice(0, 2).join('; ') || 'Reported activity' : `${result.recentActivity.length}`} />
+                            <EvidenceMetric label={actorQuery ? 'Attribution' : 'Query type'} value={actorQuery ? actorIntel.attribution || 'Public reporting' : formatLabel(result.queryKind || 'free_text')} />
+                            <EvidenceMetric label={actorQuery ? 'Motivation' : 'Observed records'} value={actorQuery ? actorIntel.motivation.slice(0, 2).join('; ') || 'Reported activity' : `${result.recentActivity.length}`} />
                             <EvidenceMetric
-                                label={actorQuery ? actorNamesLabel : 'Sources'}
-                                value={actorQuery ? actorNamesValue : `${result.sources.length}`}
+                                label={actorQuery ? 'Aliases' : 'Sources'}
+                                value={actorQuery ? result.aliases.slice(0, 3).join(', ') || humanizeSlug(result.query) : `${result.sources.length}`}
                             />
                             <EvidenceMetric label='Last seen' value={result.lastSeen ? formatDate(result.lastSeen) : 'Observation date unavailable'} />
                         </div>
                     </section>
                     {actorQuery ? <section data-ti-map='true' className='min-w-0'>
-                        {catalogOnly && catalogIdentity
-                            ? <ActorIdentityPanel identity={catalogIdentity} />
-                            : <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />}
+                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                     </section> : null}
                 </div>
 
-                {catalogIdentity?.catalogMatched && !catalogOnly ? <ActorIdentityPanel identity={catalogIdentity} /> : null}
+                {catalogIdentity?.catalogMatched ? <ActorIdentityPanel identity={catalogIdentity} /> : null}
 
                 <EvidenceBoundaryStrip result={result} />
 
@@ -415,11 +431,6 @@ function ActorIdentityPanel({ identity }: { identity: NonNullable<TiSearchRespon
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>{exact ? 'Catalog identity' : 'Catalog candidates'}</p>
-                    <p className='mt-1 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
-                        {identity.activityEvidenceAvailable
-                            ? 'Catalog identity is shown separately from captured activity.'
-                            : exact ? 'Cataloged threat group; no captured activity is linked to this query.' : 'No activity attribution was merged from these catalog matches.'}
-                    </p>
                 </div>
                 {identity.ambiguous ? <span className={sourceHealthChipClass('review')}>ambiguous label</span> : null}
             </div>
