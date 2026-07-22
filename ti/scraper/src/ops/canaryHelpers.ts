@@ -65,6 +65,14 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
     if (activityBody.truncated) throw new Error("Ransomware operation activity evidence exceeded the bounded response size.");
     const ransomwareOperationCatalogSnapshot = parseCurrentRansomwareOperations(fetched, activityBody.text, { retrievedAt: at, sourceUrl: task.targetUrl });
     const [groupContentHash, activityContentHash] = ransomwareOperationCatalogSnapshot.evidenceContentHashes;
+    const groupMetadataItems = feedItems(
+      source,
+      { ...task, planning: { ...task.planning, extractionProfile: "ransomware_group_metadata" } },
+      fetched,
+      at,
+      metadata,
+      Number(source.metadata?.groupMetadataMaxItemsPerFetch ?? 120)
+    );
     const activityMetadata = {
       canaryPortfolio: true,
       fetchMode: mode,
@@ -116,7 +124,7 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
       links: [],
       metadata: { ...metadata, extractionProfile: "ransomware_operation_catalog", ransomwareOperationCatalogSnapshot, parserVersion: "ransomware-live-current-operations:v1" },
       sensitive: true
-    }];
+    }, ...groupMetadataItems];
   }
   return feedItems(source, task, fetched, at, metadata, maxItemsFor(source, task) ?? maxItems);
 }

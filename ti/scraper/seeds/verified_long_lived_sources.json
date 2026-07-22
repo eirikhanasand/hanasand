@@ -99,17 +99,11 @@
             "url": "https://data.ransomware.live/groups.json",
             "extractionProfile": "ransomware_operation_catalog",
             "activityUrl": "https://data.ransomware.live/victims.json",
-            "maxItemsPerFetch": 2
-          },
-          {
-            "id": "group_metadata",
-            "url": "https://data.ransomware.live/groups.json",
-            "extractionProfile": "ransomware_group_metadata",
-            "maxItemsPerFetch": 120
+            "maxItemsPerFetch": 122
           }
         ],
+        "groupMetadataMaxItemsPerFetch": 120,
         "productionCollection": true,
-        "maxItemsPerProcess": 2,
         "safetyBoundary": "hash-only raw captures; derived operation names, aliases, lineage relationships, reachability state, and aggregate claim counts only"
       },
       "catalog": {

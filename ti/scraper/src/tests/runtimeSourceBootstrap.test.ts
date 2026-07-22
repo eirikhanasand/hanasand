@@ -249,8 +249,8 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         now: () => "2026-07-22T12:00:00.000Z",
         fetch: async () => { throw new Error("scheduler eligibility probe"); }
       } as any);
-      expect(cycle).toMatchObject({ activeSourceCount: 2, queuedTaskCount: 3, leasedTaskCount: 2, failedTaskCount: 2 });
-      expect(store.listRuns().find((run: any) => run.id === cycle.runId)?.taskCount).toBe(3);
+      expect(cycle).toMatchObject({ activeSourceCount: 2, queuedTaskCount: 2, leasedTaskCount: 2, failedTaskCount: 2 });
+      expect(store.listRuns().find((run: any) => run.id === cycle.runId)?.taskCount).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

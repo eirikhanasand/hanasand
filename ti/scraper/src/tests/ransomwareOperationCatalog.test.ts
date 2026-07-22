@@ -58,6 +58,7 @@ test("collects both real indexes as hash-only evidence and creates no activity",
   const sourceGroups = Array.from({ length: 25 }, (_, index) => ({ ...group(`Operation ${index}`, null, null, "2026-07-21T20:00:00Z", 200), locations: [{ enabled: true, available: true, lastscrape: "2026-07-21T20:00:00Z", fqdn: `not-retained-${index}.onion`, http: { status: 200 } }] }));
   const sourceVictims = Array.from({ length: 25 }, (_, index) => claim(`Operation ${index}`, "2026-07-21T19:00:00Z"));
   const store = new InMemoryScraperStore();
+  const fetchedUrls: string[] = [];
   store.saveSource({ ...source, createdAt: at, updatedAt: at });
 
   const result = await runCanaryCollectionCycle({
@@ -68,14 +69,19 @@ test("collects both real indexes as hash-only evidence and creates no activity",
     maxTasks: 1,
     maxItemsPerTask: 2,
     now: () => at,
-    fetch: async (url: string | URL | Request) => new Response(String(url).endsWith("victims.json") ? JSON.stringify(sourceVictims) : JSON.stringify(sourceGroups), { headers: { "content-type": "application/json" } })
+    fetch: async (url: string | URL | Request) => {
+      fetchedUrls.push(String(url));
+      return new Response(String(url).endsWith("victims.json") ? JSON.stringify(sourceVictims) : JSON.stringify(sourceGroups), { headers: { "content-type": "application/json" } });
+    }
   } as any);
 
-  expect(result).toMatchObject({ completedTaskCount: 1, failedTaskCount: 0, insertedCaptureCount: 2, incidentCount: 0 });
+  expect(result).toMatchObject({ queuedTaskCount: 1, completedTaskCount: 1, failedTaskCount: 0, insertedCaptureCount: 27, incidentCount: 0 });
+  expect(fetchedUrls).toEqual(["https://data.ransomware.live/groups.json", "https://data.ransomware.live/victims.json"]);
   expect(store.listActorIdentities()).toHaveLength(25);
-  expect(store.listActorProfiles()).toHaveLength(0);
+  expect(store.listActorProfiles()).toHaveLength(25);
   expect(store.listIncidents()).toHaveLength(0);
-  expect(store.listCaptures().every((capture: any) => capture.sensitive && capture.storageKind === "metadata_only" && capture.body === undefined)).toBe(true);
+  expect(store.listCaptures().slice(0, 2).every((capture: any) => capture.sensitive && capture.storageKind === "metadata_only" && capture.body === undefined)).toBe(true);
+  expect(store.listCaptures().filter((capture: any) => capture.metadata?.extractionProfile === "ransomware_group_metadata")).toHaveLength(25);
   expect(store.listActorIdentityCatalogs()[0].evidenceCaptureIds).toHaveLength(2);
   expect(JSON.stringify(store.listCaptures())).not.toContain(".onion");
 });
