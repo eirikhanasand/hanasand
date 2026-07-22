@@ -1702,7 +1702,7 @@ function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, se
     const entityContext = selectedEntity?.name || alert.matchedTerm.value
     const caseContext = workflowContext.caseId ? `case ${workflowContext.caseId}` : 'case candidate'
     return (
-        <section className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
+        <section className='min-w-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel'>
             <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
                 <div>
                     <h3 className='text-sm font-semibold text-ui-text'>Source evidence</h3>
