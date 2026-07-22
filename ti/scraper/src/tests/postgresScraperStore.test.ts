@@ -784,7 +784,25 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
           )
       WHERE incident_id IN (${savedVerified.incident!.id}, ${savedUnknown.incident!.id})
     `;
-    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '023_reconcile_delivery_and_event_times'`;
+    await admin`
+      UPDATE threat_intel.timeliness_records AS timeliness
+      SET published_at = ${"2026-07-21T11:29:27.000Z"},
+          processed_at = capture.processed_at,
+          record = timeliness.record || jsonb_build_object('publishedAt', ${"2026-07-21T11:29:27.000Z"}::timestamptz, 'processedAt', capture.processed_at)
+      FROM threat_intel.captures AS capture
+      WHERE timeliness.incident_id = ${savedVerified.incident!.id}
+        AND capture.id = timeliness.capture_id
+    `;
+    await admin`
+      UPDATE threat_intel.incidents AS incident
+      SET published_at = ${"2026-07-21T11:29:27.000Z"},
+          processed_at = capture.processed_at,
+          record = incident.record || jsonb_build_object('publishedAt', ${"2026-07-21T11:29:27.000Z"}::timestamptz, 'processedAt', capture.processed_at)
+      FROM threat_intel.captures AS capture
+      WHERE incident.id = ${savedVerified.incident!.id}
+        AND capture.id = incident.capture_id
+    `;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version IN ('023_reconcile_delivery_and_event_times', '024_finish_timestamp_backfill')`;
 
     const restarted = await PostgresScraperStore.create({ databaseUrl });
     await restarted.close();
@@ -850,6 +868,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       }
     ]);
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '023_reconcile_delivery_and_event_times'`).toHaveLength(1);
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '024_finish_timestamp_backfill'`).toHaveLength(1);
   });
 
   test("imports the legacy JSON snapshot once and then uses PostgreSQL", async () => {
