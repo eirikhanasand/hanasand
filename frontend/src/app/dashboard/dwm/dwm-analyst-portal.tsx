@@ -1303,7 +1303,7 @@ function BriefStep({ label, value }: { label: string, value: string }) {
     return (
         <div className='min-w-0 border-l border-ui-border py-1 pl-3'>
             <p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p>
-            <p className='mt-1 line-clamp-4 text-sm leading-6 text-ui-text'>{value}</p>
+            <p className='mt-1 line-clamp-4 wrap-break-word text-sm leading-6 text-ui-text'>{value}</p>
         </div>
     )
 }
