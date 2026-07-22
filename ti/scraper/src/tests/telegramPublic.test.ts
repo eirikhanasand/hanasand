@@ -29,8 +29,11 @@ describe("compact Telegram public adapter", () => {
     expect(validateTelegramPublicSourceCompliance({ ...source, url: "http://t.me/securityalerts" }).allowed).toBe(false);
     expect(validateTelegramPublicSourceCompliance({ ...source, url: "https://example.test/t.me/securityalerts" }).allowed).toBe(false);
     expect(validateTelegramPublicSourceCompliance({ ...source, url: "https://t.me/securityalerts/42" }).allowed).toBe(false);
+    expect(validateTelegramPublicSourceCompliance({ ...source, url: "https://t.me/securityalerts?token=secret" }).allowed).toBe(false);
+    expect(validateTelegramPublicSourceCompliance({ ...source, url: "https://t.me/securityalerts#private" }).allowed).toBe(false);
     expect(validateTelegramPublicSourceCompliance({ ...source, metadata: { requiresAuthentication: true } }).allowed).toBe(false);
     expect(validateTelegramPublicSourceCompliance({ ...source, metadata: { captchaRequired: true } }).allowed).toBe(false);
+    expect(validateTelegramPublicSourceCompliance({ ...source, metadata: { botToken: "123:secret" } }).allowed).toBe(false);
     expect(parseTelegramTarget("https://t.me/securityalerts").channel).toBe("securityalerts");
   });
 

@@ -1,10 +1,10 @@
 {
   "version": 2,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-07-22T12:45:20.000Z",
+  "generatedAt": "2026-07-22T14:03:39.000Z",
   "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 3,
+  "sourceCount": 7,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -303,6 +303,430 @@
             "threat actor",
             "breach",
             "victim"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_positive_technologies_telegram",
+      "tenantId": "default",
+      "name": "Positive Technologies public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/Positive_Technologies",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.9,
+      "language": "ru",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public text posts from the Positive Technologies channel linked by ptsecurity.com. Collect the unauthenticated web preview only; do not join, authenticate, message, or download media, files, exploits, or samples.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-22T14:03:39.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "apt_research",
+          "malware_research",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "verifiedSourceId": "src_positive_technologies_telegram",
+        "publisherReference": "https://www.ptsecurity.com/",
+        "ownershipVerifiedAt": "2026-07-22T14:03:39.000Z",
+        "activityVerifiedAt": "2026-07-22T14:03:39.000Z",
+        "topics": [
+          "APT",
+          "malware",
+          "vulnerability",
+          "threat intelligence",
+          "industrial security"
+        ],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "vendor:positive-technologies:telegram",
+        "publisher": {
+          "name": "Positive Technologies",
+          "country": "RU",
+          "homepage": "https://www.ptsecurity.com/",
+          "trustBasis": "publisher-owned website link"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.9,
+        "intelligenceValue": 0.88,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "APT",
+            "malware",
+            "vulnerability",
+            "threat intelligence"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "technology",
+            "industrial",
+            "government",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "APT",
+            "malware",
+            "уязвимост",
+            "кибератак"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_i4c_cyberdost_telegram",
+      "tenantId": "default",
+      "name": "India I4C CyberDost public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/cyberdosti4c",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.95,
+      "language": "hi",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public cybercrime advisories from the Indian Cyber Crime Coordination Centre channel named by India's Press Information Bureau. Collect the unauthenticated web preview only; never submit reports, join, authenticate, message, follow suspect identifiers, or collect victim submissions, media, or files.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-22T14:03:39.000Z",
+        "approvedBy": "source-review:government-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "cert_government",
+          "cybercrime_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "verifiedSourceId": "src_i4c_cyberdost_telegram",
+        "publisherReference": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2077948&lang=2&reg=48",
+        "ownershipVerifiedAt": "2026-07-22T14:03:39.000Z",
+        "activityVerifiedAt": "2026-07-22T14:03:39.000Z",
+        "topics": [
+          "cybercrime",
+          "phishing",
+          "malware",
+          "online fraud",
+          "public advisories"
+        ],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "gov:in:i4c:cyberdost:telegram",
+        "publisher": {
+          "name": "Indian Cyber Crime Coordination Centre",
+          "country": "IN",
+          "homepage": "https://i4c.mha.gov.in/",
+          "trustBasis": "government Press Information Bureau reference"
+        },
+        "tier": "tier_1",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public government communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public government channel used for defensive cybercrime research.",
+        "reliability": 0.95,
+        "intelligenceValue": 0.83,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "cybercrime",
+            "phishing",
+            "malware",
+            "online fraud"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "finance",
+            "government",
+            "technology",
+            "consumer"
+          ],
+          "regions": [
+            "India",
+            "South Asia"
+          ],
+          "countries": [
+            "India"
+          ],
+          "languages": [
+            "hi",
+            "en"
+          ],
+          "queryPatterns": [
+            "CyberCrime",
+            "phishing",
+            "malware",
+            "fraud"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_ukraine_cyberpolice_telegram",
+      "tenantId": "default",
+      "name": "Ukraine Cyber Police public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/CyberpolUA",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.94,
+      "language": "uk",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public cyberattack and cybercrime posts from the Cyber Police Department channel linked by cyberpolice.gov.ua. Collect the unauthenticated web preview only; never submit reports, join, authenticate, message, or collect victim submissions, media, or files.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-22T14:03:39.000Z",
+        "approvedBy": "source-review:government-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "cert_government",
+          "cybercrime_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "searchQuery": "кібератак",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "verifiedSourceId": "src_ukraine_cyberpolice_telegram",
+        "publisherReference": "https://cyberpolice.gov.ua/",
+        "ownershipVerifiedAt": "2026-07-22T14:03:39.000Z",
+        "activityVerifiedAt": "2026-07-22T14:03:39.000Z",
+        "topics": [
+          "cyberattack",
+          "cybercrime",
+          "phishing",
+          "malware",
+          "public prosecutions"
+        ],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "gov:ua:cyberpolice:telegram",
+        "publisher": {
+          "name": "Cyber Police Department of the National Police of Ukraine",
+          "country": "UA",
+          "homepage": "https://cyberpolice.gov.ua/",
+          "trustBasis": "government website link"
+        },
+        "tier": "tier_1",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public government communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public government channel used for defensive cybercrime research.",
+        "reliability": 0.94,
+        "intelligenceValue": 0.84,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "cyberattack",
+            "cybercrime",
+            "phishing",
+            "malware"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "finance",
+            "technology",
+            "consumer"
+          ],
+          "regions": [
+            "Ukraine",
+            "Europe"
+          ],
+          "countries": [
+            "Ukraine"
+          ],
+          "languages": [
+            "uk"
+          ],
+          "queryPatterns": [
+            "кібератак",
+            "кіберзлочин",
+            "фішинг",
+            "шкідлив"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_ctt_report_hub_telegram",
+      "tenantId": "default",
+      "name": "CTT Report Hub public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/aptreports",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.78,
+      "language": "en",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public defensive report-index posts from the CTT Report Hub channel named by Cyber Threat Technologies. Generated annotations are unverified enrichment, not source-of-truth attribution. Collect the unauthenticated text preview only; do not join, authenticate, message, or retrieve linked reports, media, samples, credentials, or files.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-22T14:03:39.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "apt_research",
+          "malware_research",
+          "ransomware_research",
+          "actor_announcement_reporting",
+          "victim_publication_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": true,
+        "verifiedSourceId": "src_ctt_report_hub_telegram",
+        "publisherReference": "https://cyberthreat.tech/media/2024/05/cttthreatfeed_datasheet_ru.pdf",
+        "ownershipVerifiedAt": "2026-07-22T14:03:39.000Z",
+        "activityVerifiedAt": "2026-07-22T14:03:39.000Z",
+        "topics": [
+          "APT reports",
+          "malware reports",
+          "ransomware reports",
+          "threat actors",
+          "public victim reporting",
+          "indicators"
+        ],
+        "maxItemsPerFetch": 20
+      },
+      "catalog": {
+        "canonicalId": "vendor:cyber-threat-technologies:report-hub:telegram",
+        "publisher": {
+          "name": "Cyber Threat Technologies",
+          "country": "RU",
+          "homepage": "https://cyberthreat.tech/",
+          "trustBasis": "publisher datasheet names the channel"
+        },
+        "tier": "tier_3",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution and generated-enrichment caveat retained.",
+        "legalBasis": "Unauthenticated public defensive report index used for security research.",
+        "reliability": 0.78,
+        "intelligenceValue": 0.86,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "APT reports",
+            "malware reports",
+            "ransomware reports",
+            "threat actors",
+            "public victim reporting"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "technology",
+            "finance",
+            "critical infrastructure"
+          ],
+          "regions": [
+            "Global",
+            "Eastern Europe"
+          ],
+          "countries": [],
+          "languages": [
+            "en",
+            "ru"
+          ],
+          "queryPatterns": [
+            "ParsedReport",
+            "APT",
+            "ransomware",
+            "Victims"
           ]
         },
         "collection": {

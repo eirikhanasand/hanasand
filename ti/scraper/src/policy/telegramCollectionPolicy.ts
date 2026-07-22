@@ -15,14 +15,14 @@ export function evaluateTelegramPublicCompliance(source: SourceRecord): { allowe
   if (url.protocol !== "https:" || url.username || url.password || !["t.me", "telegram.me"].includes(url.hostname.toLowerCase())) {
     return { allowed: false, reason: "public Telegram source must use an unauthenticated HTTPS t.me or telegram.me URL" };
   }
-  if (!/^\/(?:s\/)?[a-z0-9_]{4,}\/?$/i.test(url.pathname)) {
+  if (url.search || url.hash || !/^\/(?:s\/)?[a-z0-9_]{4,}\/?$/i.test(url.pathname)) {
     return { allowed: false, reason: "public Telegram source must identify one public channel without message, invite, or private paths" };
   }
 
   const metadata = source.metadata ?? {};
   for (const key of [
     "accountAutomation", "autoJoin", "joinGroups", "joinChannels", "privateChannel", "inviteLink",
-    "sessionString", "userSession", "phoneNumber", "password", "bypassAccessControls",
+    "sessionString", "userSession", "phoneNumber", "password", "botToken", "apiKey", "credentials", "bypassAccessControls",
     "requiresAuthentication", "authenticationRequired", "authRequired", "credentialRequired",
     "loginRequired", "captchaRequired"
   ]) {

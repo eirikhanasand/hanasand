@@ -82,24 +82,48 @@ describe("public Telegram canary collection", () => {
     const families = new Set(report.accepted.flatMap((item: any) => item.metadata.sourceFamilies));
 
     expect(report).toMatchObject({ valid: true, errors: [], duplicates: [] });
-    expect(report.accepted).toHaveLength(3);
+    expect(report.accepted).toHaveLength(7);
     expect(report.accepted.every((item: any) => evaluateSourceForCollection(item).allowed)).toBe(true);
-    expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "ru"]));
+    expect(report.accepted.map((item: any) => item.id)).toEqual(expect.arrayContaining([
+      "src_group_ib_telegram",
+      "src_kaspersky_ru_telegram",
+      "src_hackmanac_telegram",
+      "src_positive_technologies_telegram",
+      "src_i4c_cyberdost_telegram",
+      "src_ukraine_cyberpolice_telegram",
+      "src_ctt_report_hub_telegram"
+    ]));
+    expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "ru", "hi", "uk"]));
     expect([...families]).toEqual(expect.arrayContaining([
       "apt_research",
       "malware_research",
       "actor_announcement_reporting",
       "victim_publication_reporting",
+      "cert_government",
+      "cybercrime_reporting",
       "regional_language"
     ]));
-    expect(report.accepted.every((item: any) => item.metadata.collectionMode === "public_web_preview" && item.metadata.mediaPolicy === "metadata_only_no_download")).toBe(true);
+    for (const family of ["apt_research", "malware_research", "ransomware_research", "actor_announcement_reporting", "victim_publication_reporting", "cert_government", "regional_language"]) {
+      expect(report.accepted.filter((item: any) => item.metadata.sourceFamilies.includes(family)).length).toBeGreaterThanOrEqual(2);
+    }
+    expect(new Set(report.accepted.map((item: any) => item.catalog.canonicalId)).size).toBe(report.accepted.length);
+    expect(report.accepted.every((item: any) => item.accessMethod === "public_http" && item.governance.approvalState === "approved" && item.metadata.collectionMode === "public_web_preview" && item.metadata.mediaPolicy === "metadata_only_no_download" && item.metadata.productionCollection === true && item.metadata.publisherReference.startsWith("https://"))).toBe(true);
+    expect(report.accepted.map((item: any) => item.url)).not.toEqual(expect.arrayContaining([
+      "https://t.me/FalconFeedsio",
+      "https://t.me/noname05716",
+      "https://t.me/dailydarkweb",
+      "https://t.me/darkwebinformer_news",
+      "https://t.me/bizone_channel",
+      "https://t.me/kzcert",
+      "https://t.me/certkznews"
+    ]));
 
     const store = new InMemoryScraperStore();
     const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: bundle.generatedAt });
     const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: bundle.generatedAt });
 
-    expect(first).toMatchObject({ importedSourceCount: 3, updatedSourceCount: 0, activeSourceCount: 3, errors: [] });
-    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 3, activeSourceCount: 3, totalSourceCount: 3, errors: [] });
+    expect(first).toMatchObject({ importedSourceCount: 7, updatedSourceCount: 0, activeSourceCount: 7, errors: [] });
+    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 7, activeSourceCount: 7, totalSourceCount: 7, errors: [] });
   });
 
   test("backs off a public-preview source after a bounded upstream failure", async () => {
