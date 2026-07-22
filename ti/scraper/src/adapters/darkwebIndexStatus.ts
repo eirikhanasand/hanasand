@@ -1,5 +1,5 @@
 import type { DarkwebIndexRecord, DarkwebIndexStatusDto } from "./darkwebIndexTypes.ts";
-import { rowsFromRuntime } from "./darkwebIndexFixtures.ts";
+import { rowsFromRuntime } from "./darkwebIndexRuntime.ts";
 import { buyerRow, countBy, isSellable, noLeak } from "./darkwebIndexHelpers.ts";
 
 export function buildDarkwebIndexStatus(records: readonly DarkwebIndexRecord[] | { sources?: any[]; captures?: any[] } = []): DarkwebIndexStatusDto {

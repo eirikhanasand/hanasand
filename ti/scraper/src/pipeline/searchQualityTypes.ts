@@ -1,6 +1,6 @@
 import type { EvidenceStage, TiConfidenceCaveatCode } from "./intelligenceProfiles.ts";
-import type { ExtractionQualityNoteCode } from "./evaluation.ts";
 
+export type ExtractionQualityNoteCode = "low_evidence_count" | "alias_collision" | "stale_source" | "contradicted_attribution" | "weak_victim_claim" | "extracted_ttp_needs_review" | "source_family_bias";
 export type SearchQualityStatus = "ready" | "partial" | "weak-evidence" | "needs-review" | "contradicted" | "stale" | "source-biased" | "insufficient-capture";
 export type GraphReviewState = "accepted" | "proposed" | "needs-human-review" | "contradiction" | "stale" | "rejected" | "downgraded" | "superseded";
 export type SearchQualityApplyActionKind = "analyst_review" | "lower_confidence" | "request_more_capture_evidence" | "suppress_noisy_alias" | "mark_contradiction" | "expire_stale_claim" | "promote_quality_status";

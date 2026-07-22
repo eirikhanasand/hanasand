@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { buildActiveLearningCandidateQueueDto, buildAnalystFeedbackLoopDto, buildAnalystQualityReviewQueueDto } from "../pipeline/analystFeedback.ts";
-import { buildQualityRuntimeValueGatesDto, evaluateExtractionCalibration, evaluateExtractionFixtures } from "../pipeline/evaluation.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { SOURCE_SPECIFIC_EXTRACTOR_VERSION } from "../pipeline/sourceSpecificExtraction.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
@@ -15,16 +14,6 @@ describe("compact pipeline value path", () => {
     expect(result.indicators.some((indicator: any) => indicator.type === "cve")).toBe(true);
     expect(result.capture.metadata.title).toBe("APT29 report");
     expect(result.incident?.captureId).toBe(result.capture.id);
-  });
-
-  test("scores extraction fixtures and sellable row gates", () => {
-    const fixtures = [{ id: "apt29", rawText: "APT29 targeted Northwind Health with CVE-2026-1234", expected: { actor: "APT29", cve: "CVE-2026-1234" } }];
-    const report = evaluateExtractionFixtures(fixtures);
-    const calibration = evaluateExtractionCalibration(fixtures);
-    const gates = buildQualityRuntimeValueGatesDto({ rows: [{ actor: "APT29", victim: "Northwind Health" }] });
-    expect(report.fixtureCount).toBe(1);
-    expect(calibration.qualityNotes.length).toBeGreaterThan(0);
-    expect(gates.summary.sellableRows).toBe(1);
   });
 
   test("uses source-specific structured fields before the deterministic fallback", () => {

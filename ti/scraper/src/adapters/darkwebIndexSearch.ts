@@ -1,5 +1,5 @@
 import type { DarkwebIndexContractDto, DarkwebIndexNetwork, DarkwebIndexRecord, DarkwebIndexSearchDto } from "./darkwebIndexTypes.ts";
-import { rowsFromRuntime } from "./darkwebIndexFixtures.ts";
+import { rowsFromRuntime } from "./darkwebIndexRuntime.ts";
 import { buyerRow, noLeak } from "./darkwebIndexHelpers.ts";
 
 export function searchDarkwebIndex(input: { records?: readonly DarkwebIndexRecord[]; sources?: any[]; captures?: any[]; actorProfiles?: any[]; q?: string; query?: string; network?: DarkwebIndexNetwork | string; category?: string; legalTriage?: string; reviewState?: string; limit?: number; cursor?: string }): DarkwebIndexSearchDto {

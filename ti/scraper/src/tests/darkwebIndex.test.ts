@@ -1,23 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { buildDarkwebIndexStatus, darkwebIndexContract, darkwebIndexFixtureRecords, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
+import { buildDarkwebIndexStatus, darkwebIndexContract, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 
 describe("compact darkweb metadata index", () => {
-  test("keeps a searchable metadata-only index with sellable rows", () => {
-    const records = darkwebIndexFixtureRecords(120);
-    const status = buildDarkwebIndexStatus(records);
-    const search = searchDarkwebIndex({ records, q: "akira", network: "tor", limit: 10 });
-    expect(records).toHaveLength(120);
-    expect(status.metadataOnly).toBe(true);
-    expect(status.indexedRecordCount).toBe(120);
-    expect(status.monitoredSourceCount).toBe(120);
-    expect(status).not.toHaveProperty("targetRecordCount");
-    expect(status).not.toHaveProperty("indexedRecordEstimate");
-    expect(status.sellableRowCount).toBeGreaterThan(0);
-    expect(status.productHandoff.buyerSearchRows[0].safeLocatorHash).toStartWith("h_");
-    expect(search.rows.length).toBeGreaterThan(0);
-    expect(JSON.stringify(search.rows)).not.toMatch(/\\.onion|rawUrl|bodyHtml/);
-  });
-
   test("derives counts and search rows from persisted captures", () => {
     const sources = [{ id: "source-akira", type: "tor_metadata" }, { id: "source-public", type: "rss" }];
     const captures = [{
@@ -44,11 +28,15 @@ describe("compact darkweb metadata index", () => {
     const result = searchDarkwebIndex({ sources, captures, q: "akira", network: "tor" });
     const unrelated = searchDarkwebIndex({ sources, captures, q: "lockbit" });
 
+    expect(status.metadataOnly).toBe(true);
     expect(status.indexedRecordCount).toBe(1);
     expect(status.monitoredSourceCount).toBe(1);
+    expect(status.sellableRowCount).toBe(1);
     expect(status.latestRecordAt).toBe("2026-07-21T08:00:00.000Z");
+    expect(status.productHandoff.buyerSearchRows[0].safeLocatorHash).toStartWith("h_");
     expect(result.count).toBe(1);
     expect(result.rows[0]).toMatchObject({ title: "Akira Acme Industries", actorHints: ["Akira"], victimHints: ["Acme Industries"] });
+    expect(JSON.stringify(result.rows)).not.toMatch(/\\.onion|rawUrl|bodyHtml/);
     expect(unrelated).toMatchObject({ count: 0, rows: [] });
   });
 

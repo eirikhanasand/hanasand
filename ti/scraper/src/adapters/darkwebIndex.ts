@@ -1,7 +1,6 @@
 export {
-  darkwebIndexFixtureRecords,
   rowsFromRuntime
-} from "./darkwebIndexFixtures.ts";
+} from "./darkwebIndexRuntime.ts";
 export {
   buildDarkwebIndexStatus
 } from "./darkwebIndexStatus.ts";
