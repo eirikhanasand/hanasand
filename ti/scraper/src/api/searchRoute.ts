@@ -12,6 +12,7 @@ import { ACTOR_ALIAS_RECORDS } from "../pipeline/actorAliases.ts";
 import { termRegex } from "./searchTerm.ts";
 import { hasIncidentEvidence } from "../pipeline/incidentCandidate.ts";
 import { resolveMitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
+import { evidenceIndependence } from "../storage/memoryStore.ts";
 
 type SearchEntityType = "actor" | "domain" | "cve" | "indicator" | "organization" | "free_text";
 
@@ -121,7 +122,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     confidence: Math.min(assessment.confidence, 0.69)
   }));
   const missing = missingFields({ actor, victims, sectors, countries, ttps, records, rows });
-  const businessModel = businessModelAssessment(records.businessEntities);
+  const businessModel = businessModelAssessment(records.businessEntities, records.businessClaims, records.businessClaimEvidence);
   const attributionEvidence = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
   const attribution = attributionEvidence?.statement;
   const actorIntelligence = {
@@ -306,71 +307,227 @@ function searchRecords(store: any, tenantId: string | undefined, captureIds: Set
   const safeAggregate = (ids: string[] = []) => ids.some(safeCapture) && !ids.some((id) => restrictedCaptureIds.has(id));
   const allEntities = scoped("listExtractedEntities");
   const entities = allEntities.filter((record: any) => safeCapture(record.captureId));
-  const businessEntities = allEntities.filter((record: any) => captureIds.has(record.captureId) && isSafeBusinessMechanism(record));
+  const businessEntityCandidates = allEntities.filter((record: any) => captureIds.has(record.captureId) && isSafeBusinessMechanism(record));
+  const businessEntityIds = new Set(businessEntityCandidates.map((record: any) => record.id));
   const indicators = scoped("listIndicators").filter((record: any) => safeCapture(record.captureId));
   const incidents = scoped("listIncidents").filter((record: any) => safeCapture(record.captureId));
-  const claims = scoped("listIntelligenceClaims").filter((record: any) => safeAggregate(record.captureIds)).map((record: any) => {
+  const allClaims = scoped("listIntelligenceClaims");
+  const businessClaimEvidence = scoped("listClaimEvidence").filter((record: any) => captureIds.has(record.captureId) && record.subjectType === "entity" && businessEntityIds.has(record.subjectId));
+  const businessClaimIds = new Set(businessClaimEvidence.map((record: any) => record.claimId));
+  const businessEntitiesById = new Map<string, any>(businessEntityCandidates.map((record: any) => [record.id, record]));
+  const actorBusinessClaims = new Map(allClaims.filter((record: any) => businessClaimIds.has(record.id)).map((record: any) => {
+    const evidence = businessClaimEvidence.filter((item: any) => item.claimId === record.id);
+    const exactAssociation = evidence.some((item: any) => item.subjectId === record.subjectId);
+    const actorSourceIds = unique(evidence.map((item: any) => item.sourceId).filter(Boolean));
+    const actorCaptureIds = unique(evidence.map((item: any) => item.captureId).filter(Boolean));
+    const sourceIndependence = evidenceIndependence(store, actorCaptureIds);
+    const observedAt = evidence.map((item: any) => validIso(item.createdAt)).filter(Boolean);
+    const reviewState = exactAssociation ? record.reviewState : "needs_review";
+    return [record.id, {
+      ...record,
+      sourceIds: actorSourceIds,
+      captureIds: actorCaptureIds,
+      sourceCount: sourceIndependence.groupCount,
+      sourceIndependence,
+      evidenceCount: evidence.length,
+      confidence: Math.max(...evidence.map((item: any) => confidence(item.confidence)), 0),
+      evidenceStage: evidence.map((item: any) => item.evidenceStage).find(Boolean),
+      extractorVersion: evidence.map((item: any) => item.extractorVersion).find(Boolean) ?? record.extractorVersion,
+      reviewState,
+      corroborationState: exactAssociation && record.corroborationState === "contradicted" ? "contradicted" : sourceIndependence.groupCount > 1 ? "corroborated" : "single_source",
+      firstSeenAt: earliest(observedAt),
+      lastSeenAt: latest(observedAt),
+      reviewedBy: exactAssociation ? record.reviewedBy : undefined,
+      reviewedAt: exactAssociation ? record.reviewedAt : undefined,
+      uncertaintyReasons: exactAssociation ? record.uncertaintyReasons : unique(evidence.flatMap((item: any) => businessEntitiesById.get(item.subjectId)?.reviewReasons ?? [])),
+    }];
+  }));
+  const claims = allClaims.filter((record: any) => businessClaimIds.has(record.id) || safeAggregate(record.captureIds)).map((record: any) => {
+    const actorBusinessClaim = actorBusinessClaims.get(record.id);
+    if (actorBusinessClaim) return actorBusinessClaim;
     const visibleSourceIds = unique([...(record.sourceIds ?? []), record.sourceId].filter((sourceId) => sourceIds.has(sourceId)));
     return { ...record, sourceIds: visibleSourceIds, sourceCount: visibleSourceIds.length, corroborationState: record.corroborationState === "corroborated" && visibleSourceIds.length < 2 ? "single_source" : record.corroborationState };
   });
+  const businessClaims = [...actorBusinessClaims.values()];
+  const evidencedBusinessEntityIds = new Set(businessClaimEvidence.map((record: any) => record.subjectId));
+  const businessEntities = businessEntityCandidates.filter((record: any) => evidencedBusinessEntityIds.has(record.id));
   const profiles = scoped("listActorProfiles").filter((record: any) => safeAggregate(record.captureIds));
   const profileIds = new Set(profiles.map((profile: any) => profile.id));
   const aliases = scoped("listActorAliases").filter((record: any) => profileIds.has(record.actorProfileId));
   const validations = scoped("listValidationRecords").filter((record: any) => captureIds.has(record.captureId) || incidents.some((incident: any) => incident.id === record.incidentId));
-  return { entities, businessEntities, indicators, incidents, claims, profiles, aliases, validations, sourceCount: sourceIds.size };
+  return { entities, businessEntities, businessClaims, businessClaimEvidence, indicators, incidents, claims, profiles, aliases, validations, sourceCount: sourceIds.size };
 }
 
-const SAFE_BUSINESS_MECHANISMS: Record<string, Set<string>> = {
-  publication_strategy: new Set(["dedicated leak-site publication", "public victim listing", "staged publication status", "public data release link"]),
-  publicity_tactic: new Set(["public victim listing infrastructure", "public victim naming"]),
-  victim_pressure_tactic: new Set(["countdown to publication"]),
-};
+const SOURCE_BACKED_BUSINESS_TYPES = new Set([
+  "extortion_model", "extortion_type", "advertised_product", "advertised_data", "dataset",
+  "pricing_claim", "payment_claim", "revenue_claim", "revenue_share_claim", "publication_strategy", "publicity_tactic",
+  "publicity_event", "victim_pressure_tactic", "communication_channel", "buyer_seller_communication",
+  "intermediary_communication", "monetization_path", "profitability_signal",
+]);
 
 function isSafeBusinessMechanism(entity: any) {
-  const values = SAFE_BUSINESS_MECHANISMS[entity.type];
-  return Boolean(values?.has(String(entity.normalizedValue ?? entity.value ?? "").trim().toLowerCase()));
+  if (!SOURCE_BACKED_BUSINESS_TYPES.has(entity.type) || entity.extractionMethod !== "source_specific" || entity.assertionKind === "inferred") return false;
+  const fieldEcho = `${safeText(entity.sourceField, 80)}: ${safeText(entity.value, 160)}`.trim().toLowerCase();
+  return Array.isArray(entity.provenance) && entity.provenance.some((record: any) => {
+    const excerpt = safeText(record?.evidenceText, 240).toLowerCase();
+    return excerpt && excerpt !== fieldEcho;
+  });
 }
 
-function businessModelAssessment(entities: any[]) {
+function businessModelAssessment(entities: any[], claims: any[], claimEvidence: any[]) {
+  const claimsById = new Map(claims.map((claim: any) => [claim.id, claim]));
   const observations = entities.reduce((items: any[], entity) => {
     const value = safeText(entity.value, 160);
+    if (!value) return items;
+    const evidenceLinks = claimEvidence.filter((record: any) => record.subjectId === entity.id && record.captureId === entity.captureId);
+    const linkedClaims = evidenceLinks.map((record: any) => claimsById.get(record.claimId)).filter(Boolean) as any[];
+    const claim = linkedClaims[0];
+    const provenance = (Array.isArray(entity.provenance) ? entity.provenance : []).map((record: any) => ({
+      sourceId: safeText(record.sourceId ?? entity.sourceId, 160),
+      captureId: safeText(record.captureId ?? entity.captureId, 160),
+      url: safeUrl(record.url),
+      collectedAt: validIso(record.collectedAt),
+      excerpt: safeText(record.evidenceText, 240),
+    })).filter((record: any) => record.sourceId && record.captureId && record.excerpt);
+    const reviewReasons = unique([
+      ...(entity.reviewReasons ?? []).map((reason: unknown) => safeText(reason, 200)),
+      ...(claim?.uncertaintyReasons ?? []).map((reason: unknown) => safeText(reason, 200)),
+    ].filter(Boolean));
+    const sourceIds = unique([
+      ...provenance.map((record: any) => record.sourceId),
+      ...evidenceLinks.map((record: any) => record.sourceId),
+      entity.sourceId,
+    ].filter(Boolean));
+    const captureIds = unique([
+      ...provenance.map((record: any) => record.captureId),
+      ...evidenceLinks.map((record: any) => record.captureId),
+      entity.captureId,
+    ].filter(Boolean));
+    const observedAt = unique([
+      ...provenance.map((record: any) => record.collectedAt),
+      ...evidenceLinks.map((record: any) => validIso(record.createdAt)),
+    ].filter(Boolean));
+    const reviewState = claim?.reviewState ?? (reviewReasons.length ? "needs_review" : "unreviewed");
+    const observation = {
+      type: entity.type,
+      value,
+      assertionKind: entity.assertionKind ?? "observed",
+      evidenceKind: evidenceKind(entity.assertionKind),
+      confidence: confidence(claim?.confidence ?? entity.confidence),
+      sourceIds: claim?.sourceIds ?? sourceIds,
+      captureIds: claim?.captureIds ?? captureIds,
+      sourceCount: claim?.sourceCount ?? sourceIds.length,
+      evidenceCount: claim?.evidenceCount ?? provenance.length,
+      claimIds: claim ? [claim.id] : unique(evidenceLinks.map((record: any) => record.claimId).filter(Boolean)),
+      reviewState,
+      reviewReasons,
+      corroborationState: claim?.corroborationState ?? (sourceIds.length > 1 ? "corroborated" : "single_source"),
+      firstSeenAt: claim?.firstSeenAt ?? earliest(observedAt),
+      lastSeenAt: claim?.lastSeenAt ?? latest(observedAt),
+      evidenceStages: unique(evidenceLinks.map((record: any) => record.evidenceStage ?? claim?.evidenceStage).filter(Boolean)),
+      extractionMethods: unique([entity.extractionMethod, claim?.extractionMethod].filter(Boolean)),
+      extractorVersions: unique([entity.extractorVersion, ...evidenceLinks.map((record: any) => record.extractorVersion)].filter(Boolean)),
+      evidence: provenance,
+    };
     const existing = items.find((item) => item.type === entity.type && item.value.toLowerCase() === value.toLowerCase());
     if (existing) {
-      existing.sourceIds = unique([...existing.sourceIds, entity.sourceId]);
-      existing.captureIds = unique([...existing.captureIds, entity.captureId]);
-      existing.confidence = Math.max(existing.confidence, confidence(entity.confidence));
-      existing.reviewReasons = unique([...existing.reviewReasons, ...(entity.reviewReasons ?? [])]);
-      existing.reviewState = existing.reviewReasons.length ? "needs_review" : "unreviewed";
+      existing.sourceIds = unique([...existing.sourceIds, ...observation.sourceIds]);
+      existing.captureIds = unique([...existing.captureIds, ...observation.captureIds]);
+      existing.claimIds = unique([...existing.claimIds, ...observation.claimIds]);
+      existing.confidence = Math.max(existing.confidence, observation.confidence);
+      existing.reviewReasons = unique([...existing.reviewReasons, ...observation.reviewReasons]);
+      existing.sourceCount = Math.max(existing.sourceCount, observation.sourceCount);
+      existing.evidenceCount = Math.max(existing.evidenceCount, observation.evidenceCount);
+      existing.firstSeenAt = earliest([existing.firstSeenAt, observation.firstSeenAt]);
+      existing.lastSeenAt = latest([existing.lastSeenAt, observation.lastSeenAt]);
+      existing.evidenceStages = unique([...existing.evidenceStages, ...observation.evidenceStages]);
+      existing.extractionMethods = unique([...existing.extractionMethods, ...observation.extractionMethods]);
+      existing.extractorVersions = unique([...existing.extractorVersions, ...observation.extractorVersions]);
+      existing.evidence = uniqueBy([...existing.evidence, ...observation.evidence], (record: any) => `${record.sourceId}:${record.captureId}:${record.excerpt}`);
       return items;
     }
-    items.push({ type: entity.type, value, assertionKind: entity.assertionKind ?? "observed", confidence: confidence(entity.confidence), sourceIds: unique([entity.sourceId]), captureIds: unique([entity.captureId]), reviewState: entity.reviewReasons?.length ? "needs_review" : "unreviewed", reviewReasons: unique(entity.reviewReasons ?? []) });
+    items.push(observation);
     return items;
   }, []);
-  const byType = (type: string) => observations.filter((item) => item.type === type).map(({ type: _type, ...item }) => item);
+  const byType = (...types: string[]) => observations.filter((item) => types.includes(item.type)).map(({ type: _type, ...item }) => item);
+  const extortionModels = byType("extortion_model", "extortion_type");
+  const advertisedProducts = byType("advertised_product");
+  const advertisedData = byType("advertised_data", "dataset");
+  const pricingClaims = byType("pricing_claim");
+  const paymentClaims = byType("payment_claim");
+  const revenueClaims = byType("revenue_claim");
+  const revenueShareClaims = byType("revenue_share_claim");
   const publicationStrategies = byType("publication_strategy");
   const publicityTactics = byType("publicity_tactic");
+  const publicityEvents = byType("publicity_event");
   const pressureTactics = byType("victim_pressure_tactic");
   const communicationChannels = byType("communication_channel");
+  const buyerSellerCommunications = byType("buyer_seller_communication");
+  const intermediaryCommunications = byType("intermediary_communication");
+  const monetizationPaths = byType("monetization_path");
+  const profitabilitySignals = byType("profitability_signal");
   return {
-    schemaVersion: "ti.actor.business_model.v1",
+    schemaVersion: "ti.actor.business_model.v2",
     evidenceState: observations.length ? "observed_mechanisms" : "not_observed",
+    extortionModels,
+    advertisedProducts,
+    advertisedData,
+    pricingClaims,
+    paymentClaims,
+    revenueClaims,
+    revenueShareClaims,
     publicationStrategies,
     publicityTactics,
+    publicityEvents,
     pressureTactics,
     communicationChannels,
-    buyerSellerCommunications: [],
-    intermediaryCommunications: [],
-    monetizationPaths: [],
-    profitabilitySignals: [],
+    buyerSellerCommunications,
+    intermediaryCommunications,
+    monetizationPaths,
+    profitabilitySignals,
+    profitabilityConclusion: {
+      status: profitabilitySignals.length ? "profitability_reported" : revenueClaims.length ? "revenue_reported" : "unknown",
+      summary: profitabilitySignals.length
+        ? "A third-party profitability statement was captured, but realized revenue and profit remain unverified."
+        : revenueClaims.length
+          ? "A third-party revenue or payment outcome was captured, but costs and realized profit remain unknown."
+        : "Profitability is unknown because no captured financial evidence establishes revenue or profit.",
+      claimIds: unique([...profitabilitySignals, ...revenueClaims].flatMap((row: any) => row.claimIds)),
+      sourceIds: unique([...profitabilitySignals, ...revenueClaims].flatMap((row: any) => row.sourceIds)),
+      captureIds: unique([...profitabilitySignals, ...revenueClaims].flatMap((row: any) => row.captureIds)),
+    },
     missingEvidence: [
-      "buyer and seller conversations",
-      "intermediary conversations",
-      "pricing or ransom demands",
-      "payments or conversion",
-      "realized revenue or profit",
+      ...(!buyerSellerCommunications.length ? ["buyer and seller conversations"] : []),
+      ...(!intermediaryCommunications.length ? ["intermediary conversations"] : []),
+      ...(!pricingClaims.length ? ["pricing or ransom demands"] : []),
+      ...(!paymentClaims.length ? ["payment demands or methods"] : []),
+      "independently verified revenue",
+      "independently verified profitability",
     ],
-    evidenceBoundary: "Observed publication, pressure, and channel mechanisms do not establish counterparties, negotiations, prices, payments, conversion, revenue, or profit.",
+    evidenceBoundary: "Public observations and reports can describe operating mechanisms, demands, or communication channels. They do not prove private conversations, completed payments, conversion, revenue, or profit.",
   };
+}
+
+function evidenceKind(assertionKind: unknown) {
+  if (assertionKind === "source_claim") return "actor_claim";
+  if (assertionKind === "third_party_report") return "third_party_report";
+  if (assertionKind === "inferred") return "analytical_inference";
+  return "observed";
+}
+
+function validIso(value: unknown): string | undefined {
+  const time = Date.parse(String(value ?? ""));
+  return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
+}
+
+function safeUrl(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const parsed = new URL(value);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function assess(rows: any[], records: ReturnType<typeof searchRecords>) {

@@ -450,7 +450,7 @@ function claimFromAnalystEntry(entry: any, previous?: any): any {
   };
 }
 
-function evidenceIndependence(store: any, captureIds: string[]) {
+export function evidenceIndependence(store: any, captureIds: string[]) {
   const evidence = captureIds.map((id) => store.getCapture(id)).filter(Boolean).map((capture: any) => ({
     publisher: publisherKey(store.getSource?.(capture.sourceId), capture.sourceId),
     content: capture.normalizedTextHash || capture.contentHash

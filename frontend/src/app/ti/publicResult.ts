@@ -163,14 +163,29 @@ function sanitizeActorIntelligence(actorIntelligence?: TiActorIntelligenceContra
         missingFields: actorIntelligence.missingFields?.map(publicTiText),
         businessModel: actorIntelligence.businessModel ? {
             ...actorIntelligence.businessModel,
+            extortionModels: sanitizeBusinessObservations(actorIntelligence.businessModel.extortionModels),
+            advertisedProducts: sanitizeBusinessObservations(actorIntelligence.businessModel.advertisedProducts),
+            advertisedData: sanitizeBusinessObservations(actorIntelligence.businessModel.advertisedData),
+            pricingClaims: sanitizeBusinessObservations(actorIntelligence.businessModel.pricingClaims),
+            paymentClaims: sanitizeBusinessObservations(actorIntelligence.businessModel.paymentClaims),
+            revenueClaims: sanitizeBusinessObservations(actorIntelligence.businessModel.revenueClaims),
+            revenueShareClaims: sanitizeBusinessObservations(actorIntelligence.businessModel.revenueShareClaims),
             publicationStrategies: sanitizeBusinessObservations(actorIntelligence.businessModel.publicationStrategies),
             publicityTactics: sanitizeBusinessObservations(actorIntelligence.businessModel.publicityTactics),
+            publicityEvents: sanitizeBusinessObservations(actorIntelligence.businessModel.publicityEvents),
             pressureTactics: sanitizeBusinessObservations(actorIntelligence.businessModel.pressureTactics),
             communicationChannels: sanitizeBusinessObservations(actorIntelligence.businessModel.communicationChannels),
             buyerSellerCommunications: sanitizeBusinessObservations(actorIntelligence.businessModel.buyerSellerCommunications),
             intermediaryCommunications: sanitizeBusinessObservations(actorIntelligence.businessModel.intermediaryCommunications),
             monetizationPaths: sanitizeBusinessObservations(actorIntelligence.businessModel.monetizationPaths),
             profitabilitySignals: sanitizeBusinessObservations(actorIntelligence.businessModel.profitabilitySignals),
+            profitabilityConclusion: actorIntelligence.businessModel.profitabilityConclusion ? {
+                status: actorIntelligence.businessModel.profitabilityConclusion.status,
+                summary: publicTiText(actorIntelligence.businessModel.profitabilityConclusion.summary),
+                claimIds: actorIntelligence.businessModel.profitabilityConclusion.claimIds,
+                sourceIds: actorIntelligence.businessModel.profitabilityConclusion.sourceIds,
+                captureIds: actorIntelligence.businessModel.profitabilityConclusion.captureIds,
+            } : undefined,
             missingEvidence: actorIntelligence.businessModel.missingEvidence.map(publicTiText),
             evidenceBoundary: publicTiText(actorIntelligence.businessModel.evidenceBoundary),
         } : undefined,
@@ -197,12 +212,33 @@ function sanitizeActorIntelligence(actorIntelligence?: TiActorIntelligenceContra
     }
 }
 
-function sanitizeBusinessObservations(rows: NonNullable<TiActorIntelligenceContract['businessModel']>['publicationStrategies']) {
-    return rows.map(row => ({
-        ...row,
+function sanitizeBusinessObservations(rows: NonNullable<TiActorIntelligenceContract['businessModel']>['publicationStrategies'] | undefined) {
+    return rows?.map(row => ({
         value: publicTiText(row.value),
+        assertionKind: row.assertionKind,
+        evidenceKind: row.evidenceKind,
+        confidence: row.confidence,
+        sourceIds: row.sourceIds,
+        captureIds: row.captureIds,
+        claimIds: row.claimIds,
+        reviewState: row.reviewState,
         reviewReasons: row.reviewReasons.map(publicTiText),
-    }))
+        corroborationState: row.corroborationState,
+        sourceCount: row.sourceCount,
+        evidenceCount: row.evidenceCount,
+        firstSeenAt: row.firstSeenAt,
+        lastSeenAt: row.lastSeenAt,
+        evidenceStages: row.evidenceStages,
+        extractionMethods: row.extractionMethods,
+        extractorVersions: row.extractorVersions,
+        evidence: row.evidence?.map(evidence => ({
+            sourceId: evidence.sourceId,
+            captureId: evidence.captureId,
+            url: evidence.url,
+            collectedAt: evidence.collectedAt,
+            excerpt: publicTiText(evidence.excerpt),
+        })),
+    })) ?? []
 }
 
 function sanitizeActionability(actionability?: TiActionabilityContract): TiActionabilityContract | undefined {

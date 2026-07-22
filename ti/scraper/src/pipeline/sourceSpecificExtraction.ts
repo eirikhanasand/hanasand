@@ -2,8 +2,9 @@ import type { CollectedItem, ExtractedEntity, ExtractionProvenance } from "../ty
 import { normalizeWhitespace } from "../utils.ts";
 import type { ExtractionContext } from "./extractors.ts";
 import { resolveMitreActorIdentity, type ActorIdentityRecord } from "./mitreActorCatalog.ts";
+import { extractActorBusinessEvidence } from "./actorBusinessEvidence.ts";
 
-export const SOURCE_SPECIFIC_EXTRACTOR_VERSION = "ti-source-specific-extractor-v2";
+export const SOURCE_SPECIFIC_EXTRACTOR_VERSION = "ti-source-specific-extractor-v3";
 
 export function extractSourceSpecificEntities(item: CollectedItem, context: ExtractionContext, actorIdentities?: ActorIdentityRecord[]): ExtractedEntity[] {
   const profile = item.metadata?.extractionProfile;
@@ -35,11 +36,26 @@ function ransomwareGroupEntities(item: CollectedItem, context: ExtractionContext
   const actor = fieldEntity("ransomware_family", fields.actorName, 0.88, "actorName", item, context, "observed", []);
   if (actor) (actor as any).aliases = Array.isArray(fields.aliases) ? fields.aliases.map(meaningful).filter(Boolean) : [];
   const has = (type: string) => channels.some((channel: string) => channel.toLowerCase() === type.toLowerCase());
+  const description = meaningful(fields.description) ?? "", descriptionOffset = Math.max(0, item.rawText.indexOf(description));
+  const businessEvidence = extractActorBusinessEvidence(description).map((finding) => entity(
+    finding.type,
+    finding.value,
+    finding.confidence,
+    "description",
+    item,
+    context,
+    finding.assertionKind,
+    finding.reviewReasons,
+    descriptionOffset + finding.startOffset,
+    finding.evidenceText,
+    finding.matchedLength
+  ));
   return compact([
     actor,
     ...channels.map((channel: string) => fieldEntity("channel_type", channel, 0.9, "channelTypes", item, context, "observed", [])),
     fieldEntity("publication_strategy", has("DLS") ? "dedicated leak-site publication" : undefined, 0.9, "channelTypes", item, context, "observed", []),
-    fieldEntity("publicity_tactic", has("DLS") ? "public victim listing infrastructure" : undefined, 0.86, "channelTypes", item, context, "observed", [])
+    fieldEntity("publicity_tactic", has("DLS") ? "public victim listing infrastructure" : undefined, 0.86, "channelTypes", item, context, "observed", []),
+    ...businessEvidence
   ]);
 }
 
@@ -60,6 +76,7 @@ function victimBlogEntities(item: CollectedItem, context: ExtractionContext): Ex
     fieldEntity("publication_strategy", fields.publicationStrategy ?? "public victim listing", fields.publicationStrategy ? 0.8 : 0.95, "publicationStrategy", item, context, fields.publicationStrategy ? "source_claim" : "observed", fields.publicationStrategy ? ["unverified threat-actor claim"] : []),
     signalEntity("publication_strategy", "staged publication status", 0.86, "summary", summary, /\b(?:PENDING|RELEASED|Publishes? after)\b/, item, context),
     signalEntity("publication_strategy", "public data release link", 0.9, "summary", summary, /\bDownload\s*:/i, item, context),
+    signalEntity("publicity_event", "public victim listing", 0.88, "summary", summary, /\b(?:has just published|published) (?:a )?new victim\b/i, item, context, ["third-party publication report requires analyst review"], "third_party_report"),
     fieldEntity("channel_type", fields.channelType, 0.95, "channel", item, context, "observed", []),
     fieldEntity("victim_pressure_tactic", fields.victimPressureTactic, 0.75, "victimPressureTactic", item, context, "source_claim", ["unverified threat-actor claim"]),
     countdown,
@@ -102,14 +119,14 @@ function fieldEntity(type: string, value: unknown, confidence: number, field: st
   return entity(type, normalized, confidence, field, item, context, assertionKind, reviewReasons, item.rawText.toLowerCase().indexOf(normalized.toLowerCase()));
 }
 
-function signalEntity(type: string, value: string, confidence: number, field: string, text: string, pattern: RegExp, item: CollectedItem, context: ExtractionContext, reviewReasons: string[] = []): ExtractedEntity | undefined {
+function signalEntity(type: string, value: string, confidence: number, field: string, text: string, pattern: RegExp, item: CollectedItem, context: ExtractionContext, reviewReasons: string[] = [], assertionKind = "observed"): ExtractedEntity | undefined {
   const match = pattern.exec(text);
   if (!match) return undefined;
   const start = Math.max(0, match.index - 48), evidence = normalizeWhitespace(text.slice(start, match.index + match[0].length + 96)).slice(0, 240);
-  return entity(type, value, confidence, field, item, context, "observed", reviewReasons, Math.max(0, item.rawText.indexOf(match[0])), evidence);
+  return entity(type, value, confidence, field, item, context, assertionKind, reviewReasons, Math.max(0, item.rawText.indexOf(match[0])), evidence, match[0].length);
 }
 
-function entity(type: string, value: string, confidence: number, field: string, item: CollectedItem, context: ExtractionContext, assertionKind: string, reviewReasons: string[], offset: number, evidenceText = `${field}: ${value}`): ExtractedEntity {
+function entity(type: string, value: string, confidence: number, field: string, item: CollectedItem, context: ExtractionContext, assertionKind: string, reviewReasons: string[], offset: number, evidenceText = `${field}: ${value}`, evidenceLength = value.length): ExtractedEntity {
   const startOffset = Math.max(0, offset);
   return {
     type,
@@ -123,7 +140,7 @@ function entity(type: string, value: string, confidence: number, field: string, 
     sourceField: field,
     assertionKind,
     reviewReasons,
-    provenance: [provenance(context, startOffset, startOffset + value.length, evidenceText)]
+    provenance: [provenance(context, startOffset, startOffset + evidenceLength, evidenceText)]
   } as ExtractedEntity;
 }
 

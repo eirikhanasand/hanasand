@@ -15,6 +15,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { SyntheticEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
+import { ActorBusinessModelEvidence } from './businessModelEvidence'
 
 const TI_WORKBENCH_PREVIEW_ROWS = 1
 const TI_EVIDENCE_QUEUE_PREVIEW_ROWS = 2
@@ -78,6 +79,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
             .then((next) => {
                 if (requestSeqRef.current !== requestSeq || activeQueryRef.current !== cleanKey) return
                 if (next) setResult(next)
+                else setError('Threat intelligence search is temporarily unavailable.')
             })
             .finally(() => {
                 if (requestSeqRef.current === requestSeq) setBusy(false)
@@ -91,7 +93,10 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         const timer = window.setTimeout(async () => {
             const next = await searchThreatIntel(expectedQuery)
             if (next && activeQueryRef.current === expectedKey) {
+                setError('')
                 setResult(next)
+            } else if (activeQueryRef.current === expectedKey) {
+                setError('Threat intelligence search is temporarily unavailable.')
             }
         }, Math.max(3, result.refreshAfterSeconds) * 1000)
 
@@ -117,7 +122,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
             const next = await searchThreatIntel(clean)
             if (requestSeqRef.current !== requestSeq || activeQueryRef.current !== cleanKey) return
             if (!next) {
-                setError('No intelligence is available for that search yet.')
+                setError('Threat intelligence search is temporarily unavailable.')
                 return
             }
             setResult(next)
@@ -175,20 +180,20 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                 {error ? <p className='text-sm text-ui-danger'>{error}</p> : null}
             </form>
 
-            {visible ? <Results result={visible} /> : <EmptyState />}
+            {visible ? <Results result={visible} error={error} /> : <EmptyState />}
         </div>
     )
 }
 
-function Results({ result }: { result: TiSearchResponse }) {
+function Results({ result, error }: { result: TiSearchResponse; error: string }) {
     const catalogIdentity = result.actorIdentity
     if (catalogIdentity?.catalogMatched && !catalogIdentity.activityEvidenceAvailable) {
-        return <CatalogOnlyActorResult result={result} identity={catalogIdentity} />
+        return <CatalogOnlyActorResult result={result} identity={catalogIdentity} error={error} />
     }
-    return <EvidenceResults result={result} />
+    return <EvidenceResults result={result} error={error} />
 }
 
-function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse, identity: NonNullable<TiSearchResponse['actorIdentity']> }) {
+function CatalogOnlyActorResult({ result, identity, error }: { result: TiSearchResponse; identity: NonNullable<TiSearchResponse['actorIdentity']>; error: string }) {
     const candidate = !identity.ambiguous && identity.candidates.length === 1 ? identity.candidates[0] : undefined
     const title = candidate?.canonicalName ?? humanizeSlug(result.query)
     const source = candidate?.catalogId === 'mitre-attack-enterprise' ? 'MITRE Enterprise ATT&CK' : candidate?.catalogId === 'ransomware-live-current-operations' ? 'Ransomware.live' : 'the actor catalog'
@@ -201,11 +206,12 @@ function CatalogOnlyActorResult({ result, identity }: { result: TiSearchResponse
                 </p>
             </div>
             <ActorIdentityPanel identity={identity} />
+            <ActorBusinessModelEvidence model={result.actorIntelligence?.businessModel} sources={result.sources} state={error ? 'error' : 'ready'} error={error} />
         </section>
     )
 }
 
-function EvidenceResults({ result }: { result: TiSearchResponse }) {
+function EvidenceResults({ result, error }: { result: TiSearchResponse; error: string }) {
     const sourceUrlById = useMemo(() => new Map(result.sources.map(source => [source.id, source.url || linkFromText(source.provenance)])), [result.sources])
     const sources = result.sources
     const actorQuery = result.queryKind === 'actor'
@@ -351,6 +357,15 @@ function EvidenceResults({ result }: { result: TiSearchResponse }) {
                 {catalogIdentity?.catalogMatched ? <ActorIdentityPanel identity={catalogIdentity} /> : null}
 
                 <EvidenceBoundaryStrip result={result} />
+
+                {actorQuery || result.status === 'searching' || result.status === 'queued' || error ? (
+                    <ActorBusinessModelEvidence
+                        model={result.actorIntelligence?.businessModel}
+                        sources={result.sources}
+                        state={error ? 'error' : result.status === 'searching' || result.status === 'queued' ? 'loading' : 'ready'}
+                        error={error}
+                    />
+                ) : null}
 
                 <section id='ti-activity' data-ti-activity='true' className='grid gap-3 border-t border-ui-border pt-4 dark:border-ui-border'>
                     <div className='flex flex-wrap items-end justify-between gap-3'>
@@ -1979,113 +1994,6 @@ function SourceCoverageWorkbench({
                     )}
                 </div>
             </div>
-        </section>
-    )
-}
-
-function ActorIntelligenceDossier({ actor, actionability, result, artifacts, selectedArtifactId, onSelectArtifact }: {
-    actor: TiActorIntelligenceProfile
-    actionability: TiActionabilityModel
-    result: TiSearchResponse
-    artifacts: ActorArtifact[]
-    selectedArtifactId?: string
-    onSelectArtifact: (artifactId: string) => void
-}) {
-    const artifactByLookup = new Map(artifacts.map(artifact => [`${artifact.kind}:${artifact.label.toLowerCase()}`, artifact]))
-    return (
-        <section data-ti-actor-dossier='true' className='w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-4 dark:border-ui-border dark:bg-ui-panel'>
-            <div className='flex flex-wrap items-start justify-between gap-3'>
-                <div className='w-full min-w-0 lg:flex-1 lg:basis-64'>
-                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Overview</p>
-                    <h2 className='mt-1 wrap-break-word text-xl font-semibold text-ui-text dark:text-ui-text'>{actor.actorClass}</h2>
-                    <p className='mt-2 text-sm leading-6 text-ui-muted dark:text-ui-muted'>{actor.attribution}</p>
-                </div>
-                <div className='grid w-full min-w-0 basis-full grid-cols-2 gap-2 text-center text-xs sm:min-w-52 md:grid-cols-4 lg:w-auto lg:basis-auto'>
-                    <EvidenceMetric label='First seen' value={actor.firstSeen} />
-                    <EvidenceMetric label='Last seen' value={actor.lastSeen ? formatDate(actor.lastSeen) : result.lastSeen ? formatDate(result.lastSeen) : 'Observation date unavailable'} />
-                    <EvidenceMetric label='Evidence strength' value={sourceBasisLabel(actor.confidence)} />
-                    <EvidenceMetric label='Freshness' value={actor.freshness.stale ? 'Needs refresh' : 'Current'} />
-                </div>
-            </div>
-
-            <FreshnessGatePanel actor={actor} actionability={actionability} query={result.query} />
-
-            <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
-                <DossierList title='Motivation' values={actor.motivation} />
-                <DossierList title='Tooling' values={actor.malwareTools} artifactKind='tool' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
-                <DossierList title='Campaigns' values={actor.campaigns} artifactKind='campaign' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
-                <DossierList title='Indicators' values={actor.indicators} />
-                <DossierList title='Targets' description='Industries, victim types, or regions mentioned in the linked source evidence.' values={actor.targetSectors} />
-                <DossierList title='Geographies' values={actor.geographies} artifactKind='country' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
-                <DossierList title='Infrastructure' values={actor.infrastructure} artifactKind='infrastructure' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
-                <TechniqueCoveragePanel techniques={actor.techniqueCoverage} />
-                <CampaignTimelinePanel timeline={actor.campaignTimeline} />
-            </div>
-
-            <BusinessModelPanel model={result.actorIntelligence?.businessModel} />
-
-            <div className='mt-4 grid gap-3 xl:grid-cols-3'>
-                <EvidencePanel title='Why this profile is trusted'>
-                    {actor.confidenceReasoning.slice(0, TI_DOSSIER_REASON_ROWS).map(item => <li key={item}>{item}</li>)}
-                    {actor.confidenceReasoning.length > TI_DOSSIER_REASON_ROWS ? <li className='text-ui-muted'>+{actor.confidenceReasoning.length - TI_DOSSIER_REASON_ROWS} more reasons in source workbench</li> : null}
-                </EvidencePanel>
-                <SourceCoveragePanel coverage={actor.sourceCoverage} />
-                <StructuredProvenancePanel rows={actor.provenanceRows} actor={actor} actionability={actionability} query={result.query} />
-            </div>
-        </section>
-    )
-}
-
-function BusinessModelPanel({ model }: { model?: NonNullable<TiSearchResponse['actorIntelligence']>['businessModel'] }) {
-    if (!model) return null
-    const observed = [
-        { label: 'Publication strategy', rows: model.publicationStrategies },
-        { label: 'Publicity tactic', rows: model.publicityTactics },
-        { label: 'Pressure tactic', rows: model.pressureTactics },
-        { label: 'Communication channel', rows: model.communicationChannels },
-    ].filter(group => group.rows.length)
-    const notObserved = [
-        { label: 'Buyer and seller communication', rows: model.buyerSellerCommunications },
-        { label: 'Intermediary communication', rows: model.intermediaryCommunications },
-        { label: 'Pricing and monetization', rows: model.monetizationPaths },
-        { label: 'Revenue and profitability', rows: model.profitabilitySignals },
-    ].filter(group => !group.rows.length)
-
-    return (
-        <section data-ti-business-model='true' className='mt-4 min-w-0 border-t border-ui-border pt-4 dark:border-ui-border'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-ui-primary dark:text-ui-primary'>Business model evidence</p>
-                    <h3 className='mt-1 text-sm font-semibold text-ui-text dark:text-ui-text'>Observed operating mechanisms</h3>
-                </div>
-                <span className='text-xs font-semibold text-ui-muted dark:text-ui-muted'>
-                    {observed.length ? `${observed.reduce((count, group) => count + group.rows.length, 0)} observed` : 'None observed'}
-                </span>
-            </div>
-
-            <div className='mt-3 grid min-w-0 gap-x-6 gap-y-3 md:grid-cols-2'>
-                {observed.map(group => (
-                    <div key={group.label} className='min-w-0 border-t border-ui-border pt-2 dark:border-ui-border'>
-                        <p className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>{group.label}</p>
-                        <ul className='mt-1 grid gap-1.5'>
-                            {group.rows.map(row => (
-                                <li key={`${group.label}:${row.value}`} className='min-w-0'>
-                                    <p className='wrap-break-word text-sm font-medium text-ui-text dark:text-ui-text'>{row.value}</p>
-                                    <p className='mt-0.5 text-[11px] text-ui-muted dark:text-ui-muted'>{row.sourceIds.length} source(s), {row.captureIds.length} capture(s), {row.reviewState.replaceAll('_', ' ')}</p>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                ))}
-                {notObserved.map(group => (
-                    <div key={group.label} className='min-w-0 border-t border-ui-border pt-2 dark:border-ui-border'>
-                        <p className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>{group.label}</p>
-                        <p className='mt-1 text-sm font-medium text-ui-text dark:text-ui-text'>Not observed</p>
-                    </div>
-                ))}
-            </div>
-
-            <p className='mt-3 wrap-break-word border-l-2 border-ui-warning pl-3 text-xs leading-5 text-ui-muted dark:text-ui-muted'>{model.evidenceBoundary}</p>
         </section>
     )
 }
@@ -6253,6 +6161,16 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
                 <p className='mt-3 wrap-break-word border-t border-ui-border pt-3 text-xs leading-5 text-ui-muted dark:border-ui-border dark:text-ui-muted'>
                     Sources used: {actor.provenanceRows.slice(0, 4).map(row => `${row.sourceName}${row.reportDate ? ` (${formatDate(row.reportDate)})` : ''}`).join(' · ')}
                 </p>
+            ) : null}
+            {actor.confidenceReasoning.length ? (
+                <div className='mt-3 border-t border-ui-border pt-3 dark:border-ui-border'>
+                    <p className='text-[11px] font-semibold uppercase text-ui-muted dark:text-ui-muted'>Confidence basis</p>
+                    <ul className='mt-1 grid list-disc gap-1 pl-4 text-xs leading-5 text-ui-muted dark:text-ui-muted'>
+                        {actor.confidenceReasoning.slice(0, TI_DOSSIER_REASON_ROWS).map(item => (
+                            <li key={item} className='wrap-break-word'>{displayRequirementText(item)}</li>
+                        ))}
+                    </ul>
+                </div>
             ) : null}
         </section>
     )

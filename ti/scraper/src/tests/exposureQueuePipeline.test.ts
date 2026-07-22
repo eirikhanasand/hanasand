@@ -197,7 +197,12 @@ describe("DWM exposure queue pipeline", () => {
       monetizationPaths: [],
       profitabilitySignals: []
     });
-    expect(businessModel.missingEvidence).toEqual(expect.arrayContaining(["pricing or ransom demands", "payments or conversion", "realized revenue or profit"]));
+    expect(businessModel.missingEvidence).toEqual(expect.arrayContaining([
+      "pricing or ransom demands",
+      "payment demands or methods",
+      "independently verified revenue",
+      "independently verified profitability"
+    ]));
   });
 
   test("does not turn a victim-feed label into an actor profile", async () => {
