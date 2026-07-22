@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const alertId = clean(body.alertId)
-    const organizationId = clean(body.organizationId) || clean(body.orgId) || clean(body.tenantId)
+    const organizationId = clean(body.organizationId) || clean(body.orgId)
     if (!alertId || !organizationId) {
         const passthrough = new NextRequest(request.url, { method: 'POST', headers: request.headers, body: JSON.stringify(body) })
         return proxyTiRequest(passthrough, '/v1/dwm/webhooks/deliver', { method: 'POST' })
@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
             organizationId,
             orgId: organizationId,
             tenantId: organizationId,
-            live: body.live ?? body.dryRun !== true,
+            dryRun: body.dryRun === true,
+            live: body.live === true || body.dryRun !== true,
         }),
     })
     return proxyOrganizationApiRequest(deliveryRequest, '/dwm/webhook-deliveries', { method: 'POST', timeoutMs: 20000 })

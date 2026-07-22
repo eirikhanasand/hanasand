@@ -40,24 +40,23 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
             return NextResponse.json({ error: { code: 'invalid_scope', message: scope.error } }, { status: 400 })
         }
         if (scope.organizationId) {
-            const scopeError = await organizationScopeError(scope.organizationId, token, id)
+            const scopeError = await organizationScopeError(scope.organizationId, token, id, method !== 'GET')
             if (scopeError) return scopeError
         }
+        const storageScope = dwmStorageScope(scope)
         const target = new URL(path, base)
         for (const [key, value] of request.nextUrl.searchParams.entries()) {
             if (key === 'tenantId' || key === 'organizationId' || key === 'orgId') continue
             target.searchParams.set(key, value)
         }
-        target.searchParams.set('tenantId', scope.tenantId)
-        if (scope.organizationId) target.searchParams.set('organizationId', scope.organizationId)
+        target.searchParams.set('tenantId', storageScope.tenantId)
 
         const init: RequestInit = {
             method,
             cache: 'no-store',
             headers: {
                 'content-type': 'application/json',
-                'x-tenant-id': scope.tenantId,
-                ...(scope.organizationId ? { 'x-organization-id': scope.organizationId } : {}),
+                'x-tenant-id': storageScope.tenantId,
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 ...(id ? { id } : {}),
                 ...(actorId ? { 'x-actor-id': actorId, 'x-user-id': actorId } : {}),
@@ -67,7 +66,7 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
         }
 
         if (method !== 'GET') {
-            init.body = JSON.stringify(withDwmRequestScope(body || {}, scope))
+            init.body = JSON.stringify(withDwmRequestScope(body || {}, storageScope))
         }
 
         const response = await fetch(target, init)
@@ -127,7 +126,11 @@ export function withDwmRequestScope(body: Record<string, unknown>, scope: Pick<D
     return scoped
 }
 
-async function organizationScopeError(organizationId: string, token: string, id: string) {
+export function dwmStorageScope(scope: Pick<DwmRequestScope, 'tenantId'>) {
+    return { tenantId: scope.tenantId }
+}
+
+async function organizationScopeError(organizationId: string, token: string, id: string, mutation: boolean) {
     try {
         const target = new URL(`${authApiUrl().replace(/\/$/, '')}/organizations/${encodeURIComponent(organizationId)}`)
         const response = await fetch(target, {
@@ -138,7 +141,14 @@ async function organizationScopeError(organizationId: string, token: string, id:
             },
             signal: AbortSignal.timeout(8000),
         })
-        if (response.ok) return null
+        if (response.ok) {
+            if (!mutation) return null
+            const payload = await response.json().catch(() => null) as Record<string, unknown> | null
+            const organization = isRecord(payload?.organization) ? payload.organization : {}
+            const denial = dwmOrganizationMutationDenial(organization)
+            if (denial) return NextResponse.json({ error: denial.error }, { status: denial.status, headers: { 'cache-control': 'no-store' } })
+            return null
+        }
         const notFound = response.status === 404
         const accessDenied = response.status === 401 || response.status === 403
         return NextResponse.json({
@@ -150,6 +160,16 @@ async function organizationScopeError(organizationId: string, token: string, id:
     } catch {
         return NextResponse.json({ error: { code: 'organization_unavailable', message: 'Organization access could not be verified.' } }, { status: 502 })
     }
+}
+
+export function dwmOrganizationMutationDenial(organization: Record<string, unknown>) {
+    if (clean(organization.lifecycleStatus) !== 'active') {
+        return { status: 409, error: { code: 'organization_inactive', message: 'Organization DWM changes require an active organization.' } }
+    }
+    if (!['owner', 'admin', 'member'].includes(clean(organization.role))) {
+        return { status: 403, error: { code: 'organization_access_denied', message: 'Your organization role cannot change DWM data.' } }
+    }
+    return null
 }
 
 function parseJsonObject(value: string) {

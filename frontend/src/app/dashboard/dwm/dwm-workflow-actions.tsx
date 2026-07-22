@@ -38,7 +38,7 @@ type WorkflowRouteSummary = {
     deliveryState?: string
 }
 
-export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry }: { tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry }) {
+export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry, onChanged }: { tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry, onChanged?: () => void }) {
     const router = useRouter()
     const webhookInputRef = useRef<HTMLInputElement>(null)
     const watchlistInputRef = useRef<HTMLTextAreaElement>(null)
@@ -53,6 +53,11 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const [result, setResult] = useState<WorkflowResult | null>(null)
     const [lastRoute, setLastRoute] = useState<WorkflowRouteSummary | null>(null)
     const scope = organizationId ? { tenantId, organizationId } : { tenantId }
+
+    function refreshWorkspace() {
+        onChanged?.()
+        router.refresh()
+    }
 
     function saveWatchlistTerms(nextTerms: string) {
         return postJson('/api/dwm/watchlists', {
@@ -95,7 +100,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 watchTerms: countTerms(nextTerms),
                 alertCount: savedAlertCount,
             })
-            router.refresh()
+            refreshWorkspace()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
         } finally {
@@ -146,7 +151,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 captureCount: accepted,
                 alertCount: savedAlertCount,
             })
-            router.refresh()
+            refreshWorkspace()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
         } finally {
@@ -234,7 +239,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             if (caseId) {
                 router.push(caseDetailPath(caseId, alert.id, organizationId, 'metadata_claim'))
             } else {
-                router.refresh()
+                refreshWorkspace()
             }
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -303,7 +308,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     alertCount: savedAlertCount,
                 })
                 setResult({ ok: true, message: `Sources updated. Collected ${captureCount} capture(s) and rebuilt ${savedAlertCount} alert(s). No watchlist match opened a case.` })
-                router.refresh()
+                refreshWorkspace()
                 return
             }
 
@@ -358,7 +363,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             if (caseId) {
                 router.push(caseDetailPath(caseId, alert.id, organizationId, 'source_pack'))
             } else {
-                router.refresh()
+                refreshWorkspace()
             }
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -390,7 +395,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 sourceCount: duplicateOf ? 0 : 1,
             })
             setSourceTarget('')
-            router.refresh()
+            refreshWorkspace()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
         } finally {
@@ -422,7 +427,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 captureCount,
                 alertCount: savedAlertCount,
             })
-            router.refresh()
+            refreshWorkspace()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
         } finally {
@@ -472,7 +477,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 captureCount,
                 alertCount: savedAlertCount,
             })
-            router.refresh()
+            refreshWorkspace()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
         } finally {
@@ -512,7 +517,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 watchTerms: countTerms(nextTerms),
                 sourceCount: count + advisoryCount,
             })
-            router.refresh()
+            refreshWorkspace()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
         } finally {
@@ -545,7 +550,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 deliveryAttempts: attemptedCount,
                 deliveryState: attemptedCount ? 'attempted' : 'nothing queued',
             })
-            router.refresh()
+            refreshWorkspace()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
         } finally {
@@ -570,7 +575,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 deliveryAttempts: 1,
                 deliveryState: 'test delivered',
             })
-            router.refresh()
+            refreshWorkspace()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
         } finally {

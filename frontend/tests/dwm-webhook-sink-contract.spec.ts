@@ -1,29 +1,25 @@
 import { expect, test } from '@playwright/test'
 
 const validPayload = {
-    eventType: 'darkweb.monitoring.match',
-    generatedAt: '2026-07-03T02:14:00.000Z',
-    severity: 'critical',
-    actor: 'Akira',
-    company: 'Acme Payments',
-    matchedTerm: 'acme.com',
-    artifactType: 'telegram_stealer_log_hint',
-    sourceFamily: 'telegram_public + restricted_metadata',
-    sourceName: 'monitored Telegram broker room and leak-site update',
-    sourceUrl: 'https://hanasand.com/ti/Acme%20Payments',
-    claimSummary: 'Telegram broker post and leak-site update mention a watched company.',
-    firstSeenAt: '2026-07-03T02:08:00.000Z',
-    confidence: 88,
-    sourceCount: 5,
-    reviewState: 'needs_review',
-    recommendedAction: 'Confirm the company match and route to incident response.',
-    selectedCaptureIds: ['cap_akira_acme'],
-    deliveryReadinessContext: {
-        deliveryDedupeKey: 'dwm_dedupe_akira_acme',
+    schemaVersion: 'dwm.webhook.v1',
+    eventType: 'dwm.alert.created',
+    occurredAt: '2026-07-22T08:14:00.000Z',
+    idempotencyKey: 'dwm.alert.created:org-live:destination-live:alert-live',
+    org: { id: 'org-live', name: 'Live tenant', tenantId: 'org-live' },
+    destination: { id: 'destination-live', name: 'Acceptance receiver', kind: 'webhook' },
+    alert: {
+        id: 'alert-live',
+        severity: 'critical',
+        matchedTerm: { value: 'tenant.example', kind: 'domain' },
+        reviewState: 'needs_review',
+        sourceFamily: 'restricted_metadata',
     },
+    watchlist: { id: 'watchlist-live', name: 'Production watchlist', terms: ['tenant.example'] },
+    delivery: { id: 'delivery-live', eventType: 'dwm.alert.created', replay: false },
+    source: { family: 'restricted_metadata', artifactType: 'victim_claim', confidence: { score: 88 } },
 }
 
-test('public DWM webhook receiver validates sample payload shape before accepting', async ({ request }) => {
+test('public DWM webhook receiver accepts the real delivery payload contract', async ({ request }) => {
     const accepted = await request.post('/api/dwm/webhook-sink', {
         headers: { 'x-hanasand-event-id': 'preview_contract_ok' },
         data: validPayload,
@@ -35,8 +31,8 @@ test('public DWM webhook receiver validates sample payload shape before acceptin
         accepted: true,
         eventId: 'preview_contract_ok',
         summary: {
-            eventType: 'darkweb.monitoring.match',
-            matchedTerm: 'acme.com',
+            eventType: 'dwm.alert.created',
+            matchedTerm: 'tenant.example',
             reviewState: 'needs_review',
             severity: 'critical',
         },
@@ -44,13 +40,13 @@ test('public DWM webhook receiver validates sample payload shape before acceptin
 
     const rejected = await request.post('/api/dwm/webhook-sink', {
         headers: { 'x-hanasand-event-id': 'preview_contract_bad' },
-        data: { eventType: 'darkweb.monitoring.match', confidence: 88 },
+        data: { ...validPayload, alert: { severity: 'critical', reviewState: 'needs_review' } },
     })
 
     expect(rejected.status()).toBe(400)
     await expect(rejected.json()).resolves.toMatchObject({
         accepted: false,
         eventId: 'preview_contract_bad',
-        error: 'Missing required DWM webhook field: severity.',
+        error: 'Missing required DWM webhook field: alert.id.',
     })
 })

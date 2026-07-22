@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, XCircle } from 'lucide-react'
@@ -181,6 +181,8 @@ export function DwmAnalystPortal({
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
     const [localDeliveries, setLocalDeliveries] = useState<DeliveryItem[]>(initialDeliveries)
+    const [refreshVersion, setRefreshVersion] = useState(0)
+    const pendingInitialAlertId = useRef(initialAlertId)
     const [queueFilter, setQueueFilter] = useState<QueueFilter>(() => normalizeQueueFilter(searchParams.get('filter')))
     const [queueQuery, setQueueQuery] = useState(() => searchParams.get('q')?.slice(0, 120) ?? '')
     const queue = useMemo(() => filterAlerts(orderAlerts(alerts), queueFilter, queueQuery), [alerts, queueFilter, queueQuery])
@@ -222,14 +224,22 @@ export function DwmAnalystPortal({
             organizationId={selectedOrganizationId}
             initialTerms={snapshot.watchlist.map(term => term.value)}
             telemetry={workflowTelemetry}
+            onChanged={() => setRefreshVersion(version => version + 1)}
         />
     )
 
     useEffect(() => {
+        const requestedAlertId = pendingInitialAlertId.current
+        if (requestedAlertId && alerts.some(alert => alert.id === requestedAlertId)) {
+            if (!queue.some(alert => alert.id === requestedAlertId)) setQueueFilter('all')
+            setSelectedId(requestedAlertId)
+            pendingInitialAlertId.current = undefined
+            return
+        }
         if (queue.length && !queue.some(alert => alert.id === selectedId)) {
             setSelectedId(queue[0].id)
         }
-    }, [queue, selectedId])
+    }, [alerts, queue, selectedId])
 
     useEffect(() => {
         const controller = new AbortController()
@@ -241,7 +251,7 @@ export function DwmAnalystPortal({
         return () => {
             controller.abort()
         }
-    }, [tenantId, organizationId])
+    }, [tenantId, organizationId, refreshVersion])
 
     async function updateAlert(alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) {
         await runAction(`update:${alertId}`, async () => {
@@ -336,6 +346,7 @@ export function DwmAnalystPortal({
         try {
             const text = await action()
             setMessage({ ok: true, text })
+            setRefreshVersion(version => version + 1)
             router.refresh()
         } catch (error) {
             setMessage({ ok: false, text: safeActionMessage(error) })
