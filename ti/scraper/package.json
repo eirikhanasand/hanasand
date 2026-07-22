@@ -31,7 +31,6 @@
     "check:scraper-native-search": "bun run scripts/check-scraper-native-search-readiness.ts",
     "check:public-ti-org-relevance": "bun run scripts/validatePublicTiOrgRelevance.ts",
     "check:ti-release-candidate": "bun run scripts/check-ti-release-candidate.ts",
-    "measure:search-product": "bun run scripts/measure-search-product.ts",
     "snapshot:product-slo": "bun run scripts/collect-product-slo-snapshot.ts",
     "bootstrap:evaluation-corpus": "bun run scripts/bootstrap-authoritative-evaluation.ts",
     "rehearse:cutover": "bun run scripts/run-cutover-rehearsal.ts",
