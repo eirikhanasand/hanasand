@@ -8,7 +8,6 @@
   "sources": [
     {
       "id": "src_group_ib_telegram",
-      "tenantId": "default",
       "name": "Group-IB public Telegram",
       "type": "telegram_public",
       "url": "https://t.me/Group_IB",
@@ -112,7 +111,6 @@
     },
     {
       "id": "src_kaspersky_ru_telegram",
-      "tenantId": "default",
       "name": "Kaspersky Russian public Telegram",
       "type": "telegram_public",
       "url": "https://t.me/kasperskylab_ru",
@@ -215,7 +213,6 @@
     },
     {
       "id": "src_hackmanac_telegram",
-      "tenantId": "default",
       "name": "Hackmanac Cyber News public Telegram",
       "type": "telegram_public",
       "url": "https://t.me/hackmanac_cybernews",
@@ -319,7 +316,6 @@
     },
     {
       "id": "src_positive_technologies_telegram",
-      "tenantId": "default",
       "name": "Positive Technologies public Telegram",
       "type": "telegram_public",
       "url": "https://t.me/Positive_Technologies",
@@ -422,7 +418,6 @@
     },
     {
       "id": "src_i4c_cyberdost_telegram",
-      "tenantId": "default",
       "name": "India I4C CyberDost public Telegram",
       "type": "telegram_public",
       "url": "https://t.me/cyberdosti4c",
@@ -528,7 +523,6 @@
     },
     {
       "id": "src_ukraine_cyberpolice_telegram",
-      "tenantId": "default",
       "name": "Ukraine Cyber Police public Telegram",
       "type": "telegram_public",
       "url": "https://t.me/CyberpolUA",
@@ -634,7 +628,6 @@
     },
     {
       "id": "src_ctt_report_hub_telegram",
-      "tenantId": "default",
       "name": "CTT Report Hub public Telegram",
       "type": "telegram_public",
       "url": "https://t.me/aptreports",

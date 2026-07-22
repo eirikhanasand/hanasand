@@ -83,6 +83,7 @@ describe("public Telegram canary collection", () => {
 
     expect(report).toMatchObject({ valid: true, errors: [], duplicates: [] });
     expect(report.accepted).toHaveLength(7);
+    expect(report.accepted.every((item: any) => item.tenantId === undefined)).toBe(true);
     expect(report.accepted.every((item: any) => evaluateSourceForCollection(item).allowed)).toBe(true);
     expect(report.accepted.map((item: any) => item.id)).toEqual(expect.arrayContaining([
       "src_group_ib_telegram",
