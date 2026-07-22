@@ -21,6 +21,7 @@ import type {
 } from "../types.ts";
 import { stableId } from "../utils.ts";
 import { InMemoryScraperStore, linkedAlertCaptureIds } from "./memoryStore.ts";
+import { persistActorIdentityCatalog } from "./postgresActorIdentityCatalog.ts";
 
 const DEFAULT_MIGRATIONS = [
   { version: "006_threat_intelligence_store", path: fileURLToPath(new URL("../../migrations/006_threat_intelligence_store.sql", import.meta.url)) },
@@ -36,7 +37,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "016_merge_duplicate_actor_profiles", path: fileURLToPath(new URL("../../migrations/016_merge_duplicate_actor_profiles.sql", import.meta.url)) },
   { version: "017_evidence_linked_timeliness", path: fileURLToPath(new URL("../../migrations/017_evidence_linked_timeliness.sql", import.meta.url)) },
   { version: "018_remove_unsupported_business_claims", path: fileURLToPath(new URL("../../migrations/018_remove_unsupported_business_claims.sql", import.meta.url)) },
-  { version: "019_incident_logical_identity", path: fileURLToPath(new URL("../../migrations/019_incident_logical_identity.sql", import.meta.url)) }
+  { version: "019_incident_logical_identity", path: fileURLToPath(new URL("../../migrations/019_incident_logical_identity.sql", import.meta.url)) },
+  { version: "020_actor_identity_catalog", path: fileURLToPath(new URL("../../migrations/020_actor_identity_catalog.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -142,7 +144,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const offset = Math.max(0, Number(input.offset ?? 0));
     const parameters = [input.tenantId ?? null, input.query?.trim().toLowerCase() || null];
     const searchBy = "searchBy" in table ? table.searchBy : "record::text";
-    const where = `(tenant_id IS NOT DISTINCT FROM $1::text) AND ($2::text IS NULL OR position($2 in lower(${searchBy})) > 0)`;
+    const tenantWhere = "includeGlobal" in table && table.includeGlobal
+      ? `($1::text IS NULL AND tenant_id IS NULL OR $1::text IS NOT NULL AND (tenant_id IS NULL OR tenant_id IS NOT DISTINCT FROM $1::text))`
+      : `(tenant_id IS NOT DISTINCT FROM $1::text)`;
+    const where = `${tenantWhere} AND ($2::text IS NULL OR position($2 in lower(${searchBy})) > 0)`;
     const [rows, countRows] = await Promise.all([
       this.sql.unsafe(`SELECT record FROM threat_intel.${table.name} WHERE ${where} ORDER BY ${table.orderBy} DESC LIMIT $3 OFFSET $4`, [...parameters, limit, offset]),
       this.sql.unsafe(`SELECT count(*)::int AS total FROM threat_intel.${table.name} WHERE ${where}`, parameters)
@@ -263,6 +268,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     const stored = super.saveActorProfile(profile);
     if (!this.pipelineDepth) this.enqueue(`actor-profile:${stored.id}`, () => this.persistActorProfile(stored));
     return stored;
+  }
+
+  override replaceActorIdentityCatalog(snapshot: any, provenance: any): any {
+    const result = super.replaceActorIdentityCatalog(snapshot, provenance);
+    const catalog = structuredClone(this.getActorIdentityCatalog(snapshot.catalogId));
+    const identities = structuredClone(this.listActorIdentities().filter((identity: any) => identity.catalogId === snapshot.catalogId));
+    this.enqueue(`actor-identity-catalog:${catalog.id}`, () => persistActorIdentityCatalog(this.sql, catalog, identities));
+    return result;
   }
 
   override saveIntelligenceClaim(claim: any): any {
@@ -408,13 +421,15 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   private async hydrate(): Promise<void> {
-    const [sources, captures, incidents, entities, indicators, actorProfiles, evidenceLinks, validations, alerts, evaluationLabels, sourceHealth, timeliness, runs, claims, claimEvidence, claimReviews, workflows] = await Promise.all([
+    const [sources, captures, incidents, entities, indicators, actorProfiles, actorIdentityCatalogs, actorIdentities, evidenceLinks, validations, alerts, evaluationLabels, sourceHealth, timeliness, runs, claims, claimEvidence, claimReviews, workflows] = await Promise.all([
       this.sql`SELECT record FROM threat_intel.sources ORDER BY created_at`,
       this.sql`SELECT record FROM threat_intel.captures ORDER BY collected_at`,
       this.sql`SELECT record FROM threat_intel.incidents ORDER BY first_seen_at`,
       this.sql`SELECT record FROM threat_intel.entities ORDER BY created_at`,
       this.sql`SELECT record FROM threat_intel.indicators ORDER BY created_at`,
       this.sql`SELECT record FROM threat_intel.actor_profiles ORDER BY first_seen_at`,
+      this.sql`SELECT record FROM threat_intel.actor_identity_catalogs ORDER BY retrieved_at`,
+      this.sql`SELECT record FROM threat_intel.actor_identities ORDER BY catalog_id, external_id`,
       this.sql`SELECT record FROM threat_intel.evidence_links ORDER BY created_at`,
       this.sql`SELECT record FROM threat_intel.validation_records ORDER BY matched_at`,
       this.sql`SELECT record FROM threat_intel.alerts ORDER BY first_seen_at`,
@@ -433,6 +448,8 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     for (const row of entities) super.saveExtractedEntity(readRecord(row));
     for (const row of indicators) super.saveIndicator(readRecord(row));
     for (const row of actorProfiles) super.saveActorProfile(readRecord(row));
+    for (const row of actorIdentityCatalogs) this.hydrateActorIdentityCatalogSnapshot(readRecord(row));
+    for (const row of actorIdentities) this.hydrateActorIdentitySnapshot(readRecord(row));
     for (const row of evidenceLinks) super.saveEvidenceLink(readRecord(row));
     for (const row of validations) super.saveValidationRecord(readRecord(row));
     for (const row of alerts) super.saveDwmAlert(readRecord(row));
@@ -447,7 +464,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   private hasStoredData(): boolean {
-    return this.listSources().length > 0 || this.listCaptures().length > 0 || this.listIncidents().length > 0 || this.listDwmAlerts().length > 0 || legacyWorkflowLoaders.some(([, , , list]) => list(this).length > 0);
+    return this.listSources().length > 0 || this.listCaptures().length > 0 || this.listIncidents().length > 0 || this.listActorIdentityCatalogs().length > 0 || this.listDwmAlerts().length > 0 || legacyWorkflowLoaders.some(([, , , list]) => list(this).length > 0);
   }
 
   private enqueue(description: string, run: () => Promise<void>): void {
@@ -1099,6 +1116,8 @@ const structuredTables = {
   incidents: { name: "incidents", orderBy: "first_seen_at" },
   actorProfiles: { name: "actor_profiles", orderBy: "last_seen_at" },
   actorAliases: { name: "actor_aliases", orderBy: "last_seen_at" },
+  actorIdentityCatalogs: { name: "actor_identity_catalogs", orderBy: "retrieved_at", includeGlobal: true },
+  actorIdentities: { name: "actor_identities", orderBy: "updated_at", includeGlobal: true },
   evidenceLinks: { name: "evidence_links", orderBy: "created_at" },
   validationRecords: { name: "validation_records", orderBy: "matched_at" },
   evaluationLabels: { name: "evaluation_labels", orderBy: "labeled_at" },

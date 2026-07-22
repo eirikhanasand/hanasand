@@ -19,7 +19,7 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
       let useful = false;
       for (const item of result.items) {
         item.tenantId = source.tenantId;
-        const pipeline = processCollectedItem(item);
+        const pipeline = processCollectedItem(item, { actorIdentities: options.store.listActorIdentities?.() ?? [] });
         const duplicate = options.store.findDuplicateCapture?.(pipeline.capture);
         const saved = source.metadata?.transportCanary ? { capture: options.store.saveCapture(pipeline.capture) } : options.store.savePipelineResult(pipeline);
         if (duplicate) counters.duplicateCount++; else { counters.captureCount++; useful = true; }

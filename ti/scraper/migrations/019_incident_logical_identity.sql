@@ -108,25 +108,6 @@ FROM identified;
 CREATE UNIQUE INDEX ON _incident_identity_map (old_id);
 CREATE INDEX ON _incident_identity_map (canonical_id);
 
-CREATE INDEX IF NOT EXISTS threat_intel_evidence_links_subject_direct_idx
-  ON threat_intel.evidence_links (subject_type, subject_id);
-CREATE INDEX IF NOT EXISTS threat_intel_claim_evidence_subject_idx
-  ON threat_intel.claim_evidence (subject_type, subject_id);
-CREATE INDEX IF NOT EXISTS threat_intel_validation_incident_direct_idx
-  ON threat_intel.validation_records (incident_id) WHERE incident_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS threat_intel_alerts_incident_idx
-  ON threat_intel.alerts (incident_id) WHERE incident_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS threat_intel_evaluation_labels_incident_idx
-  ON threat_intel.evaluation_labels (incident_id) WHERE incident_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS threat_intel_workflow_incident_id_idx
-  ON threat_intel.workflow_records ((record->>'incidentId')) WHERE record ? 'incidentId';
-CREATE INDEX IF NOT EXISTS threat_intel_workflow_promoted_incident_id_idx
-  ON threat_intel.workflow_records ((record->>'promotedToIncidentId')) WHERE record ? 'promotedToIncidentId';
-CREATE INDEX IF NOT EXISTS threat_intel_workflow_subject_incident_id_idx
-  ON threat_intel.workflow_records ((record->>'subjectId')) WHERE record->>'subjectType' = 'incident';
-CREATE INDEX IF NOT EXISTS threat_intel_workflow_incident_ids_idx
-  ON threat_intel.workflow_records USING GIN ((record->'incidentIds')) WHERE jsonb_typeof(record->'incidentIds') = 'array';
-
 DO $$
 BEGIN
   IF EXISTS (
@@ -156,6 +137,117 @@ BEGIN
   END IF;
 END $$;
 
+CREATE TEMP TABLE _incident_reference_snapshots ON COMMIT DROP AS
+WITH
+entity_rows AS (
+  SELECT incident_id, jsonb_agg(to_jsonb(row)) AS rows
+  FROM threat_intel.entities AS row
+  WHERE incident_id IS NOT NULL
+  GROUP BY incident_id
+), indicator_rows AS (
+  SELECT incident_id, jsonb_agg(to_jsonb(row)) AS rows
+  FROM threat_intel.indicators AS row
+  WHERE incident_id IS NOT NULL
+  GROUP BY incident_id
+), evidence_link_rows AS (
+  SELECT subject_id AS incident_id, jsonb_agg(to_jsonb(row)) AS rows
+  FROM threat_intel.evidence_links AS row
+  WHERE subject_type = 'incident'
+  GROUP BY subject_id
+), validation_rows AS (
+  SELECT incident_id, jsonb_agg(to_jsonb(row)) AS rows
+  FROM threat_intel.validation_records AS row
+  WHERE incident_id IS NOT NULL
+  GROUP BY incident_id
+), alert_rows AS (
+  SELECT incident_id, jsonb_agg(to_jsonb(row)) AS rows
+  FROM threat_intel.alerts AS row
+  WHERE incident_id IS NOT NULL
+  GROUP BY incident_id
+), evaluation_label_rows AS (
+  SELECT incident_id, jsonb_agg(to_jsonb(row)) AS rows
+  FROM threat_intel.evaluation_labels AS row
+  WHERE incident_id IS NOT NULL
+  GROUP BY incident_id
+), claim_rows AS (
+  SELECT subject_id AS incident_id, jsonb_agg(to_jsonb(row)) AS rows
+  FROM threat_intel.intelligence_claims AS row
+  WHERE subject_type = 'incident'
+  GROUP BY subject_id
+), claim_evidence_ids AS (
+  SELECT mapping.old_id AS incident_id, evidence.id
+  FROM _incident_identity_map AS mapping
+  JOIN threat_intel.claim_evidence AS evidence
+    ON evidence.subject_type = 'incident' AND evidence.subject_id = mapping.old_id
+  UNION
+  SELECT mapping.old_id AS incident_id, evidence.id
+  FROM _incident_identity_map AS mapping
+  JOIN threat_intel.intelligence_claims AS claim
+    ON claim.subject_type = 'incident' AND claim.subject_id = mapping.old_id
+  JOIN threat_intel.claim_evidence AS evidence ON evidence.claim_id = claim.id
+), claim_evidence_rows AS (
+  SELECT ids.incident_id, jsonb_agg(to_jsonb(evidence)) AS rows
+  FROM claim_evidence_ids AS ids
+  JOIN threat_intel.claim_evidence AS evidence ON evidence.id = ids.id
+  GROUP BY ids.incident_id
+), timeliness_rows AS (
+  SELECT incident_id, jsonb_agg(to_jsonb(row)) AS rows
+  FROM threat_intel.timeliness_records AS row
+  GROUP BY incident_id
+), workflow_ids AS (
+  SELECT mapping.old_id AS incident_id, row.record_type, row.id
+  FROM _incident_identity_map AS mapping
+  JOIN threat_intel.workflow_records AS row ON row.record->>'incidentId' = mapping.old_id
+  UNION
+  SELECT mapping.old_id AS incident_id, row.record_type, row.id
+  FROM _incident_identity_map AS mapping
+  JOIN threat_intel.workflow_records AS row ON row.record->>'promotedToIncidentId' = mapping.old_id
+  UNION
+  SELECT mapping.old_id AS incident_id, row.record_type, row.id
+  FROM _incident_identity_map AS mapping
+  JOIN threat_intel.workflow_records AS row
+    ON row.record->>'subjectType' = 'incident' AND row.record->>'subjectId' = mapping.old_id
+  UNION
+  SELECT mapping.old_id AS incident_id, row.record_type, row.id
+  FROM threat_intel.workflow_records AS row
+  CROSS JOIN LATERAL jsonb_array_elements_text(
+    CASE WHEN jsonb_typeof(row.record->'incidentIds') = 'array' THEN row.record->'incidentIds' ELSE '[]'::jsonb END
+  ) AS item(value)
+  JOIN _incident_identity_map AS mapping ON mapping.old_id = item.value
+), workflow_rows AS (
+  SELECT ids.incident_id, jsonb_agg(to_jsonb(row)) AS rows
+  FROM workflow_ids AS ids
+  JOIN threat_intel.workflow_records AS row ON row.record_type = ids.record_type AND row.id = ids.id
+  GROUP BY ids.incident_id
+)
+SELECT
+  mapping.old_id,
+  jsonb_build_object(
+    'entities', COALESCE(entity_rows.rows, '[]'::jsonb),
+    'indicators', COALESCE(indicator_rows.rows, '[]'::jsonb),
+    'evidenceLinks', COALESCE(evidence_link_rows.rows, '[]'::jsonb),
+    'validations', COALESCE(validation_rows.rows, '[]'::jsonb),
+    'alerts', COALESCE(alert_rows.rows, '[]'::jsonb),
+    'evaluationLabels', COALESCE(evaluation_label_rows.rows, '[]'::jsonb),
+    'claims', COALESCE(claim_rows.rows, '[]'::jsonb),
+    'claimEvidence', COALESCE(claim_evidence_rows.rows, '[]'::jsonb),
+    'timeliness', COALESCE(timeliness_rows.rows, '[]'::jsonb),
+    'workflowRecords', COALESCE(workflow_rows.rows, '[]'::jsonb)
+  ) AS reference_snapshot
+FROM _incident_identity_map AS mapping
+LEFT JOIN entity_rows ON entity_rows.incident_id = mapping.old_id
+LEFT JOIN indicator_rows ON indicator_rows.incident_id = mapping.old_id
+LEFT JOIN evidence_link_rows ON evidence_link_rows.incident_id = mapping.old_id
+LEFT JOIN validation_rows ON validation_rows.incident_id = mapping.old_id
+LEFT JOIN alert_rows ON alert_rows.incident_id = mapping.old_id
+LEFT JOIN evaluation_label_rows ON evaluation_label_rows.incident_id = mapping.old_id
+LEFT JOIN claim_rows ON claim_rows.incident_id = mapping.old_id
+LEFT JOIN claim_evidence_rows ON claim_evidence_rows.incident_id = mapping.old_id
+LEFT JOIN timeliness_rows ON timeliness_rows.incident_id = mapping.old_id
+LEFT JOIN workflow_rows ON workflow_rows.incident_id = mapping.old_id;
+
+CREATE UNIQUE INDEX ON _incident_reference_snapshots (old_id);
+
 INSERT INTO threat_intel.incident_identity_history (
   old_incident_id, tenant_id, source_id, canonical_incident_id, action,
   identity_strategy, identity_subject, invalid_reason, old_incident,
@@ -175,33 +267,7 @@ SELECT
   mapping.subject,
   mapping.invalid_reason,
   to_jsonb(incident),
-  jsonb_build_object(
-    'entities', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.entities AS row WHERE row.incident_id = mapping.old_id), '[]'::jsonb),
-    'indicators', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.indicators AS row WHERE row.incident_id = mapping.old_id), '[]'::jsonb),
-    'evidenceLinks', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.evidence_links AS row WHERE row.subject_type = 'incident' AND row.subject_id = mapping.old_id), '[]'::jsonb),
-    'validations', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.validation_records AS row WHERE row.incident_id = mapping.old_id), '[]'::jsonb),
-    'alerts', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.alerts AS row WHERE row.incident_id = mapping.old_id), '[]'::jsonb),
-    'evaluationLabels', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.evaluation_labels AS row WHERE row.incident_id = mapping.old_id), '[]'::jsonb),
-    'claims', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.intelligence_claims AS row WHERE row.subject_type = 'incident' AND row.subject_id = mapping.old_id), '[]'::jsonb),
-    'claimEvidence', COALESCE((
-      SELECT jsonb_agg(to_jsonb(row))
-      FROM threat_intel.claim_evidence AS row
-      WHERE (row.subject_type = 'incident' AND row.subject_id = mapping.old_id)
-        OR row.claim_id IN (
-          SELECT claim.id FROM threat_intel.intelligence_claims AS claim
-          WHERE claim.subject_type = 'incident' AND claim.subject_id = mapping.old_id
-        )
-    ), '[]'::jsonb),
-    'timeliness', COALESCE((SELECT jsonb_agg(to_jsonb(row)) FROM threat_intel.timeliness_records AS row WHERE row.incident_id = mapping.old_id), '[]'::jsonb),
-    'workflowRecords', COALESCE((
-      SELECT jsonb_agg(to_jsonb(row))
-      FROM threat_intel.workflow_records AS row
-      WHERE row.record->>'incidentId' = mapping.old_id
-        OR row.record->>'promotedToIncidentId' = mapping.old_id
-        OR (row.record->>'subjectType' = 'incident' AND row.record->>'subjectId' = mapping.old_id)
-        OR (jsonb_typeof(row.record->'incidentIds') = 'array' AND (row.record->'incidentIds') ? mapping.old_id)
-    ), '[]'::jsonb)
-  ),
+  snapshot.reference_snapshot,
   jsonb_strip_nulls(jsonb_build_object(
     'oldIncidentId', mapping.old_id,
     'canonicalIncidentId', mapping.canonical_id,
@@ -212,6 +278,7 @@ SELECT
   ))
 FROM _incident_identity_map AS mapping
 JOIN threat_intel.incidents AS incident ON incident.id = mapping.old_id
+JOIN _incident_reference_snapshots AS snapshot ON snapshot.old_id = mapping.old_id
 ON CONFLICT (old_incident_id) DO NOTHING;
 
 WITH ranked AS (

@@ -62,11 +62,11 @@ describe("public Telegram canary collection", () => {
   test("keeps the verified CERT-UA channel collectable only through the approved public preview", async () => {
     const bundle = await Bun.file(new URL("../../seeds/verified_long_lived_sources.json", import.meta.url)).json();
     const verifiedSources = importSeedBundle(bundle, { importedAt: "2026-07-20T00:00:00.000Z" }).accepted;
-    const verified = verifiedSources[0];
+    const verified = verifiedSources.find((source: any) => source.id === "src_ssscip_cert_ua_telegram");
 
     expect(verified).toMatchObject({ id: "src_ssscip_cert_ua_telegram", accessMethod: "public_http", governance: { approvalState: "approved" }, metadata: { collectionMode: "public_web_preview", searchQuery: "CERT-UA", mediaPolicy: "metadata_only_no_download" } });
     expect(evaluateSourceForCollection(verified)).toMatchObject({ allowed: true, reason: expect.stringContaining("public web preview") });
-    expect(verifiedSources[1]).toMatchObject({ id: "src_ccn_cert_telegram", language: "es", metadata: { collectionMode: "public_web_preview" } });
+    expect(verifiedSources.find((source: any) => source.id === "src_ccn_cert_telegram")).toMatchObject({ id: "src_ccn_cert_telegram", language: "es", metadata: { collectionMode: "public_web_preview" } });
     expect(isSellableIntelText({ sourceId: verified.id, text: "CERT-UA зафіксувала кібератаку угруповання UAC-0010 проти державної установи з використанням шкідливого програмного забезпечення.", publishedAt: "2026-07-20T00:00:00.000Z", now: "2026-07-20T01:00:00.000Z" })).toBe(true);
     expect(isSellableIntelText({ sourceId: verifiedSources[1].id, text: "CCN-CERT investiga un ciberataque y una campaña de phishing contra infraestructura crítica con credenciales comprometidas.", publishedAt: "2026-07-20T00:00:00.000Z", now: "2026-07-20T01:00:00.000Z" })).toBe(true);
   });

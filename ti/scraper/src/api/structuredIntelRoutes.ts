@@ -9,6 +9,7 @@ import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
 import { authenticateRequest } from "./requestAuthentication.ts";
 import { handleEvaluationBenchmarkRequest } from "./evaluationBenchmarkRoutes.ts";
+import { reconcileActorIdentityCoverage } from "../pipeline/mitreActorCatalog.ts";
 
 const listRoutes = {
   "/v1/intel/sources": ["sources", "listSources"],
@@ -18,6 +19,8 @@ const listRoutes = {
   "/v1/intel/incidents": ["incidents", "listIncidents"],
   "/v1/intel/actor-profiles": ["actorProfiles", "listActorProfiles"],
   "/v1/intel/actor-aliases": ["actorAliases", "listActorAliases"],
+  "/v1/intel/actor-identity-catalogs": ["actorIdentityCatalogs", "listActorIdentityCatalogs"],
+  "/v1/intel/actor-identities": ["actorIdentities", "listActorIdentities"],
   "/v1/intel/evidence-links": ["evidenceLinks", "listEvidenceLinks"],
   "/v1/intel/validation-records": ["validationRecords", "listValidationRecords"],
   "/v1/intel/evaluation-labels": ["evaluationLabels", "listEvaluationLabels"],
@@ -37,6 +40,25 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
   if (url.pathname === "/v1/intel/source-operations" && request.method === "GET") {
     const scope = resolveTenantScope(request, url);
     return scope.error ?? json(buildSourceOperationsSnapshot(options.store, { tenantId: scope.tenantId }));
+  }
+  if (url.pathname === "/v1/intel/actor-identity-coverage" && request.method === "GET") {
+    const scope = resolveTenantScope(request, url);
+    if (scope.error) return scope.error;
+    const identities = ((options.store as any).listActorIdentities?.() ?? []).filter((record: any) => !record.tenantId || inTenantScope(record, scope.tenantId));
+    const captures = new Set(((options.store as any).listCaptures?.() ?? []).filter((record: any) => inTenantScope(record, scope.tenantId)).map((record: any) => record.id));
+    const profiles = ((options.store as any).listActorProfiles?.() ?? []).filter((record: any) => inTenantScope(record, scope.tenantId));
+    const evidenceBacked = profiles.filter((profile: any) => Array.isArray(profile.captureIds) && profile.captureIds.some((captureId: string) => captures.has(captureId)));
+    const recentCutoff = Date.now() - 90 * 86_400_000;
+    return json({
+      schemaVersion: "ti.actor_identity_coverage.v1",
+      generatedAt: nowIso(),
+      catalogCoverage: reconcileActorIdentityCoverage(identities),
+      activityCoverage: {
+        actorProfileCount: profiles.length,
+        evidenceBackedProfileCount: evidenceBacked.length,
+        recentActivityProfileCount: evidenceBacked.filter((profile: any) => Number.isFinite(Date.parse(profile.lastSeenAt)) && Date.parse(profile.lastSeenAt) >= recentCutoff).length
+      }
+    });
   }
   if (url.pathname === "/v1/intel/evaluation" && request.method === "GET") {
     const scope = resolveTenantScope(request, url);
@@ -69,10 +91,14 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
 
   const records = typeof (options.store as any)[memoryMethod] === "function" ? (options.store as any)[memoryMethod]() : [];
   const filtered = records
-    .filter((record: any) => inTenantScope(record, tenantId))
+    .filter((record: any) => globalCatalogCollection(responseKey) ? !record.tenantId || inTenantScope(record, tenantId) : inTenantScope(record, tenantId))
     .map((record: any) => apiRecord(responseKey, record, url, tenantId))
     .filter((record: any) => !query || JSON.stringify(record).toLowerCase().includes(query));
   return json({ [responseKey]: filtered.slice(offset, offset + limit), total: filtered.length, nextCursor: offset + limit < filtered.length ? String(offset + limit) : undefined });
+}
+
+function globalCatalogCollection(collection: string): boolean {
+  return collection === "actorIdentityCatalogs" || collection === "actorIdentities";
 }
 
 async function applyGovernanceAction(request: Request, options: ApiServerOptions): Promise<Response> {

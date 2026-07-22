@@ -5,6 +5,137 @@
   "generatedAt": "2026-07-21T00:00:00.000Z",
   "sources": [
     {
+      "id": "src_mitre_attack_enterprise_stix",
+      "name": "MITRE Enterprise ATT&CK STIX",
+      "type": "json_api",
+      "url": "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack.json",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.99,
+      "language": "en",
+      "crawlFrequencySeconds": 86400,
+      "legalNotes": "Official public MITRE ATT&CK STIX 2.1 Enterprise collection. Preserve the retrieved bundle as immutable catalog evidence and do not represent catalog modification dates as actor activity.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "official_public_stix_catalog",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-21T00:00:00.000Z",
+        "approvedBy": "source-review:mitre-official-repository",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "standards_body",
+        "extractionProfile": "mitre_actor_catalog",
+        "productionCollection": true,
+        "publisherReference": "https://attack.mitre.org/resources/attack-data-and-tools/",
+        "maxItemsPerFetch": 1
+      },
+      "catalog": {
+        "canonicalId": "standards:mitre:attack-enterprise:stix-2.1",
+        "publisher": {
+          "name": "MITRE ATT&CK",
+          "country": "US",
+          "homepage": "https://attack.mitre.org",
+          "trustBasis": "standards_body"
+        },
+        "tier": "tier_1",
+        "approvalScope": "official_public_stix_catalog",
+        "license": "MITRE ATT&CK terms apply; source attribution and version provenance retained.",
+        "legalBasis": "Public unauthenticated defensive reference data published by MITRE.",
+        "reliability": 0.99,
+        "intelligenceValue": 0.98,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": ["ATT&CK", "actor identity", "associated groups"],
+          "actors": [],
+          "aliases": [],
+          "industries": ["all"],
+          "regions": ["global"],
+          "countries": [],
+          "languages": ["en"],
+          "queryPatterns": []
+        },
+        "collection": {
+          "freshnessTargetSeconds": 86400,
+          "collectionSlaSeconds": 86400,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 86400
+        },
+        "adapterCompatibility": ["json_api"],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_ransomwarelive_current_operations_catalog",
+      "name": "Ransomware.live Current Operation Catalog",
+      "type": "json_api",
+      "url": "https://data.ransomware.live/groups.json",
+      "accessMethod": "public_http",
+      "status": "active",
+      "risk": "low",
+      "trustScore": 0.74,
+      "language": "en",
+      "crawlFrequencySeconds": 43200,
+      "legalNotes": "Public defensive metadata only. Fetch the public group and victim indexes, retain hash/provenance captures without raw locators or victim payloads, and never fetch actor-controlled sites or leaked files.",
+      "governance": {
+        "approvalRequired": false,
+        "approvalState": "approved",
+        "approvalScope": "safe_public_metadata_catalog",
+        "metadataOnly": true,
+        "approvedAt": "2026-07-21T00:00:00.000Z",
+        "approvedBy": "source-review:ransomwarelive-public-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "community_ransomware_metadata",
+        "extractionProfile": "ransomware_operation_catalog",
+        "activityUrl": "https://data.ransomware.live/victims.json",
+        "productionCollection": true,
+        "maxItemsPerProcess": 2,
+        "safetyBoundary": "hash-only raw captures; derived operation names, aliases, lineage relationships, reachability state, and aggregate claim counts only"
+      },
+      "catalog": {
+        "canonicalId": "community:ransomwarelive:current-operations",
+        "publisher": {
+          "name": "Ransomware.live",
+          "country": "FR",
+          "homepage": "https://www.ransomware.live",
+          "trustBasis": "community"
+        },
+        "tier": "tier_2",
+        "approvalScope": "safe_public_metadata_catalog",
+        "license": "Public community metadata; attribution retained.",
+        "legalBasis": "Public unauthenticated defensive metadata. Actor-controlled services and leaked content are not fetched.",
+        "reliability": 0.74,
+        "intelligenceValue": 0.86,
+        "retentionClass": "restricted_metadata",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": ["ransomware", "extortion", "operation identity", "public victim claims"],
+          "actors": [],
+          "aliases": [],
+          "industries": ["all"],
+          "regions": ["global"],
+          "countries": [],
+          "languages": ["en"],
+          "queryPatterns": []
+        },
+        "collection": {
+          "freshnessTargetSeconds": 43200,
+          "collectionSlaSeconds": 43200,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 43200
+        },
+        "adapterCompatibility": ["json_api"],
+        "rollback": {
+          "rollbackReason": "Disable if the public indexes expose payload content or no longer permit bounded metadata collection."
+        }
+      }
+    },
+    {
       "id": "src_ssscip_cert_ua_telegram",
       "name": "SSSCIP / CERT-UA public Telegram",
       "type": "telegram_public",

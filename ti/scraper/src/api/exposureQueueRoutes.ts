@@ -446,7 +446,7 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
         reason: claim.needsReview ? "AI parser fallback or low-confidence extraction" : "Actor and victim fields parsed"
       }
     }
-  });
+  }, { actorIdentities: store.listActorIdentities?.() ?? [] });
   pipeline.capture.title = title;
   return store.savePipelineResult(pipeline).capture;
 }

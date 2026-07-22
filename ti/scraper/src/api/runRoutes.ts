@@ -25,7 +25,7 @@ export async function createRun(request: Request, options: ApiServerOptions): Pr
   }
   const createdAt = nowIso();
   const requestId = stableId("request", `${scope.tenantId}:${idempotencyKey ?? requestHash}`);
-  const planned = createCollectionPlan({ ...input, id: requestId, createdAt }, options.store.listSources().filter((source: any) => !source.tenantId || source.tenantId === scope.tenantId), options.frontier);
+  const planned = createCollectionPlan({ ...input, id: requestId, createdAt, actorIdentities: options.store.listActorIdentities?.() ?? [] }, options.store.listSources().filter((source: any) => !source.tenantId || source.tenantId === scope.tenantId), options.frontier);
   const plan = { ...planned, id: stableId("plan", requestId), requestId, tenantId: scope.tenantId, idempotencyKey, requestHash } as CollectionPlan;
   const executableTasks = plan.tasks.filter((task: any) => !task.availableAt || !task.deadlineAt || Date.parse(task.availableAt) <= Date.parse(task.deadlineAt));
   const executablePlan = { ...plan, tasks: executableTasks } as CollectionPlan;

@@ -11,6 +11,7 @@ import { searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { ACTOR_ALIAS_RECORDS } from "../pipeline/actorAliases.ts";
 import { termRegex } from "./searchTerm.ts";
 import { hasIncidentEvidence } from "../pipeline/incidentCandidate.ts";
+import { resolveMitreActorIdentity } from "../pipeline/mitreActorCatalog.ts";
 
 type SearchEntityType = "actor" | "domain" | "cve" | "indicator" | "organization" | "free_text";
 
@@ -26,6 +27,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const sourcesInScope = options.store.listSources().filter((source: any) => !source.tenantId || source.tenantId === scope.tenantId);
   const liveSearch = createLiveSearchPlan({
     request: { query, entityType, tenantId: scope.tenantId, createdAt: generatedAt },
+    actorIdentities: options.store.listActorIdentities?.() ?? [],
     sources: sourcesInScope,
     frontier: options.frontier,
     activeRuns: options.store.listRuns?.() ?? [],
@@ -90,7 +92,8 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const victims = unique([...entityValues(records.entities, "victim"), ...rows.map((row) => row.victimName)]);
   const actor = profile?.canonicalName
     ?? records.entities.find((entity) => ["actor", "ransomware_family"].includes(entity.type) && identity.normalizedTerms.has(normalizeActorName(entity.value)))?.value
-    ?? rows.find((row) => row.actor && identity.normalizedTerms.has(normalizeActorName(row.actor)))?.actor;
+    ?? rows.find((row) => row.actor && identity.normalizedTerms.has(normalizeActorName(row.actor)))?.actor
+    ?? (identity.catalogCandidates.length === 1 && identity.catalogCandidates[0].matchKinds.includes("canonical") ? identity.catalogCandidates[0].canonicalName : undefined);
   const eventCaptureIds = new Set(eventRows.map((row) => row.id));
   const publicIncidents = records.incidents.filter((incident) => eventCaptureIds.has(incident.captureId));
   const campaigns = unique(publicIncidents.map((incident) => safeText(incident.title ?? incident.summary, 180)));
@@ -122,7 +125,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const attributionEvidence = actor ? actorAttribution(rows, unique([actor, ...aliases, ...identity.terms])) : undefined;
   const attribution = attributionEvidence?.statement;
   const actorIntelligence = {
-    actorClass: profile?.actorType ?? (actor ? "observed_threat_actor" : "unclassified_query"),
+    actorClass: profile?.actorType ?? (rows.length && actor ? "observed_threat_actor" : identity.catalogCandidates.length ? "cataloged_threat_group" : "unclassified_query"),
     attribution,
     firstSeen: earliest(activityRows.map((row) => row.publishedAt)),
     lastSeen,
@@ -177,7 +180,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     extractorVersion: incident.extractorVersion,
     reviewReasons: incident.reviewReasons ?? []
   }));
-  const status = rows.length ? assessment.ready ? "ready" : "partial" : "searching";
+  const status = rows.length ? assessment.ready ? "ready" : "partial" : identity.catalogCandidates.length ? "partial" : "searching";
   const restricted = searchDarkwebIndex({ query, sources: sourcesInScope, captures: options.store.listCaptures(), limit: 20 });
   const restrictedSourceCount = sourcesInScope.filter((source: any) => String(source.type).endsWith("_metadata")).length;
   const restrictedDisabled = Number((options.config as any)?.limits?.maxConcurrentDarknetMetadataTasks) === 0;
@@ -205,6 +208,12 @@ export async function searchResponse(request: Request, options: ApiServerOptions
     claims,
     incidents,
     actorProfile: { query, actor, aliases, datasets: { evidenceStageCounts: stageCounts(records.claims), sourceCount: records.sourceCount }, provenance: structuredProvenance },
+    actorIdentity: {
+      catalogMatched: identity.catalogCandidates.length > 0,
+      ambiguous: identity.catalogAmbiguous,
+      candidates: identity.catalogCandidates,
+      activityEvidenceAvailable: rows.length > 0
+    },
     actorIntelligence,
     actionability: {
       schemaVersion: "ti.query.actionability.v1",
@@ -315,7 +324,6 @@ const SAFE_BUSINESS_MECHANISMS: Record<string, Set<string>> = {
   publication_strategy: new Set(["dedicated leak-site publication", "public victim listing", "staged publication status", "public data release link"]),
   publicity_tactic: new Set(["public victim listing infrastructure", "public victim naming"]),
   victim_pressure_tactic: new Set(["countdown to publication"]),
-  communication_channel: new Set(["listed actor chat endpoint"]),
 };
 
 function isSafeBusinessMechanism(entity: any) {
@@ -512,7 +520,10 @@ function searchCaptures(store: any, query: string, entityType: SearchEntityType,
 
 function actorIdentity(store: any, tenantId: string | undefined, query: string) {
   const normalizedQuery = normalizeActorName(query);
-  const dictionary = ACTOR_ALIAS_RECORDS.find((record) => [record.canonical, ...record.aliases].some((value) => normalizeActorName(value) === normalizedQuery));
+  const registeredIdentities = store.listActorIdentities?.() ?? [];
+  const catalogResolution = resolveMitreActorIdentity(query, registeredIdentities);
+  const catalogConfigured = (store.listSources?.() ?? []).some((source: any) => ["mitre_actor_catalog", "ransomware_operation_catalog"].includes(source.metadata?.extractionProfile));
+  const dictionary = registeredIdentities.length || catalogConfigured ? undefined : ACTOR_ALIAS_RECORDS.find((record) => [record.canonical, ...record.aliases].some((value) => normalizeActorName(value) === normalizedQuery));
   const profiles = (store.listActorProfiles?.() ?? []).filter((profile: any) => (profile.tenantId || undefined) === tenantId);
   const aliases = (store.listActorAliases?.() ?? []).filter((alias: any) => (alias.tenantId || undefined) === tenantId);
   const matchedProfileIds = new Set([
@@ -524,10 +535,24 @@ function actorIdentity(store: any, tenantId: string | undefined, query: string) 
     query,
     dictionary?.canonical,
     ...(dictionary?.aliases ?? []),
+    ...(catalogResolution.ambiguous ? [] : catalogResolution.candidates.flatMap((candidate) => candidate.matchKinds.includes("canonical") ? [candidate.identity.canonicalName] : [])),
     ...matchedProfiles.flatMap((profile: any) => [profile.canonicalName, ...(profile.aliases ?? [])]),
     ...aliases.filter((alias: any) => matchedProfileIds.has(alias.actorProfileId)).map((alias: any) => alias.alias)
   ]);
-  return { matched: Boolean(dictionary || matchedProfiles.length), terms, normalizedTerms: new Set(terms.map(normalizeActorName)) };
+  const catalogCandidates = catalogResolution.candidates.map((candidate) => ({
+    catalogId: candidate.identity.catalogId,
+    externalId: candidate.identity.externalId,
+    canonicalName: candidate.identity.canonicalName,
+    associatedNames: candidate.identity.associatedNames,
+    matchKinds: candidate.matchKinds,
+    status: candidate.identity.status,
+    aptNumberDesignationPresent: candidate.identity.aptNumberDesignationPresent,
+    sourceUrl: candidate.identity.sourceUrl,
+    catalogVersion: candidate.identity.catalogVersion,
+    catalogModifiedAt: candidate.identity.catalogModifiedAt,
+    captureId: (candidate.identity as any).captureId
+  }));
+  return { matched: Boolean(catalogCandidates.length || dictionary || matchedProfiles.length), terms, normalizedTerms: new Set(terms.map(normalizeActorName)), catalogCandidates, catalogAmbiguous: catalogResolution.ambiguous };
 }
 
 function actorCaptureMatches(capture: any, entities: any[], normalizedTerms: Set<string>) {

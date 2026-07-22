@@ -7,6 +7,7 @@ import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio
 import { detachedState, externalize, fetchItems, health, maxItemsFor, taskFor } from "./canaryHelpers.ts";
 import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
 import { evaluateSourceForCollection } from "../policy/collectionPolicy.ts";
+import { buildRawCapture } from "../pipeline/pipelineCapture.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
 export type * from "./canaryCollectionTypes.ts";
@@ -67,18 +68,28 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     taskMetrics.httpStatus = collectedItems[0]?.metadata?.fetchProvenance?.httpStatus;
     taskMetrics.parserWarningCount = collectedItems.reduce((total: number, item: any) => total + (Array.isArray(item.metadata?.parserWarnings) ? item.metadata.parserWarnings.length : 0), 0);
     taskMetrics.publishedAt = collectedItems.map((item: any) => item.publishedAt).filter(Boolean);
-    const sellableItems = collectedItems.filter((collected: any) => ["cisa_kev", "ransomware_group_metadata"].includes(collected.metadata?.extractionProfile) || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: source.metadata?.queryClass === "threat-intel" ? 365 : 30 }));
+    const sellableItems = collectedItems.filter((collected: any) => ["cisa_kev", "ransomware_group_metadata", "mitre_actor_catalog", "ransomware_operation_catalog", "ransomware_operation_activity_evidence"].includes(collected.metadata?.extractionProfile) || isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt, maxAgeDays: source.metadata?.queryClass === "threat-intel" ? 365 : 30 }));
     counters.skippedLowValueCount += collectedItems.length - sellableItems.length;
     for (const collected of sellableItems.slice(0, itemLimit(source, options))) {
       collected.tenantId = source.tenantId;
       collected.metadata = { ...collected.metadata, runId, queryTerms: task.planning?.queryTerms ?? [], sellableCandidate: true, sellableReason: sellableReason(collected.rawText) };
-      let pipeline = processCollectedItem(collected);
+      const actorIdentityCatalogSnapshot = collected.metadata?.actorIdentityCatalogSnapshot ?? collected.metadata?.ransomwareOperationCatalogSnapshot;
+      const catalogEvidenceOnly = collected.metadata?.catalogEvidenceOnly === true;
+      const { actorIdentityCatalogSnapshot: _mitreSnapshot, ransomwareOperationCatalogSnapshot: _ransomwareSnapshot, ...captureMetadata } = collected.metadata ?? {};
+      let pipeline = actorIdentityCatalogSnapshot || catalogEvidenceOnly
+        ? { capture: buildRawCapture({ ...collected, metadata: captureMetadata }), entities: [], indicators: [] }
+        : processCollectedItem(collected, { actorIdentities: options.store.listActorIdentities?.() ?? [] });
       if (pipeline.capture.body && options.objectStore) pipeline = { ...pipeline, capture: externalize(pipeline.capture, options.objectStore) };
       const duplicate = options.store.findDuplicateCapture?.(pipeline.capture), saved = options.store.savePipelineResult(pipeline);
+      if (actorIdentityCatalogSnapshot) {
+        if (typeof options.store.replaceActorIdentityCatalog !== "function") throw new Error("Actor identity catalog persistence is unavailable.");
+        const evidenceCaptureIds = options.store.listCaptures().filter((capture: any) => actorIdentityCatalogSnapshot.evidenceContentHashes?.includes(capture.contentHash)).map((capture: any) => capture.id);
+        options.store.replaceActorIdentityCatalog({ ...actorIdentityCatalogSnapshot, ...(evidenceCaptureIds.length ? { evidenceCaptureIds } : {}) }, { sourceId: source.id, captureId: saved.capture.id, importedAt: generatedAt });
+      }
       if (duplicate) { counters.duplicateCaptureCount++; taskMetrics.duplicateCount++; } else { counters.insertedCaptureCount++; taskMetrics.captureCount++; }
       if (saved.incident) { counters.incidentCount++; taskMetrics.incidentCount++; }
       for (const entity of pipeline.entities ?? []) if (["actor", "ransomware_family"].includes(entity.type)) taskMetrics.actorIds.add(String(entity.normalizedValue ?? entity.value));
-      if (await saveExposureClaimFromCollectedItem(options.store, collected, generatedAt)) counters.exposureClaimCount++;
+      if (!actorIdentityCatalogSnapshot && !catalogEvidenceOnly && await saveExposureClaimFromCollectedItem(options.store, collected, generatedAt)) counters.exposureClaimCount++;
       latestCaptureIds.push(saved.capture.id);
     }
     counters.completedTaskCount++; options.frontier.complete(task);

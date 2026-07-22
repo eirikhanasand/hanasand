@@ -8,16 +8,16 @@ import { createCollectionPlan } from "./plannerCollection.ts";
 
 export function createLiveSearchPlan(input): any {
   const request = { ...input.request, budgetClass: "interactive_live_search", priority: input.request.priority ?? "urgent", maxTasks: input.request.maxTasks ?? BUDGETS.interactive_live_search[0] };
-  const plan = createCollectionPlan(request, input.sources, input.frontier ?? new FocusedFrontier({ strategy: "balanced" }));
-  const reuseKey = liveSearchReuseKey(plan.request, input.sources, plan.queryTerms), activeRun = activeFor(plan, input.activeRuns ?? [], input.activePlans ?? [], reuseKey);
+  const plan = createCollectionPlan({ ...request, actorIdentities: input.actorIdentities }, input.sources, input.frontier ?? new FocusedFrontier({ strategy: "balanced" }));
+  const reuseKey = liveSearchReuseKey(plan.request, input.sources, plan.queryTerms, input.actorIdentities), activeRun = activeFor(plan, input.activeRuns ?? [], input.activePlans ?? [], reuseKey);
   const zeroTaskReason = zeroReason(plan, activeRun), recommendedSourceActivations = recommended(plan, input.sources, input.queryDemand ?? {});
   const back = backpressure(plan, activeRun, zeroTaskReason, input.frontier, recommendedSourceActivations, input.queuePressureLimit);
   return { plan, dto: { mode: "interactive_live_search", planId: plan.id, reuseKey, activeRunId: activeRun?.id, attachedToActiveRun: Boolean(activeRun), backpressureState: back.state, backpressureReason: back.reason, retryAfterSeconds: back.retryAfterSeconds, queuedTaskCount: plan.tasks.length, reviewTaskCount: plan.reviewRequired.length, blockedSourceCount: (plan.explanations ?? []).filter((x) => x.status === "blocked-by-policy" || x.status === "blocked-by-approval").length, skippedTaskCount: (plan.explanations ?? []).filter((x) => x.status === "skipped" || x.status === "duplicate-suppressed").length, nextPollSeconds: nextPoll(plan, activeRun, back.state), zeroTaskReason, coverageGaps: gaps(plan), recommendedSourceActivations, queryTerms: plan.queryTerms ?? [plan.request.query] } };
 }
 
-export function liveSearchReuseKey(request, sources, queryTerms) {
+export function liveSearchReuseKey(request, sources, queryTerms, actorIdentities) {
   const scoped = sources.filter((s) => sourceMatchesScope(s, { includeClearWeb: request.includeClearWeb ?? true, includeTelegram: request.includeTelegram ?? true, includeDarknetMetadata: request.includeDarknetMetadata ?? false }, queryTerms));
-  return stableId("live-reuse", JSON.stringify({ tenantId: request.tenantId ?? "global", entityType: request.entityType, terms: reuseTerms(request.query, request.entityType, queryTerms), sourceScope: uniq(scoped.map((s) => s.type)), riskScope: uniq(scoped.map((s) => s.risk)), freshnessWindow: hour(request.createdAt ?? nowIso()) }));
+  return stableId("live-reuse", JSON.stringify({ tenantId: request.tenantId ?? "global", entityType: request.entityType, terms: reuseTerms(request.query, request.entityType, queryTerms, actorIdentities), sourceScope: uniq(scoped.map((s) => s.type)), riskScope: uniq(scoped.map((s) => s.risk)), freshnessWindow: hour(request.createdAt ?? nowIso()) }));
 }
 
 function zeroReason(plan, activeRun) { const ex = plan.explanations ?? []; if (activeRun) return "duplicate_run_already_active"; if (plan.tasks.length || plan.reviewRequired.length) return "none"; if (/^(apt|ransomware|malware|cve|threat|actor|victim)$/i.test(plan.request.query.trim())) return "query_too_broad"; if (!ex.length) return "no_approved_sources"; if (ex.every((x) => x.status === "waiting-for-backoff" || x.status === "delayed")) return "all_sources_stale_or_backoff"; if (ex.every((x) => x.status === "blocked-by-policy" || x.status === "blocked-by-approval")) return "all_sources_blocked_by_risk"; if (ex.every((x) => x.reason.includes("disabled") || x.reason.includes("outside request scope"))) return "adapter_disabled"; if (ex.every((x) => x.reason.includes("budget"))) return "tenant_budget_exhausted"; return "no_approved_sources"; }

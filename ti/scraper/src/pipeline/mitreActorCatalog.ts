@@ -63,11 +63,27 @@ export type MitreActorResolution = {
   query: string;
   normalizedQuery: string;
   candidates: Array<{
-    identity: MitreActorIdentity;
+    identity: ActorIdentityRecord;
     matchKinds: Array<"canonical" | "associated">;
     matchedLabels: string[];
   }>;
   ambiguous: boolean;
+};
+
+export type ActorIdentityRecord = {
+  id: string;
+  catalogId: string;
+  externalId: string;
+  canonicalName: string;
+  normalizedCanonicalName: string;
+  associatedNames: string[];
+  status: MitreActorIdentityStatus;
+  aptNumberDesignationPresent: boolean;
+  sourceUrl: string;
+  catalogVersion: string;
+  catalogModifiedAt: string;
+  bundleSha256: string;
+  retrievedAt: string;
 };
 
 type JsonObject = Record<string, unknown>;
@@ -167,9 +183,10 @@ export function parseMitreActorCatalog(
   };
 }
 
-export function resolveMitreActorIdentity(query: string, identities: readonly MitreActorIdentity[]): MitreActorResolution {
+export function resolveMitreActorIdentity(query: string, identities: readonly ActorIdentityRecord[]): MitreActorResolution {
   const normalizedQuery = normalizeActorLabel(query);
-  const candidates = identities.filter((identity) => identity.status === "current").flatMap((identity) => {
+  const current = identities.filter((identity) => identity.status === "current");
+  const matched = current.flatMap((identity) => {
     const canonical = normalizeActorLabel(identity.canonicalName) === normalizedQuery ? [identity.canonicalName] : [];
     const associated = identity.associatedNames.filter((label) => normalizeActorLabel(label) === normalizedQuery);
     if (!canonical.length && !associated.length) return [];
@@ -179,7 +196,34 @@ export function resolveMitreActorIdentity(query: string, identities: readonly Mi
       matchedLabels: [...canonical, ...associated]
     }];
   });
+  const candidates = [...matched.reduce((groups, candidate) => {
+    const identity = canonicalIdentity(candidate.identity, current);
+    const existing = groups.get(identity.id);
+    groups.set(identity.id, existing ? {
+      identity,
+      matchKinds: [...new Set([...existing.matchKinds, ...candidate.matchKinds])],
+      matchedLabels: unique([...existing.matchedLabels, ...candidate.matchedLabels])
+    } : { ...candidate, identity });
+    return groups;
+  }, new Map<string, { identity: ActorIdentityRecord; matchKinds: Array<"canonical" | "associated">; matchedLabels: string[] }>()).values()];
   return { query, normalizedQuery, candidates, ambiguous: candidates.length > 1 };
+}
+
+export function reconcileActorIdentityCoverage(identities: readonly ActorIdentityRecord[]) {
+  const current = identities.filter((identity) => identity.status === "current");
+  const canonicalIds = new Set(current.map((identity) => canonicalIdentity(identity, current).id));
+  const aliases = current.flatMap((identity) => identity.associatedNames);
+  return {
+    currentCatalogRecordCount: current.length,
+    canonicalIdentityCount: canonicalIds.size,
+    mitreCurrentIdentityCount: current.filter((identity) => identity.catalogId === "mitre-attack-enterprise").length,
+    ransomwareCurrentOperationCount: current.filter((identity) => identity.catalogId === "ransomware-live-current-operations").length,
+    crossCatalogMergedIdentityCount: current.length - canonicalIds.size,
+    aptNumberDesignationPresentCount: current.filter((identity) => identity.catalogId === "mitre-attack-enterprise" && identity.aptNumberDesignationPresent).length,
+    associatedNameOccurrenceCount: aliases.length,
+    distinctAssociatedNameCount: new Set(aliases.map(normalizeActorLabel)).size,
+    distinctLookupLabelCount: new Set(current.flatMap((identity) => [identity.canonicalName, ...identity.associatedNames]).map(normalizeActorLabel)).size
+  };
 }
 
 export function normalizeActorLabel(value: string): string {
@@ -203,6 +247,13 @@ function collisions(identities: MitreActorIdentity[]): MitreActorAliasCollision[
 
 function hasAptNumberDesignation(value: string): boolean {
   return /^apt[- ]?\d+$/i.test(value.trim());
+}
+
+function canonicalIdentity(identity: ActorIdentityRecord, current: readonly ActorIdentityRecord[]): ActorIdentityRecord {
+  if (identity.catalogId === "mitre-attack-enterprise") return identity;
+  const name = normalizeActorLabel(identity.canonicalName);
+  const mitreMatches = current.filter((candidate) => candidate.catalogId === "mitre-attack-enterprise" && normalizeActorLabel(candidate.canonicalName) === name);
+  return mitreMatches.length === 1 ? mitreMatches[0] : identity;
 }
 
 function mitreExternalId(group: JsonObject): string {

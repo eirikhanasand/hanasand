@@ -155,6 +155,10 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
   beforeEach(async () => {
     await admin.unsafe(`
       TRUNCATE TABLE
+        threat_intel.actor_identity_aliases,
+        threat_intel.actor_identities,
+        threat_intel.actor_identity_catalog_versions,
+        threat_intel.actor_identity_catalogs,
         threat_intel.incident_identity_history,
         threat_intel.incident_revisions,
         threat_intel.workflow_records,
@@ -247,6 +251,51 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     })]);
     expect(await store.databaseHealth()).toMatchObject({ ok: true, pendingWrites: 0 });
     await store.close();
+  });
+
+  test("persists global actor identity catalogs across refresh and restart without fabricating activity", async () => {
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    first.saveSource(source({ id: "src_actor_catalog", name: "Authoritative actor catalog" }));
+    first.saveCapture(catalogCapture("cap_actor_catalog_v1", "catalog-v1"));
+    first.replaceActorIdentityCatalog(actorCatalog([actorIdentity("G0001", "Alpha Group", ["Alpha Alias"]), actorIdentity("G0002", "Beta Group", ["Beta Alias"])]), {
+      sourceId: "src_actor_catalog",
+      captureId: "cap_actor_catalog_v1",
+      importedAt: collectedAt
+    });
+    await first.flush();
+
+    expect(first.listActorProfiles()).toEqual([]);
+    expect(first.listIncidents()).toEqual([]);
+    const tenantResponse = await handleApiRequest(api("/v1/intel/actor-identities?tenantId=tenant_catalog"), { store: first, frontier: new FocusedFrontier() });
+    expect(await tenantResponse.json()).toMatchObject({ total: 2, actorIdentities: [{ catalogId: "mitre-attack-enterprise" }, { catalogId: "mitre-attack-enterprise" }] });
+    await first.close();
+
+    const second = await PostgresScraperStore.create({ databaseUrl });
+    expect(second.listActorIdentityCatalogs()).toEqual([expect.objectContaining({ id: "mitre-attack-enterprise", identityIds: ["mitre-attack-enterprise:G0001", "mitre-attack-enterprise:G0002"] })]);
+    expect(second.listActorIdentities()).toHaveLength(2);
+    second.saveCapture(catalogCapture("cap_actor_catalog_v2", "catalog-v2"));
+    second.replaceActorIdentityCatalog(actorCatalog([actorIdentity("G0001", "Alpha Group", ["Alpha Current Alias"])], "catalog-v2"), {
+      sourceId: "src_actor_catalog",
+      captureId: "cap_actor_catalog_v2",
+      importedAt: "2026-07-20T12:00:00.000Z"
+    });
+    await second.close();
+
+    const third = await PostgresScraperStore.create({ databaseUrl });
+    expect(third.listActorIdentities()).toEqual([
+      expect.objectContaining({ id: "mitre-attack-enterprise:G0001", status: "current", associatedNames: ["Alpha Current Alias"] }),
+      expect.objectContaining({ id: "mitre-attack-enterprise:G0002", status: "retired" })
+    ]);
+    expect(third.listActorProfiles()).toEqual([]);
+    expect(third.listIncidents()).toEqual([]);
+    const [counts] = await admin<{ versions: number; current_version_identities: number; aliases: number }[]>`
+      SELECT
+        (SELECT count(*)::int FROM threat_intel.actor_identity_catalog_versions) AS versions,
+        (SELECT jsonb_array_length(record->'identities')::int FROM threat_intel.actor_identity_catalog_versions WHERE bundle_sha256 = 'catalog-v2') AS current_version_identities,
+        (SELECT count(*)::int FROM threat_intel.actor_identity_aliases) AS aliases
+    `;
+    expect(counts).toMatchObject({ versions: 2, current_version_identities: 1, aliases: 4 });
+    await third.close();
   });
 
   test("persists and rehydrates the complete monitoring record across restart", async () => {
@@ -677,4 +726,69 @@ function pipeline(sourceId: string, tenantId?: string, suffix = "") {
     if (result.incident) result.incident.tenantId = tenantId;
   }
   return result;
+}
+
+function catalogCapture(id: string, contentHash: string) {
+  return {
+    id,
+    sourceId: "src_actor_catalog",
+    url: `https://catalog.example/${contentHash}`,
+    collectedAt,
+    mediaType: "application/json",
+    storageKind: "metadata_only",
+    contentHash,
+    sensitive: false,
+    metadata: { extractionProfile: "mitre_actor_catalog", catalogEvidenceOnly: true }
+  } as any;
+}
+
+function actorCatalog(identities: any[], bundleSha256 = "catalog-v1") {
+  return {
+    schemaVersion: "ti.actor_identity_catalog.v1",
+    catalogId: "mitre-attack-enterprise",
+    catalogName: "Enterprise ATT&CK",
+    catalogVersion: "test-version",
+    catalogModifiedAt: collectedAt,
+    sourceUrl: "https://catalog.example/enterprise-attack.json",
+    bundleId: `bundle--${bundleSha256}`,
+    bundleSha256,
+    retrievedAt: collectedAt,
+    counts: {
+      totalIdentityCount: identities.length,
+      currentIdentityCount: identities.length,
+      deprecatedIdentityCount: 0,
+      revokedIdentityCount: 0,
+      aptNumberDesignationPresentCount: 0,
+      associatedNameOccurrenceCount: identities.reduce((count, identity) => count + identity.associatedNames.length, 0),
+      distinctAssociatedNameCount: identities.reduce((count, identity) => count + identity.associatedNames.length, 0),
+      distinctLookupLabelCount: identities.reduce((count, identity) => count + identity.associatedNames.length + 1, 0),
+      aliasCollisionCount: 0
+    },
+    identities,
+    aliasCollisions: []
+  };
+}
+
+function actorIdentity(externalId: string, canonicalName: string, associatedNames: string[]) {
+  return {
+    id: `mitre-attack-enterprise:${externalId}`,
+    catalogId: "mitre-attack-enterprise",
+    externalId,
+    stixId: `intrusion-set--${externalId.toLowerCase()}`,
+    canonicalName,
+    normalizedCanonicalName: canonicalName.toLowerCase(),
+    associatedNames,
+    status: "current",
+    aptNumberDesignationPresent: false,
+    createdAt: collectedAt,
+    modifiedAt: collectedAt,
+    domains: ["enterprise-attack"],
+    contributors: [],
+    sourceUrl: `https://attack.mitre.org/groups/${externalId}/`,
+    referenceUrls: [],
+    catalogVersion: "test-version",
+    catalogModifiedAt: collectedAt,
+    bundleSha256: "identity-bundle",
+    retrievedAt: collectedAt
+  };
 }

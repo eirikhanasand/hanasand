@@ -1,6 +1,7 @@
 import type { ExtractedEntity, ExtractionProvenance, Indicator } from "../types.ts";
 import { normalizeWhitespace } from "../utils.ts";
 import { ACTOR_ALIAS_RECORDS } from "./actorAliases.ts";
+import { resolveMitreActorIdentity, type ActorIdentityRecord } from "./mitreActorCatalog.ts";
 
 export const EXTRACTOR_VERSION = "ti-extractor-v2";
 export type ExtractionContext = { sourceId: string; captureId: string; url: string; collectedAt: string; contentHash: string; language?: string };
@@ -17,9 +18,23 @@ export function extractIndicators(text: string, context: ExtractionContext): Ind
   const rows: Indicator[] = []; for (const [type, pattern] of Object.entries(RES)) addMatches(rows, type as Indicator["type"], text, pattern, context, CONF[type]); return dedupe(rows, (i) => `${i.type}:${i.value.toLowerCase()}`);
 }
 
-export function extractEntities(text: string, context: ExtractionContext): ExtractedEntity[] {
+export function extractEntities(text: string, context: ExtractionContext, actorIdentities?: ActorIdentityRecord[]): ExtractedEntity[] {
   const rows: ExtractedEntity[] = [], lower = text.toLowerCase();
-  for (const record of ACTOR_ALIAS_RECORDS) for (const alias of record.aliases) { const index = phraseIndex(lower, alias); if (index >= 0) { rows.push({ ...ent("actor", record.canonical, text.slice(index, index + alias.length), context, index, index + alias.length, record.confidence), aliases: record.aliases }); break; } }
+  if (actorIdentities) {
+    const labels = [...new Set(actorIdentities.filter((record) => record.status === "current").flatMap((identity) => [identity.canonicalName, ...identity.associatedNames]))];
+    for (const label of labels) {
+      const index = phraseIndex(lower, label);
+      if (index < 0) continue;
+      const resolution = resolveMitreActorIdentity(label, actorIdentities);
+      const exact = !resolution.ambiguous && resolution.candidates.length === 1 && resolution.candidates[0].matchKinds.includes("canonical");
+      const value = exact ? resolution.candidates[0].identity.canonicalName : label;
+      rows.push({
+        ...ent("actor", value, text.slice(index, index + label.length), context, index, index + label.length, exact ? 0.82 : 0.72),
+        aliases: exact ? resolution.candidates[0].identity.associatedNames : [label],
+        actorIdentityIds: resolution.candidates.map((candidate) => candidate.identity.id)
+      });
+    }
+  } else for (const record of ACTOR_ALIAS_RECORDS) for (const alias of record.aliases) { const index = phraseIndex(lower, alias); if (index >= 0) { rows.push({ ...ent("actor", record.canonical, text.slice(index, index + alias.length), context, index, index + alias.length, record.confidence), aliases: record.aliases }); break; } }
   for (const [type, hints, confidence, transform] of [["malware", MALWARE, 0.72, same], ["sector", SECTORS, 0.54, same], ["country", COUNTRIES, 0.54, title], ["ttp", TECHNIQUES, 0.72, same]] as const) for (const hint of hints) { const index = phraseIndex(lower, hint); if (index >= 0) rows.push(ent(type, transform(hint), text.slice(index, index + hint.length), context, index, index + hint.length, confidence)); }
   if (/\b(?:ransomware|leak|claimed|victim|extortion|data theft)\b/i.test(text)) for (const family of RANSOMWARE_FAMILIES) { const index = phraseIndex(lower, family), nearby = text.slice(Math.max(0, index - 48), index + family.length + 48); if (index >= 0 && (family !== "play" || /(?:\bplay\b.{0,24}\b(?:ransomware|gang|group|operators?|extortion)|\b(?:ransomware|gang|group|operators?|extortion)\b.{0,24}\bplay\b)/i.test(nearby))) rows.push(ent("ransomware_family", title(family), text.slice(index, index + family.length), context, index, index + family.length, 0.76)); }
   addEntityMatches(rows, "victim", text, /\b(?:victim|customer|target(?:ed)?|against|compromised)\s*:\s*([A-Z][A-Za-z0-9&.,' -]{2,80})/g, context, 0.68);

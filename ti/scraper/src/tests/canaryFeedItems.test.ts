@@ -71,9 +71,9 @@ describe("canary feed item extraction", () => {
     const result = processCollectedItem(items[0]);
     expect(result.entities).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "ransomware_family", value: "Example Group", aliases: ["Example Alias"], assertionKind: "observed" }),
-      expect.objectContaining({ type: "communication_channel", value: "listed actor chat endpoint", assertionKind: "observed" })
+      expect.objectContaining({ type: "channel_type", value: "Chat", assertionKind: "observed" })
     ]));
-    expect(result.entities.some((entity: any) => ["buyer_seller_communication", "monetization_path", "profitability_signal"].includes(entity.type))).toBe(false);
+    expect(result.entities.some((entity: any) => ["communication_channel", "buyer_seller_communication", "monetization_path", "profitability_signal"].includes(entity.type))).toBe(false);
   });
 });
 

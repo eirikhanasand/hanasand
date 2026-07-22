@@ -1,16 +1,33 @@
 import type { CollectedItem, ExtractedEntity, ExtractionProvenance } from "../types.ts";
 import { normalizeWhitespace } from "../utils.ts";
 import type { ExtractionContext } from "./extractors.ts";
+import { resolveMitreActorIdentity, type ActorIdentityRecord } from "./mitreActorCatalog.ts";
 
 export const SOURCE_SPECIFIC_EXTRACTOR_VERSION = "ti-source-specific-extractor-v2";
 
-export function extractSourceSpecificEntities(item: CollectedItem, context: ExtractionContext): ExtractedEntity[] {
+export function extractSourceSpecificEntities(item: CollectedItem, context: ExtractionContext, actorIdentities?: ActorIdentityRecord[]): ExtractedEntity[] {
   const profile = item.metadata?.extractionProfile;
-  if (profile === "ransomware_victim_blog") return victimBlogEntities(item, context);
-  if (profile === "ransomware_group_metadata") return ransomwareGroupEntities(item, context);
-  if (profile === "cisa_kev") return cisaKevEntities(item, context);
-  if (profile === "cert_ua_public_channel") return certUaEntities(item, context);
-  return [];
+  const entities = profile === "ransomware_victim_blog" ? victimBlogEntities(item, context)
+    : profile === "ransomware_group_metadata" ? ransomwareGroupEntities(item, context)
+      : profile === "cisa_kev" ? cisaKevEntities(item, context)
+        : profile === "cert_ua_public_channel" ? certUaEntities(item, context)
+          : [];
+  return actorIdentities?.length ? entities.map((entity) => resolveActorEntity(entity, actorIdentities)) : entities;
+}
+
+function resolveActorEntity(entity: ExtractedEntity, identities: ActorIdentityRecord[]): ExtractedEntity {
+  if (entity.type !== "actor" && entity.type !== "ransomware_family") return entity;
+  const resolution = resolveMitreActorIdentity(entity.value, identities);
+  if (!resolution.candidates.length) return entity;
+  const exact = !resolution.ambiguous && resolution.candidates.length === 1 && resolution.candidates[0].matchKinds.includes("canonical");
+  const identity = resolution.candidates[0].identity;
+  return {
+    ...entity,
+    value: exact ? identity.canonicalName : entity.value,
+    normalizedValue: exact ? identity.canonicalName : entity.normalizedValue,
+    aliases: exact ? identity.associatedNames : [entity.value],
+    actorIdentityIds: resolution.candidates.map((candidate) => candidate.identity.id)
+  } as ExtractedEntity;
 }
 
 function ransomwareGroupEntities(item: CollectedItem, context: ExtractionContext): ExtractedEntity[] {
@@ -23,7 +40,6 @@ function ransomwareGroupEntities(item: CollectedItem, context: ExtractionContext
     ...channels.map((channel: string) => fieldEntity("channel_type", channel, 0.9, "channelTypes", item, context, "observed", [])),
     fieldEntity("publication_strategy", has("DLS") ? "dedicated leak-site publication" : undefined, 0.9, "channelTypes", item, context, "observed", []),
     fieldEntity("publicity_tactic", has("DLS") ? "public victim listing infrastructure" : undefined, 0.86, "channelTypes", item, context, "observed", []),
-    fieldEntity("communication_channel", has("Chat") ? "listed actor chat endpoint" : undefined, 0.82, "channelTypes", item, context, "observed", ["counterparties, purpose, and conversation content are not stated"]),
     fieldEntity("extortion_type", has("DLS") ? "leak-site extortion infrastructure" : undefined, 0.62, "channelTypes", item, context, "inferred", ["infrastructure does not prove a specific extortion event"])
   ]);
 }

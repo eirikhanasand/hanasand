@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { executeScheduledCollectionRun, recoverCollectionRuns } from "../ops/scheduledCollection.ts";
+import type { MitreActorCatalogSnapshot } from "../pipeline/mitreActorCatalog.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 
@@ -9,6 +10,20 @@ describe("scheduled API collection runs", () => {
   test("executes a queued run and exposes its captured results", async () => {
     const store = new InMemoryScraperStore();
     const frontier = new FocusedFrontier();
+    store.replaceActorIdentityCatalog({
+      schemaVersion: "ti.actor_identity_catalog.v1", catalogId: "mitre-attack-enterprise", catalogName: "Enterprise ATT&CK",
+      catalogVersion: "19.1", catalogModifiedAt: "2026-05-12T14:00:00.188Z", sourceUrl: "https://attack.mitre.org/groups/G0016/",
+      bundleId: "bundle--64af0946-bfeb-481d-96df-a38e2709e3db", bundleSha256: "bdf1ce86a4e604214c5076d37ae4dcb322678afc528df8492e6fdc1b554f5da3", retrievedAt: "2026-07-21T00:00:00.000Z",
+      counts: { totalIdentityCount: 1, currentIdentityCount: 1, deprecatedIdentityCount: 0, revokedIdentityCount: 0, aptNumberDesignationPresentCount: 1, associatedNameOccurrenceCount: 14, distinctAssociatedNameCount: 14, distinctLookupLabelCount: 15, aliasCollisionCount: 0 },
+      identities: [{
+        id: "mitre-attack-enterprise:G0016", catalogId: "mitre-attack-enterprise", externalId: "G0016", stixId: "intrusion-set--899ce53f-13a0-479b-a0e4-67d46e241542",
+        canonicalName: "APT29", normalizedCanonicalName: "apt29", associatedNames: ["IRON RITUAL", "IRON HEMLOCK", "NobleBaron", "Dark Halo", "NOBELIUM", "UNC2452", "YTTRIUM", "The Dukes", "Cozy Bear", "CozyDuke", "SolarStorm", "Blue Kitsune", "UNC3524", "Midnight Blizzard"],
+        status: "current", aptNumberDesignationPresent: true, createdAt: "2017-05-31T21:31:52.748Z", modifiedAt: "2026-01-20T16:22:04.140Z",
+        domains: ["enterprise-attack"], contributors: ["Daniyal Naeem, BT Security", "Matt Brenton, Zurich Insurance Group", "Katie Nickels, Red Canary", "Joe Gumke, U.S. Bank", "Liran Ravich, CardinalOps", "Vicky Ray, RayvenX"],
+        sourceUrl: "https://attack.mitre.org/groups/G0016", referenceUrls: ["https://attack.mitre.org/groups/G0016"], catalogVersion: "19.1", catalogModifiedAt: "2026-05-12T14:00:00.188Z", bundleSha256: "bdf1ce86a4e604214c5076d37ae4dcb322678afc528df8492e6fdc1b554f5da3", retrievedAt: "2026-07-21T00:00:00.000Z"
+      }],
+      aliasCollisions: []
+    } satisfies MitreActorCatalogSnapshot, { sourceId: "src_mitre_enterprise_stix", captureId: "cap_mitre_enterprise_v19_1" });
     store.saveSource(source({ id: "src_live_run", name: "Live APT feed", url: "https://public.example/feed.xml", type: "rss", tags: ["apt29"], tenantId: undefined }));
     store.savePlan({ id: "plan_live", tenantId: "tenant_live", request: { query: "APT29", entityType: "actor" }, tasks: [{ id: "task_live", sourceId: "src_live_run", sourceType: "rss", targetUrl: "https://public.example/feed.xml", queuedAt: new Date().toISOString(), priority: 1, maxRetries: 0, planning: { queryTerms: ["APT29"] } }] });
     store.saveRun({ id: "run_live", tenantId: "tenant_live", planId: "plan_live", requestId: "request_live", status: "queued", createdAt: new Date().toISOString(), taskCount: 1 });

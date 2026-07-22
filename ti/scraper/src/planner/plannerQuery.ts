@@ -1,16 +1,16 @@
 // @ts-nocheck
 import { actorAliasesFor, ACTOR_ALIAS_RECORDS } from "../pipeline/actorAliases.ts";
 
-export function expandQueryTerms(query, entityType) {
+export function expandQueryTerms(query, entityType, actorIdentities) {
   const terms = new Set([query.trim()]);
-  const record = ACTOR_ALIAS_RECORDS.find((r) => r.canonical.toLowerCase() === query.trim().toLowerCase() || r.aliases.includes(query.trim().toLowerCase()));
+  const record = Array.isArray(actorIdentities) ? undefined : ACTOR_ALIAS_RECORDS.find((r) => r.canonical.toLowerCase() === query.trim().toLowerCase() || r.aliases.includes(query.trim().toLowerCase()));
   if ((entityType === "actor" || entityType === "alias" || entityType === "free_text") && record) [record.canonical, ...actorAliasesFor(record.canonical)].forEach((t) => terms.add(t));
   if (entityType === "cve" || entityType === "indicator") terms.add(query.trim().toUpperCase());
   return [...terms].filter(Boolean).slice(0, 12);
 }
 
-export function reuseTerms(query, entityType, terms) {
-  const record = ACTOR_ALIAS_RECORDS.find((r) => r.canonical.toLowerCase() === query.trim().toLowerCase() || r.aliases.includes(query.trim().toLowerCase()) || terms.some((t) => r.aliases.includes(t.toLowerCase())));
+export function reuseTerms(query, entityType, terms, actorIdentities) {
+  const record = Array.isArray(actorIdentities) ? undefined : ACTOR_ALIAS_RECORDS.find((r) => r.canonical.toLowerCase() === query.trim().toLowerCase() || r.aliases.includes(query.trim().toLowerCase()) || terms.some((t) => r.aliases.includes(t.toLowerCase())));
   return record && ["actor", "alias", "free_text"].includes(entityType) ? [record.canonical, ...actorAliasesFor(record.canonical)].map((t) => t.toLowerCase()).sort() : uniq(terms.map((t) => t.trim().toLowerCase()));
 }
 

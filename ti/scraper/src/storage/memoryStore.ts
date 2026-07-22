@@ -264,6 +264,7 @@ function mergeActorProfile(previous: any, capture: any, entity: any, entities: a
     normalizedName: normalized(entity),
     actorType: keepPreviousIdentity ? previous.actorType : incomingType,
     aliases: uniqueActorAliases([canonicalName, ...(previous?.aliases ?? []), ...(entity.aliases ?? []), entity.rawValue, entity.value]),
+    actorIdentityIds: unique([...(previous?.actorIdentityIds ?? []), ...(entity.actorIdentityIds ?? [])]),
     confidence: Math.max(previous?.confidence ?? 0, entity.confidence ?? 0),
     firstSeenAt: earlier(previous?.firstSeenAt, observedAt),
     lastSeenAt: later(previous?.lastSeenAt, observedAt),

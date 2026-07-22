@@ -4,8 +4,9 @@ import { buildIncidentCandidate } from "./incidentCandidate.ts";
 import { buildRawCapture } from "./pipelineCapture.ts";
 import { nowIso } from "../utils.ts";
 import { extractSourceSpecificEntities } from "./sourceSpecificExtraction.ts";
+import type { ActorIdentityRecord } from "./mitreActorCatalog.ts";
 
-export function processCollectedItem(item: CollectedItem): PipelineResult {
+export function processCollectedItem(item: CollectedItem, options: { actorIdentities?: ActorIdentityRecord[] } = {}): PipelineResult {
   const processedAt = nowIso();
   const capture = { ...buildRawCapture(item), processedAt };
   const extractorContext: ExtractionContext = {
@@ -17,8 +18,8 @@ export function processCollectedItem(item: CollectedItem): PipelineResult {
     language: item.language
   };
   const indicators = extractIndicators(item.rawText, extractorContext);
-  const sourceSpecificEntities = extractSourceSpecificEntities(item, extractorContext);
-  const fallbackEntities = extractEntities(item.rawText, extractorContext);
+  const sourceSpecificEntities = extractSourceSpecificEntities(item, extractorContext, options.actorIdentities);
+  const fallbackEntities = extractEntities(item.rawText, extractorContext, options.actorIdentities);
   const authoritativeTypes = item.metadata?.extractionProfile === "ransomware_victim_blog"
     ? new Set(sourceSpecificEntities.filter((entity) => entity.type === "actor" || entity.type === "ransomware_family" || entity.type === "victim").flatMap((entity) => entity.type === "actor" || entity.type === "ransomware_family" ? ["actor", "ransomware_family"] : [entity.type]))
     : new Set<string>();

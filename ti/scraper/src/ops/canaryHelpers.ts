@@ -2,8 +2,12 @@
 import { hashContent, stableId } from "../utils.ts";
 import type { CanaryFetch, CanaryLoopState } from "./canaryCollectionTypes.ts";
 import { feedItems } from "./canaryFeedItems.ts";
+import { parseMitreActorCatalog } from "../pipeline/mitreActorCatalog.ts";
+import { parseCurrentRansomwareOperations } from "../pipeline/ransomwareOperationCatalog.ts";
 
 export function taskFor(source: any, at: string, runId: string, maxBytes: number) {
+  if (source.metadata?.extractionProfile === "mitre_actor_catalog") maxBytes = Math.max(maxBytes, 64 * 1024 * 1024);
+  if (source.metadata?.extractionProfile === "ransomware_operation_catalog") maxBytes = Math.max(maxBytes, 32 * 1024 * 1024);
   return { id: stableId("task", `${source.id}:${at}`), tenantId: source.tenantId, sourceId: source.id, targetUrl: source.url, sourceType: source.type, queuedAt: at, priority: source.trustScore ?? 0.5, reason: "public_canary", retryCount: 0, maxBytes, runId };
 }
 
@@ -11,6 +15,8 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
   const started = Date.now(), requestedUrl = publicFetchUrl(source, task.targetUrl);
   if (source.catalog?.canonicalId === "gov:us:cisa:known-exploited-vulnerabilities") maxBytes = Math.max(maxBytes, 4_000_000);
   if (source.catalog?.canonicalId === "community:ransomwarelive:groups") maxBytes = Math.max(maxBytes, 2_000_000);
+  if (source.metadata?.extractionProfile === "mitre_actor_catalog") maxBytes = Math.max(maxBytes, 64 * 1024 * 1024);
+  if (source.metadata?.extractionProfile === "ransomware_operation_catalog") maxBytes = Math.max(maxBytes, 32 * 1024 * 1024);
   const { response: res, finalUrl, redirectCount } = await fetchPublicResponse(fetcher, requestedUrl, timeoutMs);
   if (!res.ok) throw httpError(res.status);
   const contentType = res.headers.get("content-type") ?? undefined;
@@ -18,6 +24,89 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
   const body = await boundedText(res, maxBytes);
   const fetched = body.text;
   const metadata = { canaryPortfolio: true, fetchMode: mode, finalUrlHash: hashContent(finalUrl), responseBytes: body.bytesReceived, fetchProvenance: { mode, adapterVersion: "public_canary_fetcher:v2", requestedUrlHash: hashContent(requestedUrl), sourceUrlHash: hashContent(task.targetUrl), finalUrlHash: hashContent(finalUrl), httpStatus: res.status, ok: res.ok, contentType, fetchedAt: at, durationMs: Date.now() - started, bytesReceived: body.bytesReceived, maxBytes, truncated: body.truncated, bounded: true, redirectCount, userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" } };
+  if (source.metadata?.extractionProfile === "mitre_actor_catalog") {
+    if (body.truncated) throw new Error("MITRE actor catalog exceeded the bounded response size.");
+    const actorIdentityCatalogSnapshot = parseMitreActorCatalog(fetched, { retrievedAt: at, sourceUrl: task.targetUrl });
+    return [{
+      tenantId: source.tenantId,
+      sourceId: source.id,
+      taskId: task.id,
+      url: task.targetUrl,
+      title: `${actorIdentityCatalogSnapshot.catalogName} ${actorIdentityCatalogSnapshot.catalogVersion}`,
+      rawText: fetched,
+      collectedAt: at,
+      publishedAt: actorIdentityCatalogSnapshot.catalogModifiedAt,
+      contentHash: actorIdentityCatalogSnapshot.bundleSha256,
+      links: [task.targetUrl],
+      metadata: { ...metadata, extractionProfile: "mitre_actor_catalog", actorIdentityCatalogSnapshot, parserVersion: "mitre-attack-stix-2.1:v1" },
+      sensitive: false
+    }];
+  }
+  if (source.metadata?.extractionProfile === "ransomware_operation_catalog") {
+    if (body.truncated) throw new Error("Ransomware operation group catalog exceeded the bounded response size.");
+    const activityUrl = String(source.metadata?.activityUrl ?? "");
+    const activityStarted = Date.now();
+    const activityFetch = await fetchPublicResponse(fetcher, activityUrl, timeoutMs);
+    if (!activityFetch.response.ok) throw httpError(activityFetch.response.status);
+    const activityType = activityFetch.response.headers.get("content-type") ?? undefined;
+    if (activityType && !/^application\/json/i.test(activityType)) throw new Error(`unsupported media type: ${activityType}`);
+    const activityBody = await boundedText(activityFetch.response, 32 * 1024 * 1024);
+    if (activityBody.truncated) throw new Error("Ransomware operation activity evidence exceeded the bounded response size.");
+    const ransomwareOperationCatalogSnapshot = parseCurrentRansomwareOperations(fetched, activityBody.text, { retrievedAt: at, sourceUrl: task.targetUrl });
+    const [groupContentHash, activityContentHash] = ransomwareOperationCatalogSnapshot.evidenceContentHashes;
+    const activityMetadata = {
+      canaryPortfolio: true,
+      fetchMode: mode,
+      extractionProfile: "ransomware_operation_activity_evidence",
+      catalogEvidenceOnly: true,
+      responseBytes: activityBody.bytesReceived,
+      fetchProvenance: {
+        mode,
+        adapterVersion: "public_canary_fetcher:v2",
+        requestedUrlHash: hashContent(activityUrl),
+        sourceUrlHash: hashContent(activityUrl),
+        finalUrlHash: hashContent(activityFetch.finalUrl),
+        httpStatus: activityFetch.response.status,
+        ok: activityFetch.response.ok,
+        contentType: activityType,
+        fetchedAt: at,
+        durationMs: Date.now() - activityStarted,
+        bytesReceived: activityBody.bytesReceived,
+        maxBytes: 32 * 1024 * 1024,
+        truncated: false,
+        bounded: true,
+        redirectCount: activityFetch.redirectCount,
+        userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)"
+      }
+    };
+    return [{
+      tenantId: source.tenantId,
+      sourceId: source.id,
+      taskId: task.id,
+      url: activityUrl,
+      title: `Ransomware.live activity evidence through ${ransomwareOperationCatalogSnapshot.activityWatermarkAt}`,
+      rawText: activityBody.text,
+      collectedAt: at,
+      publishedAt: ransomwareOperationCatalogSnapshot.activityWatermarkAt,
+      contentHash: activityContentHash,
+      links: [],
+      metadata: activityMetadata,
+      sensitive: true
+    }, {
+      tenantId: source.tenantId,
+      sourceId: source.id,
+      taskId: task.id,
+      url: task.targetUrl,
+      title: `${ransomwareOperationCatalogSnapshot.catalogName} ${ransomwareOperationCatalogSnapshot.catalogVersion}`,
+      rawText: fetched,
+      collectedAt: at,
+      publishedAt: ransomwareOperationCatalogSnapshot.catalogModifiedAt,
+      contentHash: groupContentHash,
+      links: [],
+      metadata: { ...metadata, extractionProfile: "ransomware_operation_catalog", ransomwareOperationCatalogSnapshot, parserVersion: "ransomware-live-current-operations:v1" },
+      sensitive: true
+    }];
+  }
   return feedItems(source, task, fetched, at, metadata, maxItemsFor(source) ?? maxItems);
 }
 
