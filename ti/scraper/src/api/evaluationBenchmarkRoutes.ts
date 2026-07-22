@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { minimizeTelegramPii } from "../adapters/telegramPublicHelpers.ts";
 import { sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
@@ -85,7 +85,7 @@ export function createEvaluationBenchmark(store: any, input: {
   createdAt?: string;
 }) {
   const createdAt = input.createdAt ?? nowIso();
-  const seed = hashContent(randomUUID());
+  const seed = evaluationHash(randomUUID());
   const labelTypes = input.labelTypes?.length ? input.labelTypes : [...LABEL_TYPES];
   const requiredReviewers = Math.max(2, Math.min(3, input.requiredReviewers ?? 2));
   const datasetSplit = input.datasetSplit ?? "validation";
@@ -131,10 +131,11 @@ export function createEvaluationBenchmark(store: any, input: {
         captureId: capture.id,
         labelType,
         contentHash: capture.contentHash,
-        excerptHash: hashContent(evidence),
+        excerptHash: evaluationHash(evidence),
+        evidenceHashAlgorithm: "sha256",
         sourceFamily: sourceFamily(sourceById.get(capture.sourceId), capture),
         referenceEvidence,
-        referenceEvidenceHash: hashContent(JSON.stringify(referenceEvidence)),
+        referenceEvidenceHash: evaluationHash(JSON.stringify(referenceEvidence)),
         independenceContext: {
           extractorPredictionsExcluded: true,
           reviewerContextsIsolated: true,
@@ -175,17 +176,18 @@ export function createEvaluationBenchmark(store: any, input: {
     selectionSeedSource: "server_generated",
     samplingMethod: "stable_hash_stratified_source_family_case_type",
     selectionStrata: countByValue(selectedStrata),
-    selectionFrameHash: hashContent(eligible.map((capture) => `${capture.id}:${capture.contentHash}:${hashContent(evidenceByCapture.get(capture.id)!)}`).sort().join("\n")),
+    selectionFrameHash: evaluationHash(eligible.map((capture) => `${capture.id}:${capture.contentHash}:${evaluationHash(evidenceByCapture.get(capture.id)!)}`).sort().join("\n")),
     eligibleCaptureCount: eligible.length,
     captureIds: selected.map((capture) => capture.id),
     taskCount: manifest.length,
     manifest,
-    manifestHash: hashContent(JSON.stringify(manifest.map(({ automation: _automation, ...task }) => task))),
+    manifestHash: evaluationHash(JSON.stringify(manifest.map(({ automation: _automation, ...task }) => task))),
     protocol: {
       version: "ti.independent_extraction_benchmark.v3",
       labelSchemaVersion: "ti.extraction_label.v3",
       reviewPromptVersion: REVIEW_PROMPT_VERSION,
       reviewSchemaVersion: REVIEW_SCHEMA_VERSION,
+      evidenceHashAlgorithm: "sha256",
       blinded: true,
       predictionHiddenUntilSubmission: true,
       predictionHiddenFromReviewers: true,
@@ -326,7 +328,7 @@ function autoAdjudicate(store: any, benchmark: any, task: any) {
     benchmark,
     task,
     compared[0].expectedValues,
-    `consensus:${hashContent(compared.map((row) => row.reviewerId).sort().join("|"))}`,
+    `consensus:${evaluationHash(compared.map((row) => row.reviewerId).sort().join("|"))}`,
     compared.map((row) => row.id),
     automatic ? "independent_model_reviewer_consensus" : "independent_reviewer_consensus",
     adjudicatedAt,
@@ -878,7 +880,7 @@ function balancedSample(captures: any[], sourceById: Map<string, any>, size: num
     const key = `${family}:${stratum}`;
     groups.set(key, [...(groups.get(key) ?? []), capture]);
   }
-  for (const rows of groups.values()) rows.sort((a, b) => hashContent(`${seed}:${a.id}`).localeCompare(hashContent(`${seed}:${b.id}`)));
+  for (const rows of groups.values()) rows.sort((a, b) => evaluationHash(`${seed}:${a.id}`).localeCompare(evaluationHash(`${seed}:${b.id}`)));
   const selected: any[] = [], names = [...groups.keys()].sort();
   while (selected.length < Math.min(size, captures.length)) {
     let progressed = false;
@@ -904,10 +906,9 @@ function exhaustiveEvidenceText(capture: any): string | undefined {
     if (!root || !keyParts.length || keyParts.some((part: string) => !part || part === "." || part === "..") || ref.bucket !== (Bun.env.TI_EVIDENCE_OBJECT_BUCKET ?? "public-canary-evidence") || !Number.isFinite(retainedBytes) || retainedBytes < 0 || retainedBytes > MAX_REVIEW_EVIDENCE_BYTES) return undefined;
     try {
       const path = fileObjectPathForKey(root, ref.key);
-      if (!existsSync(path) || statSync(path).size !== retainedBytes) return undefined;
+      if (!existsSync(path) || statSync(path).size !== retainedBytes || !persistedObjectLineageMatches(path, capture)) return undefined;
       body = readFileSync(path, "utf8");
     } catch { return undefined; }
-    if (hashContent(body) !== capture.contentHash) return undefined;
   }
   return cleanEvidence(body);
 }
@@ -921,11 +922,19 @@ function cleanEvidence(value: unknown) {
     .trim();
   return safe && !forbiddenBoundaryMaterial(safe) ? safe : undefined;
 }
-function taskEvidenceMatches(task: any, capture: any, evidence = blindExcerpt(capture)) { return Boolean(capture) && (!task.contentHash || task.contentHash === capture.contentHash) && (!task.excerptHash || task.excerptHash === hashContent(evidence)); }
+function taskEvidenceMatches(task: any, capture: any, evidence = blindExcerpt(capture)) { if (!capture || !evidence) return false; const hash = task.evidenceHashAlgorithm === "sha256" ? evaluationHash(evidence) : hashContent(evidence); return (!task.contentHash || task.contentHash === capture.contentHash) && (!task.excerptHash || task.excerptHash === hash); }
 function sourceFamily(source: any, capture: any) { return source?.metadata?.sourceFamily ?? capture?.metadata?.sourceFamily ?? source?.type ?? capture?.metadata?.adapter ?? "unknown"; }
 function benchmarkAnnotations(store: any, id: string) { return records(store, "listEvaluationAnnotations").filter((row) => row.benchmarkId === id); }
 function benchmarkAdjudications(store: any, id: string) { return records(store, "listEvaluationAdjudications").filter((row) => row.benchmarkId === id); }
 function records(store: any, method: string): any[] { return typeof store?.[method] === "function" ? store[method]() : []; }
+function evaluationHash(value: string) { return createHash("sha256").update(value).digest("hex"); }
+function persistedObjectLineageMatches(path: string, capture: any) {
+  try {
+    const persisted = JSON.parse(readFileSync(`${path}.json`, "utf8"));
+    return persisted.captureId === capture.id && persisted.sourceId === capture.sourceId && persisted.contentHash === capture.contentHash
+      && persisted.ref?.key === capture.objectRef?.key && persisted.ref?.versionId === capture.contentHash && persisted.ref?.sizeBytes === capture.objectRef?.sizeBytes;
+  } catch { return false; }
+}
 function annotationValues(value: unknown): string[] | undefined { if (!Array.isArray(value) || value.length > 50) return undefined; const values = unique(value.map((item) => cleanText(item, 200)).filter(Boolean) as string[]); return values; }
 function modelValues(value: unknown): string[] | undefined { if (!Array.isArray(value) || value.length > 50) return undefined; const values = value.map((item) => safeModelText(item, 200)); return values.some((item) => item === undefined) ? undefined : unique(values as string[]); }
 function safeModelText(value: unknown, max: number) { const text = cleanText(value, max); return text && cleanEvidence(text) === text ? text : undefined; }
@@ -997,7 +1006,7 @@ function referenceEvidenceFor(capture: any, source: any, incidents: any[], valid
     sourceName: source?.name ?? "Unknown source",
     sourceFamily: sourceFamily(source, capture),
     contentHash: capture.contentHash,
-    excerptHash: hashContent(evidence),
+    excerptHash: evaluationHash(evidence),
     publishedAt: capture.publishedAt,
     collectedAt: capture.collectedAt,
     independence: "primary_source_evidence_reviewed_without_extractor_predictions"

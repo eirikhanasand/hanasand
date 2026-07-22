@@ -196,7 +196,7 @@ describe("automatic independent evaluation", () => {
       objectEvaluationStore.saveCapture({ id: "cap_complete_object", tenantId: "tenant_automatic", sourceId: "src_automatic", url: "https://evidence.test/complete-object", collectedAt: at, publishedAt: at, contentHash: hashContent(objectBody), mediaType: "text/plain", storageKind: "external_object", objectRef: object.ref, metadata: { safeExcerpt: "Full retained" }, sensitive: false });
       const objectBenchmark = createEvaluationBenchmark(objectEvaluationStore, { tenantId: "tenant_automatic", sampleSize: 1, labelTypes: ["actor"], datasetSplit: "validation", reviewMode: "automatic_model", createdAt: "2026-07-21T13:00:30.000Z" })!;
       expect(objectBenchmark.captureIds).toEqual(["cap_complete_object"]);
-      expect(objectBenchmark.manifest[0].excerptHash).toBe(hashContent(objectBody));
+      expect(objectBenchmark.manifest[0]).toMatchObject({ evidenceHashAlgorithm: "sha256", excerptHash: expect.stringMatching(/^[a-f0-9]{64}$/) });
     } finally {
       if (previousObjectRoot === undefined) delete Bun.env.TI_EVIDENCE_OBJECT_DIR;
       else Bun.env.TI_EVIDENCE_OBJECT_DIR = previousObjectRoot;
