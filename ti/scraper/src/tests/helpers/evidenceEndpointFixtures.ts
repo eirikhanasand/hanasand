@@ -40,7 +40,7 @@ export async function mountedCutoverReport(
       }&runId=${encodeURIComponent(seed.runId)}&tenantId=tenant_endpoint&generatedAt=${generatedAt}`,
     );
   } finally {
-    server.stop();
+    await server.stop();
   }
 }
 export function seedMountedEvidence(

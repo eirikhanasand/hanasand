@@ -86,7 +86,7 @@ describe("api v1", () => {
       expect(serialized).not.toContain("user:pass");
       expect(serialized).not.toContain("customer-dump");
     } finally {
-      server.stop();
+      await server.stop();
     }
   });
 });

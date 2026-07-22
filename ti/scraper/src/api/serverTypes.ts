@@ -22,5 +22,5 @@ export interface ApiServerOptions {
 export interface ApiServerHandle {
   server: ReturnType<typeof Bun.serve>;
   port: number;
-  stop(): void;
+  stop(): Promise<void>;
 }

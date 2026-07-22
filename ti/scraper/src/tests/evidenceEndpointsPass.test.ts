@@ -28,7 +28,7 @@ describe("mounted evidence endpoints pass path", () => {
       expect(serialized).not.toContain("\"body\":");
       expect(serialized).not.toContain("object/key");
     } finally {
-      server.stop();
+      await server.stop();
     }
   });
 });

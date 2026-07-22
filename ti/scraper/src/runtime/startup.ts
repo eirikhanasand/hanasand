@@ -74,5 +74,5 @@ export async function startScraperRuntime() {
   const recoveredRuns = recoverCollectionRuns({ store, execute: executeRun });
   const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, restrictedMetadataLoop: restrictedMetadata, sourceBootstrap, runExecutor: executeRun });
   logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", recoveredRuns, sourceBootstrap, ...paths });
-  return { stop: async () => { for (const timer of runTimers.values()) clearTimeout(timer); canary.stop(); restrictedMetadata.stop(); server.stop(); await store.close(); } };
+  return { stop: async () => { for (const timer of runTimers.values()) clearTimeout(timer); canary.stop(); restrictedMetadata.stop(); await server.stop(); await store.close(); } };
 }

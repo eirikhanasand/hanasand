@@ -15,7 +15,7 @@ describe("mounted evidence endpoint validation", () => {
       expect(missingRun.status).toBe(404);
       expect(await missingRun.json()).toMatchObject({ error: { code: "not_found" } });
     } finally {
-      server.stop();
+      await server.stop();
     }
   });
 });

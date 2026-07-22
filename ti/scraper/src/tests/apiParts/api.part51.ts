@@ -44,7 +44,7 @@ describe("api v1", () => {
       expect(JSON.stringify(alias.quality)).not.toContain("Cyber gang list");
       expect(JSON.stringify(alias.quality)).not.toContain("mounted-quality.example.test");
     } finally {
-      server.stop();
+      await server.stop();
     }
   });
 });

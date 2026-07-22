@@ -169,7 +169,7 @@ describe("api v1", () => {
           }
         } else expect(payload.error?.code).toBe(scenario.expectedError);
       } finally {
-        server.stop();
+        await server.stop();
       }
       expect(frontier.snapshot().map((item) => item.task.id).sort()).toEqual(
         beforeQueued,
