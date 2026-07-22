@@ -24,6 +24,7 @@ describe('public TI v1', () => {
         expect(Object.keys(spec.paths)).toEqual(['/ti/search', '/ti/search/batch', '/actors', '/aliases', '/incidents', '/claims', '/evidence', '/sources', '/validations', '/alerts', '/evaluation', '/timeliness'])
         expect(spec.paths['/ti/search'].post.security).toEqual([])
         expect(spec.paths['/actors'].get.security).toEqual([{ ApiKey: [] }, { SessionBearer: [], SessionId: [] }])
+        expect(spec.components.schemas.SearchResult.required).not.toContain('lastSeen')
         expect(JSON.stringify(spec)).not.toContain('additionalProperties":true')
     })
 

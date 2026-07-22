@@ -354,7 +354,7 @@ export interface components {
             refreshAfterSeconds?: number;
             summary: string;
             confidence: number;
-            lastSeen: string;
+            lastSeen?: string;
             aliases: string[];
             recentActivity: components["schemas"]["Activity"][];
             targets: components["schemas"]["Target"][];
