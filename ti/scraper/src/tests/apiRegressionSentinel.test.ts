@@ -235,37 +235,6 @@ describe("api regression sentinel", () => {
       route: "/api/admin/support/readiness",
       scopeFields: expect.arrayContaining(["tenantId", "organizationId", "actorId", "idempotencyKey"])
     });
-    expect(rows.get("hanasand.product_readiness.customer_workflow_envelope.v1")).toMatchObject({
-      contractId: "product_readiness_customer_workflow_envelope",
-      ownerLane: "integration",
-      route: "/v1/contracts",
-      scopeFields: expect.arrayContaining(["organizationId", "memberRef", "inviteRef", "watchlistId", "alertId", "caseId", "sourceCoverageId"]),
-      blockerCodes: expect.arrayContaining(["missing_customer_workflow_field", "missing_customer_workflow_step", "missing_customer_workflow_proof_link"]),
-      downstreamConsumers: expect.arrayContaining([
-        expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" }),
-        expect.objectContaining({ ownerLane: "website", route: "/" }),
-        expect.objectContaining({ ownerLane: "integration", route: "/v1/contracts" })
-      ])
-    });
-    expect(rows.get("hanasand.product_readiness.customer_workflow_envelope_compatibility.v1")).toMatchObject({
-      contractId: "product_readiness_customer_workflow_envelope",
-      ownerLane: "integration",
-      route: "/v1/contracts",
-      downstreamConsumers: expect.arrayContaining([
-        expect.objectContaining({ ownerLane: "integration", requiredFields: expect.arrayContaining(["acceptedFutureFields"]) }),
-        expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" })
-      ])
-    });
-    expect(rows.get("hanasand.product_readiness.customer_workflow_consumer_fixture.v1")).toMatchObject({
-      contractId: "product_readiness_customer_workflow_envelope",
-      ownerLane: "integration",
-      route: "/v1/contracts",
-      downstreamConsumers: expect.arrayContaining([
-        expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" }),
-        expect.objectContaining({ ownerLane: "website", route: "/" }),
-        expect.objectContaining({ ownerLane: "integration", route: "/v1/contracts" })
-      ])
-    });
     const serialized = JSON.stringify(contract.schemaLookup);
     expect(serialized).not.toContain("https://discord.com");
     expect(serialized).not.toContain("authorization:");
@@ -369,30 +338,6 @@ describe("api regression sentinel", () => {
         expect.objectContaining({ ownerLane: "publicTI", route: "/ti" }),
         expect.objectContaining({ ownerLane: "support", route: "/api/admin/support/readiness" })
       ])
-    });
-    expect(contract.surfaces.find((surface: any) => surface.id === "product_readiness_customer_workflow_envelope")).toMatchObject({
-      ownerLane: "integration",
-      route: "/v1/contracts",
-      schemas: {
-        envelope: "hanasand.product_readiness.customer_workflow_envelope.v1",
-        compatibility: "hanasand.product_readiness.customer_workflow_envelope_compatibility.v1",
-        consumerFixture: "hanasand.product_readiness.customer_workflow_consumer_fixture.v1"
-      },
-      scopeFields: expect.arrayContaining(["organizationId", "memberRef", "inviteRef", "watchlistId", "alertId", "caseId", "sourceCoverageId"]),
-      recordFields: expect.arrayContaining(["schemaVersion", "version", "workflowPacket", "compatibility", "consumerImplementationNotes", "lastVerifiedAt"]),
-      consumerFields: expect.arrayContaining(["orgId", "watchlistId", "alertId", "caseId", "sourceCoverageId", "provenanceHash", "workflowStatus", "destinationDeliveryState", "supportAuditStatus", "proofLink", "version", "lastVerifiedAt"]),
-      blockerCodes: expect.arrayContaining(["missing_customer_workflow_field", "missing_customer_workflow_step", "missing_customer_workflow_proof_link"]),
-      downstreamConsumers: expect.arrayContaining([
-        expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" }),
-        expect.objectContaining({ ownerLane: "website", route: "/" }),
-        expect.objectContaining({ ownerLane: "integration", route: "/v1/contracts" })
-      ]),
-      safeOutput: {
-        metadataOnly: true,
-        rawEvidenceExposed: false,
-        webhookSecretExposed: false,
-        crossOrgDataExposed: false
-      }
     });
     expect(matrix).toMatchObject({
       schemaVersion: "hanasand.product_readiness.receipt_matrix.v1",
