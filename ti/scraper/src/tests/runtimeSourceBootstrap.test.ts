@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { describe, expect, FocusedFrontier, handleApiRequest, InMemoryScraperStore, join, mkdtempSync, rmSync, runCanaryCollectionCycle, test } from "./apiTestHarness.ts";
+import { describe, expect, FileBackedScraperStore, FocusedFrontier, handleApiRequest, InMemoryScraperStore, join, mkdtempSync, rmSync, runCanaryCollectionCycle, test } from "./apiTestHarness.ts";
 import { tmpdir } from "node:os";
 import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { dirname } from "node:path";
@@ -380,8 +380,9 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
   test("activates only recently parser-verified Tor metadata and preserves restart state", () => {
     const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
     Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
-    const store = new InMemoryScraperStore();
     const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-verified-tor-"));
+    const snapshotPath = join(dir, "store.json");
+    const store = new FileBackedScraperStore({ snapshotPath });
     const seedPath = join(dir, "restricted.json");
     const onion = (letter: string) => `http://${letter.repeat(56)}.onion/`;
     const restrictedSource = (id: string, url: string, verifiedAt: string) => ({
@@ -455,9 +456,10 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       expect(store.getSource("src_stale_restricted")).toMatchObject({ status: "candidate", metadata: { productionCollection: false, restrictedMetadataCandidate: true } });
 
       const beforeRestart = structuredClone(store.listSources());
-      const second = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-22T13:00:00.000Z" });
+      const restarted = new FileBackedScraperStore({ snapshotPath });
+      const second = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-22T13:00:00.000Z" });
       expect(second).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 2, activeSourceCount: 1, totalSourceCount: 2 });
-      expect(store.listSources()).toEqual(beforeRestart);
+      expect(restarted.listSources()).toEqual(beforeRestart);
     } finally {
       if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
       else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;

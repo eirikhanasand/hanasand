@@ -231,7 +231,7 @@ function isPrivateHostname(hostname: string) {
 
 function managedSourceConfiguration(source: SourceRecord) {
   const { id: _id, tenantId: _tenantId, createdAt: _createdAt, updatedAt: _updatedAt, lastSeenAt: _lastSeenAt, health: _health, crawlState: _crawlState, ...configuration } = source;
-  return configuration;
+  return JSON.parse(JSON.stringify(configuration));
 }
 
 function configuredSeedPaths() {
