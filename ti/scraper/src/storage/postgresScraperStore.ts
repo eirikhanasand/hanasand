@@ -38,7 +38,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "017_evidence_linked_timeliness", path: fileURLToPath(new URL("../../migrations/017_evidence_linked_timeliness.sql", import.meta.url)) },
   { version: "018_remove_unsupported_business_claims", path: fileURLToPath(new URL("../../migrations/018_remove_unsupported_business_claims.sql", import.meta.url)) },
   { version: "019_incident_logical_identity", path: fileURLToPath(new URL("../../migrations/019_incident_logical_identity.sql", import.meta.url)) },
-  { version: "020_actor_identity_catalog", path: fileURLToPath(new URL("../../migrations/020_actor_identity_catalog.sql", import.meta.url)) }
+  { version: "020_actor_identity_catalog", path: fileURLToPath(new URL("../../migrations/020_actor_identity_catalog.sql", import.meta.url)) },
+  { version: "021_remove_dangling_incident_evidence_links", path: fileURLToPath(new URL("../../migrations/021_remove_dangling_incident_evidence_links.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -235,7 +236,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         profiles: this.listActorProfiles().filter((record: any) => record.captureIds?.includes(captureId)),
         claims: this.listIntelligenceClaims().filter((record: any) => record.captureIds?.includes(captureId)),
         claimEvidence: this.listClaimEvidence().filter((record: any) => record.captureId === captureId),
-        links: this.listEvidenceLinks().filter((record: any) => record.captureId === captureId),
+        links: this.listEvidenceLinks().filter((record: any) => record.captureId === captureId && (record.subjectType !== "incident" || record.subjectId === incidentId)),
         timeliness: incidentId ? this.getTimelinessRecord(incidentId) : undefined,
         deltas: this.listEvidenceDeltas().filter((record: any) => record.captureIds?.includes(captureId))
       });
@@ -316,6 +317,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
   }
 
   override saveEvidenceLink(linkRecord: any): any {
+    if (linkRecord.subjectType === "incident" && !this.getIncident(linkRecord.subjectId)) throw new Error(`Unknown incident evidence subject: ${linkRecord.subjectId}`);
     const stored = super.saveEvidenceLink(linkRecord);
     if (!this.pipelineDepth) this.enqueue(`evidence-link:${stored.id}`, () => this.persistEvidenceLink(stored));
     return stored;
@@ -450,7 +452,10 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     for (const row of actorProfiles) super.saveActorProfile(readRecord(row));
     for (const row of actorIdentityCatalogs) this.hydrateActorIdentityCatalogSnapshot(readRecord(row));
     for (const row of actorIdentities) this.hydrateActorIdentitySnapshot(readRecord(row));
-    for (const row of evidenceLinks) super.saveEvidenceLink(readRecord(row));
+    for (const row of evidenceLinks) {
+      const record = readRecord(row);
+      if (record.subjectType !== "incident" || this.getIncident(record.subjectId)) super.saveEvidenceLink(record);
+    }
     for (const row of validations) super.saveValidationRecord(readRecord(row));
     for (const row of alerts) super.saveDwmAlert(readRecord(row));
     for (const row of evaluationLabels) super.saveEvaluationLabel(readRecord(row));

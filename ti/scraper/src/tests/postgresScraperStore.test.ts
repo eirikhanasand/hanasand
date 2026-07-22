@@ -444,6 +444,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const result = first.savePipelineResult(pipeline("src_duplicate_incident", "tenant_duplicate_incident"));
     await first.flush();
     first.saveIncident({ ...result.incident, id: "inc_legacy_content_hash", logicalIdentity: undefined, updatedAt: undefined });
+    const currentLink = first.listEvidenceLinks().find((link: any) => link.captureId === result.capture.id && link.subjectType === "incident" && link.subjectId === result.incident.id);
+    first.saveEvidenceLink({ ...currentLink, id: "evidence-link_legacy_duplicate_capture", subjectId: "inc_legacy_content_hash" });
     await first.flush();
     first.saveExtractedEntity({
       id: "entity_legacy_incident_link",
@@ -463,10 +465,12 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const sentinel = "2000-01-01T00:00:00.000Z";
     await admin`UPDATE threat_intel.incidents SET updated_at = ${sentinel} WHERE id = 'inc_legacy_content_hash'`;
     const second = await PostgresScraperStore.create({ databaseUrl });
+    await admin`DELETE FROM threat_intel.evidence_links WHERE id = 'evidence-link_legacy_duplicate_capture'`;
     second.savePipelineResult(pipeline("src_duplicate_incident", "tenant_duplicate_incident"));
     await second.flush();
     const [legacy] = await admin<{ updated_at: Date }[]>`SELECT updated_at FROM threat_intel.incidents WHERE id = 'inc_legacy_content_hash'`;
     expect(legacy.updated_at.toISOString()).toBe(sentinel);
+    expect(await admin`SELECT id FROM threat_intel.evidence_links WHERE id = 'evidence-link_legacy_duplicate_capture'`).toHaveLength(0);
     await second.close();
   });
 
@@ -581,9 +585,18 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       VALUES ('live_search_snapshot', 'snapshot_incident_lineage', ${collectedAt}, ${collectedAt},
         ${JSON.stringify({ id: "snapshot_incident_lineage", incidentIds: [current.incident.id, legacyId, invalidId], subjectType: "incident", subjectId: invalidId })}::text::jsonb)
     `;
+    await admin`
+      INSERT INTO threat_intel.evidence_links (
+        id, capture_id, subject_type, subject_id, relationship, confidence, extractor_version, created_at, record
+      ) VALUES (
+        'evidence-link_preexisting_dangling', ${current.capture.id}, 'incident', 'inc_missing_before_lineage',
+        'supports', 0.2, 'legacy', ${collectedAt},
+        ${JSON.stringify({ id: "evidence-link_preexisting_dangling", captureId: current.capture.id, subjectType: "incident", subjectId: "inc_missing_before_lineage", relationship: "supports" })}::text::jsonb
+      )
+    `;
     await admin`DELETE FROM threat_intel.incident_revisions`;
     await admin`DELETE FROM threat_intel.incident_identity_history`;
-    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '019_incident_logical_identity'`;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version IN ('019_incident_logical_identity', '021_remove_dangling_incident_evidence_links')`;
 
     const protectedGraph = async () => (await admin<{ snapshot: any }[]>`
       SELECT jsonb_build_object(
@@ -633,6 +646,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       { old_incident_id: invalidId, action: "invalid_archived", invalid_reason: "parser_fallback" }
     ].sort((a, b) => a.old_incident_id.localeCompare(b.old_incident_id)));
     expect(await admin`SELECT id FROM threat_intel.evidence_links WHERE capture_id = ${current.capture.id} AND subject_type = 'incident' AND subject_id = ${current.incident.id} AND relationship = ${originalLink.relationship}`).toHaveLength(1);
+    expect(await admin`SELECT id FROM threat_intel.evidence_links WHERE id = 'evidence-link_preexisting_dangling'`).toHaveLength(0);
     expect(await admin`SELECT id FROM threat_intel.timeliness_records WHERE incident_id = ${current.incident.id}`).toHaveLength(1);
     expect((await admin<{ incident_id?: string }[]>`SELECT incident_id FROM threat_intel.entities WHERE id = 'entity_legacy_lineage'`)[0].incident_id).toBe(current.incident.id);
     expect((await admin<{ incident_id?: string }[]>`SELECT incident_id FROM threat_intel.entities WHERE id = 'entity_invalid_lineage'`)[0].incident_id).toBeNull();
