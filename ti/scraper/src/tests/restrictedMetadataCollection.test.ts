@@ -79,6 +79,31 @@ describe("restricted metadata collection", () => {
     }
   });
 
+  test("persists Qilin, Nova, and Interlock victim-list formats as metadata only", async () => {
+    const store = new InMemoryScraperStore();
+    const pages: Record<string, string> = {
+      q: '<title>Qilin blog</title><div class="item_box"><h3 class="item_box-title">Qilin Victim</h3><div>countdown 00:01</div></div>',
+      n: '<title>Nova Blog</title><div class="post-card"><p class="post-date">JUL 22, 2026</p><a class="logo">Nova Victim</a><p class="post-excerpt">dynamic description</p></div>',
+      i: '<title>Interlock</title><div class="advert_item"><div class="advert_info_title">Interlock Victim</div><div>dynamic listing detail</div></div>'
+    };
+    const boundary = new TorMetadataHttpBoundary({
+      proxyUrl: "http://onion-tor:8118",
+      fetcher: async (url) => new Response(pages[new URL(String(url)).hostname[0]] ?? "", { headers: { "content-type": "text/html" } })
+    });
+    for (const [host, actorName] of [["q", "Qilin"], ["n", "Nova"]]) store.saveSource(source({ id: `src_${actorName.toLowerCase()}`, type: "tor_metadata", url: `http://${host.repeat(56)}.onion/`, accessMethod: "approved_proxy", status: "active", risk: "restricted", legalNotes: "Approved public victim-listing metadata only.", governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-22T09:00:00.000Z", approvedBy: "reviewer" }, metadata: { actorName } }));
+
+    const first = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-22T14:00:00.000Z" });
+    store.saveSource(source({ id: "src_interlock", type: "tor_metadata", url: `http://${"i".repeat(56)}.onion/`, accessMethod: "approved_proxy", status: "active", risk: "restricted", legalNotes: "Approved public victim-listing metadata only.", governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-22T09:00:00.000Z", approvedBy: "reviewer" }, metadata: { actorName: "Interlock" } }));
+    const second = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-22T14:01:00.000Z" });
+
+    expect(first).toMatchObject({ status: "completed", intelligenceSourceCount: 2, captureCount: 2 });
+    expect(second).toMatchObject({ status: "completed", intelligenceSourceCount: 1, captureCount: 1 });
+    expect(store.listCaptures().map((capture) => capture.metadata.leakSite.victimName)).toEqual(["Qilin Victim", "Nova Victim", "Interlock Victim"]);
+    expect(store.listCaptures().every((capture) => capture.storageKind === "metadata_only" && !capture.body && !capture.objectRef && !capture.metadata.leakSite.links?.length)).toBe(true);
+    expect(store.listExtractedEntities().filter((entity) => entity.type === "victim").map((entity) => entity.value)).toEqual(["Qilin Victim", "Nova Victim", "Interlock Victim"]);
+    expect(JSON.stringify(store.listCaptures())).not.toContain("dynamic");
+  });
+
   test("keeps repeated scheduled cycles idempotent and records only novel useful victim metadata", async () => {
     const store = new InMemoryScraperStore();
     let version = 1, requestCount = 0;
@@ -132,14 +157,20 @@ describe("restricted metadata collection", () => {
     const report = importRestrictedMetadataSeedBundle(bundle, "2026-07-22T13:00:00.000Z");
 
     expect(report.valid).toBe(true);
-    expect(report.accepted.filter((item) => item.metadata?.transportCanary !== true).map((item) => item.id)).toEqual(["restricted_safepay_victim_blog", "restricted_space_bears_victim_blog"]);
+    expect(report.accepted.filter((item) => item.metadata?.transportCanary !== true).map((item) => item.id)).toEqual(["restricted_safepay_victim_blog", "restricted_space_bears_victim_blog", "restricted_qilin_victim_blog", "restricted_nova_victim_blog", "restricted_interlock_victim_blog"]);
     expect(report.accepted.filter((item) => item.metadata?.transportCanary !== true).every((item) => item.status === "candidate" && item.governance?.approvalState === "approved" && item.metadata?.productionCollectionOutcome === "metadata_only_parser_verified")).toBe(true);
     expect(report.accepted.some((item) => ["restricted_akira_victim_blog", "restricted_blackout_victim_blog", "restricted_braincipher_victim_blog", "restricted_deadlock_victim_blog"].includes(item.id))).toBe(false);
+    expect(bundle.reviewedRejectedCandidates.length).toBeGreaterThan(10);
+    expect(bundle.reviewedRejectedCandidates.every((item: any) => item.disposition === "rejected" && item.countsAsCoverage === false && !JSON.stringify(item).includes(".onion"))).toBe(true);
 
     delete bundle.sources[1].metadata.parserProfile;
     const invalid = importRestrictedMetadataSeedBundle(bundle, "2026-07-22T13:00:00.000Z");
     expect(invalid.valid).toBe(false);
     expect(invalid.errors.some((error) => error.sourceId === "restricted_safepay_victim_blog" && error.message.includes("useful metadata parser"))).toBe(true);
+
+    const leaked = JSON.parse(readFileSync(new URL("../../seeds/restricted_metadata_source_packs.json", import.meta.url), "utf8"));
+    leaked.reviewedRejectedCandidates[0].locator = `http://${"z".repeat(56)}.onion/`;
+    expect(importRestrictedMetadataSeedBundle(leaked, "2026-07-22T13:00:00.000Z").errors.some((error) => error.message.includes("must not retain a restricted locator"))).toBe(true);
   });
 
   test("reports only collectable intelligence coverage and redacts restricted locators", () => {

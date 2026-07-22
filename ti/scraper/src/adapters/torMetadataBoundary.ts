@@ -102,7 +102,10 @@ function victimNamesFromHtml(html: string, actorName?: string): string[] {
     ...[...html.matchAll(/<article\b[^>]*class=["'][^"']*\bnews-item\b[^"']*["'][^>]*>[\s\S]*?<h2\b[^>]*class=["'][^"']*\bheadline\b[^"']*["'][^>]*>([\s\S]*?)<\/h2>/gi)].map((match) => clean(match[1])),
     ...[...html.matchAll(/<div\b[^>]*class=["'][^"']*\bpost-title\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1])),
     ...(actor === "safepay" ? [...html.matchAll(/<h5\b[^>]*class=["'][^"']*\bcard-title\b[^"']*["'][^>]*>([\s\S]*?)<\/h5>/gi)].map((match) => clean(match[1])) : []),
-    ...(actor === "spacebears" ? [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bcompanies-list__item\b[^"']*["'][^>]*>[\s\S]*?<div\b[^>]*class=["'][^"']*\bname\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1])) : [])
+    ...(actor === "spacebears" ? [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bcompanies-list__item\b[^"']*["'][^>]*>[\s\S]*?<div\b[^>]*class=["'][^"']*\bname\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1])) : []),
+    ...(actor === "qilin" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\bitem_box-title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : []),
+    ...(actor === "nova" ? [...html.matchAll(/<[^>]*class=["'][^"']*\bpost-card\b[^"']*["'][^>]*>[\s\S]*?<a\b[^>]*class=["'][^"']*\blogo\b[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)].map((match) => clean(match[1])) : []),
+    ...(actor === "interlock" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\badvert_info_title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : [])
   ];
   return [...new Set(names.filter((name) => name.length >= 2 && name.length <= 160))].slice(0, 24);
 }

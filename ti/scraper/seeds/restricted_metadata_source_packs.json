@@ -18,6 +18,197 @@
     "unapproved_proxy",
     "non_metadata_capture"
   ],
+  "reviewedRejectedCandidates": [
+    {
+      "id": "restricted_braincipher_victim_blog",
+      "actorName": "BrainCipher",
+      "disposition": "rejected",
+      "reason": "Superseded duplicate of the retained production source identity.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/braincipher",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_deadlock_victim_blog",
+      "actorName": "Deadlock",
+      "disposition": "rejected",
+      "reason": "Superseded duplicate of the retained production source identity.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/deadlock",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_akira_victim_blog",
+      "actorName": "Akira",
+      "disposition": "rejected",
+      "reason": "Current approved-proxy probe still returns an upstream HTTP 500 and no useful metadata.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/akira",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_blackout_victim_blog",
+      "actorName": "Blackout",
+      "disposition": "rejected",
+      "reason": "The current detail inventory reports its public DLS unavailable; prior collection produced no captures.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/blackout",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_krybit_victim_blog",
+      "actorName": "Krybit",
+      "disposition": "rejected",
+      "reason": "No currently available public DLS is reported despite recent victim activity.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/krybit",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_play_victim_blog",
+      "actorName": "Play",
+      "disposition": "rejected",
+      "reason": "No currently available public DLS is reported.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/play",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_anubis_victim_blog",
+      "actorName": "Anubis",
+      "disposition": "rejected",
+      "reason": "No currently available public DLS is reported.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/anubis",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_coinbase_cartel_victim_blog",
+      "actorName": "Coinbase Cartel",
+      "disposition": "rejected",
+      "reason": "No currently available public DLS is reported.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/coinbasecartel",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_worldleaks_victim_blog",
+      "actorName": "World Leaks",
+      "disposition": "rejected",
+      "reason": "No currently available public DLS is reported.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/worldleaks",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_the_gentlemen_victim_blog",
+      "actorName": "The Gentlemen",
+      "disposition": "rejected",
+      "reason": "The public endpoint resolves only to a protection verification page with no victim metadata.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/thegentlemen",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_inc_ransom_victim_blog",
+      "actorName": "INC Ransom",
+      "disposition": "rejected",
+      "reason": "Available endpoints returned only tiny placeholder responses and no useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/incransom",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_dragonforce_victim_blog",
+      "actorName": "DragonForce",
+      "disposition": "rejected",
+      "reason": "The public blog's listing body starts beyond the enforced 64 KiB metadata boundary; the other reachable endpoint is a recovery portal.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/dragonforce",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_doommageddon_victim_blog",
+      "actorName": "Doommageddon",
+      "disposition": "rejected",
+      "reason": "Current inventory and detail endpoints disagree on availability and freshness, so service identity is not independently stable.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/doommageddon",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_chaos_victim_blog",
+      "actorName": "Chaos",
+      "disposition": "rejected",
+      "reason": "Reachable page produced no verified stable victim parser during the bounded pass.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/chaos",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_booba_project_victim_blog",
+      "actorName": "Booba Project",
+      "disposition": "rejected",
+      "reason": "Reachable response was a minimal shell with no useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/Booba%20Project",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_kairos_victim_blog",
+      "actorName": "Kairos",
+      "disposition": "rejected",
+      "reason": "Reachable response was a client loader with no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/kairos",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_m3rx_victim_blog",
+      "actorName": "M3rx",
+      "disposition": "rejected",
+      "reason": "Reachable response contained no useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/m3rx",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_payload_victim_blog",
+      "actorName": "Payload",
+      "disposition": "rejected",
+      "reason": "The public endpoint redirects without a usable approved metadata target.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/payload",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_threeam_victim_blog",
+      "actorName": "3AM",
+      "disposition": "rejected",
+      "reason": "The reachable endpoint is a verification gate and exposes no public victim metadata without interaction.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/threeam",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_titan_victim_blog",
+      "actorName": "Titan",
+      "disposition": "rejected",
+      "reason": "Only one mirror returned content and no stable bounded victim parser was verified.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/titan",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_unsafe_victim_blog",
+      "actorName": "UnSafe",
+      "disposition": "rejected",
+      "reason": "The research authority identifies this service as recycling other groups' leaks, so its source identity is not trustworthy.",
+      "evidenceCheckedAt": "2026-07-22T14:42:52.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/unsafe",
+      "countsAsCoverage": false
+    }
+  ],
   "sources": [
     {
       "id": "restricted_tor_project_transport_canary",
@@ -136,6 +327,129 @@
         "retainRawContent": false,
         "retentionDays": 30,
         "attribution": "Ransomwhere.org public research inventory, sourced from Ransomware.live"
+      }
+    },
+    {
+      "id": "restricted_qilin_victim_blog",
+      "name": "Qilin victim blog",
+      "type": "tor_metadata",
+      "url": "http://ijzn3sicrcy7guixkzjkib4ukbiilwc3xhnmby4mcbccnsd7j2rekvqd.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.88,
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Collect public victim-card names and publication metadata only. Never authenticate, interact with operators, follow payload links, or retain page bodies, credentials, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-07-22T14:42:52.000Z",
+        "approvedBy": "source-review:goal4-gate3-public-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Qilin",
+        "actors": ["Qilin"],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/data",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/qilin",
+        "discoveryCheckedAt": "2026-07-22T14:42:52.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-07-22T14:42:52.000Z",
+        "productionCollectionVerifiedAt": "2026-07-22T14:42:52.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "item_box_title",
+        "reportedVictimCount": 2039,
+        "lastReportedVictimAt": "2026-07-21T20:16:35.167Z",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "attribution": "Ransomwhere.org and RansomLook public research inventories plus approved-proxy metadata verification"
+      }
+    },
+    {
+      "id": "restricted_nova_victim_blog",
+      "name": "Nova victim blog",
+      "type": "tor_metadata",
+      "url": "http://novadmrkp4vbk2padk5t6pbxolndceuc7hrcq4mjaoyed6nxsqiuzyyd.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.84,
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Collect public victim-card names and publication metadata only. Never authenticate, interact with operators, follow payload links, or retain page bodies, credentials, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-07-22T14:42:52.000Z",
+        "approvedBy": "source-review:goal4-gate3-public-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Nova",
+        "actors": ["Nova"],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/data",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/nova",
+        "discoveryCheckedAt": "2026-07-22T14:42:52.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-07-22T14:42:52.000Z",
+        "productionCollectionVerifiedAt": "2026-07-22T14:42:52.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "post_card_logo",
+        "reportedVictimCount": 174,
+        "lastReportedVictimAt": "2026-07-22T00:15:57.994Z",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "attribution": "Ransomwhere.org and RansomLook public research inventories plus approved-proxy metadata verification"
+      }
+    },
+    {
+      "id": "restricted_interlock_victim_blog",
+      "name": "Interlock victim blog",
+      "type": "tor_metadata",
+      "url": "http://ebhmkoohccl45qesdbvrjqtyro2hmhkmh6vkyfyjjzfllm3ix72aqaid.onion/leaks.php",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.83,
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Collect public victim-card names and publication metadata only. Never authenticate, interact with operators, follow payload links, or retain page bodies, credentials, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-07-22T14:42:52.000Z",
+        "approvedBy": "source-review:goal4-gate3-public-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Interlock",
+        "actors": ["Interlock"],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/data",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/interlock",
+        "discoveryCheckedAt": "2026-07-22T14:42:52.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-07-22T14:42:52.000Z",
+        "productionCollectionVerifiedAt": "2026-07-22T14:42:52.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "advert_info_title",
+        "reportedVictimCount": 118,
+        "lastReportedVictimAt": "2026-07-17T14:25:38.205Z",
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "attribution": "Ransomwhere.org and RansomLook public research inventories plus approved-proxy metadata verification"
       }
     }
   ]

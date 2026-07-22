@@ -28,10 +28,17 @@ export function importRestrictedMetadataSeedBundle(bundle: unknown, importedAt: 
     && bundle.proxyBoundaryId === "tor-approved-metadata-proxy"
     && bundle.approvalScope === "metadata_only"
     && bundle.retentionClass === "restricted_metadata"
+    && Array.isArray(bundle.reviewedRejectedCandidates)
     && REQUIRED_BLOCKED_OPERATIONS.every((operation) => Array.isArray(bundle.forbiddenOperations) && bundle.forbiddenOperations.includes(operation));
   if (!bundleValid) errors.push({ message: "restricted seed bundle policy boundary is incomplete" });
   if (!Array.isArray(bundle.sources)) errors.push({ message: "restricted seed bundle sources must be an array" });
   if (!bundleValid || !Array.isArray(bundle.sources)) return { accepted: [], errors, duplicates: [], valid: false };
+
+  const sourceIds = new Set(sources.filter(isRecord).map((source) => source.id).filter(nonEmpty));
+  for (const rejected of bundle.reviewedRejectedCandidates) {
+    const message = validateRejectedCandidate(rejected, sourceIds);
+    if (message) errors.push({ sourceId: isRecord(rejected) && nonEmpty(rejected.id) ? rejected.id : undefined, message });
+  }
 
   const accepted: SourceRecord[] = [];
   for (const raw of sources) {
@@ -143,6 +150,12 @@ function validateSource(source: unknown): string[] {
     || !isIsoDate(metadata.lastReportedVictimAt)
   )) errors.push("approved restricted intelligence sources require current useful metadata parser verification");
   return errors;
+}
+
+function validateRejectedCandidate(candidate: unknown, sourceIds: Set<string>): string | undefined {
+  if (!isRecord(candidate) || !nonEmpty(candidate.id) || !nonEmpty(candidate.actorName) || candidate.disposition !== "rejected" || candidate.countsAsCoverage !== false || !nonEmpty(candidate.reason) || !isIsoDate(candidate.evidenceCheckedAt) || !isPublicHttpsUrl(candidate.discoveryAuthorityRecordUrl)) return "rejected candidate review metadata is incomplete";
+  if (sourceIds.has(candidate.id)) return "rejected candidate must not also be an importable source";
+  if ("url" in candidate || "targetUrl" in candidate || "locator" in candidate || /\.onion\b/i.test(JSON.stringify(candidate))) return "rejected candidate must not retain a restricted locator";
 }
 
 function isV3OnionUrl(value: unknown): boolean {
