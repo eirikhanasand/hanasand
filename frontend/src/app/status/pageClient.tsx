@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import type { ServiceIncident, ServiceStatus } from '@/utils/status/getStatus'
 import { AlertCircle, CheckCircle, Clock, RefreshCw } from 'lucide-react'
 
@@ -48,14 +48,10 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
         }
     }, [])
 
-    const nowMs = now ?? Date.parse(currentStatus.generated_at)
-    const checks = useMemo(
-        () => currentStatus.checks.filter((check) => isCurrentPublicCheck(check, nowMs)),
-        [currentStatus, nowMs],
-    )
+    const checks = currentStatus.checks
     const incidents = currentStatus.incidents
     const headline = currentStatus.overall === 'up'
-        ? 'All systems operational'
+        ? 'Monitored services operational'
         : currentStatus.overall === 'degraded'
             ? 'Some systems degraded'
             : 'Service interruption'
@@ -164,7 +160,7 @@ export default function StatusDashboard({ serviceStatus, mode = 'status', incide
             <section className='grid gap-3 border-y border-ui-border py-4 text-sm text-ui-muted md:grid-cols-3'>
                 <StatusMeta icon={<RefreshCw className={isRefreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />} label='Data interval' value={`${REFRESH_MS / 1000}s auto-refresh`} />
                 <StatusMeta icon={<Clock className='h-4 w-4' />} label='Uptime interval' value={UPTIME_WINDOW} />
-                <StatusMeta icon={<CheckCircle className='h-4 w-4' />} label='Components' value={`${checks.length} public checks`} />
+                <StatusMeta icon={<CheckCircle className='h-4 w-4' />} label='Components' value={`${checks.length} monitored checks`} />
             </section>
 
             <section>
@@ -273,11 +269,6 @@ function statusPillClass(status: ServiceStatus['checks'][number]['status']) {
     if (status === 'up') return 'bg-green-600 text-white'
     if (status === 'degraded') return 'bg-amber-100 text-amber-800'
     return 'bg-red-100 text-red-800'
-}
-
-function isCurrentPublicCheck(check: ServiceStatus['checks'][number], nowMs: number) {
-    const checkedAt = new Date(check.checked_at).getTime()
-    return Number.isFinite(checkedAt) && nowMs - checkedAt <= 14 * 24 * 60 * 60 * 1000
 }
 
 function historyDaysFor(status: ServiceStatus, check: ServiceStatus['checks'][number]) {

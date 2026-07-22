@@ -2,6 +2,7 @@ import run from '#db'
 import crypto from 'crypto'
 
 const apiBase = process.env.MONITOR_API_BASE || `http://127.0.0.1:${Number(process.env.PORT) || 8081}/api`
+const webBase = (process.env.MONITOR_WEB_BASE || 'http://frontend:3000').replace(/\/$/, '')
 
 async function record(service: string, checkName: string, status: 'up' | 'degraded' | 'down', latency: number, message = '') {
     await run(`
@@ -10,11 +11,11 @@ async function record(service: string, checkName: string, status: 'up' | 'degrad
     `, [service, checkName, status, latency, message])
 }
 
-async function check(service: string, checkName: string, fn: () => Promise<void>) {
+async function check(service: string, checkName: string, fn: () => Promise<void | string>) {
     const started = performance.now()
     try {
-        await fn()
-        await record(service, checkName, 'up', Math.round(performance.now() - started))
+        const message = await fn()
+        await record(service, checkName, 'up', Math.round(performance.now() - started), message || '')
     } catch (error) {
         await record(service, checkName, 'down', Math.round(performance.now() - started), error instanceof Error ? error.message : String(error))
     }
@@ -23,6 +24,7 @@ async function check(service: string, checkName: string, fn: () => Promise<void>
 async function fetchJson(path: string, options: RequestInit = {}) {
     const response = await fetch(`${apiBase}${path}`, {
         ...options,
+        signal: options.signal || AbortSignal.timeout(15_000),
         headers: {
             ...(options.body ? { 'Content-Type': 'application/json' } : {}),
             ...(options.headers || {}),
@@ -37,6 +39,18 @@ async function fetchJson(path: string, options: RequestInit = {}) {
         body = text
     }
     return { response, body }
+}
+
+async function fetchPage(path: string, headers: Record<string, string> = {}) {
+    const response = await fetch(`${webBase}${path}`, {
+        headers,
+        signal: AbortSignal.timeout(15_000),
+    })
+    return { response, body: await response.text() }
+}
+
+function object(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
 }
 
 function hasToken(body: unknown): body is { token: string } {
@@ -70,21 +84,39 @@ export default async function runSyntheticMonitor() {
         token = body.token
     })
 
-    await check('auth', 'Delete account', async () => {
-        const { response } = await fetchJson('/user/self', {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}`, id: runId },
-            body: JSON.stringify({ id: runId }),
-        })
-        if (response.status !== 200) {
-            throw new Error(`Unexpected delete response ${response.status}`)
-        }
-    })
-
     await Promise.all([
-        check('core', 'API index', async () => {
-            const { response } = await fetchJson('/')
-            if (response.status >= 500) throw new Error(`Unexpected index response ${response.status}`)
+        check('core', 'API health', async () => {
+            const { response, body } = await fetchJson('/health')
+            if (response.status !== 200 || object(body)?.ok !== true) throw new Error(`Unexpected API health response ${response.status}`)
+            return 'The public API health endpoint responded successfully.'
+        }),
+        check('website', 'Public website', async () => {
+            const { response, body } = await fetchPage('/')
+            if (response.status !== 200 || !body.toLowerCase().includes('hanasand')) throw new Error(`Unexpected website response ${response.status}`)
+            return 'The public website rendered successfully.'
+        }),
+        check('threat-intelligence', 'Public search', async () => {
+            const { response, body } = await fetchJson('/ti/search', {
+                method: 'POST',
+                body: JSON.stringify({ query: 'APT29' }),
+            })
+            const result = object(body)
+            if (response.status !== 200 || result?.mode !== 'scraper' || !Array.isArray(result.sources) || !Array.isArray(result.recentActivity)) {
+                throw new Error(`Threat intelligence search is unavailable (${response.status})`)
+            }
+            return 'A canonical threat-intelligence search completed successfully.'
+        }),
+        check('browser-sandbox', 'Browser workspace', async () => {
+            const { response, body } = await fetchPage('/browser')
+            if (response.status !== 200 || !body.includes('Browser')) throw new Error(`Unexpected browser workspace response ${response.status}`)
+            return 'The browser investigation workspace rendered successfully.'
+        }),
+        check('dark-web-monitoring', 'Monitoring workspace', async () => {
+            const { response, body } = await fetchPage('/dashboard/dwm', {
+                Cookie: `id=${encodeURIComponent(runId)}; access_token=${encodeURIComponent(token)}`,
+            })
+            if (response.status !== 200 || !body.includes('Dark web monitoring')) throw new Error(`Unexpected monitoring workspace response ${response.status}`)
+            return 'The authenticated dark-web monitoring workspace rendered successfully.'
         }),
         check('content', 'Articles', async () => {
             const { response } = await fetchJson('/articles')
@@ -102,6 +134,17 @@ export default async function runSyntheticMonitor() {
             if (response.status >= 500) throw new Error(`Unexpected pwned response ${response.status}`)
         }),
     ])
+
+    await check('auth', 'Delete account', async () => {
+        const { response } = await fetchJson('/user/self', {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}`, id: runId },
+            body: JSON.stringify({ id: runId }),
+        })
+        if (response.status !== 200) {
+            throw new Error(`Unexpected delete response ${response.status}`)
+        }
+    })
 
     await run('DELETE FROM tokens WHERE id = $1', [runId]).catch(() => {})
     await run('DELETE FROM login_events WHERE user_id = $1', [runId]).catch(() => {})

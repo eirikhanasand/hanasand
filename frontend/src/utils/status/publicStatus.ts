@@ -1,20 +1,24 @@
 import { ServiceCheck, ServiceStatus } from './getStatus'
 
-export function toPublicServiceStatus(status: ServiceStatus): ServiceStatus {
-    const publicChecks = status.checks.filter(isCurrentPublicCheck)
-    const publicCheckKeys = new Set(publicChecks.map(checkKey))
-    const checks = publicChecks
-        .map(toPublicServiceCheck)
+const requiredPublicChecks = [
+    { service: 'core', check_name: 'API health' },
+    { service: 'website', check_name: 'Public website' },
+    { service: 'threat-intelligence', check_name: 'Public search' },
+    { service: 'browser-sandbox', check_name: 'Browser workspace' },
+    { service: 'dark-web-monitoring', check_name: 'Monitoring workspace' },
+] as const
 
-    if (!checks.length) {
-        return {
-            overall: 'degraded',
-            generated_at: status.generated_at,
-            checks: [publicStatusCoverageCheck(status.generated_at)],
-            history: [],
-            incidents: [],
-        }
-    }
+const MAX_CHECK_AGE_MS = 5 * 60 * 1000
+
+export function toPublicServiceStatus(status: ServiceStatus, nowMs = Date.now()): ServiceStatus {
+    const currentChecks = new Map(status.checks
+        .filter(check => isCurrentPublicCheck(check, nowMs))
+        .map(check => [checkKey(check), check]))
+    const publicCheckKeys = new Set(requiredPublicChecks.map(checkKey))
+    const checks = requiredPublicChecks.map(required => {
+        const check = currentChecks.get(checkKey(required))
+        return check ? toPublicServiceCheck(check) : missingPublicCheck(required, status.generated_at)
+    })
 
     return {
         overall: checks.some((check) => check.status === 'down')
@@ -60,14 +64,26 @@ export function publicStatusCoverageCheck(generatedAt = new Date().toISOString()
     }
 }
 
-function isCurrentPublicCheck(check: ServiceCheck) {
+function missingPublicCheck(required: typeof requiredPublicChecks[number], generatedAt: string): ServiceCheck {
+    return {
+        service: publicStatusLabel(required.service),
+        check_name: publicStatusLabel(required.check_name),
+        status: 'degraded',
+        latency_ms: 0,
+        message: 'No status result has arrived in the last 5 minutes. Treat this component as unverified.',
+        checked_at: generatedAt,
+        uptime_30d: 'unverified',
+    }
+}
+
+function isCurrentPublicCheck(check: ServiceCheck, nowMs: number) {
     const checkedAt = new Date(check.checked_at).getTime()
     if (!Number.isFinite(checkedAt)) {
         return false
     }
 
-    const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000
-    return Date.now() - checkedAt <= fourteenDaysMs
+    const age = nowMs - checkedAt
+    return age >= -60_000 && age <= MAX_CHECK_AGE_MS
 }
 
 function toPublicServiceCheck(check: ServiceCheck): ServiceCheck {
@@ -95,6 +111,9 @@ function publicStatusLabel(value: string) {
         user_creation: 'Account creation',
         vm: 'Workspace runtime',
         websocket: 'Realtime delivery',
+        'browser-sandbox': 'Browser sandbox',
+        'dark-web-monitoring': 'Dark web monitoring',
+        'threat-intelligence': 'Threat intelligence',
     }
     const exact = replacements[value.toLowerCase()]
     if (exact) {

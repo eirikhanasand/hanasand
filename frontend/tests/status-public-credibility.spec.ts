@@ -13,42 +13,86 @@ test('public status does not claim operational health without fresh public check
         checks: [],
         history: [],
         incidents: [],
-    })
+    }, Date.parse('2026-07-05T00:00:00.000Z'))
 
     expect(status.overall).toBe('degraded')
-    expect(status.checks).toHaveLength(1)
+    expect(status.checks).toHaveLength(5)
+    expect(status.checks.map(check => check.service)).toEqual([
+        'Core platform',
+        'Website',
+        'Threat intelligence',
+        'Browser sandbox',
+        'Dark web monitoring',
+    ])
     expect(status.checks[0]).toMatchObject({
-        service: 'Status coverage',
-        check_name: 'Public monitor freshness',
+        check_name: 'API Health',
         status: 'degraded',
         uptime_30d: 'unverified',
     })
-    expect(status.checks[0].message).toContain('Treat status as unverified')
+    expect(status.checks[0].message).toContain('last 5 minutes')
 })
 
 test('public status keeps fresh failing checks more severe than freshness fallback', () => {
+    const now = Date.parse('2026-07-05T00:00:00.000Z')
     const status = toPublicServiceStatus({
         overall: 'up',
         generated_at: '2026-07-05T00:00:00.000Z',
         checks: [{
-            service: 'frontend',
-            check_name: 'api-status',
+            service: 'core',
+            check_name: 'API health',
             status: 'down',
             latency_ms: 1200,
             message: 'Status probe failed.',
-            checked_at: new Date().toISOString(),
+            checked_at: new Date(now).toISOString(),
             uptime_30d: '99.1',
         }],
         history: [],
         incidents: [],
-    } satisfies ServiceStatus)
+    } satisfies ServiceStatus, now)
 
     expect(status.overall).toBe('down')
     expect(status.checks[0]).toMatchObject({
-        service: 'Website',
-        check_name: 'API Status',
+        service: 'Core platform',
+        check_name: 'API Health',
         status: 'down',
     })
+})
+
+test('public status is operational only when every buyer-facing monitor is fresh', () => {
+    const now = Date.parse('2026-07-05T00:05:00.000Z')
+    const checkedAt = '2026-07-05T00:04:00.000Z'
+    const status = toPublicServiceStatus({
+        overall: 'up',
+        generated_at: new Date(now).toISOString(),
+        checks: [
+            serviceCheck('core', 'API health', checkedAt),
+            serviceCheck('website', 'Public website', checkedAt),
+            serviceCheck('threat-intelligence', 'Public search', checkedAt),
+            serviceCheck('browser-sandbox', 'Browser workspace', checkedAt),
+            serviceCheck('dark-web-monitoring', 'Monitoring workspace', checkedAt),
+            serviceCheck('content', 'Articles', checkedAt),
+        ],
+        history: [],
+        incidents: [],
+    }, now)
+
+    expect(status.overall).toBe('up')
+    expect(status.checks).toHaveLength(5)
+    expect(status.checks.every(check => check.status === 'up')).toBe(true)
+})
+
+test('public status rejects monitor results older than five minutes', () => {
+    const now = Date.parse('2026-07-05T00:10:01.000Z')
+    const status = toPublicServiceStatus({
+        overall: 'up',
+        generated_at: new Date(now).toISOString(),
+        checks: [serviceCheck('core', 'API health', '2026-07-05T00:05:00.000Z')],
+        history: [],
+        incidents: [],
+    }, now)
+
+    expect(status.overall).toBe('degraded')
+    expect(status.checks[0]).toMatchObject({ status: 'degraded', uptime_30d: 'unverified' })
 })
 
 test('public status fallback check is reusable by API and page fallbacks', () => {
@@ -81,3 +125,20 @@ test('public footer does not hardcode operational status', async () => {
     expect(footer).toContain('return { label: \'Checking status\', dotClass: \'bg-ui-muted\' }')
     expect(footer).not.toContain('<span className=\'h-2.5 w-2.5 rounded-full bg-ui-success shadow-sm\' />')
 })
+
+test('status monitors probe buyer-facing surfaces without inserting fake traffic', async () => {
+    const syntheticMonitor = await readFile(path.join(root, '../api/src/utils/status/monitor.ts'), 'utf8')
+    const logMonitor = await readFile(path.join(root, '../api/src/utils/status/logMonitors.ts'), 'utf8')
+
+    for (const expected of ['API health', 'Public website', 'Public search', 'Browser workspace', 'Monitoring workspace']) {
+        expect(syntheticMonitor).toContain(`'${expected}'`)
+    }
+    expect(syntheticMonitor).toContain('result?.mode !== \'scraper\'')
+    expect(logMonitor).not.toContain('INSERT INTO traffic_events')
+    expect(logMonitor).not.toContain('synthetic-monitor')
+    expect(logMonitor).not.toContain('normal sample')
+})
+
+function serviceCheck(service: string, check_name: string, checked_at: string): ServiceStatus['checks'][number] {
+    return { service, check_name, checked_at, status: 'up', latency_ms: 20, message: null, uptime_30d: '100.00' }
+}

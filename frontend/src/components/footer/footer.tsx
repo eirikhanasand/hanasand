@@ -165,7 +165,7 @@ export default function Footer() {
 
 function footerStatusCopy(status: ServiceStatus['overall'] | 'unknown') {
     if (status === 'up') {
-        return { label: 'All systems operational', dotClass: 'bg-ui-success' }
+        return { label: 'Monitored services operational', dotClass: 'bg-ui-success' }
     }
     if (status === 'down') {
         return { label: 'Service interruption', dotClass: 'bg-ui-danger' }
