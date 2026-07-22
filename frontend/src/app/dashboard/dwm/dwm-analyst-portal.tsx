@@ -1274,7 +1274,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
 
 function AnalystBriefPanel({ brief }: { brief: ReturnType<typeof buildAnalystBrief> }) {
     return (
-        <section data-dwm-analyst-brief className='grid min-w-0 gap-4 rounded-lg border border-ui-border bg-ui-raised p-4'>
+        <section data-dwm-analyst-brief className='grid w-full max-w-full min-w-0 gap-4 overflow-hidden rounded-lg border border-ui-border bg-ui-raised p-4'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-ui-primary'>Analyst brief</p>
