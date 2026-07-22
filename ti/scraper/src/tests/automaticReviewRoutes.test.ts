@@ -69,7 +69,7 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(first.request.evidence[0].capture.safeExcerpt).toContain("Ignore prior instructions");
     expect(JSON.stringify(first.toolsRequest)).not.toMatch(/\.onion|\.i2p|analyst@|\+47|t\.me|@ops_channel|123456789:|api[_-]?key|password\s*=|12 hours left/i);
     expect(first.request.subject).toEqual({ type: "claim", id: "claim_one" });
-    expect(first.request.schemaVersion).toBe("ti.automatic_intelligence_review.request.v2");
+    expect(first.request.schemaVersion).toBe("ti.automatic_intelligence_review.request.v3");
     expect(first.request.evidence.every((item: any) => first.request.evidence.some((allowed: any) => allowed.id === item.id))).toBe(true);
 
     const task = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task" && item.subject.id === "claim_one");
@@ -158,14 +158,43 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(automaticReviewSnapshot(store, "default").tasks[0]).toMatchObject({ state: "retrying", lastError: "Hanasand AI returned malformed structured output" });
   });
 
-  test("supersedes every stale nonterminal state before fetching while preserving old outcomes", async () => {
+  test("feeds only bounded validator feedback into the next retry and completes idempotently", async () => {
+    const store = seededClaimStore();
+    const requests: any[] = [];
+    const prompts: string[] = [];
+    const fetcher = async (_input: string | URL | Request, init?: RequestInit) => {
+      const toolsRequest = JSON.parse(String(init?.body));
+      const request = promptRequest(toolsRequest.prompt);
+      prompts.push(toolsRequest.prompt);
+      requests.push(request);
+      const decision = negativeDecision(request);
+      if (requests.length === 1) decision.falsePositiveReasons = [];
+      return completedTools(request, decision);
+    };
+    let clock = firstAt;
+    await runAutomaticReviewCycle(options(store), { now: clock, clock: () => clock, allTenants: true, limit: 1, modelVersion: "hanasand", fetcher });
+    expect(automaticReviewSnapshot(store, "default").tasks[0]).toMatchObject({ state: "retrying", attempt: 1, lastError: "A non-supported decision requires a structured false-positive reason" });
+    clock = "2026-07-22T10:01:00.000Z";
+    await runAutomaticReviewCycle(options(store), { now: clock, clock: () => clock, allTenants: true, limit: 1, modelVersion: "hanasand", fetcher });
+    const completed = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
+    store.saveAnalystMetadataReviewTask({ ...completed, state: "running", outcome: undefined, completedAt: undefined, leaseExpiresAt: "2026-07-22T10:01:30.000Z" });
+    await runAutomaticReviewCycle(options(store), { now: "2026-07-22T10:03:00.000Z", allTenants: true, limit: 1, modelVersion: "hanasand", fetcher: async () => { throw new Error("must not retry terminal work"); } });
+
+    expect(requests[0].retryCorrection).toBeUndefined();
+    expect(requests[1].retryCorrection).toBe("A non-supported decision requires a structured false-positive reason");
+    expect(prompts[1]).toContain("correct only that prior response-contract error");
+    expect(automaticReviewSnapshot(store, "default").tasks[0]).toMatchObject({ state: "terminal", outcome: "decided", attempt: 2, decision: { action: "reject", falsePositiveReasons: expect.any(Array) }, history: expect.arrayContaining([expect.objectContaining({ state: "restart_reconciled" })]) });
+    expect(requests).toHaveLength(2);
+  });
+
+  test("supersedes every v2 nonterminal state before fetching while preserving old outcomes", async () => {
     const templateStore = seededClaimStore();
     syncAutomaticReviewQueue(options(templateStore), { allTenants: true, now: firstAt, modelVersion: "old-model" });
     const legacy = templateStore.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
     const store = seededClaimStore();
-    for (const state of ["queued", "running", "retrying"] as const) store.saveAnalystMetadataReviewTask({ ...legacy, id: `${legacy.id}-${state}`, state, promptVersion: "ti.automatic_intelligence_review.prompt.v1" });
-    store.saveAnalystMetadataReviewTask({ ...legacy, id: `${legacy.id}-terminal`, state: "terminal", outcome: "decided", decision: { preserved: true }, promptVersion: "ti.automatic_intelligence_review.prompt.v1" });
-    store.saveAnalystMetadataReviewTask({ ...legacy, id: `${legacy.id}-dead`, state: "dead_letter", lastError: "preserved failure", promptVersion: "ti.automatic_intelligence_review.prompt.v1" });
+    for (const state of ["queued", "running", "retrying"] as const) store.saveAnalystMetadataReviewTask({ ...legacy, id: `${legacy.id}-${state}`, state, promptVersion: "ti.automatic_intelligence_review.prompt.v2" });
+    store.saveAnalystMetadataReviewTask({ ...legacy, id: `${legacy.id}-terminal`, state: "terminal", outcome: "decided", decision: { preserved: true }, promptVersion: "ti.automatic_intelligence_review.prompt.v2" });
+    store.saveAnalystMetadataReviewTask({ ...legacy, id: `${legacy.id}-dead`, state: "dead_letter", lastError: "preserved failure", promptVersion: "ti.automatic_intelligence_review.prompt.v2" });
     const fetchedVersions: string[] = [];
     const fetcher = async (_input: string | URL | Request, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body));
@@ -174,7 +203,7 @@ describe("automatic Hanasand AI intelligence review", () => {
     };
     const cycle = await runAutomaticReviewCycle(options(store), { now: firstAt, allTenants: true, modelVersion: "hanasand", fetcher, aiBase: "http://ai.test" });
     const tasks = automaticReviewSnapshot(store, "default", 10).tasks as any[];
-    const stale = tasks.filter((task) => task.promptVersion.endsWith(".v1"));
+    const stale = tasks.filter((task) => task.promptVersion.endsWith(".v2"));
     const current = tasks.find((task) => task.promptVersion === AUTOMATIC_REVIEW_PROMPT_VERSION);
     expect(cycle).toMatchObject({ superseded: 3, queued: 1, attempted: 1 });
     expect(fetchedVersions).toEqual([AUTOMATIC_REVIEW_PROMPT_VERSION]);
@@ -204,6 +233,27 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(projected.evidence[0].capture.safeExcerpt).toHaveLength(500);
     expect(JSON.stringify(projected)).not.toContain(reference);
     expect(automaticReviewSnapshot(store, "default").tasks[0]).toMatchObject({ state: "terminal", decision: { action: "reject", contradictoryEvidenceIds: ["evidence_google"] } });
+  });
+
+  test("quarantines a URL confirm based on a related topic without the exact hidden fingerprint", async () => {
+    const store = new InMemoryScraperStore();
+    const asserted = "https://cloud.google.com/security/products/security-operations";
+    const observed = "https://example.test/advisories/CVE-2026-1000";
+    seedSource(store, "source_related", `A related CVE advisory links to ${observed}.`);
+    store.saveIntelligenceClaim({ id: "claim_url_related", tenantId: "default", claimType: "url", subjectType: "entity", subjectId: "url_entity", reviewState: "unreviewed", summary: "Related security URL", value: { type: "url", value: asserted }, extractorVersion: "claim-parser-v4" });
+    store.saveClaimEvidence({ ...claimEvidence("evidence_related", "claim_url_related", "capture_source_related", "source_related", 0.9), provenance: [{ evidenceText: observed }] } as any);
+    let prompt = "";
+    const fetcher = async (_input: string | URL | Request, init?: RequestInit) => {
+      prompt = JSON.parse(String(init?.body)).prompt;
+      const request = promptRequest(prompt);
+      return completedTools(request, supportedDecision(request, { actorAttribution: { canonicalName: null, aliases: [] }, rationale: "The evidence discusses a related CVE topic." }));
+    };
+    await runAutomaticReviewCycle(options(store), { now: firstAt, allTenants: true, modelVersion: "hanasand", fetcher });
+
+    const request = promptRequest(prompt);
+    expect(request.assertionUnderReview.referenceFingerprints[0].sha256).not.toBe(request.evidence[0].capture.referenceFingerprints[0].sha256);
+    expect(prompt).toContain("occurrence alone is not CTI relevance");
+    expect(automaticReviewSnapshot(store, "default").tasks[0]).toMatchObject({ state: "quarantined", lastError: "literal_identifier_not_grounded", decision: { action: "mark_needs_review", claimValidity: "uncertain" } });
   });
 
   test("persists only uniquely catalog-resolved incident attribution and the dispatcher returns reviewed truth", async () => {
@@ -250,8 +300,10 @@ describe("automatic Hanasand AI intelligence review", () => {
   test("automatically retries connecting, unsafe output, and unsafe calibration before dead-lettering", async () => {
     const store = seededClaimStore();
     let attempt = 0;
+    const retryCorrections: unknown[] = [];
     const fetcher = async (_input: string | URL | Request, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body));
+      retryCorrections.push(request.retryCorrection);
       attempt++;
       if (attempt === 1) return Response.json({ status: "connecting", provider: "hanasand-ai" });
       if (attempt === 2) return completedDirect(request, supportedDecision(request, { rationale: `See ${"a".repeat(56)}.onion and contact analyst@example.invalid` }));
@@ -266,6 +318,7 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(task).toMatchObject({ state: "dead_letter", attempt: 3, lastError: "Hanasand AI returned unsafe calibration context" });
     expect(task.history.map((event: any) => event.state)).toEqual(["queued", "running", "retrying", "running", "retrying", "running", "dead_letter"]);
     expect(store.listClaimReviews()).toHaveLength(0);
+    expect(retryCorrections).toEqual([undefined, undefined, undefined]);
     expect(JSON.stringify(store.listAnalystMetadataReviewTasks())).not.toMatch(/\.onion|analyst@example|t\.me\/unsafe_contact/i);
   });
 
