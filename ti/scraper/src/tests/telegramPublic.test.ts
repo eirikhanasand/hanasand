@@ -55,6 +55,7 @@ describe("compact Telegram public adapter", () => {
     expect(item.rawText).not.toContain("abcdef1234567890");
     expect(item.rawText).not.toContain("ABCDEFGHIJKLMNOPQRSTUVWXYZabcd1234");
     expect(item.rawText).toContain("[credential]");
+    expect(minimizeTelegramPii("CVE-2021-22681 198.51.100.42 2026-07-22 +47 999 99 999")).toBe("CVE-2021-22681 198.51.100.42 2026-07-22 [phone]");
     expect(evidence?.messageUrl).toBe("https://t.me/securityalerts/42");
     expect(evidence?.extractedUrls).toContain("https://example.test/report");
   });
