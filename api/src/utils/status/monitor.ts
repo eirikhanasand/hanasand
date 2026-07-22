@@ -2,7 +2,8 @@ import run from '#db'
 import crypto from 'crypto'
 
 const apiBase = process.env.MONITOR_API_BASE || `http://127.0.0.1:${Number(process.env.PORT) || 8081}/api`
-const webBase = (process.env.MONITOR_WEB_BASE || 'http://frontend:3000').replace(/\/$/, '')
+const publicApiBase = (process.env.MONITOR_PUBLIC_API_BASE || 'https://api.hanasand.com/api/v1').replace(/\/$/, '')
+const webBase = (process.env.MONITOR_WEB_BASE || 'https://hanasand.com').replace(/\/$/, '')
 
 async function record(service: string, checkName: string, status: 'up' | 'degraded' | 'down', latency: number, message = '') {
     await run(`
@@ -21,8 +22,8 @@ async function check(service: string, checkName: string, fn: () => Promise<void 
     }
 }
 
-async function fetchJson(path: string, options: RequestInit = {}) {
-    const response = await fetch(`${apiBase}${path}`, {
+async function fetchJson(path: string, options: RequestInit = {}, base = apiBase) {
+    const response = await fetch(`${base}${path}`, {
         ...options,
         signal: options.signal || AbortSignal.timeout(15_000),
         headers: {
@@ -86,9 +87,12 @@ export default async function runSyntheticMonitor() {
 
     await Promise.all([
         check('core', 'API health', async () => {
-            const { response, body } = await fetchJson('/health')
-            if (response.status !== 200 || object(body)?.ok !== true) throw new Error(`Unexpected API health response ${response.status}`)
-            return 'The public API health endpoint responded successfully.'
+            const { response, body } = await fetchJson('/openapi.json', {}, publicApiBase)
+            const contract = object(body)
+            if (response.status !== 200 || typeof contract?.openapi !== 'string' || !object(contract.paths)) {
+                throw new Error(`Unexpected public API contract response ${response.status}`)
+            }
+            return 'The public API contract endpoint responded successfully.'
         }),
         check('website', 'Public website', async () => {
             const { response, body } = await fetchPage('/')
@@ -99,7 +103,7 @@ export default async function runSyntheticMonitor() {
             const { response, body } = await fetchJson('/ti/search', {
                 method: 'POST',
                 body: JSON.stringify({ query: 'APT29' }),
-            })
+            }, publicApiBase)
             const result = object(body)
             if (response.status !== 200 || result?.mode !== 'scraper' || !Array.isArray(result.sources) || !Array.isArray(result.recentActivity)) {
                 throw new Error(`Threat intelligence search is unavailable (${response.status})`)

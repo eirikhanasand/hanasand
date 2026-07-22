@@ -133,6 +133,9 @@ test('status monitors probe buyer-facing surfaces without inserting fake traffic
     for (const expected of ['API health', 'Public website', 'Public search', 'Browser workspace', 'Monitoring workspace']) {
         expect(syntheticMonitor).toContain(`'${expected}'`)
     }
+    expect(syntheticMonitor).toContain('\'https://api.hanasand.com/api/v1\'')
+    expect(syntheticMonitor).toContain('\'https://hanasand.com\'')
+    expect(syntheticMonitor).toContain('fetchJson(\'/openapi.json\', {}, publicApiBase)')
     expect(syntheticMonitor).toContain('result?.mode !== \'scraper\'')
     expect(logMonitor).not.toContain('INSERT INTO traffic_events')
     expect(logMonitor).not.toContain('synthetic-monitor')
