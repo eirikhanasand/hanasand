@@ -215,13 +215,14 @@ async function listTasks(request: Request, options: ApiServerOptions, benchmarkI
   if (benchmark instanceof Response) return benchmark;
   const annotations = benchmarkAnnotations(options.store, benchmark.id);
   const adjudications = benchmarkAdjudications(options.store, benchmark.id);
+  const labels = records(options.store, "listEvaluationLabels").filter((row) => row.benchmarkId === benchmark.id);
   const sourceById = new Map(records(options.store, "listSources").map((source) => [source.id, source]));
   const captureById = new Map(records(options.store, "listCaptures").map((capture) => [capture.id, capture]));
   const evidenceByCapture = new Map<string, string | undefined>();
   const tasks = benchmarkTasks(benchmark).map((task) => {
     const capture = captureById.get(task.captureId);
     if (!evidenceByCapture.has(task.captureId)) evidenceByCapture.set(task.captureId, exhaustiveEvidenceText(capture));
-    return taskDto(task, capture, sourceById, annotations, adjudications, reviewerId, benchmark.requiredReviewers, evidenceByCapture.get(task.captureId));
+    return taskDto(task, capture, sourceById, annotations, adjudications, labels, reviewerId, benchmark.requiredReviewers, evidenceByCapture.get(task.captureId));
   });
   return json({ benchmark: benchmarkSummary(options.store, benchmark), tasks, total: tasks.length });
 }
@@ -442,7 +443,7 @@ function benchmarkTasks(benchmark: any) {
   return benchmark.manifest ?? benchmark.captureIds.flatMap((captureId: string) => benchmark.labelTypes.map((labelType: string) => ({ id: stableId("evaluation-task", `${benchmark.id}:${captureId}:${labelType}`), benchmarkId: benchmark.id, captureId, labelType })));
 }
 
-function taskDto(task: any, capture: any, sourceById: Map<string, any>, annotations: any[], adjudications: any[], reviewerId: string, requiredReviewers: number, evidence?: string) {
+function taskDto(task: any, capture: any, sourceById: Map<string, any>, annotations: any[], adjudications: any[], labels: any[], reviewerId: string, requiredReviewers: number, evidence?: string) {
   const source = sourceById.get(capture?.sourceId);
   const taskAnnotations = annotations.filter((row) => row.taskId === task.id);
   const taskAdjudications = adjudications.filter((row) => row.taskId === task.id);
@@ -465,7 +466,7 @@ function taskDto(task: any, capture: any, sourceById: Map<string, any>, annotati
     automation: task.automation ? { ...task.automation, history: [...(task.automation.history ?? [])] } : undefined,
     reviewHistory: taskAnnotations.map((annotation) => reviewHistoryDto(annotation, exposeValues)),
     adjudicationHistory: taskAdjudications.map((adjudication) => adjudicationHistoryDto(adjudication, exposeValues)),
-    results: exposeValues ? recordsForTask(task, taskAdjudications[0]) : undefined,
+    results: adjudicated ? labels.filter((label) => label.taskId === task.id).map((label) => ({ expectedValue: label.expectedValue, observedValue: label.observedValue, outcome: label.outcome })) : undefined,
     protocol: { predictionHidden: true, exhaustiveExpectedValues: true, promptVersion: REVIEW_PROMPT_VERSION, schemaVersion: REVIEW_SCHEMA_VERSION }
   };
 }
@@ -1071,16 +1072,6 @@ function adjudicationHistoryDto(adjudication: any, exposeValues: boolean) {
     adjudicatedAt: adjudication.adjudicatedAt,
     ...(exposeValues ? { expectedValues: adjudication.expectedValues } : {})
   };
-}
-
-function recordsForTask(task: any, adjudication: any) {
-  const expected = valueMap(adjudication?.expectedValues ?? []), observed = valueMap(task.observedValues ?? []);
-  const units = unique([...expected.keys(), ...observed.keys()]);
-  return (units.length ? units : ["__none__"]).map((unit) => ({
-    expectedValue: expected.get(unit) ?? null,
-    observedValue: observed.get(unit) ?? null,
-    outcome: unit === "__none__" ? "true_negative" : expected.has(unit) && observed.has(unit) ? "true_positive" : expected.has(unit) ? "false_negative" : "false_positive"
-  }));
 }
 
 function countByValue(values: string[]) {

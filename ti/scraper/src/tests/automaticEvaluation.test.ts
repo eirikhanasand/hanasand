@@ -23,6 +23,12 @@ describe("automatic independent evaluation", () => {
       createdAt: "2026-07-21T10:00:00.000Z"
     })!;
     const requests: any[] = [];
+    const queuedResponse = await handleApiRequest(new Request(`http://local/v1/intel/evaluation/benchmarks/${benchmark.id}/tasks`, {
+      headers: { authorization: "Bearer test", id: "evaluation_operator", "x-tenant-id": "tenant_automatic" }
+    }), apiOptions(store));
+    expect(queuedResponse.status).toBe(200);
+    const queuedTasks = await queuedResponse.json() as any;
+    expect(queuedTasks.tasks.every((task: any) => task.results === undefined)).toBe(true);
 
     const result = await runAutomaticEvaluationCycle({
       store,
@@ -74,6 +80,11 @@ describe("automatic independent evaluation", () => {
     expect(labels.map((label: any) => label.outcome).sort()).toEqual(["false_negative", "false_positive", "true_negative", "true_positive"]);
     expect(labels.every((label: any) => label.labelingMethod === "automatic_model_review" && label.independentFromExtractor && label.referenceEvidenceHash && label.labeledAt)).toBe(true);
     expect(() => store.saveEvaluationLabel({ ...labels[0], outcome: "false_positive" })).toThrow("Evaluation label is immutable");
+    const completedResponse = await handleApiRequest(new Request(`http://local/v1/intel/evaluation/benchmarks/${benchmark.id}/tasks`, {
+      headers: { authorization: "Bearer test", id: "evaluation_operator", "x-tenant-id": "tenant_automatic" }
+    }), apiOptions(store));
+    const completedTasks = await completedResponse.json() as any;
+    expect(completedTasks.tasks.flatMap((task: any) => task.results || []).map((result: any) => result.outcome).sort()).toEqual(labels.map((label: any) => label.outcome).sort());
 
     const metrics = buildEvaluationMetrics(store, { tenantId: "tenant_automatic", datasetSplit: "validation", generatedAt: "2026-07-21T10:02:00.000Z" });
     expect(metrics.quality).toMatchObject({
