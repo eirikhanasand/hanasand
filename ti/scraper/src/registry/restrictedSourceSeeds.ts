@@ -74,6 +74,11 @@ export function importRestrictedMetadataSeedBundle(bundle: unknown, importedAt: 
         discoveryCheckedAt: raw.metadata.discoveryCheckedAt,
         discoveryAvailability: raw.metadata.discoveryAvailability,
         discoveryObservedAt: raw.metadata.discoveryObservedAt,
+        productionCollectionVerifiedAt: raw.metadata.productionCollectionVerifiedAt,
+        productionCollectionOutcome: raw.metadata.productionCollectionOutcome,
+        parserProfile: raw.metadata.parserProfile,
+        reportedVictimCount: raw.metadata.reportedVictimCount,
+        lastReportedVictimAt: raw.metadata.lastReportedVictimAt,
         expectedPageRole: transportCanary ? "transport_canary" : "victim_listing",
         collectionScope: "metadata_only",
         retainRawContent: false,
@@ -130,6 +135,13 @@ function validateSource(source: unknown): string[] {
     || !nonEmpty(metadata.attribution)) {
     errors.push("restricted source attribution, role, verification, and retention metadata are required");
   }
+  if (governance?.approvalState === "approved" && metadata && !transportCanary && (
+    !isIsoDate(metadata.productionCollectionVerifiedAt)
+    || metadata.productionCollectionOutcome !== "metadata_only_parser_verified"
+    || !nonEmpty(metadata.parserProfile)
+    || !boundedNumber(metadata.reportedVictimCount, 1, 1_000_000)
+    || !isIsoDate(metadata.lastReportedVictimAt)
+  )) errors.push("approved restricted intelligence sources require current useful metadata parser verification");
   return errors;
 }
 
