@@ -13,13 +13,11 @@ export function statusFrom(...records: Array<Record<string, unknown> | undefined
   return "unknown";
 }
 
-export function coveragePercent(search: Record<string, unknown> | undefined, coverageJson: unknown): number {
+export function coveragePercent(search: Record<string, unknown> | undefined): number {
   const direct = asRecord(search?.sourceCoverage ?? search?.source_coverage);
-  const queryCoverage = asRecord(Array.isArray(asRecord(coverageJson)?.queries) ? asRecord(coverageJson)?.queries?.[0] : undefined);
-  const source = direct ?? queryCoverage;
-  const eligible = readArray(source, "eligibleSources").length + readArray(source, "selectedSources").length + readArray(source, "activeCoverage").length;
-  const missing = readArray(source, "missingApprovedSources").length + readArray(source, "missingVerticals").length + readArray(source, "blockedSources").length;
-  if (eligible + missing === 0) return source ? 80 : 0;
+  const eligible = readArray(direct, "eligibleSources").length + readArray(direct, "selectedSources").length + readArray(direct, "activeCoverage").length;
+  const missing = readArray(direct, "missingApprovedSources").length + readArray(direct, "missingVerticals").length + readArray(direct, "blockedSources").length;
+  if (eligible + missing === 0) return 0;
   return Math.round((eligible / (eligible + missing)) * 100);
 }
 

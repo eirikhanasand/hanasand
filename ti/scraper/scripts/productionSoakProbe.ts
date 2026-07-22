@@ -6,9 +6,8 @@ import { asRecord, parseJson, readBool, readNumber } from "./productionSoakUtils
 
 export async function probeQuery(query: string, previousStatus: QuerySample["status"] | undefined, config: { scraperBase: string; publicApiBase: string }): Promise<QuerySample> {
   const started = Date.now();
-  const [search, coverage, frontier, resource, api] = await Promise.all([
+  const [search, frontier, resource, api] = await Promise.all([
     fetchJson(`${config.scraperBase}/v1/intel/search?q=${encodeURIComponent(query)}&entityType=actor`),
-    fetchJson(`${config.scraperBase}/v1/sources/coverage-plan`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ queries: [query], entityTypes: ["actor"] }) }),
     fetchJson(`${config.scraperBase}/v1/frontier/status?q=${encodeURIComponent(query)}`),
     fetchJson(`${config.scraperBase}/v1/ops/resource-snapshot`),
     fetchJson(config.publicApiBase, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query }) })
@@ -34,7 +33,7 @@ export async function probeQuery(query: string, previousStatus: QuerySample["sta
     status,
     previousStatus,
     pollDelta: delta(previousStatus, status),
-    sourceCoveragePercent: coveragePercent(searchJson, coverage.json),
+    sourceCoveragePercent: coveragePercent(searchJson),
     queueAgeP95Seconds: queueAge,
     memoryRssGb,
     cpuPercent,

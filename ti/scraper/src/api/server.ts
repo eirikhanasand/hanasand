@@ -123,7 +123,6 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname.startsWith("/v1/sources/") && request.method === "PATCH") return updateSource(request, options, url.pathname.split("/")[3]);
     if (url.pathname === "/v1/sources/atlas" && request.method === "GET") return sourceAtlas(request, options);
     if (url.pathname === "/v1/sources/apply-plan") return sourceApplyPlan(request, options);
-    if (url.pathname === "/v1/sources/coverage-plan") return json({ queries: (await readJson(request)).queries ?? [], slo: { goal: "add payworthy fresh rows" } });
     if (url.pathname === "/v1/intel/search" || url.pathname === "/api/ti/search") return searchResponse(request, options, url);
     const evidenceResponse = await handleEvidenceRequest(request, options);
     if (evidenceResponse) return evidenceResponse;
