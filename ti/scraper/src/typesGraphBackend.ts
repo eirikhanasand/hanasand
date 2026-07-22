@@ -24,7 +24,6 @@ export type GraphExportEnforcementDto = any;
 export type GraphRuntimeApiDto = any;
 export type CorrelationTimelineDto = any;
 export type GraphQueryApiContractDto = any;
-export type Stix21MappingContractDto = any;
 export type GraphIntegritySeverity = any;
 export type GraphIntegrityFindingCode = any;
 export type GraphIntegrityFindingDto = any;
