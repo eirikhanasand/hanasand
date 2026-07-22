@@ -1,327 +1,161 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Clock3, DatabaseBackup, FileClock, ListChecks, RotateCcw, ShieldCheck } from 'lucide-react'
-import { triggerBackupAction } from '../actions'
-import type { BackupService } from '@/utils/db/internal'
-import { dashboardPanelClass } from '@/components/dashboard/ui'
-import { presentBackup, presentBackupLoadError, type BackupPresentation } from './backupPresentation'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState, useTransition } from 'react'
+import { DatabaseBackup, RefreshCw, ShieldCheck } from 'lucide-react'
+import type { BackupFile, BackupOperation, BackupService } from '@/utils/db/internal'
+import { triggerBackupAction, verifyBackupAction } from '../actions'
 
 type BackupPageProps = {
     backups: BackupService[]
+    files: BackupFile[]
     loadError?: string
 }
 
-function formatSchedule(value?: string | null) {
-    if (!value) return 'No schedule configured'
-    const date = new Date(value)
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
-}
-
-function formatRelative(value?: string | null) {
-    if (!value) return 'Never'
-    const date = new Date(value)
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
-}
-
-function healthClasses(tone: BackupPresentation['healthTone']) {
-    if (tone === 'ok') return 'border-ui-success bg-ui-success/15 text-ui-success'
-    if (tone === 'warn') return 'border-ui-warning bg-ui-warning/15 text-ui-warning'
-    return 'border-ui-danger bg-ui-danger/15 text-ui-danger'
-}
-
-function backupServiceSlug(backup: BackupService) {
-    return (backup.id || backup.name).replace(/_database$/, '')
-}
-
-export default function BackupPage({ backups, loadError = '' }: BackupPageProps) {
-    const [message, setMessage] = useState('')
+export default function BackupPage({ backups, files, loadError = '' }: BackupPageProps) {
+    const service = backups[0]
+    const router = useRouter()
     const [isPending, startTransition] = useTransition()
-    const loadBlocker = loadError ? presentBackupLoadError(loadError) : null
-    const presentations = backups.map((backup) => ({ backup, presentation: presentBackup(backup) }))
-    const healthyCount = presentations.filter(({ presentation }) => presentation.healthTone === 'ok').length
-    const restoreReadyCount = presentations.filter(({ presentation }) => presentation.restoreReady).length
-    const attentionTarget = presentations.find(({ presentation }) => presentation.healthTone === 'bad')
-    const nextBackup = backups.find(backup => backup.nextBackup)?.nextBackup
-    const lastBackup = backups.find(backup => backup.lastBackup)?.lastBackup
-    const firstRestoreReady = presentations.find(({ presentation }) => presentation.restoreReady)
-    const hasRestoreTargets = presentations.length > 0
-    const primaryTitle = loadBlocker
-        ? 'Fix backup config'
-        : !backups.length
-            ? 'Create first backup'
-            : attentionTarget
-                ? `Check ${attentionTarget.backup.name}`
-                : restoreReadyCount
-                    ? 'Restore files are ready'
-                    : hasRestoreTargets
-                        ? 'Create restore point'
-                        : 'Run backup'
-    const primaryDetail = loadBlocker
-        ? loadBlocker.safeError
-        : !backups.length
-            ? 'No targets are reporting. Run backup to initialize the lane.'
-            : attentionTarget
-                ? attentionTarget.presentation.safeError || attentionTarget.presentation.summary
-                : restoreReadyCount
-                    ? `${restoreReadyCount} target${restoreReadyCount === 1 ? '' : 's'} ready. Last backup: ${formatRelative(lastBackup)}.`
-                    : 'Targets are visible. Run backup to index the first restore file.'
-    const primaryRestoreHref = firstRestoreReady ? `/dashboard/db/restore?service=${encodeURIComponent(backupServiceSlug(firstRestoreReady.backup))}` : ''
+    const [message, setMessage] = useState('')
+    const [error, setError] = useState('')
+    const [verifying, setVerifying] = useState('')
 
-    function handleRun() {
-        startTransition(async () => {
+    useEffect(() => {
+        if (!service?.currentOperation) return
+        const timer = window.setInterval(() => router.refresh(), 2000)
+        return () => window.clearInterval(timer)
+    }, [router, service?.currentOperation])
+
+    function runBackup() {
+        setMessage('')
+        setError('')
+        startTransition(async() => {
             const response = await triggerBackupAction()
-            setMessage(typeof response === 'string' ? presentBackupLoadError(response).safeError : response.message)
+            if (typeof response === 'string') setError(response)
+            else setMessage(response.message)
+            router.refresh()
         })
     }
 
+    function verify(file: string) {
+        setMessage('')
+        setError('')
+        setVerifying(file)
+        startTransition(async() => {
+            const response = await verifyBackupAction(file)
+            if (typeof response === 'string') setError(response)
+            else setMessage(response.message)
+            setVerifying('')
+            router.refresh()
+        })
+    }
+
+    const busy = isPending || Boolean(service?.currentOperation)
+    const visibleError = error || loadError || service?.error || ''
+
     return (
-        <div className='grid gap-4'>
-            <section className={`${dashboardPanelClass} grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center`} data-backup-primary-flow>
-                <div className='min-w-0'>
-                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>Recommended next</span>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{healthyCount}/{backups.length || 0} healthy</span>
-                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{restoreReadyCount} restore-ready</span>
+        <main className='mx-auto grid w-full max-w-7xl gap-4 p-4 sm:p-6' data-backup-operator-console>
+            <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5' data-backup-primary-flow>
+                <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
+                    <div>
+                        <div className='flex items-center gap-2'>
+                            <DatabaseBackup className='h-5 w-5 text-ui-primary' />
+                            <h1 className='text-xl font-semibold text-ui-text'>Database backup and recovery</h1>
+                        </div>
+                        <p className='mt-2 text-sm text-ui-muted'>Verified PostgreSQL archives, retention evidence, and isolated restore drills.</p>
                     </div>
-                    <h2 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h2>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
-                </div>
-                {loadBlocker ? (
-                    <Link
-                        href='/dashboard/logs'
-                        className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:bg-ui-primary/90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
-                        data-backup-primary-action
-                    >
-                        <ListChecks className='h-4 w-4' />
-                        Open logs
-                    </Link>
-                ) : attentionTarget ? (
-                    <Link
-                        href='/dashboard/logs'
-                        className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:bg-ui-primary/90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
-                        data-backup-primary-action
-                    >
-                        <ListChecks className='h-4 w-4' />
-                        Open logs
-                    </Link>
-                ) : primaryRestoreHref ? (
-                    <Link
-                        href={primaryRestoreHref}
-                        className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:bg-ui-primary/90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
-                        data-backup-primary-action
-                    >
-                        <RotateCcw className='h-4 w-4' />
-                        Open restore files
-                    </Link>
-                ) : (
                     <button
                         type='button'
-                        onClick={handleRun}
-                        disabled={isPending}
-                        className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:bg-ui-primary/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto'
+                        onClick={runBackup}
+                        disabled={busy}
+                        className='inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60'
                         data-backup-primary-action
                     >
-                        <DatabaseBackup className='h-4 w-4' />
-                        {isPending ? 'Running backup...' : 'Run backup now'}
+                        <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
+                        {service?.currentOperation ? stageLabel(service.currentOperation.stage) : isPending ? 'Running backup…' : 'Run verified backup'}
                     </button>
-                )}
+                </div>
+                {visibleError && <p role='alert' className='mt-4 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-3 text-sm text-ui-danger'>{visibleError}</p>}
+                {message && <p role='status' className='mt-4 rounded-lg border border-ui-success/30 bg-ui-success/10 p-3 text-sm text-ui-success'>{message}</p>}
             </section>
 
-            <details className={`${dashboardPanelClass} overflow-hidden`} data-backup-summary-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                    <span>Backup counters and schedule</span>
-                    <span className='text-xs font-medium text-ui-muted'>Last {formatRelative(lastBackup)}, next {formatSchedule(nextBackup)}</span>
-                </summary>
-                <div className='grid gap-3 border-t border-ui-border bg-ui-panel p-3 md:grid-cols-2 xl:grid-cols-4' data-backup-summary-metrics>
-                    <SummaryMetric icon={<ShieldCheck className='h-4 w-4' />} label='Backup health' value={loadBlocker ? 'Unavailable' : backups.length ? `${healthyCount}/${backups.length} healthy` : 'Checking targets'} />
-                    <SummaryMetric icon={<FileClock className='h-4 w-4' />} label='Last backup' value={formatRelative(lastBackup)} />
-                    <SummaryMetric icon={<Clock3 className='h-4 w-4' />} label='Next backup' value={formatSchedule(nextBackup)} />
-                    <SummaryMetric icon={<RotateCcw className='h-4 w-4' />} label='Restore lane' value={restoreReadyCount ? `${restoreReadyCount} target${restoreReadyCount === 1 ? '' : 's'} ready` : 'Indexing restore points'} />
+            <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5' aria-labelledby='backup-runtime-heading'>
+                <div className='flex items-center justify-between gap-3'>
+                    <h2 id='backup-runtime-heading' className='font-semibold text-ui-text'>Runtime evidence</h2>
+                    <Status value={service?.status || 'Unavailable'} />
                 </div>
-            </details>
+                <dl className='mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-4'>
+                    <Evidence label='Last attempt' value={formatDate(service?.lastAttempt)} />
+                    <Evidence label='Last success' value={formatDate(service?.lastSuccess)} />
+                    <Evidence label='Last failure' value={formatDate(service?.lastFailure)} detail={service?.lastError || undefined} />
+                    <Evidence label='Next automatic run' value={service?.scheduleEnabled ? formatDate(service.nextBackup) : 'Paused'} detail={service?.schedule ? `${service.schedule} ${service.scheduleTimezone || 'UTC'}` : undefined} />
+                    <Evidence label='Storage target' value={service?.storageTarget || 'Not reported'} mono />
+                    <Evidence label='Retention' value={service?.retention || 'Not reported'} detail={retentionLabel(service)} />
+                    <Evidence label='Latest checksum' value={shortHash(service?.latestChecksum)} detail={service?.latestVerifiedAt ? `Verified ${formatDate(service.latestVerifiedAt)}` : 'No verification metadata'} mono />
+                    <Evidence label='Release commit' value={shortHash(service?.releaseCommit)} mono />
+                </dl>
+            </section>
 
-            {loadBlocker && (
-                <ConfigurationBlocker safeError={loadBlocker.safeError} rawDetails={loadBlocker.rawDetails} />
-            )}
+            <section className='overflow-hidden rounded-xl border border-ui-border bg-ui-panel' aria-labelledby='backup-files-heading'>
+                <div className='flex flex-col gap-2 border-b border-ui-border p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5'>
+                    <div>
+                        <h2 id='backup-files-heading' className='font-semibold text-ui-text'>Backup files</h2>
+                        <p className='mt-1 text-sm text-ui-muted'>{files.length} archive{files.length === 1 ? '' : 's'} measured from {service?.storageTarget || 'configured storage'}.</p>
+                    </div>
+                    <Link href='/dashboard/db/restore' className='text-sm font-semibold text-ui-primary hover:underline'>Open restore drills</Link>
+                </div>
+                <div className='overflow-x-auto'>
+                    <table className='min-w-[760px] w-full text-left text-sm'>
+                        <thead className='bg-ui-raised text-xs uppercase text-ui-muted'>
+                            <tr><th className='px-4 py-3'>Archive</th><th className='px-4 py-3'>Created</th><th className='px-4 py-3'>Size</th><th className='px-4 py-3'>Verification</th><th className='px-4 py-3 text-right'>Action</th></tr>
+                        </thead>
+                        <tbody className='divide-y divide-ui-border'>
+                            {files.map(file => (
+                                <tr key={file.file} className='text-ui-text'>
+                                    <td className='px-4 py-3 font-mono text-xs'>{file.file}</td>
+                                    <td className='px-4 py-3'>{formatDate(file.mtime)}</td>
+                                    <td className='px-4 py-3'>{file.size || '—'}</td>
+                                    <td className='px-4 py-3'>{file.verified ? <span className='inline-flex items-center gap-1 text-ui-success'><ShieldCheck className='h-4 w-4' /> {shortHash(file.checksumSha256)}</span> : <span className='text-ui-warning'>Unverified</span>}</td>
+                                    <td className='px-4 py-3 text-right'>
+                                        <button type='button' disabled={busy} onClick={() => verify(file.file)} className='min-h-9 rounded-md border border-ui-border px-3 font-semibold hover:bg-ui-raised disabled:opacity-50'>
+                                            {verifying === file.file ? 'Verifying…' : 'Verify checksum'}
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {!files.length && <tr><td colSpan={5} className='px-4 py-8 text-center text-ui-muted'>No archive exists. Run the first verified backup.</td></tr>}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
 
-            {message && (
-                <p className='rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm text-ui-text shadow-sm'>{message}</p>
-            )}
-
-            <BackupCommandGrid presentations={presentations} isPending={isPending} onRun={handleRun} />
-
-            <div className='grid gap-4' id='backup-targets' data-backup-targets>
-                {presentations.map(({ backup, presentation }) => (
-                    <article key={backup.id} className={`${dashboardPanelClass} p-5`}>
-                        <div className='flex flex-wrap items-start justify-between gap-4'>
-                            <div className='min-w-0'>
-                                <div className='flex flex-wrap items-center gap-2'>
-                                    <h2 className='text-lg font-semibold text-ui-text'>{backup.name}</h2>
-                                    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${healthClasses(presentation.healthTone)}`}>
-                                        {presentation.healthLabel}
-                                    </span>
-                                </div>
-                                <p className='mt-1 text-xs font-semibold uppercase text-ui-muted'>{backup.id}</p>
-                                <p className='mt-2 max-w-3xl text-sm leading-6 text-ui-muted'>{presentation.summary}</p>
-                            </div>
-                            <div className='flex flex-wrap gap-2'>
-                                <button
-                                    type='button'
-                                    onClick={handleRun}
-                                    disabled={isPending}
-                                    title='Run a backup for this target.'
-                                    className='inline-flex items-center gap-2 rounded-lg border border-ui-primary bg-ui-primary/15 px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
-                                >
-                                    <DatabaseBackup className='h-4 w-4' />
-                                    {isPending ? 'Running backup...' : 'Run backup now'}
-                                </button>
-                                {presentation.restoreReady ? (
-                                    <Link
-                                        href={`/dashboard/db/restore?service=${encodeURIComponent(backupServiceSlug(backup))}`}
-                                        className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary hover:bg-ui-raised'
-                                    >
-                                        <RotateCcw className='h-4 w-4' />
-                                        Restore
-                                    </Link>
-                                ) : (
-                                    <Link
-                                        href={`/dashboard/db/restore?service=${encodeURIComponent(backupServiceSlug(backup))}`}
-                                        title={presentation.restoreDisabledReason}
-                                        className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary hover:bg-ui-raised'
-                                    >
-                                        <RotateCcw className='h-4 w-4' />
-                                        Open restore index
-                                    </Link>
-                                )}
-                            </div>
-                        </div>
-
-                        {presentation.restoreDisabledReason && (
-                            <div className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>
-                                <p>{presentation.restoreDisabledReason}</p>
-                                <p className='mt-1'>Use the action above to create or refresh restore points for this target.</p>
-                            </div>
-                        )}
-
-                        <RestoreProof proof={presentation.restoreProof} />
-
-                        {presentation.safeError && (
-                            <ConfigurationBlocker safeError={presentation.safeError} rawDetails={presentation.rawDetails} compact />
-                        )}
-
-                        <details className='mt-4 overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-backup-target-details>
-                            <summary className='flex cursor-pointer list-none flex-col gap-1 px-3 py-2 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                                <span>Schedule, storage, and file details</span>
-                                <span className='text-xs font-medium text-ui-muted'>{formatRelative(backup.lastBackup)} last, {formatSchedule(backup.nextBackup)} next</span>
-                            </summary>
-                            <div className='grid gap-3 border-t border-ui-border p-3 text-sm text-ui-muted md:grid-cols-2 xl:grid-cols-4'>
-                                <InfoCell label='Last backup' value={formatRelative(backup.lastBackup)} />
-                                <InfoCell label='Next backup' value={formatSchedule(backup.nextBackup)} />
-                                <InfoCell label='Retention' value={presentation.retention} />
-                                <InfoCell label='Storage target' value={presentation.storageTarget} />
-                                <InfoCell label='Latest file' value={presentation.latestFile} />
-                                <InfoCell label='Latest size' value={presentation.latestSize} />
-                                <InfoCell label='Duration' value={presentation.duration} />
-                                <InfoCell label='Health check' value={presentation.healthCheck} />
-                            </div>
-                        </details>
-                    </article>
-                ))}
-
-                {!backups.length && (
-                    <article className={`${dashboardPanelClass} p-5`}>
-                        <div className='flex flex-wrap items-start justify-between gap-4'>
-                            <div>
-                                <h2 className='text-lg font-semibold text-ui-text'>Checking backup targets</h2>
-                                <p className='mt-2 max-w-3xl text-sm leading-6 text-ui-muted'>
-                                    Backup targets stay on watch while the service connection is checked.
-                                </p>
-                                <p className='mt-3 text-sm text-ui-muted'>
-                                    Restore unlocks when the first verified backup file is indexed. Use Run backup now to create one.
-                                </p>
-                            </div>
-                            <button
-                                type='button'
-                                onClick={handleRun}
-                                disabled={isPending}
-                                title='Try to create the first backup.'
-                                className='inline-flex items-center gap-2 rounded-lg border border-ui-primary bg-ui-primary/15 px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
-                            >
-                                <DatabaseBackup className='h-4 w-4' />
-                                {isPending ? 'Running backup...' : 'Run backup now'}
-                            </button>
-                        </div>
-                    </article>
-                )}
-            </div>
-        </div>
+            <OperationHistory operations={service?.operations || []} />
+        </main>
     )
 }
 
-function BackupCommandGrid({
-    presentations,
-    isPending,
-    onRun,
-}: {
-    presentations: Array<{ backup: BackupService; presentation: BackupPresentation }>
-    isPending: boolean
-    onRun: () => void
-}) {
-    if (!presentations.length) return null
+function OperationHistory({ operations }: { operations: BackupOperation[] }) {
     return (
-        <section className={`${dashboardPanelClass} overflow-hidden`} data-backup-command-grid>
-            <div className='flex flex-wrap items-center justify-between gap-2 border-b border-ui-border px-4 py-3'>
-                <h2 className='text-base font-semibold text-ui-text'>Backup operator</h2>
-                <span className='text-xs font-medium text-ui-muted'>{presentations.length} target{presentations.length === 1 ? '' : 's'}</span>
+        <section className='overflow-hidden rounded-xl border border-ui-border bg-ui-panel' aria-labelledby='backup-history-heading'>
+            <div className='border-b border-ui-border p-4 sm:px-5'>
+                <h2 id='backup-history-heading' className='font-semibold text-ui-text'>Persistent operation history</h2>
+                <p className='mt-1 text-sm text-ui-muted'>Terminal failures and interrupted runs remain visible after restart.</p>
             </div>
             <div className='overflow-x-auto'>
-                <table className='min-w-full text-left text-sm'>
-                    <thead className='border-b border-ui-border bg-ui-panel text-xs uppercase text-ui-muted'>
-                        <tr>
-                            <th className='px-4 py-2 font-semibold'>Target</th>
-                            <th className='px-3 py-2 font-semibold'>Health</th>
-                            <th className='px-3 py-2 font-semibold'>Restore</th>
-                            <th className='px-3 py-2 font-semibold'>Last file</th>
-                            <th className='px-3 py-2 font-semibold'>Storage</th>
-                            <th className='px-4 py-2 text-right font-semibold'>Action</th>
-                        </tr>
-                    </thead>
+                <table className='min-w-[760px] w-full text-left text-sm'>
+                    <thead className='bg-ui-raised text-xs uppercase text-ui-muted'><tr><th className='px-4 py-3'>Started</th><th className='px-4 py-3'>Operation</th><th className='px-4 py-3'>Status</th><th className='px-4 py-3'>Duration</th><th className='px-4 py-3'>Evidence</th></tr></thead>
                     <tbody className='divide-y divide-ui-border'>
-                        {presentations.map(({ backup, presentation }) => (
-                            <tr key={backup.id} className='text-ui-text'>
-                                <td className='px-4 py-3 font-semibold'>{backup.name}</td>
-                                <td className='px-3 py-3'>
-                                    <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${healthClasses(presentation.healthTone)}`}>{presentation.healthLabel}</span>
-                                </td>
-                                <td className='px-3 py-3 font-medium'>{presentation.restoreReady ? 'Ready' : 'Run backup'}</td>
-                                <td className='px-3 py-3 text-ui-muted'>{presentation.latestFile}</td>
-                                <td className='max-w-72 px-3 py-3 text-ui-muted'><span className='wrap-break-word'>{presentation.storageTarget}</span></td>
-                                <td className='px-4 py-3'>
-                                    <div className='flex justify-end gap-2'>
-                                        <button
-                                            type='button'
-                                            onClick={onRun}
-                                            disabled={isPending}
-                                            className='inline-flex min-h-9 items-center gap-2 rounded-md border border-ui-primary bg-ui-primary/15 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/20 disabled:cursor-not-allowed disabled:opacity-60'
-                                        >
-                                            <DatabaseBackup className='h-4 w-4' />
-                                            {isPending ? 'Running' : 'Run'}
-                                        </button>
-                                        <Link
-                                            href={`/dashboard/db/restore?service=${encodeURIComponent(backupServiceSlug(backup))}`}
-                                            className='inline-flex min-h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised'
-                                            title={presentation.restoreReady ? 'Open restore files.' : presentation.restoreDisabledReason}
-                                        >
-                                            <RotateCcw className='h-4 w-4' />
-                                            Restore
-                                        </Link>
-                                    </div>
-                                </td>
+                        {operations.map(operation => (
+                            <tr key={operation.id} className='text-ui-text'>
+                                <td className='px-4 py-3'>{formatDate(operation.startedAt)}</td>
+                                <td className='px-4 py-3'>{operationLabel(operation)}</td>
+                                <td className='px-4 py-3'><Status value={operation.status} /></td>
+                                <td className='px-4 py-3'>{formatDuration(operation.durationMs)}</td>
+                                <td className='max-w-md px-4 py-3 text-ui-muted'>{operation.error || operation.file || stageLabel(operation.stage)}</td>
                             </tr>
                         ))}
+                        {!operations.length && <tr><td colSpan={5} className='px-4 py-8 text-center text-ui-muted'>No operation has been attempted yet.</td></tr>}
                     </tbody>
                 </table>
             </div>
@@ -329,78 +163,41 @@ function BackupCommandGrid({
     )
 }
 
-function SummaryMetric({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-    return (
-        <div className='flex items-start gap-3 rounded-lg border border-ui-border bg-ui-raised p-3'>
-            <span className='mt-0.5 text-ui-primary'>{icon}</span>
-            <span>
-                <span className='block text-xs font-semibold uppercase text-ui-muted'>{label}</span>
-                <span className='mt-1 block font-medium text-ui-text'>{value}</span>
-            </span>
-        </div>
-    )
+function Evidence({ label, value, detail, mono = false }: { label: string, value: string, detail?: string, mono?: boolean }) {
+    return <div className='min-w-0'><dt className='text-xs font-semibold uppercase text-ui-muted'>{label}</dt><dd className={`mt-1 wrap-break-word font-medium text-ui-text ${mono ? 'font-mono text-xs' : ''}`}>{value}</dd>{detail && <dd className='mt-1 wrap-break-word text-xs text-ui-muted'>{detail}</dd>}</div>
 }
 
-function InfoCell({ label, value }: { label: string; value: string }) {
-    return (
-        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
-            <p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p>
-            <p className='mt-2 wrap-break-word font-medium text-ui-text'>{value}</p>
-        </div>
-    )
+function Status({ value }: { value: string }) {
+    const normalized = value.toLowerCase()
+    const color = normalized === 'succeeded' || normalized === 'healthy' ? 'text-ui-success' : normalized === 'failed' || normalized === 'interrupted' || normalized === 'unavailable' ? 'text-ui-danger' : 'text-ui-warning'
+    return <span className={`rounded-full border border-current/25 px-2 py-1 text-xs font-semibold capitalize ${color}`}>{value.replaceAll('_', ' ')}</span>
 }
 
-function RestoreProof({ proof }: { proof: BackupPresentation['restoreProof'] }) {
-    return (
-        <div className='mt-4 rounded-lg border border-ui-border bg-ui-panel p-3' data-backup-restore-proof={proof.state}>
-            <div className='flex flex-wrap items-center justify-between gap-2'>
-                <p className='text-sm font-semibold text-ui-text'>Restore actions</p>
-                <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${proof.state === 'ready' ? 'border-ui-success bg-ui-success/15 text-ui-success' : 'border-ui-warning bg-ui-warning/15 text-ui-warning'}`}>
-                    {proof.state === 'ready' ? 'Ready' : 'Run backup'}
-                </span>
-            </div>
-            <div className='mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4'>
-                {proof.checks.map(check => (
-                    <div key={check.id} className='rounded-md border border-ui-border bg-ui-raised px-3 py-2 text-xs'>
-                        <p className='font-semibold uppercase text-ui-muted'>{check.label}</p>
-                        <p className='mt-1 wrap-break-word text-ui-text'>{check.value}</p>
-                        <p className={`mt-1 font-semibold ${check.state === 'ready' ? 'text-ui-success' : check.state === 'needs_action' ? 'text-ui-warning' : 'text-ui-muted'}`}>{check.state === 'needs_action' ? 'run backup' : check.state}</p>
-                    </div>
-                ))}
-            </div>
-            {proof.blockers.length > 0 && (
-                <ul className='mt-3 grid gap-1 text-xs leading-5 text-ui-warning'>
-                    {proof.blockers.slice(0, 3).map(blocker => <li key={blocker}>{blocker}</li>)}
-                </ul>
-            )}
-        </div>
-    )
+function retentionLabel(service?: BackupService) {
+    const outcome = service?.retentionOutcome
+    return outcome ? `Last pass examined ${outcome.examined}, deleted ${outcome.deleted}` : 'No completed retention pass yet'
 }
 
-function ConfigurationBlocker({ safeError, rawDetails, compact = false }: { safeError: string; rawDetails?: string; compact?: boolean }) {
-    return (
-        <section className={`${compact ? 'mt-4' : ''} rounded-lg border border-ui-warning bg-ui-warning/15 p-4`}>
-            <div className='flex items-start gap-3'>
-                <AlertTriangle className='mt-0.5 h-4 w-4 shrink-0 text-ui-warning' />
-                <div className='min-w-0 flex-1'>
-                    <p className='text-sm font-semibold text-ui-warning'>Configuration needs attention</p>
-                    <p className='mt-1 text-sm leading-6 text-ui-muted'>{safeError}</p>
-                    <div className='mt-3 flex flex-wrap items-center gap-3 text-sm'>
-                        <Link href='/dashboard/logs' className='inline-flex items-center gap-2 font-semibold text-ui-primary hover:underline'>
-                            <ListChecks className='h-4 w-4' />
-                            Open logs
-                        </Link>
-                        {rawDetails && (
-                            <details className='text-ui-muted'>
-                                <summary className='cursor-pointer font-semibold text-ui-text'>Technical details</summary>
-                                <code className='mt-2 block whitespace-pre-wrap wrap-break-word rounded-md border border-ui-warning bg-ui-panel px-3 py-2 text-xs text-ui-text'>
-                                    {rawDetails}
-                                </code>
-                            </details>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </section>
-    )
+function operationLabel(operation: BackupOperation) {
+    if (operation.kind === 'restore_drill') return `Restore drill → ${operation.targetDatabase || 'isolated target'}`
+    return `${operation.kind === 'backup' ? 'Backup' : 'Checksum verification'} · ${operation.trigger}`
+}
+
+function stageLabel(value: string) {
+    return value.replaceAll('_', ' ').replace(/^./, character => character.toUpperCase())
+}
+
+function formatDate(value?: string | null) {
+    if (!value) return 'Never'
+    const date = new Date(value)
+    return Number.isFinite(date.getTime()) ? date.toLocaleString() : value
+}
+
+function formatDuration(value: number | null) {
+    if (value === null) return '—'
+    return value < 1000 ? `${value}ms` : `${Math.round(value / 1000)}s`
+}
+
+function shortHash(value?: string | null) {
+    return value ? value.slice(0, 12) : 'Not reported'
 }

@@ -10,6 +10,7 @@ import { runDueAutomations } from './automations.ts'
 import runProductionLogMonitors from './status/logMonitors.ts'
 import { runTrackedBackgroundJob } from './backgroundJobRuntime.ts'
 import { runDueVulnerabilityScan, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
+import { DATABASE_BACKUP_JOB_ID, runDueDatabaseBackup } from './db/backups.ts'
 import run, { queryOnce } from '#db'
 
 const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
@@ -20,6 +21,7 @@ const apiCronRunners: Record<string, () => Promise<unknown> | unknown> = {
     'api-production-log-monitor': runProductionLogMonitors,
     'api-vm-ensure-running': ensureAlwaysRunningVms,
     [VULNERABILITY_SCAN_JOB_ID]: runDueVulnerabilityScan,
+    [DATABASE_BACKUP_JOB_ID]: runDueDatabaseBackup,
     'api-agent-automations': runDueAutomations,
     'api-mail-account-provisioning': provisionExistingMailAccounts,
 }
@@ -60,6 +62,7 @@ export async function setApiCronJobPaused(id: string, paused: boolean) {
 }
 
 async function runDueApiCronJob(id: string) {
+    if (id === DATABASE_BACKUP_JOB_ID) return runApiCronJobNow(id)
     if (await isApiCronJobPaused(id)) return undefined
     return runApiCronJobNow(id)
 }
@@ -80,6 +83,7 @@ export default function cron() {
                 runDueApiCronJob('api-production-log-monitor'),
                 runDueApiCronJob('api-vm-ensure-running'),
                 runDueApiCronJob(VULNERABILITY_SCAN_JOB_ID),
+                runDueApiCronJob(DATABASE_BACKUP_JOB_ID),
                 runDueApiCronJob('api-agent-automations'),
             ]
 

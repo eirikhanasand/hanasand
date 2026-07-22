@@ -8,6 +8,7 @@ import {
     listDatabaseBackupFiles,
     restoreDatabaseBackupFile,
     sanitizeBackupError,
+    verifyDatabaseBackupFile,
 } from '#utils/db/backups.ts'
 
 type BackupFilesQuery = {
@@ -16,6 +17,12 @@ type BackupFilesQuery = {
 }
 
 type RestoreBody = {
+    file?: string
+    targetDatabase?: string
+    confirmation?: string
+}
+
+type VerifyBody = {
     file?: string
 }
 
@@ -31,11 +38,15 @@ export async function getDatabaseBackups(req: FastifyRequest, res: FastifyReply)
 }
 
 export async function postDatabaseBackup(req: FastifyRequest, res: FastifyReply) {
-    if (!await requireBackupAccess(req, res)) return
+    const actorId = await requireBackupAccess(req, res)
+    if (!actorId) return
 
     try {
-        const backup = await createDatabaseBackup()
-        return res.send({ message: `Backup completed: ${backup.file} (${backup.size}, ${backup.duration}).` })
+        const operation = await createDatabaseBackup({ actorId })
+        return res.send({
+            message: `Backup completed: ${operation.file}.`,
+            operation,
+        })
     } catch (error) {
         req.log.error(error)
         const statusCode = error instanceof BackupOperationError ? error.statusCode : 503
@@ -54,15 +65,42 @@ export async function getDatabaseBackupFiles(req: FastifyRequest<{ Querystring: 
     }
 }
 
-export async function postDatabaseBackupRestore(req: FastifyRequest<{ Body: RestoreBody }>, res: FastifyReply) {
-    if (!await requireBackupAccess(req, res)) return
-
+export async function postDatabaseBackupVerify(req: FastifyRequest<{ Body: VerifyBody }>, res: FastifyReply) {
+    const actorId = await requireBackupAccess(req, res)
+    if (!actorId) return
     if (!req.body?.file) {
-        return res.status(400).send({ message: 'Restore requires a backup filename from the configured backup directory.' })
+        return res.status(400).send({ message: 'Verification requires a backup filename from the configured backup directory.' })
     }
 
     try {
-        return res.send(await restoreDatabaseBackupFile(req.body.file))
+        const operation = await verifyDatabaseBackupFile(req.body.file, actorId)
+        return res.send({ message: `Backup verified: ${operation.file}.`, operation })
+    } catch (error) {
+        req.log.error(error)
+        const statusCode = error instanceof BackupOperationError ? error.statusCode : 503
+        return res.status(statusCode).send({ message: sanitizeBackupError(error) })
+    }
+}
+
+export async function postDatabaseBackupRestore(req: FastifyRequest<{ Body: RestoreBody }>, res: FastifyReply) {
+    const actorId = await requireBackupAccess(req, res)
+    if (!actorId) return
+
+    if (!req.body?.file || !req.body.targetDatabase || !req.body.confirmation) {
+        return res.status(400).send({ message: 'Restore drill requires a backup file, an isolated target database, and exact confirmation.' })
+    }
+
+    try {
+        const operation = await restoreDatabaseBackupFile({
+            file: req.body.file,
+            targetDatabase: req.body.targetDatabase,
+            confirmation: req.body.confirmation,
+            actorId,
+        })
+        return res.send({
+            message: `Restore drill passed for ${operation.file}; isolated target ${operation.targetDatabase} was removed.`,
+            operation,
+        })
     } catch (error) {
         req.log.error(error)
         const statusCode = error instanceof BackupOperationError ? error.statusCode : 503
@@ -71,17 +109,19 @@ export async function postDatabaseBackupRestore(req: FastifyRequest<{ Body: Rest
 }
 
 async function requireBackupAccess(req: FastifyRequest, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
+    const auth = await tokenWrapper(req, res)
+    const { valid } = auth
     if (!valid) {
         res.status(401).send({ error: 'Unauthorized.' })
-        return false
+        return null
     }
 
     const role = await hasRole(req, res, 'system_admin')
     if (!role.valid) {
         res.status(403).send({ error: 'Missing system_admin role.' })
-        return false
+        return null
     }
 
-    return true
+    const id = auth.authenticatedId || auth.id || req.headers.id
+    return Array.isArray(id) ? id[0] || null : id || null
 }

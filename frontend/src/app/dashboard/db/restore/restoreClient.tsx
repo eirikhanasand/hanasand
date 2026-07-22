@@ -1,256 +1,154 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
-import { RotateCcw, Search, X } from 'lucide-react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { restoreBackupAction, triggerBackupAction } from '../actions'
-import { dashboardPanelClass } from '@/components/dashboard/ui'
-import type { BackupFile } from '@/utils/db/internal'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState, useTransition } from 'react'
+import { DatabaseZap, ShieldCheck, TriangleAlert } from 'lucide-react'
+import type { BackupFile, BackupOperation, BackupService } from '@/utils/db/internal'
+import { restoreBackupAction } from '../actions'
 
-type GroupedBackup = BackupFile & { locations: string[] }
-
-function formatDate(value?: string | null) {
-    if (!value) return 'Timestamp syncing'
-    const date = new Date(value)
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
-}
-
-export default function RestoreClient({ backups, loadError = '' }: { backups: BackupFile[], loadError?: string }) {
+export default function RestoreClient({ backups, service, loadError = '' }: { backups: BackupFile[], service?: BackupService, loadError?: string }) {
     const router = useRouter()
-    const pathname = usePathname()
-    const searchParams = useSearchParams()
-    const [serviceFilter, setServiceFilter] = useState(searchParams.get('service') || '')
-    const [dateFilter, setDateFilter] = useState(searchParams.get('date') || '')
-    const [message, setMessage] = useState('')
-    const [restoring, setRestoring] = useState('')
     const [isPending, startTransition] = useTransition()
+    const [file, setFile] = useState(backups[0]?.file || '')
+    const [target, setTarget] = useState(defaultTarget())
+    const [confirmation, setConfirmation] = useState('')
+    const [message, setMessage] = useState('')
+    const [error, setError] = useState('')
+    const [result, setResult] = useState<BackupOperation | null>(null)
+    const selected = backups.find(backup => backup.file === file)
+    const activeDrill = service?.currentOperation?.kind === 'restore_drill' ? service.currentOperation : null
+    const drillHistory = useMemo(() => (service?.operations || []).filter(operation => operation.kind === 'restore_drill'), [service?.operations])
 
-    const groupedBackups = useMemo(() => {
-        const groups: Record<string, GroupedBackup> = {}
-        backups.forEach((backup) => {
-            const key = `${backup.service}-${backup.file}`
-            if (!groups[key]) {
-                groups[key] = { ...backup, locations: backup.location ? [backup.location] : [] }
-                return
+    useEffect(() => {
+        if (!isPending && !activeDrill) return
+        const timer = window.setInterval(() => router.refresh(), 1500)
+        return () => window.clearInterval(timer)
+    }, [activeDrill, isPending, router])
+
+    function runDrill() {
+        setMessage('')
+        setError('')
+        setResult(null)
+        startTransition(async() => {
+            const response = await restoreBackupAction(file, target, confirmation)
+            if (typeof response === 'string') setError(response)
+            else {
+                setMessage(response.message)
+                setResult(response.operation)
             }
-            if (backup.location && !groups[key].locations.includes(backup.location)) {
-                groups[key].locations.push(backup.location)
-            }
-        })
-        return Object.values(groups)
-    }, [backups])
-    const serviceCount = useMemo(() => new Set(groupedBackups.map(backup => backup.service)).size, [groupedBackups])
-    const newestBackup = useMemo(() => groupedBackups.reduce<GroupedBackup | null>((newest, backup) => {
-        if (!newest) return backup
-        const newestTime = new Date(newest.mtime || '').getTime()
-        const backupTime = new Date(backup.mtime || '').getTime()
-        const safeNewestTime = Number.isFinite(newestTime) ? newestTime : -Infinity
-        return Number.isFinite(backupTime) && backupTime > safeNewestTime ? backup : newest
-    }, null), [groupedBackups])
-    const activeFilterCount = Number(Boolean(serviceFilter)) + Number(Boolean(dateFilter))
-    const primaryTitle = loadError
-        ? 'Restore index unavailable'
-        : groupedBackups.length
-            ? 'Select a restore point'
-            : activeFilterCount
-                ? 'No restore points match the filters'
-                : 'Restore index is empty'
-    const primaryDetail = loadError
-        ? loadError.replace(/^Error:\s*/i, '')
-        : groupedBackups.length
-            ? `${groupedBackups.length} restore point${groupedBackups.length === 1 ? '' : 's'} across ${serviceCount} service${serviceCount === 1 ? '' : 's'}. Newest file: ${newestBackup?.file || 'syncing'}.`
-            : activeFilterCount
-                ? 'Clear filters or adjust the service/date search to widen the restore set.'
-                : 'No indexed restore file exists yet. Run backup now to create one.'
-    const primaryHref = groupedBackups.length ? '#restore-points' : activeFilterCount ? '#restore-filters' : '/dashboard/db/backups'
-    const primaryActionLabel = groupedBackups.length ? 'Review restore points' : activeFilterCount ? 'Adjust filters' : 'Run backup now'
-
-    function updateParam(key: string, value: string) {
-        const params = new URLSearchParams(searchParams.toString())
-        if (value) params.set(key, value)
-        else params.delete(key)
-        const query = params.toString()
-        router.push(query ? `${pathname}?${query}` : pathname)
-    }
-
-    function clearFilters() {
-        setServiceFilter('')
-        setDateFilter('')
-        router.push(pathname)
-    }
-
-    function handleRestore(backup: GroupedBackup) {
-        const key = `${backup.service}-${backup.file}`
-        setRestoring(key)
-        startTransition(async () => {
-            const response = await restoreBackupAction(backup.service, backup.file)
-            setMessage(typeof response === 'string' ? response : response.message)
-            setRestoring('')
-        })
-    }
-
-    function handleRunBackup() {
-        startTransition(async () => {
-            const response = await triggerBackupAction()
-            setMessage(typeof response === 'string' ? response.replace(/^Error:\s*/i, '') : response.message)
             router.refresh()
         })
     }
 
+    const requiredConfirmation = `RESTORE ${target.trim().toLowerCase()}`
+    const canRun = Boolean(file && /^restore_drill_[a-z0-9_]{1,48}$/.test(target) && confirmation === requiredConfirmation && !isPending && !service?.currentOperation)
+    const visibleError = error || loadError
+
     return (
-        <div className='grid gap-4'>
-            <section className={`${dashboardPanelClass} grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center`} data-restore-primary-flow>
-                <div className='min-w-0'>
-                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
-                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>Recommended next</span>
-                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{groupedBackups.length} restore points</span>
-                        {activeFilterCount > 0 && <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{activeFilterCount} active filters</span>}
-                    </div>
-                    <h2 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h2>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
+        <main className='mx-auto grid w-full max-w-6xl gap-4 p-4 sm:p-6' data-restore-operator-console>
+            <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5'>
+                <div className='flex items-center gap-2'>
+                    <DatabaseZap className='h-5 w-5 text-ui-primary' />
+                    <h1 className='text-xl font-semibold text-ui-text'>Isolated restore drill</h1>
                 </div>
-                {groupedBackups.length || activeFilterCount ? (
-                    <a
-                        href={primaryHref}
-                        className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
-                        data-restore-primary-action
-                    >
-                        {primaryActionLabel}
-                    </a>
-                ) : (
-                    <button
-                        type='button'
-                        onClick={handleRunBackup}
-                        disabled={isPending}
-                        className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 disabled:opacity-60 sm:w-auto'
-                        data-restore-primary-action
-                    >
-                        {isPending ? 'Running backup...' : primaryActionLabel}
-                    </button>
-                )}
+                <p className='mt-2 text-sm text-ui-muted'>Verify an archive, restore it into a temporary database, check its table shape, and remove the temporary target. This workflow never restores over the live database.</p>
+                <div className='mt-4 flex items-start gap-2 rounded-lg border border-ui-warning/30 bg-ui-warning/10 p-3 text-sm text-ui-warning'>
+                    <TriangleAlert className='mt-0.5 h-4 w-4 shrink-0' />
+                    <p>The target must begin with <code className='font-mono'>restore_drill_</code>. The API rejects the live database name and records failures durably.</p>
+                </div>
             </section>
 
-            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' open={activeFilterCount > 0} id='restore-filters' data-restore-filters-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
-                    <span className='inline-flex items-center gap-2'>
-                        <Search className='h-4 w-4 text-ui-primary' />
-                        Filter restore points
-                    </span>
-                    <span className='text-xs font-medium text-ui-muted'>{activeFilterCount ? `${activeFilterCount} active` : 'All indexed files'}</span>
-                </summary>
-                <div className='grid gap-3 border-t border-ui-border p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end'>
-                    <label className='grid gap-1.5 text-sm'>
-                        <span className='text-xs font-semibold uppercase text-ui-muted'>Service</span>
-                        <input
-                            value={serviceFilter}
-                            onChange={(event) => {
-                                const value = event.target.value
-                                setServiceFilter(value)
-                                updateParam('service', value)
-                            }}
-                            placeholder='Filter by service'
-                            className='min-h-10 min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none focus:border-ui-primary'
-                            data-restore-service-filter
-                        />
-                    </label>
-                    <label className='grid gap-1.5 text-sm'>
-                        <span className='text-xs font-semibold uppercase text-ui-muted'>Date</span>
-                        <input
-                            type='date'
-                            value={dateFilter}
-                            onChange={(event) => {
-                                const value = event.target.value
-                                setDateFilter(value)
-                                updateParam('date', value)
-                            }}
-                            className='min-h-10 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none focus:border-ui-primary'
-                            data-restore-date-filter
-                        />
-                    </label>
-                    <button
-                        type='button'
-                        onClick={clearFilters}
-                        disabled={!activeFilterCount}
-                        className='inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 disabled:cursor-not-allowed disabled:opacity-50'
-                        data-restore-clear-filters
-                    >
-                        <X className='h-4 w-4' />
-                        Clear
-                    </button>
+            <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5' aria-labelledby='restore-controls-heading'>
+                <div className='flex items-center justify-between gap-3'>
+                    <h2 id='restore-controls-heading' className='font-semibold text-ui-text'>Drill controls</h2>
+                    <Link href='/dashboard/db/backups' className='text-sm font-semibold text-ui-primary hover:underline'>Back to backups</Link>
                 </div>
-            </details>
+                <div className='mt-4 grid gap-4'>
+                    <label className='grid gap-1.5 text-sm font-medium text-ui-text'>
+                        Backup archive
+                        <select value={file} onChange={event => setFile(event.target.value)} className='min-h-11 rounded-lg border border-ui-border bg-ui-raised px-3 font-mono text-xs'>
+                            <option value=''>Select a real archive</option>
+                            {backups.map(backup => <option key={backup.file} value={backup.file}>{backup.file} · {backup.size || 'size unknown'} · {backup.verified ? 'verified' : 'verify during drill'}</option>)}
+                        </select>
+                    </label>
+                    <label className='grid gap-1.5 text-sm font-medium text-ui-text'>
+                        Isolated target database
+                        <input value={target} onChange={event => { setTarget(event.target.value.toLowerCase()); setConfirmation('') }} spellCheck={false} className='min-h-11 rounded-lg border border-ui-border bg-ui-raised px-3 font-mono text-sm' />
+                        <span className='text-xs font-normal text-ui-muted'>Lowercase letters, numbers, and underscores only; maximum 62 characters.</span>
+                    </label>
+                    <label className='grid gap-1.5 text-sm font-medium text-ui-text'>
+                        Type <code className='font-mono text-ui-primary'>{requiredConfirmation}</code> to confirm
+                        <input value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete='off' spellCheck={false} placeholder={requiredConfirmation} className='min-h-11 rounded-lg border border-ui-border bg-ui-raised px-3 font-mono text-sm' />
+                    </label>
+                </div>
 
-            {message && <p className='rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm text-ui-muted'>{message}</p>}
-
-            <div className='grid gap-4' id='restore-points' data-restore-points>
-                {groupedBackups.map((backup) => {
-                    const key = `${backup.service}-${backup.file}`
-                    return (
-                        <article key={key} className={`${dashboardPanelClass} p-5`}>
-                            <div className='flex flex-wrap items-start justify-between gap-3'>
-                                <div>
-                                    <h2 className='text-lg font-semibold text-ui-text'>{backup.service}</h2>
-                                    <p className='mt-1 text-sm text-ui-muted'>{backup.file}</p>
-                                </div>
-                                <button
-                                    type='button'
-                                    onClick={() => handleRestore(backup)}
-                                    disabled={isPending}
-                                    className='inline-flex items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-primary/15 disabled:opacity-60'
-                                >
-                                    <RotateCcw className='h-4 w-4' />
-                                    {restoring === key ? 'Restoring…' : 'Restore'}
-                                </button>
-                            </div>
-                            <div className='mt-4 grid gap-3 text-sm text-ui-muted md:grid-cols-3'>
-                                <div className='rounded-lg border border-ui-border bg-ui-canvas p-3'>
-                                    <p className='text-xs font-semibold uppercase text-ui-muted'>Locations</p>
-                                    <p className='mt-2 font-medium text-ui-text'>{backup.locations.join(', ') || 'Storage location syncing'}</p>
-                                </div>
-                                <div className='rounded-lg border border-ui-border bg-ui-canvas p-3'>
-                                    <p className='text-xs font-semibold uppercase text-ui-muted'>Modified</p>
-                                    <p className='mt-2 font-medium text-ui-text'>{formatDate(backup.mtime)}</p>
-                                </div>
-                                <div className='rounded-lg border border-ui-border bg-ui-canvas p-3'>
-                                    <p className='text-xs font-semibold uppercase text-ui-muted'>Size</p>
-                                    <p className='mt-2 font-medium text-ui-text'>{backup.size || 'Measuring size'}</p>
-                                </div>
-                            </div>
-                        </article>
-                    )
-                })}
-                {!groupedBackups.length && (
-                    <article className={`${dashboardPanelClass} p-5`} data-restore-empty-state>
-                        <h2 className='text-lg font-semibold text-ui-text'>No restore files yet</h2>
-                        <p className='mt-2 text-sm text-ui-muted'>No restore files are indexed for this filter set.</p>
-                        {activeFilterCount > 0 ? (
-                            <p className='mt-1 text-sm text-ui-muted'>No matches found. Clear filters or return to Backup to create a verified restore point.</p>
-                        ) : (
-                            <p className='mt-1 text-sm text-ui-muted'>No verified files are available. Run backup now to create and index one.</p>
-                        )}
-
-                        {activeFilterCount > 0 ? (
-                            <button
-                                type='button'
-                                onClick={clearFilters}
-                                className='mt-3 inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10'
-                            >
-                                <X className='h-4 w-4' />
-                                Clear filters
-                            </button>
-                        ) : (
-                            <button
-                                type='button'
-                                onClick={handleRunBackup}
-                                disabled={isPending}
-                                className='mt-3 inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text transition hover:border-ui-primary/35 hover:bg-ui-primary/10 disabled:opacity-60'
-                            >
-                                {isPending ? 'Running backup...' : 'Run backup now'}
-                            </button>
-                        )}
-                    </article>
+                {selected && (
+                    <dl className='mt-4 grid gap-3 rounded-lg border border-ui-border bg-ui-raised p-3 text-sm sm:grid-cols-3'>
+                        <Evidence label='Measured file' value={selected.size || 'Not reported'} />
+                        <Evidence label='Checksum' value={selected.checksumSha256?.slice(0, 16) || 'Verified during drill'} mono />
+                        <Evidence label='Release commit' value={selected.releaseCommit?.slice(0, 12) || 'Not reported'} mono />
+                    </dl>
                 )}
-            </div>
-        </div>
+
+                <button type='button' onClick={runDrill} disabled={!canRun} className='mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto' data-restore-primary-action>
+                    <ShieldCheck className='h-4 w-4' />
+                    {activeDrill ? stageLabel(activeDrill.stage) : isPending ? 'Starting isolated drill…' : 'Run isolated restore drill'}
+                </button>
+                {visibleError && <p role='alert' className='mt-4 rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-3 text-sm text-ui-danger'>{visibleError}</p>}
+                {message && <p role='status' className='mt-4 rounded-lg border border-ui-success/30 bg-ui-success/10 p-3 text-sm text-ui-success'>{message}</p>}
+            </section>
+
+            {(activeDrill || result) && <DrillEvidence operation={activeDrill || result!} />}
+
+            <section className='overflow-hidden rounded-xl border border-ui-border bg-ui-panel' aria-labelledby='restore-history-heading'>
+                <div className='border-b border-ui-border p-4 sm:px-5'><h2 id='restore-history-heading' className='font-semibold text-ui-text'>Restore-drill audit history</h2></div>
+                <div className='overflow-x-auto'>
+                    <table className='min-w-[680px] w-full text-left text-sm'>
+                        <thead className='bg-ui-raised text-xs uppercase text-ui-muted'><tr><th className='px-4 py-3'>Started</th><th className='px-4 py-3'>Target</th><th className='px-4 py-3'>Status</th><th className='px-4 py-3'>Integrity</th></tr></thead>
+                        <tbody className='divide-y divide-ui-border'>
+                            {drillHistory.map(operation => <tr key={operation.id} className='text-ui-text'><td className='px-4 py-3'>{formatDate(operation.startedAt)}</td><td className='px-4 py-3 font-mono text-xs'>{operation.targetDatabase}</td><td className='px-4 py-3 capitalize'>{operation.status}</td><td className='px-4 py-3 text-ui-muted'>{operation.error || integrityLabel(operation)}</td></tr>)}
+                            {!drillHistory.length && <tr><td colSpan={4} className='px-4 py-8 text-center text-ui-muted'>No isolated restore drill has been attempted yet.</td></tr>}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
     )
+}
+
+function DrillEvidence({ operation }: { operation: BackupOperation }) {
+    return (
+        <section className='rounded-xl border border-ui-border bg-ui-panel p-4 sm:p-5' aria-live='polite'>
+            <div className='flex items-center justify-between gap-3'><h2 className='font-semibold text-ui-text'>Current drill evidence</h2><span className='capitalize text-ui-muted'>{operation.status}</span></div>
+            <ol className='mt-4 grid gap-2 text-sm sm:grid-cols-5'>
+                {['verifying_archive', 'creating_isolated_database', 'restoring', 'checking_integrity', 'removing_isolated_database'].map(stage => <li key={stage} className={`rounded-lg border p-2 ${operation.stage === stage ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border text-ui-muted'}`}>{stageLabel(stage)}</li>)}
+            </ol>
+            {operation.status === 'succeeded' && <p className='mt-4 text-sm text-ui-success'>{integrityLabel(operation)} Target removed: {operation.targetRemoved ? 'yes' : 'no'}.</p>}
+            {operation.error && <p className='mt-4 text-sm text-ui-danger'>{operation.error}</p>}
+        </section>
+    )
+}
+
+function Evidence({ label, value, mono = false }: { label: string, value: string, mono?: boolean }) {
+    return <div><dt className='text-xs font-semibold uppercase text-ui-muted'>{label}</dt><dd className={`mt-1 break-all text-ui-text ${mono ? 'font-mono text-xs' : ''}`}>{value}</dd></div>
+}
+
+function defaultTarget() {
+    return `restore_drill_${new Date().toISOString().slice(0, 10).replaceAll('-', '')}`
+}
+
+function integrityLabel(operation: BackupOperation) {
+    if (!operation.restoredIntegrity) return stageLabel(operation.stage)
+    return `${operation.restoredIntegrity.schemas} schemas, ${operation.restoredIntegrity.tables} tables, source match ${operation.sourceIntegrity?.tables === operation.restoredIntegrity.tables ? 'passed' : 'unavailable'}`
+}
+
+function stageLabel(value: string) {
+    return value.replaceAll('_', ' ').replace(/^./, character => character.toUpperCase())
+}
+
+function formatDate(value?: string | null) {
+    if (!value) return 'Never'
+    const date = new Date(value)
+    return Number.isFinite(date.getTime()) ? date.toLocaleString() : value
 }
