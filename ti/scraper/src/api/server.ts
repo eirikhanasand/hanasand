@@ -329,8 +329,6 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       });
       return json(result.body, result.status);
     }
-    if (url.pathname.endsWith("/apply-plan")) return json({ endpoint: url.pathname, dryRun: true, actions: [] });
-    if (url.pathname.includes("/graph/")) return json({ endpoint: url.pathname, nodes: [], relationships: [] });
     return error("not_found", "Route not found", 404);
   } catch (caught) {
     return error("internal_error", caught instanceof Error ? caught.message : String(caught), 500);

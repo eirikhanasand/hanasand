@@ -17,5 +17,11 @@ describe("api v1", () => {
     const missingRun = await handleApiRequest(api("/v1/intel/runs/run_missing"), options);
     expect(missingRun.status).toBe(404);
     expect(await body(missingRun)).toMatchObject({ error: { code: "not_found" } });
+
+    for (const path of ["/v1/graph/review-plan", "/v1/unknown/apply-plan"]) {
+      const missingRoute = await handleApiRequest(api(path), options);
+      expect(missingRoute.status).toBe(404);
+      expect(await body(missingRoute)).toMatchObject({ error: { code: "not_found" } });
+    }
   });
 });
