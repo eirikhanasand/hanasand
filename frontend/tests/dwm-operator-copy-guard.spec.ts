@@ -62,6 +62,7 @@ test('product progress uses persisted evidence instead of synthetic readiness ro
     const route = await readFile(path.join(root, 'src/app/api/product-progress/route.ts'), 'utf8')
 
     expect(route).not.toMatch(/synthetic(?:Organization|Webhook|Deliveries|Cases|Analyst|Support)/)
+    expect(route).not.toContain('sourceCount < 1000')
     expect(route).toContain('const organizationProof = organizationReadinessProof(organizationReadiness)')
     expect(route).toContain('const selectedCaseProof = analystCaseDetailProof(selectedCaseDetail')
 })

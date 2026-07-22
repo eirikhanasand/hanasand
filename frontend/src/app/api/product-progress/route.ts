@@ -320,9 +320,7 @@ function sourceProxyFromDwmProductFallback(input: {
         sourcePacks?: DashboardSourceProofProxyPayload['sourcePacks']
     } | undefined
     const inventory = payload?.sourceInventory
-    const counts = inventory?.counts
-    const sourceCount = Math.max(counts?.registeredActiveOrCanary || 0, counts?.registeredTotal || 0)
-    if (!input.fetch.ok || payload?.schemaVersion !== 'dwm.product.v1' || inventory?.schemaVersion !== 'dwm.source_inventory.v1' || sourceCount < 1000) {
+    if (!input.fetch.ok || payload?.schemaVersion !== 'dwm.product.v1' || inventory?.schemaVersion !== 'dwm.source_inventory.v1') {
         return undefined
     }
 

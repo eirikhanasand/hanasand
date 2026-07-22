@@ -95,28 +95,34 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
       }
     };
   }).sort((left: any, right: any) => left.name.localeCompare(right.name));
+  const executableRows = rows.filter((row: any) => row.executable);
 
   return {
     schemaVersion: "ti.source_operations.v1",
     generatedAt,
-    tenantId: input.tenantId ?? "global",
+    tenantId: input.tenantId ?? "all",
     summary: {
       sourceCount: rows.length,
-      retainedSourceCount: rows.filter((row: any) => row.executable).length,
-      activeSourceCount: rows.filter((row: any) => row.executable).length,
-      observedSourceCount: rows.filter((row: any) => row.health.observationCount > 0).length,
-      checkedWithin24hSourceCount: rows.filter((row: any) => row.executable && recent(row.health.lastAttemptAt, generatedAt)).length,
-      successfulWithin24hSourceCount: rows.filter((row: any) => row.executable && recent(row.health.lastSuccessAt, generatedAt)).length,
-      usefulWithin24hSourceCount: rows.filter((row: any) => row.executable && recent(row.health.lastUsefulItemAt, generatedAt)).length,
-      captureProducingSourceCount: rows.filter((row: any) => row.executable && row.coverage.captureCount > 0).length,
+      retainedSourceCount: executableRows.length,
+      inactiveSourceCount: rows.length - executableRows.length,
+      retiredSourceCount: rows.filter((row: any) => row.lifecycleStatus === "retired").length,
+      activeSourceCount: executableRows.length,
+      observedSourceCount: executableRows.filter((row: any) => row.health.observationCount > 0).length,
+      checkedSourceCount: executableRows.filter((row: any) => row.health.observationCount > 0).length,
+      successfulSourceCount: executableRows.filter((row: any) => Boolean(row.health.lastSuccessAt)).length,
+      usefulSourceCount: executableRows.filter((row: any) => Boolean(row.health.lastUsefulItemAt)).length,
+      checkedWithin24hSourceCount: executableRows.filter((row: any) => recent(row.health.lastAttemptAt, generatedAt)).length,
+      successfulWithin24hSourceCount: executableRows.filter((row: any) => recent(row.health.lastSuccessAt, generatedAt)).length,
+      usefulWithin24hSourceCount: executableRows.filter((row: any) => recent(row.health.lastUsefulItemAt, generatedAt)).length,
+      captureProducingSourceCount: executableRows.filter((row: any) => row.coverage.captureCount > 0).length,
       recentlySeenSourceCount: sources.filter((source: any) => isExecutableSource(source) && recent(source.lastSeenAt, generatedAt)).length,
       backoffSourceCount: sources.filter((source: any) => isExecutableSource(source) && Date.parse(String(source.crawlState?.backoffUntil ?? "")) > Date.parse(generatedAt)).length,
-      neverObservedSourceCount: rows.filter((row: any) => row.executable && row.health.observationCount === 0).length,
-      healthySourceCount: rows.filter((row: any) => row.health.state === "healthy").length,
-      degradedSourceCount: rows.filter((row: any) => ["degraded", "stale"].includes(row.health.state)).length,
-      failedSourceCount: rows.filter((row: any) => row.health.state === "failed").length,
-      unobservedSourceCount: rows.filter((row: any) => row.health.state === "not_observed").length,
-      falsePositiveMeasuredSourceCount: rows.filter((row: any) => row.quality.falsePositiveRate !== null).length
+      neverObservedSourceCount: executableRows.filter((row: any) => row.health.observationCount === 0).length,
+      healthySourceCount: executableRows.filter((row: any) => row.health.state === "healthy").length,
+      degradedSourceCount: executableRows.filter((row: any) => ["degraded", "stale"].includes(row.health.state)).length,
+      failedSourceCount: executableRows.filter((row: any) => row.health.state === "failed").length,
+      unobservedSourceCount: executableRows.filter((row: any) => row.health.state === "not_observed").length,
+      falsePositiveMeasuredSourceCount: executableRows.filter((row: any) => row.quality.falsePositiveRate !== null).length
     },
     sources: rows,
     safeOutput: { sourceUrlsExposed: false, rawCapturesExposed: false, restrictedPayloadsExposed: false }

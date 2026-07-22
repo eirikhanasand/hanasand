@@ -63,7 +63,7 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
       totalSourceCount,
       retainedSourceCount: retainedSources.length,
       inactiveSourceCount: totalSourceCount - retainedSources.length,
-      retiredSourceCount: sources.filter((source: any) => ["retired", "rejected", "disabled"].includes(source.status)).length,
+      retiredSourceCount: sources.filter((source: any) => source.status === "retired").length,
       activeSourceCount: activeSources.length,
       checkedSourceCount: activeSources.filter((source: any) => (observationsBySource.get(source.id)?.length ?? 0) > 0).length,
       successfulSourceCount: activeSources.filter((source: any) => observationsBySource.get(source.id)?.some((row: any) => row.success === true)).length,

@@ -23,7 +23,7 @@ describe("source operations", () => {
     const payload = await response.json() as any;
 
     expect(response.status).toBe(200);
-    expect(payload.summary).toMatchObject({ sourceCount: 1, observedSourceCount: 1, failedSourceCount: 1, falsePositiveMeasuredSourceCount: 1 });
+    expect(payload.summary).toMatchObject({ sourceCount: 1, retainedSourceCount: 1, checkedSourceCount: 1, successfulSourceCount: 1, usefulSourceCount: 1, captureProducingSourceCount: 1, observedSourceCount: 1, failedSourceCount: 1, falsePositiveMeasuredSourceCount: 1 });
     expect(payload.sources[0]).toMatchObject({
       id: "src_ops_a",
       family: "vendor_blog",
@@ -36,7 +36,7 @@ describe("source operations", () => {
     expect(JSON.stringify(payload)).not.toContain("token=unsafe");
 
     const allTenants = await handleApiRequest(api("/v1/intel/source-operations"), { store, frontier: new FocusedFrontier() });
-    expect((await allTenants.json() as any).summary.sourceCount).toBe(2);
+    expect(await allTenants.json() as any).toMatchObject({ tenantId: "all", summary: { sourceCount: 2, retainedSourceCount: 2 } });
 
     const mismatch = await handleApiRequest(api("/v1/intel/source-operations?tenantId=tenant_b", { headers: { "x-tenant-id": "tenant_a" } }), { store, frontier: new FocusedFrontier() });
     expect(mismatch.status).toBe(403);
