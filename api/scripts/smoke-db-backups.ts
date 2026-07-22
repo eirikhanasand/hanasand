@@ -114,6 +114,32 @@ try {
     assert.match(commands, /dropdb .*restore_drill_release_check/)
     assert.doesNotMatch(commands, /createdb .* hanasand(?:\n|$)/, 'restore drill must never create or target the live database name')
 
+    const failedCleanupTarget = 'restore_drill_cleanup_failure'
+    process.env.DB_BACKUP_TEST_FAIL = 'pg_restore'
+    process.env.DB_BACKUP_TEST_DROP_FAIL = 'true'
+    await assert.rejects(
+        () => backups.restoreDatabaseBackupFile({
+            file: drillFile,
+            targetDatabase: failedCleanupTarget,
+            confirmation: `RESTORE ${failedCleanupTarget}`,
+            actorId: 'admin-1',
+        }),
+        error => {
+            assert.match(String(error), /Restore drill failed:/)
+            assert.match(String(error), /Cleanup failed;/)
+            assert.match(String(error), /was not removed/)
+            return true
+        },
+    )
+    delete process.env.DB_BACKUP_TEST_FAIL
+    delete process.env.DB_BACKUP_TEST_DROP_FAIL
+    status = (await backups.collectDatabaseBackupServices())[0]
+    const failedCleanup = status.operations.find(operation => operation.targetDatabase === failedCleanupTarget)
+    assert.equal(failedCleanup?.status, 'failed')
+    assert.equal(failedCleanup?.targetRemoved, false)
+    assert.match(failedCleanup?.error || '', /Restore drill failed:.*Cleanup failed;.*was not removed/)
+    assert.match(await readFile(commandLog, 'utf8'), /dropdb .*restore_drill_cleanup_failure/, 'cleanup must still be attempted after restore failure')
+
     const persisted = JSON.parse(await readFile(statePath, 'utf8'))
     persisted.operations.push({
         ...persisted.operations[0],
@@ -166,7 +192,7 @@ done
 printf 'verified custom archive bytes' > "$output"
 `,
         pg_restore: `#!/bin/sh
-if [ "$DB_BACKUP_TEST_FAIL" = "pg_restore" ]; then echo "pg_restore failed" >&2; exit 1; fi
+if [ "$DB_BACKUP_TEST_FAIL" = "pg_restore" ] && [ "$1" != "--list" ]; then echo "pg_restore failed" >&2; exit 1; fi
 if [ "$1" = "--list" ]; then
   printf '; archive\n1; 0 0 SCHEMA - public owner\n2; 1259 1 TABLE public users owner\n3; 1259 2 TABLE public audit_events owner\n4; 0 0 COMMENT - TABLE public users owner\n5; 0 1 TABLE DATA public users owner\n6; 0 2 TABLE DATA public audit_events owner\n'
 fi
@@ -181,7 +207,7 @@ if [ "$DB_BACKUP_TEST_FAIL" = "createdb" ]; then exit 1; fi
 `,
         dropdb: `#!/bin/sh
 printf 'dropdb %s\n' "$*" >> "$DB_BACKUP_TEST_COMMAND_LOG"
-if [ "$DB_BACKUP_TEST_FAIL" = "dropdb" ]; then exit 1; fi
+if [ "$DB_BACKUP_TEST_FAIL" = "dropdb" ] || [ "$DB_BACKUP_TEST_DROP_FAIL" = "true" ]; then exit 1; fi
 `,
     }
     for (const [name, source] of Object.entries(scripts)) {
