@@ -58,7 +58,7 @@ assert.match(apiCron, /runDueDatabaseBackup/)
 assert.match(compose, /api_state:\/var\/lib\/hanasand/)
 assert.match(compose, /DB_BACKUP_SCHEDULE: \$\{DB_BACKUP_SCHEDULE:-23 2 \* \* \*\}/)
 assert.match(compose, /DB_BACKUP_RETENTION_DAYS: \$\{DB_BACKUP_RETENTION_DAYS:-14\}/)
-assert.match(dockerfile, /postgresql-client/)
+assert.match(dockerfile, /postgresql15-client/)
 
 console.log('Backup operator workflow checks passed.')
 
