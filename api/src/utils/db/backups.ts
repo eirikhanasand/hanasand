@@ -298,7 +298,7 @@ export async function verifyDatabaseBackupFile(file: string, actorId = 'system_a
             throw new BackupOperationError('Backup checksum does not match its persisted verification metadata.', 409)
         }
 
-        const sourceIntegrity = existing?.sourceIntegrity || archive.integrity
+        const sourceIntegrity = archive.integrity
         const metadata: BackupMetadata = {
             schemaVersion: 'hanasand.database_backup.v1',
             file: path.basename(backup),
@@ -378,7 +378,7 @@ export async function restoreDatabaseBackupFile(input: {
 
             await updateStage('checking_integrity')
             restoredIntegrity = await queryIntegrity(targetDatabase)
-            sourceIntegrity = existing?.sourceIntegrity || archive.integrity
+            sourceIntegrity = archive.integrity
             if (restoredIntegrity.tables !== sourceIntegrity.tables) {
                 throw new BackupOperationError(`Restore drill integrity failed: expected ${sourceIntegrity.tables} user tables and restored ${restoredIntegrity.tables}.`, 500)
             }
@@ -761,7 +761,7 @@ async function inspectArchive(file: string) {
     const lines = output.split('\n')
     const entries = lines.filter(line => line.trim() && !line.trim().startsWith(';')).length
     if (!entries) throw new BackupOperationError('Backup archive contains no restorable entries.', 500)
-    const tableLines = lines.filter(line => /\bTABLE\b/.test(line) && !/TABLE DATA/.test(line))
+    const tableLines = lines.filter(line => line.trim().split(/\s+/)[3] === 'TABLE')
     const schemas = new Set(tableLines.map(line => {
         const fields = line.trim().split(/\s+/)
         return fields[fields.indexOf('TABLE') + 1]

@@ -47,6 +47,7 @@ try {
     assert.match(created.checksumSha256 || '', /^[a-f0-9]{64}$/)
     assert.ok((created.sizeBytes || 0) > 0)
     assert.ok((created.archiveEntries || 0) > 0)
+    assert.equal(created.sourceIntegrity?.tables, 2, 'archive comments about tables must not inflate restored table counts')
     assert.equal(created.retention?.deleted, 1, 'retention must delete an expired real archive')
     await assert.rejects(stat(oldFile), /ENOENT/)
 
@@ -167,7 +168,7 @@ printf 'verified custom archive bytes' > "$output"
         pg_restore: `#!/bin/sh
 if [ "$DB_BACKUP_TEST_FAIL" = "pg_restore" ]; then echo "pg_restore failed" >&2; exit 1; fi
 if [ "$1" = "--list" ]; then
-  printf '; archive\n1; 0 0 SCHEMA - public owner\n2; 1259 1 TABLE public users owner\n3; 1259 2 TABLE public audit_events owner\n'
+  printf '; archive\n1; 0 0 SCHEMA - public owner\n2; 1259 1 TABLE public users owner\n3; 1259 2 TABLE public audit_events owner\n4; 0 0 COMMENT - TABLE public users owner\n'
 fi
 `,
         psql: `#!/bin/sh
