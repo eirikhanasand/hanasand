@@ -10,8 +10,8 @@ type Evidence = {
     relationship: string
     evidenceStage: string
     confidence?: number
-    source: { id: string, name?: string, type?: string, trustScore?: number }
-    capture: { id: string, title?: string, safeExcerpt?: string, publishedAt?: string, collectedAt?: string, storageKind?: string }
+    source: { id: string, name?: string, type?: string, trustScore?: number, independenceGroup: string }
+    capture: { id: string, safeExcerpt?: string, publishedAt?: string, collectedAt?: string, storageKind?: string, extractorVersion?: string, parserVersion?: string }
 }
 type Decision = {
     action: string
@@ -20,18 +20,24 @@ type Decision = {
     supportingEvidenceIds: string[]
     contradictoryEvidenceIds: string[]
     uncertainty: string[]
+    falsePositiveReasons: string[]
     rationale: string
     confidence: number
     modelVersion: string
     promptVersion: string
+    configuredModelVersion: string
+    runtimeIdentity?: { provider: string, model: string, client?: string, conversationId: string, modelStrategy?: string }
     calibrationContext: Record<string, unknown>
 }
-type HistoryEvent = { id: string, state: string, attempt: number, occurredAt: string, evidenceIds: string[], error?: string, decision?: Decision }
-type ReviewTask = {
+type HistoryEvent = { id: string, state: string, attempt: number, occurredAt: string, selectedEvidenceIds: string[], requestSha256?: string, error?: string, decision?: Decision }
+export type ReviewTask = {
     id: string
-    subject: { type: 'claim' | 'incident', id: string, claimId?: string, incidentId?: string, summary?: string }
+    subject: { type: 'claim' | 'incident', id: string, claimId?: string, incidentId?: string }
     evidence: Evidence[]
-    evidenceIds: string[]
+    selectedEvidenceIds: string[]
+    linkedEvidenceCount: number
+    linkedSourceCount: number
+    linkedIndependentSourceCount: number
     state: QueueState
     outcome?: string
     attempt: number
@@ -44,16 +50,17 @@ type ReviewTask = {
     completedAt?: string
     updatedAt: string
     lastError?: string
+    requestSha256?: string
     decision?: Decision
     history: HistoryEvent[]
 }
-type QueueResponse = { counts: Record<QueueState, number>, total: number, tasks: ReviewTask[] }
+type QueueResponse = { counts: Record<QueueState, number>, subjectCounts: Record<'claim' | 'incident', number>, total: number, displayedTaskCount: number, hasMore: boolean, tasks: ReviewTask[] }
 const filters: Array<'active' | QueueState | 'all'> = ['active', 'dead_letter', 'quarantined', 'terminal', 'all']
 
 export default function AutomaticReviewQueue() {
     const [scope, setScope] = useState<'default' | 'global'>('default')
     const [filter, setFilter] = useState<(typeof filters)[number]>('active')
-    const [queue, setQueue] = useState<QueueResponse>({ counts: emptyCounts(), total: 0, tasks: [] })
+    const [queue, setQueue] = useState<QueueResponse>({ counts: emptyCounts(), subjectCounts: { claim: 0, incident: 0 }, total: 0, displayedTaskCount: 0, hasMore: false, tasks: [] })
     const [selectedId, setSelectedId] = useState('')
     const [loading, setLoading] = useState(true)
     const [acting, setActing] = useState(false)
@@ -82,7 +89,7 @@ export default function AutomaticReviewQueue() {
         setActing(true)
         setError('')
         try {
-            await api(`/api/ti/claims/automatic-reviews/${action}?scope=${scope}`, { method: 'POST', body: action === 'run' ? JSON.stringify({ limit: 10 }) : '{}' })
+            await api(`/api/ti/claims/automatic-reviews/${action}?scope=${scope}`, { method: 'POST', body: action === 'run' ? JSON.stringify({ limit: 50 }) : '{}' })
             await load()
         } catch (cause) {
             setError(message(cause))
@@ -116,13 +123,14 @@ export default function AutomaticReviewQueue() {
                         <button type='button' onClick={() => void control('run')} disabled={acting} className='inline-flex h-9 items-center gap-2 rounded-md bg-ui-primary px-3 text-xs font-semibold text-ui-canvas disabled:opacity-50'>{acting ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Play className='h-4 w-4' />}Run next batch</button>
                     </div>
                 </div>
-                <div className='grid grid-cols-2 gap-px bg-ui-border sm:grid-cols-6'>
+                <div className='grid grid-cols-2 gap-px bg-ui-border sm:grid-cols-7'>
                     <Metric label='Total' value={queue.total} />
                     <Metric label='Queued' value={queue.counts.queued} />
                     <Metric label='Running' value={queue.counts.running} />
                     <Metric label='Retrying' value={queue.counts.retrying} tone={queue.counts.retrying ? 'warn' : 'neutral'} />
                     <Metric label='Dead letter' value={queue.counts.dead_letter} tone={queue.counts.dead_letter ? 'danger' : 'neutral'} />
                     <Metric label='Quarantined' value={queue.counts.quarantined} tone={queue.counts.quarantined ? 'danger' : 'neutral'} />
+                    <Metric label='Terminal' value={queue.counts.terminal} />
                 </div>
                 {error ? <div role='alert' className='flex items-start gap-2 border-t border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'><AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />{error}</div> : null}
             </DashboardPanel>
@@ -137,7 +145,7 @@ export default function AutomaticReviewQueue() {
                             <button key={task.id} type='button' onClick={() => setSelectedId(task.id)} className={`flex w-full items-start gap-2 border-b border-ui-border px-3 py-2.5 text-left hover:bg-ui-raised ${selected?.id === task.id ? 'bg-ui-raised' : ''}`}>
                                 <StateIcon state={task.state} />
                                 <span className='min-w-0 flex-1'>
-                                    <span className='block truncate text-xs font-semibold text-ui-text'>{task.subject.summary || task.subject.id}</span>
+                                    <span className='block truncate text-xs font-semibold text-ui-text'>{task.subject.id}</span>
                                     <span className='mt-0.5 block truncate text-[11px] text-ui-muted'>{task.subject.type} · {label(task.state)} · attempt {task.attempt}/{task.maxAttempts}</span>
                                 </span>
                             </button>
@@ -154,14 +162,14 @@ export default function AutomaticReviewQueue() {
     )
 }
 
-function TaskDetail({ task, acting, replay }: { task: ReviewTask, acting: boolean, replay: (task: ReviewTask) => Promise<void> }) {
+export function TaskDetail({ task, acting, replay }: { task: ReviewTask, acting: boolean, replay: (task: ReviewTask) => Promise<void> }) {
     return (
         <div className='grid gap-0'>
             <div className='border-b border-ui-border bg-ui-raised px-4 py-3'>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div className='min-w-0'>
                         <p className='text-[10px] font-semibold uppercase text-ui-primary'>{task.subject.type} automatic review</p>
-                        <h2 className='mt-1 wrap-break-word text-base font-semibold text-ui-text'>{task.subject.summary || task.subject.id}</h2>
+                        <h2 className='mt-1 wrap-break-word text-base font-semibold text-ui-text'>{task.subject.id}</h2>
                         <p className='mt-1 break-all text-[11px] text-ui-muted'>{task.subject.id}</p>
                     </div>
                     <div className='flex items-center gap-2'>
@@ -174,16 +182,17 @@ function TaskDetail({ task, acting, replay }: { task: ReviewTask, acting: boolea
                 <dl className='grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4'>
                     <Datum label='Model' value={task.requestedModelVersion} />
                     <Datum label='Attempt' value={`${task.attempt}/${task.maxAttempts}`} />
-                    <Datum label='Evidence' value={String(task.evidence.length)} />
+                    <Datum label='Evidence sent / linked' value={`${task.selectedEvidenceIds.length}/${task.linkedEvidenceCount} across ${task.linkedSourceCount} source IDs / ${task.linkedIndependentSourceCount} independent`} />
                     <Datum label='Updated' value={formatDate(task.updatedAt)} />
                     <Datum label='Prompt contract' value={task.promptVersion} wide />
                     <Datum label='Task ID' value={task.id} wide />
+                    <Datum label='Request SHA-256' value={task.requestSha256 || 'Not sent'} wide />
                 </dl>
                 {task.lastError ? <div className='rounded-md border border-ui-danger/30 bg-ui-danger/10 p-3 text-xs text-ui-danger'>{task.lastError}</div> : null}
                 <section>
                     <h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Governed evidence sent to Hanasand AI</h3>
                     <div className='mt-2 grid gap-2 md:grid-cols-2'>
-                        {task.evidence.map(item => <div key={item.id} className='rounded-md border border-ui-border bg-ui-canvas p-3 text-xs'><p className='font-semibold text-ui-text'>{item.capture.title || item.source.name || item.id}</p><p className='mt-1 text-ui-muted'>{item.source.name || item.source.id} · {label(item.evidenceStage)} · {formatConfidence(item.confidence)}</p>{item.capture.safeExcerpt ? <p className='mt-2 leading-5 text-ui-text'>{item.capture.safeExcerpt}</p> : null}<p className='mt-2 break-all text-[10px] text-ui-muted'>{item.id}</p></div>)}
+                        {task.evidence.map(item => <div key={item.id} className='rounded-md border border-ui-border bg-ui-canvas p-3 text-xs'><p className='font-semibold text-ui-text'>{item.source.name || item.id}</p><p className='mt-1 text-ui-muted'>{item.source.name || item.source.id} · {label(item.evidenceStage)} · {formatConfidence(item.confidence)}</p>{item.capture.safeExcerpt ? <p className='mt-2 leading-5 text-ui-text'>{item.capture.safeExcerpt}</p> : null}<p className='mt-2 break-all text-[10px] text-ui-muted'>{item.id}</p></div>)}
                         {!task.evidence.length ? <p className='text-xs text-ui-muted'>No governed evidence is linked. This task cannot become a successful model decision.</p> : null}
                     </div>
                 </section>
@@ -191,7 +200,7 @@ function TaskDetail({ task, acting, replay }: { task: ReviewTask, acting: boolea
                 <section>
                     <h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Persisted decision history</h3>
                     <ol className='mt-2 grid gap-2'>
-                        {task.history.map(event => <li key={event.id} className='rounded-md border border-ui-border bg-ui-canvas p-3 text-xs'><div className='flex flex-wrap justify-between gap-2'><span className='font-semibold text-ui-text'>{label(event.state)}</span><time className='text-ui-muted'>{formatDate(event.occurredAt)}</time></div><p className='mt-1 text-ui-muted'>Attempt {event.attempt} · {event.evidenceIds.length} evidence record(s)</p>{event.error ? <p className='mt-1 text-ui-danger'>{event.error}</p> : null}</li>)}
+                        {task.history.map(event => <li key={event.id} className='rounded-md border border-ui-border bg-ui-canvas p-3 text-xs'><div className='flex flex-wrap justify-between gap-2'><span className='font-semibold text-ui-text'>{label(event.state)}</span><time className='text-ui-muted'>{formatDate(event.occurredAt)}</time></div><p className='mt-1 text-ui-muted'>Attempt {event.attempt} · {event.selectedEvidenceIds?.length ?? 0} selected evidence record(s)</p>{event.requestSha256 ? <p className='mt-1 break-all text-[10px] text-ui-muted'>Request {event.requestSha256}</p> : null}{event.error ? <p className='mt-1 text-ui-danger'>{event.error}</p> : null}</li>)}
                     </ol>
                 </section>
             </div>
@@ -200,7 +209,7 @@ function TaskDetail({ task, acting, replay }: { task: ReviewTask, acting: boolea
 }
 
 function DecisionView({ decision }: { decision: Decision }) {
-    return <section className='rounded-md border border-ui-success/30 bg-ui-success/5 p-3'><div className='flex flex-wrap items-center justify-between gap-2'><h3 className='text-[10px] font-semibold uppercase text-ui-success'>Persisted automatic decision</h3><span className='text-xs font-semibold text-ui-text'>{label(decision.action)} · {formatConfidence(decision.confidence)}</span></div><p className='mt-2 text-sm leading-6 text-ui-text'>{decision.rationale}</p><dl className='mt-3 grid gap-2 text-xs sm:grid-cols-2'><Datum label='Claim validity' value={label(decision.claimValidity)} /><Datum label='Proposed actor' value={decision.actorAttribution.canonicalName || 'No supported attribution'} /><Datum label='Aliases' value={decision.actorAttribution.aliases.join(', ') || 'None'} /><Datum label='Model' value={decision.modelVersion} /><Datum label='Supporting evidence' value={decision.supportingEvidenceIds.join(', ') || 'None'} wide /><Datum label='Contradictory evidence' value={decision.contradictoryEvidenceIds.join(', ') || 'None'} wide /><Datum label='Uncertainty' value={decision.uncertainty.join('; ') || 'None recorded'} wide /></dl></section>
+    return <section className='rounded-md border border-ui-success/30 bg-ui-success/5 p-3'><div className='flex flex-wrap items-center justify-between gap-2'><h3 className='text-[10px] font-semibold uppercase text-ui-success'>Persisted automatic decision</h3><span className='text-xs font-semibold text-ui-text'>{label(decision.action)} · {formatConfidence(decision.confidence)}</span></div><p className='mt-2 text-sm leading-6 text-ui-text'>{decision.rationale}</p><dl className='mt-3 grid gap-2 text-xs sm:grid-cols-2'><Datum label='Claim validity' value={label(decision.claimValidity)} /><Datum label='Catalog actor' value={decision.actorAttribution.canonicalName || 'No supported attribution'} /><Datum label='Aliases' value={decision.actorAttribution.aliases.join(', ') || 'None'} /><Datum label='Configured model' value={decision.configuredModelVersion} /><Datum label='Runtime' value={decision.runtimeIdentity ? `${decision.runtimeIdentity.provider} / ${decision.runtimeIdentity.model}` : 'Policy decision'} /><Datum label='Conversation' value={decision.runtimeIdentity?.conversationId || 'None'} /><Datum label='Supporting evidence' value={decision.supportingEvidenceIds.join(', ') || 'None'} wide /><Datum label='Contradictory evidence' value={decision.contradictoryEvidenceIds.join(', ') || 'None'} wide /><Datum label='Uncertainty' value={decision.uncertainty.join('; ') || 'None recorded'} wide /><Datum label='False-positive reasons' value={decision.falsePositiveReasons.join('; ') || 'None'} wide /></dl></section>
 }
 
 function matchesFilter(state: QueueState, filter: (typeof filters)[number]) { return filter === 'all' || filter === 'active' ? filter === 'all' || ['queued', 'running', 'retrying'].includes(state) : state === filter }

@@ -61,7 +61,8 @@ export class InMemoryScraperStore implements ScraperStore {
       publishedAt: reporting.publisherReportedAt,
       collectedAt: capture.collectedAt,
       processedAt: capture.processedAt ?? result.incident.processedAt,
-      firstVisibleAt: capture.firstVisibleAt ?? firstVisibleAt
+      firstVisibleAt: capture.firstVisibleAt ?? firstVisibleAt,
+      ...preservedIncidentReview(previousIncident, incidentInput)
     }) : undefined;
     const extractorVersion = incident?.extractorVersion ?? capture.provenance?.extractorVersion ?? "unknown";
     const entities = (result.entities ?? []).map((entity: any) => ({ ...entity, id: entity.id ?? stableId("entity", `${capture.id}:${entity.type}:${normalized(entity)}`), tenantId: capture.tenantId, sourceId: capture.sourceId, captureId: capture.id, incidentId: incident?.id, extractorVersion: entity.extractorVersion ?? extractorVersion }));
@@ -253,6 +254,26 @@ export class InMemoryScraperStore implements ScraperStore {
   protected hydrateDwmWebhookDeliverySnapshot(delivery: any) { return put(this.dwmWebhookDeliveries, delivery); }
   getDwmWebhookDelivery(id: string) { return this.dwmWebhookDeliveries.get(id); } listDwmWebhookDeliveries() { return mapValues(this.dwmWebhookDeliveries); }
   saveActorOrgRelevanceReview(review: any) { return put(this.actorOrgRelevanceReviews, review); } getActorOrgRelevanceReview(id: string) { return this.actorOrgRelevanceReviews.get(id); } listActorOrgRelevanceReviews() { return mapValues(this.actorOrgRelevanceReviews); }
+}
+
+function preservedIncidentReview(previous: any, candidate: any) {
+  if (!previous) return {};
+  const previousReviewedAt = Date.parse(String(previous.reviewedAt ?? ""));
+  const candidateReviewedAt = Date.parse(String(candidate?.reviewedAt ?? ""));
+  if (Number.isFinite(candidateReviewedAt) && (!Number.isFinite(previousReviewedAt) || candidateReviewedAt > previousReviewedAt)) return {};
+  const humanTerminal = ["confirmed", "rejected", "contradicted"].includes(previous.reviewState)
+    && !String(previous.reviewedBy ?? "").startsWith("hanasand-ai:");
+  if (!humanTerminal && !previous.automaticReview) return {};
+  return {
+    reviewState: previous.reviewState,
+    reviewedBy: previous.reviewedBy,
+    reviewedAt: previous.reviewedAt,
+    reviewReasons: ["confirmed", "rejected", "contradicted"].includes(previous.reviewState) ? [] : previous.reviewReasons,
+    actorAttribution: previous.actorAttribution,
+    actorIdentityId: previous.actorIdentityId,
+    actorName: previous.actorName,
+    automaticReview: previous.automaticReview
+  };
 }
 installMemoryStoreReplayMethods(InMemoryScraperStore); installMemoryStoreDiscoveryMethods(InMemoryScraperStore);
 export { canonicalizeUrl, captureDedupeKey, InMemoryObjectEvidenceStore };

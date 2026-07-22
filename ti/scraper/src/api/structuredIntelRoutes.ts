@@ -10,6 +10,7 @@ import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
 import { authenticateRequest } from "./requestAuthentication.ts";
 import { handleEvaluationBenchmarkRequest } from "./evaluationBenchmarkRoutes.ts";
 import { reconcileActorIdentityCoverage } from "../pipeline/mitreActorCatalog.ts";
+import { handleAutomaticReviewRequest } from "./automaticReviewRoutes.ts";
 
 const listRoutes = {
   "/v1/intel/sources": ["sources", "listSources"],
@@ -34,6 +35,8 @@ const listRoutes = {
 } as const;
 
 export async function handleStructuredIntelRequest(request: Request, options: ApiServerOptions): Promise<Response | undefined> {
+  const automaticReviewResponse = await handleAutomaticReviewRequest(request, options);
+  if (automaticReviewResponse) return automaticReviewResponse;
   const url = new URL(request.url);
   const evaluationBenchmarkResponse = await handleEvaluationBenchmarkRequest(request, options);
   if (evaluationBenchmarkResponse) return evaluationBenchmarkResponse;
@@ -337,6 +340,18 @@ function apiRecord(collection: string, record: any, url: URL, tenantId?: string)
 }
 
 function safeIncidentDto(incident: any) {
+  const automatic = incident.automaticReview;
+  const attribution = incident.reviewState === "confirmed" && incident.actorAttribution?.identityId && incident.actorAttribution?.canonicalName && incident.actorAttribution?.provenance
+    ? {
+      identityId: incident.actorAttribution.identityId,
+      externalId: incident.actorAttribution.externalId,
+      catalogId: incident.actorAttribution.catalogId,
+      canonicalName: incident.actorAttribution.canonicalName,
+      aliases: incident.actorAttribution.aliases ?? [],
+      supportingEvidenceIds: incident.actorAttribution.supportingEvidenceIds ?? [],
+      provenance: incident.actorAttribution.provenance
+    }
+    : null;
   return sanitizeDwmApiPayload({
     id: incident.id,
     tenantId: incident.tenantId,
@@ -347,7 +362,25 @@ function safeIncidentDto(incident: any) {
     firstSeenAt: incident.firstSeenAt,
     confidence: confidenceValue(incident.confidence),
     assertionKind: "inferred",
-    reviewState: incident.reviewReasons?.length ? "needs_review" : "unreviewed",
+    reviewState: incident.reviewState ?? (incident.reviewReasons?.length ? "needs_review" : "unreviewed"),
+    actorAttribution: attribution,
+    automaticReview: automatic ? {
+      taskId: automatic.taskId,
+      requestSha256: automatic.requestSha256,
+      configuredModelVersion: automatic.configuredModelVersion,
+      runtimeIdentity: automatic.runtimeIdentity,
+      promptVersion: automatic.promptVersion,
+      responseSchemaVersion: automatic.responseSchemaVersion,
+      evidenceProjectionSchema: automatic.evidenceProjectionSchema,
+      selectedEvidenceIds: automatic.selectedEvidenceIds ?? [],
+      linkedEvidenceCount: automatic.linkedEvidenceCount,
+      linkedSourceCount: automatic.linkedSourceCount,
+      linkedIndependentSourceCount: automatic.linkedIndependentSourceCount,
+      reviewedAt: automatic.reviewedAt,
+      action: automatic.decision?.action,
+      claimValidity: automatic.decision?.claimValidity,
+      confidence: automatic.decision?.confidence
+    } : undefined,
     extractorVersion: incident.extractorVersion,
     reviewReasons: incident.reviewReasons ?? []
   });
