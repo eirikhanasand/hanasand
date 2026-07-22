@@ -42,7 +42,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "021_remove_dangling_incident_evidence_links", path: fileURLToPath(new URL("../../migrations/021_remove_dangling_incident_evidence_links.sql", import.meta.url)) },
   { version: "022_reconcile_source_fleet", path: fileURLToPath(new URL("../../migrations/022_reconcile_source_fleet.sql", import.meta.url)) },
   { version: "023_reconcile_delivery_and_event_times", path: fileURLToPath(new URL("../../migrations/023_reconcile_delivery_and_event_times.sql", import.meta.url)) },
-  { version: "024_finish_timestamp_backfill", path: fileURLToPath(new URL("../../migrations/024_finish_timestamp_backfill.sql", import.meta.url)) }
+  { version: "024_finish_timestamp_backfill", path: fileURLToPath(new URL("../../migrations/024_finish_timestamp_backfill.sql", import.meta.url)) },
+  { version: "025_reconcile_timeliness_capture", path: fileURLToPath(new URL("../../migrations/025_reconcile_timeliness_capture.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -663,9 +664,9 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         first_seen_at = LEAST(threat_intel.incidents.first_seen_at, EXCLUDED.first_seen_at),
         reported_at = COALESCE(EXCLUDED.reported_at, threat_intel.incidents.reported_at),
         published_at = COALESCE(LEAST(threat_intel.incidents.published_at, EXCLUDED.published_at), threat_intel.incidents.published_at, EXCLUDED.published_at),
-        collected_at = COALESCE(threat_intel.incidents.collected_at, EXCLUDED.collected_at),
-        processed_at = COALESCE(threat_intel.incidents.processed_at, EXCLUDED.processed_at),
-        first_visible_at = COALESCE(threat_intel.incidents.first_visible_at, EXCLUDED.first_visible_at),
+        collected_at = EXCLUDED.collected_at,
+        processed_at = EXCLUDED.processed_at,
+        first_visible_at = EXCLUDED.first_visible_at,
         updated_at = EXCLUDED.updated_at,
         record = EXCLUDED.record
     `;

@@ -59,9 +59,9 @@ export class InMemoryScraperStore implements ScraperStore {
       firstSeenAt: previousIncident?.firstSeenAt ?? validIso(result.incident.firstSeenAt) ?? capture.publishedAt ?? capture.collectedAt,
       ...reporting,
       publishedAt: reporting.publisherReportedAt,
-      collectedAt: previousIncident?.collectedAt ?? capture.collectedAt,
-      processedAt: capture.processedAt ?? result.incident.processedAt ?? previousIncident?.processedAt,
-      firstVisibleAt: previousIncident?.firstVisibleAt ?? capture.firstVisibleAt ?? firstVisibleAt
+      collectedAt: capture.collectedAt,
+      processedAt: capture.processedAt ?? result.incident.processedAt,
+      firstVisibleAt: capture.firstVisibleAt ?? firstVisibleAt
     }) : undefined;
     const extractorVersion = incident?.extractorVersion ?? capture.provenance?.extractorVersion ?? "unknown";
     const entities = (result.entities ?? []).map((entity: any) => ({ ...entity, id: entity.id ?? stableId("entity", `${capture.id}:${entity.type}:${normalized(entity)}`), tenantId: capture.tenantId, sourceId: capture.sourceId, captureId: capture.id, incidentId: incident?.id, extractorVersion: entity.extractorVersion ?? extractorVersion }));
@@ -90,7 +90,11 @@ export class InMemoryScraperStore implements ScraperStore {
     if (incident) recordClaim(this, capture, "incident", incident);
     for (const entity of entities) recordClaim(this, capture, "entity", entity);
     for (const indicator of indicators) recordClaim(this, capture, "indicator", indicator);
-    if (incident) this.saveTimelinessRecord(timelinessRecord(capture, incident, this.getTimelinessRecord(incident.id)));
+    if (incident) {
+      const previousTimeliness = this.getTimelinessRecord(incident.id);
+      const timingCapture = this.getCapture(previousTimeliness?.captureId) ?? capture;
+      this.saveTimelinessRecord(timelinessRecord(timingCapture, incident, previousTimeliness));
+    }
     return { ...result, capture, incident };
   }
   replayInput(captureId: string, extractorVersion: string): ReplayPipelineInput | undefined { const c = this.captures.get(captureId); return c && { captureId: c.id, sourceId: c.sourceId, url: c.url, collectedAt: c.collectedAt, mediaType: c.mediaType, storageKind: c.storageKind, body: c.body, objectRef: c.objectRef, metadata: c.metadata, contentHash: c.contentHash, normalizedTextHash: c.normalizedTextHash, extractorVersion }; }
@@ -536,15 +540,15 @@ function timelinessRecord(capture: any, incident: any, previous?: any): any {
   const reporting = mergeReportTimeline(previous, incident);
   const record = {
     id: incident.id,
-    tenantId: incident.tenantId ?? capture.tenantId,
-    sourceId: incident.sourceId ?? capture.sourceId,
+    tenantId: previous?.tenantId ?? capture.tenantId ?? incident.tenantId,
+    sourceId: capture.sourceId ?? incident.sourceId,
     captureId: capture.id,
     incidentId: incident.id,
     ...reporting,
     publishedAt: reporting.publisherReportedAt,
-    collectedAt: incident.collectedAt ?? capture.collectedAt,
+    collectedAt: capture.collectedAt,
     processedAt: capture.processedAt ?? incident.processedAt,
-    firstVisibleAt: previous?.firstVisibleAt ?? incident.firstVisibleAt ?? capture.firstVisibleAt,
+    firstVisibleAt: capture.firstVisibleAt ?? incident.firstVisibleAt,
     alertCreatedAt: previous?.alertCreatedAt,
     alertCreatedProvenance: previous?.alertCreatedProvenance,
     alertedAt: previous?.alertCreatedAt ?? previous?.alertedAt,

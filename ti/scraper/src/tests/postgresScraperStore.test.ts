@@ -822,9 +822,34 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       WHERE incident.id = ${savedVerified.incident!.id}
         AND capture.id = incident.capture_id
     `;
-    await admin`DELETE FROM threat_intel.schema_migrations WHERE version IN ('023_reconcile_delivery_and_event_times', '024_finish_timestamp_backfill')`;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version IN ('023_reconcile_delivery_and_event_times', '024_finish_timestamp_backfill', '025_reconcile_timeliness_capture')`;
 
     const restarted = await PostgresScraperStore.create({ databaseUrl });
+    restarted.savePipelineResult({
+      ...verified,
+      capture: {
+        ...savedVerified.capture,
+        id: "capture_verified_followup",
+        url: "https://www.ransomware.live/id/verified/followup",
+        canonicalUrl: "https://www.ransomware.live/id/verified/followup",
+        contentHash: hashContent("verified-publication-followup"),
+        normalizedTextHash: hashContent("verified-publication-followup-text"),
+        collectedAt: "2026-07-22T14:51:14.400Z",
+        processedAt: "2026-07-22T14:51:14.414Z",
+        firstVisibleAt: "2026-07-22T14:51:14.451Z"
+      },
+      incident: {
+        ...savedVerified.incident!,
+        captureId: "capture_verified_followup",
+        collectedAt: "2026-07-22T14:51:14.400Z",
+        processedAt: "2026-07-22T14:51:14.414Z",
+        firstVisibleAt: "2026-07-22T14:51:14.451Z",
+        updatedAt: "2026-07-22T14:51:14.451Z"
+      },
+      entities: [],
+      indicators: []
+    });
+    await restarted.flush();
     await restarted.close();
 
     expect(await admin<{ id: string; status: string }[]>`
@@ -863,6 +888,20 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       WHERE timeliness.incident_id IN (${savedVerified.incident!.id}, ${savedUnknown.incident!.id})
         AND (timeliness.processed_at <> capture.processed_at OR timeliness.record->'timestampAnomalies' ? 'processed_after_visibility')
     `).toHaveLength(0);
+    const [persistedTiming] = await admin<{ capture_id: string; record: any }[]>`
+      SELECT capture_id, record
+      FROM threat_intel.timeliness_records
+      WHERE incident_id = ${savedVerified.incident!.id}
+    `;
+    expect(persistedTiming).toMatchObject({
+      capture_id: savedVerified.capture.id,
+      record: {
+        captureId: savedVerified.capture.id,
+        processedAt: savedVerified.capture.processedAt,
+        firstVisibleAt: savedVerified.capture.firstVisibleAt
+      }
+    });
+    expect(persistedTiming.record.timestampAnomalies).not.toContain("processed_after_visibility");
     expect((await admin<{ incident_id: string; capture_published_at: Date | null; incident_published_at: Date | null; timeliness_published_at: Date | null }[]>`
       SELECT timeliness.incident_id,
              capture.published_at AS capture_published_at,
@@ -896,6 +935,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     `).toHaveLength(2);
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '023_reconcile_delivery_and_event_times'`).toHaveLength(1);
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '024_finish_timestamp_backfill'`).toHaveLength(1);
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '025_reconcile_timeliness_capture'`).toHaveLength(1);
   });
 
   test("imports the legacy JSON snapshot once and then uses PostgreSQL", async () => {

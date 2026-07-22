@@ -24,7 +24,7 @@ test("pipeline storage drops malformed incident timestamps", () => {
   expect(stored.incident).toMatchObject({ firstSeenAt: capture.collectedAt, reportedAt: undefined, publishedAt: undefined });
 });
 
-test("duplicate processing preserves the incident's first processing timestamp", () => {
+test("later evidence preserves the incident's first capture timing", () => {
   const store = new InMemoryScraperStore();
   const capture = fixtureCapture({
     processedAt: "2026-05-24T10:00:01.000Z",
@@ -45,13 +45,14 @@ test("duplicate processing preserves the incident's first processing timestamp",
 
   store.savePipelineResult({ capture, incident, entities: [], indicators: [] });
   store.savePipelineResult({
-    capture: { ...capture, processedAt: "2026-05-24T11:00:00.000Z" },
-    incident: { ...incident, collectedAt: "2026-05-24T11:00:00.000Z", processedAt: "2026-05-24T11:00:00.000Z" },
+    capture: { ...capture, id: "cap_reprocessed_followup", url: "https://example.test/followup", contentHash: "hash_reprocessed_followup", collectedAt: "2026-05-24T11:00:00.000Z", processedAt: "2026-05-24T11:00:01.000Z", firstVisibleAt: "2026-05-24T11:00:02.000Z" },
+    incident: { ...incident, captureId: "cap_reprocessed_followup", collectedAt: "2026-05-24T11:00:00.000Z", processedAt: "2026-05-24T11:00:01.000Z", firstVisibleAt: "2026-05-24T11:00:02.000Z" },
     entities: [],
     indicators: []
   });
 
   expect(store.getTimelinessRecord(incident.id)).toMatchObject({
+    captureId: capture.id,
     processedAt: "2026-05-24T10:00:01.000Z",
     collectedAt: "2026-05-24T10:00:00.000Z",
     firstVisibleAt: "2026-05-24T10:00:02.000Z",
