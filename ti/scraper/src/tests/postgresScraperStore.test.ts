@@ -734,6 +734,10 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await store.flush();
     await store.close();
 
+    // Keep a writer hydrated before the API-owned delivery trigger runs. A later
+    // collection write must not erase delivery stages persisted behind its back.
+    const staleWriter = await PostgresScraperStore.create({ databaseUrl });
+
     const delivery = (id: string, status: string, attemptedAt: string | null, completedAt: string | null, deliveredAt: string | null, responseStatus: number | null) => ({
       id,
       owner_id: "owner_delivery",
@@ -754,10 +758,21 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     });
     const failed = delivery("delivery_failed", "failed", "2026-07-22T12:45:04.000Z", "2026-07-22T12:45:04.688Z", null, 404);
     const delivered = delivery("delivery_delivered", "delivered", "2026-07-22T12:46:17.000Z", "2026-07-22T12:46:18.034Z", "2026-07-22T12:46:18.034Z", 202);
+    const deliveredLater = delivery("delivery_delivered_later", "delivered", "2026-07-22T14:53:21.386Z", "2026-07-22T14:53:21.415Z", "2026-07-22T14:53:21.415Z", 202);
     const skipped = delivery("delivery_skipped", "skipped", null, null, null, null);
-    for (const row of [failed, delivered, skipped, failed]) {
+    for (const row of [failed, delivered, skipped, deliveredLater, failed]) {
       await admin`SELECT threat_intel.persist_public_dwm_delivery(${row}::jsonb)`;
     }
+    staleWriter.savePipelineResult(verified);
+    await staleWriter.flush();
+    await staleWriter.close();
+    expect((await admin<{ record: any }[]>`
+      SELECT record FROM threat_intel.timeliness_records WHERE incident_id = ${savedVerified.incident!.id}
+    `)[0].record).toMatchObject({
+      deliveryAttemptProvenance: { deliveryId: "delivery_failed" },
+      deliveredProvenance: { deliveryId: "delivery_delivered" },
+      latencies: { alertToDeliveryAttemptSeconds: 127, deliveryAttemptToDeliveredSeconds: 74, reportToDeliveredSeconds: 91011 }
+    });
 
     const staleProcessedAt = "2026-07-23T13:59:35.445Z";
     await admin`
@@ -822,6 +837,15 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         AND capture.id = timeliness.capture_id
     `;
     await admin`
+      UPDATE threat_intel.timeliness_records
+      SET record = jsonb_set(record - 'alertCreatedProvenance' - 'deliveryAttemptProvenance' - 'deliveredProvenance', '{latencies}', COALESCE(record->'latencies', '{}'::jsonb) || jsonb_build_object(
+        'alertToDeliveryAttemptSeconds', 9999,
+        'deliveryAttemptToDeliveredSeconds', 9999,
+        'reportToDeliveredSeconds', 9999
+      ))
+      WHERE incident_id = ${savedVerified.incident!.id}
+    `;
+    await admin`
       UPDATE threat_intel.incidents AS incident
       SET published_at = ${"2026-07-21T11:29:27.000Z"},
           processed_at = capture.processed_at,
@@ -830,7 +854,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       WHERE incident.id = ${savedVerified.incident!.id}
         AND capture.id = incident.capture_id
     `;
-    await admin`DELETE FROM threat_intel.schema_migrations WHERE version IN ('023_reconcile_delivery_and_event_times', '024_finish_timestamp_backfill', '025_reconcile_timeliness_capture', '026_align_timeliness_capture_record')`;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version IN ('023_reconcile_delivery_and_event_times', '024_finish_timestamp_backfill', '025_reconcile_timeliness_capture', '026_align_timeliness_capture_record', '027_reconcile_delivery_latencies')`;
 
     const restarted = await PostgresScraperStore.create({ databaseUrl });
     restarted.savePipelineResult({
@@ -867,6 +891,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       ORDER BY id
     `).toEqual([
       { id: "delivery_delivered", status: "delivered" },
+      { id: "delivery_delivered_later", status: "delivered" },
       { id: "delivery_failed", status: "failed" },
       { id: "delivery_skipped", status: "skipped" }
     ]);
@@ -879,9 +904,24 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       delivered_at: new Date("2026-07-22T12:46:18.034Z"),
       record: {
         deliveryAttemptProvenance: { deliveryId: "delivery_failed", status: "failed" },
-        deliveredProvenance: { deliveryId: "delivery_delivered", httpStatus: 202 }
+        deliveredProvenance: { deliveryId: "delivery_delivered", httpStatus: 202 },
+        latencies: {
+          alertToDeliveryAttemptSeconds: 127,
+          deliveryAttemptToDeliveredSeconds: 74,
+          reportToDeliveredSeconds: 91011
+        }
       }
     });
+    expect(await admin`
+      SELECT id
+      FROM threat_intel.timeliness_records
+      WHERE (alert_created_at IS NOT NULL AND delivery_attempted_at IS NOT NULL
+          AND record #> '{latencies,alertToDeliveryAttemptSeconds}' IS DISTINCT FROM to_jsonb(round(extract(epoch FROM delivery_attempted_at - alert_created_at))::bigint))
+         OR (delivery_attempted_at IS NOT NULL AND delivered_at IS NOT NULL
+          AND record #> '{latencies,deliveryAttemptToDeliveredSeconds}' IS DISTINCT FROM to_jsonb(round(extract(epoch FROM delivered_at - delivery_attempted_at))::bigint))
+         OR (first_reported_at IS NOT NULL AND delivered_at IS NOT NULL
+          AND record #> '{latencies,reportToDeliveredSeconds}' IS DISTINCT FROM to_jsonb(round(extract(epoch FROM delivered_at - first_reported_at))::bigint))
+    `).toHaveLength(0);
     expect(await admin`
       SELECT incident.id, incident.processed_at, capture.processed_at
       FROM threat_intel.incidents AS incident
@@ -945,6 +985,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '024_finish_timestamp_backfill'`).toHaveLength(1);
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '025_reconcile_timeliness_capture'`).toHaveLength(1);
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '026_align_timeliness_capture_record'`).toHaveLength(1);
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '027_reconcile_delivery_latencies'`).toHaveLength(1);
   });
 
   test("imports the legacy JSON snapshot once and then uses PostgreSQL", async () => {

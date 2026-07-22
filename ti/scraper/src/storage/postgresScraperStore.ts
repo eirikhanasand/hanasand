@@ -44,7 +44,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "023_reconcile_delivery_and_event_times", path: fileURLToPath(new URL("../../migrations/023_reconcile_delivery_and_event_times.sql", import.meta.url)) },
   { version: "024_finish_timestamp_backfill", path: fileURLToPath(new URL("../../migrations/024_finish_timestamp_backfill.sql", import.meta.url)) },
   { version: "025_reconcile_timeliness_capture", path: fileURLToPath(new URL("../../migrations/025_reconcile_timeliness_capture.sql", import.meta.url)) },
-  { version: "026_align_timeliness_capture_record", path: fileURLToPath(new URL("../../migrations/026_align_timeliness_capture_record.sql", import.meta.url)) }
+  { version: "026_align_timeliness_capture_record", path: fileURLToPath(new URL("../../migrations/026_align_timeliness_capture_record.sql", import.meta.url)) },
+  { version: "027_reconcile_delivery_latencies", path: fileURLToPath(new URL("../../migrations/027_reconcile_delivery_latencies.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -895,7 +896,82 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         delivery_attempted_at = COALESCE(LEAST(threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at), threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at),
         delivered_at = COALESCE(LEAST(threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at), threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at),
         updated_at = EXCLUDED.updated_at,
-        record = EXCLUDED.record
+        record = ((threat_intel.timeliness_records.record || EXCLUDED.record)
+          - 'alertCreatedAt' - 'alertedAt' - 'alertCreatedProvenance'
+          - 'deliveryAttemptedAt' - 'deliveryAttemptProvenance'
+          - 'deliveredAt' - 'deliveredProvenance' - 'latencies')
+          || jsonb_strip_nulls(jsonb_build_object(
+            'alertCreatedAt', CASE
+              WHEN threat_intel.timeliness_records.alert_created_at IS NULL THEN EXCLUDED.record->'alertCreatedAt'
+              WHEN EXCLUDED.alert_created_at IS NULL OR threat_intel.timeliness_records.alert_created_at <= EXCLUDED.alert_created_at
+                THEN COALESCE(threat_intel.timeliness_records.record->'alertCreatedAt', to_jsonb(threat_intel.timeliness_records.alert_created_at))
+              ELSE COALESCE(EXCLUDED.record->'alertCreatedAt', to_jsonb(EXCLUDED.alert_created_at))
+            END,
+            'alertedAt', CASE
+              WHEN threat_intel.timeliness_records.alert_created_at IS NULL THEN COALESCE(EXCLUDED.record->'alertedAt', EXCLUDED.record->'alertCreatedAt')
+              WHEN EXCLUDED.alert_created_at IS NULL OR threat_intel.timeliness_records.alert_created_at <= EXCLUDED.alert_created_at
+                THEN COALESCE(threat_intel.timeliness_records.record->'alertedAt', threat_intel.timeliness_records.record->'alertCreatedAt', to_jsonb(threat_intel.timeliness_records.alert_created_at))
+              ELSE COALESCE(EXCLUDED.record->'alertedAt', EXCLUDED.record->'alertCreatedAt', to_jsonb(EXCLUDED.alert_created_at))
+            END,
+            'alertCreatedProvenance', CASE
+              WHEN threat_intel.timeliness_records.alert_created_at IS NULL THEN EXCLUDED.record->'alertCreatedProvenance'
+              WHEN EXCLUDED.alert_created_at IS NULL OR threat_intel.timeliness_records.alert_created_at <= EXCLUDED.alert_created_at
+                THEN COALESCE(threat_intel.timeliness_records.record->'alertCreatedProvenance', EXCLUDED.record->'alertCreatedProvenance')
+              ELSE COALESCE(EXCLUDED.record->'alertCreatedProvenance', threat_intel.timeliness_records.record->'alertCreatedProvenance')
+            END,
+            'deliveryAttemptedAt', CASE
+              WHEN threat_intel.timeliness_records.delivery_attempted_at IS NULL THEN EXCLUDED.record->'deliveryAttemptedAt'
+              WHEN EXCLUDED.delivery_attempted_at IS NULL OR threat_intel.timeliness_records.delivery_attempted_at <= EXCLUDED.delivery_attempted_at
+                THEN COALESCE(threat_intel.timeliness_records.record->'deliveryAttemptedAt', to_jsonb(threat_intel.timeliness_records.delivery_attempted_at))
+              ELSE COALESCE(EXCLUDED.record->'deliveryAttemptedAt', to_jsonb(EXCLUDED.delivery_attempted_at))
+            END,
+            'deliveryAttemptProvenance', CASE
+              WHEN threat_intel.timeliness_records.delivery_attempted_at IS NULL THEN EXCLUDED.record->'deliveryAttemptProvenance'
+              WHEN EXCLUDED.delivery_attempted_at IS NULL OR threat_intel.timeliness_records.delivery_attempted_at <= EXCLUDED.delivery_attempted_at
+                THEN COALESCE(threat_intel.timeliness_records.record->'deliveryAttemptProvenance', EXCLUDED.record->'deliveryAttemptProvenance')
+              ELSE COALESCE(EXCLUDED.record->'deliveryAttemptProvenance', threat_intel.timeliness_records.record->'deliveryAttemptProvenance')
+            END,
+            'deliveredAt', CASE
+              WHEN threat_intel.timeliness_records.delivered_at IS NULL THEN EXCLUDED.record->'deliveredAt'
+              WHEN EXCLUDED.delivered_at IS NULL OR threat_intel.timeliness_records.delivered_at <= EXCLUDED.delivered_at
+                THEN COALESCE(threat_intel.timeliness_records.record->'deliveredAt', to_jsonb(threat_intel.timeliness_records.delivered_at))
+              ELSE COALESCE(EXCLUDED.record->'deliveredAt', to_jsonb(EXCLUDED.delivered_at))
+            END,
+            'deliveredProvenance', CASE
+              WHEN threat_intel.timeliness_records.delivered_at IS NULL THEN EXCLUDED.record->'deliveredProvenance'
+              WHEN EXCLUDED.delivered_at IS NULL OR threat_intel.timeliness_records.delivered_at <= EXCLUDED.delivered_at
+                THEN COALESCE(threat_intel.timeliness_records.record->'deliveredProvenance', EXCLUDED.record->'deliveredProvenance')
+              ELSE COALESCE(EXCLUDED.record->'deliveredProvenance', threat_intel.timeliness_records.record->'deliveredProvenance')
+            END,
+            'latencies', ((COALESCE(threat_intel.timeliness_records.record->'latencies', '{}'::jsonb) || COALESCE(EXCLUDED.record->'latencies', '{}'::jsonb))
+              - 'alertToDeliveryAttemptSeconds' - 'deliveryAttemptToDeliveredSeconds' - 'reportToDeliveredSeconds')
+              || jsonb_strip_nulls(jsonb_build_object(
+                'alertToDeliveryAttemptSeconds', CASE
+                  WHEN COALESCE(LEAST(threat_intel.timeliness_records.alert_created_at, EXCLUDED.alert_created_at), threat_intel.timeliness_records.alert_created_at, EXCLUDED.alert_created_at) IS NOT NULL
+                   AND COALESCE(LEAST(threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at), threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at) IS NOT NULL
+                    THEN round(extract(epoch FROM
+                      COALESCE(LEAST(threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at), threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at)
+                      - COALESCE(LEAST(threat_intel.timeliness_records.alert_created_at, EXCLUDED.alert_created_at), threat_intel.timeliness_records.alert_created_at, EXCLUDED.alert_created_at)
+                    ))::bigint
+                END,
+                'deliveryAttemptToDeliveredSeconds', CASE
+                  WHEN COALESCE(LEAST(threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at), threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at) IS NOT NULL
+                   AND COALESCE(LEAST(threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at), threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at) IS NOT NULL
+                    THEN round(extract(epoch FROM
+                      COALESCE(LEAST(threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at), threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at)
+                      - COALESCE(LEAST(threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at), threat_intel.timeliness_records.delivery_attempted_at, EXCLUDED.delivery_attempted_at)
+                    ))::bigint
+                END,
+                'reportToDeliveredSeconds', CASE
+                  WHEN COALESCE(LEAST(threat_intel.timeliness_records.first_reported_at, EXCLUDED.first_reported_at), threat_intel.timeliness_records.first_reported_at, EXCLUDED.first_reported_at) IS NOT NULL
+                   AND COALESCE(LEAST(threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at), threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at) IS NOT NULL
+                    THEN round(extract(epoch FROM
+                      COALESCE(LEAST(threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at), threat_intel.timeliness_records.delivered_at, EXCLUDED.delivered_at)
+                      - COALESCE(LEAST(threat_intel.timeliness_records.first_reported_at, EXCLUDED.first_reported_at), threat_intel.timeliness_records.first_reported_at, EXCLUDED.first_reported_at)
+                    ))::bigint
+                END
+              ))
+          ))
     `;
   }
 
