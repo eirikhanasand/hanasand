@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { importSeedBundle, seedDuplicateKey } from "../registry/sourceSeeds.ts";
 import { importRestrictedMetadataSeedBundle, isRestrictedMetadataSeedBundle } from "../registry/restrictedSourceSeeds.ts";
 import type { SourceRecord } from "../types.ts";
@@ -80,8 +81,13 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
       ? importRestrictedMetadataSeedBundle(bundle, generatedAt)
       : importSeedBundle(bundle, { importedAt: generatedAt, existingSources: store.listSources() });
     const rejectedSourceIds = new Set((report.errors ?? []).map((error: any) => error.sourceId).filter(Boolean));
+    const verifiedJsonApiExceptions = new Set((report.accepted as SourceRecord[])
+      .filter((source) => source.type === "json_api"
+        && isVerifiedProductionSource(source)
+        && (report.errors ?? []).filter((error: any) => error.sourceId === source.id).every((error: any) => error.message === "source must be safe public CTI"))
+      .map((source) => source.id));
     for (const source of report.accepted as SourceRecord[]) {
-      if (rejectedSourceIds.has(source.id) || !shouldImportSource(source)) {
+      if ((rejectedSourceIds.has(source.id) && !verifiedJsonApiExceptions.has(source.id)) || !shouldImportSource(source)) {
         skippedSourceCount++;
         continue;
       }
@@ -105,6 +111,7 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
     }
 
     for (const error of report.errors ?? []) {
+      if (verifiedJsonApiExceptions.has(error.sourceId) && error.message === "source must be safe public CTI") continue;
       errors.push({ path, message: `${error.sourceId ?? "unknown"}: ${error.message}` });
     }
   }
@@ -128,31 +135,82 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
 }
 
 function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord, generatedAt: string): SourceRecord | undefined {
-  const approvedPreview = verified.type === "telegram_public"
-    && verified.status === "active"
-    && verified.accessMethod === "public_http"
-    && verified.governance?.approvalState === "approved"
-    && verified.metadata?.collectionMode === "public_web_preview"
-    && verified.metadata?.productionCollection === true;
-  const existingApproved = existing.status === "active"
-    && existing.governance?.approvalState === "approved"
-    && existing.metadata?.collectionMode === "public_web_preview"
-    && existing.metadata?.productionCollection === true;
-  if (!approvedPreview || existingApproved) return undefined;
-  return {
+  if (!isVerifiedProductionSource(verified) || !isSafeUpgradeTarget(existing)) return undefined;
+  const metadata = {
+    ...(existing.metadata ?? {}),
+    ...(verified.metadata ?? {}),
+    verifiedSourceId: verified.id,
+    sourceImportedAt: existing.metadata?.verifiedSourceId === verified.id
+      ? existing.metadata?.sourceImportedAt ?? verified.metadata?.sourceImportedAt
+      : verified.metadata?.sourceImportedAt
+  };
+  const reconciled = {
     ...existing,
     ...verified,
     id: existing.id,
-    tenantId: existing.tenantId ?? verified.tenantId,
+    tenantId: existing.tenantId,
     createdAt: existing.createdAt ?? verified.createdAt,
     updatedAt: generatedAt,
-    metadata: {
-      ...(existing.metadata ?? {}),
-      ...(verified.metadata ?? {}),
-      verifiedSourceId: verified.id
-    },
+    metadata,
+    health: existing.health,
     crawlState: existing.crawlState
   };
+  return isDeepStrictEqual(managedSourceConfiguration(existing), managedSourceConfiguration(reconciled)) ? undefined : reconciled;
+}
+
+function isVerifiedProductionSource(source: SourceRecord) {
+  return source.status === "active"
+    && source.risk === "low"
+    && source.accessMethod === "public_http"
+    && source.governance?.approvalState === "approved"
+    && source.metadata?.productionCollection === true
+    && Boolean(source.legalNotes?.trim())
+    && !unsafeAutomaticUpgrade(source);
+}
+
+function isSafeUpgradeTarget(source: SourceRecord) {
+  return ["active", "canary", "candidate"].includes(source.status)
+    && source.risk === "low"
+    && source.accessMethod === "public_http"
+    && (!source.governance?.approvalState || source.governance.approvalState === "approved")
+    && source.metadata?.productionCollection !== false
+    && !unsafeAutomaticUpgrade(source);
+}
+
+function unsafeAutomaticUpgrade(source: SourceRecord) {
+  const metadata = source.metadata ?? {};
+  if ([
+    "generatedPublicSourcePack", "generatedSourcePack", "paddedSourcePack", "paddedSource",
+    "requiresAuthentication", "authenticationRequired", "authRequired", "credentialRequired",
+    "private", "privateChannel", "inviteOnly", "captchaRequired", "disabledByDefault"
+  ].some((key) => metadata[key] === true)) return true;
+  if (Object.entries(metadata).some(([key, value]) => value === true && /generated.*(?:pack|padding)|padded|padding/i.test(key))) return true;
+  if ([metadata.collectionMode, metadata.accessMode, metadata.sourceVisibility].some((value) => typeof value === "string" && /(?:^|_)(?:private|invite|auth|captcha|credential)(?:_|$)/i.test(value))) return true;
+  try {
+    const url = new URL(source.url);
+    return !["http:", "https:"].includes(url.protocol)
+      || Boolean(url.username || url.password)
+      || isPrivateHostname(url.hostname)
+      || /\/(?:joinchat|invite|private|login|sign-?in|auth|captcha)(?:[/?#]|$)|t\.me\/\+/i.test(url.href);
+  } catch {
+    return true;
+  }
+}
+
+function isPrivateHostname(hostname: string) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!host || host === "localhost" || /\.(?:local|internal|onion|i2p)$/.test(host) || host === "::1" || /^(?:fc|fd|fe8|fe9|fea|feb)/i.test(host)) return true;
+  const octets = host.split(".").map(Number);
+  return octets.length === 4 && octets.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255)
+    && (octets[0] === 0 || octets[0] === 10 || octets[0] === 127 || octets[0] >= 224
+      || octets[0] === 169 && octets[1] === 254 || octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31
+      || octets[0] === 192 && octets[1] === 168 || octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127
+      || octets[0] === 198 && [18, 19].includes(octets[1]));
+}
+
+function managedSourceConfiguration(source: SourceRecord) {
+  const { id: _id, tenantId: _tenantId, createdAt: _createdAt, updatedAt: _updatedAt, lastSeenAt: _lastSeenAt, health: _health, crawlState: _crawlState, ...configuration } = source;
+  return configuration;
 }
 
 function configuredSeedPaths() {

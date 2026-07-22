@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { describe, expect, FocusedFrontier, handleApiRequest, InMemoryScraperStore, join, mkdtempSync, rmSync, test } from "./apiTestHarness.ts";
+import { describe, expect, FocusedFrontier, handleApiRequest, InMemoryScraperStore, join, mkdtempSync, rmSync, runCanaryCollectionCycle, test } from "./apiTestHarness.ts";
 import { tmpdir } from "node:os";
 import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { dirname } from "node:path";
@@ -106,7 +106,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
-  test("upgrades a matching tenant Telegram candidate after independent source approval", () => {
+  test("upgrades a matching low-risk tenant Telegram candidate after independent source approval", () => {
     const store = new InMemoryScraperStore();
     const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-verified-"));
     const seedPath = join(dir, "verified.json");
@@ -118,7 +118,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       url: "https://t.me/example_verified",
       accessMethod: "public_http",
       status: "canary",
-      risk: "medium",
+      risk: "low",
       trustScore: 0.6,
       crawlFrequencySeconds: 1800,
       legalNotes: "Pending source review.",
@@ -157,6 +157,161 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         governance: { approvalState: "approved" },
         metadata: { collectionMode: "public_web_preview", productionCollection: true, verifiedSourceId: "src_verified_reference" }
       });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("reconciles authoritative actor catalogs under stable source IDs and schedules them after restart", async () => {
+    const catalogSeedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/verified_long_lived_sources.json");
+    const verifiedBundle = JSON.parse(readFileSync(catalogSeedPath, "utf8"));
+    const verifiedSources = ["src_mitre_attack_enterprise_stix", "src_ransomwarelive_current_operations_catalog"]
+      .map((id) => verifiedBundle.sources.find((source: any) => source.id === id));
+    expect(verifiedSources.every(Boolean)).toBe(true);
+
+    const tenantId = "tenant_gate1";
+    const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-catalogs-"));
+    const seedPath = join(dir, "verified-catalogs.json");
+    const sources = verifiedSources.map((source: any) => ({ ...source, tenantId }));
+    writeFileSync(seedPath, JSON.stringify({ version: 1, name: "verified actor catalogs", sources }));
+
+    const store = new InMemoryScraperStore();
+    const history = [
+      {
+        id: "src_legacy_mitre_catalog",
+        createdAt: "2026-06-01T00:00:00.000Z",
+        lastSeenAt: "2026-07-19T12:00:00.000Z",
+        health: { status: "degraded", checkedAt: "2026-07-20T12:00:00.000Z", lastSuccessAt: "2026-07-19T12:00:00.000Z", consecutiveFailures: 2 },
+        crawlState: { retryCount: 2, lastCollectedAt: "2026-07-19T12:00:00.000Z", lastError: "legacy parser missing", nextEligibleAt: "2026-07-21T00:00:00.000Z" }
+      },
+      {
+        id: "src_legacy_ransomwarelive_catalog",
+        createdAt: "2026-06-02T00:00:00.000Z",
+        lastSeenAt: "2026-07-20T06:00:00.000Z",
+        health: { status: "healthy", checkedAt: "2026-07-20T06:00:00.000Z", lastSuccessAt: "2026-07-20T06:00:00.000Z", consecutiveFailures: 0 },
+        crawlState: { retryCount: 0, lastCollectedAt: "2026-07-20T06:00:00.000Z", nextEligibleAt: "2026-07-21T00:00:00.000Z" }
+      }
+    ];
+    sources.forEach((verified: any, index: number) => store.saveSource({
+      ...verified,
+      id: history[index].id,
+      name: `Stale ${verified.name}`,
+      status: "candidate",
+      risk: "low",
+      trustScore: 0.4,
+      crawlFrequencySeconds: 3600,
+      governance: undefined,
+      metadata: { legacyCatalogCandidate: true },
+      createdAt: history[index].createdAt,
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      lastSeenAt: history[index].lastSeenAt,
+      health: history[index].health,
+      crawlState: history[index].crawlState
+    } as any));
+
+    try {
+      const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-21T12:00:00.000Z", sourceTarget: 0 });
+      expect(first).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 2, skippedSourceCount: 0, activeSourceCount: 2, totalSourceCount: 2 });
+      expect(store.getSource(history[0].id)).toMatchObject({
+        id: history[0].id,
+        tenantId,
+        createdAt: history[0].createdAt,
+        lastSeenAt: history[0].lastSeenAt,
+        crawlFrequencySeconds: 86400,
+        status: "active",
+        governance: { approvalState: "approved" },
+        metadata: { extractionProfile: "mitre_actor_catalog", productionCollection: true, verifiedSourceId: sources[0].id },
+        health: history[0].health,
+        crawlState: history[0].crawlState
+      });
+      expect(store.getSource(history[1].id)).toMatchObject({
+        id: history[1].id,
+        tenantId,
+        createdAt: history[1].createdAt,
+        lastSeenAt: history[1].lastSeenAt,
+        crawlFrequencySeconds: 43200,
+        status: "active",
+        governance: { approvalState: "approved" },
+        metadata: { extractionProfile: "ransomware_operation_catalog", productionCollection: true, verifiedSourceId: sources[1].id },
+        health: history[1].health,
+        crawlState: history[1].crawlState
+      });
+      expect(store.listSources().some((source) => verifiedSources.some((verified: any) => verified.id === source.id))).toBe(false);
+
+      const afterFirstBootstrap = structuredClone(store.listSources());
+      const second = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-22T12:00:00.000Z", sourceTarget: 0 });
+      expect(second).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 2, totalSourceCount: 2 });
+      expect(store.listSources()).toEqual(afterFirstBootstrap);
+
+      const cycle = await runCanaryCollectionCycle({
+        store,
+        frontier: new FocusedFrontier(),
+        tenantId,
+        sourceIds: history.map((source) => source.id),
+        maxSources: 2,
+        maxTasks: 2,
+        now: () => "2026-07-22T12:00:00.000Z",
+        fetch: async () => { throw new Error("scheduler eligibility probe"); }
+      } as any);
+      expect(cycle).toMatchObject({ activeSourceCount: 2, queuedTaskCount: 2, leasedTaskCount: 2, failedTaskCount: 2 });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("leaves every unsafe or pending duplicate untouched", () => {
+    const catalogSeedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/verified_long_lived_sources.json");
+    const verified = JSON.parse(readFileSync(catalogSeedPath, "utf8")).sources
+      .find((source: any) => source.id === "src_mitre_attack_enterprise_stix");
+    expect(verified).toBeTruthy();
+    const unsafeVariants = [
+      { risk: "medium" },
+      { risk: "high" },
+      { risk: "restricted" },
+      { accessMethod: "api_key" },
+      { governance: { approvalState: "pending" } },
+      { metadata: { productionCollection: false } },
+      { metadata: { private: true } },
+      { metadata: { inviteOnly: true } },
+      { metadata: { authRequired: true } },
+      { metadata: { captchaRequired: true } },
+      { metadata: { generatedPublicSourcePack: true } },
+      { metadata: { paddedSourcePack: true } },
+      { url: "http://127.0.0.1/private-catalog.json" }
+    ];
+    const tenantId = "tenant_unsafe";
+    const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-unsafe-"));
+    const seedPath = join(dir, "verified-catalogs.json");
+    const seeds = unsafeVariants.map((_, index) => ({
+      ...verified,
+      id: `src_verified_catalog_${index}`,
+      tenantId,
+      url: (unsafeVariants[index] as any).url ?? `https://catalog.example.test/actor-${index}.json`
+    }));
+    writeFileSync(seedPath, JSON.stringify({ version: 1, name: "verified actor catalogs", sources: seeds }));
+    const store = new InMemoryScraperStore();
+    seeds.forEach((seed: any, index: number) => {
+      const variant: any = unsafeVariants[index];
+      store.saveSource({
+        ...seed,
+        id: `src_unsafe_existing_${index}`,
+        name: `Unsafe existing ${index}`,
+        status: "candidate",
+        risk: "low",
+        governance: undefined,
+        metadata: { unsafeMarker: index, ...(variant.metadata ?? {}) },
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-01T00:00:00.000Z",
+        ...variant,
+        ...(variant.metadata ? { metadata: { unsafeMarker: index, ...variant.metadata } } : {})
+      } as any);
+    });
+    const before = structuredClone(store.listSources());
+
+    try {
+      const result = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-21T12:00:00.000Z", sourceTarget: 0 });
+      expect(result).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: unsafeVariants.length, totalSourceCount: unsafeVariants.length });
+      expect(store.listSources()).toEqual(before);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
