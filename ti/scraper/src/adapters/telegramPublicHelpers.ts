@@ -14,7 +14,7 @@ export const minimizeTelegramPii = (value: string) => value
   .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
   .replace(/\b\d{8,10}:[A-Z0-9_-]{30,}\b/gi, "[credential]")
   .replace(/\b(?:api[_ -]?key|access[_ -]?token|password|passwd|session[_ -]?string)\s*[:=]\s*["']?[A-Z0-9_./+=-]{8,}["']?/gi, "[credential]")
-  .replace(/\+?\d[\d\s().-]{7,}\d/g, "[phone]");
+  .replace(/(?<![A-Za-z0-9.-])(?!\d{4}-\d{2}-\d{2}\b)(?!\d{1,3}(?:\.\d{1,3}){3}\b)\+?\d[\d\s().-]{7,}\d/g, "[phone]");
 export const buildTelegramCrawlState = (config: any, input: any = {}) => ({ channel: config.channel, cursor: input.nextCursor ?? input.messages?.at?.(-1)?.id, lastSeenMessageDate: input.messages?.at?.(-1)?.date });
 
 export function parseTelegramTarget(value: string) {
