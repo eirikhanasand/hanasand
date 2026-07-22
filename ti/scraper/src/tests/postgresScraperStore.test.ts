@@ -805,6 +805,14 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       WHERE incident_id IN (${savedVerified.incident!.id}, ${savedUnknown.incident!.id})
     `;
     await admin`
+      UPDATE threat_intel.timeliness_records
+      SET record = record || jsonb_build_object(
+        'captureId', 'capture_historical_publication_copy',
+        'timestampAnomalies', '[]'::jsonb
+      )
+      WHERE incident_id = ${savedVerified.incident!.id}
+    `;
+    await admin`
       UPDATE threat_intel.timeliness_records AS timeliness
       SET published_at = ${"2026-07-21T11:29:27.000Z"},
           processed_at = capture.processed_at,
@@ -822,7 +830,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       WHERE incident.id = ${savedVerified.incident!.id}
         AND capture.id = incident.capture_id
     `;
-    await admin`DELETE FROM threat_intel.schema_migrations WHERE version IN ('023_reconcile_delivery_and_event_times', '024_finish_timestamp_backfill', '025_reconcile_timeliness_capture')`;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version IN ('023_reconcile_delivery_and_event_times', '024_finish_timestamp_backfill', '025_reconcile_timeliness_capture', '026_align_timeliness_capture_record')`;
 
     const restarted = await PostgresScraperStore.create({ databaseUrl });
     restarted.savePipelineResult({
@@ -936,6 +944,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '023_reconcile_delivery_and_event_times'`).toHaveLength(1);
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '024_finish_timestamp_backfill'`).toHaveLength(1);
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '025_reconcile_timeliness_capture'`).toHaveLength(1);
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '026_align_timeliness_capture_record'`).toHaveLength(1);
   });
 
   test("imports the legacy JSON snapshot once and then uses PostgreSQL", async () => {

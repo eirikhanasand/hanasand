@@ -43,7 +43,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "022_reconcile_source_fleet", path: fileURLToPath(new URL("../../migrations/022_reconcile_source_fleet.sql", import.meta.url)) },
   { version: "023_reconcile_delivery_and_event_times", path: fileURLToPath(new URL("../../migrations/023_reconcile_delivery_and_event_times.sql", import.meta.url)) },
   { version: "024_finish_timestamp_backfill", path: fileURLToPath(new URL("../../migrations/024_finish_timestamp_backfill.sql", import.meta.url)) },
-  { version: "025_reconcile_timeliness_capture", path: fileURLToPath(new URL("../../migrations/025_reconcile_timeliness_capture.sql", import.meta.url)) }
+  { version: "025_reconcile_timeliness_capture", path: fileURLToPath(new URL("../../migrations/025_reconcile_timeliness_capture.sql", import.meta.url)) },
+  { version: "026_align_timeliness_capture_record", path: fileURLToPath(new URL("../../migrations/026_align_timeliness_capture_record.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
