@@ -30,6 +30,12 @@ async function ensureSystemSender() {
         .update(mailConfig.encryptionKey)
         .update(`system-sender:${address}`)
         .digest('base64url')
+
+    // Provisioning needs mail-admin access; sending from an existing account does not.
+    if (!mailConfig.adminPassword) {
+        return { username, address, password }
+    }
+
     const principal = await findPrincipalByName(username, 'individual')
 
     if (!principal) {
