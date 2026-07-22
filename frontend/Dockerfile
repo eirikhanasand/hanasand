@@ -16,6 +16,7 @@ ENV NODE_ENV=production
 # those guardrails run in production builds too.
 COPY frontend ./
 COPY api /workspace/api
+COPY docker-compose.yml /workspace/docker-compose.yml
 RUN bun run test
 RUN bun run lint
 RUN bun run build
