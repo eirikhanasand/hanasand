@@ -16,7 +16,7 @@ export async function requestService<T>(service: ServiceName, path: string, init
     const id = cookieStore.get('id')?.value || ''
 
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
+    const timeout = init?.signal ? undefined : setTimeout(() => controller.abort(), 5000)
 
     try {
         const response = await fetch(`${getBaseUrl(service)}/${path}`, {
@@ -29,10 +29,10 @@ export async function requestService<T>(service: ServiceName, path: string, init
                 ...(init?.headers || {}),
             },
             cache: 'no-store',
-            signal: controller.signal,
+            signal: init?.signal || controller.signal,
         })
 
-        clearTimeout(timeout)
+        if (timeout) clearTimeout(timeout)
 
         if (!response.ok) {
             let message = `${response.status} ${response.statusText}`
@@ -47,7 +47,7 @@ export async function requestService<T>(service: ServiceName, path: string, init
 
         return await response.json() as T
     } catch (error) {
-        clearTimeout(timeout)
+        if (timeout) clearTimeout(timeout)
         return error instanceof Error ? `Error: ${error.message}` : 'Error: Unknown error'
     }
 }
