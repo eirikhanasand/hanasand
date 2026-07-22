@@ -144,7 +144,6 @@ export function contractIndex() {
         methods: ["POST"],
         schemas: {
           handoff: "dwm.alert_case_handoff.v1",
-          creationFixture: "dwm.alert_to_case_creation_fixture.v1",
           case: "analyst.case_detail.v1"
         },
         scopeFields: ["tenantId", "organizationId", "alertId", "caseId", "watchlistIds", "watchlistItemIds"],
