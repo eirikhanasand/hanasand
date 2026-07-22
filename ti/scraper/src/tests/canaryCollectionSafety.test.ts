@@ -86,14 +86,15 @@ describe("public collection boundary", () => {
       id: "src_seed_ransomwarelive_groups", type: "api", url: "https://data.ransomware.live/groups.json",
       catalog: { canonicalId: "community:ransomwarelive:groups" }, metadata: { extractionProfile: "ransomware_group_metadata", canaryPortfolio: true }
     });
-    const payload = JSON.stringify([{ name: "Quiet Example", _victim_count: 3, locations: [{ type: "Chat", fqdn: `${"a".repeat(56)}.onion` }] }]);
+    const payload = JSON.stringify(Array.from({ length: 25 }, (_, index) => ({ name: `Quiet Example ${index}`, _victim_count: index + 1, locations: [{ type: "Chat", fqdn: `${"a".repeat(56)}.onion` }] })));
     const items = await fetchItems(groups, { id: "task_groups", targetUrl: groups.url }, async () => new Response(payload, { headers: { "content-type": "application/json" } }), "native_live_http", "2026-07-20T00:00:00.000Z", 512_000, 12_000, 1);
+    expect(items).toHaveLength(24);
     expect(items[0]).toMatchObject({ metadata: { fetchProvenance: { maxBytes: 2_000_000 }, extractionProfile: "ransomware_group_metadata" } });
 
     const store = new InMemoryScraperStore();
     store.saveSource(groups);
     const cycle = await runCanaryCollectionCycle({ store, frontier: new FocusedFrontier(), maxSources: 1, maxTasks: 1, maxItemsPerTask: 1, now: () => "2026-07-20T00:00:00.000Z", fetch: async () => new Response(payload, { headers: { "content-type": "application/json" } }) });
-    expect(cycle).toMatchObject({ insertedCaptureCount: 1, incidentCount: 0, skippedLowValueCount: 0 });
+    expect(cycle).toMatchObject({ insertedCaptureCount: 24, incidentCount: 0, skippedLowValueCount: 0 });
     expect(store.listExtractedEntities()).toContainEqual(expect.objectContaining({ type: "channel_type", value: "Chat" }));
     expect(store.listExtractedEntities().some((entity: any) => ["communication_channel", "buyer_seller_communication", "monetization_path", "profitability_signal"].includes(entity.type))).toBe(false);
     expect(cycle.health.promotionYield).toBe(0);

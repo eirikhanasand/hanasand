@@ -139,7 +139,7 @@ export function storageStats(captures: any[]) {
 }
 
 export function maxItemsFor(source: any) {
-  if (source.id === "src_canary_ransomwarelive") return Number(Bun.env.TI_RANSOMWARELIVE_MAX_ITEMS ?? "24");
+  if (source.id === "src_canary_ransomwarelive" || source.id === "src_seed_ransomwarelive_groups" || source.catalog?.canonicalId === "community:ransomwarelive:groups") return Number(Bun.env.TI_RANSOMWARELIVE_MAX_ITEMS ?? "24");
   return source.metadata?.maxItemsPerFetch;
 }
 

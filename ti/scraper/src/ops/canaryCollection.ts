@@ -150,8 +150,7 @@ function sourceHealthObservation(source: any, task: any, runId: string, checkedA
 }
 function failureCategory(message?: string) { return !message ? undefined : /timeout|abort/i.test(message) ? "timeout" : /policy|blocked|robots/i.test(message) ? "policy_blocked" : /unsupported media/i.test(message) ? "unsupported_media" : /HTTP 429|rate.?limit/i.test(message) ? "rate_limited" : /HTTP 5\d\d/i.test(message) ? "upstream_failure" : /HTTP 4\d\d/i.test(message) ? "source_rejected" : /parse|xml|json|html/i.test(message) ? "parser_failure" : /fetch|network|dns|connect/i.test(message) ? "network_failure" : "collection_failure"; }
 function itemLimit(source: any, options: any) {
-  if (source.id === "src_canary_ransomwarelive") return maxItemsFor(source) ?? options.maxItemsPerTask ?? 40;
-  return Math.max(1, Math.min(Number(options.maxItemsPerTask ?? 40), Number(source.metadata?.maxItemsPerProcess ?? Infinity)));
+  return maxItemsFor(source) ?? Math.max(1, Math.min(Number(options.maxItemsPerTask ?? 40), Number(source.metadata?.maxItemsPerProcess ?? Infinity)));
 }
 function isProductionCollectionSource(source: any, generatedAt: string) {
   if (!["active", "canary"].includes(source.status)) return false;
