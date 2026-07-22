@@ -49,7 +49,6 @@ export interface EvidenceCutoverReportDto {
   apiExamples: Record<string, unknown>;
   safeOutput: typeof EVIDENCE_SAFE_OUTPUT;
 }
-export type EvidenceSearchReadModelCutoverDto = Record<string, unknown>;
 export type EvidenceLedgerEnforcementDto = Record<string, unknown>;
 export type EvidencePersistenceCertificationDto = Record<string, unknown>;
 export type EvidenceTrustLedgerDto = Record<string, unknown>;
