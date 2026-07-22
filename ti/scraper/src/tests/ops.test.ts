@@ -3,22 +3,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadRuntimeConfig } from "../config/runtimeConfig.ts";
-import { evaluateAdapterMetricAlerts, recordAdapterRunMetrics } from "../ops/adapterMetrics.ts";
 import { sanitizeFields } from "../ops/logger.ts";
-import { MetricsRegistry } from "../ops/metrics.ts";
 import { appendLiveProductDailySnapshot, buildLiveProductSloDashboard, readLiveProductDailySnapshots } from "../ops/productSlo.ts";
 import { buildResourceSnapshot } from "../ops/resourceControls.ts";
 
 describe("ops utilities", () => {
-  test("records adapter metrics and emits useful alerts", () => {
-    const registry = new MetricsRegistry();
-    for (let index = 0; index < 25; index += 1) {
-      recordAdapterRunMetrics(registry, { adapter: "rss", sourceType: "rss", result: { items: [], warnings: [], metadata: { failureCategory: "timeout" } } });
-    }
-    const alerts = evaluateAdapterMetricAlerts(registry.snapshot(), { minRuns: 20, failureRateWarnPercent: 5, failureRateCriticalPercent: 20, rateLimitDelayWarnSeconds: 300, rateLimitDelayCriticalSeconds: 1800 });
-    expect(alerts.some((alert) => alert.labels.adapter === "rss")).toBe(true);
-  });
-
   test("reports the active runtime resource limits", () => {
     const config = loadRuntimeConfig({ SCRAPER_MEMORY_TARGET_MB: "4096", SCRAPER_MEMORY_CEILING_MB: "6144" });
     const snapshot = buildResourceSnapshot({

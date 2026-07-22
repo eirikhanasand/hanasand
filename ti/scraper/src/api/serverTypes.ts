@@ -8,7 +8,6 @@ export interface ApiServerOptions {
   store: ScraperStore;
   frontier: FocusedFrontier;
   config?: RuntimeConfig;
-  supervisor?: { snapshot(): unknown[] };
   objectStore?: unknown;
   canaryLoop?: unknown;
   runExecutor?: (runId: string) => void;

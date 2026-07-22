@@ -4,7 +4,6 @@ import {
   apiRestrictedMetadataApplyPlanSources,
   body,
   buildCanaryOperatorSummary,
-  createLogger,
   describe,
   expect,
   FileBackedScraperStore,
@@ -17,7 +16,6 @@ import {
   InMemoryScraperStore,
   join,
   loadRuntimeConfig,
-  MetricsRegistry,
   mkdtempSync,
   processCollectedItem,
   restrictedMetadataApplyPlanSources,
@@ -30,7 +28,6 @@ import {
   telegramCapture,
   test,
   tmpdir,
-  WorkerSupervisor,
 } from "../apiTestHarness.ts";
 import type {
   AnalystClaimLedgerEntry,

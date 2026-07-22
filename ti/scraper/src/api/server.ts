@@ -310,7 +310,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/ops/canary/console" && request.method === "GET") return canaryConsole(url, options);
     if (url.pathname === "/v1/ops/resource-snapshot") {
       const resources = buildResourceSnapshot({ config: options.config, queueItems: options.frontier.size() });
-      return json({ service: "ti-scraper", generatedAt: nowIso(), memory: resources.memory, queue: { queued: options.frontier.size() }, resources, workerPools: resources.concurrency, workers: options.supervisor?.snapshot() ?? [] });
+      return json({ service: "ti-scraper", generatedAt: nowIso(), memory: resources.memory, queue: { queued: options.frontier.size() }, resources, workerPools: resources.concurrency });
     }
     if (url.pathname === "/v1/frontier") {
       const queue = options.frontier.snapshot?.() ?? [];
