@@ -102,7 +102,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Evidence-backed intelligence claims */
+        /** Structured intelligence claims */
         get: operations["listClaims"];
         put?: never;
         post?: never;

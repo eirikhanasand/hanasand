@@ -30,7 +30,7 @@ const resourceDefinitions = {
     '/actors': ['Actor', 'Actor intelligence profiles'],
     '/aliases': ['ActorAlias', 'Actor aliases linked to canonical profiles'],
     '/incidents': ['Incident', 'Structured incidents inferred from public evidence'],
-    '/claims': ['Claim', 'Evidence-backed intelligence claims'],
+    '/claims': ['Claim', 'Structured intelligence claims'],
     '/evidence': ['EvidenceLink', 'Capture-to-intelligence evidence links'],
     '/sources': ['Source', 'Governed public-intelligence sources'],
     '/validations': ['Validation', 'Public-reference validation records'],

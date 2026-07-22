@@ -445,7 +445,7 @@
     "/claims": {
       "get": {
         "operationId": "listClaims",
-        "summary": "Evidence-backed intelligence claims",
+        "summary": "Structured intelligence claims",
         "security": [
           {
             "ApiKey": []
