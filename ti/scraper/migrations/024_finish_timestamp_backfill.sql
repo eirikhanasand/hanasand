@@ -21,20 +21,20 @@ CREATE UNIQUE INDEX threat_intel_captures_source_url_published_uq
   ON threat_intel.captures (
     source_id,
     canonical_url,
-    COALESCE(published_at, collected_at)
+    published_at
   );
 CREATE UNIQUE INDEX threat_intel_captures_source_text_published_uq
   ON threat_intel.captures (
     source_id,
     normalized_text_hash,
-    COALESCE(published_at, collected_at)
+    published_at
   )
   WHERE normalized_text_hash IS NOT NULL;
 CREATE UNIQUE INDEX threat_intel_captures_source_content_published_uq
   ON threat_intel.captures (
     source_id,
     content_hash,
-    COALESCE(published_at, collected_at)
+    published_at
   );
 
 UPDATE threat_intel.captures AS capture
