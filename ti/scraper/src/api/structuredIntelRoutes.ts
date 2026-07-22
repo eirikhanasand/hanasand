@@ -9,6 +9,7 @@ import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
 import { authenticateRequest } from "./requestAuthentication.ts";
 import { handleEvaluationBenchmarkRequest } from "./evaluationBenchmarkRoutes.ts";
+import { handleTimelinessRequest } from "./timelinessRoutes.ts";
 import { reconcileActorIdentityCoverage } from "../pipeline/mitreActorCatalog.ts";
 import { handleAutomaticReviewRequest } from "./automaticReviewRoutes.ts";
 
@@ -38,6 +39,8 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
   const automaticReviewResponse = await handleAutomaticReviewRequest(request, options);
   if (automaticReviewResponse) return automaticReviewResponse;
   const url = new URL(request.url);
+  const timelinessResponse = await handleTimelinessRequest(request, options);
+  if (timelinessResponse) return timelinessResponse;
   const evaluationBenchmarkResponse = await handleEvaluationBenchmarkRequest(request, options);
   if (evaluationBenchmarkResponse) return evaluationBenchmarkResponse;
   if (url.pathname === "/v1/intel/source-operations" && request.method === "GET") {

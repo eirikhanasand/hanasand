@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { handleTimelinessRequest } from "../api/timelinessRoutes.ts";
+import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { hashContent } from "../utils.ts";
@@ -16,7 +16,7 @@ function runtime() {
     authApiBase: "http://auth.test/api",
     authFetch: async () => Response.json({ id: "analyst_1", roles: [{ id: "analyst" }] }),
   } as any;
-  const call = (path: string, init: RequestInit = {}) => handleTimelinessRequest(new Request(`http://local${path}`, {
+  const call = (path: string, init: RequestInit = {}) => handleApiRequest(new Request(`http://local${path}`, {
     ...init,
     headers: { authorization: "Bearer test", id: "analyst_1", "x-tenant-id": "tenant_timeliness", ...(init.body ? { "content-type": "application/json" } : {}), ...init.headers },
   }), options);
