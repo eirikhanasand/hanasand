@@ -36,7 +36,6 @@ const referencePanel = readFileSync(path.join(frontendRoot, 'src/components/shar
 const terminalPanel = readFileSync(path.join(frontendRoot, 'src/components/share/terminal.tsx'), 'utf8')
 const homeExposureQueueClient = readFileSync(path.join(frontendRoot, 'src/app/homeExposureQueueClient.tsx'), 'utf8')
 const eirikPage = readFileSync(path.join(frontendRoot, 'src/app/eirik/page.tsx'), 'utf8')
-const dwmAlertInbox = readFileSync(path.join(frontendRoot, 'src/app/dashboard/dwm/dwm-alert-inbox.tsx'), 'utf8')
 const dwmWorkflowActions = readFileSync(path.join(frontendRoot, 'src/app/dashboard/dwm/dwm-workflow-actions.tsx'), 'utf8')
 const recentScans = readFileSync(path.join(frontendRoot, 'src/components/test/recentScans.tsx'), 'utf8')
 const pricingPage = readFileSync(path.join(frontendRoot, 'src/app/pricing/page.tsx'), 'utf8')
@@ -600,26 +599,6 @@ for (const required of [
 const bannedEirikPageColor = /#[0-9a-fA-F]{3,8}|\b(?:bg|text|border|ring|outline)-\[#|\b(?:bg|text|border|ring|outline)-(?:white|black|red|orange|amber|yellow|green|emerald|blue|slate|zinc|neutral|gray)\b|\b(?:bg|text|border|ring|outline)-(?:white|black|red|orange|amber|yellow|green|emerald|blue|slate|zinc|neutral|gray)\//g
 if (bannedEirikPageColor.test(eirikPage)) {
     violations.push('personal Eirik page should not use one-off public page color utilities after palette migration')
-}
-
-for (const required of [
-    'bg-ui-panel',
-    'bg-ui-raised',
-    'border-ui-border',
-    'text-ui-text',
-    'text-ui-muted',
-    'text-ui-primary',
-    'text-ui-warning',
-    'text-ui-danger',
-]) {
-    if (!dwmAlertInbox.includes(required)) {
-        violations.push(`DWM alert inbox should use shared palette class ${required}`)
-    }
-}
-
-const bannedDwmAlertInboxColor = /#[0-9a-fA-F]{3,8}|\b(?:bg|text|border|ring|outline)-\[#|\b(?:bg|text|border|ring|outline)-(?:white|black|red|orange|amber|yellow|green|emerald|blue|slate|zinc|neutral|gray)\b|\b(?:bg|text|border|ring|outline)-(?:white|black|red|orange|amber|yellow|green|emerald|blue|slate|zinc|neutral|gray)\//g
-if (bannedDwmAlertInboxColor.test(dwmAlertInbox)) {
-    violations.push('DWM alert inbox should not use one-off dark dashboard color utilities after palette migration')
 }
 
 for (const required of [

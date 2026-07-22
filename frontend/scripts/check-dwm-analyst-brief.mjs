@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { formatClaimSummary } from '../src/utils/dwm/display.ts'
 
 const source = readFileSync(new URL('../src/app/dashboard/dwm/dwm-analyst-portal.tsx', import.meta.url), 'utf8')
 const pageSource = readFileSync(new URL('../src/app/dashboard/dwm/page.tsx', import.meta.url), 'utf8')
 const workflowSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-workflow-actions.tsx', import.meta.url), 'utf8')
-const inboxSource = readFileSync(new URL('../src/app/dashboard/dwm/dwm-alert-inbox.tsx', import.meta.url), 'utf8')
 const caseDetailSource = readFileSync(new URL('../src/app/dashboard/dwm/cases/[id]/case-detail-client.tsx', import.meta.url), 'utf8')
 const workbenchAdapterSource = readFileSync(new URL('../src/app/dashboard/ti/workbench/dwmAlertAdapter.ts', import.meta.url), 'utf8')
 const displaySource = readFileSync(new URL('../src/utils/dwm/display.ts', import.meta.url), 'utf8')
@@ -55,15 +55,10 @@ for (const blockedCopy of [
     assert.ok(!source.includes(blockedCopy), `DWM analyst portal should not render implementation-shaped copy: ${blockedCopy}`)
 }
 
-for (const [label, targetSource] of [
-    ['DWM inbox', inboxSource],
-    ['TI workbench adapter', workbenchAdapterSource],
-]) {
-    if (targetSource.includes('{alert.claimSummary}')) {
-        throw new Error(`${label} renders raw alert.claimSummary`)
-    }
-    assert.ok(targetSource.includes('safeAlertSummary(alert)'), `${label} should render sanitized alert summaries.`)
+if (workbenchAdapterSource.includes('{alert.claimSummary}')) {
+    throw new Error('TI workbench adapter renders raw alert.claimSummary')
 }
+assert.ok(workbenchAdapterSource.includes('safeAlertSummary(alert)'), 'TI workbench adapter should render sanitized alert summaries.')
 
 for (const token of [
     'export function safeAlertSummary',
@@ -75,6 +70,12 @@ for (const token of [
 ]) {
     assert.ok(displaySource.includes(token), `DWM display helper missing token: ${token}`)
 }
+
+const safeSummary = formatClaimSummary('{\\"actorName\\":\\"Ransomware.live Victim Feed\\",\\"victimName\\":\\"Acme Corp\\",\\"category\\":\\"victim_claim\\"}', {
+    actor: 'Known Actor', artifactType: 'victim_claim', company: 'Acme', matchedTerm: { value: 'acme.com', kind: 'domain' }, sourceFamily: 'darkweb_metadata',
+})
+assert.equal(safeSummary, 'Ransomware.live Victim Feed matched Acme Corp as victim claim.')
+assert.doesNotMatch(safeSummary, /[{}]|actorName|victimName/)
 
 const briefIndex = source.indexOf('<AnalystBriefPanel brief={analystBrief} />')
 const actionIndex = source.indexOf('<SelectedActionBar')
