@@ -1327,7 +1327,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
     assignee?: string
     onOpenCase: (alert: PortalAlert, assignedOwner?: string, note?: string) => Promise<void>
 }) {
-    const latestDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
+    const latestDelivery = orderDeliveries(deliveries)[0]
     const actualCaseId = alert.caseId
     const caseCandidate = alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
     const casePath = workflowContext.casePath || (actualCaseId ? caseDetailHref(actualCaseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined)
@@ -1832,7 +1832,7 @@ function DeliveryCaseActivityRail({ alert, deliveries, timeline, workflowContext
     timeline: Array<{ id: string, at: string, title: string, detail: string }>
     workflowContext: ReturnType<typeof selectedWorkflowContext>
 }) {
-    const latestDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
+    const latestDelivery = orderDeliveries(deliveries)[0]
     const caseId = workflowContext.caseId || alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate
     const failedDelivery = deliveries.find(delivery => delivery.status === 'failed')
     return (
@@ -1898,7 +1898,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     onSend: (alertId: string) => Promise<void>
 }) {
     const persistedOwner = assignee === 'Unassigned' ? undefined : assignee
-    const latestDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
+    const latestDelivery = orderDeliveries(deliveries)[0]
     const hasDeliveryRoute = Boolean(alert.webhookContext?.hasWebhookRoute || alert.webhookContext?.webhookDestinationIds?.length || alert.webhookDelivery.dedupeKey)
     const transitionReady = actionReady(alert, 'transition')
     const replayReady = actionReady(alert, 'replay')
@@ -2332,7 +2332,7 @@ function DeliveryPanel({ alert, deliveries, busyAction, onTest, onSend }: { aler
 }
 
 function orderDeliveries(rows: DeliveryItem[]) {
-    return [...rows].sort((first, second) => String(second.attemptedAt).localeCompare(String(first.attemptedAt)))
+    return [...rows].sort((first, second) => String(second.attemptedAt || '').localeCompare(String(first.attemptedAt || '')))
 }
 
 function DeliveryFact({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'good' | 'warn' | 'bad' }) {
@@ -2668,7 +2668,7 @@ function selectedWorkflowContext(alert: PortalAlert, deliveries: DeliveryItem[])
     const webhookDestinationIds = webhookContext?.webhookDestinationIds || workflowContext?.webhookDestinationIds || []
     const casePath = alertCasePath(alert)
     const caseId = alert.caseId || alert.caseIdCandidate || workflowContext?.caseId || workflowContext?.caseIdCandidate || webhookContext?.caseId || webhookContext?.caseIdCandidate || caseIdFromPath(casePath)
-    const lastDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
+    const lastDelivery = orderDeliveries(deliveries)[0]
     return {
         organizationId,
         watchlistIds,
@@ -2763,13 +2763,12 @@ async function readPayload(response: Response): Promise<{ error?: { message?: st
 function mergeDeliveries(incoming: DeliveryItem[], current: DeliveryItem[]) {
     const rows = [...incoming, ...current]
     const seen = new Set<string>()
-    return rows
+    return orderDeliveries(rows
         .filter(row => {
             if (!row?.id || seen.has(row.id)) return false
             seen.add(row.id)
             return true
-        })
-        .sort((first, second) => String(second.attemptedAt).localeCompare(String(first.attemptedAt)))
+        }))
 }
 
 function deliveryActionMessage(rows: DeliveryItem[], attemptedCount: number | undefined, fallback: string) {

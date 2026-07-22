@@ -117,6 +117,8 @@ assert.ok(!pageSource.includes('mergeDwmAlerts'), 'DWM case queue should not mer
 assert.ok(source.includes('const alertCaptureCount = uniqueStrings(alerts.flatMap(alertCaptureIds)).length'), 'DWM workflow counters should use alert capture IDs when operations are unavailable.')
 assert.ok(source.includes('alertWatchlistMatchCount(alerts)'), 'DWM workflow counters should derive visible matches from alerts when operations are unavailable.')
 assert.ok(source.includes('function alertCasePath(alert: PortalAlert)'), 'DWM selected case links should use alert case paths.')
+assert.ok(source.includes('String(second.attemptedAt || \'\').localeCompare(String(first.attemptedAt || \'\'))'), 'DWM delivery ordering should tolerate persisted attempts without timestamps.')
+assert.ok(!source.includes('.attemptedAt.localeCompare('), 'DWM delivery views should not call localeCompare on nullable persisted timestamps.')
 
 for (const token of [
     'data-dwm-workflow-runbook',
