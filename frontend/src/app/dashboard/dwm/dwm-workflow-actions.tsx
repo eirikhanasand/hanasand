@@ -859,10 +859,3 @@ function readNumber(value: unknown, key: string) {
     const candidate = (value as Record<string, unknown>)[key]
     return typeof candidate === 'number' ? candidate : 0
 }
-
-function readSummaryNumber(value: Record<string, unknown>, key: string) {
-    const summary = value.summary
-    if (!summary || typeof summary !== 'object') return 0
-    const candidate = (summary as Record<string, unknown>)[key]
-    return typeof candidate === 'number' ? candidate : 0
-}
