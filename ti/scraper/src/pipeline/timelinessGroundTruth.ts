@@ -20,6 +20,7 @@ export type TimelinessContext = {
   incidents?: JsonObject[];
   captures?: JsonObject[];
   entities?: JsonObject[];
+  validationRecords?: JsonObject[];
   generatedAt?: string;
 };
 
@@ -27,6 +28,14 @@ export type TimelinessMetric = {
   sampleSize: number;
   medianSeconds: number | null;
   p95Seconds: number | null;
+  p99Seconds: number | null;
+};
+
+export type TimelinessQualityGroup = {
+  name: string;
+  recordCount: number;
+  missing: Record<string, number>;
+  issues: Record<string, number>;
 };
 
 export type TimelinessRecordView = {
@@ -50,7 +59,7 @@ export type TimelinessRecordView = {
 };
 
 export type TimelinessWorkbenchDto = {
-  schemaVersion: "ti.timeliness_workbench.v1";
+  schemaVersion: "ti.timeliness_workbench.v2";
   generatedAt: string;
   summary: {
     recordCount: number;
@@ -59,8 +68,11 @@ export type TimelinessWorkbenchDto = {
     awaitingAlertCount: number;
     awaitingDeliveryCount: number;
     completeCount: number;
+    observedCoverage: number;
+    reviewedCoverage: number;
     reportToAlertCoverage: number;
     reportToDeliveredCoverage: number;
+    excludedMetricRecordCount: number;
   };
   metrics: {
     overall: Record<string, TimelinessMetric>;
@@ -68,26 +80,35 @@ export type TimelinessWorkbenchDto = {
     byActor: Array<{ name: string; recordCount: number; metrics: Record<string, TimelinessMetric> }>;
     byStage: Array<{ name: string } & TimelinessMetric>;
   };
+  quality: {
+    fields: Array<{ name: string; presentCount: number; missingCount: number; coverage: number }>;
+    issues: Array<{ name: string; count: number }>;
+    bySourceClass: TimelinessQualityGroup[];
+  };
   items: TimelinessRecordView[];
 };
 
 const STAGES = [
+  ["observedAt", "observed"],
   ["firstReportedAt", "first_report"],
   ["publishedAt", "publication"],
   ["collectedAt", "collection"],
   ["processedAt", "processing"],
   ["firstVisibleAt", "first_visible"],
+  ["reviewedAt", "reviewed"],
   ["alertCreatedAt", "alert_created"],
   ["deliveryAttemptedAt", "delivery_attempt"],
   ["deliveredAt", "delivered"],
 ] as const;
 
 const INTERVALS = [
+  ["observationToCollectionSeconds", "observedAt", "collectedAt"],
   ["reportToPublicationSeconds", "firstReportedAt", "publishedAt"],
   ["firstReportToCollectionSeconds", "firstReportedAt", "collectedAt"],
   ["publicationToCollectionSeconds", "publishedAt", "collectedAt"],
   ["collectionToProcessingSeconds", "collectedAt", "processedAt"],
   ["processingToVisibilitySeconds", "processedAt", "firstVisibleAt"],
+  ["visibilityToReviewSeconds", "firstVisibleAt", "reviewedAt"],
   ["visibilityToAlertSeconds", "firstVisibleAt", "alertCreatedAt"],
   ["alertToDeliveryAttemptSeconds", "alertCreatedAt", "deliveryAttemptedAt"],
   ["deliveryAttemptToDeliveredSeconds", "deliveryAttemptedAt", "deliveredAt"],
@@ -103,7 +124,7 @@ export function mergePublicReportReference(
   const incidentId = requiredString(inputRecord, "incidentId");
   const captureId = requiredString(inputRecord, "captureId");
   const sourceId = requiredString(inputRecord, "sourceId");
-  const timestamp = requiredIso(input.timestamp, "reference timestamp");
+  const timestamp = requiredZonedIso(input.timestamp, "reference timestamp");
   const recordedAt = requiredIso(input.recordedAt, "recorded timestamp");
   const reference = {
     id: stableId("timeliness-reference", `${incidentId}:${input.role}:${timestamp}:${input.referenceUrl}:${input.evidencePath}`),
@@ -139,24 +160,28 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
   const incidents = index(context.incidents, "id");
   const captures = index(context.captures, "id");
   const entities = context.entities ?? [];
+  const validations = validationIndex(context.validationRecords ?? []);
   const items = records.map((record) => {
-    const derived = deriveTimeliness(record, generatedAt);
-    const incidentId = requiredString(derived, "incidentId");
-    const captureId = requiredString(derived, "captureId");
-    const sourceId = requiredString(derived, "sourceId");
+    const incidentId = requiredString(record, "incidentId");
+    const captureId = requiredString(record, "captureId");
+    const sourceId = requiredString(record, "sourceId");
     const incident = incidents.get(incidentId);
     const capture = captures.get(captureId);
     const source = sources.get(sourceId);
+    const contextStages = contextualStages(record, capture, incident, uniqueObjects([...(validations.get(incidentId) ?? []), ...(validations.get(captureId) ?? [])]));
+    const preliminary = deriveTimeliness({ ...record, ...contextStages.values }, generatedAt);
+    const provenance = stageProvenance(preliminary, sourceStageProvenance(preliminary, capture, incident, contextStages.provenance));
+    const derived = deriveTimeliness(preliminary, generatedAt, provenance, sourceQualityIssues(preliminary, capture, provenance));
     return toView(derived, {
       actorName: actorName(incident, entities, incidentId, captureId),
       sourceName: string(source?.name),
       sourceFamily: string(object(source?.metadata)?.sourceFamily) ?? string(source?.type),
       title: string(incident?.title) ?? string(capture?.title),
-    });
+    }, provenance);
   }).sort((left, right) => priority(left.status) - priority(right.status) || Date.parse(right.updatedAt ?? "") - Date.parse(left.updatedAt ?? ""));
   const overall = metrics(items);
   return {
-    schemaVersion: "ti.timeliness_workbench.v1",
+    schemaVersion: "ti.timeliness_workbench.v2",
     generatedAt,
     summary: {
       recordCount: items.length,
@@ -165,8 +190,11 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
       awaitingAlertCount: count(items, "awaiting_alert"),
       awaitingDeliveryCount: count(items, "awaiting_delivery"),
       completeCount: count(items, "complete"),
+      observedCoverage: stageCoverage(items, "observed"),
+      reviewedCoverage: stageCoverage(items, "reviewed"),
       reportToAlertCoverage: coverage(items, "reportToAlertSeconds"),
       reportToDeliveredCoverage: coverage(items, "reportToDeliveredSeconds"),
+      excludedMetricRecordCount: items.filter((item) => item.timestampAnomalies.length).length,
     },
     metrics: {
       overall,
@@ -174,11 +202,17 @@ export function buildTimelinessWorkbench(records: JsonObject[], context: Timelin
       byActor: groupedMetrics(items, (item) => item.actorName ?? "unattributed"),
       byStage: Object.entries(overall).map(([name, metric]) => ({ name, ...metric })),
     },
+    quality: quality(items),
     items,
   };
 }
 
-function deriveTimeliness(input: JsonObject, generatedAt: string): JsonObject {
+function deriveTimeliness(
+  input: JsonObject,
+  generatedAt: string,
+  provenance = stageProvenance(input),
+  additionalAnomalies: string[] = [],
+): JsonObject {
   const reportTimestamps = sortReferences(reportReferences(input));
   const first = reportTimestamps[0];
   const actor = reportTimestamps.find((item) => item.role === "actor");
@@ -197,11 +231,16 @@ function deriveTimeliness(input: JsonObject, generatedAt: string): JsonObject {
     alertCreatedAt: string(input.alertCreatedAt) ?? string(input.alertedAt),
   };
   const latencies = latencyFields(record);
-  const zeroSecondEvidence = zeroEvidence(record, latencies);
-  return { ...record, latencies, zeroSecondEvidence, timestampAnomalies: anomalies(record, latencies, zeroSecondEvidence, generatedAt) };
+  const currentProvenance = stageProvenance(record, provenance);
+  const zeroSecondEvidence = zeroEvidence(record, latencies, currentProvenance);
+  return { ...record, latencies, zeroSecondEvidence, timestampAnomalies: anomalies(record, latencies, zeroSecondEvidence, generatedAt, additionalAnomalies) };
 }
 
-function toView(record: JsonObject, labels: { actorName?: string; sourceName?: string; sourceFamily?: string; title?: string }): TimelinessRecordView {
+function toView(
+  record: JsonObject,
+  labels: { actorName?: string; sourceName?: string; sourceFamily?: string; title?: string },
+  provenance = stageProvenance(record),
+): TimelinessRecordView {
   const stages = Object.fromEntries(STAGES.map(([field, name]) => [name, string(record[field])])) as Record<string, string | undefined>;
   const timestampAnomalies = stringArray(record.timestampAnomalies);
   const missingStages = Object.entries(stages).filter(([, value]) => !value).map(([name]) => name);
@@ -215,7 +254,7 @@ function toView(record: JsonObject, labels: { actorName?: string; sourceName?: s
     status: statusFor(stages, timestampAnomalies),
     missingStages,
     stages,
-    provenance: stageProvenance(record),
+    provenance: stageProvenance(record, provenance),
     reportReferences: reportReferences(record),
     latencies: numberRecord(record.latencies),
     timestampAnomalies,
@@ -231,28 +270,108 @@ function statusFor(stages: Record<string, string | undefined>, anomalies: string
   return "complete";
 }
 
-function stageProvenance(record: JsonObject): Record<string, JsonObject | undefined> {
+function stageProvenance(record: JsonObject, overrides: Record<string, JsonObject | undefined> = {}): Record<string, JsonObject | undefined> {
   const captureId = string(record.captureId);
   const incidentId = string(record.incidentId);
   const sourceId = string(record.sourceId);
   return {
+    observed: string(record.observedAt) ? { event: "observed", timestamp: record.observedAt, evidencePath: "timeliness_record.observedAt" } : undefined,
     first_report: object(record.firstReportedProvenance),
-    publication: string(record.publishedAt) ? { event: "publication", sourceId, captureId, timestamp: record.publishedAt, evidencePath: "capture.publishedAt" } : undefined,
-    collection: string(record.collectedAt) ? { event: "collection", sourceId, captureId, timestamp: record.collectedAt, evidencePath: "capture.collectedAt" } : undefined,
-    processing: string(record.processedAt) ? { event: "processing", captureId, timestamp: record.processedAt, evidencePath: "capture.processedAt" } : undefined,
-    first_visible: string(record.firstVisibleAt) ? { event: "first_visible", incidentId, timestamp: record.firstVisibleAt, evidencePath: "incident.firstVisibleAt" } : undefined,
+    publication: string(record.publishedAt) ? { event: "publication", sourceId, captureId, timestamp: record.publishedAt, evidencePath: "timeliness_record.publishedAt" } : undefined,
+    collection: string(record.collectedAt) ? { event: "collection", sourceId, captureId, timestamp: record.collectedAt, evidencePath: "timeliness_record.collectedAt" } : undefined,
+    processing: string(record.processedAt) ? { event: "processing", captureId, timestamp: record.processedAt, evidencePath: "timeliness_record.processedAt" } : undefined,
+    first_visible: string(record.firstVisibleAt) ? { event: "first_visible", incidentId, timestamp: record.firstVisibleAt, evidencePath: "timeliness_record.firstVisibleAt" } : undefined,
+    reviewed: string(record.reviewedAt) ? { event: "reviewed", timestamp: record.reviewedAt, evidencePath: "timeliness_record.reviewedAt" } : undefined,
     alert_created: object(record.alertCreatedProvenance),
     delivery_attempt: object(record.deliveryAttemptProvenance),
     delivered: object(record.deliveredProvenance),
+    ...overrides,
   };
+}
+
+function contextualStages(record: JsonObject, capture: JsonObject | undefined, incident: JsonObject | undefined, validations: JsonObject[]) {
+  const observed = firstTimestamp([
+    [record.observedAt, "timeliness_record.observedAt", record],
+    [capture?.observedAt, "capture.observedAt", capture],
+    [object(capture?.metadata)?.observedAt, "capture.metadata.observedAt", capture],
+    [incident?.observedAt, "incident.observedAt", incident],
+    [object(incident?.metadata)?.observedAt, "incident.metadata.observedAt", incident],
+  ]);
+  const explicitReview = firstTimestamp([
+    [record.reviewedAt, "timeliness_record.reviewedAt", record],
+    [capture?.reviewedAt, "capture.reviewedAt", capture],
+    [incident?.reviewedAt, "incident.reviewedAt", incident],
+  ]);
+  const validation = [...validations]
+    .filter((item) => validIso(item.matchedAt) && string(item.reviewerId))
+    .sort((left, right) => Date.parse(requiredIso(left.matchedAt, "validation match timestamp")) - Date.parse(requiredIso(right.matchedAt, "validation match timestamp")))[0];
+  const review = explicitReview ?? (validation ? {
+    timestamp: requiredIso(validation.matchedAt, "validation match timestamp"),
+    provenance: {
+      event: "reviewed",
+      validationId: string(validation.id),
+      reviewerId: string(validation.reviewerId),
+      validationStatus: string(validation.status),
+      referenceUrl: string(validation.referenceUrl),
+      timestamp: requiredIso(validation.matchedAt, "validation match timestamp"),
+      evidencePath: "validation.matchedAt",
+    },
+  } : undefined);
+  return {
+    values: { observedAt: observed?.timestamp, reviewedAt: review?.timestamp },
+    provenance: { observed: observed?.provenance, reviewed: review?.provenance },
+  };
+}
+
+function firstTimestamp(candidates: Array<[unknown, string, JsonObject | undefined]>) {
+  for (const [value, evidencePath, source] of candidates) {
+    const timestamp = validIso(value);
+    if (timestamp) return { timestamp, provenance: { event: evidencePath.split(".").at(-1)?.replace("At", "").toLowerCase(), timestamp, evidencePath, id: string(source?.id) } };
+  }
+  return undefined;
+}
+
+function sourceStageProvenance(
+  record: JsonObject,
+  capture: JsonObject | undefined,
+  incident: JsonObject | undefined,
+  contextual: Record<string, JsonObject | undefined>,
+): Record<string, JsonObject | undefined> {
+  const candidates: Array<[string, string, JsonObject | undefined, string]> = [
+    ["publication", "publishedAt", capture, "capture.publishedAt"],
+    ["publication", "publishedAt", incident, "incident.publishedAt"],
+    ["collection", "collectedAt", capture, "capture.collectedAt"],
+    ["collection", "collectedAt", incident, "incident.collectedAt"],
+    ["processing", "processedAt", capture, "capture.processedAt"],
+    ["processing", "processedAt", incident, "incident.processedAt"],
+    ["first_visible", "firstVisibleAt", incident, "incident.firstVisibleAt"],
+    ["first_visible", "firstVisibleAt", capture, "capture.firstVisibleAt"],
+  ];
+  const result = { ...contextual };
+  for (const [stage, field, source, evidencePath] of candidates) {
+    if (result[stage] || !sameTime(record[field], source?.[field])) continue;
+    result[stage] = { event: stage, timestamp: validIso(record[field]), evidencePath, id: string(source?.id), sourceId: string(record.sourceId), captureId: string(record.captureId), incidentId: string(record.incidentId) };
+  }
+  return result;
+}
+
+function sourceQualityIssues(record: JsonObject, capture: JsonObject | undefined, provenance: Record<string, JsonObject | undefined>): string[] {
+  const result = new Set<string>();
+  if (validIso(record.processedAt) && validIso(capture?.processedAt) && !sameTime(record.processedAt, capture?.processedAt)) result.add("source_mismatch:processing");
+  const publisher = reportReferences(record).find((reference) => reference.role === "publisher");
+  if (sameTime(record.publishedAt, record.collectedAt) && !sameTime(record.publishedAt, publisher?.timestamp)) result.add("suspected_copy:publication_collection");
+  for (const reference of objectArray(record.reportTimestamps)) {
+    if (validIso(reference.timestamp) && !zonedIso(reference.timestamp)) result.add("timezone_missing:first_report_reference");
+  }
+  for (const [field, stage] of STAGES) if (string(record[field]) && !provenance[stage]) result.add(`provenance_missing:${stage}`);
+  return [...result];
 }
 
 function latencyFields(record: JsonObject): Record<string, number | undefined> {
   return Object.fromEntries(INTERVALS.map(([name, from, to]) => [name, elapsed(string(record[from]), string(record[to]))]));
 }
 
-function zeroEvidence(record: JsonObject, latencies: Record<string, number | undefined>): JsonObject {
-  const provenance = stageProvenance(record);
+function zeroEvidence(record: JsonObject, latencies: Record<string, number | undefined>, provenance: Record<string, JsonObject | undefined>): JsonObject {
   const byField = new Map(STAGES.map(([field, stage]) => [field, stage]));
   return Object.fromEntries(INTERVALS.flatMap(([name, from, to]) => latencies[name] === 0 ? [[name, {
     verified: Boolean(provenance[byField.get(from)!] && provenance[byField.get(to)!]),
@@ -263,8 +382,8 @@ function zeroEvidence(record: JsonObject, latencies: Record<string, number | und
   }]] : []));
 }
 
-function anomalies(record: JsonObject, latencies: Record<string, number | undefined>, zeroSecondEvidence: JsonObject, generatedAt: string): string[] {
-  const result = new Set<string>();
+function anomalies(record: JsonObject, latencies: Record<string, number | undefined>, zeroSecondEvidence: JsonObject, generatedAt: string, additional: string[] = []): string[] {
+  const result = new Set<string>(additional);
   for (const [name] of INTERVALS) if (latencies[name] !== undefined && latencies[name]! < 0) result.add(`negative:${name}`);
   if (string(record.firstReportedAt) && !object(record.firstReportedProvenance)) result.add("first_report_provenance_missing");
   for (const [name, evidence] of Object.entries(zeroSecondEvidence)) if (object(evidence)?.verified !== true) result.add(`unverified_zero:${name}`);
@@ -293,13 +412,34 @@ function distribution(values: number[]): TimelinessMetric {
     sampleSize: sorted.length,
     medianSeconds: percentile(sorted, 0.5),
     p95Seconds: percentile(sorted, 0.95),
+    p99Seconds: percentile(sorted, 0.99),
+  };
+}
+
+function stageCoverage(items: TimelinessRecordView[], stage: string): number {
+  return items.length ? items.filter((item) => item.stages[stage] && item.provenance[stage]).length / items.length : 0;
+}
+
+function quality(items: TimelinessRecordView[]): TimelinessWorkbenchDto["quality"] {
+  const fields = STAGES.map(([, name]) => {
+    const presentCount = items.filter((item) => item.stages[name]).length;
+    return { name, presentCount, missingCount: items.length - presentCount, coverage: items.length ? presentCount / items.length : 0 };
+  });
+  const issueCounts = (records: TimelinessRecordView[]) => countStrings(records.flatMap((item) => item.timestampAnomalies));
+  return {
+    fields,
+    issues: namedCounts(issueCounts(items)),
+    bySourceClass: groups(items, (item) => item.sourceFamily ?? "unclassified").map(([name, records]) => ({
+      name,
+      recordCount: records.length,
+      missing: Object.fromEntries(STAGES.map(([, stage]) => [stage, records.filter((item) => !item.stages[stage]).length])),
+      issues: Object.fromEntries(issueCounts(records)),
+    })),
   };
 }
 
 function groupedMetrics(items: TimelinessRecordView[], key: (item: TimelinessRecordView) => string) {
-  const groups = new Map<string, TimelinessRecordView[]>();
-  for (const item of items) groups.set(key(item), [...(groups.get(key(item)) ?? []), item]);
-  return [...groups].map(([name, records]) => ({ name, recordCount: records.length, metrics: metrics(records) })).sort((a, b) => b.recordCount - a.recordCount || a.name.localeCompare(b.name));
+  return groups(items, key).map(([name, records]) => ({ name, recordCount: records.length, metrics: metrics(records) }));
 }
 
 function actorName(incident: JsonObject | undefined, entities: JsonObject[], incidentId: string, captureId: string): string | undefined {
@@ -311,7 +451,7 @@ function actorName(incident: JsonObject | undefined, entities: JsonObject[], inc
 function reportReferences(record: JsonObject): JsonObject[] {
   return objectArray(record.reportTimestamps).flatMap((reference) => {
     const role = string(reference.role);
-    const timestamp = validIso(reference.timestamp);
+    const timestamp = zonedIso(reference.timestamp);
     const extractionMethod = string(reference.extractionMethod);
     const hasStoredLineage = string(reference.sourceId) && string(reference.captureId) && string(reference.evidencePath);
     const hasAcceptedOrigin = extractionMethod === "source_field" || extractionMethod === "public_reference" && string(reference.referenceUrl);
@@ -331,6 +471,11 @@ function count(items: TimelinessRecordView[], status: TimelinessQueueStatus): nu
 function coverage(items: TimelinessRecordView[], field: string): number { return items.length ? items.filter((item) => validMetric(item, field)).length / items.length : 0; }
 function elapsed(from?: string, to?: string): number | undefined { const start = Date.parse(from ?? ""), end = Date.parse(to ?? ""); return Number.isFinite(start) && Number.isFinite(end) ? Math.round((end - start) / 1000) : undefined; }
 function percentile(values: number[], value: number): number | null { return values.length ? values[Math.min(values.length - 1, Math.ceil(values.length * value) - 1)] : null; }
+function groups(items: TimelinessRecordView[], key: (item: TimelinessRecordView) => string): Array<[string, TimelinessRecordView[]]> { const result = new Map<string, TimelinessRecordView[]>(); for (const item of items) result.set(key(item), [...(result.get(key(item)) ?? []), item]); return [...result].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0])); }
+function validationIndex(values: JsonObject[]): Map<string, JsonObject[]> { const result = new Map<string, JsonObject[]>(); for (const value of values) for (const key of [string(value.incidentId), string(value.captureId)]) if (key) result.set(key, [...(result.get(key) ?? []), value]); return result; }
+function uniqueObjects(values: JsonObject[]): JsonObject[] { return [...new Map(values.map((value) => [string(value.id) ?? JSON.stringify(value), value])).values()]; }
+function countStrings(values: string[]): Map<string, number> { const result = new Map<string, number>(); for (const value of values) result.set(value, (result.get(value) ?? 0) + 1); return result; }
+function namedCounts(values: Map<string, number>): Array<{ name: string; count: number }> { return [...values].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)); }
 function index(values: JsonObject[] | undefined, key: string): Map<string, JsonObject> { return new Map((values ?? []).flatMap((value) => string(value[key]) ? [[string(value[key])!, value] as const] : [])); }
 function object(value: unknown): JsonObject | undefined { return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : undefined; }
 function objectArray(value: unknown): JsonObject[] { return Array.isArray(value) ? value.flatMap((item) => object(item) ? [object(item)!] : []) : []; }
@@ -339,5 +484,8 @@ function stringArray(value: unknown): string[] { return Array.isArray(value) ? v
 function numberRecord(value: unknown): Record<string, number | undefined> { const record = object(value); return Object.fromEntries(Object.entries(record ?? {}).map(([key, item]) => [key, typeof item === "number" && Number.isFinite(item) ? item : undefined])); }
 function requiredString(record: JsonObject, key: string): string { const value = string(record[key]); if (!value) throw new Error(`Timeliness record is missing ${key}`); return value; }
 function validIso(value: unknown): string | undefined { const time = Date.parse(String(value ?? "")); return Number.isFinite(time) ? new Date(time).toISOString() : undefined; }
+function zonedIso(value: unknown): string | undefined { const raw = string(value); return raw && /(?:Z|[+-]\d{2}:\d{2})$/i.test(raw) ? validIso(raw) : undefined; }
 function requiredIso(value: unknown, label: string): string { const result = validIso(value); if (!result) throw new Error(`Invalid ${label}`); return result; }
+function requiredZonedIso(value: unknown, label: string): string { const result = zonedIso(value); if (!result) throw new Error(`Invalid ${label}; include an explicit timezone`); return result; }
+function sameTime(left: unknown, right: unknown): boolean { const a = validIso(left), b = validIso(right); return Boolean(a && b && a === b); }
 function cleanText(value: unknown, max: number): string | undefined { const result = string(value)?.replace(/\s+/g, " "); return result?.slice(0, max); }

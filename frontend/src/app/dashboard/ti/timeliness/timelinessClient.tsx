@@ -6,10 +6,11 @@ import { AlertTriangle, CheckCircle2, Clock3, ExternalLink, LoaderCircle, Refres
 import { DashboardPanel } from '@/components/dashboard/ui'
 
 type QueueStatus = 'unresolved_reference' | 'anomaly' | 'awaiting_alert' | 'awaiting_delivery' | 'complete'
-type Metric = { sampleSize: number, medianSeconds: number | null, p95Seconds: number | null }
+type Metric = { sampleSize: number, medianSeconds: number | null, p95Seconds: number | null, p99Seconds: number | null }
 type Item = {
     id: string
     incidentId: string
+    captureId: string
     sourceId: string
     actorName?: string
     sourceName?: string
@@ -25,6 +26,7 @@ type Item = {
     updatedAt?: string
 }
 type GroupMetric = { name: string, recordCount: number, metrics: Record<string, Metric> }
+type QualityGroup = { name: string, recordCount: number, missing: Record<string, number>, issues: Record<string, number> }
 type ReferenceForm = { role: string, timestamp: string, referenceUrl: string, referenceTitle: string, evidencePath: string }
 type Snapshot = {
     generatedAt: string
@@ -35,10 +37,18 @@ type Snapshot = {
         awaitingAlertCount: number
         awaitingDeliveryCount: number
         completeCount: number
+        observedCoverage: number
+        reviewedCoverage: number
         reportToAlertCoverage: number
         reportToDeliveredCoverage: number
+        excludedMetricRecordCount: number
     }
     metrics: { overall: Record<string, Metric>, bySourceFamily: GroupMetric[], byActor: GroupMetric[], byStage: Array<{ name: string } & Metric> }
+    quality: {
+        fields: Array<{ name: string, presentCount: number, missingCount: number, coverage: number }>
+        issues: Array<{ name: string, count: number }>
+        bySourceClass: QualityGroup[]
+    }
     items: Item[]
     page: { total: number, nextCursor: string | null }
 }
@@ -51,12 +61,13 @@ const statuses: Array<{ value: '' | QueueStatus, label: string }> = [
     { value: 'awaiting_delivery', label: 'Awaiting delivery' },
     { value: 'complete', label: 'Complete' },
 ]
-const stageOrder = ['first_report', 'publication', 'collection', 'processing', 'first_visible', 'alert_created', 'delivery_attempt', 'delivered']
+const stageOrder = ['observed', 'first_report', 'publication', 'collection', 'processing', 'first_visible', 'reviewed', 'alert_created', 'delivery_attempt', 'delivered']
 
 export default function TimelinessClient() {
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
     const [selectedId, setSelectedId] = useState('')
-    const [scope, setScope] = useState<'default' | 'global'>('global')
+    const [scope, setScope] = useState<'tenant' | 'global'>('global')
+    const [tenantId, setTenantId] = useState('')
     const [status, setStatus] = useState<'' | QueueStatus>('')
     const [search, setSearch] = useState('')
     const [query, setQuery] = useState('')
@@ -68,8 +79,14 @@ export default function TimelinessClient() {
     const load = useCallback(async () => {
         setLoading(true)
         setError('')
+        if (scope === 'tenant' && !tenantId.trim()) {
+            setSnapshot(null)
+            setLoading(false)
+            return
+        }
         try {
             const params = new URLSearchParams({ scope, limit: '200' })
+            if (scope === 'tenant') params.set('tenantId', tenantId.trim())
             if (status) params.set('status', status)
             if (query) params.set('q', query)
             const next = await api<Snapshot>(`/api/ti/timeliness?${params}`)
@@ -80,7 +97,7 @@ export default function TimelinessClient() {
         } finally {
             setLoading(false)
         }
-    }, [query, scope, status])
+    }, [query, scope, status, tenantId])
 
     useEffect(() => { void load() }, [load])
     const selected = snapshot?.items.find(item => item.id === selectedId)
@@ -93,7 +110,9 @@ export default function TimelinessClient() {
         setSaving(true)
         setError('')
         try {
-            const response = await api<{ item: Item }>('/api/ti/timeliness?scope=' + scope, {
+            const params = new URLSearchParams({ scope })
+            if (scope === 'tenant') params.set('tenantId', tenantId.trim())
+            const response = await api<{ item: Item }>('/api/ti/timeliness?' + params, {
                 method: 'POST',
                 body: JSON.stringify({ recordId: selected.id, ...form, referenceTitle: form.referenceTitle || undefined }),
             })
@@ -112,11 +131,14 @@ export default function TimelinessClient() {
             <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
                 <div className='flex flex-wrap items-end gap-2 border-b border-ui-border bg-ui-raised p-3'>
                     <label className='grid gap-1 text-[10px] font-semibold uppercase text-ui-muted'>Scope
-                        <select value={scope} onChange={event => setScope(event.target.value as 'default' | 'global')} className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs font-medium normal-case text-ui-text'>
+                        <select value={scope} onChange={event => setScope(event.target.value as 'tenant' | 'global')} className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs font-medium normal-case text-ui-text'>
                             <option value='global'>Global records</option>
-                            <option value='default'>Default tenant</option>
+                            <option value='tenant'>Specific tenant</option>
                         </select>
                     </label>
+                    {scope === 'tenant' ? <label className='grid min-w-64 flex-1 gap-1 text-[10px] font-semibold uppercase text-ui-muted'>Tenant ID
+                        <input value={tenantId} onChange={event => setTenantId(event.target.value)} placeholder='Organization or tenant UUID' className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs font-medium normal-case text-ui-text placeholder:text-ui-muted' />
+                    </label> : null}
                     <label className='grid gap-1 text-[10px] font-semibold uppercase text-ui-muted'>Queue
                         <select value={status} onChange={event => setStatus(event.target.value as '' | QueueStatus)} className='h-9 rounded-md border border-ui-border bg-ui-panel px-2 text-xs font-medium normal-case text-ui-text'>
                             {statuses.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -126,7 +148,7 @@ export default function TimelinessClient() {
                         <label className='sr-only' htmlFor='timeliness-search'>Search incidents</label>
                         <div className='relative min-w-0 flex-1'>
                             <Search className='pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-ui-muted' />
-                            <input id='timeliness-search' value={search} onChange={event => setSearch(event.target.value)} placeholder='Actor, source, incident, anomaly' className='h-9 w-full rounded-md border border-ui-border bg-ui-panel pl-8 pr-2 text-xs text-ui-text placeholder:text-ui-muted' />
+                            <input id='timeliness-search' value={search} onChange={event => setSearch(event.target.value)} placeholder='Actor, source, incident, capture, anomaly' className='h-9 w-full rounded-md border border-ui-border bg-ui-panel pl-8 pr-2 text-xs text-ui-text placeholder:text-ui-muted' />
                         </div>
                         <button type='submit' className='h-9 rounded-md border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text hover:bg-ui-muted/10'>Search</button>
                     </form>
@@ -135,15 +157,18 @@ export default function TimelinessClient() {
                     </button>
                 </div>
                 {error ? <div role='alert' className='flex items-start gap-2 border-b border-ui-danger/30 bg-ui-danger/10 px-3 py-2 text-xs text-ui-danger'><AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />{error}</div> : null}
-                <div className='grid grid-cols-2 divide-x divide-y divide-ui-border sm:grid-cols-4 xl:grid-cols-8'>
+                <div className='grid grid-cols-2 divide-x divide-y divide-ui-border sm:grid-cols-4 lg:grid-cols-6'>
                     <Summary label='Retained' value={coverage?.recordCount ?? 0} />
                     <Summary label='Needs report' value={coverage?.unresolvedReferenceCount ?? 0} attention />
                     <Summary label='Anomalies' value={coverage?.anomalyCount ?? 0} attention />
                     <Summary label='Awaiting alert' value={coverage?.awaitingAlertCount ?? 0} />
                     <Summary label='Awaiting delivery' value={coverage?.awaitingDeliveryCount ?? 0} />
                     <Summary label='Complete' value={coverage?.completeCount ?? 0} />
+                    <Summary label='Observed' value={percent(coverage?.observedCoverage)} />
+                    <Summary label='Reviewed' value={percent(coverage?.reviewedCoverage)} />
                     <Summary label='Report → alert' value={percent(coverage?.reportToAlertCoverage)} />
                     <Summary label='Report → delivered' value={percent(coverage?.reportToDeliveredCoverage)} />
+                    <Summary label='Excluded from metrics' value={coverage?.excludedMetricRecordCount ?? 0} attention />
                 </div>
             </DashboardPanel>
 
@@ -163,6 +188,7 @@ export default function TimelinessClient() {
                     {selected ? <RecordDetail item={selected} form={form} setForm={setForm} saving={saving} onSubmit={addReference} /> : (
                         <DashboardPanel className='grid min-h-72 place-items-center p-6 text-center text-sm text-ui-muted'>Select a retained record to inspect its evidence path.</DashboardPanel>
                     )}
+                    <QualityPanel quality={snapshot?.quality} />
                     <MetricsPanel stages={principalMetrics} sources={snapshot?.metrics.bySourceFamily ?? []} actors={snapshot?.metrics.byActor ?? []} />
                 </div>
             </div>
@@ -217,9 +243,26 @@ function StageRow({ stage, timestamp, provenance }: { stage: string, timestamp?:
     </div>
 }
 
+function QualityPanel({ quality }: { quality?: Snapshot['quality'] }) {
+    const importantFields = quality?.fields.filter(field => ['first_report', 'publication', 'reviewed', 'alert_created', 'delivered'].includes(field.name)) ?? []
+    return <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
+        <div className='border-b border-ui-border bg-ui-raised px-3 py-2'><h2 className='text-xs font-semibold text-ui-text'>Measured data quality</h2><p className='mt-0.5 text-[10px] text-ui-muted'>Bad or unproven timestamps remain visible and are excluded from latency distributions.</p></div>
+        <div className='grid lg:grid-cols-[16rem_minmax(0,1fr)]'>
+            <section className='border-b border-ui-border p-3 lg:border-b-0 lg:border-r'>
+                <h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Coverage and exclusions</h3>
+                <dl className='mt-2 grid grid-cols-2 gap-2'>
+                    {importantFields.map(field => <div key={field.name} className='rounded-md border border-ui-border bg-ui-raised p-2'><dt className='truncate text-[10px] text-ui-muted'>{label(field.name)}</dt><dd className='mt-1 text-xs font-semibold text-ui-text'>{percent(field.coverage)} <span className='font-normal text-ui-muted'>({field.missingCount} missing)</span></dd></div>)}
+                </dl>
+                <div className='mt-2 space-y-1'>{quality?.issues.map(issue => <p key={issue.name} className='flex justify-between gap-2 text-[10px] text-ui-danger'><span className='truncate'>{issue.name}</span><strong>{issue.count}</strong></p>)}{!quality?.issues.length ? <p className='text-[10px] text-ui-muted'>No excluded timestamp anomalies in this scope.</p> : null}</div>
+            </section>
+            <section className='min-w-0 p-3'><h3 className='text-[10px] font-semibold uppercase text-ui-muted'>Real source classes</h3><div className='mt-2 overflow-x-auto'><table className='w-full text-left text-[11px]'><thead className='text-ui-muted'><tr><th className='pb-1 font-medium'>Class</th><th className='pb-1 text-right font-medium'>Records</th><th className='pb-1 text-right font-medium'>No observed</th><th className='pb-1 text-right font-medium'>No report</th><th className='pb-1 text-right font-medium'>No publication</th><th className='pb-1 text-right font-medium'>No collection</th><th className='pb-1 text-right font-medium'>No processing</th><th className='pb-1 text-right font-medium'>No review</th><th className='pb-1 text-right font-medium'>Issues</th></tr></thead><tbody>{quality?.bySourceClass.map(group => <tr key={group.name} className='border-t border-ui-border'><td className='max-w-44 truncate py-1.5 text-ui-text'>{group.name}</td><td className='py-1.5 text-right text-ui-muted'>{group.recordCount}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.observed ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.first_report ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.publication ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.collection ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.processing ?? 0}</td><td className='py-1.5 text-right text-ui-text'>{group.missing.reviewed ?? 0}</td><td className='py-1.5 text-right text-ui-danger'>{Object.values(group.issues).reduce((sum, count) => sum + count, 0)}</td></tr>)}</tbody></table>{!quality?.bySourceClass.length ? <p className='py-4 text-center text-ui-muted'>No retained source classes in this scope.</p> : null}</div></section>
+        </div>
+    </DashboardPanel>
+}
+
 function MetricsPanel({ stages, sources, actors }: { stages: Array<{ name: string } & Metric>, sources: GroupMetric[], actors: GroupMetric[] }) {
     return <DashboardPanel className='overflow-hidden border-ui-border bg-ui-panel p-0'>
-        <div className='border-b border-ui-border bg-ui-raised px-3 py-2'><h2 className='text-xs font-semibold text-ui-text'>Reproducible median / p95</h2></div>
+        <div className='border-b border-ui-border bg-ui-raised px-3 py-2'><h2 className='text-xs font-semibold text-ui-text'>Reproducible median / p95 / p99</h2></div>
         <div className='grid lg:grid-cols-3'>
             <MetricTable title='Stage' rows={stages.map(row => ({ ...row, name: label(row.name) }))} />
             <MetricTable title='Source family · report → delivered' rows={sources.map(row => ({ name: row.name, ...row.metrics.reportToDeliveredSeconds }))} />
@@ -229,7 +272,7 @@ function MetricsPanel({ stages, sources, actors }: { stages: Array<{ name: strin
 }
 
 function MetricTable({ title, rows }: { title: string, rows: Array<{ name: string } & Metric> }) {
-    return <section className='min-w-0 border-b border-ui-border p-3 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0'><h3 className='text-[10px] font-semibold uppercase text-ui-muted'>{title}</h3><div className='mt-2 overflow-x-auto'><table className='w-full text-left text-[11px]'><thead className='text-ui-muted'><tr><th className='pb-1 font-medium'>Group</th><th className='pb-1 text-right font-medium'>n</th><th className='pb-1 text-right font-medium'>median</th><th className='pb-1 text-right font-medium'>p95</th></tr></thead><tbody>{rows.map(row => <tr key={row.name} className='border-t border-ui-border'><td className='max-w-32 truncate py-1.5 text-ui-text'>{row.name}</td><td className='py-1.5 text-right text-ui-muted'>{row.sampleSize}</td><td className='py-1.5 text-right text-ui-text'>{duration(row.medianSeconds ?? undefined)}</td><td className='py-1.5 text-right text-ui-text'>{duration(row.p95Seconds ?? undefined)}</td></tr>)}</tbody></table>{!rows.length ? <p className='py-4 text-center text-ui-muted'>No eligible measurements.</p> : null}</div></section>
+    return <section className='min-w-0 border-b border-ui-border p-3 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0'><h3 className='text-[10px] font-semibold uppercase text-ui-muted'>{title}</h3><div className='mt-2 overflow-x-auto'><table className='w-full text-left text-[11px]'><thead className='text-ui-muted'><tr><th className='pb-1 font-medium'>Group</th><th className='pb-1 text-right font-medium'>n</th><th className='pb-1 text-right font-medium'>median</th><th className='pb-1 text-right font-medium'>p95</th><th className='pb-1 text-right font-medium'>p99</th></tr></thead><tbody>{rows.map(row => <tr key={row.name} className='border-t border-ui-border'><td className='max-w-32 truncate py-1.5 text-ui-text'>{row.name}</td><td className='py-1.5 text-right text-ui-muted'>{row.sampleSize}</td><td className='py-1.5 text-right text-ui-text'>{duration(row.medianSeconds ?? undefined)}</td><td className='py-1.5 text-right text-ui-text'>{duration(row.p95Seconds ?? undefined)}</td><td className='py-1.5 text-right text-ui-text'>{duration(row.p99Seconds ?? undefined)}</td></tr>)}</tbody></table>{!rows.length ? <p className='py-4 text-center text-ui-muted'>No eligible measurements.</p> : null}</div></section>
 }
 
 function Status({ status }: { status: QueueStatus }) {

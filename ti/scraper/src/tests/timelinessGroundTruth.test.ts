@@ -64,7 +64,7 @@ describe("timeliness ground truth", () => {
       timestampAnomalies: [],
     });
     expect(snapshot.summary).toMatchObject({ reportToAlertCoverage: 1, reportToDeliveredCoverage: 1, completeCount: 1 });
-    expect(snapshot.metrics.overall.reportToDeliveredSeconds).toEqual({ sampleSize: 1, medianSeconds: 485, p95Seconds: 485 });
+    expect(snapshot.metrics.overall.reportToDeliveredSeconds).toEqual({ sampleSize: 1, medianSeconds: 485, p95Seconds: 485, p99Seconds: 485 });
     expect(snapshot.metrics.bySourceFamily[0].name).toBe("actor_site");
   });
 
@@ -90,5 +90,42 @@ describe("timeliness ground truth", () => {
     });
     expect(snapshot.metrics.overall.reportToDeliveredSeconds.sampleSize).toBe(0);
     expect(snapshot.summary.reportToDeliveredCoverage).toBe(0);
+  });
+
+  test("uses retained observation and validation evidence while excluding source corruption", () => {
+    const record = retainedRecord({
+      publishedAt: "2026-07-22T10:07:00.000Z",
+      collectedAt: "2026-07-22T10:07:00.000Z",
+      reportTimestamps: [{
+        role: "publisher", timestamp: "2026-07-22T10:05:00.000Z", sourceId: "src_actor_site", captureId: "capture_northwind",
+        evidencePath: "article.time[datetime]", extractionMethod: "source_field",
+      }],
+    });
+    const snapshot = buildTimelinessWorkbench([record], {
+      generatedAt,
+      sources: [{ id: "src_actor_site", name: "Actor disclosure", type: "static_html", metadata: { sourceFamily: "actor_site" } }],
+      captures: [{ id: "capture_northwind", observedAt: "2026-07-22T09:59:00.000Z", publishedAt: "2026-07-22T10:07:00.000Z", collectedAt: "2026-07-22T10:07:00.000Z", processedAt: "2026-07-22T10:07:03.000Z" }],
+      validationRecords: [{ id: "validation_northwind", captureId: "capture_northwind", matchedAt: "2026-07-22T10:07:30.000Z", reviewerId: "analyst_1", status: "supported", referenceUrl: "https://news.example/northwind" }],
+    });
+
+    expect(snapshot.items[0]).toMatchObject({
+      status: "anomaly",
+      stages: { observed: "2026-07-22T09:59:00.000Z", reviewed: "2026-07-22T10:07:30.000Z" },
+      provenance: { observed: { evidencePath: "capture.observedAt" }, reviewed: { validationId: "validation_northwind", reviewerId: "analyst_1", evidencePath: "validation.matchedAt" } },
+      timestampAnomalies: expect.arrayContaining(["source_mismatch:processing", "suspected_copy:publication_collection"]),
+    });
+    expect(snapshot.summary).toMatchObject({ observedCoverage: 1, reviewedCoverage: 1, excludedMetricRecordCount: 1 });
+    expect(snapshot.quality.bySourceClass[0]).toMatchObject({ name: "actor_site", recordCount: 1, missing: { observed: 0, reviewed: 0 }, issues: { "source_mismatch:processing": 1, "suspected_copy:publication_collection": 1 } });
+  });
+
+  test("rejects first-report references without an explicit timezone", () => {
+    expect(() => mergePublicReportReference(retainedRecord(), {
+      role: "actor",
+      timestamp: "2026-07-22T10:00:00",
+      referenceUrl: "https://actor.example/reports/northwind",
+      evidencePath: "article.time[datetime]",
+      recordedBy: "analyst_1",
+      recordedAt: generatedAt,
+    })).toThrow("include an explicit timezone");
   });
 });
