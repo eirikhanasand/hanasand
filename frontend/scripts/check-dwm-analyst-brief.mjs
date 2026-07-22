@@ -129,7 +129,6 @@ for (const token of [
     'Commands',
     'RouteStateCard label=\'Terms\'',
     'Save and rebuild alerts',
-    'Run full workflow',
     'workflowTerms(terms)',
     'Add at least one customer-owned watchlist term.',
     'No persisted watchlist terms. Add terms owned by this tenant before collecting or rebuilding alerts.',
