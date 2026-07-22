@@ -286,6 +286,34 @@ describe("dwm product snapshot", () => {
     expect(JSON.stringify(body)).not.toContain(".onion/acme");
   });
 
+  test("includes global operations evidence without crossing tenant scope", async () => {
+    const store = new InMemoryScraperStore();
+    const globalSource = { ...telegramSource, id: "src_global", tenantId: undefined } as SourceRecord;
+    const tenantASource = { ...darkwebSource, id: "src_tenant_a", tenantId: "tenant_a" } as SourceRecord;
+    const tenantBSource = { ...darkwebSource, id: "src_tenant_b", tenantId: "tenant_b" } as SourceRecord;
+    store.saveSource(globalSource);
+    store.saveSource(tenantASource);
+    store.saveSource(tenantBSource);
+    store.saveCapture({ ...telegramCapture, id: "cap_global", sourceId: globalSource.id, tenantId: undefined });
+    store.saveCapture({ ...darkwebCapture, id: "cap_tenant_a", sourceId: tenantASource.id, tenantId: "tenant_a" });
+    store.saveCapture({ ...darkwebCapture, id: "cap_tenant_b", sourceId: tenantBSource.id, tenantId: "tenant_b" });
+
+    const options = { store, frontier: new FocusedFrontier() };
+    const tenantA = await (await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/operations?tenantId=tenant_a"), options)).json() as any;
+    const tenantB = await (await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/operations?tenantId=tenant_b"), options)).json() as any;
+    const productA = await (await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/product?tenantId=tenant_a"), options)).json() as any;
+    const empty = await (await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/operations?tenantId=tenant_empty"), {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier()
+    })).json() as any;
+
+    expect(tenantA.counts).toMatchObject({ sourceCount: 2, activeSourceCount: 2, captureCount: 2 });
+    expect(tenantA.sourceHealth.map((row: any) => row.sourceId).sort()).toEqual(["src_global", "src_tenant_a"]);
+    expect(tenantB.sourceHealth.map((row: any) => row.sourceId).sort()).toEqual(["src_global", "src_tenant_b"]);
+    expect(productA.sourceInventory.counts.registeredTotal).toBe(tenantA.counts.sourceCount);
+    expect(empty.counts).toMatchObject({ sourceCount: 0, activeSourceCount: 0, captureCount: 0 });
+  });
+
   test("keeps product evidence in the exact tenant scope", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(telegramSource);

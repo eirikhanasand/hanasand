@@ -125,7 +125,8 @@ export function buildDwmOperationsSnapshot(input: {
 }
 
 function inTenant(record: { tenantId?: string }, tenantId?: string): boolean {
-  return (record.tenantId || undefined) === tenantId;
+  const recordTenantId = record.tenantId || undefined;
+  return recordTenantId === undefined || recordTenantId === tenantId;
 }
 
 function captureDto(capture: any, source: any, terms: string[]): DwmOperationsSnapshot["latestCaptures"][number] {
