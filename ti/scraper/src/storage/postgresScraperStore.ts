@@ -35,7 +35,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "015_repair_reprocessing_collection_time", path: fileURLToPath(new URL("../../migrations/015_repair_reprocessing_collection_time.sql", import.meta.url)) },
   { version: "016_merge_duplicate_actor_profiles", path: fileURLToPath(new URL("../../migrations/016_merge_duplicate_actor_profiles.sql", import.meta.url)) },
   { version: "017_evidence_linked_timeliness", path: fileURLToPath(new URL("../../migrations/017_evidence_linked_timeliness.sql", import.meta.url)) },
-  { version: "018_remove_unsupported_business_claims", path: fileURLToPath(new URL("../../migrations/018_remove_unsupported_business_claims.sql", import.meta.url)) }
+  { version: "018_remove_unsupported_business_claims", path: fileURLToPath(new URL("../../migrations/018_remove_unsupported_business_claims.sql", import.meta.url)) },
+  { version: "019_incident_logical_identity", path: fileURLToPath(new URL("../../migrations/019_incident_logical_identity.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -219,7 +220,21 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     this.pipelineDepth++;
     try {
       const stored = super.savePipelineResult(result);
-      this.enqueue(`pipeline:${stored.capture.id}`, () => this.persistPipeline(stored.capture, stored.incident?.id));
+      const captureId = stored.capture.id;
+      const incidentId = stored.incident?.id;
+      const snapshot = structuredClone({
+        capture: stored.capture,
+        incident: incidentId ? this.getIncident(incidentId) : undefined,
+        entities: this.listExtractedEntities().filter((record: any) => record.captureId === captureId),
+        indicators: this.listIndicators().filter((record: any) => record.captureId === captureId),
+        profiles: this.listActorProfiles().filter((record: any) => record.captureIds?.includes(captureId)),
+        claims: this.listIntelligenceClaims().filter((record: any) => record.captureIds?.includes(captureId)),
+        claimEvidence: this.listClaimEvidence().filter((record: any) => record.captureId === captureId),
+        links: this.listEvidenceLinks().filter((record: any) => record.captureId === captureId),
+        timeliness: incidentId ? this.getTimelinessRecord(incidentId) : undefined,
+        deltas: this.listEvidenceDeltas().filter((record: any) => record.captureIds?.includes(captureId))
+      });
+      this.enqueue(`pipeline:${captureId}`, () => this.persistPipeline(snapshot));
       return stored;
     } finally {
       this.pipelineDepth--;
@@ -492,16 +507,11 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     }
   }
 
-  private async persistPipeline(capture: RawCapture, incidentId?: string): Promise<void> {
-    const entities = this.listExtractedEntities().filter((record: any) => record.captureId === capture.id);
-    const indicators = this.listIndicators().filter((record: any) => record.captureId === capture.id);
-    const incident = incidentId ? this.getIncident(incidentId) : undefined;
-    const profiles = this.listActorProfiles().filter((record: any) => record.captureIds?.includes(capture.id));
-    const claims = this.listIntelligenceClaims().filter((record: any) => record.captureIds?.includes(capture.id));
-    const claimEvidence = this.listClaimEvidence().filter((record: any) => record.captureId === capture.id);
-    const links = this.listEvidenceLinks().filter((record: any) => record.captureId === capture.id);
-    const timeliness = incidentId ? this.getTimelinessRecord(incidentId) : undefined;
-    const deltas = this.listEvidenceDeltas().filter((record: any) => record.captureIds?.includes(capture.id));
+  private async persistPipeline(snapshot: {
+    capture: RawCapture; incident?: any; entities: any[]; indicators: any[]; profiles: any[];
+    claims: any[]; claimEvidence: any[]; links: any[]; timeliness?: any; deltas: any[];
+  }): Promise<void> {
+    const { capture, incident, entities, indicators, profiles, claims, claimEvidence, links, timeliness, deltas } = snapshot;
     await this.sql.begin(async (sql) => {
       await this.persistCapture(capture, sql);
       if (incident) await this.persistIncident(incident, sql);
@@ -606,17 +616,48 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         ${incident.reviewState ?? "unreviewed"}, ${incident.updatedAt ?? new Date().toISOString()}, ${toJson(incident)}::text::jsonb
       )
       ON CONFLICT (id) DO UPDATE SET
+        source_id = EXCLUDED.source_id,
+        capture_id = EXCLUDED.capture_id,
         title = EXCLUDED.title,
         summary = EXCLUDED.summary,
         confidence = EXCLUDED.confidence,
+        extractor_version = EXCLUDED.extractor_version,
         review_state = EXCLUDED.review_state,
+        first_seen_at = LEAST(threat_intel.incidents.first_seen_at, EXCLUDED.first_seen_at),
         reported_at = COALESCE(EXCLUDED.reported_at, threat_intel.incidents.reported_at),
-        published_at = COALESCE(EXCLUDED.published_at, threat_intel.incidents.published_at),
+        published_at = COALESCE(LEAST(threat_intel.incidents.published_at, EXCLUDED.published_at), threat_intel.incidents.published_at, EXCLUDED.published_at),
         collected_at = COALESCE(threat_intel.incidents.collected_at, EXCLUDED.collected_at),
         processed_at = COALESCE(threat_intel.incidents.processed_at, EXCLUDED.processed_at),
         first_visible_at = COALESCE(threat_intel.incidents.first_visible_at, EXCLUDED.first_visible_at),
         updated_at = EXCLUDED.updated_at,
         record = EXCLUDED.record
+    `;
+    const revisionId = stableId("incident-revision", `${incident.id}:${incident.captureId}:${incident.extractorVersion ?? capture?.provenance?.extractorVersion ?? "unknown"}`);
+    await sql`
+      INSERT INTO threat_intel.incident_revisions (
+        id, tenant_id, incident_id, legacy_incident_id, source_id, capture_id,
+        title, summary, confidence, extractor_version, review_state, observed_at,
+        origin, record
+      ) VALUES (
+        ${revisionId}, ${nullable(incident.tenantId ?? capture?.tenantId)}, ${incident.id}, NULL,
+        ${incident.sourceId ?? capture?.sourceId}, ${incident.captureId}, ${incident.title ?? incident.id},
+        ${incident.summary ?? ""}, ${score(incident.confidence)},
+        ${incident.extractorVersion ?? capture?.provenance?.extractorVersion ?? "unknown"},
+        ${incident.reviewState ?? "unreviewed"}, ${incident.updatedAt ?? capture?.processedAt ?? new Date().toISOString()},
+        'runtime', ${toJson({ ...incident, id: revisionId, incidentId: incident.id, captureId: incident.captureId, origin: "runtime" })}::text::jsonb
+      )
+      ON CONFLICT (id) DO NOTHING
+    `;
+    await sql`
+      UPDATE threat_intel.incidents AS current
+      SET record = current.record || jsonb_build_object(
+        'captureIds', (
+          SELECT COALESCE(jsonb_agg(capture_id ORDER BY capture_id), '[]'::jsonb)
+          FROM (SELECT DISTINCT capture_id FROM threat_intel.incident_revisions WHERE incident_id = ${incident.id}) AS captures
+        ),
+        'revisionCount', (SELECT count(*) FROM threat_intel.incident_revisions WHERE incident_id = ${incident.id})
+      )
+      WHERE current.id = ${incident.id}
     `;
   }
 
@@ -876,13 +917,13 @@ export class PostgresScraperStore extends InMemoryScraperStore {
         ${toJson(evidence.provenance ?? {})}::text::jsonb, ${evidence.createdAt ?? new Date().toISOString()},
         ${toJson(evidence)}::text::jsonb
       )
-      ON CONFLICT (id) DO UPDATE SET
+      ON CONFLICT (claim_id, capture_id, subject_type, subject_id, relationship) DO UPDATE SET
         relationship = EXCLUDED.relationship,
         evidence_stage = EXCLUDED.evidence_stage,
-        confidence = EXCLUDED.confidence,
-        extractor_version = EXCLUDED.extractor_version,
+        confidence = GREATEST(threat_intel.claim_evidence.confidence, EXCLUDED.confidence),
+        extractor_version = COALESCE(EXCLUDED.extractor_version, threat_intel.claim_evidence.extractor_version),
         provenance = EXCLUDED.provenance,
-        record = EXCLUDED.record
+        record = EXCLUDED.record || jsonb_build_object('id', threat_intel.claim_evidence.id)
     `;
   }
 

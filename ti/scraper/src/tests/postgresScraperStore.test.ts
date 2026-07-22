@@ -155,6 +155,8 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
   beforeEach(async () => {
     await admin.unsafe(`
       TRUNCATE TABLE
+        threat_intel.incident_identity_history,
+        threat_intel.incident_revisions,
         threat_intel.workflow_records,
         threat_intel.source_health,
         threat_intel.timeliness_records,
@@ -417,6 +419,113 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const [legacy] = await admin<{ updated_at: Date }[]>`SELECT updated_at FROM threat_intel.incidents WHERE id = 'inc_legacy_content_hash'`;
     expect(legacy.updated_at.toISOString()).toBe(sentinel);
     await second.close();
+  });
+
+  test("migrates historical incident revisions with auditable and reversible lineage", async () => {
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    first.saveSource(source({ id: "src_incident_lineage" }));
+    const current = first.savePipelineResult(pipeline("src_incident_lineage"));
+    const legacyId = "inc_legacy_content_revision";
+    const invalidId = "inc_parser_fallback";
+    const originalLink = first.listEvidenceLinks().find((link: any) =>
+      link.captureId === current.capture.id && link.subjectType === "incident" && link.subjectId === current.incident.id
+    );
+    const currentTimeliness = first.getTimelinessRecord(current.incident.id);
+    first.saveIncident({ ...current.incident, id: legacyId, logicalIdentity: undefined, updatedAt: "2026-07-18T00:00:00.000Z" });
+    first.saveExtractedEntity({
+      id: "entity_legacy_lineage", sourceId: current.capture.sourceId, captureId: current.capture.id,
+      incidentId: legacyId, type: "legacy_marker", value: "legacy", normalizedValue: "legacy",
+      confidence: 0.5, extractorVersion: "legacy", provenance: []
+    });
+    first.saveEvidenceLink({ ...originalLink, id: "evidence-link_legacy_lineage", subjectId: legacyId });
+    first.saveTimelinessRecord({ ...currentTimeliness, id: legacyId, incidentId: legacyId });
+
+    const invalidCapture = {
+      ...current.capture,
+      id: "cap_parser_fallback",
+      url: "https://example.test/src_incident_lineage/fallback",
+      canonicalUrl: "https://example.test/src_incident_lineage/fallback",
+      contentHash: "parser-fallback-content",
+      normalizedTextHash: "parser-fallback-text",
+      publishedAt: undefined,
+      metadata: { feedItem: false, parserWarnings: ["feed contained no RSS or Atom entries"] }
+    };
+    first.saveCapture(invalidCapture);
+    first.saveIncident({ ...current.incident, id: invalidId, captureId: invalidCapture.id, logicalIdentity: undefined });
+    first.saveExtractedEntity({
+      id: "entity_invalid_lineage", sourceId: current.capture.sourceId, captureId: invalidCapture.id,
+      incidentId: invalidId, type: "parser_marker", value: "fallback", normalizedValue: "fallback",
+      confidence: 0.2, extractorVersion: "legacy", provenance: []
+    });
+    await first.close();
+
+    await admin`
+      INSERT INTO threat_intel.intelligence_claims (
+        id, claim_type, subject_type, subject_id, claim_value, summary, confidence,
+        evidence_stage, extraction_method, extractor_version, review_state,
+        corroboration_state, source_count, evidence_count, first_seen_at, last_seen_at, record
+      ) VALUES (
+        'claim_legacy_lineage', 'incident_summary', 'incident', ${legacyId}, ${JSON.stringify({ value: "legacy" })}::text::jsonb,
+        'Legacy incident claim', 0.7, 'extracted', 'test', 'legacy', 'unreviewed',
+        'single_source', 1, 1, ${collectedAt}, ${collectedAt},
+        ${JSON.stringify({ id: "claim_legacy_lineage", subjectType: "incident", subjectId: legacyId })}::text::jsonb
+      )
+    `;
+    await admin`
+      INSERT INTO threat_intel.claim_evidence (
+        id, claim_id, capture_id, source_id, subject_type, subject_id, relationship,
+        evidence_stage, confidence, extractor_version, provenance, record
+      ) VALUES (
+        'claim-evidence_legacy_lineage', 'claim_legacy_lineage', ${current.capture.id}, ${current.capture.sourceId},
+        'incident', ${legacyId}, 'supports', 'extracted', 0.7, 'legacy', '{}'::jsonb,
+        ${JSON.stringify({ id: "claim-evidence_legacy_lineage", claimId: "claim_legacy_lineage", captureId: current.capture.id, subjectType: "incident", subjectId: legacyId, relationship: "supports" })}::text::jsonb
+      )
+    `;
+    await admin`
+      INSERT INTO threat_intel.workflow_records (record_type, id, created_at, updated_at, record)
+      VALUES ('live_search_snapshot', 'snapshot_incident_lineage', ${collectedAt}, ${collectedAt},
+        ${JSON.stringify({ id: "snapshot_incident_lineage", incidentIds: [current.incident.id, legacyId, invalidId] })}::text::jsonb)
+    `;
+    await admin`DELETE FROM threat_intel.incident_revisions`;
+    await admin`DELETE FROM threat_intel.incident_identity_history`;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '019_incident_logical_identity'`;
+
+    const migrated = await PostgresScraperStore.create({ databaseUrl });
+    await migrated.close();
+
+    const incidents = await admin<{ id: string; record: any }[]>`SELECT id, record FROM threat_intel.incidents ORDER BY id`;
+    expect(incidents).toHaveLength(1);
+    expect(incidents[0]).toMatchObject({ id: current.incident.id, record: { revisionCount: 2 } });
+    const [lineage] = await admin<any[]>`
+      SELECT logical_incident_count::int, revision_count::int,
+        duplicate_revision_count::int, revised_incident_count::int
+      FROM threat_intel.incident_lineage_metrics
+    `;
+    expect(lineage).toMatchObject({ logical_incident_count: 1, revision_count: 2, duplicate_revision_count: 1, revised_incident_count: 1 });
+    const history = await admin<{ old_incident_id: string; action: string; invalid_reason: string | null }[]>`
+      SELECT old_incident_id, action, invalid_reason FROM threat_intel.incident_identity_history ORDER BY old_incident_id
+    `;
+    expect(history).toEqual([
+      { old_incident_id: current.incident.id, action: "already_canonical", invalid_reason: null },
+      { old_incident_id: legacyId, action: "merged", invalid_reason: null },
+      { old_incident_id: invalidId, action: "invalid_archived", invalid_reason: "parser_fallback" }
+    ].sort((a, b) => a.old_incident_id.localeCompare(b.old_incident_id)));
+    expect(await admin`SELECT id FROM threat_intel.evidence_links WHERE capture_id = ${current.capture.id} AND subject_type = 'incident' AND subject_id = ${current.incident.id} AND relationship = ${originalLink.relationship}`).toHaveLength(1);
+    expect(await admin`SELECT id FROM threat_intel.timeliness_records WHERE incident_id = ${current.incident.id}`).toHaveLength(1);
+    expect((await admin<{ incident_id?: string }[]>`SELECT incident_id FROM threat_intel.entities WHERE id = 'entity_legacy_lineage'`)[0].incident_id).toBe(current.incident.id);
+    expect((await admin<{ incident_id?: string }[]>`SELECT incident_id FROM threat_intel.entities WHERE id = 'entity_invalid_lineage'`)[0].incident_id).toBeNull();
+    expect((await admin<{ ids: string[] }[]>`SELECT ARRAY(SELECT jsonb_array_elements_text(record->'incidentIds')) AS ids FROM threat_intel.workflow_records WHERE id = 'snapshot_incident_lineage'`)[0].ids).toEqual([current.incident.id]);
+
+    const [reversal] = await admin<{ result: any }[]>`
+      SELECT threat_intel.reverse_incident_identity_merge(${legacyId}, 'analyst_test', 'Incorrect historical merge confirmed by source review') AS result
+    `;
+    expect(reversal.result).toMatchObject({ oldIncidentId: legacyId, canonicalIncidentId: current.incident.id, status: "reversed" });
+    expect((await admin<{ incident_id: string }[]>`SELECT incident_id FROM threat_intel.entities WHERE id = 'entity_legacy_lineage'`)[0].incident_id).toBe(legacyId);
+    expect((await admin<{ subject_id: string }[]>`SELECT subject_id FROM threat_intel.evidence_links WHERE id = 'evidence-link_legacy_lineage'`)[0].subject_id).toBe(legacyId);
+    expect((await admin<{ subject_id: string }[]>`SELECT subject_id FROM threat_intel.intelligence_claims WHERE id = 'claim_legacy_lineage'`)[0].subject_id).toBe(legacyId);
+    expect((await admin<{ subject_id: string }[]>`SELECT subject_id FROM threat_intel.claim_evidence WHERE id = 'claim-evidence_legacy_lineage'`)[0].subject_id).toBe(legacyId);
+    expect((await admin<{ incident_id: string }[]>`SELECT incident_id FROM threat_intel.timeliness_records WHERE id = ${legacyId}`)[0].incident_id).toBe(legacyId);
+    expect((await admin<{ ids: string[] }[]>`SELECT ARRAY(SELECT jsonb_array_elements_text(record->'incidentIds')) AS ids FROM threat_intel.workflow_records WHERE id = 'snapshot_incident_lineage'`)[0].ids).toEqual([current.incident.id, legacyId].sort());
   });
 
   test("imports the legacy JSON snapshot once and then uses PostgreSQL", async () => {
