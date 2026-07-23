@@ -118,6 +118,14 @@ test('dwm analyst portal keeps alert triage primary while disclosing route setup
     expect(page).not.toContain('More route actions')
 })
 
+test('dwm case actions use the dashboard detail route instead of the scraper API path', async () => {
+    const page = await readFile(path.join(root, 'src/app/dashboard/dwm/dwm-analyst-portal.tsx'), 'utf8')
+
+    expect(page).not.toContain('const caseHref = workflowContext.casePath ||')
+    expect(page).not.toContain('const caseHref = casePath ||')
+    expect(page).toContain('return `/dashboard/dwm/cases/${encodeURIComponent(caseId)}')
+})
+
 test('dwm next operator action prioritizes the workflow step an analyst can take now', () => {
     const base: DwmNextOperatorActionInput = {
         reviewState: 'reviewing',

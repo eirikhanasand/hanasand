@@ -1016,7 +1016,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, busyAc
     const selectedEvidence = alert.evidence.find(item => item.id === selectedEvidenceId) ?? visibleEvidence[0] ?? alert.evidence[0]
     const [copiedHash, setCopiedHash] = useState('')
     const analystBrief = buildAnalystBrief(alert, evidenceSummary, routingContext, workflowContext)
-    const caseHref = workflowContext.casePath || (workflowContext.caseId ? caseDetailHref(workflowContext.caseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined)
+    const caseHref = workflowContext.caseId ? caseDetailHref(workflowContext.caseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined
     const timeline = buildTimeline(alert, deliveries)
     async function copyHash(value: string) {
         try {
@@ -1327,7 +1327,7 @@ function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, bu
     const latestDelivery = orderDeliveries(deliveries)[0]
     const actualCaseId = alert.caseId
     const caseCandidate = alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
-    const casePath = workflowContext.casePath || (actualCaseId ? caseDetailHref(actualCaseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined)
+    const casePath = actualCaseId ? caseDetailHref(actualCaseId, alert.id, workflowContext.organizationId, 'alert_queue') : undefined
     const canOpenCase = Boolean(alert.id && alertCaptureIds(alert).length)
     const routeControlLabel = actualCaseId
         ? latestDelivery
@@ -1916,7 +1916,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const closeReason = actionUnavailableReason(alert, 'close')
     const casePath = alertCasePath(alert)
     const caseId = alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseId || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseId || alert.webhookContext?.caseIdCandidate || caseIdFromPath(casePath)
-    const caseHref = casePath || (caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert), 'alert_queue') : undefined)
+    const caseHref = caseId ? caseDetailHref(caseId, alert.id, alertOrganizationId(alert), 'alert_queue') : undefined
     const caseReady = Boolean(alert.id && alertCaptureIds(alert).length)
     const caseReason = caseReady ? undefined : 'Evidence must include a source or capture record before opening a case.'
     const nextAction = dwmNextOperatorAction({
