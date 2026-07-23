@@ -215,6 +215,11 @@ describe("automatic independent evaluation", () => {
     await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T13:01:00.000Z", review: async () => { throw new Error("terminal recovery must not call the model"); } });
     expect(store.getEvaluationBenchmark(terminalRestart.id)).toMatchObject({ status: "complete", manifest: [expect.objectContaining({ automation: expect.objectContaining({ status: "adjudicated", history: expect.arrayContaining([expect.objectContaining({ reason: "restart_terminal_reconciliation" })]) }) })] });
     expect(store.listEvaluationLabels().some((label: any) => label.benchmarkId === terminalRestart.id && label.outcome === "true_positive")).toBe(true);
+    const immutableLabel = store.listEvaluationLabels().find((label: any) => label.benchmarkId === terminalRestart.id);
+    const reconciled = store.getEvaluationBenchmark(terminalRestart.id);
+    store.saveEvaluationBenchmark({ ...reconciled, status: "annotating", manifest: reconciled.manifest.map((task: any) => ({ ...task, sourceFamily: "later-source-projection", automation: { ...task.automation, status: "running" } })) });
+    await runAutomaticEvaluationCycle({ store, autoCreate: false, maxTasks: 1, now: () => "2026-07-21T13:02:00.000Z", review: async () => { throw new Error("terminal reconciliation must not call the model"); } });
+    expect(store.getEvaluationLabel(immutableLabel.id)).toEqual(immutableLabel);
   });
 
   test("locks final-test captures out of validation and records real-case sampling strata", async () => {

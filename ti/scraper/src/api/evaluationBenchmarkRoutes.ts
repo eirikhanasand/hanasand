@@ -341,7 +341,7 @@ function saveAdjudication(store: any, benchmark: any, task: any, expectedValues:
   const id = stableId("evaluation-adjudication", task.id);
   const existing = store.getEvaluationAdjudication(id);
   if (existing) {
-    for (const label of labelsForAdjudication(store, benchmark, task, existing)) store.saveEvaluationLabel(label);
+    for (const label of labelsForAdjudication(store, benchmark, task, existing)) if (!store.getEvaluationLabel(label.id)) store.saveEvaluationLabel(label);
     return existing;
   }
   const adjudication = { id, tenantId: benchmark.tenantId, benchmarkId: benchmark.id, taskId: task.id, captureId: task.captureId, labelType: task.labelType, expectedValues, annotationIds, method, adjudicatedBy, independenceAttested: true, adjudicatedAt, createdAt: adjudicatedAt, updatedAt: adjudicatedAt, ...metadata };
