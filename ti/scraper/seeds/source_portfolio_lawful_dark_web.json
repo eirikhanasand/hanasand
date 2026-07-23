@@ -1,0 +1,300 @@
+{
+  "schemaVersion": "ti.source_portfolio_batch.v1",
+  "family": "lawful_dark_web",
+  "version": 1,
+  "disabledByDefault": true,
+  "network": "tor",
+  "proxyBoundaryId": "tor-approved-metadata-proxy",
+  "killSwitchGroup": "restricted-metadata-tor-review",
+  "approvalScope": "metadata_only",
+  "retentionClass": "restricted_metadata",
+  "forbiddenOperations": [
+    "credential_bypass",
+    "captcha_solving",
+    "threat_actor_interaction",
+    "stolen_file_download",
+    "stealth_or_evasion",
+    "unapproved_proxy",
+    "non_metadata_capture"
+  ],
+  "reviewedRejectedCandidates": [
+    {
+      "id": "restricted_0day_syndicate_victim_blog",
+      "actorName": "0day Syndicate",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/0daysyndicate",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_0mega_victim_blog",
+      "actorName": "0mega",
+      "disposition": "rejected",
+      "reason": "The authority-listed endpoint is not a credential-free v3 onion target accepted by the production boundary.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/0mega",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_ailock_victim_blog",
+      "actorName": "AiLock",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ailock",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_auditteam_victim_blog",
+      "actorName": "AuditTeam",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/auditteam",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_ransomhouse_victim_blog",
+      "actorName": "RansomHouse",
+      "disposition": "rejected",
+      "reason": "The endpoint returned an unsupported JSON response instead of bounded victim-listing metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ransomhouse",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_gunra_victim_blog",
+      "actorName": "Gunra",
+      "disposition": "rejected",
+      "reason": "The authority-listed endpoint is not a credential-free v3 onion target accepted by the production boundary.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/gunra",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_settra_victim_blog",
+      "actorName": "Settra",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/settra",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_pear_victim_blog",
+      "actorName": "Pear",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/pear",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_securotrop_victim_blog",
+      "actorName": "Securotrop",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/securotrop",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_shinyhunters_victim_blog",
+      "actorName": "ShinyHunters",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/shinyhunters",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_nightspire_victim_blog",
+      "actorName": "NightSpire",
+      "disposition": "rejected",
+      "reason": "The endpoint exceeded the production metadata redirect limit before returning a victim listing.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/nightspire",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_payoutsking_victim_blog",
+      "actorName": "PayoutsKing",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/payoutsking",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_blacknevas_victim_blog",
+      "actorName": "BlackNevas",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/blacknevas",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_lockbit5_victim_blog",
+      "actorName": "LockBit 5",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/lockbit5",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_blackwater_victim_blog",
+      "actorName": "BlackWater",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/blackwater",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_apt73_victim_blog",
+      "actorName": "APT73",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/apt73",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_bravox_victim_blog",
+      "actorName": "Bravox",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/bravox",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_direwolf_victim_blog",
+      "actorName": "Dire Wolf",
+      "disposition": "rejected",
+      "reason": "The approved-proxy request returned an upstream HTTP 502 and no victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/direwolf",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_medusalocker_victim_blog",
+      "actorName": "MedusaLocker",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/medusalocker",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_clop_victim_blog",
+      "actorName": "Clop",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/clop",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_aurora_victim_blog",
+      "actorName": "Aurora",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/aurora",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_crpxo_victim_blog",
+      "actorName": "CRPxO",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/crpxo",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_wallstreet_victim_blog",
+      "actorName": "Wallstreet",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/wallstreet",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_prinz_eugen_victim_blog",
+      "actorName": "PrinzEugen",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/prinzeugen",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_redact_victim_blog",
+      "actorName": "Redact",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response contained no bounded useful victim metadata.",
+      "evidenceCheckedAt": "2026-07-23T10:06:20.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/redact",
+      "countsAsCoverage": false
+    }
+  ],
+  "sources": [
+    {
+        "id": "restricted_ms13089_victim_blog",
+        "name": "MS-13089 victim blog",
+        "type": "tor_metadata",
+        "url": "http://msleakjir7pxbe6onlqe5uwgvdmy6nq4mnwfy7ojswbhnleenm77vgad.onion",
+        "accessMethod": "approved_proxy",
+        "status": "candidate",
+        "risk": "restricted",
+        "trustScore": 0.82,
+        "crawlFrequencySeconds": 3600,
+        "legalNotes": "Collect public victim-post titles and publication metadata only. Never authenticate, interact, follow payload links, or retain page bodies, credentials, or leaked content.",
+        "governance": {
+            "approvalRequired": true,
+            "approvalState": "approved",
+            "metadataOnly": true,
+            "approvalScope": "metadata_only",
+            "approvedAt": "2026-07-23T10:20:56.065Z",
+            "approvedBy": "source-review:goal4-lawful-metadata",
+            "policyVersion": "collection-policy:v1"
+        },
+        "metadata": {
+            "sourceFamily": "dark_web_victim_feed",
+            "actorName": "ms13089",
+            "actors": [
+                "ms13089"
+            ],
+            "discoveryAuthorityUrl": "https://ransomwhere.org/data",
+            "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ms13089",
+            "discoveryCheckedAt": "2026-07-23T10:20:56.065Z",
+            "discoveryAvailability": "reported_available",
+            "discoveryObservedAt": "2026-07-23T10:20:56.065Z",
+            "productionCollectionVerifiedAt": "2026-07-23T10:20:56.065Z",
+            "productionCollectionOutcome": "metadata_only_parser_verified",
+            "parserProfile": "post_title_victim_listing",
+            "reportedVictimCount": 4,
+            "lastReportedVictimAt": "2026-05-05T11:53:39.404Z",
+            "expectedPageRole": "victim_listing",
+            "collectionScope": "metadata_only",
+            "retainRawContent": false,
+            "retentionDays": 30,
+            "attribution": "Ransomwhere.org public research inventory plus approved-proxy metadata-only parser verification",
+            "sourcePortfolioVerification": {
+                "verifiedAt": "2026-07-23T10:20:56.065Z",
+                "outcome": "content_parsed",
+                "observedItemCount": 3,
+                "httpStatus": 200,
+                "adapter": "tor_metadata",
+                "legalBasisVerifiedAt": "2026-07-23T10:20:56.065Z"
+            }
+        }
+    }
+  ]
+}
