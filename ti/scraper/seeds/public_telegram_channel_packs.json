@@ -1,10 +1,10 @@
 {
-  "version": 2,
+  "version": 3,
   "name": "public-telegram-cti-production",
-  "generatedAt": "2026-07-22T14:03:39.000Z",
-  "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
+  "generatedAt": "2026-07-23T16:23:47.000Z",
+  "description": "Publisher-owned public Telegram channels verified for unauthenticated web-preview collection. Newly verified candidates remain non-coverage until two productive scheduled cycles. Private, invite-only, copied, hijacked, authentication-gated, CAPTCHA-gated, and credential-sharing channels are excluded.",
   "disabledByDefault": false,
-  "sourceCount": 7,
+  "sourceCount": 10,
   "sources": [
     {
       "id": "src_group_ib_telegram",
@@ -727,6 +727,374 @@
           "collectionSlaSeconds": 900,
           "budgetClass": "normal",
           "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_cert_agid_telegram",
+      "name": "CERT-AgID public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/certagid",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.95,
+      "language": "it",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public Italian government CERT advisories from the channel linked by cert-agid.gov.it. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim submissions.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T16:23:47.000Z",
+        "approvedBy": "source-review:government-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "cert_government",
+          "malware_research",
+          "cybercrime_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "certagid",
+        "verifiedSourceId": "src_cert_agid_telegram",
+        "publisherReference": "https://cert-agid.gov.it/",
+        "ownershipVerifiedAt": "2026-07-23T16:23:47.000Z",
+        "activityVerifiedAt": "2026-07-23T16:23:47.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "malware campaigns",
+          "phishing",
+          "vulnerabilities",
+          "government advisories"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T16:23:47.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 12,
+          "observedUsefulItemCount": 9,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://cert-agid.gov.it/",
+          "legalBasisVerifiedAt": "2026-07-23T16:23:47.000Z",
+          "latestPublishedAt": "2026-07-21T08:08:00+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "gov:it:cert-agid:telegram",
+        "publisher": {
+          "name": "CERT-AgID",
+          "country": "IT",
+          "homepage": "https://cert-agid.gov.it/",
+          "trustBasis": "government CERT website links the exact public Telegram handle"
+        },
+        "tier": "tier_1",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public government communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public government channel used for defensive security research.",
+        "reliability": 0.95,
+        "intelligenceValue": 0.89,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "malware campaigns",
+            "phishing",
+            "vulnerabilities",
+            "government advisories"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "government",
+            "technology",
+            "finance",
+            "public administration"
+          ],
+          "regions": [
+            "Italy",
+            "Europe"
+          ],
+          "countries": [
+            "Italy"
+          ],
+          "languages": [
+            "it"
+          ],
+          "queryPatterns": [
+            "malware",
+            "campagna",
+            "vulnerabilità",
+            "phishing"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "high",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_solar_4rays_telegram",
+      "name": "Solar 4RAYS public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/four_rays",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.88,
+      "language": "ru",
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Public Russian-language threat research from the Solar 4RAYS channel linked by rt-solar.ru. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, exploit code, or credentials.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T16:23:47.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "apt_research",
+          "malware_research",
+          "incident_response",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "four_rays",
+        "verifiedSourceId": "src_solar_4rays_telegram",
+        "publisherReference": "https://rt-solar.ru/solar-4rays/blog/6142/",
+        "ownershipVerifiedAt": "2026-07-23T16:23:47.000Z",
+        "activityVerifiedAt": "2026-07-23T16:23:47.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "malware",
+          "APT",
+          "DFIR",
+          "threat hunting",
+          "vulnerabilities"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T16:23:47.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 14,
+          "observedUsefulItemCount": 1,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://rt-solar.ru/solar-4rays/blog/6142/",
+          "legalBasisVerifiedAt": "2026-07-23T16:23:47.000Z",
+          "latestPublishedAt": "2026-07-22T08:34:50+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "vendor:solar-4rays:telegram",
+        "publisher": {
+          "name": "Solar 4RAYS",
+          "country": "RU",
+          "homepage": "https://rt-solar.ru/solar-4rays/",
+          "trustBasis": "publisher research site links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.88,
+        "intelligenceValue": 0.87,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "malware",
+            "APT",
+            "DFIR",
+            "threat hunting",
+            "vulnerabilities"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "industrial",
+            "technology",
+            "critical infrastructure",
+            "enterprise"
+          ],
+          "regions": [
+            "Eastern Europe",
+            "Global"
+          ],
+          "countries": [
+            "Russia"
+          ],
+          "languages": [
+            "ru"
+          ],
+          "queryPatterns": [
+            "вредонос",
+            "стилер",
+            "атака",
+            "уязвимость"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 1800,
+          "collectionSlaSeconds": 900,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 900
+        },
+        "adapterCompatibility": [
+          "telegram_public"
+        ],
+        "rollback": {}
+      }
+    },
+    {
+      "id": "src_d3lab_telegram",
+      "name": "D3Lab public Telegram",
+      "type": "telegram_public",
+      "url": "https://t.me/D3LabIT",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "countsAsCoverage": false,
+      "risk": "low",
+      "trustScore": 0.87,
+      "language": "it",
+      "crawlFrequencySeconds": 1800,
+      "legalNotes": "Public Italian-language phishing and malware research from the channel linked by d3lab.net. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, credentials, or victim data.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "approvalScope": "official_public_web_preview",
+        "metadataOnly": false,
+        "approvedAt": "2026-07-23T16:23:47.000Z",
+        "approvedBy": "source-review:publisher-owned-reference",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "telegram_public",
+        "sourceFamilies": [
+          "malware_research",
+          "cybercrime_reporting",
+          "victim_publication_reporting",
+          "regional_language"
+        ],
+        "collectionMode": "public_web_preview",
+        "mediaPolicy": "metadata_only_no_download",
+        "productionCollection": false,
+        "countsAsCoverage": false,
+        "sourcePortfolioQualificationState": "pending_sustained_productivity",
+        "channelHandle": "D3LabIT",
+        "verifiedSourceId": "src_d3lab_telegram",
+        "publisherReference": "https://www.d3lab.net/",
+        "ownershipVerifiedAt": "2026-07-23T16:23:47.000Z",
+        "activityVerifiedAt": "2026-07-23T16:23:47.000Z",
+        "activityWindowSeconds": 2592000,
+        "topics": [
+          "phishing campaigns",
+          "malware",
+          "brand abuse",
+          "public victim reporting"
+        ],
+        "maxItemsPerFetch": 20,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T16:23:47.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 17,
+          "observedUsefulItemCount": 5,
+          "httpStatus": 200,
+          "contentType": "text/html; charset=utf-8",
+          "adapter": "telegram_public",
+          "parserVersion": "telegram-public-preview:v1",
+          "publisherReference": "https://www.d3lab.net/",
+          "legalBasisVerifiedAt": "2026-07-23T16:23:47.000Z",
+          "latestPublishedAt": "2026-07-15T13:06:51+00:00"
+        }
+      },
+      "catalog": {
+        "canonicalId": "vendor:d3lab:telegram",
+        "publisher": {
+          "name": "D3Lab",
+          "country": "IT",
+          "homepage": "https://www.d3lab.net/",
+          "trustBasis": "publisher website links the exact public Telegram handle"
+        },
+        "tier": "tier_2",
+        "approvalScope": "official_public_web_preview",
+        "license": "Public publisher communications; source attribution retained.",
+        "legalBasis": "Unauthenticated public publisher channel used for defensive security research.",
+        "reliability": 0.87,
+        "intelligenceValue": 0.86,
+        "retentionClass": "standard",
+        "analystOwner": "source-ops",
+        "coverage": {
+          "topics": [
+            "phishing campaigns",
+            "malware",
+            "brand abuse",
+            "public victim reporting"
+          ],
+          "actors": [],
+          "aliases": [],
+          "industries": [
+            "finance",
+            "transportation",
+            "consumer",
+            "technology"
+          ],
+          "regions": [
+            "Italy",
+            "Europe"
+          ],
+          "countries": [
+            "Italy"
+          ],
+          "languages": [
+            "it"
+          ],
+          "queryPatterns": [
+            "phishing",
+            "malware",
+            "campagna",
+            "credenziali"
+          ]
+        },
+        "collection": {
+          "freshnessTargetSeconds": 3600,
+          "collectionSlaSeconds": 1800,
+          "budgetClass": "normal",
+          "crawlCadenceSeconds": 1800
         },
         "adapterCompatibility": [
           "telegram_public"
