@@ -201,6 +201,38 @@ describe("automatic Hanasand AI intelligence review", () => {
     expect(requests).toHaveLength(3);
   });
 
+  test("dead-letters an expired final-attempt lease without issuing attempt four", async () => {
+    const store = seededClaimStore();
+    syncAutomaticReviewQueue(options(store), { allTenants: true, now: firstAt, modelVersion: "hanasand" });
+    const task = store.listAnalystMetadataReviewTasks().find((item: any) => item.recordKind === "automatic_intelligence_review_task");
+    store.saveAnalystMetadataReviewTask({ ...task, state: "running", attempt: 3, leaseExpiresAt: "2026-07-22T10:00:30.000Z" });
+    let calls = 0;
+
+    await runAutomaticReviewCycle(options(store), {
+      now: "2026-07-22T10:02:00.000Z",
+      allTenants: true,
+      modelVersion: "hanasand",
+      fetcher: async () => { calls++; throw new Error("must not issue attempt four"); },
+      aiBase: "http://ai.test"
+    });
+
+    expect(calls).toBe(0);
+    expect(automaticReviewSnapshot(store, "default")).toMatchObject({
+      counts: { dead_letter: 1 },
+      tasks: [{
+        state: "dead_letter",
+        attempt: 3,
+        maxAttempts: 3,
+        lastError: "Worker lease expired before a terminal decision was persisted",
+        history: expect.arrayContaining([
+          expect.objectContaining({ state: "restart_recovered", attempt: 3 }),
+          expect.objectContaining({ state: "dead_letter", attempt: 3 })
+        ])
+      }]
+    });
+    expect(store.listClaimReviews()).toHaveLength(0);
+  });
+
   test("does not trust a generic error that copies the validator message", async () => {
     const store = seededClaimStore();
     const originalGetClaim = store.getIntelligenceClaim.bind(store);

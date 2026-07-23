@@ -347,6 +347,11 @@ async function processTask(options: ApiServerOptions, original: AutomaticReviewT
     saveEvent(store, task, "restart_reconciled", startedAt, incident.automaticReview.decision);
     return { taskId: task.id, state: task.state, outcome: task.outcome };
   }
+  if (task.attempt >= task.maxAttempts) {
+    task = saveTask(store, task, { state: "dead_letter", completedAt: startedAt, updatedAt: startedAt, leaseExpiresAt: undefined, lastError: task.lastError ?? "Automatic review retry budget exhausted" });
+    saveEvent(store, task, "dead_letter", startedAt);
+    return { taskId: task.id, state: task.state, error: task.lastError };
+  }
 
   const refreshedEvidence = governedEvidence(index, task.subject);
   const linkedRecords = eligibleLinkedEvidence(index, task.subject);
