@@ -20,6 +20,42 @@
   ],
   "reviewedRejectedCandidates": [
     {
+      "id": "restricted_blacknevas_victim_blog",
+      "actorName": "BlackNevas",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response is only a client application shell and yields no bounded victim metadata through the real parser.",
+      "evidenceCheckedAt": "2026-07-23T16:30:03.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/blacknevas",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_money_message_victim_blog",
+      "actorName": "Money Message",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response is only a client application shell and yields no bounded victim metadata through the real parser.",
+      "evidenceCheckedAt": "2026-07-23T16:30:03.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/moneymessage",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_settra_victim_blog",
+      "actorName": "Settra",
+      "disposition": "rejected",
+      "reason": "The current approved-proxy response is a title-only shell with no useful victim metadata inside the bounded response.",
+      "evidenceCheckedAt": "2026-07-23T16:30:03.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/settra",
+      "countsAsCoverage": false
+    },
+    {
+      "id": "restricted_cmd_organization_victim_blog",
+      "actorName": "CMDOrganization",
+      "disposition": "rejected",
+      "reason": "Current approved-proxy checks are inconsistent and most recently returned a verification gate, so useful lawful metadata reachability is not stable.",
+      "evidenceCheckedAt": "2026-07-23T16:30:03.000Z",
+      "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/CMDOrganization",
+      "countsAsCoverage": false
+    },
+    {
       "id": "restricted_braincipher_victim_blog",
       "actorName": "BrainCipher",
       "disposition": "rejected",
@@ -327,6 +363,75 @@
         "retainRawContent": false,
         "retentionDays": 30,
         "attribution": "Ransomwhere.org public research inventory, sourced from Ransomware.live"
+      }
+    },
+    {
+      "id": "restricted_blackwater_victim_blog",
+      "name": "Blackwater victim blog",
+      "type": "tor_metadata",
+      "url": "http://ejzl7cjxmkx7lzhiqwidmrwtfjv45pkczbc4fnyaut3t7gll3yaiq5id.onion/",
+      "accessMethod": "approved_proxy",
+      "status": "candidate",
+      "risk": "restricted",
+      "trustScore": 0.8,
+      "crawlFrequencySeconds": 3600,
+      "countsAsCoverage": false,
+      "legalNotes": "Collect public victim-card names and publication metadata only during the governed probation cycles. Never authenticate, interact with operators, follow payload links, or retain page bodies, credentials, personal data, or leaked content.",
+      "governance": {
+        "approvalRequired": true,
+        "approvalState": "approved",
+        "metadataOnly": true,
+        "approvalScope": "metadata_only",
+        "approvedAt": "2026-07-23T16:30:03.000Z",
+        "approvedBy": "source-review:goal4-gate3-candidate-metadata",
+        "policyVersion": "collection-policy:v1"
+      },
+      "metadata": {
+        "sourceFamily": "dark_web_victim_feed",
+        "actorName": "Blackwater",
+        "actors": ["Blackwater"],
+        "discoveryAuthorityUrl": "https://ransomwhere.org/data",
+        "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/blackwater",
+        "discoveryCheckedAt": "2026-07-23T16:30:03.000Z",
+        "discoveryAvailability": "reported_available",
+        "discoveryObservedAt": "2026-07-23T16:30:03.000Z",
+        "productionCollectionVerifiedAt": "2026-07-23T16:30:03.000Z",
+        "productionCollectionOutcome": "metadata_only_parser_verified",
+        "parserProfile": "victim_card_title",
+        "parserShape": "h5.card-title",
+        "reportedVictimCount": 7,
+        "observedParsedItemCount": 8,
+        "lastReportedVictimAt": "2026-07-10T10:53:44.840Z",
+        "discoveryAuthorityChain": [
+          {
+            "name": "Ransomwhere.org",
+            "role": "current public ransomware leak-service and victim inventory",
+            "url": "https://ransomwhere.org/data",
+            "recordUrl": "https://ransomwhere.org/api/groups/blackwater"
+          },
+          {
+            "name": "SOCRadar",
+            "role": "independent current ransomware actor and victim profile",
+            "url": "https://socradar.io/",
+            "recordUrl": "https://socradar.io/free-tools/ransomware-intelligence/groups/blackwater"
+          }
+        ],
+        "qualificationState": "pending_two_productive_scheduled_cycles",
+        "countsAsCoverage": false,
+        "sourcePortfolioVerification": {
+          "verifiedAt": "2026-07-23T16:30:03.000Z",
+          "legalBasisVerifiedAt": "2026-07-23T16:30:03.000Z",
+          "outcome": "content_parsed",
+          "observedItemCount": 8,
+          "contentType": "text/html",
+          "publisherReference": "https://ransomwhere.org/api/groups/blackwater",
+          "latestPublishedAt": "2026-07-10T10:53:44.840Z"
+        },
+        "expectedPageRole": "victim_listing",
+        "collectionScope": "metadata_only",
+        "retainRawContent": false,
+        "retentionDays": 30,
+        "attribution": "Ransomwhere.org public research inventory, SOCRadar actor profile, and approved-proxy metadata verification"
       }
     },
     {

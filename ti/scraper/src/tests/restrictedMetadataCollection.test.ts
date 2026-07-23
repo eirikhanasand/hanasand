@@ -16,7 +16,7 @@ describe("restricted metadata collection", () => {
       proxyUrl: "http://onion-tor:8118",
       fetcher: async (_url, init) => {
         proxy = (init as any).proxy;
-        return new Response("<html><head><title>Akira notices</title><meta name=\"description\" content=\"Victim: Northwind Health; Sector: healthcare; Country: NO; Data type: contracts; Extortion type: double extortion; Monetization path: ransom demand; Publicity tactic: countdown announcement; Buyer communication: auction contact channel; Intermediary communication: broker listing; Profitability signal: claimed paid victims\"></head><body><article class=\"news-item\"><h2 class=\"headline\"><a>Fabrikam.example</a></h2></article><div class=\"post-title font\">Contoso Manufacturing</div><time datetime=\"2026-07-20T10:00:00Z\"></time>raw page content that must not persist</body></html>", { status: 200, headers: { "content-type": "text/html" } });
+        return new Response(`<html><head><title>Akira notices</title><meta name="description" content="Victim: Northwind Health; Sector: healthcare; Country: NO; Data: http://${onion}/private; Data type: contracts; Extortion type: double extortion; Monetization path: ransom demand; Publicity tactic: countdown announcement; Buyer communication: auction contact channel; Intermediary communication: broker listing; Profitability signal: claimed paid victims; Token: should-not-persist; Contact: analyst@example.test; Phone: +47 12 34 56 78"></head><body><article class="news-item"><h2 class="headline"><a>Fabrikam.example</a></h2></article><div class="post-title font">Contoso Manufacturing</div><time datetime="2026-07-20T10:00:00Z"></time>raw page content that must not persist</body></html>`, { status: 200, headers: { "content-type": "text/html" } });
       }
     });
     store.saveSource({
@@ -48,6 +48,9 @@ describe("restricted metadata collection", () => {
     expect(serializedCapture).not.toContain(onion);
     expect(serializedCapture).not.toContain("/posts");
     expect(serializedCapture).not.toContain("raw page content");
+    expect(serializedCapture).not.toContain("should-not-persist");
+    expect(serializedCapture).not.toContain("analyst@example.test");
+    expect(serializedCapture).not.toContain("+47 12 34 56 78");
     expect(capture.objectRef).toBeUndefined();
     expect(store.listSourceHealthObservations()).toEqual([expect.objectContaining({ sourceId: "src_restricted_live", success: true, useful: true, legalMode: "metadata_only" })]);
     expect(store.listRuns().at(-1)).toMatchObject({ id: result.runId, status: "completed", captureCount: 1 });
@@ -78,12 +81,13 @@ describe("restricted metadata collection", () => {
     expect(store.listSourceHealthObservations().every((observation) => observation.useful === false && observation.observedActorCount === 0)).toBe(true);
   });
 
-  test("extracts current SafePay and Space Bears victim-card metadata without retaining locators or dynamic page text", async () => {
+  test("extracts current SafePay, Blackwater, and Space Bears victim-card metadata without retaining locators or dynamic page text", async () => {
     const pages: Record<string, string> = {
       SafePay: '<title>Safepay Blog</title><div class="card"><h5 class="card-title text-center">Northwind Health</h5><div>countdown 00:01</div></div><a href="http://' + "c".repeat(56) + '.onion/download/archive.zip">payload</a>',
+      Blackwater: '<title>Blackwater Blog</title><div class="card"><h5 class="card-title">Minidoka Memorial Hospital</h5><div>download patient files</div></div>',
       "Space Bears": '<title>Space Bears</title><div class="companies-list__item"><div class="name">Contoso Manufacturing</div><div>countdown 00:02</div></div>'
     };
-    for (const actorName of ["SafePay", "Space Bears"]) {
+    for (const actorName of ["SafePay", "Blackwater", "Space Bears"]) {
       const actorBoundary = new TorMetadataHttpBoundary({ proxyUrl: "http://onion-tor:8118", fetcher: async () => new Response(pages[actorName], { headers: { "content-type": "text/html" } }) });
       const metadata = await actorBoundary.fetchMetadata({ url: `http://${"a".repeat(56)}.onion/`, actorName });
       expect(metadata.victimNames).toHaveLength(1);
@@ -219,8 +223,9 @@ describe("restricted metadata collection", () => {
     const report = importRestrictedMetadataSeedBundle(bundle, "2026-07-22T13:00:00.000Z");
 
     expect(report.valid).toBe(true);
-    expect(report.accepted.filter((item) => item.metadata?.transportCanary !== true).map((item) => item.id)).toEqual(["restricted_safepay_victim_blog", "restricted_space_bears_victim_blog", "restricted_qilin_victim_blog", "restricted_nova_victim_blog", "restricted_interlock_victim_blog"]);
+    expect(report.accepted.filter((item) => item.metadata?.transportCanary !== true).map((item) => item.id)).toEqual(["restricted_safepay_victim_blog", "restricted_space_bears_victim_blog", "restricted_blackwater_victim_blog", "restricted_qilin_victim_blog", "restricted_nova_victim_blog", "restricted_interlock_victim_blog"]);
     expect(report.accepted.filter((item) => item.metadata?.transportCanary !== true).every((item) => item.status === "candidate" && item.governance?.approvalState === "approved" && item.metadata?.productionCollectionOutcome === "metadata_only_parser_verified")).toBe(true);
+    expect(report.accepted.find((item) => item.id === "restricted_blackwater_victim_blog")).toMatchObject({ countsAsCoverage: false, metadata: { qualificationState: "pending_two_productive_scheduled_cycles", sourcePortfolioVerification: { outcome: "content_parsed", observedItemCount: 8 } } });
     expect(report.accepted.some((item) => ["restricted_akira_victim_blog", "restricted_blackout_victim_blog", "restricted_braincipher_victim_blog", "restricted_deadlock_victim_blog"].includes(item.id))).toBe(false);
     expect(bundle.reviewedRejectedCandidates.length).toBeGreaterThan(10);
     expect(bundle.reviewedRejectedCandidates.every((item: any) => item.disposition === "rejected" && item.countsAsCoverage === false && !JSON.stringify(item).includes(".onion"))).toBe(true);
@@ -233,6 +238,10 @@ describe("restricted metadata collection", () => {
     const leaked = JSON.parse(readFileSync(new URL("../../seeds/restricted_metadata_source_packs.json", import.meta.url), "utf8"));
     leaked.reviewedRejectedCandidates[0].locator = `http://${"z".repeat(56)}.onion/`;
     expect(importRestrictedMetadataSeedBundle(leaked, "2026-07-22T13:00:00.000Z").errors.some((error) => error.message.includes("must not retain a restricted locator"))).toBe(true);
+
+    const duplicate = JSON.parse(readFileSync(new URL("../../seeds/restricted_metadata_source_packs.json", import.meta.url), "utf8"));
+    duplicate.sources.push({ ...duplicate.sources.at(-1), id: "restricted_duplicate_endpoint", name: "Duplicate endpoint", url: `${duplicate.sources.at(-1).url}alternate` });
+    expect(importRestrictedMetadataSeedBundle(duplicate, "2026-07-23T16:30:03.000Z").errors).toContainEqual({ sourceId: "restricted_duplicate_endpoint", message: "restricted source endpoint must be unique" });
   });
 
   test("reports only collectable intelligence coverage and redacts restricted locators", () => {

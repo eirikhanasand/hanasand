@@ -649,16 +649,16 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
 
     try {
       const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-23T12:00:00.000Z" });
-      expect(first).toMatchObject({ importedSourceCount: 6, activeSourceCount: 1, totalSourceCount: 6 });
+      expect(first).toMatchObject({ importedSourceCount: 7, activeSourceCount: 1, totalSourceCount: 7 });
       expect(store.listSources().filter((item: any) => item.metadata?.transportCanary !== true)
         .every((source: any) => source.status === "candidate" && source.metadata.productionCollection === false && source.metadata.restrictedMetadataCandidate === true)).toBe(true);
       store.saveCapture(fixtureCapture({ id: "cap_retained_tor_metadata", sourceId: "restricted_safepay_victim_blog", storageKind: "metadata_only", body: undefined, sensitive: true }));
       const expired = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T00:00:00.000Z" });
-      expect(expired).toMatchObject({ activeSourceCount: 1, totalSourceCount: 6 });
+      expect(expired).toMatchObject({ activeSourceCount: 1, totalSourceCount: 7 });
 
       const restarted = new FileBackedScraperStore({ snapshotPath });
       const repeat = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-08-01T01:00:00.000Z" });
-      expect(repeat).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 6, activeSourceCount: 1, totalSourceCount: 6 });
+      expect(repeat).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 7, activeSourceCount: 1, totalSourceCount: 7 });
       expect(restarted.listSources().filter((item: any) => item.metadata?.transportCanary !== true)
         .every((source: any) => source.status === "candidate" && source.metadata.restrictedMetadataCandidate === true)).toBe(true);
       expect(restarted.listCaptures().map((capture: any) => capture.id)).toEqual(["cap_retained_tor_metadata"]);

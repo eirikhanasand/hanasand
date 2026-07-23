@@ -69,9 +69,9 @@ async function boundedText(response: Response, maxBytes: number) {
 }
 
 function metadataFromHtml(html: string, actorName?: string) {
-  const title = clean(tag(html, "title") || tag(html, "h1")).slice(0, 300) || undefined;
+  const title = safeMetadataText(tag(html, "title") || tag(html, "h1")).slice(0, 300) || undefined;
   const visible = clean(html.replace(/<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<!--[\s\S]*?-->/gi, " "));
-  const rawDescription = clean(meta(html, "description") || visible).slice(0, 1_000) || undefined;
+  const rawDescription = safeMetadataText(meta(html, "description") || visible).slice(0, 1_000) || undefined;
   const victimNames = victimNamesFromHtml(html, actorName);
   const description = clean(victimNames.length ? [title, ...victimNames].filter(Boolean).join(" | ") : rawDescription ?? "").slice(0, 1_000) || undefined;
   return {
@@ -101,13 +101,13 @@ function victimNamesFromHtml(html: string, actorName?: string): string[] {
   const names = [
     ...[...html.matchAll(/<article\b[^>]*class=["'][^"']*\bnews-item\b[^"']*["'][^>]*>[\s\S]*?<h2\b[^>]*class=["'][^"']*\bheadline\b[^"']*["'][^>]*>([\s\S]*?)<\/h2>/gi)].map((match) => clean(match[1])),
     ...[...html.matchAll(/<div\b[^>]*class=["'][^"']*\bpost-title\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1])),
-    ...(actor === "safepay" ? [...html.matchAll(/<h5\b[^>]*class=["'][^"']*\bcard-title\b[^"']*["'][^>]*>([\s\S]*?)<\/h5>/gi)].map((match) => clean(match[1])) : []),
+    ...(["safepay", "blackwater"].includes(actor ?? "") ? [...html.matchAll(/<h5\b[^>]*class=["'][^"']*\bcard-title\b[^"']*["'][^>]*>([\s\S]*?)<\/h5>/gi)].map((match) => clean(match[1])) : []),
     ...(actor === "spacebears" ? [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bcompanies-list__item\b[^"']*["'][^>]*>[\s\S]*?<div\b[^>]*class=["'][^"']*\bname\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)].map((match) => clean(match[1])) : []),
     ...(actor === "qilin" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\bitem_box-title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : []),
     ...(actor === "nova" ? [...html.matchAll(/<[^>]*class=["'][^"']*\bpost-card\b[^"']*["'][^>]*>[\s\S]*?<a\b[^>]*class=["'][^"']*\blogo\b[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)].map((match) => clean(match[1])) : []),
     ...(actor === "interlock" ? [...html.matchAll(/<([a-z0-9]+)\b[^>]*class=["'][^"']*\badvert_info_title\b[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi)].map((match) => clean(match[2])) : [])
   ];
-  return [...new Set(names.filter((name) => name.length >= 2 && name.length <= 160))].slice(0, 24);
+  return [...new Set(names.map(safeMetadataText).filter((name) => name.length >= 2 && name.length <= 160 && !name.includes("[redacted-")))].slice(0, 24);
 }
 
 function tag(html: string, name: string): string { return html.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`, "i"))?.[1] ?? ""; }
@@ -115,3 +115,11 @@ function meta(html: string, name: string): string { const element = [...html.mat
 function time(html: string): string | undefined { const value = html.match(/<time\b[^>]*datetime=["']([^"']+)["']/i)?.[1]?.trim(); return value && /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) && Number.isFinite(Date.parse(value)) ? value : undefined; }
 function labeled(text: string | undefined, labels: string[]): string | undefined { if (!text) return undefined; const match = text.match(new RegExp(`(?:${labels.join("|")})\\s*[:\\-]\\s*([^|;\\n]{2,120})`, "i")); return match?.[1]?.trim(); }
 function clean(value: string): string { return value.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'").replace(/\s+/g, " ").trim(); }
+function safeMetadataText(value: string): string {
+  return clean(value)
+    .replace(/\bhttps?:\/\/[^\s"'<>]+/gi, "[redacted-url]")
+    .replace(/\b[a-z2-7]{56}\.onion(?:\/[^\s"'<>]*)?/gi, "[restricted-locator]")
+    .replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/gi, "[redacted-email]")
+    .replace(/\+?\d(?:[\s().-]*\d){7,}/g, "[redacted-phone]")
+    .replace(/\b(?:password|passwd|credential|api[_ -]?key|token|secret)\s*[:=]\s*\S+/gi, "[redacted-secret]");
+}
