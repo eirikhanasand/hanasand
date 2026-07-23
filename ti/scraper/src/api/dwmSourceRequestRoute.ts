@@ -7581,7 +7581,6 @@ function sourcePackGrowthCounters(packs: SourcePackRegistry[], options: ApiServe
     const parserStatus = candidate.parserStatus ?? "not_scheduled";
     parserSourceFamilyCounts[candidate.declaredFamily][parserStatus] = (parserSourceFamilyCounts[candidate.declaredFamily][parserStatus] ?? 0) + 1;
   }
-  const fixtureLoadReadiness = sourcePackFixtureLoadReadiness(candidates);
   const sourceFamilyCounts = sourceFamilyCoverage({ sources, registry: packs[0] });
 
   return {
@@ -7603,7 +7602,6 @@ function sourcePackGrowthCounters(packs: SourcePackRegistry[], options: ApiServe
     lastRunTime: lastRun?.completedAt,
     lastRunStatus: lastRun?.status,
     parserSourceFamilyCounts,
-    fixtureLoadReadiness,
     sourceFamilyCounts,
     sourceFamilyBreakdown: sourcePackFamilyBreakdown({
       candidates,
@@ -7612,7 +7610,6 @@ function sourcePackGrowthCounters(packs: SourcePackRegistry[], options: ApiServe
       frontierTasks,
       persistedQueueReceipts,
       parserSourceFamilyCounts,
-      fixtureLoadReadiness,
       sourceFamilyCounts,
       lastRun
     }),
@@ -7629,18 +7626,15 @@ function sourcePackFamilyBreakdown(input: {
   frontierTasks: Array<Record<string, any>>;
   persistedQueueReceipts: Array<Record<string, any>>;
   parserSourceFamilyCounts: Record<SourceGrowthFamily, Record<string, number>>;
-  fixtureLoadReadiness: Record<string, any>;
   sourceFamilyCounts: Record<SourceGrowthFamily, Record<string, any>>;
   lastRun?: Record<string, any>;
 }) {
-  const fixtureRows = new Map<string, Record<string, any>>((input.fixtureLoadReadiness.rows ?? []).map((row: Record<string, any>) => [String(row.family), row]));
   const activeRowsByFamily = countRecordsByFamily(input.activeRows, (row) => row.sourceFamily ?? row.family);
   const queuedTaskIdsByFamily = sourcePackQueuedTaskIdsByFamily(input.frontierTasks, input.persistedQueueReceipts);
 
   const rows = SOURCE_GROWTH_FAMILIES.map((family) => {
     const familyCandidates = input.candidates.filter((candidate) => candidate.declaredFamily === family);
     const statusCounts = countRecordsByFamilyStatus(familyCandidates);
-    const fixtureRow: Record<string, any> = fixtureRows.get(family) ?? {};
     const sourceCounts = input.sourceFamilyCounts[family] ?? {};
     const queuedCollectionTasks = queuedTaskIdsByFamily.get(family)?.size ?? 0;
     const activeSourceRows = Math.max(Number(sourceCounts.active ?? 0), activeRowsByFamily.get(family) ?? 0);
@@ -7648,7 +7642,6 @@ function sourcePackFamilyBreakdown(input: {
       return ["rejected", "failed", "disabled", "suppressed", "duplicate"].includes(String(candidate.status)) || Boolean(candidate.failure);
     });
     const parserStatuses = input.parserSourceFamilyCounts[family] ?? {};
-    const fixtureReadyCandidates = Number(fixtureRow.fixtureReadyCandidates ?? 0);
     const canProduceAlertGradeEvidence = activeSourceRows > 0 && (
       family === "telegram"
       || family === "darkweb_metadata"
@@ -7670,40 +7663,28 @@ function sourcePackFamilyBreakdown(input: {
       queuedCollectionTasks,
       collectionReady: activeSourceRows > 0 && queuedCollectionTasks > 0,
       parserStatuses,
-      fixtureReadiness: {
-        fixtureReadyCandidates,
-        blockedCandidates: Number(fixtureRow.blockedCandidates ?? 0),
-        parserProfile: fixtureRow.parserProfile ?? parserProfileForFamily(family),
-        expectedCaptureType: fixtureRow.expectedCaptureType ?? expectedCaptureTypeForFamily(family),
-        fixtureKeys: fixtureRow.fixtureKeys ?? [],
-        loadPlan: fixtureRow.loadPlan ?? {
-          mode: "no_network_fixture",
-          action: "pack_worker_run",
-          liveNetworkFetch: false,
-          rawRestrictedPayloadStorage: false
-        }
-      },
       alertability: {
         canProduceAlertGradeEvidence,
         matchableFields: alertableFieldsForFamily(family),
         evidenceSource: "source_pack_worker_readiness"
       },
-      policyBoundary: sourcePackFixturePolicyBoundaryForFamily(family),
+      policyBoundary: family === "telegram"
+        ? publicTelegramBoundary()
+        : family === "darkweb_onion" || family === "darkweb_metadata"
+          ? restrictedMetadataBoundary()
+          : publicWebMetadataBoundary(),
       lastWorkerRun: input.lastRun ? {
         id: input.lastRun.id,
         status: input.lastRun.status,
         completedAt: input.lastRun.completedAt
       } : undefined,
-      blockers: dedupeBlockers([
-        ...(fixtureRow.blockers ?? []),
-        ...blockedCandidates.map((candidate) => ({
+      blockers: dedupeBlockers(blockedCandidates.map((candidate) => ({
           code: candidate.failure?.code ?? candidate.status,
           severity: "warning",
           family,
           candidateId: candidate.id,
           retryable: candidate.status !== "rejected"
-        }))
-      ]),
+        }))),
       safeOutput: sourcePackSafeOutput()
     };
   });
@@ -7713,8 +7694,7 @@ function sourcePackFamilyBreakdown(input: {
     summary: {
       activeFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.activeSourceRows > 0).map((row) => row.family)),
       collectionReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.collectionReady).map((row) => row.family)),
-      fixtureReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.fixtureReadiness.fixtureReadyCandidates > 0).map((row) => row.family)),
-      blockedFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.blockedCandidates > 0 || row.fixtureReadiness.blockedCandidates > 0).map((row) => row.family)),
+      blockedFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.blockedCandidates > 0).map((row) => row.family)),
       parserStatuses: Object.fromEntries(rows.map((row) => [row.family, row.parserStatuses])),
       alertableFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.alertability.canProduceAlertGradeEvidence).map((row) => row.family))
     },
@@ -7765,79 +7745,6 @@ function sourceGrowthFamilyFromUnknown(value: unknown): SourceGrowthFamily {
   if (raw.includes("actor")) return "actor_page";
   if (raw.includes("advisory") || raw.includes("cisa") || raw.includes("cert")) return "public_advisory";
   return "clear_web";
-}
-
-function sourcePackFixtureLoadReadiness(candidates: Array<Record<string, any>>) {
-  const rows = SOURCE_GROWTH_FAMILIES.map((family) => {
-    const familyCandidates = candidates.filter((candidate) => candidate.declaredFamily === family);
-    const fixtureReadyCandidates = familyCandidates.filter((candidate) => {
-      const parserExpectation = candidate.parserExpectation ?? parserProfileForFamily(family);
-      return Boolean(parserExpectation) && !["rejected", "duplicate", "suppressed", "disabled"].includes(String(candidate.status));
-    });
-    const blockedCandidates = familyCandidates.filter((candidate) => {
-      return ["rejected", "failed", "disabled"].includes(String(candidate.status)) || Boolean(candidate.failure);
-    });
-    return {
-      schemaVersion: "dwm.source_pack_fixture_load_readiness_row.v1",
-      family,
-      totalCandidates: familyCandidates.length,
-      fixtureReadyCandidates: fixtureReadyCandidates.length,
-      blockedCandidates: blockedCandidates.length,
-      parserProfile: parserProfileForFamily(family),
-      expectedCaptureType: expectedCaptureTypeForFamily(family),
-      fixtureKeys: uniqueSourceReadinessStrings(fixtureReadyCandidates.map((candidate) => sourcePackCandidateFixtureKey(candidate))),
-      policyBoundary: sourcePackFixturePolicyBoundaryForFamily(family),
-      loadPlan: {
-        mode: "no_network_fixture",
-        action: "pack_worker_run",
-        liveNetworkFetch: false,
-        rawRestrictedPayloadStorage: false
-      },
-      blockers: dedupeBlockers(blockedCandidates.map((candidate) => ({
-        code: candidate.failure?.code ?? "candidate_not_fixture_ready",
-        severity: "warning",
-        family,
-        retryable: candidate.status !== "rejected"
-      }))),
-      safeOutput: sourcePackSafeOutput()
-    };
-  });
-  return {
-    schemaVersion: "dwm.source_pack_fixture_load_readiness.v1",
-    rows,
-    summary: {
-      totalFixtures: rows.reduce((sum, row) => sum + row.fixtureReadyCandidates, 0),
-      familiesWithFixtures: uniqueSourceReadinessStrings(rows.filter((row) => row.fixtureReadyCandidates > 0).map((row) => row.family)),
-      blockedFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.blockedCandidates > 0).map((row) => row.family)),
-      parserProfiles: uniqueSourceReadinessStrings(rows.filter((row) => row.fixtureReadyCandidates > 0).map((row) => row.parserProfile)),
-      expectedCaptureTypes: uniqueSourceReadinessStrings(rows.filter((row) => row.fixtureReadyCandidates > 0).map((row) => row.expectedCaptureType))
-    },
-    policyBoundary: {
-      liveNetworkFetch: false,
-      rawRestrictedPayloadStorage: false,
-      metadataOnlyRestrictedSources: true,
-      publicTelegramOnly: true
-    },
-    safeOutput: sourcePackSafeOutput()
-  };
-}
-
-function sourcePackCandidateFixtureKey(candidate: Record<string, any>) {
-  const requestedFamily = String(candidate.declaredFamily ?? candidate.family ?? "");
-  const family = (SOURCE_GROWTH_FAMILIES.includes(requestedFamily as SourceGrowthFamily) ? requestedFamily : "clear_web") as SourceGrowthFamily;
-  const parserProfile = parserProfileForFamily(family);
-  const ref = String(candidate.refLabel ?? candidate.targetRef ?? candidate.id ?? family).toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "candidate";
-  return `fixture://source-pack/${family}/${parserProfile}/${ref}`;
-}
-
-function sourcePackFixturePolicyBoundaryForFamily(family: SourceGrowthFamily) {
-  return {
-    publicTelegramOnly: family === "telegram",
-    metadataOnlyRestrictedSource: family === "darkweb_onion" || family === "darkweb_metadata",
-    publicMetadataOnly: family === "actor_page" || family === "public_advisory" || family === "clear_web",
-    liveNetworkFetch: false,
-    rawRestrictedPayloadStorage: false
-  };
 }
 
 function sourcePackListQuery(body: DwmSourceRequestBody): DwmSourcePackListQuery {

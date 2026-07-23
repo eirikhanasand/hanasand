@@ -382,39 +382,7 @@ describe("dwm source requests", () => {
     expect(body.sourceGrowthCounters.parserSourceFamilyCounts.telegram).toMatchObject({ telegram_public_parser_ready: 1 });
     expect(body.sourceGrowthCounters.parserSourceFamilyCounts.darkweb_metadata).toMatchObject({ restricted_metadata_parser_ready: 1 });
     expect(body.sourceGrowthCounters.parserSourceFamilyCounts.darkweb_onion).toMatchObject({ intake_blocked: 1 });
-    expect(body.sourceGrowthCounters.fixtureLoadReadiness).toMatchObject({
-      schemaVersion: "dwm.source_pack_fixture_load_readiness.v1",
-      rows: expect.arrayContaining([
-        expect.objectContaining({
-          family: "telegram",
-          fixtureReadyCandidates: 1,
-          parserProfile: "public_channel_handoff",
-          expectedCaptureType: "telegram_public_message_preview",
-          fixtureKeys: expect.arrayContaining([expect.stringContaining("fixture://source-pack/telegram/public_channel_handoff/")]),
-          loadPlan: expect.objectContaining({ action: "pack_worker_run", liveNetworkFetch: false })
-        }),
-        expect.objectContaining({
-          family: "darkweb_metadata",
-          fixtureReadyCandidates: 1,
-          parserProfile: "restricted_metadata",
-          expectedCaptureType: "darkweb_metadata_observation",
-          policyBoundary: expect.objectContaining({ metadataOnlyRestrictedSource: true })
-        }),
-        expect.objectContaining({
-          family: "darkweb_onion",
-          blockedCandidates: 1,
-          blockers: expect.arrayContaining([
-            expect.objectContaining({ family: "darkweb_onion" })
-          ])
-        })
-      ]),
-      summary: expect.objectContaining({
-        familiesWithFixtures: expect.arrayContaining(["telegram", "darkweb_metadata"]),
-        blockedFamilies: expect.arrayContaining(["telegram", "darkweb_onion"]),
-        parserProfiles: expect.arrayContaining(["public_channel_handoff", "restricted_metadata"])
-      }),
-      safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-    });
+    expect(body.sourceGrowthCounters).not.toHaveProperty("fixtureLoadReadiness");
     expect(body.sourceGrowthCounters.sourceFamilyBreakdown).toMatchObject({
       schemaVersion: "dwm.source_pack_family_breakdown.v1",
       rows: expect.arrayContaining([
@@ -424,10 +392,6 @@ describe("dwm source requests", () => {
           activeSourceRows: 1,
           queuedCollectionTasks: 1,
           parserStatuses: expect.objectContaining({ telegram_public_parser_ready: 1 }),
-          fixtureReadiness: expect.objectContaining({
-            fixtureReadyCandidates: 1,
-            expectedCaptureType: "telegram_public_message_preview"
-          }),
           alertability: expect.objectContaining({
             canProduceAlertGradeEvidence: true,
             matchableFields: expect.arrayContaining(["text", "channel"])
@@ -439,7 +403,7 @@ describe("dwm source requests", () => {
           activeSourceRows: 1,
           queuedCollectionTasks: 1,
           parserStatuses: expect.objectContaining({ restricted_metadata_parser_ready: 1 }),
-          policyBoundary: expect.objectContaining({ metadataOnlyRestrictedSource: true }),
+          policyBoundary: expect.objectContaining({ metadataOnly: true }),
           alertability: expect.objectContaining({ canProduceAlertGradeEvidence: true })
         }),
         expect.objectContaining({
@@ -453,7 +417,6 @@ describe("dwm source requests", () => {
       summary: expect.objectContaining({
         activeFamilies: expect.arrayContaining(["telegram", "darkweb_metadata"]),
         collectionReadyFamilies: expect.arrayContaining(["telegram", "darkweb_metadata"]),
-        fixtureReadyFamilies: expect.arrayContaining(["telegram", "darkweb_metadata"]),
         blockedFamilies: expect.arrayContaining(["telegram", "darkweb_onion"]),
         alertableFamilies: expect.arrayContaining(["telegram", "darkweb_metadata"])
       }),
@@ -504,10 +467,7 @@ describe("dwm source requests", () => {
       workerReadiness: { activeSourceRows: 2, collectionReadyRows: 2 },
       lastWorkerRun: { sourcePackId: "pack_worker_route_growth" }
     });
-    expect(statusBody.registry.sourceGrowthCounters.fixtureLoadReadiness.summary).toMatchObject({
-      familiesWithFixtures: expect.arrayContaining(["telegram", "darkweb_metadata"]),
-      blockedFamilies: expect.arrayContaining(["darkweb_onion"])
-    });
+    expect(statusBody.registry.sourceGrowthCounters).not.toHaveProperty("fixtureLoadReadiness");
     expect(statusBody.registry.sourceGrowthCounters.sourceFamilyBreakdown.summary).toMatchObject({
       activeFamilies: expect.arrayContaining(["telegram", "darkweb_metadata"]),
       collectionReadyFamilies: expect.arrayContaining(["telegram", "darkweb_metadata"])
@@ -1153,24 +1113,7 @@ describe("dwm source requests", () => {
       },
       evidenceReadiness: { canProduceAlertGradeEvidence: false, reason: "activation_or_capture_required" }
     });
-    expect(body.packRegistry.sourceGrowthCounters.fixtureLoadReadiness).toMatchObject({
-      schemaVersion: "dwm.source_pack_fixture_load_readiness.v1",
-      rows: expect.arrayContaining([
-        expect.objectContaining({
-          family: "telegram",
-          totalCandidates: 2,
-          fixtureReadyCandidates: 2,
-          parserProfile: "public_channel_handoff",
-          expectedCaptureType: "telegram_public_message_preview",
-          fixtureKeys: expect.arrayContaining([expect.stringContaining("fixture://source-pack/telegram/public_channel_handoff/")])
-        })
-      ]),
-      summary: expect.objectContaining({
-        totalFixtures: 2,
-        familiesWithFixtures: expect.arrayContaining(["telegram"]),
-        parserProfiles: expect.arrayContaining(["public_channel_handoff"])
-      })
-    });
+    expect(body.packRegistry.sourceGrowthCounters).not.toHaveProperty("fixtureLoadReadiness");
     expect(body.packRegistry.sourceGrowthCounters.sourceFamilyBreakdown).toMatchObject({
       schemaVersion: "dwm.source_pack_family_breakdown.v1",
       rows: expect.arrayContaining([
@@ -1179,16 +1122,9 @@ describe("dwm source requests", () => {
           totalCandidates: 2,
           activeSourceRows: 0,
           queuedCollectionTasks: 0,
-          fixtureReadiness: expect.objectContaining({
-            fixtureReadyCandidates: 2,
-            expectedCaptureType: "telegram_public_message_preview"
-          }),
           alertability: expect.objectContaining({ canProduceAlertGradeEvidence: false })
         })
-      ]),
-      summary: expect.objectContaining({
-        fixtureReadyFamilies: expect.arrayContaining(["telegram"])
-      })
+      ])
     });
     expect(frontier.snapshot()).toHaveLength(0);
 
@@ -1226,43 +1162,19 @@ describe("dwm source requests", () => {
       darkweb_onion: { total: 1, pending: 1 },
       darkweb_metadata: { total: 0 }
     });
-    expect(body.packRegistry.sourceGrowthCounters.fixtureLoadReadiness).toMatchObject({
-      rows: expect.arrayContaining([
-        expect.objectContaining({
-          family: "telegram",
-          fixtureReadyCandidates: 1,
-          policyBoundary: expect.objectContaining({ publicTelegramOnly: true })
-        }),
-        expect.objectContaining({
-          family: "darkweb_onion",
-          fixtureReadyCandidates: 1,
-          parserProfile: "restricted_metadata",
-          expectedCaptureType: "darkweb_onion_metadata_observation",
-          policyBoundary: expect.objectContaining({ metadataOnlyRestrictedSource: true })
-        })
-      ]),
-      summary: expect.objectContaining({
-        familiesWithFixtures: expect.arrayContaining(["telegram", "darkweb_onion"]),
-        expectedCaptureTypes: expect.arrayContaining(["telegram_public_message_preview", "darkweb_onion_metadata_observation"])
-      })
-    });
+    expect(body.packRegistry.sourceGrowthCounters).not.toHaveProperty("fixtureLoadReadiness");
     expect(body.packRegistry.sourceGrowthCounters.sourceFamilyBreakdown).toMatchObject({
       rows: expect.arrayContaining([
         expect.objectContaining({
           family: "telegram",
-          totalCandidates: 1,
-          fixtureReadiness: expect.objectContaining({ fixtureReadyCandidates: 1 })
+          totalCandidates: 1
         }),
         expect.objectContaining({
           family: "darkweb_onion",
           totalCandidates: 1,
-          policyBoundary: expect.objectContaining({ metadataOnlyRestrictedSource: true }),
-          fixtureReadiness: expect.objectContaining({ expectedCaptureType: "darkweb_onion_metadata_observation" })
+          policyBoundary: expect.objectContaining({ metadataOnly: true })
         })
-      ]),
-      summary: expect.objectContaining({
-        fixtureReadyFamilies: expect.arrayContaining(["telegram", "darkweb_onion"])
-      })
+      ])
     });
     const onionCandidate = body.packRegistry.candidates.find((candidate: any) => candidate.sourceGrowthFamily === "darkweb_onion");
     expect(onionCandidate).toMatchObject({
