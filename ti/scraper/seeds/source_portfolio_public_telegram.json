@@ -2,8 +2,8 @@
   "schemaVersion": "ti.source_portfolio_batch.v1",
   "family": "public_telegram",
   "version": 1,
-  "name": "public-telegram-independent-publisher-batch-2",
-  "generatedAt": "2026-07-23T10:08:48.409Z",
+  "name": "public-telegram-independent-publisher-batch-2-corrected",
+  "generatedAt": "2026-07-23T14:12:56.784Z",
   "disabledByDefault": false,
   "sources": [
     {
@@ -2021,112 +2021,6 @@
       }
     },
     {
-      "id": "src_portfolio_tg_antph",
-      "name": "Start X phishing and human-risk research",
-      "type": "telegram_public",
-      "url": "https://t.me/antph",
-      "accessMethod": "public_http",
-      "status": "active",
-      "risk": "low",
-      "trustScore": 0.86,
-      "language": "ru",
-      "crawlFrequencySeconds": 1800,
-      "legalNotes": "Public text posts from Start X's channel independently linked by https://startx.team/. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, leak bodies, or credentials.",
-      "governance": {
-        "approvalRequired": true,
-        "approvalState": "approved",
-        "approvalScope": "official_public_web_preview",
-        "metadataOnly": false,
-        "approvedAt": "2026-07-23T10:08:48.409Z",
-        "approvedBy": "source-review:official-publisher-backlink",
-        "policyVersion": "collection-policy:v1"
-      },
-      "metadata": {
-        "productionCollection": true,
-        "sourceFamily": "telegram_public",
-        "sourceFamilies": [
-          "vendor_research",
-          "phishing_reporting",
-          "regional_language"
-        ],
-        "collectionMode": "public_web_preview",
-        "mediaPolicy": "metadata_only_no_download",
-        "channelHandle": "antph",
-        "activityWindowSeconds": 7776000,
-        "maxItemsPerFetch": 20,
-        "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T10:08:48.409Z",
-          "outcome": "content_parsed",
-          "observedItemCount": 20,
-          "observedCadenceSeconds": 381411,
-          "httpStatus": 200,
-          "contentType": "text/html; charset=utf-8",
-          "adapter": "telegram_public",
-          "parserVersion": "telegram-public-preview:v1",
-          "publisherReference": "https://startx.team/",
-          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
-        }
-      },
-      "catalog": {
-        "canonicalId": "publisher:antph:telegram",
-        "publisher": {
-          "name": "Start X",
-          "country": "RU",
-          "homepage": "https://startx.team/",
-          "trustBasis": "official publisher or researcher page links the exact public Telegram handle"
-        },
-        "tier": "tier_2",
-        "approvalScope": "official_public_web_preview",
-        "license": "Public publisher communications; source attribution retained.",
-        "legalBasis": "Unauthenticated public publisher channel collected for defensive security research.",
-        "reliability": 0.86,
-        "intelligenceValue": 0.88,
-        "retentionClass": "standard",
-        "analystOwner": "source-ops",
-        "coverage": {
-          "topics": [
-            "phishing",
-            "social engineering",
-            "credential theft",
-            "digital fraud"
-          ],
-          "actors": [],
-          "aliases": [],
-          "industries": [
-            "technology",
-            "government",
-            "critical infrastructure"
-          ],
-          "regions": [
-            "Eastern Europe",
-            "Global"
-          ],
-          "countries": [
-            "RU"
-          ],
-          "languages": [
-            "ru"
-          ],
-          "queryPatterns": [
-            "phishing",
-            "social engineering",
-            "credential theft",
-            "digital fraud"
-          ]
-        },
-        "collection": {
-          "freshnessTargetSeconds": 1800,
-          "collectionSlaSeconds": 1800,
-          "budgetClass": "normal",
-          "crawlCadenceSeconds": 1800
-        },
-        "adapterCompatibility": [
-          "telegram_public"
-        ],
-        "rollback": {}
-      }
-    },
-    {
       "id": "src_portfolio_tg_ap_security",
       "name": "AP Security laboratory reporting",
       "type": "telegram_public",
@@ -2339,112 +2233,6 @@
       }
     },
     {
-      "id": "src_portfolio_tg_it_law_security",
-      "name": "RTM Group cyber incident and legal analysis",
-      "type": "telegram_public",
-      "url": "https://t.me/it_law_security",
-      "accessMethod": "public_http",
-      "status": "active",
-      "risk": "low",
-      "trustScore": 0.83,
-      "language": "ru",
-      "crawlFrequencySeconds": 3600,
-      "legalNotes": "Public text posts from RTM Group's channel independently linked by https://rtmtech.ru/. Collect only unauthenticated public-preview text for defensive threat intelligence; do not join, authenticate, interact, follow private invitations, or download media, files, samples, leak bodies, or credentials.",
-      "governance": {
-        "approvalRequired": true,
-        "approvalState": "approved",
-        "approvalScope": "official_public_web_preview",
-        "metadataOnly": false,
-        "approvedAt": "2026-07-23T10:08:48.409Z",
-        "approvedBy": "source-review:official-publisher-backlink",
-        "policyVersion": "collection-policy:v1"
-      },
-      "metadata": {
-        "productionCollection": true,
-        "sourceFamily": "telegram_public",
-        "sourceFamilies": [
-          "incident_response",
-          "cybercrime_reporting",
-          "regional_language"
-        ],
-        "collectionMode": "public_web_preview",
-        "mediaPolicy": "metadata_only_no_download",
-        "channelHandle": "it_law_security",
-        "activityWindowSeconds": 4914240,
-        "maxItemsPerFetch": 20,
-        "sourcePortfolioVerification": {
-          "verifiedAt": "2026-07-23T10:08:48.409Z",
-          "outcome": "content_parsed",
-          "observedItemCount": 20,
-          "observedCadenceSeconds": 81904,
-          "httpStatus": 200,
-          "contentType": "text/html; charset=utf-8",
-          "adapter": "telegram_public",
-          "parserVersion": "telegram-public-preview:v1",
-          "publisherReference": "https://rtmtech.ru/",
-          "legalBasisVerifiedAt": "2026-07-23T10:08:48.409Z"
-        }
-      },
-      "catalog": {
-        "canonicalId": "publisher:it_law_security:telegram",
-        "publisher": {
-          "name": "RTM Group",
-          "country": "RU",
-          "homepage": "https://rtmtech.ru/",
-          "trustBasis": "official publisher or researcher page links the exact public Telegram handle"
-        },
-        "tier": "tier_3",
-        "approvalScope": "official_public_web_preview",
-        "license": "Public publisher communications; source attribution retained.",
-        "legalBasis": "Unauthenticated public publisher channel collected for defensive security research.",
-        "reliability": 0.83,
-        "intelligenceValue": 0.82,
-        "retentionClass": "standard",
-        "analystOwner": "source-ops",
-        "coverage": {
-          "topics": [
-            "cyber incidents",
-            "data breaches",
-            "digital forensics",
-            "security regulation"
-          ],
-          "actors": [],
-          "aliases": [],
-          "industries": [
-            "technology",
-            "government",
-            "critical infrastructure"
-          ],
-          "regions": [
-            "Eastern Europe",
-            "Global"
-          ],
-          "countries": [
-            "RU"
-          ],
-          "languages": [
-            "ru"
-          ],
-          "queryPatterns": [
-            "cyber incidents",
-            "data breaches",
-            "digital forensics",
-            "security regulation"
-          ]
-        },
-        "collection": {
-          "freshnessTargetSeconds": 3600,
-          "collectionSlaSeconds": 3600,
-          "budgetClass": "normal",
-          "crawlCadenceSeconds": 3600
-        },
-        "adapterCompatibility": [
-          "telegram_public"
-        ],
-        "rollback": {}
-      }
-    },
-    {
       "id": "src_portfolio_tg_alukatsky",
       "name": "Alexey Lukatsky cybersecurity analysis",
       "type": "telegram_public",
@@ -2573,6 +2361,11 @@
       "verifiedAt": "2026-07-23T10:08:48.409Z"
     },
     {
+      "idOrUrlHash": "0802d7541ba0361a9bb2f404f44ef0ade9a9e7ba63996abf4717c1d78e0ed79c",
+      "reason": "no_accepted_production_intel",
+      "verifiedAt": "2026-07-23T14:12:56.784Z"
+    },
+    {
       "idOrUrlHash": "0941b3ed349ecb027d95bc19c493d3a1ca409b68bff7b985539d4aa451f5f90f",
       "reason": "unreachable_or_no_current_cti_content",
       "verifiedAt": "2026-07-23T10:08:48.409Z"
@@ -2586,6 +2379,11 @@
       "idOrUrlHash": "0f5274f10e79af1fec3bc3fdc3d5daa0aff56fd0368771f2d7cbdb450203cefd",
       "reason": "unreachable_or_no_current_cti_content",
       "verifiedAt": "2026-07-23T10:08:48.409Z"
+    },
+    {
+      "idOrUrlHash": "1460027b40fc830fc48792a1d7c80ca15fcb66a60a9232c860b6dec88a6c313a",
+      "reason": "no_accepted_production_intel",
+      "verifiedAt": "2026-07-23T14:12:56.784Z"
     },
     {
       "idOrUrlHash": "14cf4d822dbbd81e2a93b02e6e4200d759144e1b976af4670e00977e0da27e65",

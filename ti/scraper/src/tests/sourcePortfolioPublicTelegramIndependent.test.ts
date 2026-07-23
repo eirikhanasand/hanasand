@@ -3,6 +3,7 @@ import { evaluateSourceForCollection, isExecutableSource } from "../policy/colle
 import { importSeedBundle } from "../registry/sourceSeeds.ts";
 
 const portfolioPath = "seeds/source_portfolio_public_telegram.json";
+const productionZeroYield = ["antph", "it_law_security"];
 
 describe("independently verified public Telegram source portfolio", () => {
   test("imports executable publisher-linked channels without endpoint aliases or scraped content", async () => {
@@ -21,6 +22,7 @@ describe("independently verified public Telegram source portfolio", () => {
     expect(report).toMatchObject({ valid: true, errors: [], duplicates: [] });
     expect(new Set(portfolioKeys).size).toBe(portfolioKeys.length);
     expect(portfolioKeys.filter((key: string) => reservedKeys.has(key))).toEqual([]);
+    expect(bundle.sources.map((source: any) => source.metadata.channelHandle)).not.toContainAnyValues(productionZeroYield);
     expect(canonicalFeedKey("https://telegram.me/S/CISOCLUB/")).toBe(canonicalFeedKey("https://t.me/cisoclub"));
 
     for (const [index, source] of bundle.sources.entries()) {
@@ -79,8 +81,8 @@ describe("independently verified public Telegram source portfolio", () => {
       expect(source.legalNotes).toContain("do not join");
       expect(source.metadata.activityWindowSeconds).toBeGreaterThan(0);
       expect(source.metadata.maxItemsPerFetch).toBeGreaterThan(0);
-      expect(verification.verifiedAt).toBe(bundle.generatedAt);
-      expect(verification.legalBasisVerifiedAt).toBe(bundle.generatedAt);
+      expect(Date.parse(verification.verifiedAt)).toBeLessThanOrEqual(Date.parse(bundle.generatedAt));
+      expect(Date.parse(verification.legalBasisVerifiedAt)).toBeLessThanOrEqual(Date.parse(bundle.generatedAt));
       expect(verification.observedItemCount).toBeGreaterThanOrEqual(1);
       expect(verification.observedCadenceSeconds).toBeGreaterThanOrEqual(300);
       expect(verification.contentType).toContain("text/html");
@@ -93,8 +95,13 @@ describe("independently verified public Telegram source portfolio", () => {
     for (const exclusion of bundle.exclusions) {
       expect(Object.keys(exclusion).sort()).toEqual(["idOrUrlHash", "reason", "verifiedAt"]);
       expect(exclusion.idOrUrlHash).toMatch(/^[a-f0-9]{64}$/);
-      expect(exclusion.verifiedAt).toBe(bundle.generatedAt);
+      expect(Date.parse(exclusion.verifiedAt)).toBeLessThanOrEqual(Date.parse(bundle.generatedAt));
     }
+    expect(bundle.exclusions).toEqual(expect.arrayContaining(productionZeroYield.map((handle) => ({
+      idOrUrlHash: canonicalUrlHash(handle),
+      reason: "no_accepted_production_intel",
+      verifiedAt: expect.any(String)
+    }))));
 
     const serialized = JSON.stringify(bundle);
     expect(serialized).not.toMatch(/"(?:sample|rawText|body|messageText|scrapedContent|health|lastSeen|last_seen|lastSuccessful|lastUseful|crawlState)"/);
@@ -111,6 +118,10 @@ function canonicalFeedKey(value: string) {
   expect(handle).toMatch(/^[a-z0-9_]{4,}$/);
   expect(parts.length).toBe(parts[0]?.toLowerCase() === "s" ? 2 : 1);
   return `https://t.me/${handle}`;
+}
+
+function canonicalUrlHash(handle: string) {
+  return new Bun.CryptoHasher("sha256").update(`https://t.me/${handle}`).digest("hex");
 }
 
 async function existingTelegramKeys() {
