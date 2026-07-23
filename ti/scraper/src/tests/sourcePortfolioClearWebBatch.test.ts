@@ -20,7 +20,7 @@ describe("clear-web source portfolio batch", () => {
       family: "clear_web",
       version: 1,
     });
-    expect(batch.sources).toHaveLength(16);
+    expect(batch.sources).toHaveLength(28);
     expect(batch.exclusions).toHaveLength(43);
 
     const ids = new Set<string>();
@@ -70,6 +70,34 @@ describe("clear-web source portfolio batch", () => {
       for (const prohibited of ["health", "lastSeenAt", "lastUsefulAt", "crawlState"]) {
         expect(Object.hasOwn(source, prohibited)).toBe(false);
       }
+    }
+  });
+
+  test("keeps ledger 009 current and candidate-only until productive scheduled cycles exist", () => {
+    const expected = new Map([
+      ["New Relic Security Bulletins", [42, "2026-05-08T00:00:00.000Z"]],
+      ["SAS Security Bulletins", [24, "2026-07-09T04:00:00.000Z"]],
+      ["Google Cloud Security Bulletins", [30, "2026-07-22T16:14:36.073Z"]],
+      ["Google Kubernetes Engine Security Bulletins", [30, "2026-06-18T00:00:00.000Z"]],
+      ["Google Apigee Security Bulletins", [7, "2026-06-24T08:48:38.749Z"]],
+      ["Google Vertex AI Security Bulletins", [4, "2026-02-20T00:00:00.000Z"]],
+      ["Google Agent Platform Security Bulletins", [2, "2025-10-22T17:03:06.093Z"]],
+      ["Google Developer Connect Security Bulletins", [1, "2026-07-13T00:00:00.000Z"]],
+      ["Google Compute Engine Security Bulletins", [30, "2026-06-09T18:38:16.410Z"]],
+      ["Google Cloud Service Mesh Security Bulletins", [25, "2026-06-29T21:23:09.915Z"]],
+      ["Google Confidential VM Security Bulletins", [7, "2026-04-14T23:41:36.964Z"]],
+      ["Google Cloud VMware Engine Security Bulletins", [23, "2026-05-27T18:38:43.030Z"]],
+    ] as const);
+    const sources = batch.sources.filter((source: any) => expected.has(source.name));
+    expect(sources).toHaveLength(expected.size);
+    for (const source of sources) {
+      const [observedItemCount, latestPublishedAt] = expected.get(source.name)!;
+      expect(source.id).toBe(`src_portfolio_cw_${hash(source.url).slice(0, 20)}`);
+      expect(source.metadata.sourcePortfolioVerification).toMatchObject({ observedItemCount, latestPublishedAt });
+      expect(Date.parse(batch.generatedAt) - Date.parse(latestPublishedAt)).toBeLessThanOrEqual(source.metadata.activityWindowSeconds * 1000);
+      expect(source.metadata).not.toHaveProperty("countsAsCoverage");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioQualificationState");
+      expect(source.metadata).not.toHaveProperty("sourcePortfolioProductiveCheckCount");
     }
   });
 
