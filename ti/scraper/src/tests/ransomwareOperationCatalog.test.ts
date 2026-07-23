@@ -4,11 +4,13 @@ import { parseMitreActorCatalog, resolveMitreActorIdentity } from "../pipeline/m
 import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
+import { processCollectedItem } from "../pipeline/pipeline.ts";
+import { hashContent } from "../utils.ts";
 
 // Exact safe fields from the public Ransomware.live feeds; restricted locators are intentionally omitted.
 const groups = JSON.stringify([
   group("Akira", null, "conti", "2026-07-21T21:00:00Z", 200),
-  group("TheGentlemen", "Storm-2697", null, "2026-07-21T20:00:00Z", 200),
+  { ...group("TheGentlemen", "Storm-2697", null, "2026-07-21T20:00:00Z", 200), altname: ["Storm-2697", "Unknown"] },
   group("Old Group", null, null, "2026-01-01T00:00:00Z", 200),
   { ...group("Unreliable", null, null, "2026-07-21T20:00:00Z", 200), description: "Alleged victims cannot be verified; remove entries for this group" },
   group("Unavailable", null, null, "2026-07-21T20:00:00Z", 503)
@@ -26,10 +28,33 @@ const victims = JSON.stringify([
 test("retains only current reachable evidence-producing operation labels", () => {
   const catalog = parseCurrentRansomwareOperations(groups, victims, { retrievedAt: "2026-07-21T22:00:00Z", minimumCurrentIdentities: 2 });
   expect(catalog.identities.map((identity) => identity.canonicalName)).toEqual(["Akira", "TheGentlemen"]);
-  expect(catalog.identities[0]).toMatchObject({ relatedOperationNames: ["conti"], currentEvidence: { recentClaimCount: 2, liveLocationCount: 1 }, aptNumberDesignationPresent: false });
+  expect(catalog.identities[0]).toMatchObject({ relatedOperationNames: ["conti"], lineageRelations: [{ relationship: "evolved_from", name: "conti" }], aptNumberDesignationPresent: false });
+  expect(catalog.identities[0]).not.toHaveProperty("currentEvidence");
+  expect(catalog.activityEvidence[0]).toMatchObject({ actorIdentityId: catalog.identities[0].id, recentClaimCount: 2, liveLocationCount: 1 });
   expect(catalog.identities[1].associatedNames).toEqual(["Storm-2697"]);
-  expect(catalog.counts).toMatchObject({ sourceGroupCount: 5, currentIdentityCount: 2, recentClaimGroupCount: 5, liveLocationGroupCount: 2, unreliableExcludedCount: 1, unmatchedRecentClaimGroupCount: 1 });
-  expect(catalog.exclusions).toEqual({ unreliableGroupNames: ["Unreliable"], recentClaimNamesMissingFromGroupCatalog: ["Missing Group"] });
+  expect(catalog.counts).toMatchObject({
+    sourceGroupCount: 5,
+    currentIdentityCount: 2,
+    recentClaimGroupCount: 5,
+    liveLocationGroupCount: 2,
+    unreliableExcludedCount: 1,
+    noReachableLocationExcludedCount: 1,
+    noCurrentEvidenceExcludedCount: 1,
+    unmatchedRecentClaimGroupCount: 1,
+    identityActivityEvidenceCount: 2,
+    sourceVictimRecordCount: 7
+  });
+  expect(catalog.exclusions).toEqual({
+    unreliableGroupNames: ["Unreliable"],
+    invalidIdentityLabels: [],
+    generatedIdentityLabels: [],
+    invalidAliasLabels: ["Unknown"],
+    groupNamesWithoutRecentClaims: [],
+    groupNamesWithoutReachableLocations: ["Unavailable"],
+    groupNamesWithoutCurrentEvidence: ["Old Group"],
+    recentClaimNamesMissingFromGroupCatalog: ["Missing Group"]
+  });
+  expect(catalog.governance.excludedDataClasses).toContain("victim names as identities");
   expect(JSON.stringify(catalog)).not.toContain(".onion");
 
   const mitre = parseMitreActorCatalog(JSON.stringify({ type: "bundle", id: "bundle--75fa0b14-5b14-4d12-a377-290a5ed6590d", objects: [
@@ -48,15 +73,38 @@ test("never presents source clock skew as future activity", () => {
 
   expect(catalog.activityWatermarkAt).toBe("2026-07-21T20:00:00.000Z");
   expect(catalog.catalogModifiedAt).toBe("2026-07-21T20:00:00.000Z");
-  expect(catalog.identities[0].currentEvidence).toMatchObject({ latestClaimPublishedAt: "2026-07-21T20:00:00.000Z", latestLocationCheckedAt: "2026-07-21T20:00:00.000Z" });
+  expect(catalog.activityEvidence[0]).toMatchObject({ latestClaimPublishedAt: "2026-07-21T20:00:00.000Z", latestLocationCheckedAt: "2026-07-21T20:00:00.000Z" });
 });
 
-test("collects both real indexes as hash-only evidence and creates no activity", async () => {
+test("requires structured attribution for common-word operation names", () => {
+  const catalog = parseCurrentRansomwareOperations(
+    JSON.stringify([group("Payload", null, null, "2026-07-21T19:00:00Z", 200)]),
+    JSON.stringify([claim("Payload", "2026-07-21T18:00:00Z")]),
+    { retrievedAt: "2026-07-21T20:00:00Z", minimumCurrentIdentities: 1 }
+  );
+  expect(catalog.identities[0]).toMatchObject({ canonicalName: "Payload", lookupPolicy: "structured_only" });
+  const context = (rawText: string, metadata: any = {}) => processCollectedItem({
+    sourceId: "src_public_report",
+    url: "https://publisher.example/report",
+    collectedAt: "2026-07-21T20:00:00Z",
+    rawText,
+    contentHash: hashContent(rawText),
+    links: [],
+    metadata,
+    sensitive: false
+  }, { actorIdentities: catalog.identities });
+  expect(context("The payload loader executed in memory.").entities.some((entity: any) => entity.type === "actor" || entity.type === "ransomware_family")).toBe(false);
+  expect(context("Structured operation metadata.", { extractionProfile: "ransomware_group_metadata", ransomwareGroup: { actorName: "Payload" } }).entities)
+    .toContainEqual(expect.objectContaining({ type: "ransomware_family", value: "Payload", actorIdentityIds: [catalog.identities[0].id] }));
+});
+
+test("collects both real indexes as hash-only evidence without retaining restricted locators", async () => {
   const at = "2026-07-21T22:00:00Z";
   const sourceBundle = await Bun.file(new URL("../../seeds/verified_long_lived_sources.json", import.meta.url)).json();
   const source = sourceBundle.sources.find((row: any) => row.id === "src_ransomwarelive_current_operations_catalog");
-  const sourceGroups = Array.from({ length: 25 }, (_, index) => ({ ...group(`Operation ${index}`, null, null, "2026-07-21T20:00:00Z", 200), locations: [{ enabled: true, available: true, lastscrape: "2026-07-21T20:00:00Z", fqdn: `not-retained-${index}.onion`, http: { status: 200 } }] }));
-  const sourceVictims = Array.from({ length: 25 }, (_, index) => claim(`Operation ${index}`, "2026-07-21T19:00:00Z"));
+  const operationNames = ["Akira", "Abyss", "AiLock", "APT73", "AuditTeam", "Aurora", "Black X", "BlackNevas", "Blackout", "BlackWater", "Booba Project", "BrainCipher", "Bravox", "Clop", "CRPxO", "D1R", "Deadlock", "Doommageddon", "DragonForce", "Embargo", "Genesis", "Gunra", "Inc Ransom", "Insomnia", "Interlock"];
+  const sourceGroups = [...operationNames.map((name, index) => ({ ...group(name, null, null, "2026-07-21T20:00:00Z", 200), locations: [{ enabled: true, available: true, lastscrape: "2026-07-21T20:00:00Z", fqdn: `not-retained-${index}.onion`, http: { status: 200 } }] })), group("Operation 0", null, null, "2026-07-21T20:00:00Z", 200)];
+  const sourceVictims = [...operationNames.map((name) => claim(name, "2026-07-21T19:00:00Z")), claim("Operation 0", "2026-07-21T19:00:00Z")];
   const store = new InMemoryScraperStore();
   const fetchedUrls: string[] = [];
   store.saveSource({ ...source, createdAt: at, updatedAt: at });
@@ -75,14 +123,15 @@ test("collects both real indexes as hash-only evidence and creates no activity",
     }
   } as any);
 
-  expect(result).toMatchObject({ queuedTaskCount: 1, completedTaskCount: 1, failedTaskCount: 0, insertedCaptureCount: 27, incidentCount: 0 });
+  expect(result).toMatchObject({ queuedTaskCount: 1, completedTaskCount: 1, failedTaskCount: 0, insertedCaptureCount: 28, incidentCount: 0 });
   expect(fetchedUrls).toEqual(["https://data.ransomware.live/groups.json", "https://data.ransomware.live/victims.json"]);
   expect(store.listActorIdentities()).toHaveLength(25);
   expect(store.listActorProfiles()).toHaveLength(25);
   expect(store.listIncidents()).toHaveLength(0);
   expect(store.listCaptures().slice(0, 2).every((capture: any) => capture.sensitive && capture.storageKind === "metadata_only" && capture.body === undefined)).toBe(true);
-  expect(store.listCaptures().filter((capture: any) => capture.metadata?.extractionProfile === "ransomware_group_metadata")).toHaveLength(25);
+  expect(store.listCaptures().filter((capture: any) => capture.metadata?.extractionProfile === "ransomware_group_metadata")).toHaveLength(26);
   expect(store.listActorIdentityCatalogs()[0].evidenceCaptureIds).toHaveLength(2);
+  expect(store.listActorIdentityCatalogs()[0].exclusions.generatedIdentityLabels).toEqual(["Operation 0"]);
   expect(JSON.stringify(store.listCaptures())).not.toContain(".onion");
 });
 

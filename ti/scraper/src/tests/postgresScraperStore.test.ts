@@ -767,6 +767,83 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     await third.close();
   });
 
+  test("archives an active profile whose identity became retired before restart", async () => {
+    const first = await PostgresScraperStore.create({ databaseUrl });
+    first.saveSource(source({ id: "src_actor_catalog", name: "Authoritative actor catalog" }));
+    first.saveSource(source({ id: "src_worldleaks_observation", name: "WorldLeaks observation", url: "https://publisher.example/worldleaks" }));
+    first.saveCapture(catalogCapture("cap_actor_catalog_worldleaks", "catalog-worldleaks"));
+    const identity = {
+      ...actorIdentity("worldleaks", "WorldLeaks", []),
+      id: "ransomware-live-current-operations:worldleaks",
+      catalogId: "ransomware-live-current-operations",
+      externalId: "ransomwarelive:worldleaks",
+      lookupPolicy: "text_safe"
+    };
+    first.replaceActorIdentityCatalog({
+      ...actorCatalog([identity], "catalog-worldleaks"),
+      catalogId: "ransomware-live-current-operations",
+      catalogName: "Ransomware.live current operations"
+    }, {
+      sourceId: "src_actor_catalog",
+      captureId: "cap_actor_catalog_worldleaks",
+      importedAt: collectedAt
+    });
+    first.savePipelineResult(processCollectedItem({
+      sourceId: "src_worldleaks_observation",
+      url: "https://publisher.example/worldleaks",
+      collectedAt,
+      rawText: "WorldLeaks was observed in structured operation metadata.",
+      contentHash: hashContent("worldleaks-observation"),
+      links: [],
+      metadata: { extractionProfile: "ransomware_group_metadata", ransomwareGroup: { actorName: "WorldLeaks" } },
+      sensitive: false
+    }, { actorIdentities: first.listActorIdentities() }));
+    const profileId = first.listActorProfiles()[0].id;
+    await first.close();
+
+    await admin`
+      UPDATE threat_intel.actor_identities
+      SET status = 'retired', record = record || '{"status":"retired"}'::jsonb
+      WHERE id = 'ransomware-live-current-operations:worldleaks'
+    `;
+    expect(await admin`
+      SELECT id FROM threat_intel.actor_profiles
+      WHERE id = ${profileId} AND COALESCE(record->>'identityResolutionState', 'active') <> 'archived'
+    `).toHaveLength(1);
+
+    const restarted = await PostgresScraperStore.create({ databaseUrl });
+    expect(restarted.listActorProfiles()).toEqual([]);
+    expect(await restarted.listActorProfilesForOwnership()).toContainEqual(expect.objectContaining({
+      id: profileId,
+      normalizedName: `archived:${profileId}`,
+      identityResolutionState: "archived",
+      identityResolutionReason: "inactive_identity",
+      actorIdentityIds: ["ransomware-live-current-operations:worldleaks"]
+    }));
+    await restarted.close();
+    expect(await admin`
+      SELECT id FROM threat_intel.actor_profiles
+      WHERE id = ${profileId} AND COALESCE(record->>'identityResolutionState', 'active') <> 'archived'
+    `).toHaveLength(0);
+
+    await admin`
+      UPDATE threat_intel.actor_profiles
+      SET
+        normalized_name = 'worldleaks',
+        record = (record - 'identityResolutionReason') || '{"normalizedName":"worldleaks","identityResolutionState":"canonical","aliases":["WorldLeaks"]}'::jsonb
+      WHERE id = ${profileId}
+    `;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '031_archive_inactive_actor_profiles'`;
+    const migrated = await PostgresScraperStore.create({ databaseUrl });
+    expect(migrated.listActorProfiles()).toEqual([]);
+    await migrated.close();
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '031_archive_inactive_actor_profiles'`).toHaveLength(1);
+    expect(await admin`
+      SELECT id FROM threat_intel.actor_profiles
+      WHERE id = ${profileId} AND COALESCE(record->>'identityResolutionState', 'active') <> 'archived'
+    `).toHaveLength(0);
+  });
+
   test("reconciles canonical actor profiles per tenant and archives unresolved identities idempotently", async () => {
     const seed = await PostgresScraperStore.create({ databaseUrl });
     const sourceScopes = [

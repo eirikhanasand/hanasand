@@ -48,7 +48,8 @@ const DEFAULT_MIGRATIONS = [
   { version: "027_reconcile_delivery_latencies", path: fileURLToPath(new URL("../../migrations/027_reconcile_delivery_latencies.sql", import.meta.url)) },
   { version: "028_remove_generic_business_labels", path: fileURLToPath(new URL("../../migrations/028_remove_generic_business_labels.sql", import.meta.url)) },
   { version: "029_scope_capture_dedupe_by_tenant", path: fileURLToPath(new URL("../../migrations/029_scope_capture_dedupe_by_tenant.sql", import.meta.url)) },
-  { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) }
+  { version: "030_reconcile_actor_profiles", path: fileURLToPath(new URL("../../migrations/030_reconcile_actor_profiles.sql", import.meta.url)) },
+  { version: "031_archive_inactive_actor_profiles", path: fileURLToPath(new URL("../../migrations/031_archive_inactive_actor_profiles.sql", import.meta.url)) }
 ] as const;
 const LATEST_MIGRATION_VERSION = DEFAULT_MIGRATIONS.at(-1)!.version;
 
@@ -576,6 +577,14 @@ export class PostgresScraperStore extends InMemoryScraperStore {
     for (const row of claimReviews) super.saveClaimReview(readRecord(row));
     for (const row of workflows) this.hydrateWorkflow(String(row.record_type), readRecord(row));
     });
+    this.pipelineDepth++;
+    let archivedActorProfileIds: string[] = [];
+    try {
+      archivedActorProfileIds = this.archiveInactiveActorProfiles(new Date().toISOString());
+    } finally {
+      this.pipelineDepth--;
+    }
+    for (const id of archivedActorProfileIds) await this.persistActorProfile(this.getActorProfile(id));
   }
 
   private hasStoredData(): boolean {
