@@ -274,9 +274,9 @@
             ],
             "discoveryAuthorityUrl": "https://ransomwhere.org/data",
             "discoveryAuthorityRecordUrl": "https://ransomwhere.org/api/groups/ms13089",
-            "discoveryCheckedAt": "2026-07-23T10:36:58.280Z",
+            "discoveryCheckedAt": "2026-07-23T10:47:05.333Z",
             "discoveryAvailability": "reported_available",
-            "discoveryObservedAt": "2026-07-23T10:36:58.280Z",
+            "discoveryObservedAt": "2026-07-23T10:47:05.333Z",
             "discoveryAuthorityChain": [
                 {
                     "name": "Ransomware.live",
@@ -290,7 +290,7 @@
                     "recordUrl": "https://ransomwhere.org/api/groups/ms13089"
                 }
             ],
-            "productionCollectionVerifiedAt": "2026-07-23T10:36:58.280Z",
+            "productionCollectionVerifiedAt": "2026-07-23T10:47:05.333Z",
             "productionCollectionOutcome": "metadata_only_parser_verified",
             "parserProfile": "darknet-metadata-v2",
             "parserShape": "generic_post_title",
@@ -307,8 +307,10 @@
                 "feat/tor-1000@b3dc212894ac69504e9e2ff3f1f25ec4b606615e"
             ],
             "sourcePortfolioVerification": {
-                "verifiedAt": "2026-07-23T10:36:58.280Z",
+                "verifiedAt": "2026-07-23T10:47:05.333Z",
                 "outcome": "content_parsed",
+                "receiptSha256": "e1a3e9549269294a4c84ccdda896491a6f8df645a02b993b35a3f40a414f613c",
+                "boundaryModuleSha256": "4cd76149c0c7ffee86323602df2b5c94daebdc7439ac9048ef55636a688f87f3",
                 "endpointSha256": "16650efde859c502b7ca98eb490a85a65cf3c3c436fd6f510dad944802fdc990",
                 "contentType": "text/html",
                 "byteBound": 64000,
@@ -320,15 +322,15 @@
                 "observedItemCount": 3,
                 "parsedItemFingerprints": [
                     "6c2d817791d416c2c0fe3c9fdb2e63cc5489699ed5b0a194e381001c11b04bcd",
-                    "f8164ab854ca95a6f6a7cfcaaac51349e5e89caa93abc10ae7e909875e63647d",
-                    "9e713fb283c2a9efaae9e149c76de4e55caedb9c77bbdf320f37d06c0185ccbb"
+                    "9e713fb283c2a9efaae9e149c76de4e55caedb9c77bbdf320f37d06c0185ccbb",
+                    "f8164ab854ca95a6f6a7cfcaaac51349e5e89caa93abc10ae7e909875e63647d"
                 ],
                 "parsedSourceTimestamp": null,
                 "authorityReportedVictimCount": 4,
                 "authorityLatestReportedAt": "2026-05-05T11:53:39.404Z",
                 "httpStatus": 200,
                 "adapter": "tor_metadata",
-                "legalBasisVerifiedAt": "2026-07-23T10:36:58.280Z"
+                "legalBasisVerifiedAt": "2026-07-23T10:47:05.333Z"
             }
         }
     }
