@@ -128,6 +128,14 @@ describe("restored object evidence reconciliation", () => {
     });
   });
 
+  test("rejects same-size content swapped after the DB snapshot but before ledger creation", async () => {
+    await withFixture(async ({ objectPath, references }, evidenceRoot) => {
+      writeFileSync(objectPath, "x".repeat(readFileSync(objectPath).byteLength));
+      await expect(buildObjectLedger(references, evidenceRoot))
+        .rejects.toThrow("linked=1 resolved=0 missing=0 mismatched=1");
+    });
+  });
+
   test("rejects recovery metadata that differs from the DB snapshot", async () => {
     await withFixture(async ({ objectPath, references }, evidenceRoot) => {
       const metadataPath = `${objectPath}.json`;

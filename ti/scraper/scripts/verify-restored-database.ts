@@ -173,6 +173,7 @@ async function inspectObject(
     || reference.versionId !== reference.contentHash
     || reference.refContentHash !== reference.contentHash
     || objectBytes.byteLength !== reference.sizeBytes
+    || Bun.hash(objectBytes).toString(16) !== reference.contentHash
   ) {
     throw new ObjectEvidenceError("mismatched");
   }
