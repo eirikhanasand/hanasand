@@ -125,16 +125,19 @@ export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSource
 }
 
 function reconcileVerifiedSource(existing: SourceRecord, verified: SourceRecord, generatedAt: string): SourceRecord | undefined {
-  const restricted = isVerifiedRestrictedProductionSource(verified, generatedAt);
+  const restricted = verified.type === "tor_metadata" && verified.metadata?.transportCanary !== true;
   if (!(restricted ? isSafeRestrictedUpgradeTarget(existing) : isVerifiedProductionSource(verified) && isSafeUpgradeTarget(existing))) return undefined;
+  const sameSource = existing.metadata?.verifiedSourceId === verified.id || restricted && existing.id === verified.id;
   const metadata = {
     ...(existing.metadata ?? {}),
     ...(verified.metadata ?? {}),
-    verifiedSourceId: verified.id,
-    sourceImportedAt: existing.metadata?.verifiedSourceId === verified.id
+    ...(verified.metadata?.productionCollection === true ? { verifiedSourceId: verified.id } : {}),
+    sourceImportedAt: sameSource
       ? existing.metadata?.sourceImportedAt ?? verified.metadata?.sourceImportedAt
       : verified.metadata?.sourceImportedAt
   };
+  if (restricted && verified.metadata?.productionCollection === true) delete metadata.restrictedMetadataCandidate;
+  else if (restricted) delete metadata.verifiedSourceId;
   const reconciled = {
     ...existing,
     ...verified,

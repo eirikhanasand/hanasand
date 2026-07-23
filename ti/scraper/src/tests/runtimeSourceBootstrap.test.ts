@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { describe, expect, FileBackedScraperStore, FocusedFrontier, handleApiRequest, InMemoryScraperStore, join, mkdtempSync, rmSync, runCanaryCollectionCycle, test } from "./apiTestHarness.ts";
+import { describe, expect, FileBackedScraperStore, fixtureCapture, FocusedFrontier, handleApiRequest, InMemoryScraperStore, join, mkdtempSync, rmSync, runCanaryCollectionCycle, test } from "./apiTestHarness.ts";
 import { tmpdir } from "node:os";
 import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { dirname } from "node:path";
@@ -460,6 +460,66 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       const second = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-22T13:00:00.000Z" });
       expect(second).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 2, activeSourceCount: 1, totalSourceCount: 2 });
       expect(restarted.listSources()).toEqual(beforeRestart);
+    } finally {
+      if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+      else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("withdraws executable Tor sources when real-pack verification expires or revalidation fails", () => {
+    const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
+    Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
+    const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-tor-expiry-"));
+    const snapshotPath = join(dir, "store.json");
+    const seedPath = join(dir, "restricted.json");
+    const realSeedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/restricted_metadata_source_packs.json");
+    const bundle = JSON.parse(readFileSync(realSeedPath, "utf8"));
+    writeFileSync(seedPath, JSON.stringify(bundle));
+    const store = new FileBackedScraperStore({ snapshotPath });
+
+    try {
+      const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-23T12:00:00.000Z" });
+      expect(first).toMatchObject({ importedSourceCount: 6, activeSourceCount: 6, totalSourceCount: 6 });
+      for (const source of store.listSources().filter((item: any) => item.metadata?.transportCanary !== true)) {
+        store.saveSource({ ...source, health: { status: "healthy", checkedAt: "2026-07-23T12:30:00.000Z", consecutiveFailures: 0 }, crawlState: { retryCount: 2, backoffUntil: "2026-07-23T13:00:00.000Z" } });
+      }
+      store.saveCapture(fixtureCapture({ id: "cap_retained_tor_metadata", sourceId: "restricted_safepay_victim_blog", storageKind: "metadata_only", body: undefined, sensitive: true }));
+
+      const failed = structuredClone(bundle);
+      failed.sources.find((source: any) => source.id === "restricted_safepay_victim_blog").metadata.discoveryAvailability = "unknown";
+      failed.sources.find((source: any) => source.id === "restricted_space_bears_victim_blog").governance.approvalState = "pending";
+      failed.sources.find((source: any) => source.id === "restricted_qilin_victim_blog").metadata.discoveryAvailability = "reported_unavailable";
+      writeFileSync(seedPath, JSON.stringify(failed));
+      const revalidated = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-23T13:00:00.000Z" });
+      expect(revalidated).toMatchObject({ updatedSourceCount: 3, skippedSourceCount: 3, activeSourceCount: 3, totalSourceCount: 6 });
+      expect(["restricted_safepay_victim_blog", "restricted_space_bears_victim_blog", "restricted_qilin_victim_blog"].every((id) => {
+        const source = store.getSource(id);
+        return source?.status === "candidate" && source.metadata?.productionCollection === false && source.metadata?.restrictedMetadataCandidate === true
+          && !("verifiedSourceId" in source.metadata);
+      })).toBe(true);
+
+      writeFileSync(seedPath, JSON.stringify(bundle));
+      const fresh = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-23T14:00:00.000Z" });
+      expect(fresh).toMatchObject({ updatedSourceCount: 3, skippedSourceCount: 3, activeSourceCount: 6, totalSourceCount: 6 });
+      expect(store.listSources().filter((item: any) => item.metadata?.transportCanary !== true).every((source: any) => source.metadata.verifiedSourceId === source.id
+        && !("restrictedMetadataCandidate" in source.metadata))).toBe(true);
+
+      const expired = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T00:00:00.000Z" });
+      expect(expired).toMatchObject({ updatedSourceCount: 5, skippedSourceCount: 1, activeSourceCount: 1, totalSourceCount: 6 });
+      expect(store.listSources().filter((item: any) => item.metadata?.transportCanary !== true).every((source: any) => source.status === "candidate"
+        && source.metadata.productionCollection === false
+        && source.metadata.restrictedMetadataCandidate === true
+        && !("verifiedSourceId" in source.metadata)
+        && source.health?.status === "healthy"
+        && source.crawlState?.retryCount === 2)).toBe(true);
+
+      const restarted = new FileBackedScraperStore({ snapshotPath });
+      const repeat = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-08-01T01:00:00.000Z" });
+      expect(repeat).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 6, activeSourceCount: 1, totalSourceCount: 6 });
+      expect(restarted.listSources().filter((item: any) => item.metadata?.transportCanary !== true).every((source: any) => !("verifiedSourceId" in source.metadata)
+        && source.metadata.restrictedMetadataCandidate === true)).toBe(true);
+      expect(restarted.listCaptures().map((capture: any) => capture.id)).toEqual(["cap_retained_tor_metadata"]);
     } finally {
       if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
       else Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = previous;
