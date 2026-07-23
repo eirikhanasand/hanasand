@@ -30,7 +30,7 @@ import { handleFrontierApplyPlanRoute } from "./frontierApplyPlanRoute.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 import { buildSchedulerDiagnostics, SCHEDULER_CUTOVER_DESIGN } from "../frontier/schedulerProduction.ts";
-import { buildResourceSnapshot } from "../ops/resourceControls.ts";
+import { buildResourceSnapshot, readCgroupResourceSnapshot } from "../ops/resourceControls.ts";
 import { authenticateOperatorRequest } from "./requestAuthentication.ts";
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 export function startApiServer(options: ApiServerOptions): ApiServerHandle {
@@ -74,7 +74,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
 
     if (url.pathname === "/v1/health") {
       const storage = await (options.store as any).databaseHealth?.() ?? { ok: true, backend: "memory" };
-      return json({ ok: storage.ok !== false, service: "ti-scraper", version: "v1", storage, collection: { public: (options.canaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, generatedAt: nowIso() }, storage.ok === false ? 503 : 200);
+      const runtime = runtimeResourceSnapshot(options);
+      return json({ ok: storage.ok !== false, service: "ti-scraper", version: "v1", storage, collection: { public: (options.canaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, ...runtime, generatedAt: nowIso() }, storage.ok === false ? 503 : 200);
     }
     if (url.pathname === "/v1/auth/integration-notes" && request.method === "GET") {
       return json({
@@ -311,8 +312,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/ops/canary/soak" && request.method === "GET") return canarySoak(url, options);
     if (url.pathname === "/v1/ops/canary/console" && request.method === "GET") return canaryConsole(url, options);
     if (url.pathname === "/v1/ops/resource-snapshot") {
-      const resources = buildResourceSnapshot({ config: options.config, queueItems: options.frontier.size() });
-      return json({ service: "ti-scraper", generatedAt: nowIso(), memory: resources.memory, queue: { queued: options.frontier.size() }, resources, workerPools: resources.concurrency });
+      const runtime = runtimeCapacitySnapshot(options);
+      return json({ service: "ti-scraper", generatedAt: nowIso(), memory: runtime.resources.memory, queue: runtime.pressure.collection, ...runtime, workerPools: runtime.resources.concurrency });
     }
     if (url.pathname === "/v1/frontier") {
       const queue = options.frontier.snapshot?.() ?? [];
@@ -352,6 +353,87 @@ function orgAlertCaseActionLedgerRepository(options: ApiServerOptions): InMemory
   const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
   options.orgAlertCaseActionLedgerRepository = repository;
   return repository;
+}
+
+function runtimeCapacitySnapshot(options: ApiServerOptions) {
+  return {
+    ...runtimeResourceSnapshot(options),
+    pressure: runtimeQueuePressure(options)
+  };
+}
+
+function runtimeResourceSnapshot(options: ApiServerOptions) {
+  const resources = buildResourceSnapshot({
+    config: options.config,
+    queueItems: options.frontier.size(),
+    cgroup: readCgroupResourceSnapshot()
+  });
+  return {
+    resources,
+    runtimeLimits: {
+      collectionMaxConcurrentTasks: loopState(options.canaryLoop)?.maxConcurrentTasks ?? positiveInteger(Bun.env.TI_CANARY_MAX_CONCURRENT_TASKS, 16),
+      automaticReviewMaxConcurrentTasks: Math.min(4, positiveInteger(Bun.env.HANASAND_AI_REVIEW_CONCURRENCY, 3)),
+      automaticEvaluationMaxTasksPerCycle: positiveInteger(Bun.env.TI_AUTOMATIC_EVALUATION_MAX_TASKS_PER_CYCLE, 2)
+    }
+  };
+}
+
+function runtimeQueuePressure(options: ApiServerOptions) {
+  const runs = options.store.listRuns?.() ?? [];
+  const automaticBenchmarks = ((options.store as any).listEvaluationBenchmarks?.() ?? [])
+    .filter((record: any) => record.reviewMode === "automatic_model");
+  const evaluationTasks = automaticBenchmarks.flatMap((benchmark: any) => Array.isArray(benchmark.manifest) ? benchmark.manifest : []);
+  const evaluationState = loopState(options.evaluationLoop);
+  return {
+    collection: {
+      queued: options.frontier.size(),
+      leased: options.frontier.leasedSnapshot?.().length ?? 0,
+      deadLetter: options.frontier.deadLetterSnapshot?.().length ?? 0,
+      queuedRuns: runs.filter((run: any) => run.status === "queued").length,
+      runningRuns: runs.filter((run: any) => run.status === "running").length
+    },
+    automaticReview: automaticReviewPressure((options.store as any).listAnalystMetadataReviewTasks?.() ?? []),
+    automaticEvaluation: {
+      benchmarkCount: automaticBenchmarks.length,
+      activeBenchmarkCount: automaticBenchmarks.filter((benchmark: any) => benchmark.status !== "complete").length,
+      taskCount: evaluationTasks.length,
+      counts: countsBy(evaluationTasks, (task) => task.automation?.status ?? "pending"),
+      running: evaluationState?.running ?? false,
+      cycleCount: evaluationState?.cycleCount ?? 0,
+      errorCount: evaluationState?.errorCount ?? 0
+    }
+  };
+}
+
+function automaticReviewPressure(records: any[]) {
+  const pressure: { total: number; backlog: number; counts: Record<string, number>; oldestQueuedAt?: string } = { total: 0, backlog: 0, counts: {} };
+  for (const task of records) {
+    if (task.recordKind !== "automatic_intelligence_review_task") continue;
+    pressure.total++;
+    const state = String(task.state ?? "unknown");
+    pressure.counts[state] = (pressure.counts[state] ?? 0) + 1;
+    if (["queued", "running", "retrying"].includes(state)) pressure.backlog++;
+    if (["queued", "retrying"].includes(state) && task.queuedAt && (!pressure.oldestQueuedAt || task.queuedAt < pressure.oldestQueuedAt)) pressure.oldestQueuedAt = task.queuedAt;
+  }
+  return pressure;
+}
+
+function loopState(loop: unknown): any {
+  return loop && typeof loop === "object" && typeof (loop as any).getState === "function" ? (loop as any).getState() : undefined;
+}
+
+function countsBy(records: any[], value: (record: any) => unknown) {
+  const counts: Record<string, number> = {};
+  for (const record of records) {
+    const key = String(value(record) ?? "unknown");
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function positiveInteger(value: string | undefined, fallback: number) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function parseWatchlistParam(value: string): string[] {

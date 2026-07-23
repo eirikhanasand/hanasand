@@ -12,6 +12,9 @@ describe("deploy hygiene", () => {
     expect(report.checks.find((item) => item.name === "dockerfile.test_enforced")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "compose.api_depends_on_scraper")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "compose.scraper_memory_target")?.ok).toBe(true);
+    expect(report.checks.find((item) => item.name === "compose.scraper_stop_grace")?.ok).toBe(true);
+    expect(report.checks.find((item) => item.name === "compose.scraper_review_concurrency")?.ok).toBe(true);
+    expect(report.checks.find((item) => item.name === "compose.postgres_mem_limit")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "compose.scraper_evidence_volume")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "compose.scraper_canary_no_auto_activate")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "dockerignore.root_excludes_env")?.ok).toBe(true);

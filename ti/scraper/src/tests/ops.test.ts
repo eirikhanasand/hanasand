@@ -3,9 +3,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadRuntimeConfig } from "../config/runtimeConfig.ts";
+import { FocusedFrontier } from "../frontier/frontier.ts";
+import { startCanaryCollectionLoop } from "../ops/canaryCollection.ts";
 import { sanitizeFields } from "../ops/logger.ts";
 import { appendLiveProductDailySnapshot, buildLiveProductSloDashboard, readLiveProductDailySnapshots } from "../ops/productSlo.ts";
 import { buildResourceSnapshot } from "../ops/resourceControls.ts";
+import { InMemoryScraperStore } from "../storage/memoryStore.ts";
+import { InMemoryObjectEvidenceStore } from "../storage/memoryObjectEvidenceStore.ts";
 
 describe("ops utilities", () => {
   test("reports the active runtime resource limits", () => {
@@ -13,11 +17,44 @@ describe("ops utilities", () => {
     const snapshot = buildResourceSnapshot({
       config,
       queueItems: 7,
+      cgroup: { memoryCurrentBytes: 1024 ** 3, memoryMaxBytes: 16 * 1024 ** 3, cpuQuotaMicros: 800_000, cpuPeriodMicros: 100_000 },
       memoryUsage: { rss: 1024 ** 3, heapTotal: 0, heapUsed: 512 * 1024 ** 2, external: 0, arrayBuffers: 0 }
     });
-    expect(snapshot.memory).toMatchObject({ rssMb: 1024, targetMb: 4096, ceilingMb: 6144, status: "ok" });
+    expect(snapshot.memory).toMatchObject({ rssMb: 1024, containerCurrentMb: 1024, containerLimitMb: 16 * 1024, containerHeadroomMb: 15 * 1024, targetMb: 4096, ceilingMb: 6144, status: "ok" });
+    expect(snapshot.cpu.containerLimitCores).toBe(8);
     expect(snapshot.concurrency.total).toBe(76);
     expect(snapshot.queue.currentItems).toBe(7);
+  });
+
+  test("waits for an active collection cycle before shutdown completes", async () => {
+    const store = new InMemoryScraperStore();
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    (store as any).batch = async (operation: () => unknown) => {
+      entered();
+      await gate;
+      return operation();
+    };
+    const loop = startCanaryCollectionLoop({
+      store,
+      frontier: new FocusedFrontier(),
+      objectStore: new InMemoryObjectEvidenceStore(),
+      enabled: true,
+      intervalSeconds: 3600,
+      activateSources: false
+    });
+    const cycle = loop.runOnce();
+    await started;
+    let stopped = false;
+    const stopping = loop.stop().then(() => { stopped = true; });
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+    release();
+    await cycle;
+    await stopping;
+    expect(loop.getState()).toMatchObject({ enabled: false, running: false });
   });
 
   test("sanitizes secret-looking fields", () => {

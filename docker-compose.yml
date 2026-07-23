@@ -312,6 +312,7 @@ services:
     mem_limit: 16g
     cpus: "8.0"
     restart: always
+    stop_grace_period: 10m
     build:
       context: .
       dockerfile: ./ti/scraper/Dockerfile
@@ -358,6 +359,7 @@ services:
       HANASAND_AI_EVALUATION_API: ${HANASAND_AI_EVALUATION_API:-http://api:8080/api/tools/ai}
       HANASAND_AI_EVALUATION_MODEL_VERSION: ${HANASAND_AI_EVALUATION_MODEL_VERSION:-hanasand}
       HANASAND_AI_EVALUATION_TIMEOUT_MS: ${HANASAND_AI_EVALUATION_TIMEOUT_MS:-30000}
+      HANASAND_AI_REVIEW_CONCURRENCY: ${HANASAND_AI_REVIEW_CONCURRENCY:-3}
       TI_AUTOMATIC_EVALUATION_ENABLED: ${TI_AUTOMATIC_EVALUATION_ENABLED:-true}
       TI_AUTOMATIC_EVALUATION_INTERVAL_SECONDS: ${TI_AUTOMATIC_EVALUATION_INTERVAL_SECONDS:-60}
       TI_AUTOMATIC_EVALUATION_MAX_TASKS_PER_CYCLE: ${TI_AUTOMATIC_EVALUATION_MAX_TASKS_PER_CYCLE:-2}
@@ -390,7 +392,7 @@ services:
   postgres:
     image: postgres:15
     container_name: hanasand_database
-    mem_limit: 1g
+    mem_limit: 2g
     cpus: "2.0"
     restart: always
     environment:

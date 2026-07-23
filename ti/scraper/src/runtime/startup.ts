@@ -14,6 +14,56 @@ import { executeScheduledCollectionRun, recoverCollectionRuns } from "../ops/sch
 import { startAutomaticReviewWorker } from "../api/automaticReviewRoutes.ts";
 import { startAutomaticEvaluationLoop } from "../api/evaluationBenchmarkRoutes.ts";
 
+export function createScheduledRunBoundary(options: {
+  execute: (runId: string) => Promise<any>;
+  onError: (error: unknown, runId: string) => void;
+}) {
+  const timers = new Map<string, Timer>();
+  const active = new Set<Promise<any>>();
+  let stopping = false;
+  const clearTimers = () => {
+    for (const timer of timers.values()) clearTimeout(timer);
+    timers.clear();
+  };
+  const execute = (runId: string): Promise<any> => {
+    if (stopping) return Promise.resolve(undefined);
+    const existingTimer = timers.get(runId);
+    if (existingTimer) clearTimeout(existingTimer);
+    timers.delete(runId);
+    let execution: Promise<any>;
+    try { execution = options.execute(runId); }
+    catch (error) { execution = Promise.reject(error); }
+    let tracked!: Promise<any>;
+    tracked = execution
+      .then((run) => {
+        if (!stopping && run?.status === "queued" && run.nextAttemptAt) {
+          const delay = Math.max(0, Math.min(2_147_000_000, Date.parse(run.nextAttemptAt) - Date.now()));
+          timers.set(runId, setTimeout(() => {
+            timers.delete(runId);
+            if (!stopping) void execute(runId);
+          }, delay));
+        }
+        return run;
+      })
+      .catch((error) => {
+        options.onError(error, runId);
+        throw error;
+      })
+      .finally(() => active.delete(tracked));
+    active.add(tracked);
+    void tracked.catch(() => undefined);
+    return tracked;
+  };
+  return {
+    execute,
+    beginStopping: () => { stopping = true; clearTimers(); },
+    drain: async () => {
+      while (active.size) await Promise.allSettled([...active]);
+      clearTimers();
+    }
+  };
+}
+
 export async function startScraperRuntime() {
   const config = loadRuntimeConfig();
   const logger = createLogger(Bun.env.SCRAPER_LOG_LEVEL === "debug" ? "debug" : "info");
@@ -29,26 +79,18 @@ export async function startScraperRuntime() {
     crawlBudgetPolicies: { "public-canary": { taskLimit: Number(Bun.env.TI_CANARY_BUDGET_TASKS ?? "1000"), byteLimit: Number(Bun.env.TI_CANARY_BUDGET_BYTES ?? "512000000") } }
   });
   const sourceBootstrap = await bootstrapRuntimeSources(store as any);
-  const runTimers = new Map<string, Timer>();
-  const executeRun = (runId: string): Promise<any> => {
-    const existingTimer = runTimers.get(runId);
-    if (existingTimer) clearTimeout(existingTimer);
-    runTimers.delete(runId);
-    const execution = executeScheduledCollectionRun({
+  const scheduledRuns = createScheduledRunBoundary({
+    execute: (runId) => executeScheduledCollectionRun({
       store,
       frontier,
       objectStore,
       maxConcurrentTasks: Math.min(4, Number(Bun.env.TI_CANARY_MAX_CONCURRENT_TASKS ?? "4")),
       timeoutMs: Number(Bun.env.TI_CANARY_TIMEOUT_MS ?? Bun.env.SCRAPER_DEFAULT_TIMEOUT_MS ?? "12000"),
       maxItemsPerTask: Number(Bun.env.TI_CANARY_MAX_ITEMS_PER_TASK ?? "4"),
-    }, runId);
-    void execution.then((run: any) => {
-      if (run?.status !== "queued" || !run.nextAttemptAt) return;
-      const delay = Math.max(0, Math.min(2_147_000_000, Date.parse(run.nextAttemptAt) - Date.now()));
-      runTimers.set(runId, setTimeout(() => void executeRun(runId), delay));
-    }).catch((error) => logger.warn("scheduled collection run failed", { event: "scheduled_run.error", runId, error: error instanceof Error ? error.message : String(error) }));
-    return execution;
-  };
+    }, runId),
+    onError: (error, runId) => logger.warn("scheduled collection run failed", { event: "scheduled_run.error", runId, error: error instanceof Error ? error.message : String(error) })
+  });
+  const executeRun = scheduledRuns.execute;
   const canary = startCanaryCollectionLoop({
     store, frontier, objectStore,
     enabled: Bun.env.TI_CANARY_ENABLED !== "false",
@@ -90,5 +132,15 @@ export async function startScraperRuntime() {
   const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
   const automaticReview = startAutomaticReviewWorker({ store, frontier, config } as any);
   logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", automaticEvaluationEnabled: Bun.env.TI_AUTOMATIC_EVALUATION_ENABLED !== "false", recoveredRuns, sourceBootstrap, ...paths });
-  return { stop: async () => { for (const timer of runTimers.values()) clearTimeout(timer); canary.stop(); restrictedMetadata.stop(); await evaluation.stop(); await automaticReview.stop(); await server.stop(); await store.close(); } };
+  let stopPromise: Promise<void> | undefined;
+  return { stop: () => stopPromise ??= (async () => {
+    scheduledRuns.beginStopping();
+    await server.stop();
+    await canary.stop();
+    await restrictedMetadata.stop();
+    await scheduledRuns.drain();
+    await evaluation.stop();
+    await automaticReview.stop();
+    await store.close();
+  })() };
 }

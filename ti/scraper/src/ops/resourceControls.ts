@@ -1,2 +1,3 @@
 export { buildResourceSnapshot } from "./resourceSnapshot.ts";
-export type { ResourceSnapshotInput, ResourceStatus, RuntimeResourceSnapshot } from "./resourceTypes.ts";
+export { readCgroupResourceSnapshot } from "./resourceUtils.ts";
+export type { CgroupResourceSnapshot, ResourceSnapshotInput, ResourceStatus, RuntimeResourceSnapshot } from "./resourceTypes.ts";

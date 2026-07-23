@@ -2,11 +2,42 @@ import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { executeScheduledCollectionRun, recoverCollectionRuns } from "../ops/scheduledCollection.ts";
+import { createScheduledRunBoundary } from "../runtime/startup.ts";
 import type { MitreActorCatalogSnapshot } from "../pipeline/mitreActorCatalog.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { api, body, source } from "./helpers/apiSourceFixtures.ts";
 
 describe("scheduled API collection runs", () => {
+  test("shutdown drains a deferred run without scheduling a late retry", async () => {
+    let release!: () => void;
+    const deferred = new Promise<void>((resolve) => { release = resolve; });
+    const writes: string[] = [];
+    let closed = false;
+    let calls = 0;
+    let lateWrites = 0;
+    const boundary = createScheduledRunBoundary({
+      execute: async (runId) => {
+        calls++;
+        await deferred;
+        if (closed) lateWrites++;
+        writes.push(runId);
+        return { status: "queued", nextAttemptAt: new Date().toISOString() };
+      },
+      onError: () => undefined
+    });
+
+    const execution = boundary.execute("run_deferred");
+    boundary.beginStopping();
+    const stopped = boundary.drain().then(() => { closed = true; });
+    release();
+    await Promise.all([execution, stopped]);
+    await Bun.sleep(10);
+
+    expect({ calls, writes, lateWrites, closed }).toEqual({ calls: 1, writes: ["run_deferred"], lateWrites: 0, closed: true });
+    await boundary.execute("run_deferred");
+    expect(calls).toBe(1);
+  });
+
   test("executes a queued run and exposes its captured results", async () => {
     const store = new InMemoryScraperStore();
     const frontier = new FocusedFrontier();

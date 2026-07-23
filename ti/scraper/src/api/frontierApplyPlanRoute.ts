@@ -21,7 +21,7 @@ function normalizeRequest(input: any) {
 }
 
 function daily(input: { queued: CollectionTask[]; leased: CollectionTask[]; deadLetters: FrontierAck[]; runs: CollectionRun[]; sources: SourceRecord[]; now: Date }) {
-  const queueEconomics = buildSchedulerQueueEconomics({ queued: input.queued, leased: input.leased, deadLetters: input.deadLetters, workerSlots: 64, memoryCeilingMb: 96 * 1024, now: input.now });
+  const queueEconomics = buildSchedulerQueueEconomics({ queued: input.queued, leased: input.leased, deadLetters: input.deadLetters, workerSlots: 64, now: input.now });
   const runtimeExecution = buildSchedulerRuntimeExecution({ queued: input.queued, leased: input.leased, deadLetters: input.deadLetters, queueEconomics, pendingActivationBatchCount: 0, now: input.now });
   const runtimeSla = buildSchedulerRuntimeSla({ queueEconomics, runtimeExecution, runs: input.runs, now: input.now });
   const slaEnforcement = buildSchedulerSlaEnforcement({ queueEconomics, runtimeExecution, runtimeSla, runs: input.runs, now: input.now });

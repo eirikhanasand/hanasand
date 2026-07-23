@@ -47,23 +47,26 @@ export async function runRestrictedMetadataCollectionCycle(options: any) {
 export function startRestrictedMetadataCollectionLoop(options: any) {
   const intervalSeconds = Math.max(60, Number(options.intervalSeconds ?? 900));
   const state: any = { enabled: options.enabled === true, running: false, intervalSeconds, cycleCount: 0, successCount: 0, errorCount: 0 };
-  let startup: Timer | undefined, timer: Timer | undefined;
-  const cycle = async () => {
-    if (!state.enabled || state.running) return;
+  let startup: Timer | undefined, timer: Timer | undefined, active: Promise<void> | undefined;
+  const cycle = () => {
+    if (!state.enabled || active) return active ?? Promise.resolve();
     state.running = true; state.lastCycleAt = nowIso();
-    try {
-      state.latestResult = await runRestrictedMetadataCollectionCycle(options);
-      state.successCount++;
-      state.lastSuccessAt = nowIso();
-      state.failedSourceCount = state.latestResult.failedSourceCount;
-      state.lastSourceFailureAt = state.latestResult.failedSourceCount ? state.lastSuccessAt : undefined;
-    }
-    catch (caught) { state.errorCount++; state.lastError = safeError(caught); state.lastErrorAt = nowIso(); options.onError?.(caught); }
-    finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? new Date(Date.now() + intervalSeconds * 1_000).toISOString() : undefined; }
+    active = (async () => {
+      try {
+        state.latestResult = await runRestrictedMetadataCollectionCycle(options);
+        state.successCount++;
+        state.lastSuccessAt = nowIso();
+        state.failedSourceCount = state.latestResult.failedSourceCount;
+        state.lastSourceFailureAt = state.latestResult.failedSourceCount ? state.lastSuccessAt : undefined;
+      }
+      catch (caught) { state.errorCount++; state.lastError = safeError(caught); state.lastErrorAt = nowIso(); options.onError?.(caught); }
+      finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? new Date(Date.now() + intervalSeconds * 1_000).toISOString() : undefined; active = undefined; }
+    })();
+    return active;
   };
   if (state.enabled) { state.nextCycleAt = new Date(Date.now() + 2_000).toISOString(); startup = setTimeout(cycle, 2_000); }
   timer = setInterval(cycle, intervalSeconds * 1_000);
-  return { stop: () => { if (startup) clearTimeout(startup); if (timer) clearInterval(timer); state.enabled = false; state.nextCycleAt = undefined; }, runOnce: cycle, getState: () => ({ ...state }) };
+  return { stop: async () => { if (startup) clearTimeout(startup); if (timer) clearInterval(timer); state.enabled = false; state.nextCycleAt = undefined; await active; }, runOnce: cycle, getState: () => ({ ...state }) };
 }
 
 function due(source: any, generatedAt: string) {
