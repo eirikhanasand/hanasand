@@ -46,6 +46,7 @@ describe("scheduled organization watchlist discovery", () => {
         organizationId: "org_ntnu",
         sourceFamily: "public_advisory",
         scheduledWatchlistDiscovery: true,
+        reportTimestamps: [expect.objectContaining({ timestamp: publishedAt, referenceUrl: "https://reports.example.test/ntnu", extractionMethod: "source_field" })],
         matchedWatchlistTerms: [{ id: "term_watch_ntnu", watchlistId: "watch_ntnu", value: "NTNU" }],
         discoveryProvider: { sourceId: "src_google_news_query", retainedAsEvidence: false }
       }

@@ -7,8 +7,10 @@ import ManualRunButton from '../manualRunButton'
 
 export const dynamic = 'force-dynamic'
 
-export default async function TiSourcesPage() {
-    const overview = await getTiAdminOverview()
+export default async function TiSourcesPage(props: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
+    const params = await props.searchParams
+    const cursor = Math.max(0, Number(typeof params?.cursor === 'string' ? params.cursor : 0) || 0)
+    const overview = await getTiAdminOverview('default', { cursor, limit: 100 })
     const { sources, captures, runs } = overview
     const sourceRows = sources.map(source => {
         const sourceCaptures = captures.filter(capture => capture.sourceId === source.id)
@@ -21,16 +23,17 @@ export default async function TiSourcesPage() {
         return { source, sourceCaptures, sourceRuns, lastRun, avgRows, avgCaptures, minutesSinceRun, health }
     }).sort((a, b) => healthWeight(b.health.state) - healthWeight(a.health.state) || new Date(a.source.nextRunAt).getTime() - new Date(b.source.nextRunAt).getTime())
 
-    const activeCount = sources.filter(source => source.status === 'active').length
+    const activeCount = overview.sourceTotals.active
     const staleCount = sourceRows.filter(row => row.health.state === 'stale').length
     const reviewCount = sources.filter(source => source.aiReview?.status === 'needs_human' || source.status === 'candidate' || source.status === 'review').length
     const aiReviewedCount = sources.filter(source => source.aiReview).length
     const restrictedCount = sources.filter(source => source.risk === 'restricted').length
-    const qualifyingCount = sources.filter(source => source.qualifiesForBaseline).length
-    const qualifyingClearWeb = sources.filter(source => source.qualifiesForBaseline && source.baselineFamily === 'clear_web').length
-    const qualifyingDarkWeb = sources.filter(source => source.qualifiesForBaseline && source.baselineFamily === 'lawful_dark_web').length
-    const qualifyingTelegram = sources.filter(source => source.qualifiesForBaseline && source.baselineFamily === 'public_telegram').length
-    const nextDue = [...sourceRows].sort((a, b) => new Date(a.source.nextRunAt).getTime() - new Date(b.source.nextRunAt).getTime())[0]
+    const qualifyingCount = overview.sourceTotals.qualifying
+    const qualifyingClearWeb = overview.sourceTotals.qualifyingClearWeb
+    const qualifyingDarkWeb = overview.sourceTotals.qualifyingLawfulDarkWeb
+    const qualifyingTelegram = overview.sourceTotals.qualifyingPublicTelegram
+    const nextDue = sourceRows.filter(row => Number.isFinite(Date.parse(row.source.nextRunAt)))
+        .sort((a, b) => Date.parse(a.source.nextRunAt) - Date.parse(b.source.nextRunAt))[0]
 
     return (
         <DashboardPage>
@@ -49,12 +52,12 @@ export default async function TiSourcesPage() {
                         Source inventory summary
                     </span>
                     <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
-                        {activeCount}/{sources.length} active · {reviewCount} in review · {staleCount} stale
+                        {activeCount}/{overview.sourcePage.total} active · {reviewCount} in review on this page · {staleCount} stale on this page
                         <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
                     </span>
                 </summary>
                 <div className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-6' data-ti-source-inventory-metrics>
-                    <Metric title='Active' value={`${activeCount}/${sources.length}`} detail='collecting sources' tone='ok' />
+                    <Metric title='Active' value={`${activeCount}/${overview.sourcePage.total}`} detail='collecting sources' tone='ok' />
                     <Metric title='Qualified' value={`${qualifyingCount}/6,100`} detail={`${qualifyingClearWeb}/5,000 web · ${qualifyingDarkWeb}/1,000 Tor · ${qualifyingTelegram}/100 Telegram`} tone={qualifyingCount >= 6100 && qualifyingClearWeb >= 5000 && qualifyingDarkWeb >= 1000 && qualifyingTelegram >= 100 ? 'ok' : 'warn'} />
                     <Metric title='Reviewed' value={String(aiReviewedCount)} detail={reviewCount ? `${reviewCount} in review` : 'ready for monitoring'} tone={reviewCount ? 'warn' : 'ok'} />
                     <Metric title='Stale' value={String(staleCount)} detail='late or not collecting' tone={staleCount ? 'warn' : 'ok'} />
@@ -162,6 +165,16 @@ export default async function TiSourcesPage() {
                 </div>
             </DashboardPanel>
 
+            <nav className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm' aria-label='Source inventory pages'>
+                <span className='text-ui-muted'>
+                    {overview.sourcePage.total ? `${cursor + 1}–${Math.min(cursor + sources.length, overview.sourcePage.total)} of ${overview.sourcePage.total}` : 'No sources recorded'}
+                </span>
+                <div className='flex gap-2'>
+                    {cursor > 0 ? <Link href={`/dashboard/ti/sources?cursor=${Math.max(0, cursor - overview.sourcePage.limit)}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Previous</Link> : null}
+                    {overview.sourcePage.nextCursor ? <Link href={`/dashboard/ti/sources?cursor=${overview.sourcePage.nextCursor}`} className='rounded-md border border-ui-border px-3 py-1.5 font-semibold text-ui-text hover:bg-ui-raised'>Next</Link> : null}
+                </div>
+            </nav>
+
             <div className='grid gap-4 xl:grid-cols-[1.05fr_0.95fr]'>
                 <DashboardPanel className='border-ui-border bg-ui-panel p-4'>
                     <div className='flex items-center justify-between gap-3'>
@@ -191,7 +204,7 @@ export default async function TiSourcesPage() {
                     <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised [&::-webkit-details-marker]:hidden'>
                         <span className='inline-flex items-center gap-2'><Camera className='h-4 w-4 text-ui-primary' /> Capture coverage</span>
                         <span className='inline-flex items-center gap-2 text-xs font-medium text-ui-muted'>
-                            {captures.length} captures across {sources.length} sources
+                            {captures.length} recent captures across {overview.sourcePage.total} sources
                             <ChevronDown className='h-4 w-4 transition group-open:rotate-180' />
                         </span>
                     </summary>
@@ -268,6 +281,7 @@ function sourceHealth(source: TiAdminSource, minutesSinceRun: number): SourceHea
     if (source.status === 'paused') return { state: 'paused', label: 'Paused', detail: 'Collection disabled.' }
     if (source.aiReview?.status === 'needs_human') return { state: 'review', label: 'Human review', detail: source.aiReview.summary }
     if (source.status === 'candidate' || source.status === 'review') return { state: 'review', label: 'Review', detail: 'Needs approval or access check.' }
+    if (!source.lastRunAt) return { state: 'review', label: 'Not observed', detail: 'No source check has been recorded.' }
     if (minutesSinceRun > source.cadenceMinutes * 2) return { state: 'stale', label: 'Stale', detail: `${Math.round(minutesSinceRun / 60)} hr since run.` }
     return { state: 'healthy', label: 'Healthy', detail: 'Running on schedule.' }
 }
@@ -287,7 +301,7 @@ function minutesSince(value: string) {
 
 function relativeAge(value: string) {
     const minutes = minutesSince(value)
-    if (!Number.isFinite(minutes)) return 'checking'
+    if (!Number.isFinite(minutes)) return 'not recorded'
     if (minutes < 60) return `${minutes} min ago`
     const hours = Math.round(minutes / 60)
     if (hours < 48) return `${hours} hr ago`
@@ -296,7 +310,7 @@ function relativeAge(value: string) {
 
 function relativeUntil(value: string) {
     const diff = new Date(value).getTime() - Date.now()
-    if (!Number.isFinite(diff)) return 'checking'
+    if (!Number.isFinite(diff)) return 'not recorded'
     const minutes = Math.round(diff / 60000)
     if (minutes < -60) return `${Math.abs(Math.round(minutes / 60))} hr overdue`
     if (minutes < 0) return `${Math.abs(minutes)} min overdue`
@@ -307,6 +321,7 @@ function relativeUntil(value: string) {
 }
 
 function shortTime(value: string) {
+    if (!Number.isFinite(Date.parse(value))) return 'not recorded'
     return new Intl.DateTimeFormat('en', {
         month: 'short',
         day: 'numeric',

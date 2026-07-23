@@ -7,3 +7,4 @@ const source = await readFile(path.join(process.cwd(), 'src/app/api/ti/scraper/c
 assert.match(source, /requireApiSession\(request, \['system_admin', 'admin', 'administrator'\]\)/)
 assert.match(source, /system_admin/)
 assert.match(source, /authorization: `Bearer \$\{identity\.token\}`/)
+assert.match(source, /tenantId: 'default'/)

@@ -67,7 +67,7 @@ describe("DWM exposure queue pipeline", () => {
     expect(store.listCaptures()[0]).toMatchObject({ tenantId: "org_ntnu_research", url: reportUrl, title: "NTNU hit by cyberattack", publishedAt, sensitive: false, metadata: { adapter: "static_web", sourceFamily: "public_advisory", organizationId: "org_ntnu_research" } });
     expect(store.listSources()[0]).toMatchObject({ lastSeenAt: store.listCaptures()[0].collectedAt, health: { checkedAt: store.listCaptures()[0].collectedAt, lastSuccessAt: store.listCaptures()[0].collectedAt, lastUsefulAt: store.listCaptures()[0].collectedAt } });
     expect(store.listSourceHealthObservations()).toEqual([expect.objectContaining({ tenantId: "org_ntnu_research", sourceId: store.listCaptures()[0].sourceId, taskId: store.listCaptures()[0].taskId, captureId: store.listCaptures()[0].id, checkedAt: store.listCaptures()[0].collectedAt, success: true, useful: true, itemCount: 1, captureCount: 1, duplicateCount: 0, legalMode: "public_content" })]);
-    expect(store.listTimelinessRecords()[0]).toMatchObject({ captureId: store.listCaptures()[0].id, publishedAt, publisherReportedAt: publishedAt, reportTimestamps: [expect.objectContaining({ evidencePath: "page.publicationTimestamp", extractionMethod: "source_field" })] });
+    expect(store.listTimelinessRecords()[0]).toMatchObject({ captureId: store.listCaptures()[0].id, publishedAt, publisherReportedAt: publishedAt, reportTimestamps: [expect.objectContaining({ referenceUrl: reportUrl, evidencePath: "page.publicationTimestamp", extractionMethod: "source_field" })] });
     expect(JSON.stringify(store.listCaptures()[0])).not.toContain("1999-01-01T00:00:00.000Z");
     expect(store.listCaptures()[0].metadata?.leakSite).toBeUndefined();
     expect(JSON.stringify(store.listCaptures()[0])).not.toContain("has just published a new victim");
@@ -415,7 +415,7 @@ describe("DWM exposure queue pipeline", () => {
       url: "https://www.ransomware.live/id/RmFicmlrYW0gTWFudWZhY3R1cmluZ0Bha2lyYQ==",
       collectedAt,
       publishedAt,
-      metadata: { adapter: "public_advisory", reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId: "src_public_news", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] }
+      metadata: { adapter: "public_advisory", reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId: "src_public_news", referenceUrl: "https://www.ransomware.live/id/RmFicmlrYW0gTWFudWZhY3R1cmluZ0Bha2lyYQ==", evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] }
     };
     await saveExposureClaimFromCollectedItem(store, collected);
     await saveExposureClaimFromCollectedItem(store, collected);

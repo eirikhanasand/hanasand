@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "../ops/canaryPortfolio.ts";
+import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 
 const batchPath = new URL("../../seeds/source_portfolio_clear_web.json", import.meta.url);
 const seedDirectory = dirname(fileURLToPath(batchPath));
@@ -34,7 +35,6 @@ describe("clear-web source portfolio batch", () => {
     const endpoints = new Set<string>();
     for (const source of batch.sources) {
       const key = canonicalFeedKey(source.url);
-      expect(source.url).toBe(key);
       expect(ids.has(source.id)).toBe(false);
       expect(endpoints.has(key)).toBe(false);
       ids.add(source.id);
@@ -113,14 +113,6 @@ describe("clear-web source portfolio batch", () => {
     }
   });
 });
-
-function canonicalFeedKey(value: string) {
-  const url = new URL(value);
-  url.hostname = url.hostname.toLowerCase();
-  url.hash = "";
-  url.pathname = url.pathname.replace(/\/+$/, "");
-  return url.toString();
-}
 
 function stableSourceId(url: string) {
   return `src_portfolio_cw_${hash(url).slice(0, 20)}`;

@@ -11,6 +11,7 @@ import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { StaticWebAdapter, canonicalizeUrl } from "../adapters/staticWeb.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
+import { sourceFieldReportTimestamp, zonedSourceTimestamp } from "../pipeline/sourceFieldReportTimestamp.ts";
 
 const PUBLIC_ADVISORY_MAX_BYTES = 2_000_000;
 
@@ -508,6 +509,13 @@ async function collectPublicAdvisory(item: ExposureClaimItem, options: ApiServer
   const url = collectedUrl && new URL(collectedUrl).protocol === "https:" ? collectedUrl : requestedUrl;
   const publisher = publicAdvisorySourceIdentity(url, options.store.listSources?.());
   const sourceId = publisher.id;
+  const reportTimestamp = sourceFieldReportTimestamp({
+    role: "publisher",
+    timestamp: publishedAt,
+    referenceUrl: url,
+    sourceId,
+    evidencePath: "page.publicationTimestamp"
+  });
   return {
     ...item,
     sourceId,
@@ -532,7 +540,7 @@ async function collectPublicAdvisory(item: ExposureClaimItem, options: ApiServer
     summary: text.slice(0, 500),
     links: collected.links,
     adapterMetadata: { ...collected.metadata, provenance: { ...collected.metadata?.provenance, sourceId } },
-    reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId, evidencePath: "page.publicationTimestamp", extractionMethod: "source_field" }]
+    reportTimestamps: reportTimestamp ? [reportTimestamp] : undefined
   };
 }
 
@@ -670,7 +678,7 @@ function publicationTimestampFromHtml(html: string): string | undefined {
   }
   candidates.push(html.match(/"datePublished"\s*:\s*"([^"]+)"/i)?.[1] || "");
   candidates.push(html.match(/<time\b[^>]*datetime=["']([^"']+)["']/i)?.[1] || "");
-  return candidates.map(validTimestamp).find(Boolean);
+  return candidates.map(zonedSourceTimestamp).find(Boolean);
 }
 
 function htmlAttribute(tag: string, name: string) {

@@ -1,10 +1,12 @@
 import { nowIso } from "../utils.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { qualifySourcePortfolio } from "../ops/sourcePortfolioQualification.ts";
+import { toSafeSourceDto } from "./sourceRoutes.ts";
+import { inTenantScope } from "./tenantScope.ts";
 
-export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string } = {}) {
+export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: string; generatedAt?: string; limit?: number; cursor?: number } = {}) {
   const generatedAt = input.generatedAt ?? nowIso();
-  const inTenant = (record: any) => input.tenantId === undefined || record?.tenantId === undefined || record.tenantId === input.tenantId;
+  const inTenant = (record: any) => inTenantScope(record, input.tenantId);
   const sources = records(store, "listSources").filter(inTenant);
   const observations = records(store, "listSourceHealthObservations").filter(inTenant);
   const captures = records(store, "listCaptures").filter(inTenant);
@@ -52,7 +54,9 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
     const duplicateCount = sum(sourceObservations, "duplicateCount");
     const captureCount = sum(sourceObservations, "captureCount");
 
+    const safeSource = toSafeSourceDto(source);
     return {
+      ...safeSource,
       id: source.id,
       name: source.name,
       type: source.type,
@@ -60,6 +64,7 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
       lifecycleStatus: source.status,
       executable: isExecutableSource(source),
       operatingMode: {
+        ...(safeSource as any).operatingMode,
         accessMethod: source.accessMethod,
         legalMode: source.governance?.metadataOnly || source.metadata?.captureMode === "metadata_only" ? "metadata_only" : "public_content",
         approvalState: source.governance?.approvalState ?? (source.approvedAt ? "approved" : "not_recorded"),
@@ -103,15 +108,28 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
         usefulCheckCount: qualification?.usefulCheckCount ?? 0,
         sustainedProductive: (qualification?.usefulCheckCount ?? 0) >= 2 && sourceCaptures.length > 0
       },
+      verification: {
+        qualificationState: source.metadata?.sourcePortfolioQualificationState ?? source.metadata?.qualificationState,
+        countsAsCoverage: source.metadata?.countsAsCoverage === true,
+        authorityReportedItemCount: finiteNumber(source.metadata?.reportedVictimCount),
+        directlyParsedItemCount: finiteNumber(source.metadata?.observedParsedItemCount),
+        parserShape: source.metadata?.parserShape,
+        verifiedAt: timeOf(source.metadata?.sourcePortfolioVerification, "verifiedAt")
+      },
       qualification
     };
-  }).sort((left: any, right: any) => left.name.localeCompare(right.name));
+  }).sort((left: any, right: any) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
   const executableRows = rows.filter((row: any) => row.executable);
+  const limit = Math.max(1, Math.min(500, Number(input.limit ?? 100) || 100));
+  const cursor = Math.max(0, Number(input.cursor ?? 0) || 0);
+  const page = rows.slice(cursor, cursor + limit);
 
   return {
     schemaVersion: "ti.source_operations.v1",
     generatedAt,
-    tenantId: input.tenantId ?? "all",
+    tenantId: input.tenantId ?? "global",
+    total: rows.length,
+    nextCursor: cursor + page.length < rows.length ? String(cursor + page.length) : undefined,
     summary: {
       sourceCount: rows.length,
       retainedSourceCount: executableRows.length,
@@ -144,7 +162,7 @@ export function buildSourceOperationsSnapshot(store: any, input: { tenantId?: st
       gaps: portfolio.gaps,
       baselineMet: portfolio.baselineMet
     },
-    sources: rows,
+    sources: page,
     safeOutput: { sourceUrlsExposed: false, rawCapturesExposed: false, restrictedPayloadsExposed: false }
   };
 }
@@ -168,7 +186,7 @@ function labelSourceIndex(store: any, captures: any[], tenantId?: string) {
   const captureById = new Map(captures.map((record: any) => [record.id, record]));
   const indexes = ["listExtractedEntities", "listIndicators", "listIncidents", "listIntelligenceClaims"]
     .flatMap((method) => records(store, method))
-    .filter((record: any) => tenantId === undefined || record?.tenantId === undefined || record.tenantId === tenantId);
+    .filter((record: any) => inTenantScope(record, tenantId));
   const subjectById = new Map(indexes.map((record: any) => [record.id, record]));
   return (label: any): string[] => {
     const subjectId = label.captureId ?? label.entityId ?? label.indicatorId ?? label.incidentId ?? label.claimId;

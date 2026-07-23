@@ -5,6 +5,7 @@ import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { privateTarget } from "../registry/sourceRegistry.ts";
 import { isSellableIntelText } from "../value/sellableIntel.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
+import { sourceFieldReportTimestamp, zonedSourceTimestamp } from "../pipeline/sourceFieldReportTimestamp.ts";
 
 const MAX_TERMS_PER_QUERY = 20;
 const MAX_QUERY_CHARACTERS = 800;
@@ -168,6 +169,14 @@ export async function collectWatchlistDiscoveryEvidence(input: {
 
     const publisher = publicAdvisorySourceIdentity(canonicalUrl, input.store.listSources?.());
     const sourceId = publisher.id;
+    const reportTimestamp = sourceFieldReportTimestamp({
+      role: "publisher",
+      timestamp: publishedAt,
+      referenceUrl: canonicalUrl,
+      sourceId,
+      evidencePath: "page.publicationTimestamp",
+      parserVersion: "scheduled-watchlist-public-page:v1"
+    });
     if (!publisher.existing) input.store.saveSource({ ...publicSource, id: sourceId, tenantId: undefined, name: `Public advisory publisher ${new URL(publisher.url).hostname}`, url: publisher.url, status: "candidate", createdAt: input.generatedAt, updatedAt: input.generatedAt, metadata: { sourceFamily: "public_advisory", collectionMode: "publisher_site", productionCollection: false } });
     const { html: _html, ...safePage } = page as any;
     collected.push({
@@ -191,14 +200,7 @@ export async function collectWatchlistDiscoveryEvidence(input: {
           resultHash: hashContent(`${candidate.url}:${candidate.title}:${candidate.contentHash}`),
           retainedAsEvidence: false
         },
-        reportTimestamps: [{
-          role: "publisher",
-          timestamp: publishedAt,
-          sourceId,
-          evidencePath: "page.publicationTimestamp",
-          extractionMethod: "source_field",
-          parserVersion: "scheduled-watchlist-public-page:v1"
-        }],
+        reportTimestamps: reportTimestamp ? [reportTimestamp] : undefined,
         extractionProfile: "public_advisory",
         review: { state: "needs_review", reason: "Scheduled public incident evidence requires automated or analyst confirmation" }
       }
@@ -303,7 +305,7 @@ function publicationTimestampFromHtml(html: string) {
   }
   candidates.push(html.match(/"datePublished"\s*:\s*"([^"]+)"/i)?.[1] ?? "");
   candidates.push(html.match(/<time\b[^>]*datetime=["']([^"']+)["']/i)?.[1] ?? "");
-  return candidates.map(validTimestamp).find(Boolean);
+  return candidates.map(zonedSourceTimestamp).find(Boolean);
 }
 
 function htmlAttribute(tag: string, name: string) {

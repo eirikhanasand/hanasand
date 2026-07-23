@@ -7,7 +7,7 @@ import { buildSourceOperationsSnapshot } from "./sourceOperations.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { inTenantScope, resolveTenantScope } from "./tenantScope.ts";
 import { buildEvaluationMetrics } from "../pipeline/evaluationMetrics.ts";
-import { authenticateRequest } from "./requestAuthentication.ts";
+import { authenticateOperatorRequest, authenticateRequest, authorizeOperatorScope } from "./requestAuthentication.ts";
 import { handleEvaluationBenchmarkRequest } from "./evaluationBenchmarkRoutes.ts";
 import { handleTimelinessRequest } from "./timelinessRoutes.ts";
 import { reconcileActorIdentityCoverage } from "../pipeline/mitreActorCatalog.ts";
@@ -44,8 +44,18 @@ export async function handleStructuredIntelRequest(request: Request, options: Ap
   const evaluationBenchmarkResponse = await handleEvaluationBenchmarkRequest(request, options);
   if (evaluationBenchmarkResponse) return evaluationBenchmarkResponse;
   if (url.pathname === "/v1/intel/source-operations" && request.method === "GET") {
+    const authentication = await authenticateOperatorRequest(request, options);
+    if (authentication.error) return authentication.error;
+    if (!authentication.identity) return error("authentication_unavailable", "Source operations authentication is not configured", 503);
     const scope = resolveTenantScope(request, url);
-    return scope.error ?? json(buildSourceOperationsSnapshot(options.store, { tenantId: scope.tenantId }));
+    if (scope.error) return scope.error;
+    const accessError = authorizeOperatorScope(authentication.identity, options, scope.tenantId);
+    if (accessError) return accessError;
+    return json(buildSourceOperationsSnapshot(options.store, {
+      tenantId: scope.tenantId,
+      limit: numberQuery(url.searchParams.get("limit")),
+      cursor: numberQuery(url.searchParams.get("cursor"))
+    }));
   }
   if (url.pathname === "/v1/intel/actor-identity-coverage" && request.method === "GET") {
     const scope = resolveTenantScope(request, url);

@@ -1,19 +1,20 @@
 import type { ApiServerOptions } from "./serverTypes.ts";
-import { json, readJson } from "./http.ts";
+import { error, json, readJson } from "./http.ts";
 import { exposureClaimsFromStore } from "./exposureQueueRoutes.ts";
 import { nowIso } from "../utils.ts";
-import { authenticateOperatorRequest } from "./requestAuthentication.ts";
+import { authenticateOperatorRequest, authorizeOperatorScope } from "./requestAuthentication.ts";
 import { isExecutableSource } from "../policy/collectionPolicy.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
+import { inTenantScope } from "./tenantScope.ts";
 import { qualifySourcePortfolio, SOURCE_PORTFOLIO_BASELINE } from "../ops/sourcePortfolioQualification.ts";
 
-export function collectionSchedulerStatus(options: ApiServerOptions, lastControlAction?: Record<string, unknown>, tenantId?: string) {
+export function collectionSchedulerStatus(options: ApiServerOptions, lastControlAction?: Record<string, unknown>, tenantId?: string, page: { limit?: number; cursor?: number } = {}) {
   const generatedAt = nowIso();
-  const inScope = (record: any) => tenantId === undefined || record.tenantId === undefined || record.tenantId === tenantId;
+  const inScope = (record: any) => inTenantScope(record, tenantId);
   const sources = options.store.listSources().filter(inScope);
   const sourceIds = new Set(sources.map((source: any) => source.id));
-  const observations = (options.store.listSourceHealthObservations?.() ?? []).filter((record: any) => sourceIds.has(record.sourceId));
-  const captures = (options.store.listCaptures?.() ?? []).filter((record: any) => sourceIds.has(record.sourceId));
+  const observations = (options.store.listSourceHealthObservations?.() ?? []).filter((record: any) => inScope(record) && sourceIds.has(record.sourceId));
+  const captures = (options.store.listCaptures?.() ?? []).filter((record: any) => inScope(record) && sourceIds.has(record.sourceId));
   const portfolio = qualifySourcePortfolio({ sources, observations, captures, generatedAt });
   const qualificationBySource = new Map(portfolio.sources.map((source) => [source.sourceId, source]));
   const runs = (options.store.listRuns?.() ?? []).filter(inScope);
@@ -21,17 +22,16 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
   const successfulRuns = runs.filter((run: any) => run.requestId === "req_public_canary" && ["completed", "degraded"].includes(run.status));
   const lastSuccessfulRun = [...successfulRuns].sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
   const retainedSources = sources.filter(isExecutableSource);
-  const activeSources = retainedSources;
+  const canaryLoop = schedulerLoop(options, tenantId);
+  const activeSources = canaryLoop ? retainedSources : [];
   const dailySources = activeSources.filter((source: any) => Number(source.crawlFrequencySeconds ?? 86400) <= 86400);
   const observationsBySource = groupBySource(observations);
   const capturesBySource = groupBySource(captures);
   const dailyAttempted = dailySources.filter((source: any) => observationsBySource.get(source.id)?.some((row: any) => withinDailyWindow(row.checkedAt, generatedAt)));
   const dailyCovered = dailySources.filter((source: any) => observationsBySource.get(source.id)?.some((row: any) => row.success === true && withinDailyWindow(row.checkedAt, generatedAt)));
-  const exposureItems = tenantId === undefined
-    ? exposureClaimsFromStore(options.store, "")
-    : exposureClaimsFromStore(options.store, "", { tenantId });
-  const canaryState = readCanaryState(options.canaryLoop);
-  const schedulerEnabled = canaryState?.enabled ?? Bun.env.TI_CANARY_ENABLED !== "false";
+  const exposureItems = exposureClaimsFromStore(options.store, "", { tenantId });
+  const canaryState = readCanaryState(canaryLoop);
+  const schedulerEnabled = Boolean(canaryLoop) && (canaryState?.enabled ?? Bun.env.TI_CANARY_ENABLED !== "false");
   const intervalSeconds = canaryState?.intervalSeconds ?? Number(Bun.env.TI_CANARY_INTERVAL_SECONDS ?? "300");
   const nextRunAt = nextSchedulerRunAt({
     generatedAt,
@@ -41,15 +41,21 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
     nextEligibleAt: nextEligibleSourceAt(activeSources)
   });
   const totalSourceCount = sources.length;
-  const deadLetters = options.frontier.deadLetterSnapshot?.() ?? [];
-  const queuedTaskCount = options.frontier.size?.() ?? options.frontier.snapshot?.().length ?? 0;
+  const queued = (options.frontier.snapshot?.() ?? []).filter((item: any) => inFrontierScope(item, tenantId));
+  const leased = (options.frontier.leasedSnapshot?.() ?? []).filter((item: any) => inFrontierScope(item, tenantId));
+  const deadLetters = (options.frontier.deadLetterSnapshot?.() ?? []).filter((item: any) => inFrontierScope(item, tenantId));
+  const queuedTaskCount = queued.length;
   const queueLimit = canaryState?.queueLimit ?? Number(Bun.env.TI_CANARY_MAX_QUEUE_SIZE ?? "500");
   const maxTasks = canaryState?.maxTasks ?? Number(Bun.env.TI_CANARY_MAX_TASKS ?? "25");
   const maxSources = canaryState?.maxSources ?? Number(Bun.env.TI_CANARY_MAX_SOURCES ?? "50");
   const scheduledCheckCapacityPerDay = Math.floor(86_400 / Math.max(5, intervalSeconds)) * Math.min(maxTasks, maxSources);
   const requiredChecksPerDay = activeSources.reduce((total: number, source: any) => total + Math.max(1, Math.ceil(86_400 / Math.max(300, positiveNumber(source.crawlFrequencySeconds, 86_400)))), 0);
-  const sourceRows = activeSources.map((source: any) => describeSource(source, generatedAt, observationsBySource.get(source.id) ?? [], capturesBySource.get(source.id) ?? [], qualificationBySource.get(source.id)));
-  const control = schedulerControls({ schedulerEnabled, canaryLoop: options.canaryLoop, activeSourceCount: activeSources.length });
+  const sourceRows = activeSources.map((source: any) => describeSource(source, generatedAt, observationsBySource.get(source.id) ?? [], capturesBySource.get(source.id) ?? [], qualificationBySource.get(source.id)))
+    .sort((left, right) => left.name.localeCompare(right.name) || left.sourceId.localeCompare(right.sourceId));
+  const limit = Math.max(1, Math.min(500, Number(page.limit ?? 100) || 100));
+  const cursor = Math.max(0, Number(page.cursor ?? 0) || 0);
+  const sourcePage = sourceRows.slice(cursor, cursor + limit);
+  const control = schedulerControls({ schedulerEnabled, canaryLoop, activeSourceCount: activeSources.length, tenantId });
   const operationalBlockers = schedulerBlockers({
     activeSourceCount: activeSources.length,
     lastSuccessfulRun,
@@ -57,13 +63,15 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
     dailyCoverageRatio: dailySources.length ? dailyCovered.length / dailySources.length : 0,
     deadLetterCount: deadLetters.length,
     aiEndpointConfigured: Boolean(Bun.env.HANASAND_AI_API_BASE),
-    canaryLoop: options.canaryLoop
+    canaryLoop
   });
 
   return json({
     schemaVersion: "ti.collection_scheduler_status.v1",
     generatedAt,
-    tenantId: tenantId ?? "all",
+    tenantId: tenantId ?? "global",
+    total: sourceRows.length,
+    nextCursor: cursor + sourcePage.length < sourceRows.length ? String(cursor + sourcePage.length) : undefined,
     decision: operationalBlockers.some((blocker) => blocker.severity === "blocker") ? "not_operational" : operationalBlockers.length ? "degraded" : "operational",
     operationalBlockers,
     lastControlAction,
@@ -72,6 +80,7 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
       totalSourceCount,
       retainedSourceCount: retainedSources.length,
       inactiveSourceCount: totalSourceCount - retainedSources.length,
+      unscheduledExecutableSourceCount: retainedSources.length - activeSources.length,
       retiredSourceCount: sources.filter((source: any) => source.status === "retired").length,
       activeSourceCount: activeSources.length,
       checkedSourceCount: activeSources.filter((source: any) => (observationsBySource.get(source.id)?.length ?? 0) > 0).length,
@@ -114,7 +123,7 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
       nextRunAt,
       queue: {
         queued: queuedTaskCount,
-        leased: options.frontier.leasedSnapshot?.().length ?? 0,
+        leased: leased.length,
         deadLetterCount: deadLetters.length,
         limit: queueLimit,
         utilization: queueLimit ? Math.round(queuedTaskCount / queueLimit * 10_000) / 10_000 : 0,
@@ -149,7 +158,7 @@ export function collectionSchedulerStatus(options: ApiServerOptions, lastControl
       sourceId: item.task?.sourceId,
       reason: item.reason
     })),
-    sources: sourceRows
+    sources: sourcePage
   });
 }
 
@@ -157,8 +166,11 @@ export async function updateCollectionSchedulerControl(request: Request, options
   const body = await readJson(request);
   const authentication = await authenticateOperatorRequest(request, options);
   if (authentication.error) return authentication.error;
+  if (!authentication.identity) return error("authentication_unavailable", "Collection scheduler authentication is not configured", 503);
   const scope = resolveTenantScope(request, new URL(request.url), body.tenantId);
   if (scope.error) return scope.error;
+  const accessError = authorizeOperatorScope(authentication.identity, options, scope.tenantId);
+  if (accessError) return accessError;
   const action = body.action === "resume" || body.enabled === true
     ? "resume"
     : body.action === "pause" || body.enabled === false
@@ -171,7 +183,7 @@ export async function updateCollectionSchedulerControl(request: Request, options
     return json({ error: { code: "unsupported_action", message: "Use action pause, resume, or run_now." } }, 400);
   }
 
-  const loop = options.canaryLoop as any;
+  const loop = schedulerLoop(options, scope.tenantId) as any;
   if (!loop) {
     return json({ error: { code: "scheduler_unavailable", message: "Collection scheduler loop is not attached." } }, 409);
   }
@@ -281,20 +293,34 @@ function nextSourceAction(input: { healthState: string; backoffUntil?: string; l
   return input.lastFailureReason ? "inspect_recent_failure" : "continue_collection";
 }
 
-function schedulerControls(input: { schedulerEnabled: boolean; canaryLoop: unknown; activeSourceCount: number }) {
+function schedulerControls(input: { schedulerEnabled: boolean; canaryLoop: unknown; activeSourceCount: number; tenantId?: string }) {
   const canPauseResume = Boolean(input.canaryLoop && typeof (input.canaryLoop as any).setEnabled === "function");
   const canRunOnce = Boolean(input.canaryLoop && typeof (input.canaryLoop as any).runOnce === "function");
   return {
     actions: [
-      action("pause", "POST", { action: "pause" }, input.schedulerEnabled && canPauseResume, disabledReasons(!input.schedulerEnabled && "scheduler_already_paused", !canPauseResume && "pause_resume_control_unavailable")),
-      action("resume", "POST", { action: "resume" }, !input.schedulerEnabled && canPauseResume, disabledReasons(input.schedulerEnabled && "scheduler_already_enabled", !canPauseResume && "pause_resume_control_unavailable")),
-      action("run_now", "POST", { action: "run_now" }, canRunOnce && input.activeSourceCount > 0, disabledReasons(!canRunOnce && "run_once_control_unavailable", input.activeSourceCount === 0 && "no_active_sources"))
+      action("pause", "POST", scopedBody("pause", input.tenantId), input.schedulerEnabled && canPauseResume, disabledReasons(!input.schedulerEnabled && "scheduler_already_paused", !canPauseResume && "pause_resume_control_unavailable")),
+      action("resume", "POST", scopedBody("resume", input.tenantId), !input.schedulerEnabled && canPauseResume, disabledReasons(input.schedulerEnabled && "scheduler_already_enabled", !canPauseResume && "pause_resume_control_unavailable")),
+      action("run_now", "POST", scopedBody("run_now", input.tenantId), canRunOnce && input.activeSourceCount > 0, disabledReasons(!canRunOnce && "run_once_control_unavailable", input.activeSourceCount === 0 && "no_active_sources"))
     ]
   };
 }
 
 function action(action: string, method: string, body: Record<string, string>, enabled: boolean, disabledReasons: string[]) {
   return { action, method, endpoint: "/v1/ops/collection-scheduler", body, enabled, disabledReasons };
+}
+
+function scopedBody(action: string, tenantId?: string): Record<string, string> {
+  return tenantId ? { action, tenantId } : { action };
+}
+
+function schedulerLoop(options: ApiServerOptions, tenantId?: string) {
+  if (tenantId === undefined) return options.canaryLoop;
+  if (tenantId === "default") return options.defaultCanaryLoop;
+  return undefined;
+}
+
+function inFrontierScope(item: any, tenantId?: string) {
+  return inTenantScope(item?.task ?? item, tenantId);
 }
 
 function disabledReasons(...reasons: Array<string | false>): string[] {

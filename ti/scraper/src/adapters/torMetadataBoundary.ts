@@ -112,6 +112,6 @@ function victimNamesFromHtml(html: string, actorName?: string): string[] {
 
 function tag(html: string, name: string): string { return html.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`, "i"))?.[1] ?? ""; }
 function meta(html: string, name: string): string { const element = [...html.matchAll(/<meta\b[^>]*>/gi)].map((match) => match[0]).find((value) => new RegExp(`(?:name|property)=["'](?:og:)?${name}["']`, "i").test(value)); return element?.match(/content=["']([^"']*)["']/i)?.[1] ?? ""; }
-function time(html: string): string | undefined { const value = html.match(/<time\b[^>]*datetime=["']([^"']+)["']/i)?.[1]; return value && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : undefined; }
+function time(html: string): string | undefined { const value = html.match(/<time\b[^>]*datetime=["']([^"']+)["']/i)?.[1]?.trim(); return value && /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) && Number.isFinite(Date.parse(value)) ? value : undefined; }
 function labeled(text: string | undefined, labels: string[]): string | undefined { if (!text) return undefined; const match = text.match(new RegExp(`(?:${labels.join("|")})\\s*[:\\-]\\s*([^|;\\n]{2,120})`, "i")); return match?.[1]?.trim(); }
 function clean(value: string): string { return value.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'").replace(/\s+/g, " ").trim(); }

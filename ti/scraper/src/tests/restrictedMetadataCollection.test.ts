@@ -137,6 +137,55 @@ describe("restricted metadata collection", () => {
     expect(store.listCaptures().every((capture) => capture.storageKind === "metadata_only" && !capture.body && !capture.objectRef)).toBe(true);
   });
 
+  test("monitors an approved portfolio candidate but activates it only after two novel productive cycles", async () => {
+    const store = new InMemoryScraperStore();
+    let victim = "Northwind Health";
+    const candidate = source({
+      id: "src_restricted_candidate_cycles",
+      type: "tor_metadata",
+      url: `http://${"e".repeat(56)}.onion/`,
+      accessMethod: "approved_proxy",
+      status: "candidate",
+      risk: "restricted",
+      crawlFrequencySeconds: 900,
+      legalNotes: "Approved public victim-listing metadata only; no interaction or raw content retention.",
+      governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-22T09:00:00.000Z", approvedBy: "reviewer" },
+      metadata: {
+        actorName: "Candidate",
+        restrictedMetadataCandidate: true,
+        productionCollection: false,
+        countsAsCoverage: false,
+        sourcePortfolioVerification: {
+          verifiedAt: "2026-07-22T09:00:00.000Z",
+          legalBasisVerifiedAt: "2026-07-22T09:00:00.000Z",
+          outcome: "content_parsed",
+          observedItemCount: 1
+        }
+      }
+    });
+    store.saveSource(candidate);
+    const boundary = new TorMetadataHttpBoundary({
+      proxyUrl: "http://onion-tor:8118",
+      fetcher: async () => new Response(`<title>Candidate notices</title><div class="post-title">${victim}</div>`, { headers: { "content-type": "text/html" } })
+    });
+
+    const first = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-22T10:00:00.000Z" });
+    expect(first).toMatchObject({ sourceCount: 1, captureCount: 1 });
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "candidate",
+      metadata: { productionCollection: false, countsAsCoverage: false, sourcePortfolioQualificationState: "pending_sustained_productivity", sourcePortfolioProductiveCheckCount: 1 }
+    });
+
+    victim = "Contoso Manufacturing";
+    const second = await runRestrictedMetadataCollectionCycle({ store, boundary, now: () => "2026-07-22T10:15:00.000Z" });
+    expect(second).toMatchObject({ sourceCount: 1, captureCount: 1 });
+    expect(store.getSource(candidate.id)).toMatchObject({
+      status: "active",
+      metadata: { productionCollection: true, countsAsCoverage: true, sourcePortfolioQualificationState: "sustained_productive", sourcePortfolioProductiveCheckCount: 2 }
+    });
+    expect(store.listCaptures()).toHaveLength(2);
+  });
+
   test("backs off reachable pages that yield no useful victim metadata", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_gateway_only", type: "tor_metadata", url: `http://${"d".repeat(56)}.onion/`, accessMethod: "approved_proxy", status: "active", risk: "restricted", legalNotes: "Approved metadata-only reachability review.", governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-07-22T09:00:00.000Z", approvedBy: "reviewer" }, metadata: { actorName: "Gateway" } }));

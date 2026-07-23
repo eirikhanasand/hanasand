@@ -58,6 +58,25 @@ describe("source portfolio qualification", () => {
     expect(result.sources[0].reasons).toContain("insufficient_productive_cycles");
   });
 
+  test("requires two productive scheduled cycles inside the current activity window", () => {
+    const result = qualifySourcePortfolio({
+      sources: [publicSource("windowed", "rss", "https://example.test/windowed.xml")],
+      observations: [
+        observation("windowed", "2020-07-23T11:00:00.000Z", 1),
+        observation("windowed", "2026-07-23T11:00:00.000Z", 1)
+      ],
+      captures: [
+        capture("windowed", "old", "2020-07-23T10:00:00.000Z"),
+        capture("windowed", "current", "2026-07-23T10:00:00.000Z")
+      ],
+      generatedAt
+    });
+
+    expect(result.counts.total).toBe(0);
+    expect(result.sources[0]).toMatchObject({ scheduledCheckCount: 1, productiveCheckCount: 1 });
+    expect(result.sources[0].reasons).toContain("insufficient_productive_cycles");
+  });
+
   test("requires immutable batch verification and rejects seeded runtime timestamps", () => {
     const source = publicSource("batch", "rss", "https://example.test/batch.xml", {
       productionCollection: true,

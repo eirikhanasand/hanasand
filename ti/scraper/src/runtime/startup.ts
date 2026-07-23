@@ -70,6 +70,7 @@ export function createScraperRuntimeStop(options: {
   scheduledRuns: { beginStopping: () => void; drain: () => Promise<void> };
   server: Stoppable;
   canary: Stoppable;
+  defaultCanary: Stoppable;
   restrictedMetadata: Stoppable;
   evaluation: Stoppable;
   automaticReview: Stoppable;
@@ -81,6 +82,7 @@ export function createScraperRuntimeStop(options: {
     await options.server.stop();
     await Promise.all([
       options.canary.stop(),
+      options.defaultCanary.stop(),
       options.restrictedMetadata.stop(),
       options.evaluation.stop(),
       options.automaticReview.stop(),
@@ -117,21 +119,43 @@ export async function startScraperRuntime() {
     onError: (error, runId) => logger.warn("scheduled collection run failed", { event: "scheduled_run.error", runId, error: error instanceof Error ? error.message : String(error) })
   });
   const executeRun = scheduledRuns.execute;
-  const canary = startCanaryCollectionLoop({
+  const canaryEnabled = Bun.env.TI_CANARY_ENABLED !== "false";
+  const defaultCanaryEnabled = canaryEnabled && Bun.env.TI_DEFAULT_CANARY_ENABLED !== "false";
+  const collectionConcurrency = Math.max(2, Number(Bun.env.TI_CANARY_MAX_CONCURRENT_TASKS ?? "16"));
+  const defaultCollectionConcurrency = defaultCanaryEnabled
+    ? Math.min(collectionConcurrency - 1, Math.max(1, Number(Bun.env.TI_DEFAULT_CANARY_MAX_CONCURRENT_TASKS ?? "2")))
+    : 0;
+  const canaryOptions = {
     store, frontier, objectStore,
-    enabled: Bun.env.TI_CANARY_ENABLED !== "false",
     intervalSeconds: Number(Bun.env.TI_CANARY_INTERVAL_SECONDS ?? "300"),
     maxTasks: Number(Bun.env.TI_CANARY_MAX_TASKS ?? "25"),
     maxSources: Number(Bun.env.TI_CANARY_MAX_SOURCES ?? "50"),
-    maxConcurrentTasks: Number(Bun.env.TI_CANARY_MAX_CONCURRENT_TASKS ?? "16"),
+    maxConcurrentTasks: collectionConcurrency - defaultCollectionConcurrency,
     timeoutMs: Number(Bun.env.TI_CANARY_TIMEOUT_MS ?? Bun.env.SCRAPER_DEFAULT_TIMEOUT_MS ?? "12000"),
     maxItemsPerTask: Number(Bun.env.TI_CANARY_MAX_ITEMS_PER_TASK ?? "4"),
     queueLimit: Number(Bun.env.TI_CANARY_MAX_QUEUE_SIZE ?? "500"),
-    operatorId: Bun.env.TI_CANARY_OPERATOR_ID ?? "startup-canary",
     activateSources: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true",
-    runExecutor: executeRun,
+    runExecutor: executeRun
+  };
+  const canary = startCanaryCollectionLoop({
+    ...canaryOptions,
+    enabled: canaryEnabled,
+    operatorId: Bun.env.TI_CANARY_OPERATOR_ID ?? "startup-canary",
     onCycle: (result) => logger.info("public canary collection cycle", { event: "canary.cycle", ...result }),
     onError: (error) => logger.warn("public canary collection failed", { event: "canary.error", error: error instanceof Error ? error.message : String(error) })
+  });
+  const defaultCanary = startCanaryCollectionLoop({
+    ...canaryOptions,
+    tenantId: "default",
+    includeSharedSources: false,
+    scheduleWatchlistDiscovery: false,
+    enabled: defaultCanaryEnabled,
+    maxSources: Math.max(1, Number(Bun.env.TI_DEFAULT_CANARY_MAX_SOURCES ?? "10")),
+    maxTasks: Math.max(1, Number(Bun.env.TI_DEFAULT_CANARY_MAX_TASKS ?? "5")),
+    maxConcurrentTasks: defaultCollectionConcurrency || 1,
+    operatorId: Bun.env.TI_DEFAULT_CANARY_OPERATOR_ID ?? "startup-default-canary",
+    onCycle: (result) => logger.info("default-tenant public canary collection cycle", { event: "canary.default.cycle", ...result }),
+    onError: (error) => logger.warn("default-tenant public canary collection failed", { event: "canary.default.error", error: error instanceof Error ? error.message : String(error) })
   });
   const restrictedEnabled = Bun.env.TI_RESTRICTED_METADATA_ENABLED === "true";
   const proxyUrl = Bun.env.TI_TOR_METADATA_PROXY;
@@ -155,8 +179,8 @@ export async function startScraperRuntime() {
     onCycle: (result: any) => logger.info("automatic evaluation cycle", { event: "automatic_evaluation.cycle", ...result }),
     onError: (error: unknown) => logger.warn("automatic evaluation cycle failed", { event: "automatic_evaluation.error", error: error instanceof Error ? error.message : String(error) })
   });
-  const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
+  const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, defaultCanaryLoop: defaultCanary, restrictedMetadataLoop: restrictedMetadata, evaluationLoop: evaluation, sourceBootstrap, runExecutor: executeRun });
   const automaticReview = startAutomaticReviewWorker({ store, frontier, config } as any);
-  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", automaticEvaluationEnabled: Bun.env.TI_AUTOMATIC_EVALUATION_ENABLED !== "false", recoveredRuns, sourceBootstrap, ...paths });
-  return { stop: createScraperRuntimeStop({ scheduledRuns, server, canary, restrictedMetadata, evaluation, automaticReview, store }) };
+  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, storageBackend: "postgresql", storageSchema: "threat_intel", legacyImport, retentionAssignments, retentionMutations: retention.reduce((count, result) => count + result.deletionAudit.length, 0), publicCanaryEnabled: canaryEnabled, defaultCanaryEnabled, collectionConcurrency, publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", automaticEvaluationEnabled: Bun.env.TI_AUTOMATIC_EVALUATION_ENABLED !== "false", recoveredRuns, sourceBootstrap, ...paths });
+  return { stop: createScraperRuntimeStop({ scheduledRuns, server, canary, defaultCanary, restrictedMetadata, evaluation, automaticReview, store }) };
 }

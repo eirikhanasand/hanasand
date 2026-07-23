@@ -9,6 +9,7 @@ import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
 import { sourceCollectionLane } from "../policy/collectionPolicy.ts";
 import { buildRawCapture } from "../pipeline/pipelineCapture.ts";
 import { activeWatchlistDiscoveryTerms, collectWatchlistDiscoveryEvidence, scheduleWatchlistDiscoveryRuns } from "./watchlistDiscovery.ts";
+import { isCurrentSourcePortfolioVerification } from "../registry/sourcePortfolioBatch.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
 export type * from "./canaryCollectionTypes.ts";
@@ -20,10 +21,10 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const activation = options.activateSources ? activatePublicCanarySources({ ...options, now: generatedAt }) : { activated: [], alreadyActive: [], rejected: [] };
   const maxSources = Math.max(1, options.maxSources ?? 10), maxTasks = Math.max(1, options.maxTasks ?? 5), maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
   const selectedSourceIds = new Set(options.sourceIds ?? []);
-  const due = options.store.listSources()
-    .filter((s: any) => inCollectionScope(s, options.tenantId) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt))
-    .sort((left: any, right: any) => sourceScheduleTime(left) - sourceScheduleTime(right) || String(left.id).localeCompare(String(right.id)))
-    .slice(0, maxSources);
+  const allDue = options.store.listSources()
+    .filter((s: any) => inCollectionScope(s, options.tenantId, options.includeSharedSources) && (!selectedSourceIds.size || selectedSourceIds.has(s.id)) && isProductionCollectionSource(s, generatedAt))
+    .sort((left: any, right: any) => sourceScheduleTime(left) - sourceScheduleTime(right) || String(left.id).localeCompare(String(right.id)));
+  const due = allDue.slice(0, maxSources);
   const planId = stableId("canary-plan", `${options.tenantId ?? "global"}:${generatedAt}`), runId = stableId("canary-run", planId);
   const queueLimit = Math.max(1, Number(options.queueLimit ?? 500));
   const availableQueueSlots = Math.max(0, queueLimit - Number(options.frontier.size?.() ?? options.frontier.snapshot?.().length ?? 0));
@@ -40,7 +41,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const runStatus = counters.failedTaskCount && counters.completedTaskCount ? "degraded" : counters.failedTaskCount ? "failed" : "completed";
   const completedAt = options.now?.() ?? nowIso();
   options.store.saveRun?.({ id: runId, tenantId: options.tenantId, planId, requestId: "req_public_canary", status: runStatus, createdAt: generatedAt, startedAt: generatedAt, completedAt, updatedAt: completedAt, taskCount: tasks.length, sourceCount: scheduledSourceIds.size, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, duplicateCaptureCount: counters.duplicateCaptureCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, retryScheduledCount: counters.retryScheduledCount, retryExhaustedCount: counters.retryExhaustedCount, error: errors[0]?.message });
-  return { generatedAt, tenantId: options.tenantId, mode: "production_canary", runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: due.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount: options.frontier.snapshot().filter((i: any) => i.task.runId === runId).length, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
+  return { generatedAt, tenantId: options.tenantId, mode: "production_canary", runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, retiredSourceCount: productivity.retired.length, activeSourceCount: scheduledSourceIds.size, deferredDueSourceCount: allDue.length - scheduledSourceIds.size, queuedTaskCount: tasks.length, queueLimit, availableQueueSlots, backpressureState, ...counters, remainingQueuedTaskCount: options.frontier.snapshot().filter((i: any) => i.task.runId === runId).length, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
 }
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
   const state = detachedState(options.now?.() ?? nowIso(), options.queueLimit ?? 500), intervalMs = Math.max(5, options.intervalSeconds ?? 300) * 1000; let timer: Timer | undefined, startupTimer: Timer | undefined, active: Promise<void> | undefined;
@@ -48,7 +49,14 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
     if (!state.enabled || active) return active ?? Promise.resolve();
     state.running = true; state.lastCycleAt = nowIso();
     active = (async () => {
-      try { const watchlistDiscovery = await scheduleWatchlistDiscoveryRuns(options, options.now?.() ?? nowIso()); const result = await runCanaryCollectionCycle(options); result.watchlistDiscovery = watchlistDiscovery; state.latestResult = result; state.successCount++; state.lastSuccessAt = result.generatedAt; options.onCycle?.(result); }
+      try {
+        const watchlistDiscovery = options.scheduleWatchlistDiscovery === false
+          ? { scheduledRunCount: 0, skippedRunCount: 0, reason: "disabled_for_scheduler_lane" }
+          : await scheduleWatchlistDiscoveryRuns(options, options.now?.() ?? nowIso());
+        const result = await runCanaryCollectionCycle(options);
+        result.watchlistDiscovery = watchlistDiscovery;
+        state.latestResult = result; state.successCount++; state.lastSuccessAt = result.generatedAt; options.onCycle?.(result);
+      }
       catch (e) { state.errorCount++; state.consecutiveErrorCount++; state.lastError = e instanceof Error ? e.message : String(e); state.lastErrorAt = nowIso(); options.onError?.(e); }
       finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? new Date(Date.now() + intervalMs).toISOString() : undefined; active = undefined; }
     })();
@@ -127,7 +135,29 @@ export async function runLeasedTask(options: any, runId: string, generatedAt: st
     const checkedAt = options.now?.() ?? nowIso(), useful = taskMetrics.captureCount > 0;
     const lastContentAt = useful ? latestTimestamp(taskMetrics.productivePublishedAt) ?? checkedAt : source.health?.lastContentAt;
     options.store.saveSourceHealthObservation?.(sourceHealthObservation(source, task, runId, checkedAt, Date.now() - startedMs, taskMetrics, { success: true, useful }));
-    options.store.saveSource({ ...source, lastSeenAt: lastContentAt ?? source.lastSeenAt, health: { ...(source.health ?? {}), status: taskMetrics.parserWarningCount ? "degraded" : "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: taskMetrics.parserWarningCount ? "warnings" : "healthy", lastError: undefined }, crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + (source.crawlFrequencySeconds ?? 3600) * 1000).toISOString(), backoffUntil: undefined, lastError: undefined }, metadata: { ...(source.metadata ?? {}), lastCanaryFetchMode: mode }, updatedAt: checkedAt });
+    const portfolioCandidate = governedPortfolioCandidate(source, checkedAt);
+    const productiveCycles = portfolioCandidate ? currentProductiveCycles(options.store, source, checkedAt) : [];
+    const sustained = productiveCycles.length >= 2;
+    options.store.saveSource({
+      ...source,
+      status: portfolioCandidate && sustained ? "active" : source.status,
+      countsAsCoverage: portfolioCandidate ? sustained : source.countsAsCoverage,
+      lastSeenAt: lastContentAt ?? source.lastSeenAt,
+      health: { ...(source.health ?? {}), status: taskMetrics.parserWarningCount ? "degraded" : "healthy", checkedAt, lastSuccessAt: checkedAt, lastContentAt, lastUsefulAt: useful ? checkedAt : source.health?.lastUsefulAt, consecutiveFailures: 0, errorRate: 0, parserStatus: taskMetrics.parserWarningCount ? "warnings" : "healthy", lastError: undefined },
+      crawlState: { ...(source.crawlState ?? {}), retryCount: 0, lastCollectedAt: checkedAt, nextEligibleAt: new Date(Date.parse(checkedAt) + (source.crawlFrequencySeconds ?? 3600) * 1000).toISOString(), backoffUntil: undefined, lastError: undefined },
+      metadata: {
+        ...(source.metadata ?? {}),
+        lastCanaryFetchMode: mode,
+        ...(portfolioCandidate ? {
+          productionCollection: sustained,
+          countsAsCoverage: sustained,
+          sourcePortfolioQualificationState: sustained ? "sustained_productive" : "pending_sustained_productivity",
+          sourcePortfolioProductiveCheckCount: productiveCycles.length,
+          sourcePortfolioLastProductiveAt: productiveCycles.at(-1)?.checkedAt
+        } : {})
+      },
+      updatedAt: checkedAt
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error); taskMetrics.httpStatus = Number.isInteger((error as any)?.httpStatus) ? (error as any).httpStatus : taskMetrics.httpStatus; counters.failedTaskCount++; errors.push({ taskId: task.id, sourceId: task.sourceId, message });
     const ack = options.frontier.fail(task, new Date(generatedAt), message); if (ack?.status === "retry_scheduled") counters.retryScheduledCount++; if (ack?.status === "retry_exhausted") counters.retryExhaustedCount++;
@@ -220,18 +250,43 @@ function activityWindowDays(source: any) {
   return Number.isFinite(declaredSeconds) && declaredSeconds > 0 ? Math.max(30, Math.ceil(declaredSeconds / 86_400)) : source.metadata?.queryClass === "threat-intel" ? 365 : 30;
 }
 function isProductionCollectionSource(source: any, generatedAt: string) {
-  if (sourceCollectionLane(source) !== "public") return false;
+  if (sourceCollectionLane(source) !== "public" && !governedPortfolioCandidate(source, generatedAt)) return false;
   const nextEligibleAt = source.crawlState?.nextEligibleAt;
   return !nextEligibleAt || Date.parse(nextEligibleAt) <= Date.parse(generatedAt);
 }
-function inCollectionScope(source: any, tenantId?: string) {
+function governedPortfolioCandidate(source: any, generatedAt: string) {
+  return source.status === "candidate"
+    && source.metadata?.productionCollection === false
+    && isCurrentSourcePortfolioVerification(source, generatedAt)
+    && source.accessMethod === "public_http"
+    && source.risk === "low"
+    && source.governance?.approvalState === "approved"
+    && ["rss", "api", "json_api", "telegram_public"].includes(source.type);
+}
+function currentProductiveCycles(store: any, source: any, generatedAt: string) {
+  const now = Date.parse(generatedAt);
+  const windowSeconds = Math.max(3 * positiveNumber(source.crawlFrequencySeconds, 86_400), positiveNumber(source.metadata?.activityWindowSeconds, 30 * 86_400));
+  const byRun = new Map<string, any>();
+  for (const row of store.listSourceHealthObservations?.() ?? []) {
+    const checkedAt = Date.parse(row.checkedAt), runId = String(row.collectionRunId ?? "");
+    if (row.sourceId !== source.id || row.tenantId !== source.tenantId || !runId || Number(row.captureCount ?? 0) < 1
+      || !Number.isFinite(checkedAt) || checkedAt > now || now - checkedAt > windowSeconds * 1_000) continue;
+    if (!byRun.has(runId) || checkedAt > Date.parse(byRun.get(runId).checkedAt)) byRun.set(runId, row);
+  }
+  return [...byRun.values()].sort((left, right) => Date.parse(left.checkedAt) - Date.parse(right.checkedAt));
+}
+function inCollectionScope(source: any, tenantId?: string, includeSharedSources = true) {
   const sourceTenantId = String(source.tenantId ?? "").trim() || undefined;
   const shared = sourceTenantId === undefined || sourceTenantId === "global";
-  return tenantId ? shared || sourceTenantId === tenantId : shared;
+  return tenantId ? sourceTenantId === tenantId || includeSharedSources && shared : shared;
 }
 function sourceScheduleTime(source: any) {
   return Date.parse(source.health?.checkedAt ?? source.crawlState?.lastCollectedAt ?? source.updatedAt ?? source.createdAt ?? "") || 0;
 }
 function latestTimestamp(values: unknown[]) {
   return values.map((value) => Date.parse(String(value ?? ""))).filter(Number.isFinite).sort((left, right) => right - left).map((value) => new Date(value).toISOString())[0];
+}
+function positiveNumber(value: unknown, fallback: number) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
 }

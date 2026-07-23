@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { FocusedFrontier } from "../frontier/frontier.ts";
-import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
+import { runCanaryCollectionCycle, startCanaryCollectionLoop } from "../ops/canaryCollection.ts";
 import { reconcilePublicSourceProductivity } from "../ops/canaryActivation.ts";
 import { fetchItems } from "../ops/canaryHelpers.ts";
+import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { source } from "./helpers/apiSourceFixtures.ts";
+import { fixtureCapture } from "./helpers/storageFixtures.ts";
 
 describe("public collection boundary", () => {
   test("never routes restricted or private-network targets through public fetch", async () => {
@@ -77,7 +82,7 @@ describe("public collection boundary", () => {
       }
     });
 
-    expect(cycle).toMatchObject({ activeSourceCount: 2, queuedTaskCount: 2, leasedTaskCount: 2, completedTaskCount: 2, remainingQueuedTaskCount: 0 });
+    expect(cycle).toMatchObject({ activeSourceCount: 2, deferredDueSourceCount: 1, queuedTaskCount: 2, leasedTaskCount: 2, completedTaskCount: 2, remainingQueuedTaskCount: 0 });
     expect(fetched).toHaveLength(2);
     expect(frontier.snapshot()).toHaveLength(0);
     expect(store.getSource("c")?.health?.checkedAt).toBeUndefined();
@@ -142,26 +147,49 @@ describe("public collection boundary", () => {
     expect(cycle).toMatchObject({ insertedCaptureCount: 1, skippedLowValueCount: 0 });
   });
 
-  test("retires low-risk public feeds only after a real activity window without new captures", () => {
+  test("retires public Telegram and Tor feeds only after a full scheduled activity window without new captures", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "unproductive", metadata: { productionCollection: true, canaryPortfolio: true }, crawlFrequencySeconds: 86_400 }));
-    for (let index = 0; index < 11; index++) {
-      store.saveSourceHealthObservation({
-        id: `unproductive-${index}`,
-        sourceId: "unproductive",
-        checkedAt: new Date(Date.parse("2026-06-01T00:00:00.000Z") + index * 3 * 86_400_000).toISOString(),
-        status: "healthy",
-        success: true,
-        useful: true,
-        captureCount: 0
-      });
+    store.saveSource(source({ id: "telegram-unproductive", type: "telegram_public", url: "https://t.me/publicinteltest", metadata: { productionCollection: true, canaryPortfolio: true, collectionMode: "public_web_preview" }, governance: { approvalRequired: true, approvalState: "approved", approvedAt: "2026-06-01T00:00:00.000Z", approvedBy: "reviewer" }, crawlFrequencySeconds: 86_400 }));
+    store.saveSource(source({ id: "tor-unproductive", type: "tor_metadata", accessMethod: "approved_proxy", risk: "restricted", url: `http://${"a".repeat(56)}.onion/`, metadata: { productionCollection: true, sourcePortfolioVerification: { outcome: "content_parsed" } }, governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-06-01T00:00:00.000Z", approvedBy: "reviewer" }, crawlFrequencySeconds: 86_400 }));
+    store.saveSource(source({ id: "tor-productive", type: "tor_metadata", accessMethod: "approved_proxy", risk: "restricted", url: `http://${"c".repeat(56)}.onion/`, metadata: { productionCollection: true, sourcePortfolioVerification: { outcome: "content_parsed" } }, governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-06-01T00:00:00.000Z", approvedBy: "reviewer" }, crawlFrequencySeconds: 86_400 }));
+    store.saveSource(source({ id: "tor-transport", type: "tor_metadata", accessMethod: "approved_proxy", risk: "high", url: `http://${"b".repeat(56)}.onion/`, metadata: { productionCollection: true, transportCanary: true }, governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-06-01T00:00:00.000Z", approvedBy: "reviewer" }, crawlFrequencySeconds: 86_400 }));
+    for (const sourceId of ["unproductive", "telegram-unproductive", "tor-unproductive", "tor-productive", "tor-transport"]) {
+      for (let index = 0; index < 31; index++) {
+        const productive = sourceId === "tor-productive" && [10, 20].includes(index);
+        store.saveSourceHealthObservation({
+          id: `${sourceId}-${index}`,
+          sourceId,
+          collectionRunId: `run-${sourceId}-${index}`,
+          checkedAt: new Date(Date.parse("2026-06-23T12:00:00.000Z") + index * 86_400_000).toISOString(),
+          status: "healthy",
+          success: true,
+          useful: productive,
+          captureCount: productive ? 1 : 0
+        });
+      }
+    }
+    for (const index of [10, 20]) {
+      store.saveCapture(fixtureCapture({
+        id: `capture-tor-productive-${index}`,
+        sourceId: "tor-productive",
+        body: `Productive Tor evidence ${index}`,
+        collectedAt: new Date(Date.parse("2026-06-23T12:00:00.000Z") + index * 86_400_000).toISOString(),
+        metadata: { runId: `run-tor-productive-${index}` }
+      }));
     }
 
     const first = reconcilePublicSourceProductivity({ store, now: "2026-07-23T12:00:00.000Z" });
     const second = reconcilePublicSourceProductivity({ store, now: "2026-07-23T13:00:00.000Z" });
 
-    expect(first.retired).toEqual([{ sourceId: "unproductive", attemptCount: 11, productiveCheckCount: 0 }]);
-    expect(store.getSource("unproductive")).toMatchObject({ status: "retired", metadata: { sourcePortfolioStatus: "retired_unproductive" } });
+    expect(first.retired).toEqual([
+      { sourceId: "unproductive", attemptCount: 31, productiveCheckCount: 0 },
+      { sourceId: "telegram-unproductive", attemptCount: 31, productiveCheckCount: 0 },
+      { sourceId: "tor-unproductive", attemptCount: 31, productiveCheckCount: 0 }
+    ]);
+    expect(["unproductive", "telegram-unproductive", "tor-unproductive"].every((id) => store.getSource(id)?.status === "retired")).toBe(true);
+    expect(store.getSource("tor-productive")?.status).toBe("active");
+    expect(store.getSource("tor-transport")?.status).toBe("active");
     expect(second.retired).toEqual([]);
   });
 
@@ -212,6 +240,63 @@ describe("public collection boundary", () => {
     });
     expect(globalFetched).toEqual(["https://example.test/shared.xml"]);
     expect(globalStore.getRun(globalCycle.runId)).toMatchObject({ tenantId: undefined, sourceCount: 1 });
+  });
+
+  test("runtime loops isolate global and exact-default scheduling across restart", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "source-scheduler-scope-"));
+    const snapshotPath = join(dir, "store.json");
+    const firstAt = "2026-07-23T12:00:00.000Z";
+    const fetched: string[] = [];
+    const fetcher = async (url: string) => {
+      fetched.push(url);
+      return new Response(`<rss><channel><item><title>APT29 campaign at ${url}</title><link>${url}/report</link><description>APT29 targeted government victims with credential theft malware and command infrastructure.</description><pubDate>${firstAt}</pubDate></item></channel></rss>`, { headers: { "content-type": "application/rss+xml" } });
+    };
+    const start = (store: FileBackedScraperStore, at: string) => {
+      const frontier = new FocusedFrontier({ maxQueueSize: 4 });
+      const global = startCanaryCollectionLoop({ store, frontier, enabled: false, maxSources: 1, maxTasks: 1, maxConcurrentTasks: 1, queueLimit: 4, now: () => at, fetch: fetcher });
+      const exactDefault = startCanaryCollectionLoop({ store, frontier, enabled: false, tenantId: "default", includeSharedSources: false, scheduleWatchlistDiscovery: false, maxSources: 1, maxTasks: 1, maxConcurrentTasks: 1, queueLimit: 4, now: () => at, fetch: fetcher });
+      global.setEnabled(true);
+      exactDefault.setEnabled(true);
+      return { global, exactDefault };
+    };
+
+    try {
+      const store = new FileBackedScraperStore({ snapshotPath });
+      store.saveSource(source({ id: "global", tenantId: undefined, url: "https://global.example.com/feed.xml", metadata: { productionCollection: true } }));
+      store.saveSource(source({ id: "default", tenantId: "default", url: "https://default.example.com/feed.xml", metadata: { productionCollection: true } }));
+      store.saveSource(source({ id: "customer", tenantId: "customer", url: "https://customer.example.com/feed.xml", metadata: { productionCollection: true } }));
+      const first = start(store, firstAt);
+      await first.global.runOnce();
+      await first.exactDefault.runOnce();
+      await first.global.stop();
+      await first.exactDefault.stop();
+
+      expect(fetched.sort()).toEqual(["https://default.example.com/feed.xml", "https://global.example.com/feed.xml"]);
+      expect(store.listPlans().filter((plan: any) => plan.tasks.length).map((plan: any) => [plan.tenantId, plan.tasks[0].tenantId, plan.tasks[0].sourceId]).sort()).toEqual([
+        [undefined, undefined, "global"],
+        ["default", "default", "default"]
+      ]);
+      expect(store.listRuns().filter((run: any) => run.sourceCount).map((run: any) => [run.tenantId, run.sourceCount]).sort()).toEqual([
+        [undefined, 1],
+        ["default", 1]
+      ]);
+      expect(store.listCaptures().map((capture: any) => [capture.sourceId, capture.tenantId]).sort()).toEqual([
+        ["default", "default"],
+        ["global", undefined]
+      ]);
+
+      const restarted = new FileBackedScraperStore({ snapshotPath });
+      const second = start(restarted, "2026-07-23T12:05:00.000Z");
+      await second.global.runOnce();
+      await second.exactDefault.runOnce();
+      await second.global.stop();
+      await second.exactDefault.stop();
+      expect(fetched).toHaveLength(2);
+      expect(restarted.listCaptures()).toHaveLength(2);
+      expect(restarted.listPlans().flatMap((plan: any) => plan.tasks).some((task: any) => task.sourceId === "customer")).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("keeps the official CISA catalog bounded without truncating its JSON envelope", async () => {

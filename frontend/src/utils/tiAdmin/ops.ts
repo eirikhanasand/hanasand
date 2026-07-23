@@ -94,28 +94,40 @@ export type TiAdminOverview = {
         state: 'live' | 'degraded'
         failedResources: string[]
     }
+    sourcePage: {
+        total: number
+        cursor: number
+        limit: number
+        nextCursor?: string
+    }
+    sourceTotals: {
+        active: number
+        qualifying: number
+        qualifyingClearWeb: number
+        qualifyingLawfulDarkWeb: number
+        qualifyingPublicTelegram: number
+    }
 }
 
 type ApiPayload = Record<string, unknown>
 const TI_ADMIN_FETCH_TIMEOUT_MS = 2_500
 
-export async function getTiAdminOverview(tenantId = 'default'): Promise<TiAdminOverview> {
+export async function getTiAdminOverview(tenantId = 'default', page: { cursor?: number, limit?: number } = {}): Promise<TiAdminOverview> {
     const base = tiScraperApiBase()
     const resources = await Promise.all([
-        fetchResource(base, '/v1/intel/sources', 'sources', tenantId),
         fetchResource(base, '/v1/intel/captures', 'captures', tenantId),
         fetchResource(base, '/v1/intel/collection-runs', 'collectionRuns', tenantId),
-        fetchResource(base, '/v1/intel/source-operations', 'sources', tenantId),
+        fetchResource(base, '/v1/intel/source-operations', 'sources', tenantId, {
+            cursor: Math.max(0, page.cursor || 0),
+            limit: Math.max(1, Math.min(500, page.limit || 100)),
+        }),
     ])
-    const [sourceResult, captureResult, runResult, operationsResult] = resources
+    const [captureResult, runResult, operationsResult] = resources
     const rawCaptures = captureResult.records
-    const operationsBySource = new Map(operationsResult.records.map(row => [stringValue(row.id), row]))
     const captures = rawCaptures.map(toCapture).filter((row): row is TiAdminCapture => Boolean(row))
-    const registryBySource = new Map(sourceResult.records.map(row => [stringValue(row.id), row]))
-    const sourceRows = operationsResult.records.length
-        ? operationsResult.records.map(operations => ({ ...operations, ...registryBySource.get(stringValue(operations.id)) }))
-        : sourceResult.records
-    const sources = sourceRows.map(row => toSource(row, operationsBySource.get(stringValue(row.id)), captures)).filter((row): row is TiAdminSource => Boolean(row))
+    const sources = operationsResult.records
+        .map(row => toSource(row, row, captures))
+        .filter((row): row is TiAdminSource => Boolean(row))
     const sourceById = new Map(sources.map(source => [source.id, source]))
     const runs = runResult.records.map(row => toRun(row, sourceById)).filter((row): row is TiAdminRun => Boolean(row))
 
@@ -128,6 +140,13 @@ export async function getTiAdminOverview(tenantId = 'default'): Promise<TiAdminO
             state: resources.every(result => result.ok) ? 'live' : 'degraded',
             failedResources: resources.filter(result => !result.ok).map(result => result.resource),
         },
+        sourcePage: {
+            total: operationsResult.total,
+            cursor: Math.max(0, page.cursor || 0),
+            limit: Math.max(1, Math.min(500, page.limit || 100)),
+            nextCursor: operationsResult.nextCursor,
+        },
+        sourceTotals: sourceTotals(operationsResult.payload),
     }
 }
 
@@ -171,18 +190,44 @@ export function ageDays(since: string) {
     return Number.isFinite(diff) ? Math.max(1, Math.round(diff / 86400000)) : 0
 }
 
-async function fetchResource(base: string, path: string, key: string, tenantId: string) {
+async function fetchResource(base: string, path: string, key: string, tenantId: string, page: { cursor?: number, limit?: number } = {}) {
     const resource = path.split('/').at(-1) || key
     try {
         const target = new URL(path, base)
         target.searchParams.set('tenantId', tenantId)
-        target.searchParams.set('limit', '500')
-        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(TI_ADMIN_FETCH_TIMEOUT_MS) })
-        if (!response.ok) return { resource, ok: false, records: [] as ApiPayload[] }
+        target.searchParams.set('limit', String(page.limit || 500))
+        if (page.cursor) target.searchParams.set('cursor', String(page.cursor))
+        const serviceToken = process.env.TI_SCRAPER_SERVICE_TOKEN?.trim()
+        const response = await fetch(target, {
+            cache: 'no-store',
+            headers: serviceToken ? { 'x-hanasand-service-token': serviceToken } : undefined,
+            signal: AbortSignal.timeout(TI_ADMIN_FETCH_TIMEOUT_MS),
+        })
+        if (!response.ok) return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, payload: {} as ApiPayload }
         const payload = await response.json() as ApiPayload
-        return { resource, ok: true, records: recordArray(payload[key]) }
+        const records = recordArray(payload[key])
+        return {
+            resource,
+            ok: true,
+            records,
+            total: numberValue(payload.total, records.length),
+            nextCursor: stringValue(payload.nextCursor) || undefined,
+            payload,
+        }
     } catch {
-        return { resource, ok: false, records: [] as ApiPayload[] }
+        return { resource, ok: false, records: [] as ApiPayload[], total: 0, nextCursor: undefined, payload: {} as ApiPayload }
+    }
+}
+
+function sourceTotals(payload: ApiPayload): TiAdminOverview['sourceTotals'] {
+    const summary = objectValue(payload.summary)
+    const counts = objectValue(objectValue(payload.qualification).counts)
+    return {
+        active: numberValue(summary.activeSourceCount),
+        qualifying: numberValue(counts.total),
+        qualifyingClearWeb: numberValue(counts.clearWeb),
+        qualifyingLawfulDarkWeb: numberValue(counts.lawfulDarkWeb),
+        qualifyingPublicTelegram: numberValue(counts.publicTelegram),
     }
 }
 
@@ -195,9 +240,9 @@ function toSource(record: ApiPayload, operations: ApiPayload | undefined, captur
     const coverage = objectValue(operations?.coverage)
     const qualification = objectValue(operations?.qualification)
     const cadenceMinutes = Math.max(1, Math.round(numberValue(collection.cadenceSeconds, 3600) / 60))
-    const monitoredSince = isoValue(collection.createdAt, collection.updatedAt)
-    const lastRunAt = isoValue(health.lastAttemptAt, health.lastSuccessAt, collection.updatedAt, monitoredSince)
-    const nextRunAt = isoValue(record.nextRunAt) || new Date(Date.parse(lastRunAt) + cadenceMinutes * 60_000).toISOString()
+    const monitoredSince = isoValue(collection.createdAt)
+    const lastRunAt = isoValue(health.lastAttemptAt, health.lastSuccessAt)
+    const nextRunAt = isoValue(record.nextRunAt) || (lastRunAt ? new Date(Date.parse(lastRunAt) + cadenceMinutes * 60_000).toISOString() : '')
     const sourceCaptures = captures.filter(capture => capture.sourceId === id)
     const url = stringValue(record.url)
 
@@ -385,7 +430,7 @@ function optionalIso(...values: unknown[]) {
 }
 
 function isoValue(...values: unknown[]) {
-    return optionalIso(...values) || new Date(0).toISOString()
+    return optionalIso(...values) || ''
 }
 
 function hostname(value: string) {

@@ -9,8 +9,12 @@ export function canonicalUrl(value: string) {
     const url = new URL(value);
     url.hash = "";
     url.hostname = url.hostname.toLowerCase();
-    if (url.hostname === "t.me" || url.hostname === "telegram.me") url.pathname = url.pathname.toLowerCase();
-    url.pathname = url.pathname.replace(/\/$/, "");
+    if (url.hostname === "t.me" || url.hostname === "telegram.me") {
+      url.hostname = "t.me";
+      url.pathname = url.pathname.replace(/^\/s\//i, "/").toLowerCase();
+      url.search = "";
+    }
+    url.pathname = url.pathname.replace(/\/+$/, "");
     url.searchParams.sort();
     return url.toString();
   } catch {

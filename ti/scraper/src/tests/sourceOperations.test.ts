@@ -19,7 +19,8 @@ describe("source operations", () => {
     store.saveSourceHealthObservation({ id: "health_failed", tenantId: "tenant_a", sourceId: "src_ops_a", checkedAt: new Date(Date.now() + 1_000).toISOString(), status: "failed", success: false, useful: false, itemCount: 0, captureCount: 0, duplicateCount: 0, parserWarningCount: 0, adapterFailureCategory: "network_failure", failureReason: "fetch https://secretexample.onion/post?token=unsafe failed", legalMode: "public_content" });
     store.saveSourceHealthObservation({ id: "health_other_tenant", tenantId: "tenant_b", sourceId: "src_ops_b", checkedAt: now, status: "healthy", success: true, useful: true, itemCount: 1, captureCount: 1, duplicateCount: 0, parserWarningCount: 0, legalMode: "public_content" });
 
-    const response = await handleApiRequest(api("/v1/intel/source-operations", { headers: { "x-tenant-id": "tenant_a" } }), { store, frontier: new FocusedFrontier() });
+    const options = { store, frontier: new FocusedFrontier(), serviceToken: "source-ops-test" };
+    const response = await handleApiRequest(authenticatedApi("/v1/intel/source-operations", "tenant_a"), options);
     const payload = await response.json() as any;
 
     expect(response.status).toBe(200);
@@ -35,10 +36,68 @@ describe("source operations", () => {
     expect(JSON.stringify(payload)).not.toContain("secretexample.onion");
     expect(JSON.stringify(payload)).not.toContain("token=unsafe");
 
-    const allTenants = await handleApiRequest(api("/v1/intel/source-operations"), { store, frontier: new FocusedFrontier() });
-    expect(await allTenants.json() as any).toMatchObject({ tenantId: "all", summary: { sourceCount: 2, retainedSourceCount: 2 } });
+    const global = await handleApiRequest(authenticatedApi("/v1/intel/source-operations"), options);
+    expect(await global.json() as any).toMatchObject({ tenantId: "global", summary: { sourceCount: 0, retainedSourceCount: 0 } });
 
-    const mismatch = await handleApiRequest(api("/v1/intel/source-operations?tenantId=tenant_b", { headers: { "x-tenant-id": "tenant_a" } }), { store, frontier: new FocusedFrontier() });
+    const mismatch = await handleApiRequest(api("/v1/intel/source-operations?tenantId=tenant_b", { headers: { "x-tenant-id": "tenant_a", "x-hanasand-service-token": "source-ops-test" } }), options);
     expect(mismatch.status).toBe(403);
+
+    expect((await handleApiRequest(api("/v1/intel/source-operations"), options)).status).toBe(401);
+  });
+
+  test("keeps 6,100-source totals exact while returning stable bounded pages", async () => {
+    const store = new InMemoryScraperStore();
+    for (let index = 0; index < 6_101; index++) {
+      store.saveSource(source({ id: `src_scale_${String(index).padStart(5, "0")}`, name: `Scale ${String(index).padStart(5, "0")}` }));
+    }
+    const options = { store, frontier: new FocusedFrontier(), serviceToken: "source-ops-test" };
+    const first = await (await handleApiRequest(authenticatedApi("/v1/intel/source-operations?limit=100"), options)).json() as any;
+    const second = await (await handleApiRequest(authenticatedApi(`/v1/intel/source-operations?limit=100&cursor=${first.nextCursor}`), options)).json() as any;
+
+    expect(first).toMatchObject({ total: 6_101, nextCursor: "100", summary: { sourceCount: 6_101 } });
+    expect(first.sources).toHaveLength(100);
+    expect(second.sources).toHaveLength(100);
+    expect(second.sources[0].id).toBe("src_scale_00100");
+    expect(new Set([...first.sources, ...second.sources].map((row: any) => row.id)).size).toBe(200);
+  });
+
+  test("requires a source operator globally and exact admin membership for tenant operations", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveOrganization({ id: "org_a", tenantId: "tenant_a", name: "A", status: "active" } as any);
+    store.saveOrganization({ id: "org_b", tenantId: "tenant_b", name: "B", status: "active" } as any);
+    store.saveOrganizationMember({ id: "member_admin_a", organizationId: "org_a", userId: "admin-a", role: "admin", status: "active" } as any);
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      authApiBase: "https://auth.example.test",
+      authFetch: async (_url: unknown, init: any) => {
+        const id = String(init.headers.authorization).includes("viewer") ? "viewer" : String(init.headers.authorization).includes("source-operator") ? "source-operator" : "admin-a";
+        return Response.json({ id, roles: [{ id: id === "viewer" ? "viewer" : id === "source-operator" ? "source_operator" : "admin" }] });
+      }
+    };
+
+    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations", "viewer"), options)).status).toBe(403);
+    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations", "source-operator"), options)).status).toBe(200);
+    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations?tenantId=tenant_a", "admin-a", "tenant_a"), options)).status).toBe(200);
+    expect((await handleApiRequest(sessionApi("/v1/intel/source-operations?tenantId=tenant_b", "admin-a", "tenant_b"), options)).status).toBe(403);
   });
 });
+
+function authenticatedApi(path: string, tenantId?: string) {
+  return api(path, {
+    headers: {
+      "x-hanasand-service-token": "source-ops-test",
+      ...(tenantId ? { "x-tenant-id": tenantId } : {})
+    }
+  });
+}
+
+function sessionApi(path: string, id: string, tenantId?: string) {
+  return api(path, {
+    headers: {
+      authorization: `Bearer ${id}`,
+      id,
+      ...(tenantId ? { "x-tenant-id": tenantId } : {})
+    }
+  });
+}

@@ -58,6 +58,7 @@ export function importRestrictedMetadataSeedBundle(bundle: unknown, importedAt: 
       risk: raw.risk,
       trustScore: raw.trustScore,
       crawlFrequencySeconds: raw.crawlFrequencySeconds,
+      countsAsCoverage: raw.countsAsCoverage === true,
       legalNotes: raw.legalNotes,
       language: nonEmpty(raw.language) ? raw.language : undefined,
       createdAt: importedAt,
@@ -84,8 +85,14 @@ export function importRestrictedMetadataSeedBundle(bundle: unknown, importedAt: 
         productionCollectionVerifiedAt: raw.metadata.productionCollectionVerifiedAt,
         productionCollectionOutcome: raw.metadata.productionCollectionOutcome,
         parserProfile: raw.metadata.parserProfile,
+        parserShape: boundedString(raw.metadata.parserShape),
         reportedVictimCount: raw.metadata.reportedVictimCount,
+        observedParsedItemCount: boundedCount(raw.metadata.observedParsedItemCount),
         lastReportedVictimAt: raw.metadata.lastReportedVictimAt,
+        discoveryAuthorityChain: safeAuthorityChain(raw.metadata.discoveryAuthorityChain),
+        qualificationState: boundedString(raw.metadata.qualificationState),
+        supersedesCandidateRefs: boundedStrings(raw.metadata.supersedesCandidateRefs, 10),
+        countsAsCoverage: raw.countsAsCoverage === true,
         expectedPageRole: transportCanary ? "transport_canary" : "victim_listing",
         collectionScope: "metadata_only",
         retainRawContent: false,
@@ -181,3 +188,20 @@ function isRecord(value: unknown): value is Record<string, any> { return typeof 
 function nonEmpty(value: unknown): value is string { return typeof value === "string" && value.trim().length > 0; }
 function boundedNumber(value: unknown, min: number, max: number): boolean { return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max; }
 function isIsoDate(value: unknown): boolean { return nonEmpty(value) && Number.isFinite(Date.parse(value)); }
+function boundedString(value: unknown): string | undefined { return nonEmpty(value) ? value.trim().slice(0, 200) : undefined; }
+function boundedCount(value: unknown): number | undefined { return boundedNumber(value, 0, 1_000_000) ? value as number : undefined; }
+function boundedStrings(value: unknown, limit: number): string[] | undefined {
+  const values = Array.isArray(value) ? value.map(boundedString).filter(Boolean).slice(0, limit) as string[] : [];
+  return values.length ? values : undefined;
+}
+function safeAuthorityChain(value: unknown) {
+  const rows = Array.isArray(value) ? value.slice(0, 10) : [];
+  const safe = rows.flatMap((row) => isRecord(row)
+    && nonEmpty(row.name)
+    && nonEmpty(row.role)
+    && isPublicHttpsUrl(row.url)
+    && (row.recordUrl === undefined || isPublicHttpsUrl(row.recordUrl))
+      ? [{ name: row.name.slice(0, 200), role: row.role.slice(0, 200), url: row.url, recordUrl: row.recordUrl }]
+      : []);
+  return safe.length ? safe : undefined;
+}

@@ -57,7 +57,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
-  test("imports current verified portfolio batches and withdraws them idempotently after verification expires", () => {
+  test("uses verification for admission and current runtime evidence after restart", async () => {
     const store = new InMemoryScraperStore();
     const dir = mkdtempSync(join(tmpdir(), "hanasand-source-portfolio-bootstrap-"));
     const seedPath = join(dir, "portfolio.json");
@@ -84,13 +84,93 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
 
     try {
       const current = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-23T12:00:00.000Z" });
+      const feed = (publishedAt: string, suffix: string) => `<rss><channel><item><title>CVE-2026-${suffix} security advisory</title><link>https://security.example.test/advisory/${suffix}</link><description>A critical vulnerability affects supported products; the vendor published remediation and detection guidance.</description><pubDate>${publishedAt}</pubDate></item></channel></rss>`;
+      const firstCycle = await runCanaryCollectionCycle({
+        store,
+        frontier: new FocusedFrontier(),
+        tenantId: "default",
+        maxSources: 1,
+        maxTasks: 1,
+        now: () => "2026-07-23T13:00:00.000Z",
+        fetch: async () => new Response(feed("2026-07-23T12:30:00Z", "1001"), { headers: { "content-type": "application/rss+xml" } })
+      });
+      const secondCycle = await runCanaryCollectionCycle({
+        store,
+        frontier: new FocusedFrontier(),
+        tenantId: "default",
+        maxSources: 1,
+        maxTasks: 1,
+        now: () => "2026-07-24T13:00:00.000Z",
+        fetch: async () => new Response(feed("2026-07-24T12:30:00Z", "1002"), { headers: { "content-type": "application/rss+xml" } })
+      });
+      store.saveSourceHealthObservation({
+        id: "recent-empty-check",
+        tenantId: "default",
+        sourceId: "src_portfolio_current",
+        collectionRunId: "run-recent-empty-check",
+        checkedAt: "2026-08-01T11:00:00.000Z",
+        status: "healthy",
+        success: true,
+        useful: false,
+        captureCount: 0,
+        duplicateCount: 1
+      } as any);
+      store.saveSource({
+        ...store.getSource("src_portfolio_current"),
+        health: { ...store.getSource("src_portfolio_current")?.health, checkedAt: "2026-08-01T11:00:00.000Z", lastSuccessAt: "2026-08-01T11:00:00.000Z" }
+      } as any);
       const expired = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T12:00:00.000Z" });
       const restarted = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T13:00:00.000Z" });
+      const expiredAdmissionStore = new InMemoryScraperStore();
+      const firstAdmission = bootstrapRuntimeSources(expiredAdmissionStore, { seedPaths: [seedPath], generatedAt: "2026-08-01T12:00:00.000Z" });
+      const expiredAdmissionCycle = await runCanaryCollectionCycle({
+        store: expiredAdmissionStore,
+        frontier: new FocusedFrontier(),
+        tenantId: "default",
+        maxSources: 1,
+        maxTasks: 1,
+        now: () => "2026-08-01T13:00:00.000Z",
+        fetch: async () => { throw new Error("expired admission must not fetch"); }
+      });
 
-      expect(current).toMatchObject({ importedSourceCount: 1, activeSourceCount: 1 });
-      expect(expired).toMatchObject({ updatedSourceCount: 1, activeSourceCount: 0 });
-      expect(store.getSource("src_portfolio_current")).toMatchObject({ status: "candidate", metadata: { productionCollection: false, sourcePortfolioStatus: "verification_expired" } });
-      expect(restarted).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 1, activeSourceCount: 0, totalSourceCount: 1 });
+      expect(current).toMatchObject({ importedSourceCount: 1, activeSourceCount: 0 });
+      expect(firstCycle).toMatchObject({ insertedCaptureCount: 1 });
+      expect(store.listSourceHealthObservations().filter((row: any) => row.sourceId === "src_portfolio_current")).toHaveLength(3);
+      expect(secondCycle).toMatchObject({ insertedCaptureCount: 1 });
+      expect(expired.activeSourceCount).toBe(1);
+      expect(store.getSource("src_portfolio_current")).toMatchObject({
+        status: "active",
+        countsAsCoverage: true,
+        metadata: { productionCollection: true, sourcePortfolioQualificationState: "sustained_productive" },
+        health: { lastSuccessAt: "2026-08-01T11:00:00.000Z", lastUsefulAt: "2026-07-24T13:00:00.000Z" }
+      });
+      expect(restarted).toMatchObject({ importedSourceCount: 0, activeSourceCount: 1, totalSourceCount: 1 });
+      expect(firstAdmission).toMatchObject({ importedSourceCount: 1, activeSourceCount: 0 });
+      expect(expiredAdmissionCycle).toMatchObject({ activeSourceCount: 0, queuedTaskCount: 0 });
+      for (const checkedAt of ["2026-08-31T11:00:00.000Z", "2026-09-01T11:00:00.000Z"]) {
+        store.saveSourceHealthObservation({
+          id: `empty-${checkedAt}`,
+          tenantId: "default",
+          sourceId: "src_portfolio_current",
+          collectionRunId: `run-empty-${checkedAt}`,
+          checkedAt,
+          status: "healthy",
+          success: true,
+          useful: false,
+          captureCount: 0,
+          duplicateCount: 1
+        } as any);
+      }
+      store.saveSource({
+        ...store.getSource("src_portfolio_current"),
+        health: { ...store.getSource("src_portfolio_current")?.health, checkedAt: "2026-09-01T11:00:00.000Z", lastSuccessAt: "2026-09-01T11:00:00.000Z" }
+      } as any);
+      const stale = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-09-01T12:00:00.000Z" });
+      expect(stale.activeSourceCount).toBe(0);
+      expect(store.getSource("src_portfolio_current")).toMatchObject({
+        status: "candidate",
+        metadata: { productionCollection: false, sourcePortfolioStatus: "verification_expired" }
+      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -454,7 +534,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
-  test("activates only recently parser-verified Tor metadata and preserves restart state", () => {
+  test("keeps parser-verified Tor metadata as an auditable non-executable candidate across restart", () => {
     const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
     Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
     const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-verified-tor-"));
@@ -493,8 +573,18 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         lastReportedVictimAt: verifiedAt
       }
     });
-    const current = restrictedSource("src_verified_restricted", onion("b"), "2026-07-22T10:00:00.000Z");
-    const stale = restrictedSource("src_stale_restricted", onion("c"), "2026-06-01T10:00:00.000Z");
+    const current: any = restrictedSource("src_verified_restricted", onion("b"), "2026-07-22T10:00:00.000Z");
+    current.countsAsCoverage = false;
+    current.metadata.parserShape = "generic_post_title";
+    current.metadata.observedParsedItemCount = 3;
+    current.metadata.qualificationState = "pending_import_and_two_productive_scheduled_cycles";
+    current.metadata.discoveryAuthorityChain = [{ name: "Authority", role: "public_inventory", url: "https://authority.example.test/" }];
+    current.metadata.sourcePortfolioVerification = {
+      verifiedAt: "2026-07-22T10:00:00.000Z",
+      legalBasisVerifiedAt: "2026-07-22T10:00:00.000Z",
+      outcome: "content_parsed",
+      observedItemCount: 3
+    };
     writeFileSync(seedPath, JSON.stringify({
       version: 1,
       name: "verified Tor metadata",
@@ -505,37 +595,32 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       retentionClass: "restricted_metadata",
       forbiddenOperations: ["credential_bypass", "captcha_solving", "threat_actor_interaction", "stolen_file_download", "stealth_or_evasion", "unapproved_proxy", "non_metadata_capture"],
       reviewedRejectedCandidates: [],
-      sources: [current, stale]
+      sources: [current]
     }));
-    store.saveSource({
-      ...current,
-      id: "src_existing_candidate",
-      status: "candidate",
-      governance: { ...current.governance, approvalState: "pending" },
-      metadata: { sourceFamily: "dark_web_victim_feed", restrictedMetadataCandidate: true, productionCollection: false },
-      createdAt: "2026-07-01T00:00:00.000Z",
-      updatedAt: "2026-07-01T00:00:00.000Z",
-      health: { status: "degraded", checkedAt: "2026-07-21T00:00:00.000Z", consecutiveFailures: 1 },
-      crawlState: { retryCount: 1, nextEligibleAt: "2026-07-22T12:00:00.000Z" }
-    } as any);
 
     try {
       const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-22T12:00:00.000Z" });
-      expect(first).toMatchObject({ importedSourceCount: 1, updatedSourceCount: 1, activeSourceCount: 1, totalSourceCount: 2 });
-      expect(store.getSource("src_existing_candidate")).toMatchObject({
-        id: "src_existing_candidate",
-        status: "active",
+      expect(first).toMatchObject({ importedSourceCount: 1, activeSourceCount: 0, retainedSourceCount: 0, totalSourceCount: 1 });
+      expect(store.getSource("src_verified_restricted")).toMatchObject({
+        status: "candidate",
+        countsAsCoverage: false,
         governance: { approvalState: "approved", metadataOnly: true },
-        metadata: { productionCollection: true, productionCollectionOutcome: "metadata_only_parser_verified", verifiedSourceId: "src_verified_restricted" },
-        health: { status: "degraded", consecutiveFailures: 1 },
-        crawlState: { retryCount: 1 }
+        metadata: {
+          productionCollection: false,
+          restrictedMetadataCandidate: true,
+          countsAsCoverage: false,
+          parserShape: "generic_post_title",
+          observedParsedItemCount: 3,
+          qualificationState: "pending_import_and_two_productive_scheduled_cycles",
+          discoveryAuthorityChain: [{ name: "Authority", role: "public_inventory" }],
+          sourcePortfolioVerification: { outcome: "content_parsed", observedItemCount: 3 }
+        }
       });
-      expect(store.getSource("src_stale_restricted")).toMatchObject({ status: "candidate", metadata: { productionCollection: false, restrictedMetadataCandidate: true } });
 
       const beforeRestart = structuredClone(store.listSources());
       const restarted = new FileBackedScraperStore({ snapshotPath });
       const second = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-07-22T13:00:00.000Z" });
-      expect(second).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 2, activeSourceCount: 1, totalSourceCount: 2 });
+      expect(second).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 1, activeSourceCount: 0, totalSourceCount: 1 });
       expect(restarted.listSources()).toEqual(beforeRestart);
     } finally {
       if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
@@ -544,7 +629,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
-  test("withdraws executable Tor sources when real-pack verification expires or revalidation fails", () => {
+  test("does not use static Tor verification expiry as runtime qualification", () => {
     const previous = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
     Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
     const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-tor-expiry-"));
@@ -557,45 +642,18 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
 
     try {
       const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-23T12:00:00.000Z" });
-      expect(first).toMatchObject({ importedSourceCount: 6, activeSourceCount: 6, totalSourceCount: 6 });
-      for (const source of store.listSources().filter((item: any) => item.metadata?.transportCanary !== true)) {
-        store.saveSource({ ...source, health: { status: "healthy", checkedAt: "2026-07-23T12:30:00.000Z", consecutiveFailures: 0 }, crawlState: { retryCount: 2, backoffUntil: "2026-07-23T13:00:00.000Z" } });
-      }
+      expect(first).toMatchObject({ importedSourceCount: 6, activeSourceCount: 1, totalSourceCount: 6 });
+      expect(store.listSources().filter((item: any) => item.metadata?.transportCanary !== true)
+        .every((source: any) => source.status === "candidate" && source.metadata.productionCollection === false && source.metadata.restrictedMetadataCandidate === true)).toBe(true);
       store.saveCapture(fixtureCapture({ id: "cap_retained_tor_metadata", sourceId: "restricted_safepay_victim_blog", storageKind: "metadata_only", body: undefined, sensitive: true }));
-
-      const failed = structuredClone(bundle);
-      failed.sources.find((source: any) => source.id === "restricted_safepay_victim_blog").metadata.discoveryAvailability = "unknown";
-      failed.sources.find((source: any) => source.id === "restricted_space_bears_victim_blog").governance.approvalState = "pending";
-      failed.sources.find((source: any) => source.id === "restricted_qilin_victim_blog").metadata.discoveryAvailability = "reported_unavailable";
-      writeFileSync(seedPath, JSON.stringify(failed));
-      const revalidated = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-23T13:00:00.000Z" });
-      expect(revalidated).toMatchObject({ updatedSourceCount: 3, skippedSourceCount: 3, activeSourceCount: 3, totalSourceCount: 6 });
-      expect(["restricted_safepay_victim_blog", "restricted_space_bears_victim_blog", "restricted_qilin_victim_blog"].every((id) => {
-        const source = store.getSource(id);
-        return source?.status === "candidate" && source.metadata?.productionCollection === false && source.metadata?.restrictedMetadataCandidate === true
-          && !("verifiedSourceId" in source.metadata);
-      })).toBe(true);
-
-      writeFileSync(seedPath, JSON.stringify(bundle));
-      const fresh = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-07-23T14:00:00.000Z" });
-      expect(fresh).toMatchObject({ updatedSourceCount: 3, skippedSourceCount: 3, activeSourceCount: 6, totalSourceCount: 6 });
-      expect(store.listSources().filter((item: any) => item.metadata?.transportCanary !== true).every((source: any) => source.metadata.verifiedSourceId === source.id
-        && !("restrictedMetadataCandidate" in source.metadata))).toBe(true);
-
       const expired = bootstrapRuntimeSources(store, { seedPaths: [seedPath], generatedAt: "2026-08-01T00:00:00.000Z" });
-      expect(expired).toMatchObject({ updatedSourceCount: 5, skippedSourceCount: 1, activeSourceCount: 1, totalSourceCount: 6 });
-      expect(store.listSources().filter((item: any) => item.metadata?.transportCanary !== true).every((source: any) => source.status === "candidate"
-        && source.metadata.productionCollection === false
-        && source.metadata.restrictedMetadataCandidate === true
-        && !("verifiedSourceId" in source.metadata)
-        && source.health?.status === "healthy"
-        && source.crawlState?.retryCount === 2)).toBe(true);
+      expect(expired).toMatchObject({ activeSourceCount: 1, totalSourceCount: 6 });
 
       const restarted = new FileBackedScraperStore({ snapshotPath });
       const repeat = bootstrapRuntimeSources(restarted, { seedPaths: [seedPath], generatedAt: "2026-08-01T01:00:00.000Z" });
       expect(repeat).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 6, activeSourceCount: 1, totalSourceCount: 6 });
-      expect(restarted.listSources().filter((item: any) => item.metadata?.transportCanary !== true).every((source: any) => !("verifiedSourceId" in source.metadata)
-        && source.metadata.restrictedMetadataCandidate === true)).toBe(true);
+      expect(restarted.listSources().filter((item: any) => item.metadata?.transportCanary !== true)
+        .every((source: any) => source.status === "candidate" && source.metadata.restrictedMetadataCandidate === true)).toBe(true);
       expect(restarted.listCaptures().map((capture: any) => capture.id)).toEqual(["cap_retained_tor_metadata"]);
     } finally {
       if (previous === undefined) delete Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
@@ -645,6 +703,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     store.saveSourceHealthObservation({ id: "health_due", tenantId: "default", sourceId: "src_due", checkedAt: generatedAt, status: "failed", success: false, useful: false, itemCount: 0, captureCount: 0, incidentCount: 0, duplicateCount: 0, parserWarningCount: 0, failureReason: "HTTP 429" });
     store.saveRun({
       id: "run_recent",
+      tenantId: "default",
       requestId: "req_public_canary",
       status: "completed",
       sourceCount: 2,
@@ -655,9 +714,12 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     });
 
     try {
-      const response = await handleApiRequest(new Request("http://local/v1/ops/collection-scheduler"), {
+      const defaultCanaryLoop = { getState: () => ({ enabled: true, running: false, intervalSeconds: 300, maxSources: 50, maxTasks: 25 }) };
+      const response = await handleApiRequest(new Request("http://local/v1/ops/collection-scheduler?tenantId=default", { headers: { "x-hanasand-service-token": "scheduler-test" } }), {
         store,
         frontier: new FocusedFrontier(),
+        serviceToken: "scheduler-test",
+        defaultCanaryLoop,
         sourceBootstrap: {
           generatedAt,
           seedPaths: [],
@@ -677,7 +739,6 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
       expect(body.operationalBlockers.map((item: any) => item.code)).toEqual(expect.arrayContaining([
         "daily_coverage_below_target",
         "parser_endpoint_missing",
-        "scheduler_loop_unattached"
       ]));
       expect(body.sourceCoverage).toMatchObject({
         totalSourceCount: 2,
@@ -697,15 +758,21 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
-  test("returns the complete executable fleet instead of truncating health rows", async () => {
+  test("returns exact executable fleet totals with bounded stable health pages", async () => {
     const store = new InMemoryScraperStore();
     for (let index = 0; index < 260; index++) store.saveSource({ ...source(`src_full_${index}`, `https://security.example.test/${index}.xml`), status: "active" } as any);
 
-    const response = await handleApiRequest(new Request("http://local/v1/ops/collection-scheduler"), { store, frontier: new FocusedFrontier() } as any);
+    const response = await handleApiRequest(new Request("http://local/v1/ops/collection-scheduler?tenantId=default&limit=100", { headers: { "x-hanasand-service-token": "scheduler-test" } }), {
+      store,
+      frontier: new FocusedFrontier(),
+      serviceToken: "scheduler-test",
+      defaultCanaryLoop: { getState: () => ({ enabled: true, maxSources: 50, maxTasks: 25, intervalSeconds: 300 }) }
+    } as any);
     const body = await response.json() as any;
 
     expect(body.sourceCoverage).toMatchObject({ totalSourceCount: 260, retainedSourceCount: 260, activeSourceCount: 260, neverObservedSourceCount: 260 });
-    expect(body.sources).toHaveLength(260);
+    expect(body).toMatchObject({ total: 260, nextCursor: "100" });
+    expect(body.sources).toHaveLength(100);
     expect(Object.values(body.sourceHealth).reduce((total: number, count: any) => total + count, 0)).toBe(260);
   });
 });

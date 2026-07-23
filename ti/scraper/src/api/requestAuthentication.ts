@@ -60,6 +60,24 @@ export async function authenticateOperatorRequest(request: Request, options: Api
   return authenticateRequest(request, options);
 }
 
+export function authorizeOperatorScope(identity: AuthenticatedIdentity, options: ApiServerOptions, tenantId?: string): Response | undefined {
+  if (identity.roles.some((role) => ["service", "system_admin"].includes(role))) return undefined;
+  const sourceOperator = identity.roles.some((role) => ["source_admin", "source_operator"].includes(role));
+  if (tenantId === undefined || tenantId === "default") {
+    return sourceOperator ? undefined : error("source_operator_forbidden", "Global and default source operations require a source operator role", 403);
+  }
+  if (!sourceOperator && !identity.roles.some((role) => ["owner", "admin", "administrator"].includes(role))) {
+    return error("source_operator_forbidden", "Source operations require an operator or administrator role", 403);
+  }
+  const organization = ((options.store as any).listOrganizations?.() ?? []).find((row: any) => row.tenantId === tenantId && row.status === "active");
+  const member = organization && ((options.store as any).listOrganizationMembers?.() ?? []).find((row: any) =>
+    row.organizationId === organization.id
+    && row.status === "active"
+    && ["owner", "admin"].includes(row.role)
+    && [row.id, row.userId, row.email].some((value) => String(value ?? "").trim().toLowerCase() === identity.id.trim().toLowerCase()));
+  return member ? undefined : error("tenant_operator_access_denied", "Source operations require administrator membership in the exact tenant", 403);
+}
+
 function sameSecret(left: string, right: string): boolean {
   const leftBytes = Buffer.from(left);
   const rightBytes = Buffer.from(right);

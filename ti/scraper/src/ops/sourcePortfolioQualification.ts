@@ -29,19 +29,22 @@ export function qualifySourcePortfolio(input: {
   const sources = input.sources.map((source) => {
     const observations = [...(observationsBySource.get(source.id) ?? [])].sort(byCheckedAt);
     const captures = [...(capturesBySource.get(source.id) ?? [])].sort(byCaptureTime);
+    const cadenceSeconds = positiveNumber(source.crawlFrequencySeconds, 86_400);
+    const checkWindowSeconds = Math.max(86_400, cadenceSeconds * 3);
+    const activityWindowSeconds = Math.max(checkWindowSeconds, positiveNumber(source.metadata?.activityWindowSeconds, 30 * 86_400));
     const scheduled = observations.filter((row) => typeof row.collectionRunId === "string" && row.collectionRunId.trim());
+    const currentScheduled = summarizeScheduledCycles(
+      scheduled.filter((row) => recent(validTime(row.checkedAt), input.generatedAt, activityWindowSeconds))
+    );
     const latest = scheduled.at(-1);
-    const successes = scheduled.filter((row) => row.success === true);
-    const productive = scheduled.filter((row) => Number(row.captureCount ?? 0) > 0);
+    const successes = currentScheduled.filter((row) => row.success === true);
+    const productive = currentScheduled.filter((row) => Number(row.captureCount ?? 0) > 0);
     const latestCapture = captures.at(-1);
     const family = baselineFamily(source);
     const lastCheckedAt = validTime(latest?.checkedAt);
     const lastSuccessAt = validTime(successes.at(-1)?.checkedAt);
     const lastUsefulAt = validTime(productive.at(-1)?.checkedAt);
     const lastContentAt = validTime(latestCapture?.publishedAt) ?? validTime(latestCapture?.collectedAt);
-    const cadenceSeconds = positiveNumber(source.crawlFrequencySeconds, 86_400);
-    const checkWindowSeconds = Math.max(86_400, cadenceSeconds * 3);
-    const activityWindowSeconds = Math.max(checkWindowSeconds, positiveNumber(source.metadata?.activityWindowSeconds, 30 * 86_400));
     const reasons: string[] = [];
     const canonicalKey = canonicalSourceKey(source);
 
@@ -64,7 +67,7 @@ export function qualifySourcePortfolio(input: {
       qualifies: reasons.length === 0,
       reasons,
       checkCount: observations.length,
-      scheduledCheckCount: scheduled.length,
+      scheduledCheckCount: currentScheduled.length,
       successfulCheckCount: successes.length,
       usefulCheckCount: productive.length,
       productiveCheckCount: productive.length,
@@ -125,6 +128,21 @@ function groupBySource(records: any[]) {
     else grouped.set(record.sourceId, [record]);
   }
   return grouped;
+}
+
+function summarizeScheduledCycles(rows: any[]) {
+  const cycles = new Map<string, any>();
+  for (const row of rows) {
+    const runId = String(row.collectionRunId);
+    const previous = cycles.get(runId);
+    cycles.set(runId, previous ? {
+      ...row,
+      checkedAt: Date.parse(row.checkedAt) >= Date.parse(previous.checkedAt) ? row.checkedAt : previous.checkedAt,
+      success: previous.success === true || row.success === true,
+      captureCount: Number(previous.captureCount ?? 0) + Number(row.captureCount ?? 0)
+    } : row);
+  }
+  return [...cycles.values()].sort(byCheckedAt);
 }
 
 function byCheckedAt(left: any, right: any) {

@@ -3,6 +3,7 @@ import { nowIso } from "../utils.ts";
 import type { CanaryActivationResult, CanaryDeactivationResult } from "./canaryCollectionTypes.ts";
 import { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
+import { isExecutableSource } from "../policy/collectionPolicy.ts";
 
 const MIN_PRODUCTIVITY_CHECKS = 10;
 const CATALOG_PROFILES = new Set(["mitre_actor_catalog", "ransomware_operation_catalog"]);
@@ -10,28 +11,41 @@ const CATALOG_PROFILES = new Set(["mitre_actor_catalog", "ransomware_operation_c
 export function reconcilePublicSourceProductivity(input: any) {
   const generatedAt = input.now ?? nowIso();
   const observations = input.store.listSourceHealthObservations?.() ?? [];
+  const captures = input.store.listCaptures?.() ?? [];
   const bySource = new Map<string, any[]>();
   for (const observation of observations) bySource.set(observation.sourceId, [...(bySource.get(observation.sourceId) ?? []), observation]);
   const retired: Array<{ sourceId: string; attemptCount: number; productiveCheckCount: number }> = [];
 
   for (const source of input.store.listSources()) {
     if (!["active", "canary", "probation", "degraded"].includes(source.status)
-      || source.tenantId && source.tenantId !== "global"
-      || source.accessMethod !== "public_http"
-      || source.risk !== "low"
-      || !(source.metadata?.canaryPortfolio === true || source.metadata?.verifiedSourceId || source.id.startsWith("src_seed_"))
+      || !inProductivityScope(source, input.tenantId, input.includeSharedSources)
+      || !isExecutableSource(source)
       || source.metadata?.transportCanary === true
       || CATALOG_PROFILES.has(source.metadata?.extractionProfile)) continue;
-    const history = [...(bySource.get(source.id) ?? [])].sort((left, right) => Date.parse(left.checkedAt) - Date.parse(right.checkedAt));
-    const productiveCheckCount = history.filter((row) => Number(row.captureCount ?? 0) > 0).length;
     const monitoringWindowSeconds = Math.max(
       positiveNumber(source.metadata?.activityWindowSeconds, 30 * 86_400),
       positiveNumber(source.crawlFrequencySeconds, 86_400) * MIN_PRODUCTIVITY_CHECKS
     );
-    const firstCheckAt = Date.parse(history[0]?.checkedAt), lastCheckAt = Date.parse(history.at(-1)?.checkedAt);
-    const monitoringSpanSeconds = Number.isFinite(firstCheckAt) && Number.isFinite(lastCheckAt) ? Math.max(0, (lastCheckAt - firstCheckAt) / 1_000) : 0;
+    const now = Date.parse(generatedAt), cadenceSeconds = positiveNumber(source.crawlFrequencySeconds, 86_400);
+    const windowStart = now - monitoringWindowSeconds * 1_000;
+    const history = summarizeScheduledCycles((bySource.get(source.id) ?? [])
+      .filter((row) => {
+        const checkedAt = Date.parse(row.checkedAt);
+        return row.tenantId === source.tenantId
+          && typeof row.collectionRunId === "string" && row.collectionRunId.trim()
+          && Number.isFinite(checkedAt) && checkedAt >= windowStart && checkedAt <= now;
+      }));
+    const retainedRunIds = new Set(captures
+      .filter((capture: any) => capture.sourceId === source.id && capture.tenantId === source.tenantId)
+      .map((capture: any) => String(capture.metadata?.runId ?? ""))
+      .filter(Boolean));
+    const productiveCheckCount = history.filter((row) => row.success === true
+      && row.useful === true
+      && Number(row.captureCount ?? 0) > 0
+      && retainedRunIds.has(row.collectionRunId)).length;
+    const fullWindowObserved = Date.parse(history[0]?.checkedAt) <= windowStart + cadenceSeconds * 1_000;
     // ponytail: one real activity window plus ten checks is the smallest fair retirement proof; explicit source metadata raises the window for slow publishers.
-    if (history.length < MIN_PRODUCTIVITY_CHECKS || monitoringSpanSeconds < monitoringWindowSeconds || productiveCheckCount >= 2) continue;
+    if (history.length < MIN_PRODUCTIVITY_CHECKS || !fullWindowObserved || productiveCheckCount >= 2) continue;
     input.store.saveSource({
       ...source,
       status: "retired",
@@ -50,6 +64,12 @@ export function reconcilePublicSourceProductivity(input: any) {
     retired.push({ sourceId: source.id, attemptCount: history.length, productiveCheckCount });
   }
   return { generatedAt, retired };
+}
+
+function inProductivityScope(source: any, tenantId?: string, includeSharedSources = true) {
+  const sourceTenantId = String(source.tenantId ?? "").trim() || undefined;
+  const shared = sourceTenantId === undefined || sourceTenantId === "global";
+  return tenantId ? sourceTenantId === tenantId || includeSharedSources && shared : shared;
 }
 
 export function activatePublicCanarySources(input: any): CanaryActivationResult {
@@ -72,6 +92,21 @@ export function activatePublicCanarySources(input: any): CanaryActivationResult 
 function positiveNumber(value: unknown, fallback: number) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function summarizeScheduledCycles(rows: any[]) {
+  const byRun = new Map<string, any>();
+  for (const row of rows) {
+    const previous = byRun.get(row.collectionRunId);
+    byRun.set(row.collectionRunId, previous ? {
+      ...row,
+      checkedAt: Date.parse(row.checkedAt) >= Date.parse(previous.checkedAt) ? row.checkedAt : previous.checkedAt,
+      success: previous.success === true || row.success === true,
+      useful: previous.useful === true || row.useful === true,
+      captureCount: Number(previous.captureCount ?? 0) + Number(row.captureCount ?? 0)
+    } : row);
+  }
+  return [...byRun.values()].sort((left, right) => Date.parse(left.checkedAt) - Date.parse(right.checkedAt));
 }
 
 export function pausePublicCanarySources(input: any): CanaryDeactivationResult {

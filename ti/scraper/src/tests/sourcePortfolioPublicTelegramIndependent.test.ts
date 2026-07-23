@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { evaluateSourceForCollection, isExecutableSource } from "../policy/collectionPolicy.ts";
 import { importSeedBundle } from "../registry/sourceSeeds.ts";
+import { canonicalFeedKey } from "../registry/sourceSeedUtils.ts";
 
 const portfolioPath = "seeds/source_portfolio_public_telegram.json";
 
@@ -22,6 +23,7 @@ describe("independently verified public Telegram source portfolio", () => {
     expect(new Set(portfolioKeys).size).toBe(portfolioKeys.length);
     expect(portfolioKeys.filter((key: string) => reservedKeys.has(key))).toEqual([]);
     expect(canonicalFeedKey("https://telegram.me/S/CISOCLUB/")).toBe(canonicalFeedKey("https://t.me/cisoclub"));
+    expect(canonicalFeedKey("https://t.me/s/CisoClub?utm_source=copy&before=42")).toBe(canonicalFeedKey("https://t.me/cisoclub"));
 
     for (const [index, source] of bundle.sources.entries()) {
       const handle = new URL(source.url).pathname.slice(1);
@@ -102,16 +104,6 @@ describe("independently verified public Telegram source portfolio", () => {
     expect(serialized).not.toMatch(/(?:joinchat|https:\/\/t\.me\/\+|https:\/\/t\.me\/c\/)/i);
   });
 });
-
-function canonicalFeedKey(value: string) {
-  const url = new URL(value);
-  expect(["t.me", "telegram.me"]).toContain(url.hostname.toLowerCase());
-  const parts = url.pathname.split("/").filter(Boolean);
-  const handle = (parts[0]?.toLowerCase() === "s" ? parts[1] : parts[0])?.toLowerCase();
-  expect(handle).toMatch(/^[a-z0-9_]{4,}$/);
-  expect(parts.length).toBe(parts[0]?.toLowerCase() === "s" ? 2 : 1);
-  return `https://t.me/${handle}`;
-}
 
 async function existingTelegramKeys() {
   const keys = new Set<string>();

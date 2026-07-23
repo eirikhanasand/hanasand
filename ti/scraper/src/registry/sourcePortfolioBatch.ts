@@ -44,3 +44,19 @@ export function validateSourcePortfolioBatch(bundle: any, generatedAt: string) {
   }
   return { recognized: true, valid: errors.length === 0, errors };
 }
+
+export function isCurrentSourcePortfolioVerification(source: any, generatedAt: string) {
+  const verification = source?.metadata?.sourcePortfolioVerification;
+  const now = Date.parse(generatedAt);
+  const verifiedAt = Date.parse(String(verification?.verifiedAt ?? ""));
+  const legalBasisVerifiedAt = Date.parse(String(verification?.legalBasisVerifiedAt ?? ""));
+  return verification?.outcome === "content_parsed"
+    && Number(verification?.observedItemCount ?? 0) > 0
+    && Number.isFinite(now)
+    && Number.isFinite(verifiedAt)
+    && Number.isFinite(legalBasisVerifiedAt)
+    && verifiedAt <= now + 5 * 60_000
+    && legalBasisVerifiedAt <= now + 5 * 60_000
+    && now - verifiedAt <= 7 * 86_400_000
+    && now - legalBasisVerifiedAt <= 7 * 86_400_000;
+}

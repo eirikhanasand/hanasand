@@ -31,7 +31,7 @@ import { resolveTenantScope } from "./tenantScope.ts";
 import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 import { buildSchedulerDiagnostics, SCHEDULER_CUTOVER_DESIGN } from "../frontier/schedulerProduction.ts";
 import { buildResourceSnapshot, readCgroupResourceSnapshot } from "../ops/resourceControls.ts";
-import { authenticateOperatorRequest } from "./requestAuthentication.ts";
+import { authenticateOperatorRequest, authorizeOperatorScope } from "./requestAuthentication.ts";
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 export function startApiServer(options: ApiServerOptions): ApiServerHandle {
   const serve = (port: number) => Bun.serve({ port, hostname: options.port === 0 ? "127.0.0.1" : undefined, fetch: (request) => handleDurableApiRequest(request, options) });
@@ -75,7 +75,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/health") {
       const storage = await (options.store as any).databaseHealth?.() ?? { ok: true, backend: "memory" };
       const runtime = runtimeResourceSnapshot(options);
-      return json({ ok: storage.ok !== false, service: "ti-scraper", version: "v1", storage, collection: { public: (options.canaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, ...runtime, generatedAt: nowIso() }, storage.ok === false ? 503 : 200);
+      return json({ ok: storage.ok !== false, service: "ti-scraper", version: "v1", storage, collection: { public: (options.canaryLoop as any)?.getState?.(), publicDefault: (options.defaultCanaryLoop as any)?.getState?.(), restrictedMetadata: (options.restrictedMetadataLoop as any)?.getState?.() }, ...runtime, generatedAt: nowIso() }, storage.ok === false ? 503 : 200);
     }
     if (url.pathname === "/v1/auth/integration-notes" && request.method === "GET") {
       return json({
@@ -96,8 +96,17 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/contracts") return json(contractIndex());
     if (url.pathname === "/v1/metrics") return json(metrics(options));
     if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "GET") {
+      const authentication = await authenticateOperatorRequest(request, options);
+      if (authentication.error) return authentication.error;
+      if (!authentication.identity) return error("authentication_unavailable", "Collection scheduler authentication is not configured", 503);
       const scope = resolveTenantScope(request, url);
-      return scope.error ?? collectionSchedulerStatus(options, undefined, scope.tenantId);
+      if (scope.error) return scope.error;
+      const accessError = authorizeOperatorScope(authentication.identity, options, scope.tenantId);
+      if (accessError) return accessError;
+      return collectionSchedulerStatus(options, undefined, scope.tenantId, {
+        limit: numberQuery(url.searchParams.get("limit")),
+        cursor: numberQuery(url.searchParams.get("cursor"))
+      });
     }
     if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "POST") return updateCollectionSchedulerControl(request, options);
     if (url.pathname === "/v1/organizations" && request.method === "GET") return listOrganizations(request, options);
@@ -371,7 +380,8 @@ function runtimeResourceSnapshot(options: ApiServerOptions) {
   return {
     resources,
     runtimeLimits: {
-      collectionMaxConcurrentTasks: loopState(options.canaryLoop)?.maxConcurrentTasks ?? positiveInteger(Bun.env.TI_CANARY_MAX_CONCURRENT_TASKS, 16),
+      collectionMaxConcurrentTasks: (loopState(options.canaryLoop)?.maxConcurrentTasks ?? positiveInteger(Bun.env.TI_CANARY_MAX_CONCURRENT_TASKS, 16))
+        + (loopState(options.defaultCanaryLoop)?.enabled ? loopState(options.defaultCanaryLoop)?.maxConcurrentTasks ?? 0 : 0),
       automaticReviewMaxConcurrentTasks: Math.min(4, positiveInteger(Bun.env.HANASAND_AI_REVIEW_CONCURRENCY, 3)),
       automaticEvaluationMaxTasksPerCycle: positiveInteger(Bun.env.TI_AUTOMATIC_EVALUATION_MAX_TASKS_PER_CYCLE, 2)
     }

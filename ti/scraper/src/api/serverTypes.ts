@@ -10,6 +10,7 @@ export interface ApiServerOptions {
   config?: RuntimeConfig;
   objectStore?: unknown;
   canaryLoop?: unknown;
+  defaultCanaryLoop?: unknown;
   runExecutor?: (runId: string) => void;
   authApiBase?: string;
   authFetch?: typeof fetch;

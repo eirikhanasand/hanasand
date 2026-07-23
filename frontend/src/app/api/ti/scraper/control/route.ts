@@ -26,6 +26,7 @@ type ControlActionBody = {
 export async function GET(request: NextRequest) {
     const session = await requireApiSession(request, ['system_admin', 'admin', 'administrator'])
     if ('response' in session) return session.response
+    const identity = session.identity
     const base = scraperBase()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'APT29'
     const tenantId = request.headers.get('x-tenant-id') || 'default'
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
         fetchJson(base, '/v1/frontier'),
         fetchJson(base, '/v1/ops/resource-snapshot'),
         fetchJson(base, '/v1/ops/product-slo'),
-        fetchJson(base, `/v1/ops/collection-scheduler?tenantId=${encodeURIComponent(tenantId)}`),
+        fetchJson(base, `/v1/ops/collection-scheduler?tenantId=${encodeURIComponent(tenantId)}`, authenticated(identity)),
         fetchJson(base, '/v1/dwm/exposure-parser/health'),
         fetchJson(base, `/v1/quality/evaluate?q=${encodeURIComponent(query)}`),
         fetchJson(base, `/v1/public-channels/status?query=${encodeURIComponent(query)}&tenantId=${encodeURIComponent(tenantId)}`),
@@ -162,6 +163,7 @@ export async function POST(request: NextRequest) {
     if (body.action === 'scheduler_run_now' || body.action === 'scheduler_pause' || body.action === 'scheduler_resume') {
         return forward(base, '/v1/ops/collection-scheduler', {
             action: body.action === 'scheduler_run_now' ? 'run_now' : body.action === 'scheduler_pause' ? 'pause' : 'resume',
+            tenantId: 'default',
             approvedBy: 'dashboard/ti/control',
             reason: 'operator source scheduler control',
         }, identity)
@@ -225,6 +227,10 @@ async function forward(base: string, path: string, body: unknown, identity: ApiS
         body: JSON.stringify(body),
     })
     return NextResponse.json({ ok: result.ok, status: result.status, payload: result.json, error: result.error }, { status: result.ok ? 200 : 502 })
+}
+
+function authenticated(identity: ApiSessionIdentity): RequestInit {
+    return { headers: { authorization: `Bearer ${identity.token}`, id: identity.id, 'x-actor-id': identity.id } }
 }
 
 async function fetchJson(base: string, path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; json?: unknown; error?: string }> {

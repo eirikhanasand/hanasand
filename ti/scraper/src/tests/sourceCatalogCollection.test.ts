@@ -1,9 +1,7 @@
 import { expect, test } from "bun:test";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
-import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
-import { hashContent } from "../utils.ts";
 
 test("catalog registration captures identities without activity profiles while real activity advances one profile", async () => {
   const at = "2026-07-23T12:00:00.000Z";
@@ -43,23 +41,34 @@ test("catalog registration captures identities without activity profiles while r
   expect(store.listActorIdentityCatalogs()[0].evidenceCaptureIds).toHaveLength(2);
 
   const activityAt = "2026-07-23T11:00:00.000Z";
-  const activityText = "Akira claimed Northwind Health as a newly published victim.";
-  store.savePipelineResult(processCollectedItem({
-    sourceId: source.id,
-    url: "https://evidence.example.test/operation-0",
-    title: "Operation 0 activity",
-    rawText: activityText,
-    contentHash: hashContent(activityText),
-    collectedAt: activityAt,
-    publishedAt: activityAt,
-    links: [],
-    metadata: {
-      extractionProfile: "ransomware_victim_blog",
-      leakSite: { actorName: "Akira", victimName: "Northwind Health", summary: activityText }
-    },
-    sensitive: true
-  }, { actorIdentities: store.listActorIdentities() }));
+  const activitySource = {
+    id: "src_real_victim_activity",
+    name: "Real public victim activity",
+    type: "rss",
+    url: "https://evidence.example.test/victims.xml",
+    accessMethod: "public_http",
+    status: "active",
+    risk: "low",
+    trustScore: 0.9,
+    crawlFrequencySeconds: 3600,
+    legalNotes: "Public victim activity evidence collected without authentication.",
+    metadata: { productionCollection: true, extractionProfile: "ransomware_victim_blog", reporterRole: "actor", reporterRoleVerified: true }
+  };
+  store.saveSource(activitySource as any);
+  const activityCycle = await runCanaryCollectionCycle({
+    store,
+    frontier: new FocusedFrontier(),
+    sourceIds: [activitySource.id],
+    maxSources: 1,
+    maxTasks: 1,
+    now: () => activityAt,
+    fetch: async () => new Response(
+      `<rss><channel><item><title>Akira claimed Northwind Health</title><link>https://evidence.example.test/victims/akira-northwind</link><description>Akira has just published a new victim: Northwind Health.</description><pubDate>${activityAt}</pubDate></item></channel></rss>`,
+      { headers: { "content-type": "application/rss+xml" } }
+    )
+  } as any);
 
+  expect(activityCycle).toMatchObject({ completedTaskCount: 1, failedTaskCount: 0, insertedCaptureCount: 1 });
   expect(store.listActorProfiles()).toHaveLength(1);
   expect(store.listActorProfiles()[0]).toMatchObject({ canonicalName: "Akira", lastSeenAt: activityAt, evidenceCount: 1 });
 });
