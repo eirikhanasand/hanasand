@@ -58,6 +58,30 @@ describe("source portfolio qualification", () => {
     expect(result.sources[0].reasons).toContain("insufficient_productive_cycles");
   });
 
+  test("does not qualify retained captures from explicitly non-useful cycles", () => {
+    const result = qualifySourcePortfolio({
+      sources: [publicSource("not-useful", "rss", "https://example.test/not-useful.xml")],
+      observations: [
+        { ...observation("not-useful", "2026-07-22T12:00:00.000Z", 1), useful: false },
+        { ...observation("not-useful", "2026-07-23T11:00:00.000Z", 1), useful: false }
+      ],
+      captures: [
+        capture("not-useful", "first", "2026-07-22T10:00:00.000Z", "run-2026-07-22T12:00:00.000Z"),
+        capture("not-useful", "second", "2026-07-23T10:00:00.000Z", "run-2026-07-23T11:00:00.000Z")
+      ],
+      generatedAt
+    });
+
+    expect(result.counts.total).toBe(0);
+    expect(result.sources[0]).toMatchObject({
+      qualifies: false,
+      usefulCheckCount: 0,
+      productiveCheckCount: 0,
+      latestCheckUseful: false
+    });
+    expect(result.sources[0].reasons).toContain("insufficient_productive_cycles");
+  });
+
   test("requires two productive scheduled cycles inside the current activity window", () => {
     const result = qualifySourcePortfolio({
       sources: [publicSource("windowed", "rss", "https://example.test/windowed.xml")],

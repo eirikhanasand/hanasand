@@ -40,7 +40,7 @@ export function qualifySourcePortfolio(input: {
     );
     const latest = scheduled.at(-1);
     const successes = currentScheduled.filter((row) => row.success === true);
-    const productive = currentScheduled.filter((row) => Number(row.captureCount ?? 0) > 0 && retainedCaptureRunIds.has(String(row.collectionRunId)));
+    const productive = currentScheduled.filter((row) => row.useful === true && Number(row.captureCount ?? 0) > 0 && retainedCaptureRunIds.has(String(row.collectionRunId)));
     const latestCapture = captures.at(-1);
     const family = baselineFamily(source);
     const lastCheckedAt = validTime(latest?.checkedAt);

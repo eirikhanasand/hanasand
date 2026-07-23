@@ -276,7 +276,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
             'observationCount', count(*),
             'successCount', count(*) FILTER (WHERE h.success),
             'usefulCycleCount', count(DISTINCT h.collection_run_id) FILTER (
-              WHERE h.collection_run_id IS NOT NULL AND h.capture_count > 0
+              WHERE h.collection_run_id IS NOT NULL AND h.useful AND h.capture_count > 0
                 AND h.checked_at >= $6::timestamptz - make_interval(secs => GREATEST(
                   86400,
                   COALESCE((page.record->>'crawlFrequencySeconds')::int, 86400) * 3,
@@ -381,7 +381,7 @@ export class PostgresScraperStore extends InMemoryScraperStore {
                   ))
               ) AS successful_cycles,
               count(DISTINCT collection_run_id) FILTER (
-                WHERE collection_run_id IS NOT NULL AND capture_count > 0
+                WHERE collection_run_id IS NOT NULL AND useful AND capture_count > 0
                   AND checked_at >= $4::timestamptz - make_interval(secs => GREATEST(
                     86400,
                     COALESCE((source.record->>'crawlFrequencySeconds')::int, 86400) * 3,
