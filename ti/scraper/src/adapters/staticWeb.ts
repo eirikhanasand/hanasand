@@ -4,27 +4,31 @@ import { hashContent, normalizeWhitespace, nowIso } from "../utils.ts";
 import type { CollectionAdapter } from "./base.ts";
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export type AdapterHttpCache = Map<string, { etag?: string; lastModified?: string }>;
-export type StaticWebFailureCategory = "policy_blocked" | "robots_blocked" | "not_modified" | "rate_limited" | "not_found" | "http_error" | "too_large" | "unsupported_mime";
-export interface StaticWebAdapterOptions { fetcher?: Fetcher; cache?: AdapterHttpCache; checkRobots?: boolean; } interface RobotsRules { checked: boolean; allowed: boolean; warnings: string[]; disallow?: string[]; }
+export type StaticWebFailureCategory = "policy_blocked" | "robots_blocked" | "not_modified" | "rate_limited" | "not_found" | "http_error" | "timeout" | "too_large" | "unsupported_mime";
+export interface StaticWebAdapterOptions { fetcher?: Fetcher; cache?: AdapterHttpCache; checkRobots?: boolean; timeoutMs?: number; maxBytes?: number; } interface RobotsRules { checked: boolean; allowed: boolean; warnings: string[]; disallow?: string[]; }
 export class StaticWebAdapter implements CollectionAdapter {
   readonly type = "static_web" as const;
-  private readonly fetcher: Fetcher; private readonly cache: AdapterHttpCache; private readonly robotsCache = new Map<string, RobotsRules>(); private readonly checkRobots: boolean;
-  constructor(options: StaticWebAdapterOptions = {}) { this.fetcher = options.fetcher ?? fetch; this.cache = options.cache ?? new Map(); this.checkRobots = options.checkRobots ?? true; }
+  private readonly fetcher: Fetcher; private readonly cache: AdapterHttpCache; private readonly robotsCache = new Map<string, RobotsRules>(); private readonly checkRobots: boolean; private readonly timeoutMs: number; private readonly maxBytes: number;
+  constructor(options: StaticWebAdapterOptions = {}) { this.fetcher = options.fetcher ?? fetch; this.cache = options.cache ?? new Map(); this.checkRobots = options.checkRobots ?? true; this.timeoutMs = options.timeoutMs ?? 15_000; this.maxBytes = options.maxBytes ?? 5_000_000; }
   async collect(source: SourceRecord, task?: CollectionTask) {
     const startedAt = Date.now(), url = task?.targetUrl ?? source.url, warnings: string[] = [];
     const policy = task ? evaluateTaskForCollection(source, task) : { allowed: true, metadataOnly: false, reason: "manual run" };
     if (!policy.allowed) return emptyStaticResult(url, [policy.reason], "policy_blocked", startedAt, { policyReason: policy.reason });
     if (!source.legalNotes.trim()) warnings.push("source has no legal notes");
     if (this.checkRobots) { const robots = await this.getRobotsRules(url); if (robots.checked && !robots.allowed) return emptyStaticResult(url, [`robots.txt disallows collection for ${url}`], "robots_blocked", startedAt, { robotsChecked: true }); warnings.push(...robots.warnings); }
-    const response = await this.fetcher(url, { headers: createConditionalHeaders(url, this.cache) });
+    let response: Response;
+    try { response = await timedFetch(this.fetcher, url, { headers: createConditionalHeaders(url, this.cache) }, this.timeoutMs); }
+    catch (cause) { const failureCategory = readFailureCategory(cause); return emptyStaticResult(url, [`Static fetch failed for ${url}: ${message(cause)}`], failureCategory, startedAt); }
     const base = { responseStatus: response.status, statusClass: statusClass(response.status) };
-    if (response.status === 304) return emptyStaticResult(url, [`Static page not modified for ${url}`], "not_modified", startedAt, base);
-    if (!response.ok) return emptyStaticResult(url, [`Static fetch returned ${response.status} for ${url}`], httpFailureCategory(response.status), startedAt, { ...base, retryAfterSeconds: retryAfterSeconds(response) });
+    if (response.status === 304) { await cancelResponse(response); return emptyStaticResult(url, [`Static page not modified for ${url}`], "not_modified", startedAt, base); }
+    if (!response.ok) { await cancelResponse(response); return emptyStaticResult(url, [`Static fetch returned ${response.status} for ${url}`], httpFailureCategory(response.status), startedAt, { ...base, retryAfterSeconds: retryAfterSeconds(response) }); }
     const contentType = response.headers.get("content-type");
-    if (!isSupportedStaticMediaType(contentType)) return emptyStaticResult(url, [`Unsupported static content type ${contentType} for ${url}`], "unsupported_mime", startedAt, { ...base, contentType });
-    const finalUrl = canonicalizeUrl(response.url || url), html = await response.text(), contentBytes = byteLength(html);
+    if (!isSupportedStaticMediaType(contentType)) { await cancelResponse(response); return emptyStaticResult(url, [`Unsupported static content type ${contentType} for ${url}`], "unsupported_mime", startedAt, { ...base, contentType }); }
+    const finalUrl = canonicalizeUrl(response.url || url), maxBytes = task?.maxBytes ?? this.maxBytes;
+    let html: string, contentBytes: number;
+    try { ({ text: html, contentBytes } = await readBoundedText(response, maxBytes, this.timeoutMs)); }
+    catch (cause) { const failureCategory = readFailureCategory(cause); return emptyStaticResult(url, [`Static fetch failed for ${url}: ${message(cause)}`], failureCategory, startedAt, { ...base, finalUrl, contentType, maxBytes }); }
     rememberValidators(finalUrl, response, this.cache);
-    if (task?.maxBytes && contentBytes > task.maxBytes) return emptyStaticResult(url, [`Static page exceeds maxBytes ${task.maxBytes} for ${url}`], "too_large", startedAt, { ...base, finalUrl, contentType, contentBytes, maxBytes: task.maxBytes });
     const canonicalUrl = extractCanonicalUrl(html, finalUrl), rawText = extractReadableText(html), links = extractLinks(html, canonicalUrl), title = extractTitle(html), robots = extractRobotsMeta(html), collectedAt = nowIso(), contentHash = hashContent(rawText || html);
     if (robots.noindex) warnings.push("page declares noindex in robots meta"); if (robots.nofollow) warnings.push("page declares nofollow in robots meta");
     const meta = { adapter: "static_web", requestedUrl: url, finalUrl, canonicalUrl, responseStatus: response.status, statusClass: statusClass(response.status), contentType, contentBytes, fetchDurationMs: Date.now() - startedAt };
@@ -33,10 +37,49 @@ export class StaticWebAdapter implements CollectionAdapter {
   private async getRobotsRules(pageUrl: string): Promise<RobotsRules> {
     const robotsUrl = robotsUrlFor(pageUrl); if (!robotsUrl) return { checked: false, allowed: true, warnings: [] };
     const cached = this.robotsCache.get(robotsUrl); if (cached) return applyRobotsRules(cached, pageUrl);
-    try { const response = await this.fetcher(robotsUrl, { headers: baseHeaders() }); if (response.status === 404) return cacheRobots(this.robotsCache, robotsUrl, { checked: true, allowed: true, warnings: [] }); if (!response.ok) return { checked: true, allowed: true, warnings: [`robots.txt fetch returned ${response.status}`] }; return applyRobotsRules(cacheRobots(this.robotsCache, robotsUrl, parseRobotsTxt(await response.text())), pageUrl); }
+    try { const response = await timedFetch(this.fetcher, robotsUrl, { headers: baseHeaders() }, this.timeoutMs); if (response.status === 404) { await cancelResponse(response); return cacheRobots(this.robotsCache, robotsUrl, { checked: true, allowed: true, warnings: [] }); } if (!response.ok) { await cancelResponse(response); return { checked: true, allowed: true, warnings: [`robots.txt fetch returned ${response.status}`] }; } const { text } = await readBoundedText(response, 256_000, this.timeoutMs); return applyRobotsRules(cacheRobots(this.robotsCache, robotsUrl, parseRobotsTxt(text)), pageUrl); }
     catch (error) { return { checked: true, allowed: true, warnings: [`robots.txt check failed: ${error instanceof Error ? error.message : String(error)}`] }; }
   }
 }
+class StaticWebReadError extends Error { constructor(readonly category: "timeout" | "too_large", message: string) { super(message); } }
+async function timedFetch(fetcher: Fetcher, input: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController(), signal = init.signal, abort = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abort(); else signal?.addEventListener("abort", abort, { once: true });
+  try { return await withTimeout(fetcher(input, { ...init, signal: controller.signal }), timeoutMs, () => controller.abort()); }
+  finally { signal?.removeEventListener("abort", abort); }
+}
+async function readBoundedText(response: Response, maxBytes: number, timeoutMs: number): Promise<{ text: string; contentBytes: number }> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) { await cancelResponse(response); throw new StaticWebReadError("too_large", `response exceeds maxBytes ${maxBytes}`); }
+  if (!response.body) return { text: "", contentBytes: 0 };
+  const reader = response.body.getReader(), chunks: Uint8Array[] = []; let contentBytes = 0;
+  try {
+    const deadline = Date.now() + timeoutMs;
+    while (true) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new StaticWebReadError("timeout", "response body timed out");
+      const { done, value } = await withTimeout(reader.read(), remaining, () => reader.cancel("response body timed out").catch(() => undefined));
+      if (done) break;
+      contentBytes += value.byteLength;
+      if (contentBytes > maxBytes) throw new StaticWebReadError("too_large", `response exceeds maxBytes ${maxBytes}`);
+      chunks.push(value);
+    }
+  } catch (cause) {
+    await reader.cancel(cause).catch(() => undefined);
+    throw cause;
+  } finally { reader.releaseLock(); }
+  const bytes = new Uint8Array(contentBytes); let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return { text: new TextDecoder().decode(bytes), contentBytes };
+}
+async function withTimeout<T>(operation: Promise<T>, timeoutMs: number, onTimeout: () => void): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { return await Promise.race([operation, new Promise<T>((_, reject) => { timer = setTimeout(() => { onTimeout(); reject(new StaticWebReadError("timeout", "request timed out")); }, Math.max(1, timeoutMs)); })]); }
+  finally { if (timer) clearTimeout(timer); }
+}
+async function cancelResponse(response: Response) { await response.body?.cancel().catch(() => undefined); }
+function readFailureCategory(cause: unknown): StaticWebFailureCategory { return cause instanceof StaticWebReadError ? cause.category : cause instanceof DOMException && cause.name === "AbortError" ? "timeout" : "http_error"; }
+function message(cause: unknown) { return cause instanceof Error ? cause.message : String(cause); }
 function emptyStaticResult(requestedUrl: string, warnings: string[], failureCategory: StaticWebFailureCategory, startedAt: number, metadata: Record<string, unknown> = {}): AdapterRunResult { return { items: [], discovered: [], warnings, metadata: { adapter: "static_web", requestedUrl, failureCategory, fetchDurationMs: Date.now() - startedAt, ...metadata } }; }
 export function extractReadableText(html: string): string { return normalizeWhitespace(html.replace(/<(script|style|noscript|nav|header|footer|form|dialog)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<!--[\s\S]*?-->/g, " ").replace(/<[^>]+>/g, " ").replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code))).replace(/&#x([a-f0-9]+);/gi, (_, code) => String.fromCharCode(Number.parseInt(code, 16))).replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;/g, "'")); }
 export function extractTitle(html: string): string | undefined { const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i); return match?.[1] ? extractReadableText(match[1]) : undefined; }
@@ -50,7 +93,6 @@ function httpFailureCategory(status: number): StaticWebFailureCategory { return 
 function statusClass(status: number): string { return `${Math.floor(status / 100)}xx`; }
 function retryAfterSeconds(response: Response): number | undefined { const value = response.headers.get("retry-after"); if (!value) return undefined; const seconds = Number.parseInt(value, 10), date = Date.parse(value); return Number.isFinite(seconds) ? seconds : Number.isFinite(date) ? Math.max(0, Math.ceil((date - Date.now()) / 1000)) : undefined; }
 function isSupportedStaticMediaType(value: string | null): boolean { const type = value?.split(";")[0]?.trim().toLowerCase(); return !type || ["text/html", "application/xhtml+xml", "text/plain", "application/xml", "text/xml"].includes(type); }
-function byteLength(value: string): number { return new TextEncoder().encode(value).byteLength; }
 function shouldIgnoreHref(href: string): boolean { return /^(#|mailto:|tel:|javascript:)/i.test(href.trim()); }
 function extractRobotsMeta(html: string): { noindex: boolean; nofollow: boolean } { const meta = [...html.matchAll(/<meta\b[^>]*>/gi)].map((match) => match[0]).filter((tag) => /\bname=["']robots["']/i.test(tag)).map((tag) => tag.match(/\bcontent=["']([^"']+)["']/i)?.[1].toLowerCase() ?? "").join(","); return { noindex: meta.includes("noindex"), nofollow: meta.includes("nofollow") }; }
 function extractAnchorTextForHref(html: string, target: string, baseUrl: string): string | undefined { for (const match of html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) try { if (canonicalizeUrl(new URL(match[1], baseUrl).toString()) === target) return extractReadableText(match[2]); } catch {} }

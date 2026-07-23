@@ -45,9 +45,8 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const [terms, setTerms] = useState(initialTerms.join('\n'))
     const [webhookUrl, setWebhookUrl] = useState('')
     const [sourceTarget, setSourceTarget] = useState('')
-    const [claimActor, setClaimActor] = useState('')
     const [claimCompany, setClaimCompany] = useState('')
-    const [claimData, setClaimData] = useState('')
+    const [claimPublishedAt, setClaimPublishedAt] = useState('')
     const [claimUrl, setClaimUrl] = useState('')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [result, setResult] = useState<WorkflowResult | null>(null)
@@ -102,28 +101,27 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         await saveAndRebuildWatchlist()
     }
 
-    async function ingestMetadataClaim(event: SyntheticEvent<HTMLFormElement>) {
+    async function ingestPublicAdvisory(event: SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
         setBusyAction('claim')
         setResult(null)
 
-        const actor = claimActor.trim()
         const company = claimCompany.trim()
-        const claimedData = claimData.trim()
+        const publishedAt = evidencePublishedAt(claimPublishedAt)
         const url = claimUrl.trim()
         const nextTerms = ensureTerm(terms, company)
 
-        if (!actor || !company || !claimedData || !validEvidenceUrl(url)) {
-            setResult({ ok: false, message: 'Actor, affected company, exposure details, and an HTTPS source URL are required.' })
+        if (!company || !publishedAt || !validEvidenceUrl(url)) {
+            setResult({ ok: false, message: 'Subject, original publication time, and an HTTPS source URL are required.' })
             setBusyAction(null)
             return
         }
 
         try {
-            const ingest = await ingestClaim({ actor, company, claimedData, url }, scope)
+            const ingest = await ingestPublicEvidence({ company, publishedAt, url }, scope)
             if (!ingest.ok) throw new Error(ingest.message)
             const accepted = typeof ingest.accepted === 'number' ? ingest.accepted : 0
-            if (!accepted) throw new Error('No exposure report was accepted. Check the actor and company fields.')
+            if (!accepted) throw new Error('The source was not accepted. It must name the subject, describe a cyber incident, and provide an original publication time.')
 
             const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
@@ -131,11 +129,11 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const rebuild = await alertRebuildFromWatchlistOrRequest(watchlist, scope)
             const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
             setTerms(nextTerms)
-            setClaimData('')
+            setClaimPublishedAt('')
             setClaimUrl('')
-            setResult({ ok: rebuild.ok, message: rebuild.ok ? `Ingested ${accepted} exposure report${accepted === 1 ? '' : 's'}. Matched ${savedAlertCount} alert${savedAlertCount === 1 ? '' : 's'}.` : rebuild.message })
+            setResult({ ok: rebuild.ok, message: rebuild.ok ? `Collected ${accepted} public incident report${accepted === 1 ? '' : 's'}. Matched ${savedAlertCount} alert${savedAlertCount === 1 ? '' : 's'}.` : rebuild.message })
             setLastRoute({
-                label: 'Metadata intake',
+                label: 'Public advisory',
                 watchTerms: countTerms(nextTerms),
                 captureCount: accepted,
                 alertCount: savedAlertCount,
@@ -148,26 +146,25 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         }
     }
 
-    async function openCaseFromMetadataClaim() {
+    async function openCaseFromPublicAdvisory() {
         setBusyAction('claim-case')
         setResult(null)
 
-        const actor = claimActor.trim()
         const company = claimCompany.trim()
-        const claimedData = claimData.trim()
+        const publishedAt = evidencePublishedAt(claimPublishedAt)
         const url = claimUrl.trim()
         const nextTerms = ensureTerm(terms, company)
 
-        if (!actor || !company || !claimedData || !validEvidenceUrl(url)) {
-            setResult({ ok: false, message: 'Actor, affected company, exposure details, and an HTTPS source URL are required.' })
+        if (!company || !publishedAt || !validEvidenceUrl(url)) {
+            setResult({ ok: false, message: 'Subject, original publication time, and an HTTPS source URL are required.' })
             setBusyAction(null)
             return
         }
 
         try {
-            const ingest = await ingestClaim({ actor, company, claimedData, url }, scope)
+            const ingest = await ingestPublicEvidence({ company, publishedAt, url }, scope)
             const accepted = typeof ingest.accepted === 'number' ? ingest.accepted : 0
-            if (!accepted) throw new Error('No exposure report was accepted. Check the actor and company fields.')
+            if (!accepted) throw new Error('The source was not accepted. It must name the subject, describe a cyber incident, and provide an original publication time.')
 
             const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
@@ -176,13 +173,13 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             if (!rebuild.ok) throw new Error(rebuild.message)
 
             const alert = selectRebuiltAlert(rebuild, company, nextTerms)
-            if (!alert?.id) throw new Error('No matching alert was generated for this claim.')
+            if (!alert?.id) throw new Error('No matching alert was generated for this evidence.')
 
             const casePayload = await postJson(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
                 ...scope,
                 actor: 'dashboard',
-                note: `Case opened from metadata claim for ${company}.`,
-                idempotencyKey: `dashboard-metadata-claim-case:${alert.id}`,
+                note: `Case opened from public incident evidence for ${company}.`,
+                idempotencyKey: `dashboard-public-advisory-case:${alert.id}`,
             })
             if (!casePayload.ok) throw new Error(casePayload.message)
 
@@ -206,27 +203,27 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             }
 
             setTerms(nextTerms)
-            setClaimData('')
+            setClaimPublishedAt('')
             setClaimUrl('')
             setLastRoute({
-                label: 'Metadata case',
+                label: 'Public advisory case',
                 watchTerms: countTerms(nextTerms),
                 captureCount: accepted,
                 alertCount: 1,
                 alertId: alert.id,
                 caseId: caseId || undefined,
-                caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId, 'metadata_claim') : undefined,
+                caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId, 'public_advisory') : undefined,
                 deliveryAttempts: deliveryText ? (deliveryReady ? 1 : 0) : undefined,
                 deliveryState: deliveryText ? (deliveryReady ? deliveryText.trim() : 'Delivery needs setup. Configure or test a destination before sending customer notification.') : undefined,
             })
             setResult({
                 ok: true,
-                message: `Ingested ${accepted} exposure report(s), opened ${caseId || 'a case'}.${deliveryReady ? deliveryText : deliveryText ? ' Configure or test a destination before sending customer notification.' : ''}`,
+                message: `Collected ${accepted} public incident report${accepted === 1 ? '' : 's'}, opened ${caseId || 'a case'}.${deliveryReady ? deliveryText : deliveryText ? ' Configure or test a destination before sending customer notification.' : ''}`,
                 actionHref: deliveryText && !deliveryReady ? deliverySetupHref(organizationId, alert.id, caseId || undefined) : undefined,
                 actionLabel: deliveryText && !deliveryReady ? 'Configure delivery' : undefined,
             })
             if (caseId) {
-                router.push(caseDetailPath(caseId, alert.id, organizationId, 'metadata_claim'))
+                router.push(caseDetailPath(caseId, alert.id, organizationId, 'public_advisory'))
             } else {
                 refreshWorkspace()
             }
@@ -375,7 +372,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const effectiveTermCount = countTerms(workflowTerms(terms))
     const webhookConfigured = /^https?:\/\//i.test(webhookUrl.trim())
     const sourceReady = sourceTarget.trim().length > 0
-    const claimReady = claimActor.trim().length > 0 && claimCompany.trim().length > 0 && claimData.trim().length > 0 && validEvidenceUrl(claimUrl)
+    const claimReady = claimCompany.trim().length > 0 && Boolean(evidencePublishedAt(claimPublishedAt)) && validEvidenceUrl(claimUrl)
     const busy = busyAction !== null
     const sourceCount = telemetry?.sourceCount ?? 0
     const activeSourceCount = telemetry?.activeSourceCount ?? 0
@@ -386,7 +383,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const latestRunCaptureCount = telemetry?.latestRunCaptureCount ?? 0
     const watchlistDisabledReason = termCount ? '' : 'Add at least one customer-owned watchlist term.'
     const sourceDisabledReason = sourceReady ? '' : 'Add a public Telegram handle or t.me URL first.'
-    const claimDisabledReason = claimReady ? '' : 'Add the actor, affected company, exposure details, and an HTTPS source URL.'
+    const claimDisabledReason = claimReady ? '' : 'Add the affected subject, original publication time, and an HTTPS source URL.'
     const webhookTestDisabledReason = webhookConfigured ? '' : 'Enter an HTTPS webhook URL before testing delivery.'
     const webhookSendDisabledReason = webhookConfigured || organizationId ? '' : 'Enter an HTTPS webhook URL or open an organization with a saved delivery destination before sending queued alerts.'
     const routeQueue = [
@@ -527,34 +524,29 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     {webhookTestDisabledReason ? <p className='mt-1 text-xs leading-5 text-ui-subtle'>{webhookTestDisabledReason}</p> : null}
                 </form>
 
-                <form onSubmit={ingestMetadataClaim} className='rounded-lg border border-ui-border bg-ui-raised p-4 shadow-sm'>
+                <form onSubmit={ingestPublicAdvisory} className='rounded-lg border border-ui-border bg-ui-raised p-4 shadow-sm'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Exposure intake</h2>
-                            <p className='mt-1 text-sm leading-6 text-ui-subtle'>Create a metadata-only capture, add the affected company to the watchlist, and rebuild alerts.</p>
+                            <h2 className='text-base font-semibold text-ui-text'>Public incident evidence</h2>
+                            <p className='mt-1 text-sm leading-6 text-ui-subtle'>Fetch a public incident report, retain its original timestamp, and rebuild matching alerts.</p>
                         </div>
                         <ShieldCheck className='h-5 w-5 text-ui-primary' />
                     </div>
                     <div className='mt-4 grid gap-3 sm:grid-cols-2'>
                         <input
-                            value={claimActor}
-                            onChange={event => setClaimActor(event.target.value)}
-                            placeholder='Actor'
+                            value={claimCompany}
+                            onChange={event => setClaimCompany(event.target.value)}
+                            placeholder='Affected organization or domain'
                             className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                         />
                         <input
-                            value={claimCompany}
-                            onChange={event => setClaimCompany(event.target.value)}
-                            placeholder='Affected company or domain'
-                            className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                            type='datetime-local'
+                            value={claimPublishedAt}
+                            onChange={event => setClaimPublishedAt(event.target.value)}
+                            aria-label='Original publication time'
+                            className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                         />
                     </div>
-                    <input
-                        value={claimData}
-                        onChange={event => setClaimData(event.target.value)}
-                        placeholder='Exposure details, sector, or access type'
-                        className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
-                    />
                     <input
                         value={claimUrl}
                         onChange={event => setClaimUrl(event.target.value)}
@@ -564,9 +556,9 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <div className='mt-3 flex flex-wrap gap-2'>
                         <button disabled={busy || Boolean(claimDisabledReason)} title={claimDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                             {busyAction === 'claim' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus className='h-4 w-4' />}
-                            Ingest and rebuild
+                            Fetch and rebuild
                         </button>
-                        <WorkflowButton busy={busyAction === 'claim-case'} disabled={busy || Boolean(claimDisabledReason)} disabledReason={claimDisabledReason || undefined} icon={<ShieldCheck className='h-4 w-4' />} onClick={openCaseFromMetadataClaim}>
+                        <WorkflowButton busy={busyAction === 'claim-case'} disabled={busy || Boolean(claimDisabledReason)} disabledReason={claimDisabledReason || undefined} icon={<ShieldCheck className='h-4 w-4' />} onClick={openCaseFromPublicAdvisory}>
                             Open case
                         </WorkflowButton>
                     </div>
@@ -598,20 +590,21 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     )
 }
 
-async function ingestClaim(input: { actor: string, company: string, claimedData: string, url: string }, scope: { tenantId: string, organizationId?: string }) {
+async function ingestPublicEvidence(input: { company: string, publishedAt: string, url: string }, scope: { tenantId: string, organizationId?: string }) {
     return postJson('/api/dwm/exposure-claims/ingest', {
         items: [{
             ...scope,
-            actor: input.actor,
             company: input.company,
-            claimedData: input.claimedData,
-            sourceName: `${input.actor} metadata intake`,
-            sourceFamily: 'darkweb_metadata',
-            title: `${input.actor} has just published a new victim: ${input.company}`,
-            text: `${input.actor} victim: ${input.company}. ${input.claimedData}.`,
-            url: input.url || undefined,
+            publishedAt: input.publishedAt,
+            sourceFamily: 'public_advisory',
+            url: input.url,
         }],
     })
+}
+
+function evidencePublishedAt(value: string) {
+    const time = Date.parse(value)
+    return Number.isFinite(time) && time <= Date.now() ? new Date(time).toISOString() : ''
 }
 
 function selectRebuiltAlert(payload: Record<string, unknown>, company: string, terms: string) {

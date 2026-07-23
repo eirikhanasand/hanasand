@@ -1,3 +1,6 @@
+import { lookup } from "node:dns/promises";
+import { request as httpsRequest } from "node:https";
+import { isIP, type LookupFunction } from "node:net";
 import { error, json, numberQuery, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
@@ -5,6 +8,10 @@ import { resolveOrganizationScope } from "./organizationRoutes.ts";
 import { authenticateRequest, type AuthenticatedIdentity } from "./requestAuthentication.ts";
 import { resolveTenantScope } from "./tenantScope.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
+import { StaticWebAdapter } from "../adapters/staticWeb.ts";
+import { privateTarget } from "../registry/sourceRegistry.ts";
+
+const PUBLIC_ADVISORY_MAX_BYTES = 2_000_000;
 
 type ExposureClaimItem = {
   id?: string;
@@ -40,11 +47,13 @@ type ParsedExposureClaim = ExposureClaimItem & {
   claimTime: string;
   capturedAt: string;
   confidence: number;
-  parserMode: "hanasand-ai" | "local_fallback";
+  parserMode: "hanasand-ai" | "local_fallback" | "public_advisory_fetch";
   parserQuality: "high" | "medium" | "needs_review";
   needsReview: boolean;
   evidenceContentHash: string;
   summary?: string;
+  links?: string[];
+  adapterMetadata?: Record<string, unknown>;
 };
 
 export async function listExposureQueue(request: Request, url: URL, options: ApiServerOptions) {
@@ -115,9 +124,12 @@ export async function ingestExposureClaims(request: Request, options: ApiServerO
   if (!submitted.length) return error("missing_exposure_claims", "Submit at least one metadata-only exposure claim", 400);
   if (submitted.length > 100) return error("exposure_batch_too_large", "At most 100 exposure claims may be submitted at once", 413);
   const items = submitted.map(exposureClaimInput).filter((item): item is ExposureClaimItem => Boolean(item));
-  const parsed = await Promise.all(items.map((item) => parseExposureClaim(item, at)));
+  const parsed = await Promise.all(items.map((item) => item.sourceFamily === "public_advisory"
+    ? collectPublicAdvisory(item, options, scope, at).catch(() => undefined)
+    : parseExposureClaim(item, at)));
   const accepted = parsed
-    .filter((claim) => claim.company && claim.actor)
+    .filter((claim): claim is ParsedExposureClaim => Boolean(claim))
+    .filter((claim) => claim.company && (claim.parserMode === "public_advisory_fetch" || claim.actor))
     .map((claim) => saveExposureClaim(options.store, claim, at, scope))
     .filter(Boolean);
 
@@ -129,7 +141,7 @@ export async function ingestExposureClaims(request: Request, options: ApiServerO
     parser: {
       service: "hanasand-ai",
       aiEndpointConfigured: Boolean(Bun.env.HANASAND_AI_API_BASE),
-      fallbackUsed: parsed.some((claim) => claim.parserMode !== "hanasand-ai")
+      fallbackUsed: parsed.some((claim) => claim?.parserMode !== "hanasand-ai")
     },
     captures: accepted.map((capture) => ({ id: capture.id, sourceId: capture.sourceId, collectedAt: capture.collectedAt })),
     queue: exposureClaimsFromStore(options.store, {}, { limit: 25, tenantId: scope.tenantId })
@@ -259,12 +271,13 @@ function exposureWriteScope(request: Request, body: any, options: ApiServerOptio
 function exposureClaimInput(value: unknown): ExposureClaimItem | undefined {
   if (!value || typeof value !== "object") return undefined;
   const item: any = value;
+  const sourceFamily = ["darkweb_metadata", "telegram_public", "public_advisory", "public_actor_claims"].includes(item.sourceFamily) ? item.sourceFamily : "manual_metadata";
+  const sourceUrl = submittedUrl(item.sourceUrl);
+  const url = submittedUrl(item.url);
   const text = boundedText(item.text, 2000);
   const title = boundedText(item.title, 240);
   if ((item.text !== undefined && !text) || (item.title !== undefined && !title)) return undefined;
-  if ((!text && !title && !(item.actor && (item.company || item.victimName))) || unsafeSubmittedText(text)) return undefined;
-  const sourceUrl = submittedUrl(item.sourceUrl);
-  const url = submittedUrl(item.url);
+  if ((!text && !title && !(item.actor && (item.company || item.victimName)) && !(sourceFamily === "public_advisory" && (sourceUrl || url) && item.company)) || unsafeSubmittedText(text)) return undefined;
   if ((item.sourceUrl && !sourceUrl) || (item.url && !url)) return undefined;
   return {
     sourceId: /^[A-Za-z0-9_.:-]{1,200}$/.test(String(item.sourceId ?? "")) ? String(item.sourceId) : undefined,
@@ -284,7 +297,7 @@ function exposureClaimInput(value: unknown): ExposureClaimItem | undefined {
     capturedAt: validTimestamp(item.capturedAt),
     publishedAt: validTimestamp(item.publishedAt),
     confidence: Number.isFinite(Number(item.confidence)) ? clamp(Number(item.confidence)) : undefined,
-    sourceFamily: ["darkweb_metadata", "telegram_public", "public_advisory", "public_actor_claims"].includes(item.sourceFamily) ? item.sourceFamily : "manual_metadata"
+    sourceFamily
   };
 }
 
@@ -373,6 +386,7 @@ export function exposureClaimsFromStore(store: any, filters: string | ExposureQu
 }
 
 function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId: string; organizationId?: string; submittedBy?: string }) {
+  if (claim.parserMode === "public_advisory_fetch") return savePublicAdvisory(store, claim, at, scope);
   const requestedSourceId = /^[A-Za-z0-9_.:-]{1,200}$/.test(String(claim.sourceId ?? "")) ? String(claim.sourceId) : undefined;
   const sourceId = requestedSourceId || stableId("src_exposure", `${scope.tenantId}:${claim.sourceName || claim.sourceUrl || claim.actor}`);
   const existingSource = store.getSource?.(sourceId);
@@ -449,6 +463,268 @@ function saveExposureClaim(store: any, claim: any, at: string, scope: { tenantId
   }, { actorIdentities: store.listActorIdentities?.() ?? [] });
   pipeline.capture.title = title;
   return store.savePipelineResult(pipeline).capture;
+}
+
+async function collectPublicAdvisory(item: ExposureClaimItem, options: ApiServerOptions, scope: { tenantId: string; organizationId?: string }, at: string): Promise<ParsedExposureClaim | undefined> {
+  const requestedUrl = item.sourceUrl || item.url;
+  const company = boundedText(item.company || item.victimName, 140);
+  if (!requestedUrl || !company || new URL(requestedUrl).protocol !== "https:") return undefined;
+  const sourceId = stableId("src_public_advisory", `${scope.tenantId}:${requestedUrl}`);
+  const source = {
+    id: sourceId,
+    tenantId: scope.tenantId,
+    name: `Public advisory ${new URL(requestedUrl).hostname}`,
+    type: "public_advisory",
+    url: requestedUrl,
+    accessMethod: "public_http",
+    status: "active",
+    risk: "low",
+    trustScore: 0.7,
+    crawlFrequencySeconds: 3600,
+    legalNotes: "Public incident reporting collected without credentials, form submission, downloads, or access-control bypass.",
+    createdAt: at,
+    updatedAt: at
+  };
+  const timeoutMs = publicAdvisoryTimeout(options);
+  const adapter = new StaticWebAdapter({ fetcher: publicAdvisoryFetcher(options.fetch as typeof fetch | undefined, timeoutMs), timeoutMs });
+  const result = await adapter.collect(source, {
+    id: stableId("task_public_advisory", `${scope.tenantId}:${requestedUrl}`),
+    sourceId,
+    targetUrl: requestedUrl,
+    status: "queued",
+    retryCount: 0,
+    maxBytes: PUBLIC_ADVISORY_MAX_BYTES
+  });
+  const collected = result.items[0];
+  const text = String(collected?.rawText ?? "").replace(/\s+/g, " ").trim().slice(0, 20_000);
+  if (!collected || !text || !termOccursInText(text, company) || !cyberIncidentText(text)) return undefined;
+  const extractedPublishedAt = publicationTimestampFromHtml(String(collected.html ?? ""));
+  const publishedAt = extractedPublishedAt || validTimestamp(item.publishedAt);
+  const collectedAt = validTimestamp(collected.collectedAt) || at;
+  if (!publishedAt || Date.parse(publishedAt) > Date.parse(collectedAt) + 300_000) return undefined;
+  const title = String(collected.title ?? "").replace(/\s+/g, " ").trim().slice(0, 240) || `${company} public incident report`;
+  const collectedUrl = submittedUrl(collected.url);
+  const url = collectedUrl && new URL(collectedUrl).protocol === "https:" ? collectedUrl : requestedUrl;
+  const evidencePath = extractedPublishedAt ? "page.metadata.datePublished" : "request.publishedAt";
+  return {
+    ...item,
+    sourceId,
+    sourceName: source.name,
+    sourceUrl: url,
+    url,
+    title,
+    text,
+    actor: "",
+    company,
+    claimedData: "Public incident report",
+    claimedDataSize: "Not stated by source",
+    country: item.country || "Not stated by source",
+    publishedAt,
+    claimTime: publishedAt,
+    capturedAt: collectedAt,
+    confidence: extractedPublishedAt ? 0.9 : 0.82,
+    parserMode: "public_advisory_fetch",
+    parserQuality: "high",
+    needsReview: true,
+    evidenceContentHash: collected.contentHash || hashContent(text),
+    summary: text.slice(0, 500),
+    links: collected.links,
+    adapterMetadata: collected.metadata,
+    reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId, evidencePath, extractionMethod: extractedPublishedAt ? "source_field" : "analyst_submission" }]
+  };
+}
+
+function savePublicAdvisory(store: any, claim: ParsedExposureClaim, at: string, scope: { tenantId: string; organizationId?: string; submittedBy?: string }) {
+  const sourceId = claim.sourceId!;
+  const existingSource = store.getSource?.(sourceId);
+  if (existingSource && (existingSource.tenantId || "default") !== scope.tenantId) return undefined;
+  store.saveSource?.({
+    ...existingSource,
+    id: sourceId,
+    tenantId: scope.tenantId,
+    name: claim.sourceName,
+    type: "public_advisory",
+    url: claim.sourceUrl || claim.url,
+    accessMethod: "public_http",
+    status: "active",
+    risk: "low",
+    trustScore: 0.7,
+    crawlFrequencySeconds: 3600,
+    legalNotes: "Public incident reporting collected without credentials, form submission, downloads, or access-control bypass.",
+    createdAt: existingSource?.createdAt || at,
+    updatedAt: at,
+    metadata: {
+      ...existingSource?.metadata,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      canaryPortfolio: true,
+      sourceFamily: "public_advisory",
+      collectionMode: "public_web_page"
+    }
+  });
+  const text = claim.text!;
+  const safeExcerpt = text.slice(0, 600);
+  const pipeline = processCollectedItem({
+    tenantId: scope.tenantId,
+    sourceId,
+    url: claim.url!,
+    title: claim.title,
+    collectedAt: claim.capturedAt,
+    publishedAt: claim.publishedAt,
+    contentHash: claim.evidenceContentHash,
+    rawText: text,
+    links: claim.links || [],
+    sensitive: false,
+    metadata: {
+      ...claim.adapterMetadata,
+      publicAdvisory: true,
+      organizationId: scope.organizationId,
+      submittedBy: scope.submittedBy,
+      safeExcerpt,
+      adapter: "static_web",
+      sourceFamily: "public_advisory",
+      parserMode: claim.parserMode,
+      parserQuality: claim.parserQuality,
+      reportTimestamps: claim.reportTimestamps,
+      extractionProfile: "public_advisory",
+      review: { state: "needs_review", reason: "Public incident evidence requires analyst confirmation" }
+    }
+  }, { actorIdentities: store.listActorIdentities?.() ?? [] });
+  pipeline.capture.title = claim.title;
+  return store.savePipelineResult(pipeline).capture;
+}
+
+function publicationTimestampFromHtml(html: string): string | undefined {
+  const candidates: string[] = [];
+  for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
+    const key = htmlAttribute(tag, "property") || htmlAttribute(tag, "name") || htmlAttribute(tag, "itemprop");
+    if (/^(?:article:published_time|datepublished|date|pubdate|publish-date)$/i.test(key || "")) candidates.push(htmlAttribute(tag, "content") || "");
+  }
+  candidates.push(html.match(/"datePublished"\s*:\s*"([^"]+)"/i)?.[1] || "");
+  candidates.push(html.match(/<time\b[^>]*datetime=["']([^"']+)["']/i)?.[1] || "");
+  return candidates.map(validTimestamp).find(Boolean);
+}
+
+function htmlAttribute(tag: string, name: string) {
+  return tag.match(new RegExp(`\\b${name}=["']([^"']+)["']`, "i"))?.[1];
+}
+
+function termOccursInText(text: string, term: string) {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, "iu").test(text);
+}
+
+function cyberIncidentText(text: string) {
+  return /\b(?:cyber(?:attack| attack|angrep)|ransomware|data breach|security incident|compromis(?:e|ed)|dataangrep|sikkerhetshendelse|datainnbrudd|løsepengevirus|stjålet)\b/i.test(text);
+}
+
+export function publicAdvisoryFetcher(configured?: typeof fetch, timeoutMs = 8_000): typeof fetch {
+  return (async (input: string | URL | Request, init?: RequestInit) => {
+    let target = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    for (let redirects = 0; redirects <= 3; redirects++) {
+      target = normalizePublicAdvisoryUrl(target);
+      const response = configured
+        ? await configured(target, { ...init, redirect: "manual" })
+        : await fetchPinnedPublicAdvisory(target, init, timeoutMs, PUBLIC_ADVISORY_MAX_BYTES);
+      const location = response.headers.get("location");
+      if (![301, 302, 303, 307, 308].includes(response.status) || !location) return response;
+      await response.body?.cancel().catch(() => undefined);
+      target = new URL(location, target).toString();
+    }
+    throw new Error("Public advisory exceeded the redirect limit.");
+  }) as typeof fetch;
+}
+
+type PublicAdvisoryResolver = (hostname: string, options: { all: true; verbatim: true }) => Promise<Array<{ address: string; family: number }>>;
+
+export async function resolvePublicAdvisoryTarget(value: string, resolver: PublicAdvisoryResolver = lookup) {
+  const normalized = normalizePublicAdvisoryUrl(value), hostname = new URL(normalized).hostname.replace(/^\[|\]$/g, "");
+  const addresses = await resolver(hostname, { all: true, verbatim: true });
+  if (!addresses.length || addresses.some(({ address, family }) => isIP(address) !== family || privateTarget(address))) throw new Error("Public advisory resolved to a private network target.");
+  return { normalized, addresses };
+}
+
+export function pinnedPublicAdvisoryLookup(addresses: Array<{ address: string; family: number }>): LookupFunction {
+  return (_hostname, options, callback) => {
+    const requestedFamily = options.family === "IPv4" ? 4 : options.family === "IPv6" ? 6 : Number(options.family || 0);
+    const matching = requestedFamily ? addresses.filter(({ family }) => family === requestedFamily) : addresses;
+    if (!matching.length) {
+      callback(Object.assign(new Error("No validated public advisory address matches the requested family."), { code: "ENOTFOUND" }), options.all ? [] : "", requestedFamily);
+      return;
+    }
+    if (options.all) callback(null, matching);
+    else callback(null, matching[0].address, matching[0].family);
+  };
+}
+
+async function fetchPinnedPublicAdvisory(value: string, init: RequestInit | undefined, timeoutMs: number, maxBytes: number): Promise<Response> {
+  const startedAt = Date.now();
+  const { normalized, addresses } = await publicAdvisoryDeadline(resolvePublicAdvisoryTarget(value), timeoutMs);
+  if (init?.signal?.aborted) throw init.signal.reason;
+  const remainingMs = timeoutMs - (Date.now() - startedAt);
+  if (remainingMs <= 0) throw new Error("Public advisory request timed out.");
+  const url = new URL(normalized), headers = new Headers(init?.headers);
+  headers.set("accept-encoding", "identity");
+  headers.delete("host");
+  headers.delete("content-length");
+  return await new Promise<Response>((resolve, reject) => {
+    let settled = false;
+    const finish = (cause?: unknown, response?: Response) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      init?.signal?.removeEventListener("abort", abort);
+      cause ? reject(cause) : resolve(response!);
+    };
+    const request = httpsRequest(url, { method: "GET", headers: Object.fromEntries(headers), lookup: pinnedPublicAdvisoryLookup(addresses) }, incoming => {
+      const chunks: Buffer[] = []; let contentBytes = 0;
+      const declared = Number(incoming.headers["content-length"]);
+      if (Number.isFinite(declared) && declared > maxBytes) {
+        incoming.destroy(new Error(`Public advisory exceeds maxBytes ${maxBytes}.`));
+        return;
+      }
+      incoming.on("data", chunk => {
+        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        contentBytes += bytes.byteLength;
+        if (contentBytes > maxBytes) incoming.destroy(new Error(`Public advisory exceeds maxBytes ${maxBytes}.`));
+        else chunks.push(bytes);
+      });
+      incoming.on("error", finish);
+      incoming.on("end", () => {
+        const responseHeaders = new Headers();
+        for (const [name, raw] of Object.entries(incoming.headers)) for (const part of Array.isArray(raw) ? raw : raw === undefined ? [] : [String(raw)]) responseHeaders.append(name, part);
+        const status = incoming.statusCode ?? 0, body = [204, 205, 304].includes(status) ? null : Buffer.concat(chunks, contentBytes);
+        const response = new Response(body, { status, statusText: incoming.statusMessage, headers: responseHeaders });
+        Object.defineProperty(response, "url", { value: normalized });
+        finish(undefined, response);
+      });
+    });
+    const abort = () => request.destroy(init?.signal?.reason instanceof Error ? init.signal.reason : new Error("Public advisory request aborted."));
+    const timer = setTimeout(() => request.destroy(new Error("Public advisory request timed out.")), remainingMs);
+    request.on("error", finish);
+    if (init?.signal?.aborted) abort(); else init?.signal?.addEventListener("abort", abort, { once: true });
+    request.end();
+  });
+}
+
+async function publicAdvisoryDeadline<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { return await Promise.race([operation, new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error("Public advisory request timed out.")), timeoutMs); })]); }
+  finally { if (timer) clearTimeout(timer); }
+}
+
+function normalizePublicAdvisoryUrl(value: string) {
+  let url: URL;
+  try { url = new URL(value); } catch { throw new Error("Public advisory URL must be valid."); }
+  if (url.protocol !== "https:" || url.username || url.password) throw new Error("Public advisory URL must use HTTPS without credentials.");
+  if (privateTarget(url.hostname)) throw new Error("Public advisory URL must use a public network target.");
+  return url.toString();
+}
+
+function publicAdvisoryTimeout(options: ApiServerOptions) {
+  const direct = Number(options.publicAdvisoryTimeoutMs);
+  if (Number.isFinite(direct)) return Math.max(1, Math.min(direct, 30_000));
+  return Math.max(1_000, Math.min(Number(Bun.env.TI_PUBLIC_ADVISORY_TIMEOUT_MS || 8_000), 30_000));
 }
 
 async function parseExposureClaim(item: ExposureClaimItem, at: string): Promise<ParsedExposureClaim> {

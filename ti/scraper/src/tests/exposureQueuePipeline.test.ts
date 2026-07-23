@@ -1,5 +1,6 @@
 import { describe, expect, fixtureCapture, FocusedFrontier, handleApiRequest, InMemoryScraperStore, source, test } from "./apiTestHarness.ts";
-import { saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
+import { pinnedPublicAdvisoryLookup, resolvePublicAdvisoryTarget, saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
+import { responseFixture } from "./helpers/adapterFixtureHelpers.ts";
 
 Bun.env.HANASAND_AI_API_BASE = "";
 
@@ -25,6 +26,136 @@ describe("DWM exposure queue pipeline", () => {
     const response = await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", { method: "POST", body: JSON.stringify({ items: [{ actor: "Akira", company: "Contoso" }] }) }), { store, frontier: new FocusedFrontier() });
     expect(response.status).toBe(401);
     expect(store.listCaptures()).toHaveLength(0);
+  });
+
+  test("fetches real tenant public-incident evidence without fabricating a dark-web victim claim", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveOrganization({ id: "org_ntnu_research", tenantId: "org_ntnu_research", name: "NTNU research monitor", status: "active" });
+    store.saveOrganizationMember({ id: "analyst-test", organizationId: "org_ntnu_research", role: "analyst", status: "active" });
+    store.saveDwmWatchlist({
+      id: "watch_ntnu_research",
+      tenantId: "org_ntnu_research",
+      organizationId: "org_ntnu_research",
+      name: "NTNU",
+      terms: [{ id: "watch_item_ntnu", value: "NTNU", kind: "company" }],
+      status: "active",
+      createdAt: "2026-07-22T00:00:00.000Z",
+      updatedAt: "2026-07-22T00:00:00.000Z"
+    });
+    const pageUrl = "https://news.example.test/ntnu-cyberattack";
+    const reportUrl = "https://news.example.test/ntnu-cyberattack/";
+    const publishedAt = "2025-07-09T11:00:00.000Z";
+    const options = testOptions(store, { fetch: async (input: string | URL | Request) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith("/robots.txt")) return responseFixture("", { status: 404 }, url);
+      if (url === pageUrl) return responseFixture("", { status: 302, headers: { location: reportUrl } }, pageUrl);
+      return responseFixture(`<!doctype html><html><head><title>NTNU hit by cyberattack</title><meta property="article:published_time" content="${publishedAt}"></head><body><main><h1>NTNU hit by cyberattack</h1><p>NTNU reports that a supplier ransomware attack exposed names and email addresses.</p></main></body></html>`, { status: 200, headers: { "content-type": "text/html" } }, reportUrl);
+    } });
+    const ingest = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tenantId: "org_ntnu_research",
+        organizationId: "org_ntnu_research",
+        items: [{ tenantId: "org_ntnu_research", organizationId: "org_ntnu_research", company: "NTNU", sourceFamily: "public_advisory", url: pageUrl }]
+      })
+    }), options);
+    const ingestBody = await ingest.json() as any;
+    expect(ingestBody.accepted).toBe(1);
+    expect(store.listSources()[0]).toMatchObject({ tenantId: "org_ntnu_research", type: "public_advisory", status: "active", accessMethod: "public_http", metadata: { canaryPortfolio: true, organizationId: "org_ntnu_research" } });
+    expect(store.listCaptures()[0]).toMatchObject({ tenantId: "org_ntnu_research", url: reportUrl, title: "NTNU hit by cyberattack", publishedAt, sensitive: false, metadata: { adapter: "static_web", sourceFamily: "public_advisory", organizationId: "org_ntnu_research" } });
+    expect(store.listTimelinessRecords()[0]).toMatchObject({ captureId: store.listCaptures()[0].id, publishedAt, publisherReportedAt: publishedAt, reportTimestamps: [expect.objectContaining({ evidencePath: "page.metadata.datePublished", extractionMethod: "source_field" })] });
+    expect(store.listCaptures()[0].metadata?.leakSite).toBeUndefined();
+    expect(JSON.stringify(store.listCaptures()[0])).not.toContain("has just published a new victim");
+
+    const rebuild = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tenantId: "org_ntnu_research", organizationId: "org_ntnu_research" })
+    }), options);
+    const rebuildBody = await rebuild.json() as any;
+    expect(rebuildBody.savedAlertCount).toBe(1);
+    expect(rebuildBody.alerts[0]).toMatchObject({ tenantId: "org_ntnu_research", organizationId: "org_ntnu_research", sourceFamily: "public_advisory" });
+    expect(rebuildBody.alerts[0].evidence.map((row: any) => row.provenance?.captureId)).toContain(store.listCaptures()[0].id);
+  });
+
+  test("rejects nonincidents, watch-term-absent pages, redirect downgrades, and private targets", async () => {
+    const cases = [
+      {
+        url: "https://support.example.test/ntnu",
+        html: "<html><head><title>NTNU support</title></head><body>If you are listed by mistake, contact us.</body></html>"
+      },
+      {
+        url: "https://news.example.test/other-university",
+        html: "<html><head><title>Other university cyberattack</title></head><body>Another university reports a ransomware incident.</body></html>"
+      },
+      {
+        url: "https://news.example.test/downgrade",
+        redirect: "http://127.0.0.1/internal"
+      },
+      {
+        url: "https://127.0.0.1/internal",
+        html: "<html><body>NTNU cyberattack</body></html>"
+      }
+    ];
+    for (const testCase of cases) {
+      const store = new InMemoryScraperStore();
+      const options = testOptions(store, { fetch: async (input: string | URL | Request) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (url.endsWith("/robots.txt")) return new Response("", { status: 404 });
+        if (testCase.redirect) return new Response("", { status: 302, headers: { location: testCase.redirect } });
+        return new Response(testCase.html, { status: 200, headers: { "content-type": "text/html" } });
+      } });
+      const ingest = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ items: [{ company: "NTNU", sourceFamily: "public_advisory", publishedAt: "2025-07-09T11:00:00.000Z", url: testCase.url }] })
+      }), options);
+      expect(await ingest.json()).toMatchObject({ accepted: 0, rejected: 1 });
+      expect(store.listSources()).toHaveLength(0);
+      expect(store.listCaptures()).toHaveLength(0);
+    }
+  });
+
+  test("rejects oversized and timed-out advisory responses without persistence", async () => {
+    for (const fetcher of [
+      async (input: string | URL | Request) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (url.endsWith("/robots.txt")) return new Response("", { status: 404 });
+        let sent = 0;
+        return new Response(new ReadableStream({ pull(controller) { controller.enqueue(new Uint8Array(750_000)); if (++sent === 3) controller.close(); } }), { headers: { "content-type": "text/html" } });
+      },
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (url.endsWith("/robots.txt")) return new Response("", { status: 404 });
+        return await new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true }));
+      }
+    ]) {
+      const store = new InMemoryScraperStore();
+      const ingest = await handleApiRequest(authenticatedRequest("http://local/v1/dwm/exposure-claims/ingest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ items: [{ company: "NTNU", sourceFamily: "public_advisory", publishedAt: "2025-07-09T11:00:00.000Z", url: "https://news.example.test/ntnu-incident" }] })
+      }), testOptions(store, { fetch: fetcher, publicAdvisoryTimeoutMs: 20 }));
+      expect(await ingest.json()).toMatchObject({ accepted: 0, rejected: 1 });
+      expect(store.listSources()).toHaveLength(0);
+      expect(store.listCaptures()).toHaveLength(0);
+    }
+  });
+
+  test("rejects private and rebinding DNS answers and pins public IPv4 and IPv6", async () => {
+    const publicAddresses = [{ address: "93.184.216.34", family: 4 }, { address: "2606:4700:4700::1111", family: 6 }];
+    await expect(resolvePublicAdvisoryTarget("https://news.example.com/report", async () => publicAddresses)).resolves.toMatchObject({ addresses: publicAddresses });
+    await expect(resolvePublicAdvisoryTarget("https://127.0.0.1/report", async () => publicAddresses)).rejects.toThrow("public network");
+    await expect(resolvePublicAdvisoryTarget("https://[::1]/report", async () => publicAddresses)).rejects.toThrow("public network");
+    await expect(resolvePublicAdvisoryTarget("https://news.example.com/report", async () => [publicAddresses[0], { address: "10.0.0.4", family: 4 }])).rejects.toThrow("private network");
+    await expect(resolvePublicAdvisoryTarget("https://news.example.com/report", async () => [{ address: "fd00::4", family: 6 }])).rejects.toThrow("private network");
+
+    let resolutions = 0;
+    const validated = await resolvePublicAdvisoryTarget("https://news.example.com/report", async () => ++resolutions === 1 ? [publicAddresses[0]] : [{ address: "127.0.0.1", family: 4 }]);
+    const pinned = await new Promise<{ address: string; family: number }>((resolve, reject) => pinnedPublicAdvisoryLookup(validated.addresses)("news.example.com", { family: 0, hints: 0, all: false } as any, (cause, address, family) => cause ? reject(cause) : resolve({ address: String(address), family: Number(family) })));
+    expect(pinned).toEqual(publicAddresses[0]);
+    expect(resolutions).toBe(1);
   });
 
   test("ingests parsed actor claims into the queue and shared TI search index", async () => {

@@ -39,6 +39,27 @@ describe("static web adapter fixtures", () => {
     expect(result.warnings[0]).toContain("robots.txt disallows");
   });
 
+  test("bounds streamed bodies and aborts timed-out fetches", async () => {
+    let bodyCanceled = false;
+    const oversized = new StaticWebAdapter({ checkRobots: false, fetcher: async () => new Response(new ReadableStream({
+      pull(controller) { controller.enqueue(new Uint8Array(6)); },
+      cancel() { bodyCanceled = true; }
+    }), { headers: { "content-type": "text/html" } }) });
+    const oversizedResult = await oversized.collect(source({}), { id: "task_large", sourceId: "src_static", targetUrl: "https://example.test/report", status: "queued", retryCount: 0, maxBytes: 10 });
+    expect(oversizedResult.metadata).toMatchObject({ failureCategory: "too_large", maxBytes: 10 });
+    expect(oversizedResult.items).toHaveLength(0);
+    expect(bodyCanceled).toBe(true);
+
+    let aborted = false;
+    const timedOut = new StaticWebAdapter({ checkRobots: false, timeoutMs: 10, fetcher: async (_input, init) => await new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => { aborted = true; reject(init.signal?.reason); }, { once: true });
+    }) });
+    const timeoutResult = await timedOut.collect(source({}));
+    expect(timeoutResult.metadata).toMatchObject({ failureCategory: "timeout" });
+    expect(timeoutResult.items).toHaveLength(0);
+    expect(aborted).toBe(true);
+  });
+
   test("canonicalizes URLs and extracts safe readable text", () => {
     expect(canonicalizeUrl("HTTPS://Example.TEST:443//a?b=2&a=1#frag")).toBe("https://example.test/a?a=1&b=2");
     expect(extractReadableText("<script>bad()</script><p>Threat &amp; CVE</p>")).toBe("Threat & CVE");

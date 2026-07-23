@@ -269,6 +269,44 @@ const orgBActorCapture: RawCapture = {
 } as RawCapture;
 
 describe("dwm alert repository", () => {
+  test("matches shared and exact-tenant evidence but excludes foreign tenant and organization captures", () => {
+    const globalSource = { ...publicAdvisorySource, id: "src_scope_global" } as SourceRecord;
+    const ownSource = { ...publicAdvisorySource, id: "src_scope_own", tenantId: "tenant_scope", metadata: { organizationId: "org_scope" } } as SourceRecord;
+    const foreignSource = { ...publicAdvisorySource, id: "src_scope_foreign", tenantId: "tenant_foreign", metadata: { organizationId: "org_foreign" } } as SourceRecord;
+    const wrongOrgSource = { ...publicAdvisorySource, id: "src_scope_wrong_org", tenantId: "tenant_scope", metadata: { organizationId: "org_other" } } as SourceRecord;
+    const capture = (id: string, sourceId: string, tenantId?: string, organizationId?: string) => ({
+      ...publicAdvisoryCapture,
+      id,
+      sourceId,
+      tenantId,
+      contentHash: `hash-${id}`,
+      body: "NTNU reports a public cyberattack incident.",
+      metadata: { ...publicAdvisoryCapture.metadata, organizationId }
+    }) as RawCapture;
+    const plan = buildDwmAlertGenerationPlan({
+      watchlists: [{
+        id: "watch_scope",
+        tenantId: "tenant_scope",
+        organizationId: "org_scope",
+        name: "NTNU",
+        terms: [{ value: "NTNU", kind: "company" }],
+        status: "active",
+        createdAt: "2026-07-22T00:00:00.000Z",
+        updatedAt: "2026-07-22T00:00:00.000Z"
+      }] as any,
+      tenantId: "tenant_scope",
+      organizationId: "org_scope",
+      sources: [globalSource, ownSource, foreignSource, wrongOrgSource],
+      captures: [
+        capture("cap_scope_global", globalSource.id),
+        capture("cap_scope_own", ownSource.id, "tenant_scope", "org_scope"),
+        capture("cap_scope_foreign", foreignSource.id, "tenant_foreign", "org_foreign"),
+        capture("cap_scope_wrong_org", wrongOrgSource.id, "tenant_scope", "org_other")
+      ]
+    });
+    expect(plan.candidates[0].captureRefs.map((row) => row.captureId).sort()).toEqual(["cap_scope_global", "cap_scope_own"]);
+  });
+
   test("matches source evidence but never scheduler query metadata", () => {
     const source = {
       ...clearWebSource,

@@ -1492,8 +1492,7 @@ export type RebuildDwmRuntimeAlertsResult = {
 };
 
 export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): RebuildDwmRuntimeAlertsResult {
-  const sources = input.store.listSources();
-  const captures = input.store.listCaptures();
+  const { sources, captures } = scopeDwmEvidence(input.store.listSources(), input.store.listCaptures(), input.tenantId, input.organizationId);
   const watchlists = input.store.listDwmWatchlists();
   const generationPlan = buildDwmAlertGenerationPlan({
     watchlists,
@@ -1736,8 +1735,7 @@ export function buildDwmAlertGenerationPlan(input: {
   captures?: RawCapture[];
 }): DwmAlertGenerationPlan {
   const visibilityPolicy = normalizeVisibilityPolicy(input.visibilityPolicy);
-  const sources = input.sources ?? [];
-  const captures = input.captures ?? [];
+  const { sources, captures } = scopeDwmEvidence(input.sources ?? [], input.captures ?? [], input.tenantId, input.organizationId);
   const candidates = new Map<string, DwmAlertGenerationCandidate>();
   const blockedWatchlists: DwmAlertGenerationPlan["blockedWatchlists"] = [];
   const skippedWatchlists: DwmAlertGenerationPlan["skippedWatchlists"] = [];
@@ -1832,6 +1830,19 @@ export function buildDwmAlertGenerationPlan(input: {
   };
 }
 
+function scopeDwmEvidence(sources: SourceRecord[], captures: RawCapture[], tenantId: string, organizationId?: string) {
+  const visible = (record: any) => {
+    const recordTenantId = String(record?.tenantId ?? "").trim();
+    const recordOrganizationId = String(record?.organizationId ?? record?.metadata?.organizationId ?? "").trim();
+    return (!recordTenantId || recordTenantId === tenantId) && (!recordOrganizationId || recordOrganizationId === organizationId);
+  };
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  return {
+    sources: sources.filter(visible),
+    captures: captures.filter((capture) => visible(capture) && (!sourceById.has(capture.sourceId) || visible(sourceById.get(capture.sourceId))))
+  };
+}
+
 export function buildDwmAlertGenerationReadiness(input: {
   watchlists: RuntimeDwmWatchlist[];
   tenantId: string;
@@ -1841,7 +1852,8 @@ export function buildDwmAlertGenerationReadiness(input: {
   captures?: RawCapture[];
   productDedupePatched?: boolean;
 }): DwmAlertGenerationReadiness {
-  const plan = buildDwmAlertGenerationPlan(input);
+  const scopedEvidence = scopeDwmEvidence(input.sources ?? [], input.captures ?? [], input.tenantId, input.organizationId);
+  const plan = buildDwmAlertGenerationPlan({ ...input, ...scopedEvidence });
   const rawActiveTermCount = input.watchlists
     .filter((watchlist) => watchlist.tenantId === input.tenantId && watchlist.status === "active" && (!watchlist.organizationId || watchlist.organizationId === input.organizationId))
     .reduce((count, watchlist) => count + watchlist.terms.length, 0);
@@ -1851,7 +1863,7 @@ export function buildDwmAlertGenerationReadiness(input: {
   const sourceFamilyGaps = buildSourceFamilyGaps({
     coverage: sourceFamilyCoverage,
     candidates: plan.candidates,
-    sources: input.sources ?? []
+    sources: scopedEvidence.sources
   });
   const candidateIdsMissingRoute = plan.candidates.filter((candidate) => !candidate.hasWebhookRoute).map((candidate) => candidate.id);
   const productDedupePatched = input.productDedupePatched !== false;
@@ -1859,7 +1871,7 @@ export function buildDwmAlertGenerationReadiness(input: {
     watchlists: input.watchlists,
     organizationId: input.organizationId,
     plan,
-    sources: input.sources ?? [],
+    sources: scopedEvidence.sources,
     captureRefCount,
     candidateIdsMissingRoute,
     productDedupePatched
