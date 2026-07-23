@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { feedItems } from "../ops/canaryFeedItems.ts";
 import { fetchItems } from "../ops/canaryHelpers.ts";
 import { importSeedBundle } from "../registry/sourceSeeds.ts";
-import { evaluateSourceForCollection } from "../policy/collectionPolicy.ts";
+import { evaluateSourceForCollection, isExecutableSource } from "../policy/collectionPolicy.ts";
 import { isSellableIntelText } from "../value/sellableIntel.ts";
 import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
@@ -82,9 +82,8 @@ describe("public Telegram canary collection", () => {
     const families = new Set(report.accepted.flatMap((item: any) => item.metadata.sourceFamilies));
 
     expect(report).toMatchObject({ valid: true, errors: [], duplicates: [] });
-    expect(report.accepted).toHaveLength(7);
+    expect(report.accepted).toHaveLength(10);
     expect(report.accepted.every((item: any) => item.tenantId === undefined)).toBe(true);
-    expect(report.accepted.every((item: any) => evaluateSourceForCollection(item).allowed)).toBe(true);
     expect(report.accepted.map((item: any) => item.id)).toEqual(expect.arrayContaining([
       "src_group_ib_telegram",
       "src_kaspersky_ru_telegram",
@@ -92,9 +91,12 @@ describe("public Telegram canary collection", () => {
       "src_positive_technologies_telegram",
       "src_i4c_cyberdost_telegram",
       "src_ukraine_cyberpolice_telegram",
-      "src_ctt_report_hub_telegram"
+      "src_ctt_report_hub_telegram",
+      "src_cert_agid_telegram",
+      "src_solar_4rays_telegram",
+      "src_d3lab_telegram"
     ]));
-    expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "ru", "hi", "uk"]));
+    expect(report.accepted.map((item: any) => item.language)).toEqual(expect.arrayContaining(["en", "it", "ru", "hi", "uk"]));
     expect([...families]).toEqual(expect.arrayContaining([
       "apt_research",
       "malware_research",
@@ -108,7 +110,24 @@ describe("public Telegram canary collection", () => {
       expect(report.accepted.filter((item: any) => item.metadata.sourceFamilies.includes(family)).length).toBeGreaterThanOrEqual(2);
     }
     expect(new Set(report.accepted.map((item: any) => item.catalog.canonicalId)).size).toBe(report.accepted.length);
-    expect(report.accepted.every((item: any) => item.accessMethod === "public_http" && item.governance.approvalState === "approved" && item.metadata.collectionMode === "public_web_preview" && item.metadata.mediaPolicy === "metadata_only_no_download" && item.metadata.productionCollection === true && item.metadata.publisherReference.startsWith("https://"))).toBe(true);
+    expect(report.accepted.every((item: any) => item.accessMethod === "public_http" && item.governance.approvalState === "approved" && item.metadata.collectionMode === "public_web_preview" && item.metadata.mediaPolicy === "metadata_only_no_download" && item.metadata.publisherReference.startsWith("https://"))).toBe(true);
+    const production = report.accepted.filter((item: any) => item.status === "active");
+    const candidates = report.accepted.filter((item: any) => item.status === "candidate");
+    expect(production).toHaveLength(7);
+    expect(production.every((item: any) => item.metadata.productionCollection === true && evaluateSourceForCollection(item).allowed && isExecutableSource(item))).toBe(true);
+    expect(candidates.map((item: any) => item.id)).toEqual([
+      "src_cert_agid_telegram",
+      "src_solar_4rays_telegram",
+      "src_d3lab_telegram"
+    ]);
+    expect(candidates.every((item: any) => item.countsAsCoverage !== true
+      && item.metadata.productionCollection === false
+      && item.metadata.countsAsCoverage === false
+      && item.metadata.sourcePortfolioQualificationState === "pending_sustained_productivity"
+      && item.metadata.sourcePortfolioVerification.outcome === "content_parsed"
+      && item.metadata.sourcePortfolioVerification.observedUsefulItemCount > 0
+      && !evaluateSourceForCollection(item).allowed
+      && !isExecutableSource(item))).toBe(true);
     expect(report.accepted.map((item: any) => item.url)).not.toEqual(expect.arrayContaining([
       "https://t.me/FalconFeedsio",
       "https://t.me/noname05716",
@@ -123,8 +142,8 @@ describe("public Telegram canary collection", () => {
     const first = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: bundle.generatedAt });
     const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: bundle.generatedAt });
 
-    expect(first).toMatchObject({ importedSourceCount: 7, updatedSourceCount: 0, activeSourceCount: 7, errors: [] });
-    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 7, activeSourceCount: 7, totalSourceCount: 7, errors: [] });
+    expect(first).toMatchObject({ importedSourceCount: 10, updatedSourceCount: 0, activeSourceCount: 7, errors: [] });
+    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 10, activeSourceCount: 7, totalSourceCount: 10, errors: [] });
   });
 
   test("backs off a public-preview source after a bounded upstream failure", async () => {
@@ -147,6 +166,72 @@ describe("public Telegram canary collection", () => {
     expect(store.getSource(publicSource.id)).toMatchObject({
       health: { status: "degraded", checkedAt: "2026-07-22T12:50:00.000Z", lastError: "HTTP 429" },
       crawlState: { retryCount: 1, backoffUntil: "2026-07-22T12:55:00.000Z", nextEligibleAt: "2026-07-22T12:55:00.000Z" }
+    });
+  });
+
+  test("promotes a verified Telegram candidate only after two useful scheduled cycles and preserves it on restart", async () => {
+    const seedPath = new URL("../../seeds/public_telegram_channel_packs.json", import.meta.url);
+    const bundle = await Bun.file(seedPath).json();
+    const store = new InMemoryScraperStore();
+    bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: bundle.generatedAt });
+    const sourceId = "src_cert_agid_telegram";
+    const frontier = new FocusedFrontier({ defaultRetryBudget: 3, baseBackoffMs: 30_000 });
+    let cycle = 0;
+    const collect = (checkedAt: string) => runCanaryCollectionCycle({
+      store,
+      frontier,
+      sourceIds: [sourceId],
+      maxSources: 1,
+      maxTasks: 1,
+      now: () => checkedAt,
+      fetch: async () => {
+        cycle++;
+        return new Response(`<html><body><section>
+          <div class="tgme_widget_message" data-post="certagid/${1200 + cycle}">
+            <div class="tgme_widget_message_text">CERT-AgID segnala una nuova campagna malware ransomware contro enti pubblici con credenziali compromesse e indicatori di attacco.</div>
+            <time datetime="${checkedAt}"></time>
+          </div>
+        </section></body></html>`, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+      }
+    });
+
+    expect(store.getSource(sourceId)?.countsAsCoverage).not.toBe(true);
+    expect(store.getSource(sourceId)).toMatchObject({
+      status: "candidate",
+      metadata: { productionCollection: false, sourcePortfolioQualificationState: "pending_sustained_productivity" }
+    });
+
+    expect(await collect("2026-07-23T16:30:00.000Z")).toMatchObject({ completedTaskCount: 1, insertedCaptureCount: 1, failedTaskCount: 0 });
+    expect(store.getSource(sourceId)).toMatchObject({
+      status: "candidate",
+      countsAsCoverage: false,
+      metadata: {
+        productionCollection: false,
+        sourcePortfolioQualificationState: "pending_sustained_productivity",
+        sourcePortfolioProductiveCheckCount: 1
+      }
+    });
+
+    expect(await collect("2026-07-23T17:00:00.000Z")).toMatchObject({ completedTaskCount: 1, insertedCaptureCount: 1, failedTaskCount: 0 });
+    expect(store.getSource(sourceId)).toMatchObject({
+      status: "active",
+      countsAsCoverage: true,
+      metadata: {
+        productionCollection: true,
+        sourcePortfolioQualificationState: "sustained_productive",
+        sourcePortfolioProductiveCheckCount: 2
+      }
+    });
+    expect(isExecutableSource(store.getSource(sourceId)!)).toBe(true);
+    expect(store.listSourceHealthObservations().filter((row: any) => row.sourceId === sourceId)).toHaveLength(2);
+
+    const restart = bootstrapRuntimeSources(store, { seedPaths: [seedPath.pathname], generatedAt: "2026-07-23T17:01:00.000Z" });
+    expect(restart).toMatchObject({ importedSourceCount: 0, updatedSourceCount: 0, skippedSourceCount: 10, activeSourceCount: 8, totalSourceCount: 10, errors: [] });
+    expect(store.listSources().filter((item: any) => item.id === sourceId)).toHaveLength(1);
+    expect(store.getSource(sourceId)).toMatchObject({
+      status: "active",
+      countsAsCoverage: true,
+      metadata: { productionCollection: true, sourcePortfolioProductiveCheckCount: 2 }
     });
   });
 });
