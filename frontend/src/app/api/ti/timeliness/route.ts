@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import requireApiSession from '@/utils/proxy/requireApiSession'
+import { organizationScopeError } from '@/app/api/dwm/_tiProxy'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,10 @@ async function forward(request: NextRequest, path: string, body?: string | NextR
     const tenantId = request.nextUrl.searchParams.get('tenantId')?.trim()
     if (scope !== 'tenant' && scope !== 'global') return failure(400, 'invalid_timeliness_scope', 'Use a tenant or global timeliness scope.')
     if (scope === 'tenant' && !/^[A-Za-z0-9_.:-]{1,200}$/.test(tenantId || '')) return failure(400, 'invalid_timeliness_tenant', 'Select a valid tenant before loading timeliness evidence.')
+    if (scope === 'tenant') {
+        const scopeError = await organizationScopeError(tenantId!, session.identity.token, session.identity.id, request.method !== 'GET')
+        if (scopeError) return scopeError
+    }
     const target = new URL(path, base)
     for (const key of ['q', 'status', 'limit', 'cursor']) {
         const value = request.nextUrl.searchParams.get(key)

@@ -138,7 +138,7 @@ export function dwmStorageScope(scope: Pick<DwmRequestScope, 'tenantId' | 'organ
     }
 }
 
-async function organizationScopeError(organizationId: string, token: string, id: string, mutation: boolean) {
+export async function organizationScopeError(organizationId: string, token: string, id: string, mutation: boolean) {
     try {
         const target = new URL(`${authApiUrl().replace(/\/$/, '')}/organizations/${encodeURIComponent(organizationId)}`)
         const response = await fetch(target, {

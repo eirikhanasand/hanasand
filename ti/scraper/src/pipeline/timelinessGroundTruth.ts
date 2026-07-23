@@ -310,6 +310,7 @@ function contextualStages(record: JsonObject, capture: JsonObject | undefined, i
   const validation = [...validations]
     .filter((item) => validIso(item.matchedAt) && string(item.reviewerId))
     .sort((left, right) => Date.parse(requiredIso(left.matchedAt, "validation match timestamp")) - Date.parse(requiredIso(right.matchedAt, "validation match timestamp")))[0];
+  const validationReferenceUrl = publicReferenceUrl(validation?.referenceUrl);
   const review = explicitReview ?? (validation ? {
     timestamp: requiredIso(validation.matchedAt, "validation match timestamp"),
     provenance: {
@@ -317,7 +318,7 @@ function contextualStages(record: JsonObject, capture: JsonObject | undefined, i
       validationId: string(validation.id),
       reviewerId: string(validation.reviewerId),
       validationStatus: string(validation.status),
-      referenceUrl: string(validation.referenceUrl),
+      ...(validationReferenceUrl ? { referenceUrl: validationReferenceUrl } : {}),
       timestamp: requiredIso(validation.matchedAt, "validation match timestamp"),
       evidencePath: "validation.matchedAt",
     },
@@ -548,8 +549,9 @@ export function publicReferenceUrl(value: unknown): string | undefined {
   try {
     const url = new URL(String(value ?? ""));
     const host = url.hostname.toLowerCase();
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.toString().length > 2_048 || !host || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".onion") || host.endsWith(".i2p") || privateHost(host)) return undefined;
-    if ([...url.searchParams.keys()].some((key) => /token|secret|password|authorization|cookie|api[_-]?key|signature/i.test(key))) return undefined;
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.toString().length > 2_048 || !host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".onion") || host.endsWith(".i2p") || privateHost(host)) return undefined;
+    const secret = /token|secret|password|authorization|cookie|api[_-]?key|signature|credential|session/i;
+    if ([...url.searchParams.keys()].some((key) => secret.test(key)) || secret.test(url.hash)) return undefined;
     return url.toString();
   } catch {
     return undefined;
@@ -561,6 +563,7 @@ function privateHost(host: string): boolean {
   const octets = host.split(".").map(Number);
   if (octets.length !== 4 || octets.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) return false;
   return octets[0] === 0 || octets[0] === 10 || octets[0] === 127 || octets[0] >= 224
+    || octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127
     || octets[0] === 169 && octets[1] === 254
     || octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31
     || octets[0] === 192 && octets[1] === 168;

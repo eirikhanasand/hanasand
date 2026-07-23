@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildTimelinessWorkbench, mergePublicReportReference } from "../pipeline/timelinessGroundTruth.ts";
+import { buildTimelinessWorkbench, mergePublicReportReference, publicReferenceUrl } from "../pipeline/timelinessGroundTruth.ts";
 
 const generatedAt = "2026-07-22T12:00:00.000Z";
 
@@ -273,5 +273,27 @@ describe("timeliness ground truth", () => {
       recordedBy: "analyst_1",
       recordedAt: generatedAt,
     })).toThrow("Invalid public reference URL");
+    for (const value of [
+      "http://foo.localhost/report",
+      "http://100.64.0.1/report",
+      "https://example.test/report#token=secret",
+    ]) expect(publicReferenceUrl(value)).toBeUndefined();
+  });
+
+  test("does not expose an unsafe validation reference in reviewed-stage provenance", () => {
+    const snapshot = buildTimelinessWorkbench([retainedRecord()], {
+      captures: [{ id: "capture_northwind" }],
+      incidents: [{ id: "incident_northwind", captureId: "capture_northwind" }],
+      validationRecords: [{
+        id: "validation_private",
+        captureId: "capture_northwind",
+        matchedAt: "2026-07-22T10:07:30.000Z",
+        reviewerId: "analyst_1",
+        status: "supported",
+        referenceUrl: "http://127.0.0.1/private?token=secret",
+      }],
+    });
+
+    expect(snapshot.items[0].provenance.reviewed).not.toHaveProperty("referenceUrl");
   });
 });
