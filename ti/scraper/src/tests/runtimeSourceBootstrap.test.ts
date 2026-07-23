@@ -182,35 +182,43 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     const previous = Bun.env.TI_SOURCE_SEED_PATHS;
     const previousRestricted = Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES;
     const seedDirectory = join(dirname(fileURLToPath(import.meta.url)), "../../seeds");
-    const configured = [
+    const seed = (name: string) => JSON.parse(readFileSync(join(seedDirectory, name), "utf8"));
+    const configuredNames = [
       "public_cti_sources.json",
       "verified_long_lived_sources.json",
       "verified_query_providers.json",
       "public_cti_starter_pack.json",
       "public_telegram_channel_packs.json",
       "restricted_metadata_source_packs.json"
-    ].map((name) => join(seedDirectory, name));
+    ];
+    const portfolioNames = ["source_portfolio_clear_web.json", "source_portfolio_public_telegram.json"];
+    const configured = configuredNames.map((name) => join(seedDirectory, name));
+    const generatedAt = new Date(Math.max(...[...configuredNames, ...portfolioNames].map((name) => Date.parse(seed(name).generatedAt)).filter(Number.isFinite))).toISOString();
+    const sourceCount = (name: string) => seed(name).sources.length;
+    const verifiedSourceCount = (name: string) => seed(name).sources.filter((source: any) => source.metadata?.sourcePortfolioVerification).length;
     Bun.env.TI_SOURCE_SEED_PATHS = configured.join(",");
     Bun.env.TI_IMPORT_RESTRICTED_METADATA_SOURCES = "true";
 
     try {
       const store = new InMemoryScraperStore();
-      const first = bootstrapRuntimeSources(store, { generatedAt: "2026-07-23T17:00:00.000Z" });
-      const restarted = bootstrapRuntimeSources(store, { generatedAt: "2026-07-23T17:05:00.000Z" });
+      const first = bootstrapRuntimeSources(store, { generatedAt });
+      const restarted = bootstrapRuntimeSources(store, { generatedAt: new Date(Date.parse(generatedAt) + 5 * 60_000).toISOString() });
 
       expect(first.seedPaths.slice(0, configured.length)).toEqual(configured);
       expect(first.seedPaths).toHaveLength(new Set(first.seedPaths).size);
       expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_clear_web.json"))).toHaveLength(1);
       expect(first.seedPaths.filter((path) => path.endsWith("source_portfolio_public_telegram.json"))).toHaveLength(1);
       expect(first.errors.filter((error) => error.path.includes("source_portfolio_"))).toEqual([]);
-      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "clear_web" && source.metadata?.sourcePortfolioVerification)).toHaveLength(28);
-      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "telegram_public" && source.metadata?.sourcePortfolioVerification)).toHaveLength(25);
+      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "clear_web" && source.metadata?.sourcePortfolioVerification))
+        .toHaveLength(sourceCount("source_portfolio_clear_web.json"));
+      expect(store.listSources().filter((source: any) => source.metadata?.sourceFamily === "telegram_public" && source.metadata?.sourcePortfolioVerification))
+        .toHaveLength(verifiedSourceCount("source_portfolio_public_telegram.json") + verifiedSourceCount("public_telegram_channel_packs.json"));
       const importedPortfolio = store.listSources().filter((source: any) => source.metadata?.sourcePortfolioVerification);
       expect(importedPortfolio.every((source: any) => source.status === "candidate"
         && source.metadata.productionCollection === false
         && source.metadata.countsAsCoverage === false
         && source.metadata.sourcePortfolioQualificationState === "pending_sustained_productivity")).toBe(true);
-      expect(new Set(importedPortfolio.map((source: any) => source.metadata.sourceImportedAt))).toEqual(new Set(["2026-07-23T17:00:00.000Z"]));
+      expect(new Set(importedPortfolio.map((source: any) => source.metadata.sourceImportedAt))).toEqual(new Set([generatedAt]));
       expect(importedPortfolio.filter(isExecutableSource)).toEqual([]);
       expect(restarted).toMatchObject({ importedSourceCount: 0, totalSourceCount: first.totalSourceCount });
     } finally {
