@@ -10,50 +10,82 @@ import { hashContent } from "../utils.ts";
 // Exact safe fields from the public Ransomware.live feeds; restricted locators are intentionally omitted.
 const groups = JSON.stringify([
   group("Akira", null, "conti", "2026-07-21T21:00:00Z", 200),
-  { ...group("TheGentlemen", "Storm-2697", null, "2026-07-21T20:00:00Z", 200), altname: ["Storm-2697", "Unknown"] },
-  group("Old Group", null, null, "2026-01-01T00:00:00Z", 200),
+  { ...group("Recent Only", "Recent Alias", null, "2026-07-21T20:00:00Z", 503), description: "A documented operation with recent public claims." },
+  { ...group("Live Only", null, null, "2026-07-21T20:00:00Z", 200), description: "A documented operation with a reachable publication location." },
+  { ...group("Historical Group", null, null, "2026-01-01T00:00:00Z", 503), description: "A documented historical operation.", _victim_count: 4 },
   { ...group("Unreliable", null, null, "2026-07-21T20:00:00Z", 200), description: "Alleged victims cannot be verified; remove entries for this group" },
-  group("Unavailable", null, null, "2026-07-21T20:00:00Z", 503)
 ]);
 const victims = JSON.stringify([
   claim("akira", "2026-07-21T19:00:00Z"),
   claim("akira", "2026-07-20T19:00:00Z"),
-  claim("thegentlemen", "2026-07-19T19:00:00Z"),
+  claim("Recent Only", "2026-07-19T19:00:00Z"),
   claim("Unreliable", "2026-07-18T19:00:00Z"),
-  claim("Unavailable", "2026-07-18T19:00:00Z"),
   claim("Missing Group", "2026-07-18T19:00:00Z"),
-  claim("Old Group", "2025-01-01T00:00:00Z")
+  claim("Historical Group", "2025-01-01T00:00:00Z")
 ]);
 
-test("retains only current reachable evidence-producing operation labels", () => {
-  const catalog = parseCurrentRansomwareOperations(groups, victims, { retrievedAt: "2026-07-21T22:00:00Z", minimumCurrentIdentities: 2 });
-  expect(catalog.identities.map((identity) => identity.canonicalName)).toEqual(["Akira", "TheGentlemen"]);
-  expect(catalog.identities[0]).toMatchObject({ relatedOperationNames: ["conti"], lineageRelations: [{ relationship: "evolved_from", name: "conti" }], aptNumberDesignationPresent: false });
-  expect(catalog.identities[0]).not.toHaveProperty("currentEvidence");
-  expect(catalog.activityEvidence[0]).toMatchObject({ actorIdentityId: catalog.identities[0].id, recentClaimCount: 2, liveLocationCount: 1 });
-  expect(catalog.identities[1].associatedNames).toEqual(["Storm-2697"]);
+test("registers current and historical identities independently from per-signal activity", () => {
+  const catalog = parseCurrentRansomwareOperations(groups, victims, { retrievedAt: "2026-07-21T22:00:00Z", minimumCurrentIdentities: 3 });
+  expect(catalog.identities.map((identity) => [identity.canonicalName, identity.status])).toEqual([
+    ["Akira", "current"],
+    ["Historical Group", "retired"],
+    ["Live Only", "current"],
+    ["Recent Only", "current"]
+  ]);
+  expect(catalog.identities.find((identity) => identity.canonicalName === "Akira")).toMatchObject({
+    relatedOperationNames: ["conti"],
+    lineageRelations: [{ relationship: "evolved_from", name: "conti" }],
+    activityEvidence: [
+      { kind: "recent_public_claim", count: 2, contentHash: catalog.evidenceContentHashes[1] },
+      { kind: "reachable_publication_location", count: 1, contentHash: catalog.evidenceContentHashes[0] }
+    ]
+  });
+  expect(catalog.identities.find((identity) => identity.canonicalName === "Recent Only")).toMatchObject({
+    associatedNames: ["Recent Alias"],
+    activityEvidence: [{ kind: "recent_public_claim", contentHash: catalog.evidenceContentHashes[1] }]
+  });
+  expect(catalog.identities.find((identity) => identity.canonicalName === "Live Only")).toMatchObject({
+    activityEvidence: [{ kind: "reachable_publication_location", contentHash: catalog.evidenceContentHashes[0] }]
+  });
+  expect(catalog.identities.find((identity) => identity.canonicalName === "Historical Group")).toMatchObject({
+    status: "retired",
+    descriptionAvailable: true,
+    activityEvidence: []
+  });
+  expect(catalog).not.toHaveProperty("activityEvidence");
   expect(catalog.counts).toMatchObject({
     sourceGroupCount: 5,
-    currentIdentityCount: 2,
-    recentClaimGroupCount: 5,
+    totalIdentityCount: 4,
+    currentIdentityCount: 3,
+    retiredIdentityCount: 1,
+    recentClaimGroupCount: 4,
+    recentClaimIdentityCount: 2,
     liveLocationGroupCount: 2,
+    bothCurrentEvidenceIdentityCount: 1,
+    recentClaimOnlyIdentityCount: 1,
+    liveLocationOnlyIdentityCount: 1,
+    historicalIdentityCount: 1,
+    historicalDescriptionIdentityCount: 1,
+    historicalVictimHistoryIdentityCount: 1,
     unreliableExcludedCount: 1,
-    noReachableLocationExcludedCount: 1,
-    noCurrentEvidenceExcludedCount: 1,
     unmatchedRecentClaimGroupCount: 1,
-    identityActivityEvidenceCount: 2,
-    sourceVictimRecordCount: 7
+    identityActivityEvidenceCount: 3,
+    sourceVictimRecordCount: 6
   });
   expect(catalog.exclusions).toEqual({
     unreliableGroupNames: ["Unreliable"],
     invalidIdentityLabels: [],
     generatedIdentityLabels: [],
-    invalidAliasLabels: ["Unknown"],
-    groupNamesWithoutRecentClaims: [],
-    groupNamesWithoutReachableLocations: ["Unavailable"],
-    groupNamesWithoutCurrentEvidence: ["Old Group"],
+    invalidAliasLabels: [],
     recentClaimNamesMissingFromGroupCatalog: ["Missing Group"]
   });
+  expect(catalog.lifecycle).toEqual({
+    recentClaimOnlyGroupNames: ["Recent Only"],
+    liveLocationOnlyGroupNames: ["Live Only"],
+    bothCurrentEvidenceGroupNames: ["Akira"],
+    historicalGroupNames: ["Historical Group"]
+  });
+  expect(catalog.governance.identityRegistrationSource).toBe("tier_2_community_group_catalog");
   expect(catalog.governance.excludedDataClasses).toContain("victim names as identities");
   expect(JSON.stringify(catalog)).not.toContain(".onion");
 
@@ -61,19 +93,69 @@ test("retains only current reachable evidence-producing operation labels", () =>
     { type: "x-mitre-collection", name: "Enterprise ATT&CK", modified: "2026-05-12T14:00:00.188Z", x_mitre_version: "19.1" },
     { type: "intrusion-set", id: "intrusion-set--2f69a19d-9ea6-4d42-92e3-0e694a78acbb", name: "Akira", aliases: ["Akira"], created: "2024-04-17T19:39:25.625Z", modified: "2026-05-12T15:12:00.732Z", revoked: false, x_mitre_deprecated: false, external_references: [{ source_name: "mitre-attack", external_id: "G1024", url: "https://attack.mitre.org/groups/G1024/" }] }
   ] }), { retrievedAt: "2026-07-21T22:00:00Z", minimumCurrentIdentities: 1 });
-  expect(resolveMitreActorIdentity("Akira", [...mitre.identities, ...catalog.identities]).candidates.map((candidate) => candidate.identity.externalId)).toEqual(["G1024"]);
+  expect(resolveMitreActorIdentity("Akira", [...mitre.identities, ...catalog.identities])).toMatchObject({ ambiguous: true });
+  const store = new InMemoryScraperStore();
+  store.replaceActorIdentityCatalog(mitre, { sourceId: "src_mitre", captureId: "cap_mitre" });
+  store.replaceActorIdentityCatalog(catalog, { sourceId: "src_ransomware_live", captureId: "cap_ransomware_live" });
+  expect(store.listActorIdentities().find((identity: any) => identity.canonicalName === "Akira" && identity.catalogId === catalog.catalogId)).toMatchObject({
+    canonicalIdentityId: "mitre-attack-enterprise:G1024",
+    canonicalIdentityEvidence: {
+      matchedLabel: "Akira",
+      sourceCatalogVersion: catalog.catalogVersion,
+      sourceCaptureId: "cap_ransomware_live",
+      targetCatalogVersion: mitre.catalogVersion,
+      targetCaptureId: "cap_mitre"
+    }
+  });
+  expect(resolveMitreActorIdentity("Akira", store.listActorIdentities()).candidates.map((candidate) => candidate.identity.externalId)).toEqual(["G1024"]);
 });
 
-test("never presents source clock skew as future activity", () => {
+test("uses retrieval-time freshness and preserves future source timestamps only as anomalies", () => {
+  const stale = parseCurrentRansomwareOperations(
+    JSON.stringify([{ ...group("Stale Group", null, null, "2025-01-01T00:00:00Z", 503), description: "Documented historical operation." }]),
+    JSON.stringify([claim("Stale Group", "2025-01-01T00:00:00Z")]),
+    { retrievedAt: "2026-07-21T20:00:00Z", minimumCurrentIdentities: 0 }
+  );
+  expect(stale.identities[0]).toMatchObject({ status: "retired", activityEvidence: [] });
+  expect(stale.counts).toMatchObject({ currentIdentityCount: 0, historicalIdentityCount: 1 });
+
   const catalog = parseCurrentRansomwareOperations(
     JSON.stringify([group("Clock Skew", null, null, "2026-07-22T08:00:00Z", 200)]),
     JSON.stringify([claim("Clock Skew", "2026-07-22T00:00:00Z")]),
-    { retrievedAt: "2026-07-21T20:00:00Z", minimumCurrentIdentities: 1 }
+    { retrievedAt: "2026-07-21T20:00:00Z", minimumCurrentIdentities: 0 }
   );
 
-  expect(catalog.activityWatermarkAt).toBe("2026-07-21T20:00:00.000Z");
-  expect(catalog.catalogModifiedAt).toBe("2026-07-21T20:00:00.000Z");
-  expect(catalog.activityEvidence[0]).toMatchObject({ latestClaimPublishedAt: "2026-07-21T20:00:00.000Z", latestLocationCheckedAt: "2026-07-21T20:00:00.000Z" });
+  expect(catalog.identities[0]).toMatchObject({ status: "retired", activityEvidence: [] });
+  expect(catalog.activityWatermarkAt).toBeUndefined();
+  expect(catalog.catalogModifiedAt).toBeUndefined();
+  expect(catalog.identities[0]).not.toHaveProperty("createdAt");
+  expect(catalog.identities[0]).not.toHaveProperty("modifiedAt");
+  expect(catalog.timestampAnomalies).toEqual([
+    expect.objectContaining({ field: "victim.published", sourceTimestamp: "2026-07-22T00:00:00.000Z", currentnessEligible: false }),
+    expect.objectContaining({ field: "group.location.checked", sourceTimestamp: "2026-07-22T08:00:00.000Z", currentnessEligible: false })
+  ]);
+});
+
+test("keeps identity versioning stable when only victim and location activity changes", () => {
+  const at = "2026-07-21T20:00:00Z";
+  const first = parseCurrentRansomwareOperations(
+    JSON.stringify([{ ...group("Stable Identity", null, null, "2026-07-21T19:00:00Z", 200), date: "2025-01-01", description: "Stable identity description." }]),
+    JSON.stringify([claim("Stable Identity", "2026-07-21T18:00:00Z")]),
+    { retrievedAt: at, minimumCurrentIdentities: 1 }
+  );
+  const second = parseCurrentRansomwareOperations(
+    JSON.stringify([{ ...group("Stable Identity", null, null, "2025-01-01T19:00:00Z", 503), date: "2025-01-01", description: "Stable identity description." }]),
+    JSON.stringify([claim("Stable Identity", "2025-01-01T18:00:00Z")]),
+    { retrievedAt: at, minimumCurrentIdentities: 0 }
+  );
+
+  expect(second.identities[0]).toMatchObject({ status: "retired", activityEvidence: [] });
+  expect(second).toMatchObject({
+    bundleSha256: first.bundleSha256,
+    catalogVersion: first.catalogVersion
+  });
+  expect(second.catalogModifiedAt).toBeUndefined();
+  expect(second.evidenceContentHashes).not.toEqual(first.evidenceContentHashes);
 });
 
 test("requires structured attribution for common-word operation names", () => {

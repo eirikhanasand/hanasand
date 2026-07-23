@@ -86,12 +86,29 @@ export type ActorIdentityRecord = {
   aptNumberDesignationPresent: boolean;
   sourceUrl: string;
   catalogVersion: string;
-  catalogModifiedAt: string;
+  catalogModifiedAt?: string;
   bundleSha256: string;
   retrievedAt: string;
   revokedByExternalId?: string;
   relatedOperationNames?: string[];
   lineageRelations?: Array<{ relationship: "evolved_from"; name: string; targetIdentityId?: string }>;
+  canonicalIdentityId?: string;
+  canonicalIdentityEvidence?: {
+    relationship: "same_as";
+    matchedLabel: string;
+    sourceCatalogId: string;
+    sourceCatalogVersion: string;
+    sourceCaptureId: string;
+    targetCatalogId: string;
+    targetCatalogVersion: string;
+    targetCaptureId: string;
+  };
+  activityEvidence?: Array<{
+    kind: "recent_public_claim" | "reachable_publication_location";
+    observedAt: string;
+    count: number;
+    contentHash: string;
+  }>;
 };
 
 type JsonObject = Record<string, unknown>;
@@ -282,16 +299,15 @@ function hasAptNumberDesignation(value: string): boolean {
 export function canonicalActorIdentity(identity: ActorIdentityRecord, identities: readonly ActorIdentityRecord[]): ActorIdentityRecord {
   const successor = successorIdentity(identity, identities);
   if (successor.id !== identity.id) return successor;
+  const explicitlyMapped = identity.canonicalIdentityId && identities.find((candidate) => candidate.id === identity.canonicalIdentityId && candidate.status === "current");
+  if (explicitlyMapped) return explicitlyMapped;
   if (identity.catalogId === "mitre-attack-enterprise" || identity.status !== "current") return identity;
-  const labels = new Set([identity.canonicalName, ...identity.associatedNames].map(normalizeActorLabel));
-  const mitreMatches = identities.filter((candidate) => candidate.catalogId === "mitre-attack-enterprise"
-    && candidate.status === "current"
-    && [candidate.canonicalName, ...candidate.associatedNames].some((label) => labels.has(normalizeActorLabel(label))));
-  return mitreMatches.length === 1 ? mitreMatches[0] : identity;
+  return identity;
 }
 
 export function actorLookupPolicy(value: string): ActorLookupPolicy {
-  return STRUCTURED_ONLY_LABELS.has(normalizeActorLabel(value)) ? "structured_only" : "text_safe";
+  const normalized = normalizeActorLabel(value);
+  return normalized.length < 3 || STRUCTURED_ONLY_LABELS.has(normalized) ? "structured_only" : "text_safe";
 }
 
 const STRUCTURED_ONLY_LABELS = new Set([

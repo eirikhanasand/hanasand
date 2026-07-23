@@ -680,6 +680,14 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     }, { actorIdentities: first.listActorIdentities() });
     first.savePipelineResult(betaObservation);
     await first.flush();
+    expect((await admin<{ catalog_modified_at: Date | null; identity_modified_at: Date | null }[]>`
+      SELECT catalog_modified_at, identity_modified_at
+      FROM threat_intel.actor_identities
+      WHERE id = 'mitre-attack-enterprise:G0001'
+    `)[0]).toEqual({
+      catalog_modified_at: new Date(collectedAt),
+      identity_modified_at: new Date(collectedAt)
+    });
 
     const betaProfile = first.listActorProfiles()[0];
     expect(betaProfile).toMatchObject({
@@ -728,7 +736,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     const third = await PostgresScraperStore.create({ databaseUrl });
     expect(third.listActorIdentities()).toEqual([
       expect.objectContaining({ id: "mitre-attack-enterprise:G0001", status: "current", associatedNames: ["Alpha Current Alias"] }),
-      expect.objectContaining({ id: "mitre-attack-enterprise:G0002", status: "retired" })
+      expect.objectContaining({ id: "mitre-attack-enterprise:G0002", status: "retired", retiredAt: "2026-07-20T12:00:00.000Z" })
     ]);
     expect(third.listActorProfiles()).toEqual([]);
     expect(third.listIncidents()).toEqual([]);
@@ -748,6 +756,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
       importedAt: "2026-07-20T12:02:00.000Z"
     });
     expect(rerun.archivedActorProfileIds).toEqual([]);
+    expect(third.listActorIdentities().find((identity: any) => identity.id === "mitre-attack-enterprise:G0002")?.retiredAt).toBe("2026-07-20T12:00:00.000Z");
     await third.flush();
     const [counts] = await admin<{ versions: number; current_version_identities: number; aliases: number; bad_active: number }[]>`
       SELECT
@@ -764,6 +773,11 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
         ) AS bad_active
     `;
     expect(counts).toMatchObject({ versions: 2, current_version_identities: 1, aliases: 4, bad_active: 0 });
+    expect((await admin<{ retired_at: string }[]>`
+      SELECT record->>'retiredAt' AS retired_at
+      FROM threat_intel.actor_identities
+      WHERE id = 'mitre-attack-enterprise:G0002'
+    `)[0]?.retired_at).toBe("2026-07-20T12:00:00.000Z");
     await third.close();
   });
 
@@ -772,7 +786,7 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     first.saveSource(source({ id: "src_actor_catalog", name: "Authoritative actor catalog" }));
     first.saveSource(source({ id: "src_worldleaks_observation", name: "WorldLeaks observation", url: "https://publisher.example/worldleaks" }));
     first.saveCapture(catalogCapture("cap_actor_catalog_worldleaks", "catalog-worldleaks"));
-    const identity = {
+    const { catalogModifiedAt: _catalogModifiedAt, modifiedAt: _modifiedAt, ...identity } = {
       ...actorIdentity("worldleaks", "WorldLeaks", []),
       id: "ransomware-live-current-operations:worldleaks",
       catalogId: "ransomware-live-current-operations",
@@ -800,44 +814,141 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     }, { actorIdentities: first.listActorIdentities() }));
     const profileId = first.listActorProfiles()[0].id;
     await first.close();
+    expect((await admin<{ catalog_modified_at: Date | null; identity_modified_at: Date | null }[]>`
+      SELECT catalog_modified_at, identity_modified_at
+      FROM threat_intel.actor_identities
+      WHERE id = 'ransomware-live-current-operations:worldleaks'
+    `)[0]).toEqual({ catalog_modified_at: null, identity_modified_at: null });
+
+    await admin`
+      INSERT INTO threat_intel.workflow_records (record_type, id, tenant_id, created_at, updated_at, record)
+      VALUES (
+        'actor_scope_probe',
+        'workflow_worldleaks',
+        NULL,
+        ${collectedAt},
+        ${collectedAt},
+        ${JSON.stringify({ id: "workflow_worldleaks", subjectType: "actor_profile", subjectId: profileId, status: "open" })}::text::jsonb
+      )
+    `;
+    await admin`
+      INSERT INTO threat_intel.actor_profile_identity_history (
+        id, actor_profile_id, canonical_actor_profile_id, reconciliation_key,
+        resolution_status, original_tenant_id, original_record, reference_snapshot, reconciled_at
+      )
+      SELECT
+        'actor-profile-history-' || md5(profile.id),
+        profile.id,
+        profile.id,
+        ':identity:ransomware-live-current-operations:worldleaks',
+        'canonicalized',
+        profile.tenant_id,
+        profile.record,
+        jsonb_build_object(
+          'aliases', COALESCE((SELECT jsonb_agg(to_jsonb(alias.*) ORDER BY alias.id) FROM threat_intel.actor_aliases alias WHERE alias.actor_profile_id = profile.id), '[]'::jsonb),
+          'evidenceLinks', COALESCE((SELECT jsonb_agg(to_jsonb(link) ORDER BY link.id) FROM threat_intel.evidence_links link WHERE link.subject_type = 'actor_profile' AND link.subject_id = profile.id), '[]'::jsonb),
+          'claims', COALESCE((SELECT jsonb_agg(to_jsonb(claim) ORDER BY claim.id) FROM threat_intel.intelligence_claims claim WHERE claim.subject_type = 'actor_profile' AND claim.subject_id = profile.id), '[]'::jsonb),
+          'claimEvidence', COALESCE((SELECT jsonb_agg(to_jsonb(evidence) ORDER BY evidence.id) FROM threat_intel.claim_evidence evidence WHERE evidence.subject_type = 'actor_profile' AND evidence.subject_id = profile.id), '[]'::jsonb),
+          'claimReviews', COALESCE((SELECT jsonb_agg(to_jsonb(review) ORDER BY review.id) FROM threat_intel.claim_reviews review JOIN threat_intel.intelligence_claims claim ON claim.id = review.claim_id WHERE claim.subject_type = 'actor_profile' AND claim.subject_id = profile.id), '[]'::jsonb),
+          'workflows', COALESCE((SELECT jsonb_agg(to_jsonb(workflow) ORDER BY workflow.record_type, workflow.id) FROM threat_intel.workflow_records workflow WHERE workflow.record->>'subjectType' = 'actor_profile' AND workflow.record->>'subjectId' = profile.id), '[]'::jsonb)
+        ),
+        ${collectedAt}
+      FROM threat_intel.actor_profiles profile
+      WHERE profile.id = ${profileId}
+    `;
+    const preservedReferences = async () => {
+      const [snapshot] = await admin<{
+        capture_count: number;
+        captures: string;
+        evidence_count: number;
+        evidence: string;
+        workflow_count: number;
+        workflows: string;
+      }[]>`
+        SELECT
+          (SELECT count(*)::int FROM threat_intel.captures) AS capture_count,
+          COALESCE((SELECT jsonb_agg(to_jsonb(capture) ORDER BY capture.id) FROM threat_intel.captures capture), '[]'::jsonb)::text AS captures,
+          (SELECT count(*)::int FROM threat_intel.evidence_links) AS evidence_count,
+          COALESCE((SELECT jsonb_agg(to_jsonb(evidence) ORDER BY evidence.id) FROM threat_intel.evidence_links evidence), '[]'::jsonb)::text AS evidence,
+          (SELECT count(*)::int FROM threat_intel.workflow_records) AS workflow_count,
+          COALESCE((SELECT jsonb_agg(to_jsonb(workflow) ORDER BY workflow.record_type, workflow.id) FROM threat_intel.workflow_records workflow), '[]'::jsonb)::text AS workflows
+      `;
+      return snapshot;
+    };
+    const identityHistory = async () => {
+      const [history] = await admin<{
+        resolution_status: string;
+        canonical_actor_profile_id: string | null;
+        original_record: string;
+        reference_snapshot: string;
+        row_hash: string;
+      }[]>`
+        SELECT
+          resolution_status,
+          canonical_actor_profile_id,
+          original_record::text AS original_record,
+          reference_snapshot::text AS reference_snapshot,
+          md5(to_jsonb(history)::text) AS row_hash
+        FROM threat_intel.actor_profile_identity_history history
+        WHERE actor_profile_id = ${profileId}
+      `;
+      return history;
+    };
+    const referencesBefore = await preservedReferences();
+    const historyBefore = await identityHistory();
+    expect(referencesBefore.capture_count).toBeGreaterThan(0);
+    expect(referencesBefore.evidence_count).toBeGreaterThan(0);
+    expect(referencesBefore.workflow_count).toBe(1);
+    expect(historyBefore).toMatchObject({
+      resolution_status: "canonicalized",
+      canonical_actor_profile_id: profileId
+    });
+    expect(JSON.parse(historyBefore.reference_snapshot).aliases).toHaveLength(1);
+    expect(await admin`SELECT id FROM threat_intel.actor_aliases WHERE actor_profile_id = ${profileId}`).toHaveLength(1);
 
     await admin`
       UPDATE threat_intel.actor_identities
       SET status = 'retired', record = record || '{"status":"retired"}'::jsonb
       WHERE id = 'ransomware-live-current-operations:worldleaks'
     `;
+    await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '031_archive_inactive_actor_profiles'`;
     expect(await admin`
       SELECT id FROM threat_intel.actor_profiles
       WHERE id = ${profileId} AND COALESCE(record->>'identityResolutionState', 'active') <> 'archived'
     `).toHaveLength(1);
 
-    const restarted = await PostgresScraperStore.create({ databaseUrl });
-    expect(restarted.listActorProfiles()).toEqual([]);
-    expect(await restarted.listActorProfilesForOwnership()).toContainEqual(expect.objectContaining({
+    const migratedOnce = await PostgresScraperStore.create({ databaseUrl });
+    expect(migratedOnce.listActorProfiles()).toEqual([]);
+    expect(await migratedOnce.listActorProfilesForOwnership()).toContainEqual(expect.objectContaining({
       id: profileId,
       normalizedName: `archived:${profileId}`,
       identityResolutionState: "archived",
       identityResolutionReason: "inactive_identity",
       actorIdentityIds: ["ransomware-live-current-operations:worldleaks"]
     }));
-    await restarted.close();
+    await migratedOnce.close();
+    expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '031_archive_inactive_actor_profiles'`).toHaveLength(1);
+    expect(await admin`SELECT id FROM threat_intel.actor_aliases WHERE actor_profile_id = ${profileId}`).toHaveLength(0);
+    expect(await identityHistory()).toEqual(historyBefore);
+    expect(await preservedReferences()).toEqual(referencesBefore);
     expect(await admin`
       SELECT id FROM threat_intel.actor_profiles
       WHERE id = ${profileId} AND COALESCE(record->>'identityResolutionState', 'active') <> 'archived'
     `).toHaveLength(0);
 
-    await admin`
-      UPDATE threat_intel.actor_profiles
-      SET
-        normalized_name = 'worldleaks',
-        record = (record - 'identityResolutionReason') || '{"normalizedName":"worldleaks","identityResolutionState":"canonical","aliases":["WorldLeaks"]}'::jsonb
-      WHERE id = ${profileId}
-    `;
     await admin`DELETE FROM threat_intel.schema_migrations WHERE version = '031_archive_inactive_actor_profiles'`;
-    const migrated = await PostgresScraperStore.create({ databaseUrl });
-    expect(migrated.listActorProfiles()).toEqual([]);
-    await migrated.close();
+    const migratedTwice = await PostgresScraperStore.create({ databaseUrl });
+    expect(migratedTwice.listActorProfiles()).toEqual([]);
+    expect(await migratedTwice.listActorProfilesForOwnership()).toContainEqual(expect.objectContaining({
+      id: profileId,
+      normalizedName: `archived:${profileId}`,
+      identityResolutionState: "archived"
+    }));
+    await migratedTwice.close();
     expect(await admin`SELECT version FROM threat_intel.schema_migrations WHERE version = '031_archive_inactive_actor_profiles'`).toHaveLength(1);
+    expect(await admin`SELECT id FROM threat_intel.actor_aliases WHERE actor_profile_id = ${profileId}`).toHaveLength(0);
+    expect(await identityHistory()).toEqual(historyBefore);
+    expect(await preservedReferences()).toEqual(referencesBefore);
     expect(await admin`
       SELECT id FROM threat_intel.actor_profiles
       WHERE id = ${profileId} AND COALESCE(record->>'identityResolutionState', 'active') <> 'archived'
@@ -1113,7 +1224,9 @@ postgresDescribe("PostgreSQL threat-intelligence store", () => {
     ], "catalog-reconcile-v2"), { sourceId: "src_actor_catalog", captureId: "cap_actor_catalog_reconcile_v2", importedAt: "2026-07-22T00:00:00.000Z" });
     const reactivatedItem = processCollectedItem({
       sourceId: "src_global_one", url: "https://example.test/reactivated-actor", collectedAt: "2026-07-22T01:00:00.000Z",
-      rawText: "Unregistered Group was named in a current public report.", contentHash: hashContent("reactivated-actor"), links: [], metadata: {}, sensitive: false
+      rawText: "Unregistered Group claims victim Example Systems in a current public report.", contentHash: hashContent("reactivated-actor"), links: [],
+      metadata: { extractionProfile: "ransomware_victim_blog", leakSite: { actorName: "Unregistered Group", victimName: "Example Systems" } },
+      sensitive: false
     }, { actorIdentities: reactivation.listActorIdentities() });
     reactivation.savePipelineResult(reactivatedItem);
     await reactivation.close();
@@ -2122,6 +2235,9 @@ function pipeline(sourceId: string, tenantId?: string, suffix = "") {
     metadata: { reportTimestamps: [{ role: "publisher", timestamp: publishedAt, sourceId, evidencePath: "feed.entry.publishedAt", extractionMethod: "source_field" }] },
     sensitive: false
   });
+  result.entities = result.entities.map((entity) => entity.type === "actor" && entity.value === "APT29"
+    ? { ...entity, assertionKind: "source_attribution" }
+    : entity);
   if (tenantId) {
     result.capture.tenantId = tenantId;
     result.capture.provenance.tenantId = tenantId;
